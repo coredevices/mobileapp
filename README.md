@@ -29,7 +29,7 @@ The cross-platform Pebble mobile app is located in `composeApp`.
 Compile on Android with `./gradlew :composeApp:assembleRelease`.
 Compile on iOS in xcode (after running a gradle sync to generate project files).
 
-You will need a github token confiugured in local.properties to fetch the speex module.
+You will need a GitHub username (`github.username`) and token (`github.token`) configured in `local.properties` to fetch the speex module.
 You will need a `google-services.json` in `composeApp/src` to compile on Android (an examples with dummy values is provided in `google-services-dummy.json`).
 You will need a `GoogleService-Info.plist` in `iosApp/iosApp` to compile on iOS.
 You will need a keystore with some keys if you intend to do a release build on Android (unless you use `LOCAL_RELEASE_BUILD=true` in `gradle.properties`).
