@@ -36,6 +36,10 @@ object HardcodedNotificationColors {
         "com.linkedin.android" to 0xFF0055AA.toInt(),
         "com.slack" to 0xFFFF0055.toInt(),
         "com.beeper.android" to 0xFFAA00FF.toInt(),
-        "com.discord" to 0xFF5500AA.toInt()
+        "com.discord" to 0xFF5500AA.toInt(),
+        "com.revolut.revolut" to 0xFF555555.toInt(),
+        "com.transferwise.android" to 0xFF00FF00.toInt(),
+        "de.number26.android" to 0xFF55AAAA.toInt(),
+        "com.bunq.android" to 0xFF00AAFF.toInt()
     )
 }

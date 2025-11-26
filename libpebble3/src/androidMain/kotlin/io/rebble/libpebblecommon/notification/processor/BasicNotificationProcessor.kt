@@ -199,6 +199,10 @@ fun StatusBarNotification.icon(): TimelineIcon = when (packageName) {
     "ch.protonmail.android" -> TimelineIcon.GenericEmail
     "me.proton.android.calendar" -> TimelineIcon.TimelineCalendar
     "com.google.android.apps.walletnfcrel" -> TimelineIcon.PayBill
+    "com.revolut.revolut" -> TimelineIcon.PayBill
+    "com.transferwise.android" -> TimelineIcon.PayBill
+    "de.number26.android" -> TimelineIcon.PayBill
+    "com.bunq.android" -> TimelineIcon.PayBill
     "com.google.android.youtube" -> TimelineIcon.TvShow // Use until the YouTube icon is in the fw repo
     "app.revanced.android.youtube" -> TimelineIcon.TvShow // Use until the YouTube icon is in the fw repo
 
