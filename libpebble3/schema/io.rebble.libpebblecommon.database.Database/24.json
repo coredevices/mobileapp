@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 24,
-    "identityHash": "4debf03d994cda016c2cb7b40242c919",
+    "identityHash": "9055a5a3a3e222ddbacdaeb5356b0ee7",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -974,7 +974,7 @@
       },
       {
         "tableName": "NotificationEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `key` TEXT NOT NULL, `groupKey` TEXT, `channelId` TEXT, `timestamp` INTEGER NOT NULL, `title` TEXT, `body` TEXT, `decision` TEXT NOT NULL, `people` TEXT DEFAULT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `key` TEXT NOT NULL, `groupKey` TEXT, `channelId` TEXT, `timestamp` INTEGER NOT NULL, `title` TEXT, `body` TEXT, `decision` TEXT NOT NULL, `people` TEXT DEFAULT NULL, `vibrationPattern` TEXT NOT NULL DEFAULT '')",
         "fields": [
           {
             "fieldPath": "id",
@@ -1031,6 +1031,13 @@
             "columnName": "people",
             "affinity": "TEXT",
             "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "vibrationPattern",
+            "columnName": "vibrationPattern",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
           }
         ],
         "primaryKey": {
@@ -1085,7 +1092,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4debf03d994cda016c2cb7b40242c919')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9055a5a3a3e222ddbacdaeb5356b0ee7')"
     ]
   }
 }
