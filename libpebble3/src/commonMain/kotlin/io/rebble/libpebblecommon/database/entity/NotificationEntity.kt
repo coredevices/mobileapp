@@ -7,7 +7,6 @@ import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.notification.NotificationDecision
 
-
 @Entity(indices = [
     Index(value = ["pkg", "channelId"], unique = false),
 ])
@@ -24,4 +23,6 @@ data class NotificationEntity(
     val decision: NotificationDecision,
     @ColumnInfo(defaultValue = "NULL")
     val people: List<String>? = emptyList(),
+    @ColumnInfo(defaultValue = "")
+	val vibrationPattern: List<UInt> = emptyList(),
 )

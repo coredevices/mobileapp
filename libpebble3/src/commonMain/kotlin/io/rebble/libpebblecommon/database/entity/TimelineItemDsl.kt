@@ -62,6 +62,10 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.TextListAttribute(attribute, block()))
     }
 
+    fun uIntList(attribute: TimelineAttribute, block: () -> List<UInt>) {
+        attributes.add(BaseAttribute.UIntListAttribute(attribute, block()))
+    }
+
     fun title(block: () -> String) {
         string(TimelineAttribute.Title, block)
     }
@@ -116,6 +120,10 @@ class AttributesListBuilder internal constructor() {
 
     fun lastUpdated(block: () -> Instant) {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
+    }
+
+    fun vibrationPattern(block: () -> List<UInt>) {
+        uIntList(TimelineAttribute.VibrationPattern, block)
     }
 
     internal fun build(): List<BaseAttribute> {

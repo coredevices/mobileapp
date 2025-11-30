@@ -5,7 +5,6 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMapper
-import kotlin.math.round
 
 object TimelineAttributeFactory {
     private fun createAttribute(attributeId: UByte, content: UByteArray, contentEndianness: Endian = Endian.Unspecified): TimelineItem.Attribute {
@@ -32,6 +31,17 @@ object TimelineAttributeFactory {
         val content = SUInt(StructMapper(), value or 0x80000000u, Endian.Little).toBytes()
         return createAttribute(type.id, content)
     }
+
+    fun createUIntListAttribute(type: TimelineAttribute, list: List<UInt>): TimelineItem.Attribute {
+        val newList = listOf(list.size.toUInt()) + list
+        val content: UByteArray = UByteArray(newList.size * 4) { index ->
+            val uint = newList[newList.size - 1 - index / 4]
+            val shift = (3 - (index % 4)) * 8
+            ((uint shr shift) and 0xFFu).toUByte()
+        }
+        return createAttribute(type.id, content, Endian.Little)
+    }
+
 
 //    fun title(text: String): TimelineItem.Attribute {
 //        return createTextAttribute(TimelineAttribute.Title, text)

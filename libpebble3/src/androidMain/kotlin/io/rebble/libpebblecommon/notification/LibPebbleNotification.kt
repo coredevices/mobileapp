@@ -30,6 +30,7 @@ data class LibPebbleNotification(
     val icon: TimelineIcon,
     val actions: List<LibPebbleNotificationAction>,
     val people: List<String>,
+    val vibrationPattern: List<UInt>,
     val color: Int? = null, // ARGB
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
@@ -130,6 +131,7 @@ fun LibPebbleNotification.toEntity(
     decision = decision,
     channelId = channelId,
     people = people,
+    vibrationPattern = vibrationPattern,
 )
 
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
