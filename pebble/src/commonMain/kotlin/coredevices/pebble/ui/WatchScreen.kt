@@ -259,6 +259,7 @@ private fun WatchScreenContent(
                                     title { "Test Notification" }
                                     body { "This is a test notification" }
                                     tinyIcon { TimelineIcon.ResultFailed }
+                                    vibrationPattern { listOf(250u,500u,400u,600u,500u,200u,500u) }
                                 }
                                 actions {
                                     action(TimelineItem.Action.Type.Generic) {

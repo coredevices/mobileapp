@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbl
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.vibrationPattern
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlin.time.Instant
@@ -48,6 +49,7 @@ class BasicNotificationProcessor(
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
         val body = bigText ?: text ?: ""
         val people = sbn.notification.people()
+        val vibrationPattern = sbn.notification.vibrationPattern()
         val contactKeys = people.asContacts(context.context)
         val color = HardcodedNotificationColors.packageColorMap[sbn.packageName]
             ?: sbn.notification.color.takeIf { it != 0 && it != 0xFF000000.toInt() }
@@ -66,6 +68,7 @@ class BasicNotificationProcessor(
             },
             actions = actions,
             people = contactKeys,
+			vibrationPattern = vibrationPattern,
             color = color,
         )
         return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
