@@ -195,10 +195,10 @@ fun StatusBarNotification.icon(): TimelineIcon = when (packageName) {
     "com.viber.voip" -> TimelineIcon.NotificationViber
     "com.instagram.android" -> TimelineIcon.NotificationInstagram
     "com.bbm.enterprise" -> TimelineIcon.NotificationBlackberryMessenger
-    "com.google.android.apps.dynamite" -> TimelineIcon.NotificationGoogleHangouts
+    "com.google.android.apps.dynamite" -> TimelineIcon.NotificationGoogleChat
     "kik.android" -> TimelineIcon.NotificationKik
     "com.kakao.talk" -> TimelineIcon.NotificationKakaoTalk
-    "com.beeper.android" -> TimelineIcon.GenericSms
+    "com.beeper.android" -> TimelineIcon.NotificationBeeper
     "ch.protonmail.android" -> TimelineIcon.GenericEmail
     "me.proton.android.calendar" -> TimelineIcon.TimelineCalendar
     "com.google.android.apps.walletnfcrel" -> TimelineIcon.PayBill
@@ -206,8 +206,20 @@ fun StatusBarNotification.icon(): TimelineIcon = when (packageName) {
     "com.transferwise.android" -> TimelineIcon.PayBill
     "de.number26.android" -> TimelineIcon.PayBill
     "com.bunq.android" -> TimelineIcon.PayBill
-    "com.google.android.youtube" -> TimelineIcon.TvShow // Use until the YouTube icon is in the fw repo
-    "app.revanced.android.youtube" -> TimelineIcon.TvShow // Use until the YouTube icon is in the fw repo
+    "com.google.android.youtube" -> TimelineIcon.TvShow
+    "app.revanced.android.youtube" -> TimelineIcon.TvShow
+    "com.discord" -> TimelineIcon.NotificationDiscord
+    "xyz.blueskyweb.app" -> TimelineIcon.NotificationBluesky
+    "com.duolingo" -> TimelineIcon.NotificationDuolingo
+    "im.vector.app", "io.element.android.x" -> TimelineIcon.NotificationElement
+    "com.google.android.apps.tasks" -> TimelineIcon.NotificationGoogleTasks
+    "io.homeassistant.companion.android" -> TimelineIcon.NotificationHomeAssistant
+    "com.valvesoftware.android.steam.community" -> TimelineIcon.NotificationSteam
+    "com.microsoft.teams" -> TimelineIcon.NotificationTeams
+    "com.instagram.barcelona" -> TimelineIcon.NotificationThreads
+    "com.ubnt.unifi.protect" -> TimelineIcon.NotificationUnifiProtect
+    "us.zoom.videomeetings" -> TimelineIcon.NotificationZoom
+    "com.ebay.mobile" -> TimelineIcon.NotificationEbay
 
     else -> when (notification.category) {
         Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail
