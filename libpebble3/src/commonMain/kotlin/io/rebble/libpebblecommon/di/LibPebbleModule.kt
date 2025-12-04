@@ -113,6 +113,7 @@ import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
+import io.rebble.libpebblecommon.services.HealthService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PhoneControlService
@@ -322,6 +323,7 @@ fun initKoin(
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
+                single { get<Database>().healthDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -390,7 +392,7 @@ fun initKoin(
                 singleOf(::MissedCallSyncer)
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
-                singleOf(::Datalogging)
+                single { Datalogging(get(), get(), get()) }
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
@@ -494,6 +496,7 @@ fun initKoin(
                     scopedOf(::VoiceService)
                     scopedOf(::AudioStreamService)
                     scopedOf(::AppReorderService)
+                    scopedOf(::HealthService)
 
                     // Endpoint Managers
                     scopedOf(::PutBytesSession)

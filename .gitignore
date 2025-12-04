@@ -17,3 +17,4 @@
 *.jks
 iosApp/iosApp.xcodeproj/xcuserdata
 iosApp/iosApp.xcworkspace/xcuserdata
+iosApp/iosApp/GoogleService-Info.plist
