@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Setup JDK
@@ -27,7 +27,7 @@ jobs:
         run: |
           ls /Applications/Xcode*
           swift --version
-          sudo xcode-select --switch /Applications/Xcode_16.2.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
           gem install xcpretty
       - name: Use dummy google-services json
         run: mv composeApp/src/google-services-dummy.json composeApp/src/google-services.json

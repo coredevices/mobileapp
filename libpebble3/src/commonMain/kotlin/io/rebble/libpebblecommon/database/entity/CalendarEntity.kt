@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -13,4 +14,6 @@ data class CalendarEntity(
         val ownerId: String,
         val color: Int,
         val enabled: Boolean,
+        @ColumnInfo(defaultValue = "1")
+        val syncEvents: Boolean = true,
 )

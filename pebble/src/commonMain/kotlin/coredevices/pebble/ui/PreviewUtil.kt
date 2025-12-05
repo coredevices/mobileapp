@@ -76,6 +76,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     val configProvider = object : BootConfigProvider {
         override suspend fun setUrl(url: String) {}
+        override fun getUrl(): String? = "http://fakeurl"
         override suspend fun getBootConfig(): BootConfig? = BootConfig(bootConfig)
     }
     val themeProvider = object : ThemeProvider {

@@ -76,6 +76,7 @@ expect fun bootConfigPlatform(): String
 
 interface BootConfigProvider {
     suspend fun setUrl(url: String)
+    fun getUrl(): String?
     suspend fun getBootConfig(): BootConfig?
 }
 
@@ -93,7 +94,7 @@ class RealBootConfigProvider(
         fetch()
     }
 
-    private fun getUrl(): String? {
+    override fun getUrl(): String? {
         val baseUrl = settings.getStringOrNull(BOOTCONFIG_URL_KEY)?.removePrefix("/")
         if (baseUrl == null) {
             logger.i("fetch: no URL")

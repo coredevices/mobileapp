@@ -150,6 +150,9 @@ class IosSystemCalendar(
         }
     }
 
+    override suspend fun enableSyncForCalendar(calendar: CalendarEntity) {
+    }
+
     override fun registerForCalendarChanges(): Flow<Unit> {
         val flow = MutableSharedFlow<Unit>(replay = 1) // replay = 1 can be useful if collection starts after an event
 

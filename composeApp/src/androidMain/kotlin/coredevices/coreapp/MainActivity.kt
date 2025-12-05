@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import co.touchlab.kermit.Logger
-import com.eygraber.uri.toUriOrNull
+import com.eygraber.uri.toKmpUriOrNull
 import coredevices.coreapp.ui.App
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.pebble.PebbleAndroidDelegate
@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
-        val uri = intent.data?.toUriOrNull()
+        val uri = intent.data?.toKmpUriOrNull()
         logger.d { "handleIntent uri = $uri" }
         uri?.let {
             pebbleDeepLinkHandler.handle(it)

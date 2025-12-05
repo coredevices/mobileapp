@@ -98,6 +98,7 @@ class PhoneCalendarSyncer(
                     ownerName = matchingCalendar.ownerName,
                     ownerId = matchingCalendar.ownerId,
                     color = matchingCalendar.color,
+                    syncEvents = matchingCalendar.syncEvents,
                 )
                 calendarDao.update(updateCal)
             } else {
@@ -208,6 +209,10 @@ class PhoneCalendarSyncer(
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         libPebbleCoroutineScope.launch {
             calendarDao.setEnabled(calendarId, enabled)
+            val calendar = calendarDao.getAll().find { it.id == calendarId }
+            if (calendar != null && !calendar.syncEvents) {
+                systemCalendar.enableSyncForCalendar(calendar)
+            }
             requestSync()
         }
     }

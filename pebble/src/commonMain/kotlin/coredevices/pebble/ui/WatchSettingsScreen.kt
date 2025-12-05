@@ -17,10 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AppSettingsAlt
 import androidx.compose.material.icons.filled.Language
@@ -33,9 +33,9 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,8 +70,11 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
+import coredevices.pebble.account.BootConfigProvider
+import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
@@ -92,6 +95,7 @@ import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
+import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -220,11 +224,13 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
         val currentTheme by themeProvider.theme.collectAsState()
         val pebbleFeatures = koinInject<PebbleFeatures>()
         val pebbleAccount = koinInject<PebbleAccount>()
+        val bootConfig = koinInject<BootConfigProvider>()
         val loggedIn by pebbleAccount.loggedIn.collectAsState()
         val user by Firebase.auth.authStateChanged.map {
             it?.email
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser)
+        val firestoreLocker = koinInject<FirestoreLocker>()
         val scope = rememberCoroutineScope()
         val appContext = koinInject<AppContext>()
         val appVersion = koinInject<CoreAppVersion>()
@@ -239,6 +245,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
             PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
         }
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
+        var showLockerImportDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
         var speechRecognitionEnabled by mutableStateOf(
             CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
@@ -322,6 +329,37 @@ please disable the option.""".trimIndent(),
                     }
                 }
             }
+        }
+        if (showLockerImportDialog) {
+            val isRebble = remember {
+                parseUrl(bootConfig.getUrl() ?: "")?.host?.endsWith("rebble.io") == true
+            }
+            val webServices = koinInject<RealPebbleWebServices>()
+            LockerImportDialog(
+                onDismissRequest = { showLockerImportDialog = false },
+                onImportFromPebbleAccount = {
+                    try {
+                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api")
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                useNativeAppStore = true
+                            )
+                        )
+                    } catch (e: Exception) {
+                        logger.e(e) { "Error importing locker from pebble account" }
+                    }
+                    showLockerImportDialog = false
+                },
+                onStartFresh = {
+                    coreConfigHolder.update(
+                        coreConfig.copy(
+                            useNativeAppStore = true
+                        )
+                    )
+                    showLockerImportDialog = false
+                },
+                isRebble = isRebble
+            )
         }
 
         LaunchedEffect(Unit) {
@@ -786,11 +824,27 @@ please disable the option.""".trimIndent(),
                     section = Section.Default,
                     checked = coreConfig.useNativeAppStore,
                     onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                useNativeAppStore = !coreConfig.useNativeAppStore,
+                        if (!coreConfig.useNativeAppStore) {
+                            scope.launch {
+                                if (firestoreLocker.isLockerEmpty() && loggedIn != null) {
+                                    logger.i { "Showing locker import dialog" }
+                                    showLockerImportDialog = true
+                                } else {
+                                    logger.i { "Skipping locker import dialog" }
+                                    coreConfigHolder.update(
+                                        coreConfig.copy(
+                                            useNativeAppStore = true,
+                                        )
+                                    )
+                                }
+                            }
+                        } else {
+                            coreConfigHolder.update(
+                                coreConfig.copy(
+                                    useNativeAppStore = false,
+                                )
                             )
-                        )
+                        }
                     },
                     show = { experimentalDevices },
                 ),

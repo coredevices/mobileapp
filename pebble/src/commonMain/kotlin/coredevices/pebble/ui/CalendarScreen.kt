@@ -115,7 +115,12 @@ fun CalendarScreen(coreNav: CoreNav) {
                                         libPebble.updateCalendarEnabled(entry.id, isChecked)
                                     }
                                 )
-                                Text(entry.name)
+                                val notSyncedText = if (entry.syncEvents) {
+                                    ""
+                                } else {
+                                    " (not synced by Android!)"
+                                }
+                                Text("${entry.name}$notSyncedText")
                             }
                         }
                     }

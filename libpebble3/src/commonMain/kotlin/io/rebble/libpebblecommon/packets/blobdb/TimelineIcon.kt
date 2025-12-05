@@ -102,7 +102,21 @@ enum class TimelineIcon(val id: UInt, val code: String) {
     AlarmClock(13u, "system://images/ALARM_CLOCK"),
     HeavySnow(53u, "system://images/HEAVY_SNOW"),
     DinnerReservation(27u, "system://images/DINNER_RESERVATION"),
-    NotificationKakaoTalk(79u, "system://images/NOTIFICATION_KAKAOTALK");
+    NotificationKakaoTalk(79u, "system://images/NOTIFICATION_KAKAOTALK"),
+    NotificationBeeper(120u, "system://images/NOTIFICATION_BEEPER"),
+    NotificationDiscord(121u, "system://images/NOTIFICATION_DISCORD"),
+    NotificationBluesky(122u, "system://images/NOTIFICATION_BLUESKY"),
+    NotificationDuolingo(123u, "system://images/NOTIFICATION_DUOLINGO"),
+    NotificationElement(124u, "system://images/NOTIFICATION_ELEMENT"),
+    NotificationGoogleChat(125u, "system://images/NOTIFICATION_GOOGLE_CHAT"),
+    NotificationGoogleTasks(126u, "system://images/NOTIFICATION_GOOGLE_TASKS"),
+    NotificationHomeAssistant(127u, "system://images/NOTIFICATION_HOME_ASSISTANT"),
+    NotificationSteam(128u, "system://images/NOTIFICATION_STEAM"),
+    NotificationTeams(129u, "system://images/NOTIFICATION_TEAMS"),
+    NotificationThreads(130u, "system://images/NOTIFICATION_THREADS"),
+    NotificationUnifiProtect(131u, "system://images/NOTIFICATION_UNIFI_PROTECT"),
+    NotificationZoom(132u, "system://images/NOTIFICATION_ZOOM"),
+    NotificationEbay(133u, "system://images/NOTIFICATION_EBAY");
 
     companion object {
         fun fromId(id: UInt): TimelineIcon {
