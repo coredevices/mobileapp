@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.FirmwareVersion.Companion.slot
 import io.rebble.libpebblecommon.services.GetBytesService
+import io.rebble.libpebblecommon.services.HealthService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PutBytesService
@@ -145,6 +146,7 @@ class RealPebbleConnector(
     private val watchConfig: WatchConfigFlow,
     private val appOrderManager: AppOrderManager,
     private val languagePackInstaller: RealLanguagePackInstaller,
+    private val healthService: HealthService,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -255,6 +257,7 @@ class RealPebbleConnector(
         musicControlManager.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
+        healthService.init()
         appOrderManager.init()
 
         _state.value = Connected.ConnectedNotInPrf(

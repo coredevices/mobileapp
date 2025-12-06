@@ -9,6 +9,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
+import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
@@ -19,6 +20,7 @@ import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
@@ -26,6 +28,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -59,8 +62,10 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         LockerAppPermission::class,
         NotificationEntity::class,
         ContactEntity::class,
+        HealthDataEntity::class,
+        OverlayDataEntity::class,
     ],
-    version = 25,
+    version = 26,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -77,7 +82,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 22, to = 23),
         AutoMigration(from = 23, to = 24),
         AutoMigration(from = 24, to = 25),
-    ],
+        AutoMigration(from = 25, to = 26),
+        ],
     exportSchema = true,
 )
 @ConstructedBy(DatabaseConstructor::class)
@@ -94,6 +100,7 @@ abstract class Database : RoomDatabase() {
     abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
     abstract fun notificationsDao(): NotificationDao
     abstract fun contactDao(): ContactDao
+    abstract fun healthDao(): HealthDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
@@ -103,13 +110,13 @@ expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
 
 fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
-        //.addMigrations()
-        .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
-        // V7 required a full re-create.
-        .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-        .setDriver(BundledSQLiteDriver())
-        .setQueryCoroutineContext(Dispatchers.IO)
-        .build()
+            // .addMigrations()
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+            // V7 required a full re-create.
+            .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .setDriver(BundledSQLiteDriver())
+            .setQueryCoroutineContext(Dispatchers.IO)
+            .build()
 }
 
 internal expect fun getDatabaseBuilder(ctx: AppContext): RoomDatabase.Builder<Database>
