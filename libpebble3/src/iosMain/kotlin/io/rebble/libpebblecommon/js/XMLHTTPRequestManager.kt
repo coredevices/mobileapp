@@ -14,6 +14,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -26,6 +27,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSNull
 import platform.JavaScriptCore.JSValue
+import kotlin.uuid.Uuid
 
 private const val UNSENT = 0
 private const val OPENED = 1
@@ -33,7 +35,12 @@ private const val HEADERS = 2
 private const val LOADING = 3
 private const val DONE = 4
 
-class XMLHTTPRequestManager(private val scope: CoroutineScope, private val eval: (String) -> JSValue?): RegisterableJsInterface {
+class XMLHTTPRequestManager(
+    private val scope: CoroutineScope,
+    private val eval: (String) -> JSValue?,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val appInfo: PbwAppInfo,
+): RegisterableJsInterface {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
     private val client = HttpClient(Darwin)
@@ -132,6 +139,17 @@ class XMLHTTPRequestManager(private val scope: CoroutineScope, private val eval:
             suspend fun execute() {
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
+                }
+                if (remoteTimelineEmulator.shouldIntercept(url!!)) {
+                    val appUuid = Uuid.parse(appInfo.uuid)
+                    val result = remoteTimelineEmulator.onIntercepted(url!!, method!!.value, data!!.decodeToString(), appUuid)
+                    scope.launch {
+                        eval("$jsInstance._onResponseComplete({}, 200, \"OK\", \"$result\")")
+                        changeReadyState(DONE)
+                        dispatchEvent(XHREvent.Load)
+                        dispatchEvent(XHREvent.LoadEnd)
+                    }
+                    return
                 }
                 val response = try {
                     client.request {

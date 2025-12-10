@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.calendar
 import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.database.Cursor
@@ -28,7 +29,8 @@ private val calendarProjection = arrayOf(
     CalendarContract.Calendars.ACCOUNT_NAME,
     CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
     CalendarContract.Calendars.OWNER_ACCOUNT,
-    CalendarContract.Calendars.CALENDAR_COLOR
+    CalendarContract.Calendars.CALENDAR_COLOR,
+    CalendarContract.Calendars.SYNC_EVENTS,
 )
 
 private val instanceUri: Uri = CalendarContract.Instances.CONTENT_URI
@@ -369,6 +371,9 @@ class AndroidSystemCalendar(
                                 logger.w("Calendar has no color")
                                 return@generateSequence null
                             }
+                            val syncEvents =
+                                cursor.getNullableColumnIndex(CalendarContract.Calendars.SYNC_EVENTS)
+                                    ?.let { cursor.getInt(it) }
 
                             CalendarEntity(
                                 platformId = id.toString(),
@@ -377,6 +382,7 @@ class AndroidSystemCalendar(
                                 ownerId = ownerAccount ?: "unknown",
                                 color = color,
                                 enabled = true,
+                                syncEvents = syncEvents == 1,
                             )
                         } else {
                             null
@@ -402,8 +408,7 @@ class AndroidSystemCalendar(
         val result = contentResolver.query(
             builtUri, instanceProjection,
             "${CalendarContract.Instances.CALENDAR_ID} = ?"
-                    + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED
-                    + " AND IFNULL(" + CalendarContract.Instances.SELF_ATTENDEE_STATUS + ", " + CalendarContract.Attendees.ATTENDEE_STATUS_NONE + ") != " + CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED,
+                    + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED,
             arrayOf(calendar.platformId), "BEGIN ASC"
         )?.use { cursor ->
             logger.d("Found ${cursor.count} events for calendar ${calendar.name.obfuscate(privateLogger)}")
@@ -417,6 +422,21 @@ class AndroidSystemCalendar(
             list
         } ?: listOf()
         return result
+    }
+
+    override suspend fun enableSyncForCalendar(calendar: CalendarEntity) {
+        // Create the update URI for this specific calendar
+        val updateUri = ContentUris.withAppendedId(calendarUri, calendar.id.toLong())
+        val values = ContentValues().apply {
+            put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+        }
+
+        try {
+            contentResolver.update(updateUri, values, null, null)
+            logger.d { "Successfully enabled sync for calendar ${calendar.name.obfuscate(privateLogger)}" }
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to enable sync for calendar ${calendar.name.obfuscate(privateLogger)}" }
+        }
     }
 
     private val observerHandler = Handler(Looper.getMainLooper())

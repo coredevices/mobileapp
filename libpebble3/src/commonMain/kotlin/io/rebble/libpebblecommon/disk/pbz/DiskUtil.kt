@@ -33,7 +33,7 @@ object DiskUtil {
         } catch (e: IOException) {
             return null
         }.buffered()
-        return pbzJson.decodeFromString(source.readString())
+        return source.use {pbzJson.decodeFromString(it.readString())}
     }
 
     fun requirePbzManifests(pbzPath: Path): List<PbzManifestWrapper> {

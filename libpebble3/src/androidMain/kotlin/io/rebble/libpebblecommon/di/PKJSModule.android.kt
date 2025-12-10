@@ -20,6 +20,7 @@ actual val pkjsPlatformModule: Module = module {
             jsPath = params.get(),
             urlOpenRequests = params.get(),
             logMessages = params.get(),
+            remoteTimelineEmulator = get(),
         )
     } bind JsRunner::class
 }

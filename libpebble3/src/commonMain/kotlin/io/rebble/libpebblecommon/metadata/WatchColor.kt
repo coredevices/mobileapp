@@ -38,7 +38,10 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     Time2Gold(33, "pebble_time_2_gold", "Pebble Time 2 - Gold", WatchType.EMERY),
     Pebble2DuoBlack(34, "pebble_2_duo_black", "Pebble 2 Duo - Black", WatchType.FLINT),
     Pebble2DuoWhite(35, "pebble_2_duo_white", "Pebble 2 Duo - White", WatchType.FLINT, color = Color.White),
-    PebbleTime2Black(36, "pebble_time_2_black", "Pebble Time 2 - Black", WatchType.EMERY),
+    PebbleTime2BlackGray(36, "pebble_time_2_black_gray", "Pebble Time 2 - Black/Gray", WatchType.EMERY),
+    PebbleTime2BlackRed(37, "pebble_time_2_black_red", "Pebble Time 2 - Black/Red", WatchType.EMERY),
+    PebbleTime2SilverBlue(38, "pebble_time_2_silver_blue", "Pebble Time 2 - Silver/Blue", WatchType.EMERY),
+    PebbleTime2SilverGray(39, "pebble_time_2_silver_gray", "Pebble Time 2 - Silver/Gray", WatchType.EMERY),
     Unknown(-1, "unknown_unknown", "Unknown Watch!", WatchType.APLITE);
 
     companion object {

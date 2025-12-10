@@ -43,19 +43,23 @@ class TimelineItem(
         }
     }
 
-    enum class Layout(val value: UByte) {
-        GenericPin(1u),
-        CalendarPin(2u),
-        GenericReminder(3u),
-        GenericNotification(4u),
-        CommNotification(5u),
-        WeatherPin(6u),
-        SportsPin(7u);
+    enum class Layout(val value: UByte, val code: String) {
+        GenericPin(1u, "genericPin"),
+        CalendarPin(2u, "calendarPin"),
+        GenericReminder(3u, "genericReminder"),
+        GenericNotification(4u, "genericNotification"),
+        CommNotification(5u, "commNotification"),
+        WeatherPin(6u, "weatherPin"),
+        SportsPin(7u, "sportsPin");
 
         companion object {
             fun fromValue(value: UByte): Layout {
                 return entries.firstOrNull { it.value == value }
                     ?: error("Unknown timeline item layout: $value")
+            }
+
+            fun fromCode(code: String): Layout? {
+                return entries.firstOrNull { it.code == code }
             }
         }
     }
@@ -289,7 +293,7 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     Headings(0x19u, 128),
     Paragraphs(0x1Au, 1024),
     ForegroundColor(0x1Bu),
-    PrimaryColor(0x1Cu),
+    BackgroundColor(0x1Cu),
     SecondaryColor(0x1Du),
     AppName(30u),
     DisplayRecurring(0x1Fu),
@@ -299,6 +303,7 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     MuteDayOfWeek(40u),
     SubtitleTemplateString(0x2Fu, 150),
     Icon(0x30u),
+    VibrationPattern(0x31u),
     ;
 
     companion object {

@@ -1,0 +1,7 @@
+package coredevices.ui
+
+import platform.Foundation.NSCachesDirectory
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask

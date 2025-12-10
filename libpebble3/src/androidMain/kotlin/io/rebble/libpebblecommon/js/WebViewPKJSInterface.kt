@@ -12,7 +12,8 @@ class WebViewPKJSInterface(
     private val context: Context,
     libPebble: LibPebble,
     jsTokenUtil: JsTokenUtil,
-): PKJSInterface(jsRunner, device, libPebble, jsTokenUtil) {
+    remoteTimelineEmulator: RemoteTimelineEmulator,
+): PKJSInterface(jsRunner, device, libPebble, jsTokenUtil, remoteTimelineEmulator) {
     companion object {
         private val logger = Logger.withTag(WebViewPKJSInterface::class.simpleName!!)
     }

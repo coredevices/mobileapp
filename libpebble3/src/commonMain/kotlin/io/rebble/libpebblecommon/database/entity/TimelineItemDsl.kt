@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlin.time.Instant
 import io.rebble.libpebblecommon.util.PebbleColor
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
@@ -61,6 +62,10 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.TextListAttribute(attribute, block()))
     }
 
+    fun uIntList(attribute: TimelineAttribute, block: () -> List<UInt>) {
+        attributes.add(BaseAttribute.UIntListAttribute(attribute, block()))
+    }
+
     fun title(block: () -> String) {
         string(TimelineAttribute.Title, block)
     }
@@ -102,12 +107,24 @@ class AttributesListBuilder internal constructor() {
     }
 
     fun primaryColor(block: () -> PebbleColor) {
-        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.PrimaryColor, block()))
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.ForegroundColor, block()))
     }
-//
-//    fun lastUpdated(block: () -> UInt) {
-//        attributes.add(TimelineAttributeFactory.lastUpdated(block()))
-//    }
+
+    fun secondaryColor(block: () -> PebbleColor) {
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.SecondaryColor, block()))
+    }
+
+    fun backgroundColor(block: () -> PebbleColor) {
+        attributes.add(BaseAttribute.ColorAttribute(TimelineAttribute.BackgroundColor, block()))
+    }
+
+    fun lastUpdated(block: () -> Instant) {
+        attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
+    }
+
+    fun vibrationPattern(block: () -> List<UInt>) {
+        uIntList(TimelineAttribute.VibrationPattern, block)
+    }
 
     internal fun build(): List<BaseAttribute> {
         return attributes

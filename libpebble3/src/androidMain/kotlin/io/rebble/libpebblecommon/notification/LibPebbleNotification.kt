@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.SystemAppIDs.ANDROID_NOTIFICATIONS_UUID
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
@@ -29,7 +30,8 @@ data class LibPebbleNotification(
     val body: String?,
     val icon: TimelineIcon,
     val actions: List<LibPebbleNotificationAction>,
-    val people: List<String>,
+    val people: List<ContactEntity>,
+    val vibrationPattern: List<UInt>?,
     val color: Int? = null, // ARGB
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
@@ -98,7 +100,10 @@ data class LibPebbleNotification(
                 body { it }
             }
             color?.let {
-                primaryColor { it.toPebbleColor() }
+                backgroundColor { it.toPebbleColor() }
+            }
+            vibrationPattern?.let {
+                vibrationPattern { it }
             }
             tinyIcon { icon }
         }
@@ -129,7 +134,7 @@ fun LibPebbleNotification.toEntity(
     body = body,
     decision = decision,
     channelId = channelId,
-    people = people,
+    people = people.map { it.lookupKey },
 )
 
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {

@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createStringListA
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createTextAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUByteAttribute
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntListAttribute
 import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
@@ -113,6 +114,24 @@ sealed class BaseAttribute {
     ) : BaseAttribute() {
         override fun asAttribute(): TimelineItem.Attribute =
             createUByteAttribute(attribute, color.toProtocolNumber())
+    }
+
+    @Serializable
+    data class UIntListAttribute(
+        override val attribute: TimelineAttribute,
+        val list: List<UInt>,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUIntListAttribute(attribute, list)
+    }
+
+    @Serializable
+    data class UIntAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UInt,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUIntAttribute(attribute, value)
     }
 }
 

@@ -8,6 +8,8 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
@@ -73,6 +75,7 @@ class WatchManagerTest {
         override val batteryWatcher: BatteryWatcher,
         override val analyticsLogger: ConnectionAnalyticsLogger,
         override val usingBtClassic: Boolean,
+        override val languagePackInstaller: LanguagePackInstaller,
     ) : ConnectionScope {
         override fun close() {
         }
@@ -141,7 +144,7 @@ class WatchManagerTest {
     }
     private val firmwareUpdater = object : FirmwareUpdater {
         override val firmwareUpdateState: StateFlow<FirmwareUpdater.FirmwareUpdateStatus>
-            = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle)
+            = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle())
 
         override fun init(watchPlatform: WatchHardwarePlatform, slot: Int?) {
         }
@@ -209,6 +212,10 @@ class WatchManagerTest {
             ) {
             }
         }
+        val langPackInstaller = object : LanguagePackInstaller {
+            override val state: StateFlow<LanguagePackInstallState> = MutableStateFlow(
+                LanguagePackInstallState.Idle())
+        }
         val connectionScopeFactory = object : ConnectionScopeFactory {
             override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
                 return TestConnectionScope(
@@ -219,6 +226,7 @@ class WatchManagerTest {
                     batteryWatcher = batteryWatcher,
                     analyticsLogger = analyticsLogger,
                     usingBtClassic = false,
+                    languagePackInstaller = langPackInstaller,
                 )
             }
         }

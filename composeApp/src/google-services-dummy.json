@@ -1,0 +1,71 @@
+{
+  "project_info": {
+    "project_number": "replaceme",
+    "project_id": "replaceme",
+    "storage_bucket": "replaceme"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "replaceme",
+        "android_client_info": {
+          "package_name": "coredevices.coreapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "replaceme",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "coredevices.coreapp",
+            "certificate_hash": "replaceme"
+          }
+        },
+        {
+          "client_id": "replaceme",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "coredevices.coreapp",
+            "certificate_hash": "replaceme"
+          }
+        },
+        {
+          "client_id": "replaceme",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "coredevices.coreapp",
+            "certificate_hash": "replaceme"
+          }
+        },
+        {
+          "client_id": "replaceme",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "coredevices.coreapp",
+            "certificate_hash": "replaceme"
+          }
+        },
+        {
+          "client_id": "replaceme",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "replaceme"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "replaceme",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

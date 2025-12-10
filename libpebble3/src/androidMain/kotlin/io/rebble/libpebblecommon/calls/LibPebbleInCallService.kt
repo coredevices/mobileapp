@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.calls
 
+import android.content.ContentResolver
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
@@ -17,6 +19,30 @@ import kotlin.random.nextUInt
 class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     companion object {
         private val logger = Logger.withTag("LibPebbleInCallService")
+
+        fun ContentResolver.resolveNameFromContacts(number: String?): String? {
+            if (number == null) return null
+            return try {
+                val lookupUri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+                val cursor = query(
+                    lookupUri,
+                    arrayOf(Contacts.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        it.getString(it.getColumnIndexOrThrow(Contacts.DISPLAY_NAME))
+                    } else {
+                        null
+                    }
+                }
+            } catch (e: SecurityException) {
+                logger.w(e) { "Error getting contact name" }
+                null
+            }
+        }
     }
 
     private val libPebble: LibPebble by inject()
@@ -72,21 +98,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             details.contactDisplayName
         } else {
-            val cursor = contentResolver.query(
-                Contacts.CONTENT_URI,
-                arrayOf(Contacts.DISPLAY_NAME),
-                Contacts.HAS_PHONE_NUMBER + " = 1 AND " + ContactsContract.CommonDataKinds.Phone.NUMBER + " = ?",
-                arrayOf(details.handle.schemeSpecificPart),
-                null
-            )
-            val name = cursor?.use {
-                if (it.moveToFirst()) {
-                    it.getString(it.getColumnIndexOrThrow(Contacts.DISPLAY_NAME))
-                } else {
-                    null
-                }
-            }
-            return name
+            contentResolver.resolveNameFromContacts(details.handle.schemeSpecificPart)
         }
     }
 

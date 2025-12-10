@@ -4,6 +4,9 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
+import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
+import io.rebble.libpebblecommon.connection.endpointmanager.installedLanguagePack
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -27,6 +30,7 @@ class PebbleDeviceFactory {
         batteryLevel: Int?,
         connectionFailureInfo: ConnectionFailureInfo?,
         usingBtClassic: Boolean,
+        languagePackInstallState: LanguagePackInstallState,
     ): PebbleDevice {
         val pebbleDevice = RealPebbleDevice(
             identifier = identifier,
@@ -90,6 +94,8 @@ class PebbleDeviceFactory {
                             firmwareUpdateState = firmwareUpdateState,
                             firmwareUpdateAvailable = firmwareUpdateAvailable,
                             batteryLevel = batteryLevel,
+                            languagePackInstallState = languagePackInstallState,
+                            installedLanguagePack = state.watchInfo.installedLanguagePack(),
                         )
                 }
             }
@@ -236,6 +242,8 @@ internal class RealConnectedPebbleDevice(
     override val firmwareUpdateState: FirmwareUpdateStatus,
     override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
     override val batteryLevel: Int?,
+    override val languagePackInstallState: LanguagePackInstallState,
+    override val installedLanguagePack: InstalledLanguagePack?,
 ) : ConnectedPebbleDevice,
     KnownPebbleDevice by knownDevice,
     ActiveDevice by activeDevice,
@@ -252,7 +260,7 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.CompanionAppControl by services.companionAppControl,
     ConnectedPebble.DevConnection by services.devConnection,
     ConnectedPebble.Screenshot by services.screenshot,
-    ConnectedPebble.Language by services.language {
+    ConnectedPebble.LanguageInstall by services.language {
 
     override fun toString(): String =
         "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"

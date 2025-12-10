@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.database.entity
 
 import androidx.compose.runtime.Immutable
+import androidx.room.ColumnInfo
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
@@ -21,8 +22,9 @@ import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
-import kotlin.time.Instant
 import kotlinx.serialization.Serializable
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Instant
 
 @Immutable
 @GenerateRoomEntity(
@@ -43,6 +45,12 @@ data class NotificationAppItem(
      */
     val stateUpdated: MillisecondInstant,
     val lastNotified: MillisecondInstant,
+    @ColumnInfo(defaultValue = "null")
+    val vibePatternName: String?,
+    @ColumnInfo(defaultValue = "null")
+    val colorName: String?,
+    @ColumnInfo(defaultValue = "null")
+    val iconCode: String?,
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
@@ -162,7 +170,12 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             name = appName,
             channelGroups = emptyList(),
             lastNotified = lastUpdated.asMillisecond(),
+            vibePatternName = null,
+            colorName = null,
+            iconCode = null,
         )
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         logger.d("decoding app record ${e.message}", e)
         return null

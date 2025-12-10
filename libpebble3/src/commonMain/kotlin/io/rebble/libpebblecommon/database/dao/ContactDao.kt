@@ -47,8 +47,8 @@ interface ContactDao {
 
     @Query("""
         UPDATE ContactEntity
-        SET muteState = :muteState
+        SET muteState = :muteState, vibePatternName = :vibePatternName
         WHERE lookupKey = :key
     """)
-    suspend fun updateContactMuteState(key: String, muteState: MuteState)
+    suspend fun updateContactState(key: String, muteState: MuteState, vibePatternName: String?)
 }

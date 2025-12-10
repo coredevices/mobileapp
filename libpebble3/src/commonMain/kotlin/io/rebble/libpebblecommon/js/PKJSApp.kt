@@ -81,6 +81,10 @@ class PKJSApp(
         }
     }
 
+    fun debugForceGC() {
+        jsRunner?.debugForceGC() ?: error("JsRunner not initialized")
+    }
+
     private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
         device.inboundAppMessages(uuid).onEach { appMessageData ->
             jsRunner?.let { runner ->

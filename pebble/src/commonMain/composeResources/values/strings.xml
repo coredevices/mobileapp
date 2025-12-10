@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="devices">Devices</string>
+    <string name="faces">Faces</string>
+    <string name="apps">Apps</string>
+    <string name="notifications">Notifications</string>
+    <string name="settings">Settings</string>
+    <string name="app_store">App Store</string>
+</resources>

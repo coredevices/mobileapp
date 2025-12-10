@@ -16,8 +16,8 @@ class WebViewGeolocationInterface(
     }
 
     @JavascriptInterface
-    override fun watchPosition(id: Double): Int {
-        return super.watchPosition(id)
+    override fun watchPosition(id: Double, interval: Double): Int {
+        return super.watchPosition(id, interval)
     }
 
     @JavascriptInterface

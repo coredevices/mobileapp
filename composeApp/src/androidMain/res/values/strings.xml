@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Pebble</string>
+    <string name="intent_filter_notion_login">Notion Linking</string>
+</resources>

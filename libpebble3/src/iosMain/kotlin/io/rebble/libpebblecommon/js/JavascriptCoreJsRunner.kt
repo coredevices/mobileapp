@@ -7,11 +7,11 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
@@ -22,9 +22,14 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import platform.Foundation.NSBundle
+import platform.Foundation.NSLocale
 import platform.Foundation.NSSelectorFromString
 import platform.Foundation.NSURL
+import platform.Foundation.currentLocale
+import platform.Foundation.localeIdentifier
 import platform.JavaScriptCore.JSContext
+import platform.JavaScriptCore.JSGarbageCollect
+import platform.JavaScriptCore.JSGlobalContextRef
 import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
@@ -33,7 +38,6 @@ class JavascriptCoreJsRunner(
     private val appContext: AppContext,
     private val libPebble: LibPebble,
     private val jsTokenUtil: JsTokenUtil,
-
     device: CompanionAppDevice,
     private val scope: CoroutineScope,
     appInfo: PbwAppInfo,
@@ -41,31 +45,38 @@ class JavascriptCoreJsRunner(
     jsPath: Path,
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
-    private var interfaces: List<RegisterableJsInterface>? = null
+    private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
+
+    override fun debugForceGC() {
+        runBlocking(threadContext) {
+            JSGarbageCollect(jsContext!!.JSGlobalContextRef())
+        }
+    }
 
     private fun initInterfaces(jsContext: JSContext) {
         fun eval(js: String) = this.jsContext?.evalCatching(js)
         fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, ::eval),
+            XMLHTTPRequestManager(interfacesScope, ::eval, remoteTimelineEmulator, appInfo),
             JSTimeout(interfacesScope, ::evalRaw),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, ::evalRaw),
             JSCGeolocationInterface(interfacesScope, this)
         )
+        interfacesRef = StableRef.create(instances)
         instances.forEach {
             jsContext[it.name] = it.interf
             it.onRegister(jsContext)
         }
-        interfaces = instances
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
@@ -101,7 +112,7 @@ class JavascriptCoreJsRunner(
             jsContext.setName("PKJS: ${appInfo.longName}")
             val selector = NSSelectorFromString("setInspectable:")
             if (jsContext.respondsToSelector(selector)) {
-                jsContext.setInspectable(true)
+                jsContext.setInspectable(libPebble.config.value.watchConfig.pkjsInspectable)
             } else {
                 logger.w { "JSContext.setInspectable not available on this iOS version" }
             }
@@ -113,9 +124,11 @@ class JavascriptCoreJsRunner(
         scope.cancel()
         _readyState.value = false
         runBlocking(threadContext) {
-            interfaces?.forEach { it.close() }
-            interfaces = null
-            jsContext?.finalize()
+            interfacesRef?.let {
+                it.get().forEach { iface -> iface.close() }
+                it.dispose()
+            }
+            interfacesRef = null
             jsContext = null
         }
         GC.collect()
@@ -129,7 +142,8 @@ class JavascriptCoreJsRunner(
 
     private val navigator = mapOf(
         "userAgent" to "PKJS",
-        "geolocation" to emptyMap<String, Any>()
+        "geolocation" to emptyMap<String, Any>(),
+        "language" to NSLocale.currentLocale.localeIdentifier
     )
 
     private fun setupNavigator() {

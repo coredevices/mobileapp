@@ -1,0 +1,9 @@
+source 'https://cdn.cocoapods.org'
+
+platform :ios, '15.6'
+use_frameworks!
+
+target 'iosApp' do
+        pod 'composeApp', :path => '../composeApp'
+        pod 'Mixpanel-swift'
+end

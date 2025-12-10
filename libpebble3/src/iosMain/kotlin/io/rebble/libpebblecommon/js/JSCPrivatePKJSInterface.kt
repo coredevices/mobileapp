@@ -12,8 +12,10 @@ class JSCPrivatePKJSInterface(
     device: CompanionAppDevice,
     scope: CoroutineScope,
     outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
-    logMessages: Channel<String>
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages), RegisterableJsInterface {
+    logMessages: Channel<String>,
+    jsTokenUtil: JsTokenUtil,
+    remoteTimelineEmulator: RemoteTimelineEmulator,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(
@@ -39,6 +41,8 @@ class JSCPrivatePKJSInterface(
         "getTimelineTokenAsync" to this::getTimelineTokenAsync,
         "privateFnConfirmReadySignal" to this::privateFnConfirmReadySignal,
         "getActivePebbleWatchInfo" to this::getActivePebbleWatchInfo,
+        "insertTimelinePin" to this::insertTimelinePin,
+        "deleteTimelinePin" to this::deleteTimelinePin,
     )
 
     override val name: String = "_Pebble"

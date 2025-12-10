@@ -60,10 +60,13 @@ data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimit: Int = 25,
     val calendarReminders: Boolean = true,
+    val calendarShowDeclinedEvents: Boolean = false,
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val verboseWatchManagerLogging: Boolean = false,
     val preferBtClassicV2: Boolean = false,
+    val pkjsInspectable: Boolean = false,
+    val emulateRemoteTimeline: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -110,6 +113,12 @@ data class NotificationConfig(
      * Default new apps to be enabled (else they will be disabled).
      */
     val defaultAppsToEnabled: Boolean = true,
+    /**
+     * When [false], no notifications will be sent at all
+     */
+    val sendNotifications: Boolean = true,
+    val useAndroidVibePatterns: Boolean = false,
+    val overrideDefaultVibePattern: String? = null,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

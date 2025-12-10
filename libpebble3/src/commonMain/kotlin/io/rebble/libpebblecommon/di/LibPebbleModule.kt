@@ -40,6 +40,7 @@ import io.rebble.libpebblecommon.connection.RealPebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.RealScanning
 import io.rebble.libpebblecommon.connection.RequestSync
 import io.rebble.libpebblecommon.connection.Scanning
+import io.rebble.libpebblecommon.connection.Timeline
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
@@ -69,11 +70,12 @@ import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
+import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
@@ -98,6 +100,7 @@ import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
+import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
@@ -122,6 +125,7 @@ import io.rebble.libpebblecommon.services.appmessage.AppMessageService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import io.rebble.libpebblecommon.time.createTimeChanged
+import io.rebble.libpebblecommon.timeline.TimelineApi
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.FirmwareDownloader
@@ -200,6 +204,7 @@ interface ConnectionScope {
     val batteryWatcher: BatteryWatcher
     val analyticsLogger: ConnectionAnalyticsLogger
     val usingBtClassic: Boolean
+    val languagePackInstaller: LanguagePackInstaller
 }
 
 class RealConnectionScope(
@@ -215,6 +220,7 @@ class RealConnectionScope(
     override val batteryWatcher: BatteryWatcher = koinScope.get()
     override val analyticsLogger: ConnectionAnalyticsLogger = koinScope.get()
     override val usingBtClassic: Boolean = koinScope.get<UseBtClassicAddress>().address != null
+    override val languagePackInstaller: LanguagePackInstaller = koinScope.get()
 
     override fun close() {
         Logger.d("close ConnectionScope: $koinScope / $uuid")
@@ -316,6 +322,7 @@ fun initKoin(
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
+                single { get<Database>().vibePatternDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -323,7 +330,9 @@ fun initKoin(
                 singleOf(::Locker)
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
+                singleOf(::RemoteTimelineEmulator)
                 singleOf(::WebSyncManager) bind RequestSync::class
+                singleOf(::TimelineApi) bind Timeline::class
                 single { WebSyncManagerProvider { get() } }
                 single { createTimeChanged(get()) }
                 single {
@@ -350,7 +359,11 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
-                        get()
+                        get(),
+                        get(),
+                        get(),
+                        get(),
+                        get(),
                     )
                 } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
@@ -496,7 +509,7 @@ fun initKoin(
                     scopedOf(::PhoneControlManager)
                     scopedOf(::MusicControlManager)
                     scopedOf(::AppOrderManager)
-                    scopedOf(::LanguagePackInstaller)
+                    scopedOf(::RealLanguagePackInstaller) bind LanguagePackInstaller::class
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
                     scoped {
                         DevConnectionManager(

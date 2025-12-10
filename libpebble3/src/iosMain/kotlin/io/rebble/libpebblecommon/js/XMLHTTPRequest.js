@@ -45,6 +45,12 @@ class XMLHttpRequest {
         if (!password) {
             password = "";
         }
+        if (!method) {
+            throw new Error("SyntaxError: Method is required.");
+        }
+        if (!url) {
+            throw new Error("SyntaxError: URL is required.");
+        }
         _XMLHTTPRequestManager.open(this._instanceID, method, url, async, user, password);
     }
 

@@ -8,6 +8,8 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
+import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
+import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -21,6 +23,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -35,11 +38,13 @@ import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.notification.NotificationDecision
+import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
+import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -137,7 +142,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>> {
-        return flow { emptyList<AppBasicProperties>() }
+        return flow { emit(emptyList()) }
     }
 
     val locker = MutableStateFlow(fakeLockerEntries)
@@ -151,7 +156,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
-        return flow { fakeLockerEntries.first() }
+        return flow { emit(fakeLockerEntries.first()) }
     }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
@@ -210,6 +215,15 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun updateNotificationAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconName: String?,
+    ) {
+        TODO("Not yet implemented")
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
@@ -250,12 +264,13 @@ class FakeLibPebble : LibPebble {
         get() = flow { }
 
     override fun getContactsWithCounts(): Flow<List<ContactWithCount>> {
-        return flow { emptyList<ContactWithCount>() }
+        return flow { emit(emptyList()) }
     }
 
-    override fun updateContactMuteState(
+    override fun updateContactState(
         contactId: String,
-        muteState: MuteState
+        muteState: MuteState,
+        vibePatternName: String?,
     ) {
     }
 
@@ -266,9 +281,46 @@ class FakeLibPebble : LibPebble {
     override val analyticsEvents: Flow<AnalyticsEvent>
         get() = flow { }
     override val healthSettings: Flow<HealthSettings>
-        get() = flow { HealthSettings() }
+        get() = flow { emit(HealthSettings()) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
+    }
+
+    override suspend fun getCurrentPosition(): GeolocationPositionResult {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> {
+        TODO("Not yet implemented")
+    }
+
+    override fun insertOrReplace(pin: TimelinePin) {
+    }
+
+    override fun delete(pinUuid: Uuid) {
+    }
+
+    override fun vibePatterns(): Flow<List<VibePattern>> {
+        return flow {
+            emit(
+                listOf(
+                    VibePattern("Test", listOf(100, 200, 300), false),
+                    VibePattern("Test2", listOf(100, 200, 300), false),
+                    VibePattern("Test3", listOf(100, 200, 300), false),
+                )
+            )
+        }
+    }
+
+    override fun addCustomVibePattern(
+        name: String,
+        pattern: List<Long>
+    ) {
+        TODO("Not yet implemented")
+    }
+
+    override fun deleteCustomPattern(name: String) {
+        TODO("Not yet implemented")
     }
 }
 
@@ -305,7 +357,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
             )
             FirmwareUpdater.FirmwareUpdateStatus.InProgress(fakeUpdate, MutableStateFlow(0.47f))
         } else {
-            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle
+            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
         }
         val fwupAvailable = if (!updating && Random.nextBoolean()) {
             FirmwareUpdateCheckResult.FoundUpdate(
@@ -465,6 +517,7 @@ class FakeConnectedDevice(
 
     override val musicActions: Flow<MusicAction> = MutableSharedFlow()
     override val updateRequestTrigger: Flow<Unit> = MutableSharedFlow()
+
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
     override val currentCompanionAppSession: StateFlow<CompanionApp?> = MutableStateFlow(null)
@@ -481,8 +534,97 @@ class FakeConnectedDevice(
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
 
-    override suspend fun installLanguagePack(path: Path): Boolean {
-        return true
+    override fun installLanguagePack(path: Path, name: String) {
+    }
+
+    override fun installLanguagePack(url: String, name: String) {
+    }
+
+    override val languagePackInstallState: LanguagePackInstallState =
+        LanguagePackInstallState.Idle()
+    override val installedLanguagePack: InstalledLanguagePack? = null
+}
+
+class FakeConnectedDeviceInRecovery(
+    override val identifier: PebbleIdentifier,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
+    override val name: String,
+    override val nickname: String?,
+    override val color: WatchColor = run {
+        val white = Random.nextBoolean()
+        if (white) {
+            WatchColor.Pebble2DuoWhite
+        } else {
+            WatchColor.Pebble2DuoBlack
+        }
+    },
+    override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+    override val lastConnected: Instant = Instant.DISTANT_PAST,
+    override val serial: String = "XXXXXXXXXXXX",
+    override val runningFwVersion: String = "v1.2.3-core",
+    override val connectionFailureInfo: ConnectionFailureInfo?,
+    override val usingBtClassic: Boolean = false,
+) : ConnectedPebbleDeviceInRecovery {
+
+    override fun forget() {}
+    override fun setNickname(nickname: String?) {
+    }
+
+    override fun connect() {}
+
+    override fun disconnect() {}
+
+    override fun sideloadFirmware(path: Path) {}
+
+    override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
+
+    override fun checkforFirmwareUpdate() {}
+
+    override val watchInfo: WatchInfo = WatchInfo(
+        runningFwVersion = FirmwareVersion.from(
+            runningFwVersion,
+            isRecovery = false,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
+        )!!,
+        recoveryFwVersion = FirmwareVersion.from(
+            runningFwVersion,
+            isRecovery = true,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
+        )!!,
+        platform = watchType,
+        bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        board = "board",
+        serial = serial,
+        btAddress = "11:22:33:44:55:66",
+        resourceCrc = -9999999,
+        resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        language = "en-GB",
+        languageVersion = 1,
+        capabilities = emptySet(),
+        isUnfaithful = false,
+        healthInsightsVersion = null,
+        javascriptVersion = null,
+        color = color,
+    )
+
+    override suspend fun startDevConnection() {}
+    override suspend fun stopDevConnection() {}
+    override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val batteryLevel: Int? = 50
+
+    override suspend fun gatherLogs(): Path? {
+        return null
+    }
+
+    override suspend fun getCoreDump(unread: Boolean): Path? {
+        return null
     }
 }
 
@@ -504,6 +646,9 @@ fun fakeNotificationApp(): NotificationAppItem {
         channelGroups = if (Random.nextBoolean()) emptyList() else fakeChannelGroups(),
         stateUpdated = Instant.DISTANT_PAST.asMillisecond(),
         lastNotified = Instant.DISTANT_PAST.asMillisecond(),
+        vibePatternName = null,
+        colorName = null,
+        iconCode = null,
     )
 }
 

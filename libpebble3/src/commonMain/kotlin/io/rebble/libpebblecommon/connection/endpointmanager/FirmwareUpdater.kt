@@ -50,7 +50,7 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
 
     sealed class FirmwareUpdateStatus {
         sealed class NotInProgress : FirmwareUpdateStatus() {
-            data object Idle : NotInProgress()
+           data class Idle(val lastFailure: Exception? = null) : NotInProgress()
             data class ErrorStarting(val error: FirmwareUpdateErrorStarting) : NotInProgress()
         }
 
@@ -88,7 +88,7 @@ class RealFirmwareUpdater(
     private val logger = Logger.withTag("FWUpdate-$identifier")
     private var props: FwupProperties? = null
     private val _firmwareUpdateState =
-        MutableStateFlow<FirmwareUpdateStatus>(FirmwareUpdateStatus.NotInProgress.Idle)
+        MutableStateFlow<FirmwareUpdateStatus>(FirmwareUpdateStatus.NotInProgress.Idle())
     override val firmwareUpdateState: StateFlow<FirmwareUpdateStatus> =
         _firmwareUpdateState.asStateFlow()
 
@@ -212,6 +212,8 @@ class RealFirmwareUpdater(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 throw FirmwareUpdateException.TransferFailed(
                     "Failed to transfer resources",
@@ -248,6 +250,8 @@ class RealFirmwareUpdater(
             val pbz = PbzFirmware(path)
             val manifest = try {
                  pbz.findManifestFor(fwupProps.updateToSlot)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.w(e) { "Failed to find manifest for slot ${fwupProps.updateToSlot}" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
@@ -284,7 +288,7 @@ class RealFirmwareUpdater(
             if (!tryStartUpdateMutex(update)) {
                 return@launch
             }
-            val path = firmwareDownloader.downloadFirmware(update.url)
+            val path = firmwareDownloader.downloadFirmware(update.url, "pbz")
             if (path == null) {
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
                     FirmwareUpdateErrorStarting.ErrorDownloading)
@@ -292,6 +296,8 @@ class RealFirmwareUpdater(
             }
             val pbz = try {
                 PbzFirmware(path)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.w(e) { "Failed to parse firmware: ${e.message}" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
@@ -332,18 +338,24 @@ class RealFirmwareUpdater(
             return
         } catch (e: IllegalArgumentException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
         } catch (e: PutBytesService.PutBytesException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
         } catch (e: FirmwareUpdateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+        } catch (e: CancellationException) {
+           _firmwareUpdateState.value =
+              FirmwareUpdateStatus.NotInProgress.ErrorStarting(FirmwareUpdateErrorStarting.ErrorDownloading)
+           throw e
         } catch (e: IllegalStateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
         } catch (e: Exception) {
             logger.e(e) { "Firmware update failed (unknown): ${e.message}" }
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
         }
-        // Only if we hit an exception (i.e. we deliverately leave it in WaitingForReboot above if
-        // completed successfully).
-        _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle
     }
 
     private fun sendFirmware(

@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.js
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -14,6 +15,7 @@ abstract class PKJSInterface(
     protected val device: CompanionAppDevice,
     private val libPebble: LibPebble,
     private val jsTokenUtil: JsTokenUtil,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
 ) {
     open fun showSimpleNotificationOnPebble(title: String, notificationText: String) {
         runBlocking {

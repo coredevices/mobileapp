@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.js
 
 import io.ktor.utils.io.core.toByteArray
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.PKJSToken
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
@@ -11,6 +12,7 @@ import kotlin.uuid.Uuid
 class JsTokenUtil(
     private val tokenProvider: TokenProvider,
     private val lockerEntryDao: LockerEntryDao,
+    private val watchConfigFlow: WatchConfigFlow,
 ): PKJSToken {
     companion object {
         private const val ACCOUNT_TOKEN_SALT =
@@ -41,6 +43,16 @@ class JsTokenUtil(
         val devToken = tokenProvider.getDevToken() ?: return null
         val devId = lockerEntryDao.getEntry(appUuid)?.appstoreData?.developerId
         return generateToken(appUuid, devId ?: appUuid.toString().uppercase(), devToken)
+    }
+
+    suspend fun getTimelineToken(uuid: Uuid): String? {
+        val realToken = lockerEntryDao.getEntry(uuid)?.appstoreData?.userToken
+        val fallback = if (watchConfigFlow.value.emulateRemoteTimeline) {
+            "emulated-dummy-token"
+        } else {
+            null
+        }
+        return realToken ?: fallback
     }
 
     suspend fun getSandboxTimelineToken(uuid: Uuid): String? {

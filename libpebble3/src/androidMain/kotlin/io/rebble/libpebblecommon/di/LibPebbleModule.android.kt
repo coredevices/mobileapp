@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.di
 import android.app.Application
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -14,6 +15,7 @@ import io.rebble.libpebblecommon.connection.bt.classic.pebble.BtClassicConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidPhoneReceiver
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.connection.bt.classic.transport.AndroidBtClassicConnector
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.AndroidSystemContacts
@@ -76,9 +78,10 @@ actual val platformModule: Module = module {
     singleOf(::AndroidPackageChangedReceiver)
     singleOf(::OtherPebbleAndroidApps) bind OtherPebbleApps::class
     singleOf(::AndroidSystemContacts) bind SystemContacts::class
+    singleOf(::AndroidPhoneReceiver) bind LegacyPhoneReceiver::class
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
-    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }

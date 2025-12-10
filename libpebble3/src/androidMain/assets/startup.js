@@ -2,7 +2,7 @@
 const _global = typeof window !== 'undefined' ? window : globalThis;
 window = _global; // For compatibility with existing code that expects `window`
 _global.onerror = (message, source, lineno, colno, error) => {
-    _Pebble.onError(message, source, lineno, colno, error);
+    _Pebble.onError(message, source, lineno, colno);
 };
 _global.onunhandledrejection = (event) => {
     _Pebble.onUnhandledRejection(event.reason);
@@ -46,7 +46,7 @@ navigator.geolocation.getCurrentPosition = (success, error, options) => {
 navigator.geolocation.watchPosition = (success, error, options) => {
     const id = _PebbleGeo.getWatchCallbackID();
     _PebbleGeoCB._watchCallbacks.set(id, { success, error });
-    _PebbleGeo.watchPosition(id);
+    _PebbleGeo.watchPosition(id, options && options.frequency ? options.frequency : 500);
     return id;
 };
 navigator.geolocation.clearWatch = (id) => {
@@ -66,7 +66,25 @@ navigator.geolocation.clearWatch = (id) => {
     }
     const sendLog = (level, ...args) => {
         // build args into a single string
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        const message = args.map((arg) => {
+            if (arg instanceof Error) {
+                return "\n" + JSON.stringify({
+                    message: arg.message,
+                    lineNumber: arg.lineNumber,
+                    columnNumber: arg.columnNumber,
+                    name: arg.name,
+                    stack: arg.stack,
+                }, null, 2);
+            } else if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return '[object]';
+                }
+            } else {
+                return String(arg);
+            }
+        }).join(' ');
         const traceback = new Error().stack;
         _Pebble.onConsoleLog(level, message, traceback);
     }
@@ -248,11 +266,25 @@ navigator.geolocation.clearWatch = (id) => {
         dispatchPebbleEvent('settings_webui_allowed', {});
     };
     global.signalTimelineTokenSuccess = (data) => {
-        const payload = data ? JSON.parse(data) : {};
+        var payload;
+        if (typeof data === 'string') {
+            // Android
+            payload = data ? JSON.parse(data) : {};
+        } else {
+            // iOS
+            payload = data
+        }
         dispatchPebbleEvent(PebbleEventTypes.GET_TIMELINE_TOKEN_SUCCESS, { payload });
     };
     global.signalTimelineTokenFailure = (data) => {
-        const payload = data ? JSON.parse(data) : {};
+        var payload;
+        if (typeof data === 'string') {
+            // Android
+            payload = data ? JSON.parse(data) : {};
+        } else {
+            // iOS
+            payload = data
+        }
         dispatchPebbleEvent(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, { payload });
     };
 
@@ -302,14 +334,14 @@ navigator.geolocation.clearWatch = (id) => {
         getTimelineToken: (onSuccess, onFailure) => {
             const callId = _Pebble.getTimelineTokenAsync();
             const successCallback = (e) => {
-                if (e.data.callId === callId) {
-                    onSuccess(e.data.userToken);
+                if (e.payload.callId === callId) {
+                    onSuccess(e.payload.userToken);
                     pebbleEventHandler.removeEventListener(PebbleEventTypes.GET_TIMELINE_TOKEN_SUCCESS, successCallback);
                     pebbleEventHandler.removeEventListener(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, failureCallback);
                 }
             }
             const failureCallback = (e) => {
-                if (e.data.callId === callId) {
+                if (e.payload.callId === callId) {
                     onFailure();
                     pebbleEventHandler.removeEventListener(PebbleEventTypes.GET_TIMELINE_TOKEN_SUCCESS, successCallback);
                     pebbleEventHandler.removeEventListener(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, failureCallback);
@@ -334,6 +366,18 @@ navigator.geolocation.clearWatch = (id) => {
         appGlanceReload: (appGlanceSlices, onSuccess, onFailure) => {
             //TODO
         },
+        insertTimelinePin: (pin) => {
+            var pinString;
+            if (typeof pin === 'string') {
+                pinString = pin;
+            } else {
+                pinString = JSON.stringify(pin);
+            }
+            _Pebble.insertTimelinePin(pinString);
+        },
+        deleteTimelinePin: (id) => {
+            _Pebble.deleteTimelinePin(id);
+        },
     }
     global.Pebble.addEventListener = PebbleAPI.addEventListener;
     global.Pebble.removeEventListener = PebbleAPI.removeEventListener;
@@ -344,6 +388,73 @@ navigator.geolocation.clearWatch = (id) => {
     global.Pebble.timelineSubscriptions = PebbleAPI.timelineSubscriptions;
     global.Pebble.getActiveWatchInfo = PebbleAPI.getActiveWatchInfo;
     global.Pebble.appGlanceReload = PebbleAPI.appGlanceReload;
+    global.Pebble.insertTimelinePin = PebbleAPI.insertTimelinePin;
+    global.Pebble.deleteTimelinePin = PebbleAPI.deleteTimelinePin;
+
+    // Enable intercepting XHR calls (on Android - this doesn't work on iOS so we don't add
+    // shouldIntercept to the PKJS interface there).
+    XMLHttpRequest.prototype.originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+        const xhr = this;
+        xhr.pkjsUrl = url;
+        xhr.pkjsMethod = method;
+        xhr.pkjsIntercept = false;
+
+        try {
+            xhr.pkjsIntercept = _Pebble.shouldIntercept(url);
+            if (xhr.pkjsIntercept) {
+                console.log("XHR intercepting! returning from open")
+                return;
+            }
+        } catch (error) {
+            // iOS will fall through here and never intercept
+        }
+
+        if (arguments.length >= 5) {
+            xhr.originalOpen(method, url, async, user, password);
+        } else if (arguments.length >= 4) {
+            xhr.originalOpen(method, url, async, user);
+        } else if (arguments.length >= 3) {
+            xhr.originalOpen(method, url, async);
+        } else {
+            xhr.originalOpen(method, url);
+        }
+    };
+
+    XMLHttpRequest.prototype.originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+        const xhr = this;
+        if (xhr.pkjsIntercept) {
+            // If we don't do this, later send call will fail
+            return;
+        }
+        xhr.originalSetRequestHeader(header, value);
+    };
+
+    XMLHttpRequest.prototype.originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+        const xhr = this;
+
+        if (xhr.pkjsIntercept) {
+            try {
+                const response = _Pebble.onIntercepted(xhr.pkjsUrl, xhr.pkjsMethod, body)
+                // Define the read-only properties to simulate a successful response
+                Object.defineProperty(xhr, 'readyState', { value: XMLHttpRequest.DONE, configurable: true });
+                Object.defineProperty(xhr, 'status', { value: 200, configurable: true });
+                Object.defineProperty(xhr, 'statusText', { value: 'OK', configurable: true });
+                Object.defineProperty(xhr, 'response', { value: response, configurable: true });
+                Object.defineProperty(xhr, 'responseText', { value: response, configurable: true });
+                // Dispatch events to notify any listeners that the request is complete
+                xhr.dispatchEvent(new Event('readystatechange'));
+                xhr.dispatchEvent(new Event('load'));
+                xhr.dispatchEvent(new Event('loadend'));
+                return;
+            } catch (error) {
+            }
+        }
+
+        xhr.originalSend(body);
+    };
 
     console.log("Pebble JS Bridge initialized.");
 })(_global);

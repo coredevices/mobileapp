@@ -36,6 +36,24 @@ To fully enable PebbleKit Android Classic, you have to add this provider to your
 
 Note that by doing so, your app will not be able to be installed alongside other apps that also do this.
 
+# Mobile App
+
+The cross-platform Pebble mobile app is located in `composeApp`.
+
+Compile on Android with `./gradlew :composeApp:assembleRelease`.
+Compile on iOS in xcode (after running a gradle sync to generate project files).
+
+You will need a GitHub username (`github.username`) and token (`github.token`) configured in `local.properties` to fetch the speex module.
+You will need a `google-services.json` in `composeApp/src` to compile on Android (an examples with dummy values is provided in `google-services-dummy.json`).
+You will need a `GoogleService-Info.plist` in `iosApp/iosApp` to compile on iOS.
+You will need a keystore with some keys if you intend to do a release build on Android (unless you use `LOCAL_RELEASE_BUILD=true` in `gradle.properties`).
+
+Several features (e.g. bug reporting, google login, memfault, online transcription, github developer connection) will not work without tokens configured in `gradle.properties` (but all core features do work).
+
+### Naming your project
+
+In order to honour the Pebble trademark, you may not use "Pebble" in the name of your app, product or service, except in a referential manner. For example, "Awesome App for Pebble" is acceptable, but "Pebble Awesome" is not.
+
 # Contributing
 
 We aren't actively encouraging contributions yet, while we are aggressively building out feature parity with the original Pebble apps. CI testing is not comprehensive, so changes need to be manually tested with real hardware using CoreApp, and our roadmap/bug tracker is not currently on github. We will update when this changes.

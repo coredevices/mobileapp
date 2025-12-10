@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
+import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Looper
 import androidx.core.location.LocationListenerCompat
@@ -26,6 +27,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
@@ -37,7 +39,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
     }
     @SuppressLint("MissingPermission")
-    private val location = callbackFlow {
+    private fun locationFlow(intervalMillis: Long) = callbackFlow {
         if (!checkPermission()) {
             trySend(GeolocationPositionResult.Error("Location permission not granted"))
             close()
@@ -52,18 +54,12 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
             }
             logger.d { "Flow using location provider: $bestProvider" }
             val locationListener = object : LocationListenerCompat {
+                override fun onStatusChanged(provider: String, status: Int, extras: Bundle?) {
+                    logger.d { "Location provider $provider status changed: $status" }
+                }
                 override fun onLocationChanged(location: Location) {
-                    trySend(
-                        GeolocationPositionResult.Success(
-                            timestamp = Instant.fromEpochMilliseconds(location.time),
-                            latitude = location.latitude,
-                            longitude = location.longitude,
-                            accuracy = location.accuracy.toDouble(),
-                            altitude = location.altitude,
-                            heading = location.bearing.toDouble(),
-                            speed = location.speed.toDouble()
-                        )
-                    )
+                    Logger.d { "Got location via ${location.provider}" }
+                    trySend(location.toResult())
                 }
             }
             withContext(Dispatchers.Main) {
@@ -71,7 +67,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 LocationManagerCompat.requestLocationUpdates(
                     locationManager,
                     bestProvider,
-                    LocationRequestCompat.Builder(250L)
+                    LocationRequestCompat.Builder(intervalMillis)
                         .setMinUpdateDistanceMeters(0f)
                         .build(),
                     locationListener,
@@ -94,8 +90,8 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         val result = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                     LocationManager.FUSED_PROVIDER in enabledProviders -> LocationManager.FUSED_PROVIDER
-            LocationManager.GPS_PROVIDER in enabledProviders -> LocationManager.GPS_PROVIDER
             LocationManager.NETWORK_PROVIDER in enabledProviders -> LocationManager.NETWORK_PROVIDER
+            LocationManager.GPS_PROVIDER in enabledProviders -> LocationManager.GPS_PROVIDER
             else -> null
         }
         result ?: run {
@@ -119,7 +115,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         logger.d { "getCurrentPosition called" }
         return if (checkPermission()) {
             val location = suspendCancellableCoroutine { cont ->
-                val lastKnownLocation = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                val lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) < MAX_CACHED_TIME) {
                     logger.d { "Returning last known location" }
                     cont.resume(lastKnownLocation)
@@ -163,15 +159,8 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 }
             }
             if (location != null) {
-                GeolocationPositionResult.Success(
-                    timestamp = Instant.fromEpochMilliseconds(location.time),
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    accuracy = location.accuracy.toDouble(),
-                    altitude = location.altitude,
-                    heading = location.bearing.toDouble(),
-                    speed = location.speed.toDouble()
-                )
+                Logger.d { "Got location successfully" }
+                location.toResult()
             } else {
                 GeolocationPositionResult.Error("Location not available")
             }
@@ -180,5 +169,17 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         }
     }
 
-    override suspend fun watchPosition(): Flow<GeolocationPositionResult> = location
+    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> = locationFlow(interval.inWholeMilliseconds)
+}
+
+private fun Location.toResult(): GeolocationPositionResult {
+    return GeolocationPositionResult.Success(
+        timestamp = Instant.fromEpochMilliseconds(time),
+        latitude = latitude,
+        longitude = longitude,
+        accuracy = accuracy.toDouble().takeIf { hasAccuracy() },
+        altitude = altitude,
+        heading = bearing.toDouble().takeIf { hasBearing() },
+        speed = speed.toDouble().takeIf { hasSpeed() }
+    )
 }

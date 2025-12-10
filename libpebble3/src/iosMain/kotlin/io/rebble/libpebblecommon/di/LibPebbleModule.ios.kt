@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.di
 
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
 import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.SystemCallLog
 import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
@@ -12,6 +13,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotifica
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosLegacyPhoneReceiver
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosSystemCallLog
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.contacts.IosSystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicControl
@@ -62,6 +64,7 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
     singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
     singleOf(::IosSystemContacts) bind SystemContacts::class
+    singleOf(::IosLegacyPhoneReceiver) bind LegacyPhoneReceiver::class
     single { PlatformConfig(syncNotificationApps = true) }
     single { BlePlatformConfig(
         pinAddress = false,

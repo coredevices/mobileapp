@@ -10,10 +10,10 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
+import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
-import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
+import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
@@ -144,7 +144,7 @@ class RealPebbleConnector(
     private val voiceSessionManager: VoiceSessionManager,
     private val watchConfig: WatchConfigFlow,
     private val appOrderManager: AppOrderManager,
-    private val languagePackInstaller: LanguagePackInstaller,
+    private val languagePackInstaller: RealLanguagePackInstaller,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))

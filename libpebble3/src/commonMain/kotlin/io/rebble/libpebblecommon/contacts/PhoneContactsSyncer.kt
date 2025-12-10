@@ -76,7 +76,7 @@ class PhoneContactsSyncer(
             val matchingNewContact = newContacts.find { it.key == existingContact.lookupKey }
             if (matchingNewContact != null) {
                 if (existingContact.name != matchingNewContact.name) {
-                    contactDao.insertOrUpdate(matchingNewContact.asEntity())
+                    contactDao.insertOrUpdate(existingContact.copy(name = matchingNewContact.name))
                 }
             } else {
                 contactDao.delete(existingContact.lookupKey)
@@ -94,4 +94,5 @@ fun SystemContact.asEntity(): ContactEntity = ContactEntity(
     lookupKey = key,
     name = name,
     muteState = MuteState.Never,
+    vibePatternName = null,
 )

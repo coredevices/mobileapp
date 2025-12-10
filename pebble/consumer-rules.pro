@@ -1,0 +1,6 @@
+-keep class com.sun.jna.** { *; }
+-keep class org.vosk.** { *; }
+-dontwarn java.awt.Component
+-dontwarn java.awt.GraphicsEnvironment
+-dontwarn java.awt.HeadlessException
+-dontwarn java.awt.Window

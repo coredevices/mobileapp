@@ -63,11 +63,15 @@ class PhoneCalendarSyncer(
                 }
             }
             libPebbleCoroutineScope.launch {
-                var previous = watchConfig.value.calendarReminders
-                watchConfig.flow.map { it.watchConfig.calendarReminders }.collect {
-                    if (it != previous) {
+                var previousRemindersEnabled = watchConfig.value.calendarReminders
+                var previousShowDeclinedEvents = watchConfig.value.calendarShowDeclinedEvents
+                watchConfig.flow.collect {
+                    if (it.watchConfig.calendarShowDeclinedEvents != previousShowDeclinedEvents ||
+                        it.watchConfig.calendarReminders != previousRemindersEnabled
+                    ) {
                         requestSync()
-                        previous = it
+                        previousRemindersEnabled = it.watchConfig.calendarReminders
+                        previousShowDeclinedEvents = it.watchConfig.calendarShowDeclinedEvents
                     }
                 }
             }
@@ -80,7 +84,8 @@ class PhoneCalendarSyncer(
 
     private suspend fun syncDeviceCalendarsToDb() {
         val remindersEnabled = watchConfig.value.calendarReminders
-        logger.d("syncDeviceCalendarsToDb remindersEnabled=$remindersEnabled")
+        val showDeclinedEvents = watchConfig.value.calendarShowDeclinedEvents
+        logger.d("syncDeviceCalendarsToDb remindersEnabled=$remindersEnabled showDeclinedEvents=$showDeclinedEvents")
         val existingCalendars = calendarDao.getAll()
         val calendars = systemCalendar.getCalendars()
         logger.d("Got ${calendars.size} calendars from device, syncing... (${existingCalendars.size} existing)")
@@ -93,6 +98,7 @@ class PhoneCalendarSyncer(
                     ownerName = matchingCalendar.ownerName,
                     ownerId = matchingCalendar.ownerId,
                     color = matchingCalendar.color,
+                    syncEvents = matchingCalendar.syncEvents,
                 )
                 calendarDao.update(updateCal)
             } else {
@@ -114,6 +120,11 @@ class PhoneCalendarSyncer(
                 return@flatMap emptyList()
             }
             val events = systemCalendar.getCalendarEvents(calendar, startDate, endDate)
+                .filter { event ->
+                    if (showDeclinedEvents) return@filter true
+                    val currentUserAttendee = event.attendees.find { it.isCurrentUser }
+                    currentUserAttendee?.attendanceStatus != EventAttendee.AttendanceStatus.Declined
+                }
             events.map { event ->
                 EventAndPin(event, event.toTimelinePin(calendar))
             }
@@ -198,6 +209,10 @@ class PhoneCalendarSyncer(
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         libPebbleCoroutineScope.launch {
             calendarDao.setEnabled(calendarId, enabled)
+            val calendar = calendarDao.getAll().find { it.id == calendarId }
+            if (calendar != null && !calendar.syncEvents) {
+                systemCalendar.enableSyncForCalendar(calendar)
+            }
             requestSync()
         }
     }

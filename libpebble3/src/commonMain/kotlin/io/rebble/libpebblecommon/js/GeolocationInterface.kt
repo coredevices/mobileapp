@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
 abstract class GeolocationInterface(
@@ -89,14 +90,14 @@ abstract class GeolocationInterface(
         return id.toInt()
     }
 
-    open fun watchPosition(id: Double): Int {
+    open fun watchPosition(id: Double, interval: Double): Int {
         logger.d { "watchPosition()" }
         val job = scope.launch {
             if (!geolocationPermissionGranted()) {
                 triggerPositionResultWatch(id.toInt(), GeolocationPositionResult.Error("Location permission not granted"))
                 return@launch
             }
-            systemGeolocation.watchPosition().collect { result ->
+            systemGeolocation.watchPosition(interval.coerceAtLeast(200.0).milliseconds).collect { result ->
                 triggerPositionResultWatch(id.toInt(), result)
             }
         }

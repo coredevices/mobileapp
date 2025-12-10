@@ -19,12 +19,13 @@ class ContactsApi(
         return contactDao.getContactsWithCountFlow()
     }
 
-    override fun updateContactMuteState(
+    override fun updateContactState(
         contactId: String,
-        muteState: MuteState
+        muteState: MuteState,
+        vibePatternName: String?,
     ) {
         libPebbleCoroutineScope.launch {
-            contactDao.updateContactMuteState(contactId, muteState)
+            contactDao.updateContactState(contactId, muteState, vibePatternName)
         }
     }
 

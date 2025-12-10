@@ -3,11 +3,6 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-repositories {
-    mavenCentral()
-    google()
-}
-
 dependencies {
     implementation(project(":blobannotations"))
     implementation(kotlin("stdlib-jdk8"))
@@ -17,5 +12,5 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
 }

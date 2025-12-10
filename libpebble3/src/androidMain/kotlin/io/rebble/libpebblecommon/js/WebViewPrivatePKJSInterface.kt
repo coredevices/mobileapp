@@ -15,8 +15,10 @@ class WebViewPrivatePKJSInterface(
     device: CompanionAppDevice,
     scope: CoroutineScope,
     outgoingAppMessages: MutableSharedFlow<AppMessageRequest>,
-    logMessages: Channel<String>
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages) {
+    logMessages: Channel<String>,
+    jsTokenUtil: JsTokenUtil,
+    remoteTimelineEmulator: RemoteTimelineEmulator,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator) {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)
@@ -96,5 +98,25 @@ class WebViewPrivatePKJSInterface(
     @JavascriptInterface
     override fun getActivePebbleWatchInfo(): String {
         return super.getActivePebbleWatchInfo()
+    }
+
+    @JavascriptInterface
+    override fun shouldIntercept(url: String): Boolean {
+        return super.shouldIntercept(url)
+    }
+
+    @JavascriptInterface
+    override fun onIntercepted(url: String, method: String, body: String): String {
+        return super.onIntercepted(url, method, body)
+    }
+
+    @JavascriptInterface
+    override fun insertTimelinePin(pinJson: String) {
+        super.insertTimelinePin(pinJson)
+    }
+
+    @JavascriptInterface
+    override fun deleteTimelinePin(id: String) {
+        super.deleteTimelinePin(id)
     }
 }

@@ -2,21 +2,24 @@
 android-compileSdk = "36"
 android-minSdk = "26"
 android-targetSdk = "35"
-agp = "8.13.0"
-kotlin = "2.2.20"
-ktor = "3.3.0"
+agp = "8.13.1"
+kotlin = "2.2.21"
+jvm-toolchain = "17"
+ktor = "3.3.2"
 coroutine = "1.10.2"
 serialization = "1.9.0"
-sqlite = "2.5.2"
+sqlite = "2.6.2"
 kermit = "2.0.8"
-ksp = "2.2.20-2.0.2"
+ksp = "2.3.3"
+# We had some weird problems with BlobDb sync on room 2.8.0
 room = "2.7.2"
-okio = "3.16.0"
+okio = "3.16.4"
 kotlinx-io = "0.8.0"
 kotlinx-datetime = "0.7.1"
 koin = "4.1.1"
 atomicfu = "0.29.0"
-compose-multiplatform = "1.8.2"
+compose-multiplatform = "1.9.3"
+pebblekit = "0.0.0"
 settings = "1.3.0"
 kable = "0.40.0"
 kmpio = "0.2.3"
@@ -24,7 +27,30 @@ androidx-core = "1.17.0"
 monitorVersion = "1.8.0"
 androidXTestVersion = "1.7.0"
 androidXRulesVersion = "1.7.0"
-pebblekit = "0.0.0"
+googleServices = "4.4.4"
+firebase-crashlytics-plugin = "3.0.6"
+androidVersion = "2.4.0"
+androidx-activityCompose = "1.12.0"
+androidx-credentials = "1.5.0"
+gms-auth = "21.4.0"
+googleId = "1.1.1"
+androidxWork = "2.11.0"
+play-update = "2.1.0"
+crashkios = "0.9.0"
+androidx-lifecycle = "2.9.6"
+androidx-navigation = "2.9.1"
+firebase-kotlin = "2.4.0"
+# Fixed because of firebase-kotlin
+firebase-bom = "33.15.0"
+kmpnotifier = "1.6.0"
+mixpanel-android = "8.2.4"
+buildkonfig = "0.17.1"
+webview = "2.0.3"
+coil = "3.3.0"
+uri = "0.0.21"
+algolia = "3.36.0"
+coredevices-speex = "f3b9b07"
+cactus = "1.0.2-beta"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -38,6 +64,12 @@ composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "k
 nativeCocoaPods = { id = "org.jetbrains.kotlin.native.cocoapods", version.ref = "kotlin" }
 kotlinx-atomicfu = { id = "org.jetbrains.kotlinx.atomicfu", version.ref = "atomicfu" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics-plugin" }
+androidVersion = { id = "de.nanogiants.android-versioning", version.ref = "androidVersion" }
+buildKonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
+androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+androidLint = { id = "com.android.lint", version.ref = "agp" }
 
 [libraries]
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutine" }
@@ -80,3 +112,29 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 androidx-monitor = { group = "androidx.test", name = "monitor", version.ref = "monitorVersion" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidXTestVersion" }
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidXRulesVersion" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "androidx-credentials" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
+gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
+identity-google = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleId" }
+androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
+play-update = { group = "com.google.android.play", name = "app-update", version.ref = "play-update" }
+play-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "play-update" }
+crashkios = { module = "co.touchlab.crashkios:crashlytics", version.ref = "crashkios" }
+androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+androidx-navigation-compose = { group = "org.jetbrains.androidx.navigation", name = "navigation-compose", version.ref = "androidx-navigation" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
+firebase-auth = { group = "dev.gitlive", name = "firebase-auth", version.ref = "firebase-kotlin" }
+firebase-firestore = { group = "dev.gitlive", name = "firebase-firestore", version.ref = "firebase-kotlin" }
+firebase-crashlytics = { group = "dev.gitlive", name = "firebase-crashlytics", version.ref = "firebase-kotlin" }
+firebase-storage = { group = "dev.gitlive", name = "firebase-storage", version.ref = "firebase-kotlin" }
+kmpnotifier = { group = "io.github.mirzemehdi", name = "kmpnotifier", version.ref = "kmpnotifier" }
+mixpanel-android = { module = "com.mixpanel.android:mixpanel-android", version.ref = "mixpanel-android" }
+webview = { module = "io.github.kevinnzou:compose-webview-multiplatform", version.ref = "webview" }
+cactus = { group = "com.cactuscompute", name = "cactus", version.ref = "cactus" }
+coil = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
+uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
+algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
+coredevices-speex = { group = "coredevices.speex", name = "speex", version.ref = "coredevices-speex" }

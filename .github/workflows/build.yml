@@ -1,10 +1,10 @@
 name: Build
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Setup JDK
@@ -27,11 +27,20 @@ jobs:
         run: |
           ls /Applications/Xcode*
           swift --version
-          sudo xcode-select --switch /Applications/Xcode_16.2.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
           gem install xcpretty
+      - name: Use dummy google-services json
+        run: mv composeApp/src/google-services-dummy.json composeApp/src/google-services.json
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2.2.0
+
       - name: Build
-        run: ./gradlew linkDebugFrameworkIosArm64 assembleDebug
+        run: ./gradlew :composeApp:compileKotlinIosArm64 :libpebble3:linkDebugFrameworkIosArm64 :composeApp:assembleDebug
+        env:
+          GITHUB_ACTOR: ${{ secrets.READ_PACKAGES_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}
       - name: Test
         run: ./gradlew testDebugUnitTest jvmTest lintDebug
+        env:
+          GITHUB_ACTOR: ${{ secrets.READ_PACKAGES_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}

@@ -31,7 +31,6 @@ room {
 }
 
 android {
-    namespace = project.group.toString()
     compileSdk = libs.versions.android.compileSdk.get().toInt()
     namespace = "io.rebble.libpebblecommon"
     defaultConfig {
@@ -41,17 +40,17 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.valueOf("VERSION_${libs.versions.jvm.toolchain.get()}")
+        targetCompatibility = JavaVersion.valueOf("VERSION_${libs.versions.jvm.toolchain.get()}")
     }
 
     kotlin {
-        jvmToolchain(17)
+        jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
     }
 
     buildTypes {
         release {
-            consumerProguardFiles( "consumer-rules.pro")
+            consumerProguardFiles("consumer-rules.pro")
         }
     }
 }
@@ -84,51 +83,51 @@ kotlin {
 
     jvm()
 
-   if (enableIosTarget) {
-       val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
-           project.providers.exec {
-               isIgnoreExitValue = true
-               commandLine("which", "xcode-select")
-           }.result.get().exitValue == 0
-       }
-       val xcodeDir by lazy {
-           if (xcodeExists) {
-               project.providers.exec {
-                   commandLine("xcode-select", "-p")
-               }.standardOutput.asText.get().trim()
-           } else {
-               ""
-           }
-       }
+    val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
+        project.providers.exec {
+            isIgnoreExitValue = true
+            commandLine("which", "xcode-select")
+        }.result.get().exitValue == 0
+    }
+    val xcodeDir by lazy {
+        if (xcodeExists) {
+            project.providers.exec {
+                commandLine("xcode-select", "-p")
+            }.standardOutput.asText.get().trim()
+        } else {
+            ""
+        }
+    }
 
-       listOf(
-           iosX64(),
-           iosArm64(),
-           iosSimulatorArm64()
-       ).forEach { target ->
-           val osName = when (target.name) {
-               "iosX64" -> "iphonesimulator"
-               "iosArm64" -> "iphoneos"
-               "iosSimulatorArm64" -> "iphonesimulator"
-               else -> throw IllegalStateException("Unknown target: ${target.name}")
-           }
-           val dir = tasks.getByName("buildFrameworkLibPebbleSwift").outputs.files.singleFile.resolve(osName)
-           target.binaries.framework {
-               baseName = "libpebble3"
-           }
-           target.compilations.getByName("main") {
-               val libPebbleSwift by cinterops.creating {
-                   compilerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
-               }
-           }
-           target.binaries.all {
-               linkerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
-               if (xcodeExists) {
-                   linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
-               }
-           }
-       }
-   }
+    listOf(
+        iosX64(),
+        iosArm64(),
+        iosSimulatorArm64()
+    ).forEach { target ->
+        if (enableIosTarget) {
+            val osName = when (target.name) {
+                "iosX64" -> "iphonesimulator"
+                "iosArm64" -> "iphoneos"
+                "iosSimulatorArm64" -> "iphonesimulator"
+                else -> throw IllegalStateException("Unknown target: ${target.name}")
+            }
+            val dir = tasks.getByName("buildFrameworkLibPebbleSwift").outputs.files.singleFile.resolve(osName)
+            target.binaries.framework {
+                baseName = "libpebble3"
+            }
+            target.compilations.getByName("main") {
+                val libPebbleSwift by cinterops.creating {
+                    compilerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
+                }
+            }
+            target.binaries.all {
+                linkerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
+                if (xcodeExists) {
+                    linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
+                }
+            }
+        }
+    }
 
     sourceSets {
         all {
@@ -173,6 +172,7 @@ kotlin {
             implementation(compose.ui)
             implementation(project(":blobannotations"))
             implementation(libs.settings)
+            implementation(libs.uri)
         }
 
         commonTest.dependencies {
@@ -336,7 +336,7 @@ if (Os.isFamily(Os.FAMILY_MAC)) {
     }
 }*/
 
-abstract class BuildSwiftFramework: DefaultTask() {
+abstract class BuildSwiftFramework : DefaultTask() {
     @Inject
     abstract fun getExecOperations(): ExecOperations
 
@@ -349,7 +349,8 @@ abstract class BuildSwiftFramework: DefaultTask() {
     })
 
     @get:OutputDirectory
-    val outputDir = project.objects.directoryProperty().convention(project.layout.buildDirectory.dir("libpebble-swift/"))
+    val outputDir =
+        project.objects.directoryProperty().convention(project.layout.buildDirectory.dir("libpebble-swift/"))
 
     @TaskAction
     fun buildSwiftFramework() {
@@ -384,7 +385,7 @@ abstract class BuildSwiftFramework: DefaultTask() {
     }
 }
 
-abstract class PlatformFatFramework: DefaultTask() {
+abstract class PlatformFatFramework : DefaultTask() {
     @get:Input
     abstract val platform: Property<String>
 
@@ -395,16 +396,19 @@ abstract class PlatformFatFramework: DefaultTask() {
     val inputFrameworkDSYMs = project.objects.fileCollection()
 
     @Internal
-    val platformOutputDir: Provider<Directory> = platform.map { project.layout.buildDirectory.dir("platform-fat-framework/${it}").get() }
+    val platformOutputDir: Provider<Directory> =
+        platform.map { project.layout.buildDirectory.dir("platform-fat-framework/${it}").get() }
 
     @get:OutputDirectory
     val outputDir = project.objects.directoryProperty().convention(platformOutputDir)
 
     @get:OutputDirectories
-    val outputFiles: Provider<Array<File>> = platformOutputDir.map {arrayOf(
-        it.asFile.toPath().resolve(inputFrameworks.files.first().name).toFile(),
-        it.asFile.toPath().resolve(inputFrameworkDSYMs.files.first().name).toFile()
-    )}
+    val outputFiles: Provider<Array<File>> = platformOutputDir.map {
+        arrayOf(
+            it.asFile.toPath().resolve(inputFrameworks.files.first().name).toFile(),
+            it.asFile.toPath().resolve(inputFrameworkDSYMs.files.first().name).toFile()
+        )
+    }
 
     private fun copyFramework() {
         val file = inputFrameworks.files.first()
@@ -428,9 +432,9 @@ abstract class PlatformFatFramework: DefaultTask() {
             inputs.add(it.toPath().resolve("libpebble3").toString())
         }
         val out = outputDir.get().asFile.toPath()
-            .resolve(inputFrameworks.files.first().name+"/libpebble3").toString()
+            .resolve(inputFrameworks.files.first().name + "/libpebble3").toString()
         project.exec {
-            commandLine ("lipo", "-create", *inputs.toTypedArray(), "-output", out)
+            commandLine("lipo", "-create", *inputs.toTypedArray(), "-output", out)
         }
     }
 
@@ -440,9 +444,9 @@ abstract class PlatformFatFramework: DefaultTask() {
             inputs.add(it.toPath().resolve("Contents/Resources/DWARF/libpebble3").toString())
         }
         val out = outputDir.get().asFile.toPath()
-            .resolve(inputFrameworkDSYMs.files.first().name+"/Contents/Resources/DWARF/libpebble3").toString()
+            .resolve(inputFrameworkDSYMs.files.first().name + "/Contents/Resources/DWARF/libpebble3").toString()
         project.exec {
-            commandLine ("lipo", "-create", *inputs.toTypedArray(), "-output", out)
+            commandLine("lipo", "-create", *inputs.toTypedArray(), "-output", out)
         }
     }
 

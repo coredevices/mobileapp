@@ -5,7 +5,6 @@ import android.app.NotificationChannelGroup
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import android.os.UserHandle
@@ -22,6 +21,8 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
+import io.rebble.libpebblecommon.util.PrivateLogger
+import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
@@ -52,6 +53,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     private val configHolder: NotificationConfigFlow = get()
 
     private val watches: Watches = get<LibPebble>()
+
+    private val privateLogger: PrivateLogger = get()
 
     fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return
@@ -156,7 +159,13 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
     // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!configHolder.value.sendNotifications) {
+            logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - sendNotifications is off" }
+            return
+        }
+
         if (configHolder.value.respectDoNotDisturb && isNotificationFilteredByDoNotDisturb(sbn)) {
+            logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - do not disturb" }
             return
         }
 

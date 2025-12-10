@@ -16,7 +16,6 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket.Companion.deserial
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.createImageBitmapFromPixelArray
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -24,7 +23,9 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.timeout
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 
 class ScreenshotService(
@@ -122,6 +123,8 @@ class ScreenshotService(
             } catch (_: TimeoutCancellationException) {
                 logger.w { "Timeout fetching screenshot" }
                 null
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger.e(e) { "Error fetching screenshot: ${e.message}" }
                 null

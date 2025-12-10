@@ -25,10 +25,10 @@ class FirmwareDownloader(
     private val logger = Logger.withTag("FirmwareDownloader")
     private val fwDir = getLockerPBWCacheDirectory(appContext)
 
-    suspend fun downloadFirmware(url: String): Path? {
+    suspend fun downloadFirmware(url: String, type: String): Path? {
         logger.d { "downloadFirmware: $url" }
         return withTimeoutOr(20.seconds, {
-            val path = Path(fwDir, "fw.pbz")
+            val path = Path(fwDir, "download.$type")
             SystemFileSystem.delete(path, mustExist = false)
             val response = try {
                 httpClient.get(url)

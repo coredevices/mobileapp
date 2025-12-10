@@ -18,6 +18,7 @@ import kotlin.time.Instant
 import platform.CoreLocation.CLLocation
 import platform.Foundation.NSError
 import platform.Foundation.timeIntervalSince1970
+import kotlin.time.Duration
 
 class IosSystemGeolocation: SystemGeolocation {
     private val logger = Logger.withTag("IosSystemGeolocation")
@@ -68,5 +69,5 @@ class IosSystemGeolocation: SystemGeolocation {
         return location.first()
     }
 
-    override suspend fun watchPosition(): Flow<GeolocationPositionResult> = location
+    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> = location
 }

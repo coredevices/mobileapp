@@ -43,3 +43,12 @@ enum class WatchType(val codename: String) {
         }
     }
 }
+
+fun WatchType.isColor(): Boolean = when (this) {
+    WatchType.APLITE -> false
+    WatchType.BASALT -> true
+    WatchType.CHALK -> true
+    WatchType.DIORITE -> false
+    WatchType.EMERY -> true
+    WatchType.FLINT -> false
+}
