@@ -11,5 +11,5 @@ object AppQuirks {
             }
             return title
         },
-    )
+    ).withDefault { fun(title: String, _: String): String { return title } }
 }
