@@ -50,7 +50,8 @@ class BasicNotificationProcessor(
             channel,
             notificationConfigFlow.value
         )
-        val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
+
+        val title = AppQuirks.processTitle[sbn.packageName]?.invoke(sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: "", channel?.name ?: ""),
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
