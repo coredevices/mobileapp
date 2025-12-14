@@ -39,53 +39,47 @@ class RealHealthServiceAccessor(
     private val logger = co.touchlab.kermit.Logger.withTag("RealHealthServiceAccessor")
 
     override fun requestHealthData(fullSync: Boolean) {
-        val services = registry.getAllHealthServices()
-        if (services.isEmpty()) {
-            logger.w { "No connected watches found to request health data from" }
+        val service = registry.getActiveHealthService()
+        if (service == null) {
+            logger.w { "No active watch to request health data from" }
             return
         }
 
-        services.forEach { healthService ->
-            try {
-                healthService.requestHealthData(fullSync)
-                logger.i { "Requested ${if (fullSync) "full" else "incremental"} health data sync" }
-            } catch (e: Exception) {
-                logger.e(e) { "Failed to request health data" }
-            }
+        try {
+            service.requestHealthData(fullSync)
+            logger.i { "Requested ${if (fullSync) "full" else "incremental"} health data sync" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to request health data" }
         }
     }
 
     override fun sendHealthAveragesToWatch() {
-        val services = registry.getAllHealthServices()
-        if (services.isEmpty()) {
-            logger.w { "No connected watches available to send health averages to" }
+        val service = registry.getActiveHealthService()
+        if (service == null) {
+            logger.w { "No active watch available to send health averages to" }
             return
         }
 
-        services.forEach { healthService ->
-            try {
-                healthService.sendHealthAveragesToWatch()
-                logger.i { "Requested manual health averages push" }
-            } catch (e: Exception) {
-                logger.e(e) { "Failed to send health averages to watch" }
-            }
+        try {
+            service.sendHealthAveragesToWatch()
+            logger.i { "Requested manual health averages push" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to send health averages to watch" }
         }
     }
 
     override fun forceHealthDataOverwrite() {
-        val services = registry.getAllHealthServices()
-        if (services.isEmpty()) {
-            logger.w { "No connected watches available to force overwrite health data on" }
+        val service = registry.getActiveHealthService()
+        if (service == null) {
+            logger.w { "No active watch available to force overwrite health data on" }
             return
         }
 
-        services.forEach { healthService ->
-            try {
-                healthService.forceHealthDataOverwrite()
-                logger.i { "Forced health data overwrite on watch" }
-            } catch (e: Exception) {
-                logger.e(e) { "Failed to force health data overwrite on watch" }
-            }
+        try {
+            service.forceHealthDataOverwrite()
+            logger.i { "Forced health data overwrite on watch" }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to force health data overwrite on watch" }
         }
     }
 }
@@ -95,24 +89,37 @@ class RealHealthServiceAccessor(
  */
 class HealthServiceRegistry {
     private val services = mutableListOf<io.rebble.libpebblecommon.services.HealthService>()
+    private var activeService: io.rebble.libpebblecommon.services.HealthService? = null
+    private val lock = Any()
 
     fun register(service: io.rebble.libpebblecommon.services.HealthService) {
-        synchronized(services) {
+        synchronized(lock) {
+            services.remove(service)
             services.add(service)
+            activeService = service
         }
     }
 
     fun unregister(service: io.rebble.libpebblecommon.services.HealthService) {
-        synchronized(services) {
+        synchronized(lock) {
             services.remove(service)
+            if (activeService == service) {
+                activeService = services.lastOrNull()
+            }
         }
     }
 
     fun getAllHealthServices(): List<io.rebble.libpebblecommon.services.HealthService> {
-        return synchronized(services) {
+        return synchronized(lock) {
             services.toList()
         }
     }
+
+    fun getActiveHealthService(): io.rebble.libpebblecommon.services.HealthService? =
+        synchronized(lock) { activeService }
+
+    fun isActive(service: io.rebble.libpebblecommon.services.HealthService): Boolean =
+        synchronized(lock) { activeService == service }
 }
 
 class Health(

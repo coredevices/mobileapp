@@ -54,6 +54,13 @@ class HealthService(
     private val isAppOpen = MutableStateFlow(false)
     private val lastFullStatsUpdate = MutableStateFlow(0L) // Epoch millis of last full stats push
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null) // Date of last today movement update
+    private fun isActiveConnection(reason: String): Boolean {
+        val active = healthServiceRegistry.isActive(this)
+        if (!active) {
+            logger.d { "HEALTH_SERVICE: Ignoring $reason because this watch is not the active connection" }
+        }
+        return active
+    }
 
     fun init() {
         // Register this service instance so it can be accessed for manual sync requests
@@ -81,6 +88,7 @@ class HealthService(
      * @param fullSync If true, requests all historical data. If false, requests data since last sync.
      */
     fun requestHealthData(fullSync: Boolean = false) {
+        if (!isActiveConnection("health data request")) return
         scope.launch {
             sendHealthDataRequest(fullSync)
         }
@@ -90,6 +98,7 @@ class HealthService(
      * Manually push the latest averaged health stats to the connected watch.
      */
     fun sendHealthAveragesToWatch() {
+        if (!isActiveConnection("manual health averages push")) return
         scope.launch {
             logger.i { "HEALTH_STATS: Manual health averages send requested" }
             updateHealthStats()
@@ -102,6 +111,7 @@ class HealthService(
      * Useful for debugging or when you know the watch has incorrect data.
      */
     fun forceHealthDataOverwrite() {
+        if (!isActiveConnection("force overwrite request")) return
         scope.launch {
             logger.i { "HEALTH_STATS: Force overwrite requested - pushing all health data to watch" }
 
@@ -118,6 +128,7 @@ class HealthService(
     }
 
     private suspend fun reconcileWatchWithDatabase() {
+        if (!isActiveConnection("reconcile")) return
         val baselineTimestamp = healthDao.getLatestTimestamp() ?: 0L
         val isFirstSync = baselineTimestamp == 0L
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
@@ -243,6 +254,7 @@ class HealthService(
 
     private fun handleHealthSyncRequest(packet: HealthSyncIncomingPacket) {
         logger.i { "HEALTH_SYNC: Watch requested health sync (payload=${packet.payload.size} bytes)" }
+        if (!isActiveConnection("health sync request")) return
         scope.launch {
             sendHealthDataRequest(fullSync = false)
         }
@@ -253,6 +265,7 @@ class HealthService(
             // Update health stats once daily to minimize battery usage
             while (true) {
                 delay(TWENTY_FOUR_HOURS_MS)
+                if (!isActiveConnection("scheduled daily stats update")) continue
                 logger.i { "HEALTH_STATS: Running scheduled daily stats update" }
                 updateHealthStats()
                 lastFullStatsUpdate.value = kotlin.time.Clock.System.now().toEpochMilliseconds()
@@ -261,6 +274,7 @@ class HealthService(
     }
 
     private fun handleSessionOpen(packet: DataLoggingIncomingPacket.OpenSession) {
+        if (!isActiveConnection("health session open")) return
         val tag = packet.tag.get()
         val sessionId = packet.sessionId.get()
         if (tag !in HEALTH_TAGS) return
@@ -274,6 +288,7 @@ class HealthService(
     }
 
     private fun handleSendDataItems(packet: DataLoggingIncomingPacket.SendDataItems) {
+        if (!isActiveConnection("incoming health data")) return
         val sessionId = packet.sessionId.get()
         val session = healthSessions[sessionId] ?: return
 
@@ -316,6 +331,7 @@ class HealthService(
     }
 
     private fun handleSessionClose(packet: DataLoggingIncomingPacket.CloseSession) {
+        if (!isActiveConnection("health session close")) return
         val sessionId = packet.sessionId.get()
         healthSessions.remove(sessionId)?.let { session ->
             logger.i {
@@ -707,6 +723,10 @@ class HealthService(
                 distanceCm = buffer.getUShort().toInt()
             }
 
+            // Reject incoming sleep data from the watch; we treat the phone DB as the source of truth
+            if (type.isSleep()) {
+                logger.d { "HEALTH_DATA: Dropping incoming sleep overlay (start=$startTime, duration=$duration, type=$type)" }
+            } else {
             records.add(
                     OverlayDataEntity(
                             startTime = startTime.toLong(),
@@ -719,6 +739,7 @@ class HealthService(
                             offsetUTC = offsetUTC.toInt()
                     )
             )
+            }
 
             val consumed = buffer.readPosition - itemStart
             val expected = itemSize.toInt()
@@ -755,6 +776,7 @@ class HealthService(
     }
 
     private suspend fun updateHealthStats() {
+        if (!isActiveConnection("health stats update")) return
         val latestTimestamp = healthDao.getLatestTimestamp()
         if (latestTimestamp == null || latestTimestamp <= 0) {
             logger.d { "Skipping health stats update; no health data available" }
