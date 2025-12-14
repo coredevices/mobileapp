@@ -106,6 +106,9 @@ data class OtherPebbleApp(
 interface HealthApi {
     val healthSettings: Flow<HealthSettings>
     fun updateHealthSettings(healthSettings: HealthSettings)
+    suspend fun getHealthDebugStats(): io.rebble.libpebblecommon.services.HealthDebugStats
+    fun requestHealthData(fullSync: Boolean = false)
+    fun sendHealthAveragesToWatch()
 }
 
 interface Timeline {

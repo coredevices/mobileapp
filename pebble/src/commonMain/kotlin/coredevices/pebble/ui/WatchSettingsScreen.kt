@@ -102,6 +102,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.services.HealthDebugStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
@@ -966,6 +967,15 @@ please disable the option.""".trimIndent(),
                     show = { debugOptionsEnabled },
                 ),
                 SettingsItem(
+                    title = "Health Statistics",
+                    section = Section.Debug,
+                    keywords = "health steps sleep debug sync",
+                    show = { debugOptionsEnabled },
+                    item = {
+                        HealthDebugSection(libPebble)
+                    },
+                ),
+                SettingsItem(
                     title = TITLE_PKJS_TOKEN,
                     section = Section.Debug,
                     item = {
@@ -1445,6 +1455,194 @@ fun STTModeDialogPreview() {
                 modelName = "en-us-vosk-small",
             ),
             showModelSelection = true,
+        )
+    }
+}
+
+@Composable
+fun HealthDebugSection(libPebble: LibPebble) {
+    val scope = rememberCoroutineScope()
+    var debugStats by remember { mutableStateOf<HealthDebugStats?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var isSyncing by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
+
+    fun refreshStats() {
+        scope.launch {
+            try {
+                isLoading = true
+                debugStats = libPebble.getHealthDebugStats()
+            } catch (e: Exception) {
+                Logger.e("HealthDebugSection", e) { "Failed to load health stats" }
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            isLoading = true
+            debugStats = libPebble.getHealthDebugStats()
+        } catch (e: Exception) {
+            Logger.e("HealthDebugSection", e) { "Failed to load initial health stats" }
+        } finally {
+            isLoading = false
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { expanded = !expanded }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Health Statistics",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                if (isLoading || isSyncing) {
+                    CircularProgressIndicator(modifier = Modifier.height(24.dp).width(24.dp))
+                }
+            }
+
+            if (expanded) {
+                Spacer(Modifier.height(12.dp))
+
+                if (debugStats != null) {
+                    val stats = debugStats!!
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        HealthStatRow("Today's Steps", stats.todaySteps.toString())
+                        HealthStatRow("30d Avg Steps", "${stats.averageStepsPerDay}/day")
+                        HealthStatRow("Total Steps (30d)", "${stats.totalSteps30Days}")
+
+                        Spacer(Modifier.height(4.dp))
+
+                        val avgSleepHrs = stats.averageSleepSecondsPerDay / 3600.0
+                        HealthStatRow("30d Avg Sleep", "${String.format("%.1f", avgSleepHrs)}h/day")
+
+                        Spacer(Modifier.height(4.dp))
+
+                        HealthStatRow("Days of Data", stats.daysOfData.toString())
+
+                        stats.latestDataTimestamp?.let { timestamp ->
+                            if (timestamp > 0) {
+                                val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(timestamp)
+                                HealthStatRow("Latest Data", instant.toString())
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Sync Actions",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    isSyncing = true
+                                    libPebble.requestHealthData(fullSync = true)
+                                    kotlinx.coroutines.delay(5000)
+                                    refreshStats()
+                                    isSyncing = false
+                                }
+                            },
+                            enabled = !isLoading && !isSyncing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Full Sync", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    isSyncing = true
+                                    libPebble.requestHealthData(fullSync = false)
+                                    kotlinx.coroutines.delay(3000)
+                                    refreshStats()
+                                    isSyncing = false
+                                }
+                            },
+                            enabled = !isLoading && !isSyncing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Incremental", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { refreshStats() },
+                            enabled = !isLoading && !isSyncing,
+                            modifier = Modifier.weight(0.7f)
+                        ) {
+                            Text("Refresh", fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                isSyncing = true
+                                libPebble.sendHealthAveragesToWatch()
+                                kotlinx.coroutines.delay(1500)
+                                refreshStats()
+                                isSyncing = false
+                            }
+                        },
+                        enabled = !isLoading && !isSyncing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Send Averages To Watch", fontSize = 12.sp)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Filter logs with 'HEALTH_' to see detailed sync information",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                } else {
+                    Text(
+                        "No health data available. Tap a sync button to pull data from watch.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthStatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }

@@ -99,6 +99,8 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.health.HealthServiceRegistry
+import io.rebble.libpebblecommon.health.RealHealthServiceAccessor
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
@@ -393,7 +395,9 @@ fun initKoin(
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
                 single { Datalogging(get(), get(), get()) }
-                singleOf(::Health)
+                singleOf(::HealthServiceRegistry)
+                single { RealHealthServiceAccessor(get()) } bind io.rebble.libpebblecommon.health.HealthServiceAccessor::class
+                single { Health(get(), get(), get(), get()) }
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
                 singleOf(::PhoneContactsSyncer)

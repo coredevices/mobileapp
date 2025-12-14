@@ -275,6 +275,26 @@ class FakeLibPebble : LibPebble {
     override fun updateHealthSettings(healthSettings: HealthSettings) {
     }
 
+    override suspend fun getHealthDebugStats(): io.rebble.libpebblecommon.services.HealthDebugStats {
+        return io.rebble.libpebblecommon.services.HealthDebugStats(
+            totalSteps30Days = 0L,
+            averageStepsPerDay = 0,
+            totalSleepSeconds30Days = 0L,
+            averageSleepSecondsPerDay = 0,
+            todaySteps = 0L,
+            latestDataTimestamp = null,
+            daysOfData = 0
+        )
+    }
+
+    override fun requestHealthData(fullSync: Boolean) {
+        // No-op for fake implementation
+    }
+
+    override fun sendHealthAveragesToWatch() {
+        // No-op for fake implementation
+    }
+
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
         TODO("Not yet implemented")
     }

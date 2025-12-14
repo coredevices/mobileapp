@@ -65,6 +65,14 @@ interface HealthDao {
             "SELECT SUM(duration) FROM overlay_data WHERE startTime >= :start AND startTime < :end AND type = :type"
     )
     suspend fun getOverlayDuration(start: Long, end: Long, type: Int): Long?
+
+    @Query(
+            """
+            SELECT * FROM overlay_data 
+            WHERE startTime >= :start AND startTime < :end AND type IN (:types)
+            """
+    )
+    suspend fun getOverlayEntries(start: Long, end: Long, types: List<Int>): List<OverlayDataEntity>
 }
 
 data class HealthAggregates(
