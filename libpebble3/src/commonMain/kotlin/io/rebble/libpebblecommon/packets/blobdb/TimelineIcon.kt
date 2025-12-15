@@ -117,6 +117,9 @@ enum class TimelineIcon(val id: UInt, val code: String) {
     NotificationUnifiProtect(131u, "system://images/NOTIFICATION_UNIFI_PROTECT"),
     NotificationZoom(132u, "system://images/NOTIFICATION_ZOOM"),
     NotificationEbay(133u, "system://images/NOTIFICATION_EBAY");
+    NotificationYoutube(134u, "system://images/NOTIFICATION_YOUTUBE");
+    NotificationSignal(135u, "system://images/NOTIFICATION_SIGNAL");
+    NotificationTwitch(136u, "system://images/NOTIFICATION_TWITCH");
 
     companion object {
         fun fromId(id: UInt): TimelineIcon {
