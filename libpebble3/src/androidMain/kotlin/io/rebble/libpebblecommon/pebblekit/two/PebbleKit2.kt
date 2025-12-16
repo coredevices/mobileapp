@@ -128,7 +128,7 @@ class PebbleKit2(
 
     private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(3.seconds) {
-            device.sendAppMessageResult(AppMessageResult.ACK(id))
+           device.sendAppMessageResult(AppMessageResult.NACK(id))
         }
     }
 
