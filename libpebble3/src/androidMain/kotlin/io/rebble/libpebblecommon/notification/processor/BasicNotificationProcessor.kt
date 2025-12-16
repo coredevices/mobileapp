@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
+import io.rebble.libpebblecommon.util.stripBidiIsolates
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -50,11 +51,13 @@ class BasicNotificationProcessor(
             channel,
             notificationConfigFlow.value
         )
-        val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
+        val title = stripBidiIsolates(
+            sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
+        ) ?: ""
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
-        val body = bigText ?: text ?: ""
+        val body = stripBidiIsolates(bigText ?: text) ?: ""
         val people = sbn.notification.people()
         val contactKeys = people.asContacts(context.context)
         val contactEntries = contactKeys.mapNotNull {
@@ -70,8 +73,8 @@ class BasicNotificationProcessor(
             uuid = Uuid.random(),
             groupKey = sbn.groupKey,
             key = sbn.key,
-            title = title.toString(),
-            body = body.toString(),
+            title = title,
+            body = body,
             icon = icon,
             timestamp = if (showWhen) {
                 Instant.fromEpochMilliseconds(sbn.notification.`when`)

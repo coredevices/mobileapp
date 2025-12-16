@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.util.stripBidiIsolates
 
 data class ActionRemoteInput(
     val remoteInput: RemoteInput,
@@ -59,12 +60,12 @@ data class LibPebbleNotificationAction(
             } else {
                 SemanticAction.None
             }
-            val title = action.title?.toString() ?: return null
+            val title = stripBidiIsolates(action.title) ?: return null
             val pendingIntent = action.actionIntent ?: return null
             val input = action.remoteInputs?.firstOrNull {
                 it.allowFreeFormInput
             }
-            val suggestedResponses = input?.choices?.map { it.toString() }
+            val suggestedResponses = input?.choices?.map { stripBidiIsolates(it.toString()) ?: "" }
             return LibPebbleNotificationAction(
                 packageName = packageName,
                 title = title,
