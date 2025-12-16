@@ -56,18 +56,20 @@ class NotificationAppsScreenViewModel : ViewModel() {
 fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
-        val pebbleFeatures: PebbleFeatures = koinInject()
-        val platform = koinInject<Platform>()
 
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(true)
+            topBarParams.actions {
+            }
             topBarParams.canGoBack(false)
         }
 
         val notificationApi: NotificationApps = koinInject()
+        val platform = koinInject<Platform>()
         val appsFlow = remember { notificationApi.notificationApps() }
         val apps by appsFlow.collectAsState(emptyList())
         val bootConfig = rememberBootConfig()
+        val pebbleFeatures: PebbleFeatures = koinInject()
         val libPebble = rememberLibPebble()
         val libPebbleConfig by libPebble.config.collectAsState()
         val filteredAndSortedApps by remember(
