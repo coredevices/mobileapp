@@ -73,6 +73,7 @@ class PebbleKit2(
                         downloadUrl
                     )
                 )
+                launchNackAllIncomingMessages(scope)
             }
         }
     }
@@ -125,6 +126,20 @@ class PebbleKit2(
                 } else {
                     replyNACK(appMessageData.transactionId)
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.e(e) { "Error receiving app message from $uuid: ${e.message}" }
+            }
+        }.launchIn(scope)
+    }
+
+    private fun launchNackAllIncomingMessages(scope: CoroutineScope) {
+        incomingConsumer = device.inboundAppMessages(uuid).onEach { appMessageData ->
+            try {
+                logger.d { "Got inbound AppMessage, but valid companion app is not running. Nacking..." }
+
+                replyNACK(appMessageData.transactionId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
