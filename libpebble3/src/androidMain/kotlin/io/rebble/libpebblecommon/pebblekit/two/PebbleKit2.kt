@@ -45,6 +45,7 @@ class PebbleKit2(
 
     val uuid: Uuid by lazy { Uuid.Companion.parse(appInfo.uuid) }
     private var runningScope: CoroutineScope? = null
+    private var incomingConsumer: Job? = null
 
     override suspend fun start(connectionScope: CoroutineScope) {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
@@ -53,14 +54,15 @@ class PebbleKit2(
         val scope = connectionScope + Job() + CoroutineName("PebbleKit2-$uuid") + exceptionHandler
         runningScope = scope
 
-        launchIncomingAppMessageHandler(scope)
-
         scope.launch {
             val connectSuccess = connector.sendOnAppOpened(
                 uuid.toJavaUuid(),
                 WatchIdentifier(device.watchInfo.serial)
             )
-            if (!connectSuccess) {
+
+            if (connectSuccess) {
+                launchIncomingAppMessageHandler(scope)
+            } else {
                 val appName = appInfo.shortName
                 val downloadUrl = appInfo.companionApp?.android?.url
                 errorTracker.reportError(
@@ -76,6 +78,10 @@ class PebbleKit2(
     }
 
     override suspend fun stop() {
+        // We have to stop the incoming message consumer immediately, otherwise we might consume future messages before the service
+        // is closed.
+        incomingConsumer?.cancel()
+
         runningScope?.launch {
             connector.sendOnAppClosed(uuid.toJavaUuid(), WatchIdentifier(device.watchInfo.serial))
         }
@@ -102,7 +108,8 @@ class PebbleKit2(
     }
 
     private fun launchIncomingAppMessageHandler(scope: CoroutineScope) {
-        device.inboundAppMessages(uuid).onEach { appMessageData ->
+        logger.d { "Launching AMH" }
+        incomingConsumer = device.inboundAppMessages(uuid).onEach { appMessageData ->
             try {
                 logger.d { "Got inbound AppMessage" }
 
@@ -128,7 +135,7 @@ class PebbleKit2(
 
     private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(3.seconds) {
-           device.sendAppMessageResult(AppMessageResult.NACK(id))
+            device.sendAppMessageResult(AppMessageResult.NACK(id))
         }
     }
 
