@@ -109,7 +109,6 @@ class PebbleKit2(
     }
 
     private fun launchIncomingAppMessageHandler(scope: CoroutineScope) {
-        logger.d { "Launching AMH" }
         incomingConsumer = device.inboundAppMessages(uuid).onEach { appMessageData ->
             try {
                 logger.d { "Got inbound AppMessage" }
