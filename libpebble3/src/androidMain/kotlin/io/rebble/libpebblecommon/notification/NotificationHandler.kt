@@ -1,12 +1,12 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.app.KeyguardManager
-import android.content.Context
 import android.app.Notification
 import android.app.Notification.Action
 import android.app.Notification.WearableExtender
 import android.app.Person
 import android.app.RemoteInput
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -15,7 +15,6 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
-import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -44,7 +43,6 @@ import kotlin.uuid.Uuid
 class NotificationHandler(
     private val notificationProcessors: Set<NotificationProcessor>,
     private val notificationAppDao: NotificationAppRealDao,
-    private val contactDao: ContactDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timeProvider: TimeProvider,
     private val notificationConfig: NotificationConfigFlow,
@@ -149,11 +147,8 @@ class NotificationHandler(
                 return null
             }
         }
-        val contactEntries = notification.people.mapNotNull {
-            contactDao.getContact(it)
-        }
-        val anyContactMuted = contactEntries.any { it.muteState == MuteState.Always }
-        val anyContactStarred = contactEntries.any { it.muteState == MuteState.Exempt }
+        val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
+        val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
         val decision = when {
             sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
                 NotSentLocalOnly
@@ -180,7 +175,7 @@ class NotificationHandler(
         return isScreenOn && !isDeviceLocked
     }
 
-    private fun extractNotification(
+    private suspend fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
         channel: ChannelItem?,

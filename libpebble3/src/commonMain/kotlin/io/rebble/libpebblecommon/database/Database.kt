@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -35,6 +36,7 @@ import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderSyncEntity
+import io.rebble.libpebblecommon.database.entity.VibePatternEntity
 import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.database.entity.WatchSettingsEntity
 import io.rebble.libpebblecommon.database.entity.WatchSettingsSyncEntity
@@ -62,6 +64,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         LockerAppPermission::class,
         NotificationEntity::class,
         ContactEntity::class,
+        VibePatternEntity::class,
         HealthDataEntity::class,
         OverlayDataEntity::class,
     ],
@@ -83,8 +86,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 23, to = 24),
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26),
-        AutoMigration(from = 26, to = 27),  // Added imperialUnits field to WatchSettings
-        ],
+        AutoMigration(from = 26, to = 27),
+    ],
     exportSchema = true,
 )
 @ConstructedBy(DatabaseConstructor::class)
@@ -101,6 +104,7 @@ abstract class Database : RoomDatabase() {
     abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
     abstract fun notificationsDao(): NotificationDao
     abstract fun contactDao(): ContactDao
+    abstract fun vibePatternDao(): VibePatternDao
     abstract fun healthDao(): HealthDao
 }
 

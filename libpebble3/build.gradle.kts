@@ -156,11 +156,11 @@ kotlin {
             implementation(libs.serialization)
             implementation(libs.kermit)
             implementation(libs.room.runtime)
+            api(libs.room.paging)
             implementation(libs.sqlite.bundled)
             api(libs.kotlinx.io.core)
             implementation(libs.kotlinx.io.okio)
             implementation(libs.okio)
-            // Using our forked version (in a submodule) which has a fix for iOS reads not working
             implementation(libs.kable)
             implementation(libs.kmpio)
             implementation(libs.ktor.client.core)

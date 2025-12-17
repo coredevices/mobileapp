@@ -11,7 +11,10 @@ import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.database.dao.ContactDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationProcessor
@@ -20,6 +23,8 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.vibrationPattern
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
+import io.rebble.libpebblecommon.timeline.TimelineColor
+import io.rebble.libpebblecommon.timeline.argbColor
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -28,8 +33,10 @@ private val logger = Logger.withTag("BasicNotificationProcessor")
 class BasicNotificationProcessor(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val context: AppContext,
+    private val contactDao: ContactDao,
+    private val vibePatternDao: VibePatternDao,
 ) : NotificationProcessor {
-    override fun extractNotification(
+    override suspend fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
         channel: ChannelItem?,
@@ -49,10 +56,15 @@ class BasicNotificationProcessor(
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
         val body = bigText ?: text ?: ""
         val people = sbn.notification.people()
-        val vibrationPattern = sbn.notification.vibrationPattern()
         val contactKeys = people.asContacts(context.context)
-        val color = HardcodedNotificationColors.packageColorMap[sbn.packageName]
-            ?: sbn.notification.color.takeIf { it != 0 && it != 0xFF000000.toInt() }
+        val contactEntries = contactKeys.mapNotNull {
+            contactDao.getContact(it)
+        }
+        val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn)
+        val appProperties = NotificationProperties.lookup(app.packageName)
+
+        val color = selectColor(app, sbn, appProperties)
+        val icon = selectIcon(app, sbn, appProperties)
         val notification = LibPebbleNotification(
             packageName = sbn.packageName,
             uuid = Uuid.random(),
@@ -60,18 +72,63 @@ class BasicNotificationProcessor(
             key = sbn.key,
             title = title.toString(),
             body = body.toString(),
-            icon = sbn.icon(),
+            icon = icon,
             timestamp = if (showWhen) {
                 Instant.fromEpochMilliseconds(sbn.notification.`when`)
             } else {
                 Instant.fromEpochMilliseconds(sbn.postTime)
             },
             actions = actions,
-            people = contactKeys,
-			vibrationPattern = vibrationPattern,
+            people = contactEntries,
+			vibrationPattern = sendVibePattern,
             color = color,
         )
         return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
+    }
+
+    private fun selectColor(
+        app: NotificationAppItem,
+        sbn: StatusBarNotification,
+        appProperties: NotificationProperties?,
+    ): Int? {
+        return TimelineColor.findByName(app.colorName)?.argbColor()
+            ?: appProperties?.color?.argbColor()
+            ?: sbn.notification.color.takeIf { it != 0 && it != 0xFF000000.toInt() }
+    }
+
+    private fun selectIcon(
+        app: NotificationAppItem,
+        sbn: StatusBarNotification,
+        appProperties: NotificationProperties?,
+    ): TimelineIcon {
+        return TimelineIcon.fromCode(app.iconCode)
+            ?:appProperties?.icon
+            ?: sbn.iconForCategory()
+    }
+
+    private suspend fun selectVibrationPattern(
+        contactEntries: List<ContactEntity>,
+        app: NotificationAppItem,
+        sbn: StatusBarNotification,
+    ): List<UInt>? {
+        // TODO we're only picking the pattern from the first contact. I don't know if the first
+        //  contact is always the one that sent the message, in a group chat?
+        val vibePatternForContact = findVibePattern(contactEntries.firstOrNull()?.vibePatternName)
+        val vibePatternForApp = findVibePattern(app.vibePatternName)
+        val vibePatternFromNotification = if (notificationConfigFlow.value.useAndroidVibePatterns) {
+            sbn.notification.vibrationPattern()
+        } else {
+            null
+        }
+        val vibePatternDefaultOverride = findVibePattern(notificationConfigFlow.value.overrideDefaultVibePattern)
+        return vibePatternForContact ?: vibePatternForApp ?: vibePatternFromNotification ?: vibePatternDefaultOverride
+    }
+
+    private suspend fun findVibePattern(name: String?): List<UInt>? {
+        if (name == null) {
+            return null
+        }
+        return vibePatternDao.getVibePattern(name)?.pattern
     }
 }
 
@@ -173,69 +230,20 @@ private fun List<Person>.asContacts(context: Context): List<String> = mapNotNull
     }
 }
 
-fun StatusBarNotification.icon(): TimelineIcon = when (packageName) {
-    "com.google.android.gm.lite", "com.google.android.gm" -> TimelineIcon.NotificationGmail
-    "com.microsoft.office.outlook" -> TimelineIcon.NotificationOutlook
-    "com.Slack" -> TimelineIcon.NotificationSlack
-    "com.snapchat.android" -> TimelineIcon.NotificationSnapchat
-    "com.twitter.android", "com.twitter.android.lite" -> TimelineIcon.NotificationTwitter
-    "org.telegram.messenger", "org.telegram.messenger.web", "org.thunderdog.challegram" -> TimelineIcon.NotificationTelegram
-    "com.facebook.katana", "com.facebook.lite" -> TimelineIcon.NotificationFacebook
-    "com.facebook.orca" -> TimelineIcon.NotificationFacebookMessenger
-    "com.whatsapp" -> TimelineIcon.NotificationWhatsapp
-    "com.linkedin.android" -> TimelineIcon.NotificationLinkedIn
-    "com.google.android.apps.messaging" -> TimelineIcon.NotificationGoogleMessenger
-    "com.tencent.mm" -> TimelineIcon.NotificationWeChat
-    "com.microsoft.office.lync" -> TimelineIcon.NotificationSkype
-    "jp.naver.line.android" -> TimelineIcon.NotificationLine
-    "com.amazon.mShop.android.shopping" -> TimelineIcon.NotificationAmazon
-    "com.google.android.apps.maps" -> TimelineIcon.NotificationGoogleMaps
-    "com.yahoo.mobile.client.android.mail" -> TimelineIcon.NotificationYahooMail
-    "com.google.android.apps.photos" -> TimelineIcon.NotificationGooglePhotos
-    "com.viber.voip" -> TimelineIcon.NotificationViber
-    "com.instagram.android" -> TimelineIcon.NotificationInstagram
-    "com.bbm.enterprise" -> TimelineIcon.NotificationBlackberryMessenger
-    "com.google.android.apps.dynamite" -> TimelineIcon.NotificationGoogleChat
-    "kik.android" -> TimelineIcon.NotificationKik
-    "com.kakao.talk" -> TimelineIcon.NotificationKakaoTalk
-    "com.beeper.android" -> TimelineIcon.NotificationBeeper
-    "ch.protonmail.android" -> TimelineIcon.GenericEmail
-    "me.proton.android.calendar" -> TimelineIcon.TimelineCalendar
-    "com.google.android.apps.walletnfcrel" -> TimelineIcon.PayBill
-    "com.revolut.revolut" -> TimelineIcon.PayBill
-    "com.transferwise.android" -> TimelineIcon.PayBill
-    "de.number26.android" -> TimelineIcon.PayBill
-    "com.bunq.android" -> TimelineIcon.PayBill
-    "com.google.android.youtube" -> TimelineIcon.TvShow
-    "app.revanced.android.youtube" -> TimelineIcon.TvShow
-    "com.discord" -> TimelineIcon.NotificationDiscord
-    "xyz.blueskyweb.app" -> TimelineIcon.NotificationBluesky
-    "com.duolingo" -> TimelineIcon.NotificationDuolingo
-    "im.vector.app", "io.element.android.x" -> TimelineIcon.NotificationElement
-    "com.google.android.apps.tasks" -> TimelineIcon.NotificationGoogleTasks
-    "io.homeassistant.companion.android" -> TimelineIcon.NotificationHomeAssistant
-    "com.valvesoftware.android.steam.community" -> TimelineIcon.NotificationSteam
-    "com.microsoft.teams" -> TimelineIcon.NotificationTeams
-    "com.instagram.barcelona" -> TimelineIcon.NotificationThreads
-    "com.ubnt.unifi.protect" -> TimelineIcon.NotificationUnifiProtect
-    "us.zoom.videomeetings" -> TimelineIcon.NotificationZoom
-    "com.ebay.mobile" -> TimelineIcon.NotificationEbay
-
-    else -> when (notification.category) {
-        Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail
-        Notification.CATEGORY_MESSAGE -> TimelineIcon.GenericSms
-        Notification.CATEGORY_EVENT -> TimelineIcon.TimelineCalendar
-        Notification.CATEGORY_PROMO -> TimelineIcon.PayBill
-        Notification.CATEGORY_ALARM -> TimelineIcon.AlarmClock
-        Notification.CATEGORY_ERROR -> TimelineIcon.GenericWarning
-        Notification.CATEGORY_TRANSPORT -> TimelineIcon.AudioCassette
-        Notification.CATEGORY_SYSTEM -> TimelineIcon.Settings
-        Notification.CATEGORY_REMINDER -> TimelineIcon.NotificationReminder
-        Notification.CATEGORY_WORKOUT -> TimelineIcon.Activity
-        Notification.CATEGORY_MISSED_CALL -> TimelineIcon.TimelineMissedCall
-        Notification.CATEGORY_CALL -> TimelineIcon.IncomingPhoneCall
-        Notification.CATEGORY_NAVIGATION, Notification.CATEGORY_LOCATION_SHARING -> TimelineIcon.Location
-        Notification.CATEGORY_SOCIAL, Notification.CATEGORY_RECOMMENDATION -> TimelineIcon.NewsEvent
-        else -> TimelineIcon.NotificationGeneric
-    }
+fun StatusBarNotification.iconForCategory(): TimelineIcon = when (notification.category) {
+    Notification.CATEGORY_EMAIL -> TimelineIcon.GenericEmail
+    Notification.CATEGORY_MESSAGE -> TimelineIcon.GenericSms
+    Notification.CATEGORY_EVENT -> TimelineIcon.TimelineCalendar
+    Notification.CATEGORY_PROMO -> TimelineIcon.PayBill
+    Notification.CATEGORY_ALARM -> TimelineIcon.AlarmClock
+    Notification.CATEGORY_ERROR -> TimelineIcon.GenericWarning
+    Notification.CATEGORY_TRANSPORT -> TimelineIcon.AudioCassette
+    Notification.CATEGORY_SYSTEM -> TimelineIcon.Settings
+    Notification.CATEGORY_REMINDER -> TimelineIcon.NotificationReminder
+    Notification.CATEGORY_WORKOUT -> TimelineIcon.Activity
+    Notification.CATEGORY_MISSED_CALL -> TimelineIcon.TimelineMissedCall
+    Notification.CATEGORY_CALL -> TimelineIcon.IncomingPhoneCall
+    Notification.CATEGORY_NAVIGATION, Notification.CATEGORY_LOCATION_SHARING -> TimelineIcon.Location
+    Notification.CATEGORY_SOCIAL, Notification.CATEGORY_RECOMMENDATION -> TimelineIcon.NewsEvent
+    else -> TimelineIcon.NotificationGeneric
 }

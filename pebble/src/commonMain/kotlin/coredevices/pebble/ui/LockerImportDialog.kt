@@ -1,7 +1,6 @@
 package coredevices.pebble.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -11,8 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,16 +31,27 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 fun LockerImportDialog(
     onDismissRequest: () -> Unit,
-    onImportFromPebbleAccount: suspend () -> Unit,
+    onImportFromPebbleAccount: suspend ((progress: Float) -> Unit) -> Unit,
     onStartFresh: () -> Unit,
     isRebble: Boolean
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(-1f) }
     M3Dialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = {
+            if (!loading) {
+                onDismissRequest()
+            }
+        },
         icon = { Icon(Icons.Default.Apps, contentDescription = null) },
-        title = { Text("Import Apps & Faces?") },
+        title = {
+            if (loading) {
+                Text("Import in progress...")
+            } else {
+                Text("Import Apps & Faces?")
+            }
+        },
         buttons = {
             TextButton(
                 onClick = {
@@ -55,7 +65,9 @@ fun LockerImportDialog(
                 onClick = {
                     scope.launch {
                         loading = true
-                        onImportFromPebbleAccount()
+                        onImportFromPebbleAccount { p ->
+                            progress = p
+                        }
                     }
                 },
                 enabled = !loading,
@@ -71,10 +83,15 @@ fun LockerImportDialog(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(75.dp),
+                            .height(75.dp)
+                            .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        if (progress < 0f) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        } else {
+                            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 } else {
                     Text(

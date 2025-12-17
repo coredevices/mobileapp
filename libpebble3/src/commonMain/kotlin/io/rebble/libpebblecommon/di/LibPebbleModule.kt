@@ -70,10 +70,10 @@ import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
+import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
@@ -330,6 +330,7 @@ fun initKoin(
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
+                single { get<Database>().vibePatternDao() }
                 single { get<Database>().healthDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
@@ -345,6 +346,7 @@ fun initKoin(
                 single { createTimeChanged(get()) }
                 single {
                     LibPebble3(
+                        get(),
                         get(),
                         get(),
                         get(),

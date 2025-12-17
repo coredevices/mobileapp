@@ -26,7 +26,10 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.put
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
 import io.ktor.http.isSuccess
+import io.ktor.http.path
 import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.WebServices
@@ -232,8 +235,12 @@ class RealPebbleWebServices(
         }
     }
 
-    private suspend fun getAllSources(): List<AppstoreSource> {
-        return appstoreSourceDao.getAllEnabledSources().first()
+    private suspend fun getAllSources(enabledOnly: Boolean = true): List<AppstoreSource> {
+        return if (enabledOnly) {
+            appstoreSourceDao.getAllEnabledSources().first()
+        } else {
+            appstoreSourceDao.getAllSources().first()
+        }
     }
 
     private val appstoreServices = mutableMapOf<String, AppstoreService>()
@@ -288,20 +295,18 @@ class RealPebbleWebServices(
 
     suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType): List<Pair<AppstoreSource, AppStoreHome?>> {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean = true): List<Pair<AppstoreSource, AppStoreHome?>> {
         val typeString = type.storeString()
-        val parameters = mapOf(
-            "platform" to platform.storeString(),
-            "hardware" to hardwarePlatform.codename,
-//            "firmware_version" to "",
-            "filter_hardware" to "true",
-        )
-        return getAllSources().map {
-            it to httpClient.get<AppStoreHome>(
-                url = "${it.url}/v1/home/$typeString",
-                auth = false,
-                parameters = parameters,
-            )
+        val parameters = buildMap {
+            set("platform", platform.storeString())
+            if (hardwarePlatform != null) {
+                set("hardware", hardwarePlatform.codename)
+            }
+//            set("firmware_version", "")
+            set("filter_hardware", "true")
+        }
+        return getAllSources(enabledOnly).map {
+            it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform)
         }
     }
 
@@ -568,7 +573,7 @@ data class StoreApplication(
     val source: String?,
     val title: String,
     val type: String,
-    val uuid: String,
+    val uuid: String = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
 )
@@ -606,7 +611,7 @@ data class StoreChangelogEntry(
     @SerialName("published_date")
     val publishedDate: String,
     @SerialName("release_notes")
-    val releaseNotes: String,
+    val releaseNotes: String?,
     @SerialName("version")
     val version: String,
 )
@@ -618,7 +623,7 @@ data class StoreChangelogEntry(
 //    val orig: String,
 //)
 
-fun StoreAppResponse.toLockerEntry(): LockerEntry? {
+fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
     val app = data.firstOrNull() ?: return null
     return LockerEntry(
         id = app.id,
@@ -631,7 +636,16 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
         isConfigurable = app.capabilities.contains("configurable"),
         isTimelineEnabled = app.capabilities.contains("timeline"),
         pbw = LockerEntryPBW(
-            file = app.latestRelease.pbwFile,
+            file = app.latestRelease.pbwFile.let {
+                if (!it.startsWith("http") && sourceUrl != null) {
+                    val sourcePrefix = Url(sourceUrl)
+                    URLBuilder(sourcePrefix).apply {
+                        path(it)
+                    }.buildString()
+                } else {
+                    it
+                }
+            },
             iconResourceId = 0,
             releaseId = ""
         ),
@@ -640,12 +654,17 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
         companions = app.companions,
         category = app.category,
         hardwarePlatforms = buildList {
+            var flags = 0
+            if (app.type == AppType.Watchface.code) {
+                flags = flags or (0x1 shl 0)
+            }
             app.compatibility.aplite.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x1 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "aplite",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86", //TODO: grab from API if we can
+                        pebbleProcessInfoFlags = flagsFinal, //TODO: ditto
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -656,11 +675,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.basalt.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x2 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "basalt",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86", //TODO
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -671,11 +691,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.chalk.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x3 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "chalk",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -686,11 +707,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.diorite.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x4 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "diorite",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -701,11 +723,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.emery.takeIf { it.supported }?.let {
+                val flagsFinal = flags or (0x5 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "emery",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",
@@ -716,11 +739,12 @@ fun StoreAppResponse.toLockerEntry(): LockerEntry? {
                 )
             }
             app.compatibility.flint.takeIf { it?.supported ?: false }?.let {
+                val flagsFinal = flags or (0x6 shl 6)
                 add(
                     LockerEntryPlatform(
                         name = "flint",
-                        sdkVersion = it.firmware.major.toString(),
-                        pebbleProcessInfoFlags = 0,
+                        sdkVersion = "5.86",
+                        pebbleProcessInfoFlags = flagsFinal,
                         description = app.description,
                         images = LockerEntryPlatformImages(
                             icon = app.iconImage["48x48"] ?: "",

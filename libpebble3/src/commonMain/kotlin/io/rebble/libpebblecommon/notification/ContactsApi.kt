@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.notification
 
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.paging.PagingSource
 import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.database.dao.ContactDao
@@ -15,16 +16,21 @@ class ContactsApi(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val systemContacts: SystemContacts,
 ) : Contacts {
-    override fun getContactsWithCounts(): Flow<List<ContactWithCount>> {
-        return contactDao.getContactsWithCountFlow()
+    override fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount> {
+        return contactDao.getContactsWithCountFlow(searchTerm.ifEmpty { null }, onlyNotified)
     }
 
-    override fun updateContactMuteState(
+    override fun getContact(id: String): Flow<ContactWithCount?> {
+        return contactDao.getContactWithCountFlow(id)
+    }
+
+    override fun updateContactState(
         contactId: String,
-        muteState: MuteState
+        muteState: MuteState,
+        vibePatternName: String?,
     ) {
         libPebbleCoroutineScope.launch {
-            contactDao.updateContactMuteState(contactId, muteState)
+            contactDao.updateContactState(contactId, muteState, vibePatternName)
         }
     }
 

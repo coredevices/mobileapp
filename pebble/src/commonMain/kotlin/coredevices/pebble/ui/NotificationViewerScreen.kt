@@ -95,42 +95,6 @@ fun AppNotificationViewerScreen(
 }
 
 @Composable
-fun ContactNotificationViewerScreen(
-    topBarParams: TopBarParams,
-    nav: NavBarNav,
-    contactId: String,
-) {
-    LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
-        topBarParams.actions {}
-        topBarParams.title("Contact Notifications")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            nav.goBack()
-        }
-    }
-    val libPebble = rememberLibPebble()
-    val flow = remember {
-        libPebble.getContactsWithCounts().map { entries ->
-            entries.firstOrNull { it.contact.lookupKey == contactId }
-        }
-    }
-    val contact by flow.collectAsState(null)
-    contact?.let { entry ->
-        Column {
-            ContactCard(entry = entry, nav = nav, firstOrOnlyItem = true)
-            NotificationHistoryList(
-                packageName = null,
-                channelId = null,
-                contactId = contactId,
-                limit = 25,
-                showAppIcon = true,
-            )
-        }
-    }
-}
-
-@Composable
 fun NotificationHistoryList(
     packageName: String?,
     channelId: String?,

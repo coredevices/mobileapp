@@ -8,6 +8,7 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
@@ -46,38 +47,59 @@ class PebbleAppDelegate(
     private val appUpdate: AppUpdate,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
-    private val appstoreSourceDao: AppstoreSourceDao
+    private val appstoreSourceDao: AppstoreSourceDao,
+    private val pebbleAccount: PebbleAccountProvider
 ) {
+    companion object {
+        private val INITIAL_APPSTORE_SOURCES = listOf(
+            AppstoreSource(
+                url = "https://appstore-api.repebble.com/api",
+                title = "Pebble App Feed",
+                algoliaAppId = "GM3S9TRYO4",
+                algoliaApiKey = "0b83b4f8e4e8e9793d2f1f93c21894aa",
+                algoliaIndexName = "apps"
+            ),
+            AppstoreSource(
+                url = "https://appstore-api.rebble.io/api",
+                title = "Rebble App Feed",
+                algoliaAppId = "7683OW76EQ",
+                algoliaApiKey = "252f4938082b8693a8a9fc0157d1d24f",
+                algoliaIndexName = "rebble-appstore-production",
+                enabled = false
+            )
+        )
+    }
     private val logger = Logger.withTag("PebbleAppDelegate")
 
     private suspend fun initAppstoreSourcesDB() {
         val current = appstoreSourceDao.getAllSources().first()
-        val needsInit = current.isEmpty() || current.any { it.algoliaAppId == null }
+        //TODO: remove the migration stuff after a while
+        val needsInit = current.isEmpty() ||
+                current.any { it.algoliaAppId == null } || // migrate old entries
+                current.firstOrNull { it.url == "https://appstore-api.repebble.com/api" }?.title != "Pebble App Feed" // migrate title change
         if (needsInit) {
             logger.d { "Initializing appstore sources database" }
             current.forEach { source ->
                 appstoreSourceDao.deleteSourceById(source.id)
             }
-            appstoreSourceDao.insertSource(
-                AppstoreSource(
-                    url = "https://appstore-api.repebble.com/api",
-                    title = "Core Devices",
-                    algoliaAppId = "GM3S9TRYO4",
-                    algoliaApiKey = "0b83b4f8e4e8e9793d2f1f93c21894aa",
-                    algoliaIndexName = "apps"
-                )
-            )
-            appstoreSourceDao.insertSource(
-                AppstoreSource(
-                    url = "https://appstore-api.rebble.io/api",
-                    title = "Rebble",
-                    algoliaAppId = "7683OW76EQ",
-                    algoliaApiKey = "252f4938082b8693a8a9fc0157d1d24f",
-                    algoliaIndexName = "rebble-appstore-production"
-                )
-            )
+            INITIAL_APPSTORE_SOURCES.forEach { source ->
+                appstoreSourceDao.insertSource(source)
+            }
         } else {
             logger.d { "Appstore sources database already initialized" }
+        }
+
+        GlobalScope.launch {
+            val rebbleSource = appstoreSourceDao.getAllSources().first()
+                .firstOrNull { it.title == "Rebble" }
+            if (rebbleSource == null) {
+                return@launch
+            }
+            pebbleAccount.get().loggedIn.collect {
+                if (it == null) {
+                    appstoreSourceDao.setSourceEnabled(rebbleSource.id, false)
+                }
+            }
         }
     }
 

@@ -8,6 +8,8 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 
+import coredevices.util.CoreConfigFlow
+
 interface FirmwareUpdateUiTracker {
     fun didFirmwareUpdateCheckFromUi()
     fun shouldUiUpdateCheck(): Boolean
@@ -19,6 +21,7 @@ class RealFirmwareUpdateUiTracker(
     private val settings: Settings,
     private val clock: Clock,
     private val appContext: AppContext,
+    private val coreConfigFlow: CoreConfigFlow,
 ) : FirmwareUpdateUiTracker {
     private val logger = Logger.withTag("FirmwareUpdateUiTracker")
     private var lastUiUpdateMs: Long = settings.getLong(KEY_LAST_UI_UPDATE_CHECK_MS, 0)
@@ -39,6 +42,9 @@ class RealFirmwareUpdateUiTracker(
     }
 
     override fun maybeNotifyFirmwareUpdate(update: FirmwareUpdateCheckResult, identifier: PebbleIdentifier, watchName: String) {
+        if (coreConfigFlow.value.disableFirmwareUpdateNotifications) {
+            return
+        }
         if (update !is FirmwareUpdateCheckResult.FoundUpdate) {
             return
         }

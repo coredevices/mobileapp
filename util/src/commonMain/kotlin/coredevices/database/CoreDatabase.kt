@@ -16,11 +16,13 @@ internal const val CORE_DATABASE_FILENAME = "coreapp.db"
     entities = [
         HeartbeatStateEntity::class,
         AppstoreSource::class,
+        AppstoreCollection::class
     ],
-    version = 3,
+    version = 4,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
     ],
     exportSchema = true,
 )
@@ -28,6 +30,7 @@ internal const val CORE_DATABASE_FILENAME = "coreapp.db"
 abstract class CoreDatabase : RoomDatabase() {
     abstract fun analyticsDao(): HeartbeatStateDao
     abstract fun appstoreSourceDao(): AppstoreSourceDao
+    abstract fun appstoreCollectionDao(): AppstoreCollectionDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

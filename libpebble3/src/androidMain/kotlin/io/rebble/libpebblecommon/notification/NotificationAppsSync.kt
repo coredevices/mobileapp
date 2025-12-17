@@ -103,12 +103,15 @@ class AndroidNotificationAppsSync(
                 channelGroups = channels,
                 stateUpdated = timeProvider.now().asMillisecond(),
                 lastNotified = Instant.DISTANT_PAST.asMillisecond(),
+                vibePatternName = null,
+                colorName = null,
+                iconCode = null,
             )
             if (existing == null) {
 //                logger.d("adding ${osApp.packageName}")
                 notificationAppDao.insertOrReplace(newAppItem)
             } else {
-                val newEntryWithExistingMuteStates = newAppItem.copy(
+                val newEntryWithExistingStates = newAppItem.copy(
                     muteState = existing.muteState,
                     channelGroups = newAppItem.channelGroups.map { group ->
                         group.copy(
@@ -124,11 +127,14 @@ class AndroidNotificationAppsSync(
                     },
                     stateUpdated = existing.stateUpdated,
                     lastNotified = existing.lastNotified,
+                    vibePatternName = existing.vibePatternName,
+                    colorName = existing.colorName,
+                    iconCode = existing.iconCode,
                 )
-                if (existing != newEntryWithExistingMuteStates) {
+                if (existing != newEntryWithExistingStates) {
                     logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")
                     notificationAppDao.insertOrReplace(
-                        newEntryWithExistingMuteStates.copy(
+                        newEntryWithExistingStates.copy(
                             stateUpdated = timeProvider.now().asMillisecond()
                         )
                     )
