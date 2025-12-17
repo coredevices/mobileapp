@@ -21,7 +21,14 @@ enum class NotificationProperties(
     GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger),
     Hipchat(pkgName = "com.hipchat", color = TimelineColor.CobaltBlue, icon = null),
     Skype(pkgName = "com.skype.raider", color = TimelineColor.VividCerulean, icon = null),
-    Twitter(pkgName = "com.twitter.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTwitter),
+    Twitter(pkgName = "com.twitter.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTwitter, title = { sbn, notiApp, channel ->
+        val title = sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE) ?: ""
+        if (channel?.name == "Direct Messages") {
+            title.substring(0, title.indexOf(":"))
+        } else {
+            title.toString()
+        }
+    }),
     Mailbox(pkgName = "com.mailboxapp", color = TimelineColor.VividCerulean, icon = null),
     Snapchat(pkgName = "com.snapchat.android", color = TimelineColor.Icterine, icon = TimelineIcon.NotificationSnapchat),
     Wechat(pkgName = "com.tencent.mm", color = TimelineColor.KellyGreen, icon = TimelineIcon.NotificationWeChat),
