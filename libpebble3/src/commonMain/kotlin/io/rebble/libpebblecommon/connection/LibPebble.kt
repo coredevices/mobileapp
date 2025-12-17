@@ -110,6 +110,7 @@ interface HealthApi {
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()
     fun forceHealthDataOverwrite()
+    fun setHealthScreenActive(active: Boolean)
 }
 
 interface Timeline {

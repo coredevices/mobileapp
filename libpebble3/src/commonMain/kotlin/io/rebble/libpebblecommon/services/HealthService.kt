@@ -28,6 +28,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.toInstant
 import kotlin.uuid.Uuid
 
 /**
@@ -58,8 +59,11 @@ class HealthService(
 ) : ProtocolService {
     private val healthSessions = mutableMapOf<UByte, HealthSession>()
     private val isAppOpen = MutableStateFlow(false)
+    private val isHealthScreenActive = MutableStateFlow(false) // Track if HealthScreen is currently open
     private val lastFullStatsUpdate = MutableStateFlow(0L) // Epoch millis of last full stats push
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null) // Date of last today movement update
+    private val lastTodayUpdateTime = MutableStateFlow(0L) // Epoch millis of last today update
+    private val lastDataReceptionTime = MutableStateFlow(0L) // Epoch millis of last data reception from watch
 
     companion object {
         private val logger = Logger.withTag("HealthService")
@@ -73,9 +77,11 @@ class HealthService(
         private const val TWENTY_FOUR_HOURS_MS = 24 * 60 * 60_000L
         private const val HEALTH_STATS_AVERAGE_DAYS = 30
         private const val HEALTH_SYNC_WAIT_MS = 8_000L
-        private const val HEALTH_SYNC_POLL_MS = 500L
+        private const val HEALTH_SYNC_POLL_MS = 1000L // Reduced from 500ms to save battery
         private const val RECONCILE_DELAY_MS = 1000L
         private const val FULL_STATS_THROTTLE_HOURS = 12L
+        private const val TODAY_UPDATE_THROTTLE_MS = 30 * 60_000L // 30 minutes minimum between today updates
+        private const val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
     }
 
     fun init() {
@@ -84,8 +90,10 @@ class HealthService(
 
         listenForHealthUpdates()
         startPeriodicStatsUpdate()
+
+        // Trigger smart sync when watch connects/is selected
         scope.launch {
-            logger.i { "HEALTH_SERVICE: Initializing and reconciling health data with connected watch" }
+            logger.i { "HEALTH_SERVICE: Watch connected - performing smart reconciliation" }
             reconcileWatchWithDatabase()
         }
 
@@ -119,6 +127,20 @@ class HealthService(
             logger.i { "HEALTH_STATS: Manual health averages send requested" }
             updateHealthStats()
             lastFullStatsUpdate.value = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        }
+    }
+
+    /**
+     * Called when HealthScreen becomes active (user opens the health tab).
+     * Enables real-time data reception from watch.
+     */
+    fun setHealthScreenActive(active: Boolean) {
+        if (!isActiveConnection("health screen state change")) return
+        isHealthScreenActive.value = active
+        if (active) {
+            logger.i { "HEALTH_SERVICE: HealthScreen opened - enabling real-time updates" }
+        } else {
+            logger.i { "HEALTH_SERVICE: HealthScreen closed - throttling to background mode (30min)" }
         }
     }
 
@@ -288,13 +310,39 @@ class HealthService(
 
     private fun startPeriodicStatsUpdate() {
         scope.launch {
-            // Update health stats once daily to minimize battery usage
+            // Update health stats once daily, preferably in the morning
             while (true) {
-                delay(TWENTY_FOUR_HOURS_MS)
-                if (!isActiveConnection("scheduled daily stats update")) continue
-                logger.i { "HEALTH_STATS: Running scheduled daily stats update" }
-                updateHealthStats()
-                lastFullStatsUpdate.value = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                val timeZone = TimeZone.currentSystemDefault()
+                val now = kotlin.time.Clock.System.now().toLocalDateTime(timeZone)
+                val lastUpdateTime = lastFullStatsUpdate.value
+                val hoursSinceLastUpdate = if (lastUpdateTime > 0) {
+                    (kotlin.time.Clock.System.now().toEpochMilliseconds() - lastUpdateTime) / (60 * 60_000L)
+                } else {
+                    24L
+                }
+
+                // Calculate next morning update time (7 AM)
+                val tomorrow = now.date.plus(DatePeriod(days = 1))
+                val nextMorning = kotlinx.datetime.LocalDateTime(
+                    tomorrow.year, tomorrow.month, tomorrow.dayOfMonth,
+                    MORNING_WAKE_HOUR, 0, 0
+                )
+                val morningInstant = nextMorning.toInstant(timeZone)
+                val delayUntilMorning = (morningInstant.toEpochMilliseconds() -
+                                         kotlin.time.Clock.System.now().toEpochMilliseconds())
+                    .coerceAtLeast(0L)
+
+                // Wait until morning or 24 hours, whichever comes first
+                val delayTime = minOf(delayUntilMorning, TWENTY_FOUR_HOURS_MS)
+                delay(delayTime)
+
+                // Only update if it's been at least 24 hours since last update
+                if (hoursSinceLastUpdate >= 24) {
+                    if (!isActiveConnection("scheduled daily stats update")) continue
+                    logger.i { "HEALTH_STATS: Running scheduled daily stats update (${hoursSinceLastUpdate}h since last)" }
+                    updateHealthStats()
+                    lastFullStatsUpdate.value = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                }
             }
         }
     }
@@ -318,6 +366,20 @@ class HealthService(
         val sessionId = packet.sessionId.get()
         val session = healthSessions[sessionId] ?: return
 
+        // Throttle data reception if HealthScreen is not active
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val timeSinceLastReception = now - lastDataReceptionTime.value
+        val healthScreenActive = isHealthScreenActive.value
+
+        if (!healthScreenActive && timeSinceLastReception < TODAY_UPDATE_THROTTLE_MS) {
+            logger.d {
+                "HEALTH_DATA: Throttling data reception - HealthScreen inactive and last reception was ${timeSinceLastReception / 60_000}min ago (need ${TODAY_UPDATE_THROTTLE_MS / 60_000}min)"
+            }
+            return
+        }
+
+        lastDataReceptionTime.value = now
+
         val payload = packet.payload.get().toByteArray()
         val payloadSize = payload.size
         val itemsLeft = packet.itemsLeftAfterThis.get()
@@ -339,18 +401,24 @@ class HealthService(
             processHealthData(session, payload)
 
             // Update today's movement and recent sleep data when we finish receiving a batch
-            // This keeps the watch relatively up-to-date without excessive BlobDB writes
+            // Throttled to max once per 30 minutes to reduce battery drain
             if (itemsLeft.toInt() == 0) {
                 val timeZone = TimeZone.currentSystemDefault()
                 val today = kotlin.time.Clock.System.now().toLocalDateTime(timeZone).date
+                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                val timeSinceLastUpdate = now - lastTodayUpdateTime.value
 
-                if (lastTodayUpdateDate.value != today) {
-                    logger.d { "HEALTH_DATA: Received new data, updating today's movement and recent sleep data" }
+                val shouldUpdate = lastTodayUpdateDate.value != today ||
+                                   timeSinceLastUpdate >= TODAY_UPDATE_THROTTLE_MS
+
+                if (shouldUpdate) {
+                    logger.d { "HEALTH_DATA: Received new data, updating today's movement and recent sleep data (last update ${timeSinceLastUpdate / 60_000}min ago)" }
                     sendTodayMovementData(healthDao, blobDBService, today, timeZone)
                     sendRecentSleepData(healthDao, blobDBService, today, timeZone)
                     lastTodayUpdateDate.value = today
+                    lastTodayUpdateTime.value = now
                 } else {
-                    logger.d { "HEALTH_DATA: Already updated today's movement and sleep data" }
+                    logger.d { "HEALTH_DATA: Skipping today update - throttled (last update ${timeSinceLastUpdate / 60_000}min ago, need ${TODAY_UPDATE_THROTTLE_MS / 60_000}min)" }
                 }
             }
         }

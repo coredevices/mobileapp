@@ -57,15 +57,26 @@ fun HealthScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams
 ) {
+    val libPebble = rememberLibPebble()
+
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(false)
         topBarParams.actions {}
         topBarParams.title("Health")
         topBarParams.canGoBack(false)
+
+        // Notify that HealthScreen is active - enables real-time health data updates
+        libPebble.setHealthScreenActive(true)
+    }
+
+    // Clean up when screen is disposed
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            libPebble.setHealthScreenActive(false)
+        }
     }
 
     val healthDao: HealthDao = koinInject()
-    val libPebble = rememberLibPebble()
     val watches by libPebble.watches.collectAsState()
 
     val connectedDevice = remember(watches) {
