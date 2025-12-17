@@ -27,7 +27,7 @@ enum class NotificationProperties(
     Wechat(pkgName = "com.tencent.mm", color = TimelineColor.KellyGreen, icon = TimelineIcon.NotificationWeChat),
     Viber(pkgName = "com.viber.voip", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationViber),
     Instagram(pkgName = "com.instagram.android", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationInstagram),
-    Youtube(pkgName = "com.google.android.youtube", color = TimelineColor.Red, icon = TimelineIcon.TvShow),
+    Youtube(pkgName = "com.google.android.youtube", color = TimelineColor.Red, icon = TimelineIcon.NotificationYoutube),
     Kik(pkgName = "kik.android", color = TimelineColor.IslamicGreen, icon = TimelineIcon.NotificationKik),
     Line(pkgName = "jp.naver.line.android", color = TimelineColor.IslamicGreen, icon = TimelineIcon.NotificationLine),
     Inbox(pkgName = "com.google.android.apps.inbox", color = TimelineColor.BlueMoon, icon = null),
@@ -70,7 +70,9 @@ enum class NotificationProperties(
     ProtonMail(pkgName = "ch.protonmail.android", color = null, icon = TimelineIcon.GenericEmail),
     ProtonCalendar(pkgName = "me.proton.android.calendar", color = null, icon = TimelineIcon.TimelineCalendar),
     GoogleWallet(pkgName = "com.google.android.apps.walletnfcrel", color = null, icon = TimelineIcon.PayBill),
-    YoutubeReVanced(pkgName = "app.revanced.android.youtube", color = null, icon = TimelineIcon.TvShow),
+    YoutubeReVanced(pkgName = "app.revanced.android.youtube", color = TimelineColor.Red, icon = TimelineIcon.NotificationYoutube),
+    Signal(pkgName = "org.thoughtcrime.securesms", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationSignal),
+    Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
     ;
 
     companion object {

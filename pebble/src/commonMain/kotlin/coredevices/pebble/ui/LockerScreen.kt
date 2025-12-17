@@ -27,11 +27,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.AccessAlarm
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -279,7 +287,15 @@ fun LockerScreen(
                 }
             }
         }
-        val filteredLockerEntries by lockerQuery.collectAsState(emptyList())
+        val lockerEntries by lockerQuery.collectAsState(emptyList())
+        val filteredLockerEntries by remember(lockerEntries, watchType) {
+            derivedStateOf {
+                lockerEntries.filter {
+                    // TODO Include system apps when we support re-ordering
+                    it !is LockerWrapper.SystemApp
+                }
+            }
+        }
         val onWatch by remember(filteredLockerEntries, watchType) {
             derivedStateOf {
                 filteredLockerEntries.filter {
@@ -463,7 +479,7 @@ fun LockerScreen(
                                                     sourceId = source.id,
                                                     path = "collection/${collection.slug}",
                                                     title = collection.name,
-                                                    appType = type,
+                                                    appType = type.code,
                                                 )
                                             )
                                         })
@@ -1198,7 +1214,12 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
 
         is CommonAppType.System -> {
             val icon = when (entry.commonAppType.app) {
-                SystemApps.Calendar -> Icons.Default.DateRange
+                SystemApps.Settings -> Icons.Default.Settings
+                SystemApps.Music -> Icons.AutoMirrored.Filled.QueueMusic
+                SystemApps.Notifications -> Icons.Default.NotificationsActive
+                SystemApps.Alarms -> Icons.Default.AccessAlarm
+                SystemApps.Workout -> Icons.AutoMirrored.Filled.DirectionsRun
+                SystemApps.Watchfaces -> Icons.Default.Watch
             }
             Icon(icon, contentDescription = null, modifier = modifier.size(size))
         }

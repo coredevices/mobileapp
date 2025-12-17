@@ -123,6 +123,7 @@ enum class Section(val title: String) {
     Updates("Updates"),
     Support("Support"),
     Default("Settings"),
+    Calendar("Calendar"),
     Health("Health"),
     Apps("Apps"),
     Weather("Weather"),
@@ -727,6 +728,7 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsCompanionDeviceManager() },
                 ),
+
                 basicSettingsToggleItem(
                     title = "Ignore Missing PRF",
                     description = "Ignore missing PRF when connecting to development watches",
@@ -757,6 +759,14 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     show = { false },
+                ),
+                basicSettingsActionItem(
+                    title = "Calendar Settings",
+                    description = "",
+                    section = Section.Calendar,
+                    action = {
+                        navBarNav.navigateTo(PebbleRoutes.CalendarsRoute)
+                    },
                 ),
                 basicSettingsToggleItem(
                     title = "Enable Health",
@@ -902,7 +912,6 @@ please disable the option.""".trimIndent(),
                             topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                         }
                     },
-                    show = { experimentalDevices },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -997,6 +1006,30 @@ please disable the option.""".trimIndent(),
                         libPebble.watches.value.filterIsInstance<ConnectedPebble.CompanionAppControl>().forEach {
                             (it.currentCompanionAppSession.value as? PKJSApp)?.debugForceGC()
                         }
+                    },
+                    show = { debugOptionsEnabled },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show debug options",
+                    description = "Show some extra debug options around the app - not useful for most users",
+                    section = Section.Debug,
+                    checked = debugOptionsEnabled,
+                    onCheckChanged = {
+                        settings.set(SHOW_DEBUG_OPTIONS, it)
+                        debugOptionsEnabled = it
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Disable FW update notifications",
+                    description = "Ignore notifications for users who sideload their own firmware",
+                    section = Section.Debug,
+                    checked = coreConfig.disableFirmwareUpdateNotifications,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                disableFirmwareUpdateNotifications = it
+                            )
+                        )
                     },
                     show = { debugOptionsEnabled },
                 ),
