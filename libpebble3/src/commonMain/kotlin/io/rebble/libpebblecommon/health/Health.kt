@@ -190,3 +190,47 @@ data class HealthSettings(
     val ageYears: Int = 35,
     val gender: HealthGender = HealthGender.Female,
 )
+
+/**
+ * Time range for displaying health data
+ */
+enum class HealthTimeRange {
+    Daily, Weekly, Monthly
+}
+
+/**
+ * Data structure for stacked sleep charts (weekly/monthly views).
+ */
+data class StackedSleepData(
+    val label: String,
+    val lightSleepHours: Float,
+    val deepSleepHours: Float
+)
+
+/**
+ * Data structure for weekly aggregated data (for monthly charts broken into weeks).
+ */
+data class WeeklyAggregatedData(
+    val label: String,  // e.g., "Mar 27 - Apr 4"
+    val value: Float?,  // null when there's no data for this week
+    val weekIndex: Int  // Position in the overall sequence
+)
+
+/**
+ * Represents a segment of sleep in the daily view.
+ */
+data class SleepSegment(
+    val startHour: Float,      // Hour of day (0-24)
+    val durationHours: Float,
+    val type: OverlayType      // Sleep or DeepSleep
+)
+
+/**
+ * Daily sleep data with all segments and timing information.
+ */
+data class DailySleepData(
+    val segments: List<SleepSegment>,
+    val bedtime: Float,        // Start hour
+    val wakeTime: Float,       // End hour
+    val totalSleepHours: Float
+)
