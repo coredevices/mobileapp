@@ -38,6 +38,7 @@ import io.github.koalaplot.core.xygraph.XYGraph
 import io.github.koalaplot.core.xygraph.rememberFloatLinearAxisModel
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import kotlinx.coroutines.launch
+import theme.localHealthColors
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -87,6 +88,7 @@ fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
 private fun StepsDailyChart(data: List<Pair<String, Float>>) {
+    val healthColors = localHealthColors.current
     val points = data.mapIndexed { index, (_, value) ->
         DefaultPoint(index.toFloat(), value)
     }
@@ -127,12 +129,12 @@ private fun StepsDailyChart(data: List<Pair<String, Float>>) {
         AreaPlot2(
             data = smoothedPoints,
             lineStyle = LineStyle(
-                brush = SolidColor(MaterialTheme.colorScheme.primary),
+                brush = SolidColor(healthColors.steps),
                 strokeWidth = 2.dp
             ),
             areaBaseline = AreaBaseline.ConstantLine(value = 0f),
             areaStyle = AreaStyle(
-                brush = SolidColor(MaterialTheme.colorScheme.primary),
+                brush = SolidColor(healthColors.steps),
                 alpha = 0.3f
             )
         )
@@ -142,6 +144,7 @@ private fun StepsDailyChart(data: List<Pair<String, Float>>) {
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
 private fun StepsWeeklyChart(data: List<Pair<String, Float>>) {
+    val healthColors = localHealthColors.current
     val labels = data.map { it.first }
     val values = data.map { it.second }
     val maxY = values.maxOrNull()?.let { it * 1.1f } ?: 10f
@@ -173,7 +176,7 @@ private fun StepsWeeklyChart(data: List<Pair<String, Float>>) {
             barEntries,
             bar = { _, _, _ ->
                 DefaultBar(
-                    brush = SolidColor(MaterialTheme.colorScheme.primary),
+                    brush = SolidColor(healthColors.steps),
                     shape = topBar,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -186,6 +189,7 @@ private fun StepsWeeklyChart(data: List<Pair<String, Float>>) {
 @Composable
 private fun StepsMonthlyChart(data: List<Pair<String, Float>>) {
     if (data.isEmpty()) return
+    val healthColors = localHealthColors.current
 
     val points = data.mapIndexed { index, (_, value) ->
         DefaultPoint(index.toFloat(), value)
@@ -233,12 +237,12 @@ private fun StepsMonthlyChart(data: List<Pair<String, Float>>) {
         AreaPlot2(
             data = smoothedPoints,
             lineStyle = LineStyle(
-                brush = SolidColor(MaterialTheme.colorScheme.primary),
+                brush = SolidColor(healthColors.steps),
                 strokeWidth = 2.dp
             ),
             areaBaseline = AreaBaseline.ConstantLine(value = minY),
             areaStyle = AreaStyle(
-                brush = SolidColor(MaterialTheme.colorScheme.primary),
+                brush = SolidColor(healthColors.steps),
                 alpha = 0.3f
             )
         )

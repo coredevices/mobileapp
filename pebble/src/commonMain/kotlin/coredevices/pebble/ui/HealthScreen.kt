@@ -46,6 +46,7 @@ import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.metadata.WatchType
 import org.koin.compose.koinInject
+import theme.localHealthColors
 
 /**
  * Main Health screen showing steps, heart rate, and sleep data.
@@ -80,6 +81,8 @@ fun HealthScreen(
 
     var timeRange by remember { mutableStateOf(HealthTimeRange.Daily) }
 
+    val healthColors = localHealthColors.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -96,9 +99,9 @@ fun HealthScreen(
 
         // Steps chart
         HealthMetricCard(
-            title = "Steps",
+            title = "Activity",
             icon = Icons.Filled.DirectionsRun,
-            iconTint = MaterialTheme.colorScheme.primary
+            iconTint = healthColors.steps
         ) {
             StepsChart(healthDao, timeRange)
         }
@@ -108,7 +111,7 @@ fun HealthScreen(
             HealthMetricCard(
                 title = "Heart Rate",
                 icon = Icons.Filled.Favorite,
-                iconTint = Color(0xFFE91E63)
+                iconTint = healthColors.heartRate
             ) {
                 HeartRateChart(healthDao, timeRange)
             }
@@ -118,7 +121,7 @@ fun HealthScreen(
         HealthMetricCard(
             title = "Sleep",
             icon = Icons.Filled.Hotel,
-            iconTint = Color(0xFF9C27B0)
+            iconTint = healthColors.lightSleep
         ) {
             SleepChart(healthDao, timeRange)
         }

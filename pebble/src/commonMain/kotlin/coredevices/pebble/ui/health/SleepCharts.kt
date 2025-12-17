@@ -47,10 +47,11 @@ import io.rebble.libpebblecommon.health.OverlayType
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import theme.localHealthColors
+private val bottomBar = RoundedCornerShape(0.dp, 0.dp, 0.dp, 0.dp)
 
-private val lightSleepColor = Color(0xFF9C27B0).copy(alpha = 0.6f)
-private val deepSleepColor = Color(0xFF9C27B0)
-private val bottomBar = RoundedCornerShape(0.dp, 0.dp, 5.dp, 5.dp)
+private val dailyShape = RoundedCornerShape(5.dp)
+
 
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
@@ -105,6 +106,7 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
 
 @Composable
 private fun SleepDailyChart(data: DailySleepData) {
+    val healthColors = localHealthColors.current
     Canvas(modifier = Modifier.fillMaxWidth().height(80.dp)) {
         if (data.segments.isEmpty()) return@Canvas
 
@@ -120,8 +122,8 @@ private fun SleepDailyChart(data: DailySleepData) {
             val width = segment.durationHours * pixelsPerHour
 
             val color = when (segment.type) {
-                OverlayType.Sleep -> lightSleepColor
-                OverlayType.DeepSleep -> deepSleepColor
+                OverlayType.Sleep -> healthColors.lightSleep
+                OverlayType.DeepSleep -> healthColors.deepSleep
                 else -> Color.Transparent
             }
 
@@ -138,17 +140,18 @@ private fun SleepDailyChart(data: DailySleepData) {
 @Composable
 private fun SleepWeeklyChart(data: List<StackedSleepData>) {
     if (data.isEmpty()) return
+    val healthColors = localHealthColors.current
 
     val labels = data.map { it.label }
     val lightSleepValues = data.map { it.lightSleepHours }
     val deepSleepValues = data.map { it.deepSleepHours }
     val maxY = data.maxOfOrNull { it.lightSleepHours + it.deepSleepHours }?.let { it * 1.1f } ?: 10f
 
-    val lightBarEntries = data.map { item ->
-        DefaultVerticalBarPlotEntry(item.label, DefaultBarPosition(0f, item.lightSleepHours))
+    val deepBarEntries = data.map { item ->
+        DefaultVerticalBarPlotEntry(item.label, DefaultBarPosition(0f, item.deepSleepHours))
     }
-    val deepBarEntries = data.mapIndexed { idx, item ->
-        DefaultVerticalBarPlotEntry(item.label, DefaultBarPosition(lightSleepValues[idx], lightSleepValues[idx] + item.deepSleepHours))
+    val lightBarEntries = data.mapIndexed { idx, item ->
+        DefaultVerticalBarPlotEntry(item.label, DefaultBarPosition(deepSleepValues[idx], deepSleepValues[idx] + item.lightSleepHours))
     }
 
     XYGraph(
@@ -169,23 +172,23 @@ private fun SleepWeeklyChart(data: List<StackedSleepData>) {
             minorTickSize = 0.dp
         )
     ) {
-        // Draw light sleep bars first (bottom layer)
+        // Draw deep sleep bars first (bottom layer)
         VerticalBarPlot(
-            lightBarEntries,
+            deepBarEntries,
             bar = { _, _, _ ->
                 DefaultBar(
-                    brush = SolidColor(lightSleepColor),
+                    brush = SolidColor(healthColors.deepSleep),
                     shape = bottomBar,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         )
-        // Draw deep sleep bars on top
+        // Draw light sleep bars on top
         VerticalBarPlot(
-            deepBarEntries,
+            lightBarEntries,
             bar = { _, _, _ ->
                 DefaultBar(
-                    brush = SolidColor(deepSleepColor),
+                    brush = SolidColor(healthColors.lightSleep),
                     shape = topBar,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -198,6 +201,7 @@ private fun SleepWeeklyChart(data: List<StackedSleepData>) {
 @Composable
 private fun SleepMonthlyChart(data: List<StackedSleepData>) {
     if (data.isEmpty()) return
+    val healthColors = localHealthColors.current
 
     // Convert to indexed points (weekly aggregated data)
     val totalSleepPoints = data.mapIndexed { index, item ->
@@ -252,12 +256,12 @@ private fun SleepMonthlyChart(data: List<StackedSleepData>) {
         AreaPlot2(
             data = smoothedTotalSleep,
             lineStyle = LineStyle(
-                brush = SolidColor(lightSleepColor),
+                brush = SolidColor(healthColors.lightSleep),
                 strokeWidth = 2.dp
             ),
             areaBaseline = AreaBaseline.ConstantLine(minY),
             areaStyle = AreaStyle(
-                brush = SolidColor(lightSleepColor),
+                brush = SolidColor(healthColors.lightSleep),
                 alpha = 0.6f
             )
         )
@@ -265,12 +269,12 @@ private fun SleepMonthlyChart(data: List<StackedSleepData>) {
         AreaPlot2(
             data = smoothedDeepSleep,
             lineStyle = LineStyle(
-                brush = SolidColor(deepSleepColor),
+                brush = SolidColor(healthColors.deepSleep),
                 strokeWidth = 2.dp
             ),
             areaBaseline = AreaBaseline.ConstantLine(minY),
             areaStyle = AreaStyle(
-                brush = SolidColor(deepSleepColor),
+                brush = SolidColor(healthColors.deepSleep),
                 alpha = 0.8f
             )
         )
