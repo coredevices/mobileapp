@@ -4,16 +4,20 @@ import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.connection.Vibrations
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.VibePatternEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -25,13 +29,24 @@ interface NotificationAppsSync {
     fun init()
 }
 
+data class VibePattern(
+    val name: String,
+    val pattern: List<Long>,
+    val bundled: Boolean,
+) {
+    companion object {
+        fun VibePattern.uIntPattern() = pattern.map { it.toUInt() }
+    }
+}
+
 class NotificationApi(
     private val notificationAppsSync: NotificationAppsSync,
     private val notificationAppDao: NotificationAppRealDao,
     private val notificationsDao: NotificationDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
-) : NotificationApps {
+    private val vibePatternDao: VibePatternDao,
+) : NotificationApps, Vibrations {
     fun init() {
         notificationAppsSync.init()
     }
@@ -64,6 +79,22 @@ class NotificationApi(
         }
     }
 
+    override fun updateNotificationAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconCode: String?,
+    ) {
+        libPebbleCoroutineScope.launch {
+            notificationAppDao.updateAppState(
+                packageName = packageName,
+                vibePatternName = vibePatternName,
+                colorName = colorName,
+                iconCode = iconCode,
+            )
+        }
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
@@ -86,6 +117,37 @@ class NotificationApi(
     override suspend fun getAppIcon(packageName: String): ImageBitmap? {
         return withContext(Dispatchers.IO) {
             iconFor(packageName, appContext)
+        }
+    }
+
+    override fun vibePatterns(): Flow<List<VibePattern>> = vibePatternDao.getVibePatterns().map { patterns ->
+        patterns.map { pattern ->
+            VibePattern(
+                name = pattern.name,
+                pattern = pattern.pattern.map { it.toLong() },
+                bundled = pattern.bundled,
+            )
+        }
+    }
+
+    override fun addCustomVibePattern(
+        name: String,
+        pattern: List<Long>,
+    ) {
+        libPebbleCoroutineScope.launch {
+            vibePatternDao.insertOrIgnore(
+                VibePatternEntity(
+                    name = name,
+                    pattern = pattern.map { it.toUInt() },
+                    bundled = false,
+                )
+            )
+        }
+    }
+
+    override fun deleteCustomPattern(name: String) {
+        libPebbleCoroutineScope.launch {
+            vibePatternDao.deleteCustomPattern(name)
         }
     }
 }

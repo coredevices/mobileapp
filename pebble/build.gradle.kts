@@ -97,6 +97,7 @@ kotlin {
                 implementation(libs.koin.compose.viewmodel)
                 implementation(compose.components.resources)
                 implementation(libs.androidx.navigation.compose)
+                implementation(libs.paging.compose)
                 implementation(compose.components.uiToolingPreview)
                 implementation(libs.kotlinx.io.core)
                 implementation(libs.kermit)

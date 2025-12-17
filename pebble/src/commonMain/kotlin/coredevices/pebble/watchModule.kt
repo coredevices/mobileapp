@@ -25,7 +25,9 @@ import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleBootConfigService
 import coredevices.pebble.services.PebbleHttpClient
 import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
+import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.NotificationAppScreenViewModel
@@ -136,6 +138,17 @@ val watchModule = module {
     viewModelOf(::LockerViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
+    viewModelOf(::ContactsViewModel)
+    viewModel { p ->
+        AppStoreCollectionScreenViewModel(
+            get(),
+            get(),
+            get(),
+            p.get(),
+            p.get(),
+            p.getOrNull()
+        )
+    }
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

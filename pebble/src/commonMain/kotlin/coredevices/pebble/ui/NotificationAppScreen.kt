@@ -1,6 +1,5 @@
 package coredevices.pebble.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.outlined.DensitySmall
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
@@ -42,13 +40,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import coredevices.pebble.Platform
-import coredevices.pebble.rememberLibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -118,6 +116,39 @@ fun NotificationAppScreen(
                     nav = nav,
                     clickable = false,
                     showBadge = false,
+                )
+                SelectVibePatternOrNone(
+                    currentPattern = appWrapper.app.vibePatternName,
+                    onChangePattern = { pattern ->
+                        notificationApps.updateNotificationAppState(
+                            packageName = appWrapper.app.packageName,
+                            vibePatternName = pattern?.name,
+                            colorName = appWrapper.app.colorName,
+                            iconCode = appWrapper.app.iconCode,
+                        )
+                    },
+                )
+                SelectColorOrNone(
+                    currentColorName = appWrapper.app.colorName,
+                    onChangeColor = { color ->
+                        notificationApps.updateNotificationAppState(
+                            packageName = appWrapper.app.packageName,
+                            vibePatternName = appWrapper.app.vibePatternName,
+                            colorName = color?.name,
+                            iconCode = appWrapper.app.iconCode,
+                        )
+                    },
+                )
+                SelectIconOrNone(
+                    currentIcon = TimelineIcon.fromCode(appWrapper.app.iconCode),
+                    onChangeIcon = { icon ->
+                        notificationApps.updateNotificationAppState(
+                            packageName = appWrapper.app.packageName,
+                            vibePatternName = appWrapper.app.vibePatternName,
+                            colorName = appWrapper.app.colorName,
+                            iconCode = icon?.code,
+                        )
+                    },
                 )
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     ElevatedCard(

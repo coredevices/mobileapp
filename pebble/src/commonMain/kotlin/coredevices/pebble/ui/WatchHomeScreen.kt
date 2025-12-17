@@ -2,7 +2,6 @@ package coredevices.pebble.ui
 
 import CoreNav
 import CoreRoute
-import NextBugReportContext
 import NoOpCoreNav
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.BrowseGallery
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notifications
@@ -80,8 +78,6 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.util.CompanionDevice
-import coredevices.util.CoreConfigFlow
-import coredevices.util.PermissionRequester
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -145,9 +141,6 @@ fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?) {
         }
         val snackbarHostState = remember { SnackbarHostState() }
         val libPebble = rememberLibPebble()
-        val permissionRequester: PermissionRequester = koinInject()
-        val coreConfigFlow: CoreConfigFlow = koinInject()
-        val bugReportContext: NextBugReportContext = koinInject()
         LaunchedEffect(Unit) {
             scope.launch {
                 libPebble.userFacingErrors.collect { error ->

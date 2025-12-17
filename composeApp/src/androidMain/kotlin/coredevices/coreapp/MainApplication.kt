@@ -14,6 +14,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import coil3.svg.SvgDecoder
 import com.cactus.CactusContextInitializer
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
@@ -139,6 +140,9 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
                 MemoryCache.Builder()
                     .maxSizePercent(context, 0.25)
                     .build()
+            }
+            .components {
+                add(SvgDecoder.Factory())
             }
             .build()
     }

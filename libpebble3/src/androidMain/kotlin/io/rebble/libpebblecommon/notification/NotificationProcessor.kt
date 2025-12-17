@@ -5,7 +5,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 
 interface NotificationProcessor {
-    fun extractNotification(
+    suspend fun extractNotification(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
         channel: ChannelItem?,

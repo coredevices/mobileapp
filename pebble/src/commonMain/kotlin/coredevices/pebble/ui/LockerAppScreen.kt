@@ -1,6 +1,7 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerticalAlignTop
@@ -23,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
@@ -41,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -49,8 +54,11 @@ import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.PebbleElevatedButton
+import io.ktor.http.URLProtocol
+import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -74,6 +82,9 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
+import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -82,18 +93,24 @@ private val logger = Logger.withTag("LockerAppScreen")
 class LockerAppViewModel(
     private val pebbleWebServices: RealPebbleWebServices,
     private val platform: Platform,
-) : ViewModel() {
+) : ViewModel(), KoinComponent {
     var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
 
     fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, sources: List<Pair<String, AppstoreSource>>? = null) {
+        val service = get<AppstoreService> { parametersOf(source) }
         viewModelScope.launch {
-            val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)?.data?.firstOrNull()
+            val result = service.fetchAppStoreApp(id, watchType)?.data?.firstOrNull()
             if (result != null) {
                 storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
             }
-            selectedStoreEntry = result?.asCommonApp(watchType, platform, source)
+            selectedStoreEntry = result?.asCommonApp(
+                watchType,
+                platform,
+                source,
+                service.fetchCategories(AppType.fromString(result.type)!!)
+            )
         }
     }
 
@@ -104,11 +121,13 @@ class LockerAppViewModel(
     ): List<AppVariant> {
         val sources = storeSources ?: pebbleWebServices.searchUuidInSources(uuid)
         return sources.map { (id, source) ->
+            val service = get<AppstoreService> { parametersOf(source) }
             //TODO: Search by uuid instead of id to get all variants, id is source-specific except for OG apps
             viewModelScope.async(Dispatchers.IO) {
-                val result = pebbleWebServices.fetchAppStoreApp(id, watchType, source.url)
+                val result = service.fetchAppStoreApp(id, watchType)
+                val categories = result?.data?.firstOrNull()?.let { service.fetchCategories(AppType.fromString(it.type)!!) }
                 result?.data?.map { appEntry ->
-                    appEntry.asCommonApp(watchType, platform, source)?.let { app ->
+                    appEntry.asCommonApp(watchType, platform, source, categories)?.let { app ->
                         AppVariant(
                             source = source,
                             app = app
@@ -236,6 +255,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                                     modifier = Modifier.padding(vertical = 5.dp),
                                 )
                             }
+                        }
+                        entry.category?.let {
+                            Spacer(Modifier.height(8.dp))
+                            FilterChip(
+                                true,
+                                onClick = {
+                                    if (entry.commonAppType is CommonAppType.Store && entry.commonAppType.categorySlug != null) {
+                                        val home =
+                                            navBarNav.navigateTo(
+                                                PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                                    sourceId = entry.commonAppType.storeSource.id,
+                                                    path = "category/${entry.commonAppType.categorySlug}",
+                                                    title = entry.category
+                                                )
+                                            )
+                                    }
+                                },
+                                label = { Text(entry.category) }
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         val watchName = lastConnectedWatch?.displayName() ?: ""
@@ -428,15 +466,30 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                     }
                 }
 
-                if (entry.description != null) {
+                if (viewModel.selectedStoreEntry?.description != null || entry.description != null) {
                     Text(
-                        text = entry.description,
+                        text = viewModel.selectedStoreEntry?.description ?: entry.description ?: "",
                         modifier = Modifier.padding(vertical = 8.dp, horizontal = 5.dp),
                         fontSize = 12.sp
                     )
                 }
 
-                PropertyRow(name = "DEVELOPER", value = entry.developerName)
+                PropertyRow(
+                    name = "DEVELOPER",
+                    value = entry.developerName,
+                    onClick = if ((entry.commonAppType as? CommonAppType.Store)?.developerId != null) {
+                        {
+                            val developerId = entry.commonAppType.developerId!!
+                            navBarNav.navigateTo(PebbleNavBarRoutes.AppStoreCollectionRoute(
+                                sourceId = entry.commonAppType.storeSource.id,
+                                path = "dev/$developerId",
+                                title = "Developer: ${entry.developerName}"
+                            ))
+                        }
+                    } else {
+                        null
+                    }
+                )
                 entry.category?.let { category ->
                     PropertyRow(name = "CATEGORY", value = category)
                 }
@@ -448,14 +501,35 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                     }
                     PropertyRow(name = "VERSION", value = "$version$sideloadedText")
                 }
+                (entry.commonAppType as? CommonAppType.Store)?.sourceLink?.let { sourceLink ->
+                    val urlLauncher = LocalUriHandler.current
+                    PropertyRow(
+                        name = "SOURCE CODE",
+                        value = "External Link",
+                        onClick = {
+                            val urlParsed = parseUrl(sourceLink)
+                            if (urlParsed != null && urlParsed.protocolOrNull in listOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
+                                urlLauncher.openUri(sourceLink)
+                            } else {
+                                logger.w { "Not opening invalid URL: $sourceLink" }
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PropertyRow(name: String, value: String) {
-    Row(modifier = Modifier.padding(5.dp)) {
+private fun PropertyRow(name: String, value: String, onClick: (() -> Unit)? = null) {
+    Row(modifier = Modifier.padding(5.dp).let{
+        if (onClick != null) {
+            it.then(Modifier.clickable(onClick = onClick))
+        } else {
+            it
+        }
+    }) {
         Text(
             text = name,
             color = Color.Gray,
@@ -463,6 +537,13 @@ private fun PropertyRow(name: String, value: String) {
             maxLines = 1
         )
         Text(text = value, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
+        if (onClick != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Default.Launch,
+                contentDescription = null,
+                modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterVertically)
+            )
+        }
     }
 }
 
@@ -516,9 +597,7 @@ fun SnackbarHostState.showSnackbar(scope: CoroutineScope, message: String) {
 
 fun CommonApp.hasSettings(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.configurable
-    is CommonAppType.System -> when (commonAppType.app) {
-        SystemApps.Calendar -> true
-    }
+    is CommonAppType.System -> false
     is CommonAppType.Store -> false
 }
 
@@ -563,12 +642,7 @@ suspend fun CommonApp.showSettings(
             }
         }
 
-        is CommonAppType.System -> when (commonAppType.app) {
-            SystemApps.Calendar -> {
-                logger.d("show calendar settings...")
-                navBarNav.navigateTo(PebbleRoutes.CalendarsRoute)
-            }
-        }
+        is CommonAppType.System -> Unit
 
         is CommonAppType.Store -> Unit
     }

@@ -58,9 +58,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
+import com.cactus.TranscriptionProvider
 import com.cactus.VoiceModel
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -121,6 +123,7 @@ enum class Section(val title: String) {
     Updates("Updates"),
     Support("Support"),
     Default("Settings"),
+    Calendar("Calendar"),
     Health("Health"),
     Apps("Apps"),
     Weather("Weather"),
@@ -236,7 +239,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
         val appVersion = koinInject<CoreAppVersion>()
         val platform = koinInject<Platform>()
         val nextBugReportContext: NextBugReportContext = koinInject()
-        val title = stringResource(coreapp.pebble.generated.resources.Res.string.settings)
+        val title = stringResource(Res.string.settings)
         val appUpdate: AppUpdate = koinInject()
         val updateState by appUpdate.updateAvailable.collectAsState()
         val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
@@ -337,9 +340,13 @@ please disable the option.""".trimIndent(),
             val webServices = koinInject<RealPebbleWebServices>()
             LockerImportDialog(
                 onDismissRequest = { showLockerImportDialog = false },
-                onImportFromPebbleAccount = {
+                onImportFromPebbleAccount = { progressUpdate ->
                     try {
-                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api")
+                        firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api").collect {
+                            progressUpdate(it.first.toFloat() / it.second.toFloat())
+                        }
+                        progressUpdate(-1f)
+                        libPebble.requestLockerSync().await()
                         coreConfigHolder.update(
                             coreConfig.copy(
                                 useNativeAppStore = true
@@ -620,6 +627,42 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
+                SettingsItem(
+                    title = "Vibration Pattern",
+                    section = Section.Notifications,
+                    show = { pebbleFeatures.supportsVibePatterns() },
+                    item = {
+                        SelectVibePatternOrNone(
+                            currentPattern = libPebbleConfig.notificationConfig.overrideDefaultVibePattern,
+                            onChangePattern = { pattern ->
+                                libPebble.updateConfig(
+                                    libPebbleConfig.copy(
+                                        notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                            overrideDefaultVibePattern = pattern?.name
+                                        )
+                                    )
+                                )
+                            },
+                            subtext = "Override the default on the watch",
+                        )
+                    }
+                ),
+                basicSettingsToggleItem(
+                    title = "Use vibration patterns from OS",
+                    description = "If there is a vibration pattern defined by the app which created a notification, use it on the watch (unless overridden)",
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.useAndroidVibePatterns,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    useAndroidVibePatterns = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsVibePatterns() },
+                ),
                 basicSettingsToggleItem(
                     title = "Send local-only notifications to watch",
                     description = "Android recommends not forwarding notifications marked as local-only to external devices - check to override this",
@@ -685,6 +728,7 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsCompanionDeviceManager() },
                 ),
+
                 basicSettingsToggleItem(
                     title = "Ignore Missing PRF",
                     description = "Ignore missing PRF when connecting to development watches",
@@ -715,6 +759,14 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     show = { false },
+                ),
+                basicSettingsActionItem(
+                    title = "Calendar Settings",
+                    description = "",
+                    section = Section.Calendar,
+                    action = {
+                        navBarNav.navigateTo(PebbleRoutes.CalendarsRoute)
+                    },
                 ),
                 basicSettingsToggleItem(
                     title = "Enable Health",
@@ -836,6 +888,8 @@ please disable the option.""".trimIndent(),
                                             useNativeAppStore = true,
                                         )
                                     )
+                                    libPebble.requestLockerSync()
+                                    topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                                 }
                             }
                         } else {
@@ -844,9 +898,10 @@ please disable the option.""".trimIndent(),
                                     useNativeAppStore = false,
                                 )
                             )
+                            libPebble.requestLockerSync()
+                            topBarParams.showSnackbar("Please wait while your locker syncs in the background")
                         }
                     },
-                    show = { experimentalDevices },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -953,6 +1008,20 @@ please disable the option.""".trimIndent(),
                         settings.set(SHOW_DEBUG_OPTIONS, it)
                         debugOptionsEnabled = it
                     },
+                ),
+                basicSettingsToggleItem(
+                    title = "Disable FW update notifications",
+                    description = "Ignore notifications for users who sideload their own firmware",
+                    section = Section.Debug,
+                    checked = coreConfig.disableFirmwareUpdateNotifications,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                disableFirmwareUpdateNotifications = it
+                            )
+                        )
+                    },
+                    show = { debugOptionsEnabled },
                 ),
                 basicSettingsActionItem(
                     title = "Do background sync",
@@ -1223,7 +1292,7 @@ fun STTModeDialog(
             if (availableModels == null) {
                 availableModels = withContext(Dispatchers.IO) {
                     val stt = CactusSTT()
-                    listOf(com.cactus.TranscriptionProvider.WHISPER).flatMap {
+                    listOf(TranscriptionProvider.WHISPER).flatMap {
                         stt.getVoiceModels(it)
                     }
                 }

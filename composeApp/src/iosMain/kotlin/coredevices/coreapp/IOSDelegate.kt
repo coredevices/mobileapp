@@ -11,6 +11,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import coil3.svg.SvgDecoder
 import com.eygraber.uri.toUri
 import com.mmk.kmpnotifier.extensions.onApplicationDidReceiveRemoteNotification
 import com.mmk.kmpnotifier.notification.NotifierManager
@@ -117,6 +118,9 @@ object IOSDelegate : KoinComponent {
                     MemoryCache.Builder()
                         .maxSizePercent(context, 0.25)
                         .build()
+                }
+                .components {
+                    add(SvgDecoder.Factory())
                 }
                 .build()
         }

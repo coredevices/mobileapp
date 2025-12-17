@@ -41,4 +41,7 @@ interface AppstoreSourceDao {
 
     @Query("UPDATE AppstoreSource SET enabled = :isEnabled WHERE id = :sourceId")
     suspend fun setSourceEnabled(sourceId: Int, isEnabled: Boolean)
+
+    @Query("SELECT * FROM AppstoreSource WHERE id = :sourceId LIMIT 1")
+    suspend fun getSourceById(sourceId: Int): AppstoreSource?
 }

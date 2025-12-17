@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.dao
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Insert
@@ -21,10 +22,20 @@ interface ContactDao {
 
     @Query("SELECT a.*, COUNT(ne.id) as count " +
             "FROM ContactEntity a " +
-            "LEFT JOIN NotificationEntity ne ON ne.people LIKE '%' || a.lookupKey || '%'" +
+            "LEFT JOIN NotificationEntity ne ON ne.people LIKE '%' || a.lookupKey || '%' " +
+            "WHERE (:searchTerm IS NULL OR name LIKE '%' || :searchTerm || '%') " +
+            "AND (:onlyNotified = 0 OR (ne.id IS NOT NULL)) " +
             "GROUP BY a.lookupKey " +
             "ORDER BY a.name ASC")
-    fun getContactsWithCountFlow(): Flow<List<ContactWithCount>>
+    fun getContactsWithCountFlow(searchTerm: String?, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
+
+    @Query("SELECT a.*, COUNT(ne.id) as count " +
+            "FROM ContactEntity a " +
+            "LEFT JOIN NotificationEntity ne ON ne.people LIKE '%' || a.lookupKey || '%'" +
+            "WHERE a.lookupKey = :id " +
+            "GROUP BY a.lookupKey " +
+            "ORDER BY a.name ASC")
+    fun getContactWithCountFlow(id: String): Flow<ContactWithCount>
 
     @Query("""
         SELECT *
@@ -47,8 +58,8 @@ interface ContactDao {
 
     @Query("""
         UPDATE ContactEntity
-        SET muteState = :muteState
+        SET muteState = :muteState, vibePatternName = :vibePatternName
         WHERE lookupKey = :key
     """)
-    suspend fun updateContactMuteState(key: String, muteState: MuteState)
+    suspend fun updateContactState(key: String, muteState: MuteState, vibePatternName: String?)
 }

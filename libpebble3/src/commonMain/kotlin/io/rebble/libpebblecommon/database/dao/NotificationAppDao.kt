@@ -38,6 +38,26 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     fun allAppsWithCountsFlow(): Flow<List<AppWithCount>>
 
     @Transaction
+    suspend fun updateAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconCode: String?,
+    ) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppState: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(
+            vibePatternName = vibePatternName,
+            colorName = colorName,
+            iconCode = iconCode,
+//            stateUpdated = Clock.System.now().asMillisecond(),
+        ))
+    }
+
+    @Transaction
     suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {
         val existing = getEntry(packageName)
         if (existing == null) {

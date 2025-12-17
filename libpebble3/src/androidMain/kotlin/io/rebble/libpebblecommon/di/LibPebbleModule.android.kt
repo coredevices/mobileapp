@@ -81,7 +81,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidPhoneReceiver) bind LegacyPhoneReceiver::class
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
-    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     single { get<Application>().contentResolver }
     single { PlatformConfig(syncNotificationApps = false) }

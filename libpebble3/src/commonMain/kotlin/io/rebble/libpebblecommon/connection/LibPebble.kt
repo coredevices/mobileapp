@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.paging.PagingSource
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -21,6 +22,7 @@ import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
@@ -37,6 +39,7 @@ import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.performPlatformSpecificInit
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -70,7 +73,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi,
-    SystemGeolocation, Timeline {
+    SystemGeolocation, Timeline, Vibrations {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -196,8 +199,9 @@ interface LockerApi {
 }
 
 interface Contacts {
-    fun getContactsWithCounts(): Flow<List<ContactWithCount>>
-    fun updateContactMuteState(contactId: String, muteState: MuteState)
+    fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
+    fun getContact(id: String): Flow<ContactWithCount?>
+    fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
     suspend fun getContactImage(lookupKey: String): ImageBitmap?
 }
 
@@ -211,6 +215,12 @@ interface NotificationApps {
      * Update mute state of the specified app. Updates all apps if [packageName] is null.
      */
     fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
+    fun updateNotificationAppState(
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconCode: String?,
+    )
     fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
@@ -219,6 +229,12 @@ interface NotificationApps {
 
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
+}
+
+interface Vibrations {
+    fun vibePatterns(): Flow<List<VibePattern>>
+    fun addCustomVibePattern(name: String, pattern: List<Long>)
+    fun deleteCustomPattern(name: String)
 }
 
 interface OtherPebbleApps {
@@ -263,11 +279,13 @@ class LibPebble3(
     private val systemGeolocation: SystemGeolocation,
     private val timeline: Timeline,
     private val legacyPhoneReceiver: LegacyPhoneReceiver,
+    private val vibePatternDao: VibePatternDao,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
-    HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline {
+    HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
+    Vibrations by notificationApi {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -290,6 +308,10 @@ class LibPebble3(
         }
         housekeeping.init()
         legacyPhoneReceiver.init(currentCall)
+        libPebbleCoroutineScope.launch {
+            vibePatternDao.ensureAllDefaultsInserted()
+        }
+        locker.init()
 
         performPlatformSpecificInit()
     }

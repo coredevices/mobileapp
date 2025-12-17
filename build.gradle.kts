@@ -12,3 +12,10 @@ plugins {
     alias(libs.plugins.nativeCocoaPods) apply false
     alias(libs.plugins.kotlin.jvm) apply false
 }
+
+project.gradle.taskGraph.whenReady {
+    allTasks.filter { it::class.simpleName?.contains("EmbedAndSign") == true }.forEach {
+        logger.warn("Disabling embedding and signing task in project ${it.project.name}")
+        it.enabled = false
+    }
+}

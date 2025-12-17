@@ -197,6 +197,7 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.io.core)
             implementation(libs.coil)
+            implementation(libs.coil.svg)
 
             implementation(libs.firebase.auth)
             implementation(libs.firebase.firestore)
