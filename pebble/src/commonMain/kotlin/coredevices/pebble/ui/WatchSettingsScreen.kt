@@ -1010,16 +1010,6 @@ please disable the option.""".trimIndent(),
                     show = { debugOptionsEnabled },
                 ),
                 basicSettingsToggleItem(
-                    title = "Show debug options",
-                    description = "Show some extra debug options around the app - not useful for most users",
-                    section = Section.Debug,
-                    checked = debugOptionsEnabled,
-                    onCheckChanged = {
-                        settings.set(SHOW_DEBUG_OPTIONS, it)
-                        debugOptionsEnabled = it
-                    },
-                ),
-                basicSettingsToggleItem(
                     title = "Disable FW update notifications",
                     description = "Ignore notifications for users who sideload their own firmware",
                     section = Section.Debug,
