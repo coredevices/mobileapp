@@ -154,11 +154,10 @@ private fun formatDistance(distanceCm: Long, useImperialUnits: Boolean, daysWith
  * Formats calories (gram-calories to kilocalories)
  */
 private fun formatCalories(gramCalories: Long, daysWithData: Int): String {
-    val avgGramCalories = if (daysWithData > 1) gramCalories / daysWithData else gramCalories
-
-    // Convert gram-calories to kilocalories (divide by 1000)
-    val kcal = avgGramCalories / 1000
-    return "$kcal"
+    // Convert gram-calories to kilocalories first, then average
+    val totalKcal = gramCalories / 1000
+    val avgKcal = if (daysWithData > 1) totalKcal / daysWithData else totalKcal
+    return "$avgKcal"
 }
 
 /**

@@ -82,15 +82,15 @@ interface HealthDao {
 
     @Query(
         """
-        SELECT SUM(duration) FROM overlay_data
-        WHERE startTime >= :start AND startTime < :end AND type IN (1, 2)
+        SELECT SUM(duration) / 60 FROM overlay_data
+        WHERE startTime >= :start AND startTime < :end AND type = 1
         """
     )
     suspend fun getTotalSleepMinutes(start: Long, end: Long): Long?
 
     @Query(
         """
-        SELECT SUM(duration) FROM overlay_data
+        SELECT SUM(duration) / 60 FROM overlay_data
         WHERE startTime >= :start AND startTime < :end AND type = 2
         """
     )
@@ -98,7 +98,7 @@ interface HealthDao {
 
     @Query(
         """
-        SELECT COUNT(DISTINCT DATE(startTime, 'unixepoch')) FROM overlay_data
+        SELECT COUNT(DISTINCT DATE(startTime, 'unixepoch', 'localtime')) FROM overlay_data
         WHERE startTime >= :start AND startTime < :end AND type IN (1, 2) AND duration > 0
         """
     )
@@ -106,7 +106,7 @@ interface HealthDao {
 
     @Query(
         """
-        SELECT COUNT(DISTINCT DATE(timestamp, 'unixepoch')) FROM health_data
+        SELECT COUNT(DISTINCT DATE(timestamp, 'unixepoch', 'localtime')) FROM health_data
         WHERE timestamp >= :start AND timestamp < :end AND steps > 0
         """
     )
