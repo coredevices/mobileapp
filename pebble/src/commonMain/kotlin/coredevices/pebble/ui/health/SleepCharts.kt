@@ -60,6 +60,7 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
     var dailySleepData by remember { mutableStateOf<DailySleepData?>(null) }
     var stackedSleepData by remember { mutableStateOf<List<StackedSleepData>>(emptyList()) }
     var avgSleepHours by remember { mutableStateOf(0f) }
+    var metrics by remember { mutableStateOf<SleepMetrics?>(null) }
 
     LaunchedEffect(timeRange) {
         try {
@@ -75,35 +76,49 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
                     avgSleepHours = avg
                 }
             }
+
+            // Always fetch metrics
+            metrics = fetchSleepMetrics(healthDao, timeRange)
         } catch (e: Exception) {
             println("Error fetching sleep data: ${e.message}")
             e.printStackTrace()
             dailySleepData = null
             stackedSleepData = emptyList()
             avgSleepHours = 0f
+            metrics = fetchSleepMetrics(healthDao, timeRange)
         }
     }
 
-    if (avgSleepHours > 0 || (dailySleepData != null && dailySleepData!!.segments.isNotEmpty()) || stackedSleepData.isNotEmpty()) {
-        Box(modifier = Modifier.height(200.dp).fillMaxWidth().padding(12.dp)) {
-            when (timeRange) {
-                HealthTimeRange.Daily -> dailySleepData?.let { SleepDailyChart(it) }
-                HealthTimeRange.Weekly -> SleepWeeklyChart(stackedSleepData)
-                HealthTimeRange.Monthly -> SleepMonthlyChart(stackedSleepData)
+    Column {
+        if (avgSleepHours > 0 || (dailySleepData != null && dailySleepData!!.segments.isNotEmpty()) || stackedSleepData.isNotEmpty()) {
+            Box(modifier = Modifier.height(200.dp).fillMaxWidth().padding(12.dp)) {
+                when (timeRange) {
+                    HealthTimeRange.Daily -> dailySleepData?.let { SleepDailyChart(it) }
+                    HealthTimeRange.Weekly -> SleepWeeklyChart(stackedSleepData)
+                    HealthTimeRange.Monthly -> SleepMonthlyChart(stackedSleepData)
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Text(
+                    text = "No sleep data available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 32.dp)
+                )
             }
         }
-    } else {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Text(
-                text = "No sleep data available",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 32.dp)
+
+        // Always display metrics
+        metrics?.let {
+            SleepMetricsRow(
+                metrics = it,
+                timeRange = timeRange
             )
         }
     }

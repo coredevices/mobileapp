@@ -27,18 +27,32 @@ suspend fun fetchStepsMetrics(
         val timeZone = TimeZone.currentSystemDefault()
         val today = Clock.System.now().toLocalDateTime(timeZone).date
 
-        val aggregates = when (timeRange) {
-            HealthTimeRange.Daily -> fetchDailyMetrics(healthDao, today, timeZone)
-            HealthTimeRange.Weekly -> fetchWeeklyMetrics(healthDao, today, timeZone)
-            HealthTimeRange.Monthly -> fetchMonthlyMetrics(healthDao, today, timeZone)
+        val (aggregates, start, end) = when (timeRange) {
+            HealthTimeRange.Daily -> {
+                val s = today.atStartOfDayIn(timeZone).epochSeconds
+                val e = today.plus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds
+                Triple(fetchDailyMetrics(healthDao, today, timeZone), s, e)
+            }
+            HealthTimeRange.Weekly -> {
+                val weekStartSunday = getPreviousSunday(today)
+                val s = weekStartSunday.atStartOfDayIn(timeZone).epochSeconds
+                val e = weekStartSunday.plus(DatePeriod(days = 7)).atStartOfDayIn(timeZone).epochSeconds
+                Triple(fetchWeeklyMetrics(healthDao, today, timeZone), s, e)
+            }
+            HealthTimeRange.Monthly -> {
+                val monthStart = LocalDate(today.year, today.month, 1)
+                val s = monthStart.atStartOfDayIn(timeZone).epochSeconds
+                val e = monthStart.plus(DatePeriod(months = 1)).atStartOfDayIn(timeZone).epochSeconds
+                Triple(fetchMonthlyMetrics(healthDao, today, timeZone), s, e)
+            }
         }
 
-        formatMetrics(aggregates, useImperialUnits, timeRange)
+        formatMetrics(aggregates, useImperialUnits, timeRange, healthDao, start, end)
     } catch (e: Exception) {
         println("Error fetching steps metrics: ${e.message}")
         e.printStackTrace()
-        // Return empty metrics on error
-        StepsMetrics("--", "--", "--")
+        // Return zero metrics on error
+        StepsMetrics("0", "0", "0")
     }
 }
 
@@ -86,26 +100,35 @@ private suspend fun fetchMonthlyMetrics(
 /**
  * Formats the aggregated health data into display strings
  */
-private fun formatMetrics(
+private suspend fun formatMetrics(
     aggregates: HealthAggregates?,
     useImperialUnits: Boolean,
-    timeRange: HealthTimeRange
+    timeRange: HealthTimeRange,
+    healthDao: HealthDao,
+    start: Long,
+    end: Long
 ): StepsMetrics {
     if (aggregates == null) {
         return StepsMetrics("0", "0", "0")
     }
 
+    // Get actual days with data for averaging
+    val daysWithData = when (timeRange) {
+        HealthTimeRange.Daily -> 1
+        else -> healthDao.getDaysWithStepsData(start, end).coerceAtLeast(1)
+    }
+
     // Distance formatting
     val distanceCm = aggregates.distanceCm ?: 0L
-    val distance = formatDistance(distanceCm, useImperialUnits, timeRange)
+    val distance = formatDistance(distanceCm, useImperialUnits, daysWithData)
 
     // Calories formatting (convert from gram-calories to kilocalories)
     val totalGramCalories = (aggregates.activeGramCalories ?: 0L) + (aggregates.restingGramCalories ?: 0L)
-    val calories = formatCalories(totalGramCalories, timeRange)
+    val calories = formatCalories(totalGramCalories, daysWithData)
 
     // Active time formatting
     val activeMinutes = aggregates.activeMinutes ?: 0L
-    val activeTime = formatActiveTime(activeMinutes, timeRange)
+    val activeTime = formatActiveTime(activeMinutes, daysWithData)
 
     return StepsMetrics(distance, calories, activeTime)
 }
@@ -113,14 +136,8 @@ private fun formatMetrics(
 /**
  * Formats distance with appropriate units
  */
-private fun formatDistance(distanceCm: Long, useImperialUnits: Boolean, timeRange: HealthTimeRange): String {
-    val divisor = when (timeRange) {
-        HealthTimeRange.Daily -> 1
-        HealthTimeRange.Weekly -> 7
-        HealthTimeRange.Monthly -> 30 // Approximate
-    }
-
-    val avgDistanceCm = if (divisor > 1) distanceCm / divisor else distanceCm
+private fun formatDistance(distanceCm: Long, useImperialUnits: Boolean, daysWithData: Int): String {
+    val avgDistanceCm = if (daysWithData > 1) distanceCm / daysWithData else distanceCm
 
     return if (useImperialUnits) {
         // Convert cm to miles (1 mile = 160934.4 cm)
@@ -136,14 +153,8 @@ private fun formatDistance(distanceCm: Long, useImperialUnits: Boolean, timeRang
 /**
  * Formats calories (gram-calories to kilocalories)
  */
-private fun formatCalories(gramCalories: Long, timeRange: HealthTimeRange): String {
-    val divisor = when (timeRange) {
-        HealthTimeRange.Daily -> 1
-        HealthTimeRange.Weekly -> 7
-        HealthTimeRange.Monthly -> 30 // Approximate
-    }
-
-    val avgGramCalories = if (divisor > 1) gramCalories / divisor else gramCalories
+private fun formatCalories(gramCalories: Long, daysWithData: Int): String {
+    val avgGramCalories = if (daysWithData > 1) gramCalories / daysWithData else gramCalories
 
     // Convert gram-calories to kilocalories (divide by 1000)
     val kcal = avgGramCalories / 1000
@@ -153,14 +164,8 @@ private fun formatCalories(gramCalories: Long, timeRange: HealthTimeRange): Stri
 /**
  * Formats active time as hours and minutes
  */
-private fun formatActiveTime(activeMinutes: Long, timeRange: HealthTimeRange): String {
-    val divisor = when (timeRange) {
-        HealthTimeRange.Daily -> 1
-        HealthTimeRange.Weekly -> 7
-        HealthTimeRange.Monthly -> 30 // Approximate
-    }
-
-    val avgActiveMinutes = if (divisor > 1) activeMinutes / divisor else activeMinutes
+private fun formatActiveTime(activeMinutes: Long, daysWithData: Int): String {
+    val avgActiveMinutes = if (daysWithData > 1) activeMinutes / daysWithData else activeMinutes
 
     val hours = avgActiveMinutes / 60
     val minutes = avgActiveMinutes % 60

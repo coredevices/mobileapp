@@ -79,6 +79,38 @@ interface HealthDao {
 
     @Query("DELETE FROM overlay_data WHERE id IN (:ids)")
     suspend fun deleteOverlayEntriesByIds(ids: List<Long>)
+
+    @Query(
+        """
+        SELECT SUM(duration) FROM overlay_data
+        WHERE startTime >= :start AND startTime < :end AND type IN (1, 2)
+        """
+    )
+    suspend fun getTotalSleepMinutes(start: Long, end: Long): Long?
+
+    @Query(
+        """
+        SELECT SUM(duration) FROM overlay_data
+        WHERE startTime >= :start AND startTime < :end AND type = 2
+        """
+    )
+    suspend fun getDeepSleepMinutes(start: Long, end: Long): Long?
+
+    @Query(
+        """
+        SELECT COUNT(DISTINCT DATE(startTime, 'unixepoch')) FROM overlay_data
+        WHERE startTime >= :start AND startTime < :end AND type IN (1, 2) AND duration > 0
+        """
+    )
+    suspend fun getDaysWithSleepData(start: Long, end: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(DISTINCT DATE(timestamp, 'unixepoch')) FROM health_data
+        WHERE timestamp >= :start AND timestamp < :end AND steps > 0
+        """
+    )
+    suspend fun getDaysWithStepsData(start: Long, end: Long): Int
 }
 
 data class HealthAggregates(

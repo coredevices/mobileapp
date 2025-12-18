@@ -64,16 +64,12 @@ fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
         stepsData = labels.zip(values)
         totalSteps = total
 
-        // Fetch metrics only if there's data
-        if (stepsData.isNotEmpty()) {
-            metrics = fetchStepsMetrics(healthDao, timeRange, healthSettings.imperialUnits)
-        } else {
-            metrics = null
-        }
+        // Always fetch metrics
+        metrics = fetchStepsMetrics(healthDao, timeRange, healthSettings.imperialUnits)
     }
 
-    if (stepsData.isNotEmpty()) {
-        Column {
+    Column {
+        if (stepsData.isNotEmpty()) {
             Box(modifier = Modifier.height(200.dp).fillMaxWidth().padding(12.dp)) {
                 when (timeRange) {
                     HealthTimeRange.Daily -> StepsDailyChart(stepsData)
@@ -81,27 +77,27 @@ fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
                     HealthTimeRange.Monthly -> StepsMonthlyChart(stepsData)
                 }
             }
-
-            // Display metrics if available
-            metrics?.let {
-                StepsMetricsRow(
-                    metrics = it,
-                    timeRange = timeRange
+        } else {
+            Row(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Text(
+                    text = "No steps data available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 32.dp)
                 )
             }
         }
-    } else {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Text(
-                text = "No steps data available",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 32.dp)
+
+        // Always display metrics
+        metrics?.let {
+            StepsMetricsRow(
+                metrics = it,
+                timeRange = timeRange
             )
         }
     }
