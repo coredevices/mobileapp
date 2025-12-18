@@ -385,6 +385,11 @@ private suspend fun fetchWeeklySleepData(
         totalHours += (lightSleepHours + deepSleepHours)
     }
 
+    // If there's no sleep data at all, return empty list
+    if (totalHours == 0f) {
+        return Pair(emptyList(), 0f)
+    }
+
     val avg = totalHours / 7f
     return Pair(stackedData, avg)
 }
@@ -450,6 +455,11 @@ private suspend fun fetchMonthlySleepData(
             stackedData.add(StackedSleepData(label, lightSleepHours / 7f, deepSleepHours / 7f))
             totalHours += (lightSleepHours + deepSleepHours)
         }
+    }
+
+    // If there's no sleep data at all, return empty list
+    if (totalHours == 0f) {
+        return Pair(emptyList(), 0f)
     }
 
     val avg = if (daysInMonth > 0) totalHours / daysInMonth else 0f

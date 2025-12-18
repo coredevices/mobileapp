@@ -6,8 +6,10 @@ import io.rebble.libpebblecommon.health.StackedSleepData
 import io.rebble.libpebblecommon.health.fetchDailySleepData
 import io.rebble.libpebblecommon.health.fetchStackedSleepData
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,8 +21,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -44,7 +46,6 @@ import io.github.koalaplot.core.xygraph.XYGraph
 import io.github.koalaplot.core.xygraph.rememberFloatLinearAxisModel
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.health.OverlayType
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import theme.localHealthColors
@@ -56,13 +57,12 @@ private val dailyShape = RoundedCornerShape(5.dp)
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
 fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
-    val scope = rememberCoroutineScope()
     var dailySleepData by remember { mutableStateOf<DailySleepData?>(null) }
     var stackedSleepData by remember { mutableStateOf<List<StackedSleepData>>(emptyList()) }
     var avgSleepHours by remember { mutableStateOf(0f) }
 
     LaunchedEffect(timeRange) {
-        scope.launch {
+        try {
             when (timeRange) {
                 HealthTimeRange.Daily -> {
                     val (daily, avg) = fetchDailySleepData(healthDao)
@@ -75,6 +75,12 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
                     avgSleepHours = avg
                 }
             }
+        } catch (e: Exception) {
+            println("Error fetching sleep data: ${e.message}")
+            e.printStackTrace()
+            dailySleepData = null
+            stackedSleepData = emptyList()
+            avgSleepHours = 0f
         }
     }
 
@@ -87,12 +93,19 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
             }
         }
     } else {
-        Text(
-            text = "No sleep data available",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 32.dp)
-        )
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Text(
+                text = "No sleep data available",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 32.dp)
+            )
+        }
     }
 }
 
