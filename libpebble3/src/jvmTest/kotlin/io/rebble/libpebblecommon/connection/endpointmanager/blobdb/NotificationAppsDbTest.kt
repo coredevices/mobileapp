@@ -138,6 +138,9 @@ class NotificationAppsDbTest {
             channelGroups = emptyList(),
             stateUpdated = TIMESTAMP.asMillisecond(),
             lastNotified = TIMESTAMP.asMillisecond(),
+            vibePatternName = null,
+            colorName = null,
+            iconCode = null,
         )
         val encoded = item.value(WatchType.APLITE, emptySet())!!
         val write = DbWrite(

@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.paging.PagingSource
 import io.ktor.util.PlatformUtils
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
@@ -263,8 +264,12 @@ class FakeLibPebble : LibPebble {
     override val userFacingErrors: Flow<UserFacingError>
         get() = flow { }
 
-    override fun getContactsWithCounts(): Flow<List<ContactWithCount>> {
-        return flow { emit(emptyList()) }
+    override fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount> {
+        return TODO()
+    }
+
+    override fun getContact(id: String): Flow<ContactWithCount?> {
+        TODO("Not yet implemented")
     }
 
     override fun updateContactState(

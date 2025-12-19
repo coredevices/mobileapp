@@ -3,20 +3,25 @@ package coredevices.pebble.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Badge
+import androidx.compose.material3.ElevatedFilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.ListItem
@@ -26,8 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -35,17 +40,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import co.touchlab.kermit.Logger
+import androidx.lifecycle.ViewModel
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
-import kotlinx.coroutines.flow.map
+import org.koin.compose.viewmodel.koinViewModel
 
-private val logger = Logger.withTag("NotificationContactsScreen")
+class ContactsViewModel(
+) : ViewModel() {
+    val onlyNotified = mutableStateOf(false)
+}
 
 @Composable
 fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    val viewModel = koinViewModel<ContactsViewModel>()
+    val libPebble = rememberLibPebble()
+    val items = remember(
+        topBarParams.searchState.query,
+        viewModel.onlyNotified.value,
+    ) {
+        Pager(
+            config = PagingConfig(pageSize = 20, enablePlaceholders = true),
+            pagingSourceFactory = {
+                libPebble.getContactsWithCounts(topBarParams.searchState.query, viewModel.onlyNotified.value)
+            }
+        ).flow
+    }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         LaunchedEffect(Unit) {
             topBarParams.searchAvailable(true)
@@ -53,34 +78,57 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             }
             topBarParams.canGoBack(false)
         }
-        val libPebble = rememberLibPebble()
-        val contactsFlow = remember { libPebble.getContactsWithCounts() }
-        val contacts by contactsFlow.collectAsState(emptyList())
-
-        val filteredContacts by remember(
-            contacts,
-            topBarParams.searchState,
-        ) {
-            derivedStateOf {
-                contacts.asSequence().filter { entry ->
-                    if (topBarParams.searchState.query.isNotEmpty()) {
-                        entry.contact.name.contains(
-                            topBarParams.searchState.query,
-                            ignoreCase = true
-                        )
-                    } else {
-                        true
-                    }
-                }.toList()
+        val contacts = items.collectAsLazyPagingItems()
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = SpaceEvenly,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ElevatedFilterChip(
+                        onClick = {
+                            viewModel.onlyNotified.value =
+                                !viewModel.onlyNotified.value
+                        },
+                        label = {
+                            Text("Notified only")
+                        },
+                        selected = viewModel.onlyNotified.value,
+                        leadingIcon = if (viewModel.onlyNotified.value) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Done,
+                                    contentDescription = "Done icon",
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                        elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                        colors = FilterChipDefaults.elevatedFilterChipColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                        ),
+                    )
+                }
             }
-        }
 
-        LazyColumn {
-            itemsIndexed(
-                items = filteredContacts,
-                key = { _, item -> item.contact.lookupKey },
-            ) { index, entry ->
-                ContactCard(entry = entry, nav = nav, firstOrOnlyItem = index == 0)
+            LazyColumn {
+                items(
+                    count = contacts.itemCount,
+                    key = contacts.itemKey { it.contact.lookupKey }
+                ) { index ->
+                    val contact = contacts[index]
+                    if (contact != null) {
+                        ContactCard(entry = contact, nav = nav, firstOrOnlyItem = index == 0)
+                    }
+                }
             }
         }
     }
@@ -103,9 +151,7 @@ fun ContactNotificationViewerScreen(
     }
     val libPebble = rememberLibPebble()
     val flow = remember {
-        libPebble.getContactsWithCounts().map { entries ->
-            entries.firstOrNull { it.contact.lookupKey == contactId }
-        }
+        libPebble.getContact(contactId)
     }
     val contact by flow.collectAsState(null)
     contact?.let { entry ->
@@ -145,6 +191,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
         headlineContent = {
             Column {
                 Text(entry.contact.name, fontSize = 17.sp)
+                // TODO add phone number?
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (entry.count > 0) {
                         Badge(modifier = Modifier.padding(horizontal = 5.dp)) {

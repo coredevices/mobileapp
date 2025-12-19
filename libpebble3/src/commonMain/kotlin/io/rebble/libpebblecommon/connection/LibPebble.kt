@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection
 
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.paging.PagingSource
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -204,7 +205,8 @@ interface LockerApi {
 }
 
 interface Contacts {
-    fun getContactsWithCounts(): Flow<List<ContactWithCount>>
+    fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
+    fun getContact(id: String): Flow<ContactWithCount?>
     fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
     suspend fun getContactImage(lookupKey: String): ImageBitmap?
 }
@@ -315,6 +317,7 @@ class LibPebble3(
         libPebbleCoroutineScope.launch {
             vibePatternDao.ensureAllDefaultsInserted()
         }
+        locker.init()
 
         performPlatformSpecificInit()
     }

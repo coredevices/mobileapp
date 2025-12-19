@@ -27,6 +27,7 @@ import coredevices.pebble.services.PebbleHttpClient
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
+import coredevices.pebble.ui.ContactsViewModel
 import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.NotificationAppScreenViewModel
@@ -137,6 +138,7 @@ val watchModule = module {
     viewModelOf(::LockerViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
+    viewModelOf(::ContactsViewModel)
     viewModel { p ->
         AppStoreCollectionScreenViewModel(
             get(),

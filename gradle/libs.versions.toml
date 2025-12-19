@@ -12,7 +12,7 @@ sqlite = "2.6.2"
 kermit = "2.0.8"
 ksp = "2.3.3"
 # We had some weird problems with BlobDb sync on room 2.8.0
-room = "2.7.2"
+room = "2.8.4"
 okio = "3.16.4"
 kotlinx-io = "0.8.0"
 kotlinx-datetime = "0.7.1"
@@ -49,8 +49,9 @@ webview = "2.0.3"
 coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.36.0"
-coredevices-speex = "f3b9b07"
+coredevices-speex = "1946c84"
 cactus = "1.0.2-beta"
+paging = "3.4.0-alpha04"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -94,6 +95,8 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
+paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
@@ -137,4 +140,4 @@ coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coi
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
 algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
-coredevices-speex = { group = "coredevices.speex", name = "speex", version.ref = "coredevices-speex" }
+coredevices-speex = { group = "io.github.coredevices.speex", name = "speex", version.ref = "coredevices-speex" }

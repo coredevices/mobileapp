@@ -597,9 +597,7 @@ fun SnackbarHostState.showSnackbar(scope: CoroutineScope, message: String) {
 
 fun CommonApp.hasSettings(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.configurable
-    is CommonAppType.System -> when (commonAppType.app) {
-        SystemApps.Calendar -> true
-    }
+    is CommonAppType.System -> false
     is CommonAppType.Store -> false
 }
 
@@ -644,12 +642,7 @@ suspend fun CommonApp.showSettings(
             }
         }
 
-        is CommonAppType.System -> when (commonAppType.app) {
-            SystemApps.Calendar -> {
-                logger.d("show calendar settings...")
-                navBarNav.navigateTo(PebbleRoutes.CalendarsRoute)
-            }
-        }
+        is CommonAppType.System -> Unit
 
         is CommonAppType.Store -> Unit
     }

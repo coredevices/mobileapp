@@ -611,7 +611,7 @@ data class StoreChangelogEntry(
     @SerialName("published_date")
     val publishedDate: String,
     @SerialName("release_notes")
-    val releaseNotes: String,
+    val releaseNotes: String?,
     @SerialName("version")
     val version: String,
 )
