@@ -22,6 +22,7 @@ class Datalogging(
         private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
         private val webServices: WebServices,
         private val healthDao: HealthDao,
+        private val knownWatchDao: io.rebble.libpebblecommon.database.dao.KnownWatchDao,
 ) {
     private val logger = Logger.withTag("Datalogging")
 
@@ -156,7 +157,17 @@ class Datalogging(
                         logger.i {
                             "Parsed ${records.size} health step records (total steps: ${records.sumOf { it.steps }}, time range: ${records.firstOrNull()?.timestamp}-${records.lastOrNull()?.timestamp})"
                         }
-                        healthDao.insertHealthDataWithPriority(records)
+
+                        // Filter out health data recorded before this watch was last connected/selected
+                        // This prevents stale resting calories from being dumped when switching watches
+                        val filteredRecords = filterStaleHealthData(records, watchInfo)
+                        if (filteredRecords.size < records.size) {
+                            logger.i {
+                                "HEALTH_FILTER: Filtered out ${records.size - filteredRecords.size} stale health records recorded before watch was last selected (kept ${filteredRecords.size})"
+                            }
+                        }
+
+                        healthDao.insertHealthDataWithPriority(filteredRecords)
                         logger.d { "Inserted ${records.size} health records into database" }
                     }
                 }
@@ -247,12 +258,63 @@ class Datalogging(
                         }
 
                         logger.i { "Parsed ${records.size} health overlay records" }
-                        healthDao.insertOverlayData(records)
+
+                        // Filter out overlay data (sleep/activities) recorded before this watch was last connected/selected
+                        val filteredRecords = filterStaleOverlayData(records, watchInfo)
+                        if (filteredRecords.size < records.size) {
+                            logger.i {
+                                "HEALTH_FILTER: Filtered out ${records.size - filteredRecords.size} stale overlay records recorded before watch was last selected (kept ${filteredRecords.size})"
+                            }
+                        }
+
+                        healthDao.insertOverlayData(filteredRecords)
                         logger.d { "Inserted ${records.size} overlay records into database" }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Filter out health data records that were recorded before this watch was last connected/selected.
+     * This prevents duplicate calorie data when switching between watches.
+     */
+    private suspend fun filterStaleHealthData(
+        records: List<HealthDataEntity>,
+        watchInfo: WatchInfo
+    ): List<HealthDataEntity> {
+        val lastConnectedMillis = getLastConnectedTimestamp(watchInfo.serial) ?: return records
+        val lastConnectedSeconds = lastConnectedMillis / 1000
+
+        return records.filter { record ->
+            record.timestamp >= lastConnectedSeconds
+        }
+    }
+
+    /**
+     * Filter out overlay data (sleep/activities) that were recorded before this watch was last connected/selected.
+     * This prevents duplicate data when switching between watches.
+     */
+    private suspend fun filterStaleOverlayData(
+        records: List<OverlayDataEntity>,
+        watchInfo: WatchInfo
+    ): List<OverlayDataEntity> {
+        val lastConnectedMillis = getLastConnectedTimestamp(watchInfo.serial) ?: return records
+        val lastConnectedSeconds = lastConnectedMillis / 1000
+
+        return records.filter { record ->
+            record.startTime >= lastConnectedSeconds
+        }
+    }
+
+    /**
+     * Get the timestamp when this watch was last connected/selected by the user.
+     * Returns null if this is the first connection or if the watch is not found.
+     */
+    private suspend fun getLastConnectedTimestamp(serial: String): Long? {
+        val knownWatches = knownWatchDao.knownWatches()
+        val thisWatch = knownWatches.find { it.serial == serial }
+        return thisWatch?.lastConnected?.instant?.toEpochMilliseconds()
     }
 
     companion object {
