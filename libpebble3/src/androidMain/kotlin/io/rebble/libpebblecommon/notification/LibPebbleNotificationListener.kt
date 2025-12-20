@@ -127,7 +127,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
                     id = channel.id,
                     name = channel.name.toString(),
                     muteState = MuteState.Never,
+                    vibrationPattern = channel?.getVibrationPattern()?.map { it.toUInt() }?.let { listOf(0u) + it }
                 )
+                if (channel.vibrationPattern != null ) {
+                    logger.w { "vibration pattern for ${channel.name} is ${channel.vibrationPattern?.joinToString(", ")}" }
+                }
                 val group = groups[channel.group]
                 if (group == null) {
                     // Some channels don't have groups - but we want them all to have groups.

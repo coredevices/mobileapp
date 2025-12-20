@@ -34,11 +34,11 @@ data class MillisecondInstant(val instant: Instant) {
 fun Instant.asMillisecond(): MillisecondInstant = MillisecondInstant(this)
 
 class RoomTypeConverters {
-	@TypeConverter
-	fun ListUIntToString(value: List<UInt>): String = value.joinToString(",");
+    @TypeConverter
+    fun ListUIntToString(value: List<UInt>): String = value.joinToString(",");
 
-	@TypeConverter
-	fun StringToListUInt(value: String): List<UInt> = value.split(",").mapNotNull { it.toUIntOrNull() };
+    @TypeConverter
+    fun StringToListUInt(value: String): List<UInt> = value.split(",").mapNotNull { it.toUIntOrNull() };
 
     @TypeConverter
     fun StringToUuid(string: String?): Uuid? = string?.let { Uuid.parse(it) }

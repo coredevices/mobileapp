@@ -63,7 +63,7 @@ class BasicNotificationProcessor(
         val contactEntries = contactKeys.mapNotNull {
             contactDao.getContact(it)
         }
-        val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn)
+        val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn, channel)
         val appProperties = NotificationProperties.lookup(app.packageName)
 
         val color = selectColor(app, sbn, appProperties)
@@ -83,7 +83,7 @@ class BasicNotificationProcessor(
             },
             actions = actions,
             people = contactEntries,
-			vibrationPattern = sendVibePattern,
+            vibrationPattern = sendVibePattern,
             color = color,
         )
         return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
@@ -113,18 +113,24 @@ class BasicNotificationProcessor(
         contactEntries: List<ContactEntity>,
         app: NotificationAppItem,
         sbn: StatusBarNotification,
+        channel: ChannelItem?,
     ): List<UInt>? {
         // TODO we're only picking the pattern from the first contact. I don't know if the first
         //  contact is always the one that sent the message, in a group chat?
         val vibePatternForContact = findVibePattern(contactEntries.firstOrNull()?.vibePatternName)
         val vibePatternForApp = findVibePattern(app.vibePatternName)
+        val vibePatternForChannel = if (notificationConfigFlow.value.useAndroidVibePatterns) {
+            channel?.vibrationPattern
+        } else {
+            null
+        }
         val vibePatternFromNotification = if (notificationConfigFlow.value.useAndroidVibePatterns) {
             sbn.notification.vibrationPattern()
         } else {
             null
         }
         val vibePatternDefaultOverride = findVibePattern(notificationConfigFlow.value.overrideDefaultVibePattern)
-        return vibePatternForContact ?: vibePatternForApp ?: vibePatternFromNotification ?: vibePatternDefaultOverride
+        return vibePatternForContact ?: vibePatternForApp ?: vibePatternForChannel ?: vibePatternFromNotification ?: vibePatternDefaultOverride
     }
 
     private suspend fun findVibePattern(name: String?): List<UInt>? {

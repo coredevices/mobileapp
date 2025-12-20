@@ -111,6 +111,7 @@ data class ChannelItem(
     val id: String,
     val name: String,
     val muteState: MuteState,
+    val vibrationPattern: List<UInt>? = null,
 )
 
 class NotificationAppBlobItem(
