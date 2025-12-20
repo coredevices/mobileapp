@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.PlaybackStateData.Companion.DEFAULT
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.music.MusicAction
@@ -49,6 +50,7 @@ class MusicControlManager(
     private val musicControlService: MusicService,
     private val systemMusicControl: SystemMusicControl,
     private val clock: Clock,
+    private val watchConfigFlow: WatchConfigFlow
 ) {
     private val logger = Logger.withTag("MusicControlManager")
     private var lastSentStatus: PlaybackStatus? = null
@@ -115,9 +117,16 @@ class MusicControlManager(
             || hasPositionChanged(status)
             || lastSentStatus?.playbackRate != status?.playbackRate
             || lastSentStatus?.shuffle != status?.shuffle
-            || lastSentStatus?.repeat != status?.repeat) {
+            || lastSentStatus?.repeat != status?.repeat
+        ) {
+            val playbackState = if (watchConfigFlow.value.alwaysSendMusicPaused) {
+                PlaybackState.Paused
+            } else {
+                status?.playbackState ?: PlaybackState.Paused
+            }
+
             playbackStateUpdates.value = PlaybackStateData(
-                state = status?.playbackState ?: PlaybackState.Paused,
+                state = playbackState,
                 trackPosMs = status?.playbackPositionMs?.toUInt() ?: 0u,
                 playbackRatePct = (status?.playbackRate?.times(100)?.toInt() ?: 0).toUInt(),
                 shuffle = status?.shuffle ?: false,

@@ -67,6 +67,12 @@ data class WatchConfig(
     val preferBtClassicV2: Boolean = false,
     val pkjsInspectable: Boolean = false,
     val emulateRemoteTimeline: Boolean = true,
+    /**
+     * When true, LibPebble3 will always send music state as paused, never as playing.
+     *
+     * This prevents music app from jumping to the top of the list.
+     */
+    val alwaysSendMusicPaused: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
