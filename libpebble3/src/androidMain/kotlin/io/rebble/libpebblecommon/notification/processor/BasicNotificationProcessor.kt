@@ -57,13 +57,21 @@ class BasicNotificationProcessor(
         val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)
         val bigText = sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         val showWhen = sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN)
-        val body = stripBidiIsolates(bigText ?: text) ?: ""
         val people = sbn.notification.people()
         val contactKeys = people.asContacts(context.context)
         val contactEntries = contactKeys.mapNotNull {
             contactDao.getContact(it)
         }
-        val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn)
+        var body = stripBidiIsolates(bigText ?: text) ?: ""
+		var notifyVibrationPattern = emptyList<UInt>()
+        val bodyTokens = body.split("|")
+        if (bodyTokens.size > 1) {
+			notifyVibrationPattern = runCatching { bodyTokens.last().split(",").map { it.toUInt() } }.getOrNull() ?: emptyList<UInt>()
+			if (notifyVibrationPattern.size > 0) {
+				body = bodyTokens.dropLast(1).joinToString("|")
+			}
+		}
+        val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn) ?: notifyVibrationPattern
         val appProperties = NotificationProperties.lookup(app.packageName)
 
         val color = selectColor(app, sbn, appProperties)
