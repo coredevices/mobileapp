@@ -90,7 +90,7 @@ fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
     }
 
     Column {
-        if (avgSleepHours > 0 || (dailySleepData != null && dailySleepData!!.segments.isNotEmpty()) || stackedSleepData.isNotEmpty()) {
+        if (avgSleepHours > 0 || dailySleepData?.segments?.isNotEmpty() == true || stackedSleepData.isNotEmpty()) {
             Box(modifier = Modifier.height(200.dp).fillMaxWidth().padding(12.dp)) {
                 when (timeRange) {
                     HealthTimeRange.Daily -> dailySleepData?.let { SleepDailyChart(it) }
