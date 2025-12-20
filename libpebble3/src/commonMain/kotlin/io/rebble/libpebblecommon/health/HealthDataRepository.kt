@@ -42,28 +42,12 @@ private suspend fun fetchDailyStepsData(
 ): Triple<List<String>, List<Float>, Long> {
     val nowInstant = Clock.System.now()
     val todayStart = today.atStartOfDayIn(timeZone).epochSeconds
-
-    // Get wakeup time from sleep data (if available)
-    val searchStart = today.minus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds + (18 * 3600)
-    val searchEnd = today.atStartOfDayIn(timeZone).epochSeconds + (14 * 3600)
-    val sleepTypes = listOf(OverlayType.Sleep.value, OverlayType.DeepSleep.value)
-    val sleepEntries = healthDao.getOverlayEntries(searchStart, searchEnd, sleepTypes)
-        .sortedBy { it.startTime }
-
-    val wakeupInstant = sleepEntries.maxOfOrNull { it.startTime + it.duration }
-        ?.let { Instant.fromEpochSeconds(it) }
-    val fallbackWakeup = today.atStartOfDayIn(timeZone) + 6.hours
-    val wakeCandidate = wakeupInstant ?: fallbackWakeup
     val dayStartInstant = today.atStartOfDayIn(timeZone)
-    var startInstant = wakeCandidate
-    if (startInstant > nowInstant) startInstant = nowInstant
-    if (startInstant < dayStartInstant) startInstant = dayStartInstant
-    startInstant = roundToNearestHour(startInstant, timeZone)
 
-    // Sample once per hour from wakeup to "now", plus an initial point at wakeup and a final point at current time.
-    val labels = mutableListOf<String>()
-    val values = mutableListOf<Float>()
-    val sampleTimes = generateSequence(startInstant) { it + 1.hours }
+    // Sample once per hour from midnight to "now"
+    val allLabels = mutableListOf<String>()
+    val allValues = mutableListOf<Float>()
+    val sampleTimes = generateSequence(dayStartInstant) { it + 1.hours }
         .takeWhile { it < nowInstant }
         .toMutableList()
     sampleTimes += nowInstant
@@ -71,8 +55,31 @@ private suspend fun fetchDailyStepsData(
     sampleTimes.forEach { instant ->
         val label = formatTimeLabel(instant, timeZone)
         val steps = healthDao.getTotalStepsExclusiveEnd(todayStart, instant.epochSeconds) ?: 0L
-        labels.add(label)
-        values.add(steps.toFloat())
+        allLabels.add(label)
+        allValues.add(steps.toFloat())
+    }
+
+    // Find the first point where steps changed (indicating activity started)
+    var firstActivityIndex = -1
+    for (i in 1 until allValues.size) {
+        if (allValues[i] > allValues[i - 1]) {
+            firstActivityIndex = i
+            break
+        }
+    }
+
+    // If no activity detected, return empty data
+    val labels: List<String>
+    val values: List<Float>
+    if (firstActivityIndex == -1) {
+        labels = emptyList()
+        values = emptyList()
+    } else {
+        // Start from the point before first activity (to show the baseline at 0)
+        // This ensures the chart starts from when steps begin
+        val startIndex = (firstActivityIndex - 1).coerceAtLeast(0)
+        labels = allLabels.subList(startIndex, allLabels.size)
+        values = allValues.subList(startIndex, allValues.size)
     }
 
     val todayEnd = today.plus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds
