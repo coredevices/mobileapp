@@ -115,6 +115,7 @@ class BasicNotificationProcessor(
         sbn: StatusBarNotification,
         channel: ChannelItem?,
     ): List<UInt>? {
+        logger.w { "vibration pattern info: ${sbn.getNotification().extras.getString("extraautonotificationinfo", "")}" }
         // TODO we're only picking the pattern from the first contact. I don't know if the first
         //  contact is always the one that sent the message, in a group chat?
         val vibePatternForContact = findVibePattern(contactEntries.firstOrNull()?.vibePatternName)
@@ -129,8 +130,15 @@ class BasicNotificationProcessor(
         } else {
             null
         }
+        val vibePatternFromTaskerNotification = if (notificationConfigFlow.value.useAndroidVibePatterns) {
+            var patt = emptyList<UInt>()
+            runCatching { patt = sbn.getNotification().extras.getString("extraautonotificationinfo", "").split(",").map { it.toUInt() } }
+            if (patt.size == 0) null else patt
+        } else {
+            null
+        }
         val vibePatternDefaultOverride = findVibePattern(notificationConfigFlow.value.overrideDefaultVibePattern)
-        return vibePatternForContact ?: vibePatternForApp ?: vibePatternForChannel ?: vibePatternFromNotification ?: vibePatternDefaultOverride
+        return vibePatternForContact ?: vibePatternFromTaskerNotification ?: vibePatternFromNotification ?: vibePatternForApp ?: vibePatternForChannel ?: vibePatternDefaultOverride
     }
 
     private suspend fun findVibePattern(name: String?): List<UInt>? {
