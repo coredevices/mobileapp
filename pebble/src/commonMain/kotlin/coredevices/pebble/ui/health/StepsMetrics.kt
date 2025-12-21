@@ -17,33 +17,41 @@ data class StepsMetrics(
 
 /**
  * Fetches and formats steps metrics for the given time range
+ * @param offset Number of periods to go back (0 = current period, 1 = previous period, etc.)
  */
 suspend fun fetchStepsMetrics(
     healthDao: HealthDao,
     timeRange: HealthTimeRange,
-    useImperialUnits: Boolean
+    useImperialUnits: Boolean,
+    offset: Int = 0
 ): StepsMetrics {
     return try {
         val timeZone = TimeZone.currentSystemDefault()
         val today = Clock.System.now().toLocalDateTime(timeZone).date
 
+        val targetDate = when (timeRange) {
+            HealthTimeRange.Daily -> today.minus(DatePeriod(days = offset))
+            HealthTimeRange.Weekly -> today.minus(DatePeriod(days = offset * 7))
+            HealthTimeRange.Monthly -> today.minus(DatePeriod(months = offset))
+        }
+
         val (aggregates, start, end) = when (timeRange) {
             HealthTimeRange.Daily -> {
-                val s = today.atStartOfDayIn(timeZone).epochSeconds
-                val e = today.plus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds
-                Triple(fetchDailyMetrics(healthDao, today, timeZone), s, e)
+                val s = targetDate.atStartOfDayIn(timeZone).epochSeconds
+                val e = targetDate.plus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds
+                Triple(fetchDailyMetrics(healthDao, targetDate, timeZone), s, e)
             }
             HealthTimeRange.Weekly -> {
-                val weekStartSunday = getPreviousSunday(today)
+                val weekStartSunday = getPreviousSunday(targetDate)
                 val s = weekStartSunday.atStartOfDayIn(timeZone).epochSeconds
                 val e = weekStartSunday.plus(DatePeriod(days = 7)).atStartOfDayIn(timeZone).epochSeconds
-                Triple(fetchWeeklyMetrics(healthDao, today, timeZone), s, e)
+                Triple(fetchWeeklyMetrics(healthDao, targetDate, timeZone), s, e)
             }
             HealthTimeRange.Monthly -> {
-                val monthStart = LocalDate(today.year, today.month, 1)
+                val monthStart = LocalDate(targetDate.year, targetDate.month, 1)
                 val s = monthStart.atStartOfDayIn(timeZone).epochSeconds
                 val e = monthStart.plus(DatePeriod(months = 1)).atStartOfDayIn(timeZone).epochSeconds
-                Triple(fetchMonthlyMetrics(healthDao, today, timeZone), s, e)
+                Triple(fetchMonthlyMetrics(healthDao, targetDate, timeZone), s, e)
             }
         }
 

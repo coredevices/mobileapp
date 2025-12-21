@@ -14,19 +14,27 @@ data class SleepMetrics(
 
 /**
  * Fetches and formats sleep metrics for the given time range
+ * @param offset Number of periods to go back (0 = current period, 1 = previous period, etc.)
  */
 suspend fun fetchSleepMetrics(
     healthDao: HealthDao,
-    timeRange: HealthTimeRange
+    timeRange: HealthTimeRange,
+    offset: Int = 0
 ): SleepMetrics {
     return try {
         val timeZone = TimeZone.currentSystemDefault()
         val today = Clock.System.now().toLocalDateTime(timeZone).date
 
+        val targetDate = when (timeRange) {
+            HealthTimeRange.Daily -> today.minus(DatePeriod(days = offset))
+            HealthTimeRange.Weekly -> today.minus(DatePeriod(days = offset * 7))
+            HealthTimeRange.Monthly -> today.minus(DatePeriod(months = offset))
+        }
+
         val (totalMinutes, deepMinutes) = when (timeRange) {
-            HealthTimeRange.Daily -> fetchDailySleepMetrics(healthDao, today, timeZone)
-            HealthTimeRange.Weekly -> fetchWeeklySleepMetrics(healthDao, today, timeZone)
-            HealthTimeRange.Monthly -> fetchMonthlySleepMetrics(healthDao, today, timeZone)
+            HealthTimeRange.Daily -> fetchDailySleepMetrics(healthDao, targetDate, timeZone)
+            HealthTimeRange.Weekly -> fetchWeeklySleepMetrics(healthDao, targetDate, timeZone)
+            HealthTimeRange.Monthly -> fetchMonthlySleepMetrics(healthDao, targetDate, timeZone)
         }
 
         formatSleepMetrics(totalMinutes, deepMinutes, timeRange)

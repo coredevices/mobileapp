@@ -8,6 +8,7 @@ import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.hours
@@ -108,5 +109,54 @@ fun roundToNearestHour(instant: Instant, timeZone: TimeZone): Instant {
         hourStartInstant + 1.hours
     } else {
         hourStartInstant
+    }
+}
+
+/**
+ * Gets the date range label for a given time range and offset.
+ * @param timeRange The time range (Daily, Weekly, Monthly)
+ * @param offset Number of periods to go back from today (0 = current period)
+ * @return A formatted string describing the date range
+ */
+fun getDateRangeLabel(timeRange: HealthTimeRange, offset: Int, timeZone: TimeZone): String {
+    val today = kotlin.time.Clock.System.now().toLocalDateTime(timeZone).date
+
+    return when (timeRange) {
+        HealthTimeRange.Daily -> {
+            val targetDate = today.minus(DatePeriod(days = offset))
+            when (offset) {
+                0 -> "Today"
+                1 -> "Yesterday"
+                else -> {
+                    val month = targetDate.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+                    "$month ${targetDate.dayOfMonth}, ${targetDate.year}"
+                }
+            }
+        }
+        HealthTimeRange.Weekly -> {
+            val targetDate = today.minus(DatePeriod(days = offset * 7))
+            val weekStart = getPreviousSunday(targetDate)
+            val weekEnd = weekStart.plus(DatePeriod(days = 6))
+
+            if (offset == 0) {
+                "This Week"
+            } else if (offset == 1) {
+                "Last Week"
+            } else {
+                formatDateRangeLabel(weekStart, weekEnd)
+            }
+        }
+        HealthTimeRange.Monthly -> {
+            val targetDate = today.minus(DatePeriod(months = offset))
+            val month = targetDate.month.name.lowercase().replaceFirstChar { it.uppercase() }
+
+            if (offset == 0) {
+                "This Month"
+            } else if (offset == 1) {
+                "Last Month"
+            } else {
+                "$month ${targetDate.year}"
+            }
+        }
     }
 }

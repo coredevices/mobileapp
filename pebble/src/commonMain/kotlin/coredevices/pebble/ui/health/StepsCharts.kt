@@ -1,8 +1,14 @@
 package coredevices.pebble.ui.health
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.fetchStepsData
+import io.rebble.libpebblecommon.health.getDateRangeLabel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,10 +25,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.datetime.TimeZone
 import io.github.koalaplot.core.bar.DefaultBar
 import io.github.koalaplot.core.bar.DefaultBarPosition
 import io.github.koalaplot.core.bar.DefaultVerticalBarPlotEntry
@@ -50,7 +59,7 @@ val topBar = RoundedCornerShape(5.dp, 5.dp, 0.dp, 0.dp)
 
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
-fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
+fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange, offset: Int = 0) {
     val libPebble = rememberLibPebble()
     val healthSettings by libPebble.healthSettings.collectAsState(initial = HealthSettings())
 
@@ -58,13 +67,13 @@ fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
     var steps by remember { mutableStateOf(0L) }
     var metrics by remember { mutableStateOf<StepsMetrics?>(null) }
 
-    LaunchedEffect(timeRange, healthSettings.imperialUnits) {
-        val (labels, values, total) = fetchStepsData(healthDao, timeRange)
+    LaunchedEffect(timeRange, offset, healthSettings.imperialUnits) {
+        val (labels, values, total) = fetchStepsData(healthDao, timeRange, offset)
         stepsData = labels.zip(values)
         steps = total
 
         // Always fetch metrics
-        metrics = fetchStepsMetrics(healthDao, timeRange, healthSettings.imperialUnits)
+        metrics = fetchStepsMetrics(healthDao, timeRange, healthSettings.imperialUnits, offset)
     }
 
     Column {
@@ -75,7 +84,7 @@ fun StepsChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             when (timeRange) {
-                HealthTimeRange.Daily -> StatsTile("Today's steps", steps.toString())
+                HealthTimeRange.Daily -> StatsTile("Steps", steps.toString())
                 HealthTimeRange.Weekly -> StatsTile("Average steps", steps.toString())
                 HealthTimeRange.Monthly -> StatsTile("Average steps", steps.toString())
             }

@@ -19,19 +19,27 @@ import kotlin.time.Duration.Companion.hours
 
 /**
  * Fetches steps data for the given time range.
+ * @param offset Number of periods to go back (0 = current period, 1 = previous period, etc.)
  * @return Triple of (labels, values, total)
  */
 suspend fun fetchStepsData(
     healthDao: HealthDao,
-    timeRange: HealthTimeRange
+    timeRange: HealthTimeRange,
+    offset: Int = 0
 ): Triple<List<String>, List<Float>, Long> {
     val timeZone = TimeZone.currentSystemDefault()
     val today = Clock.System.now().toLocalDateTime(timeZone).date
 
+    val targetDate = when (timeRange) {
+        HealthTimeRange.Daily -> today.minus(DatePeriod(days = offset))
+        HealthTimeRange.Weekly -> today.minus(DatePeriod(days = offset * 7))
+        HealthTimeRange.Monthly -> today.minus(DatePeriod(months = offset))
+    }
+
     return when (timeRange) {
-        HealthTimeRange.Daily -> fetchDailyStepsData(healthDao, today, timeZone)
-        HealthTimeRange.Weekly -> fetchWeeklyStepsData(healthDao, today, timeZone)
-        HealthTimeRange.Monthly -> fetchMonthlyStepsData(healthDao, today, timeZone)
+        HealthTimeRange.Daily -> fetchDailyStepsData(healthDao, targetDate, timeZone)
+        HealthTimeRange.Weekly -> fetchWeeklyStepsData(healthDao, targetDate, timeZone)
+        HealthTimeRange.Monthly -> fetchMonthlyStepsData(healthDao, targetDate, timeZone)
     }
 }
 
@@ -304,13 +312,15 @@ private suspend fun fetchMonthlyHeartRateData(
 
 /**
  * Fetches daily sleep data.
+ * @param offset Number of days to go back (0 = today, 1 = yesterday, etc.)
  * @return Pair of (DailySleepData, averageHours)
  */
 suspend fun fetchDailySleepData(
-    healthDao: HealthDao
+    healthDao: HealthDao,
+    offset: Int = 0
 ): Pair<DailySleepData?, Float> {
     val timeZone = TimeZone.currentSystemDefault()
-    val today = Clock.System.now().toLocalDateTime(timeZone).date
+    val today = Clock.System.now().toLocalDateTime(timeZone).date.minus(DatePeriod(days = offset))
 
     // Search from 6 PM yesterday to 2 PM today
     val searchStart = today.minus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds + (18 * 3600)
@@ -351,18 +361,26 @@ suspend fun fetchDailySleepData(
 
 /**
  * Fetches stacked sleep data for weekly or monthly view.
+ * @param offset Number of periods to go back (0 = current period, 1 = previous period, etc.)
  * @return Pair of (List<StackedSleepData>, averageHours)
  */
 suspend fun fetchStackedSleepData(
     healthDao: HealthDao,
-    timeRange: HealthTimeRange
+    timeRange: HealthTimeRange,
+    offset: Int = 0
 ): Pair<List<StackedSleepData>, Float> {
     val timeZone = TimeZone.currentSystemDefault()
     val today = Clock.System.now().toLocalDateTime(timeZone).date
 
+    val targetDate = when (timeRange) {
+        HealthTimeRange.Weekly -> today.minus(DatePeriod(days = offset * 7))
+        HealthTimeRange.Monthly -> today.minus(DatePeriod(months = offset))
+        else -> today
+    }
+
     return when (timeRange) {
-        HealthTimeRange.Weekly -> fetchWeeklySleepData(healthDao, today, timeZone)
-        HealthTimeRange.Monthly -> fetchMonthlySleepData(healthDao, today, timeZone)
+        HealthTimeRange.Weekly -> fetchWeeklySleepData(healthDao, targetDate, timeZone)
+        HealthTimeRange.Monthly -> fetchMonthlySleepData(healthDao, targetDate, timeZone)
         else -> Pair(emptyList(), 0f)
     }
 }

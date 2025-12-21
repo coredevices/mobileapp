@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.Settings
@@ -53,9 +55,18 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.health.SleepChart
 import coredevices.pebble.ui.health.StepsChart
 import io.rebble.libpebblecommon.health.HealthTimeRange
+import io.rebble.libpebblecommon.health.getDateRangeLabel
+import io.rebble.libpebblecommon.health.getPreviousSunday
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 import theme.localHealthColors
 
@@ -149,8 +160,55 @@ fun HealthScreen(
     }
 
     var timeRange by remember { mutableStateOf(HealthTimeRange.Daily) }
+    var offset by remember(timeRange) { mutableStateOf(0) }
+    var canGoBack by remember { mutableStateOf(true) }
 
     val healthColors = localHealthColors.current
+    val timeZone = TimeZone.currentSystemDefault()
+
+    // Check if we can go back (if there's data in the previous period)
+    LaunchedEffect(timeRange, offset) {
+        val nextOffset = offset + 1
+        val today = kotlin.time.Clock.System.now().toLocalDateTime(timeZone).date
+
+        val targetDate = when (timeRange) {
+            HealthTimeRange.Daily -> today.minus(DatePeriod(days = nextOffset))
+            HealthTimeRange.Weekly -> today.minus(DatePeriod(days = nextOffset * 7))
+            HealthTimeRange.Monthly -> today.minus(DatePeriod(months = nextOffset))
+        }
+
+        // Check for steps data for the target day/week/month
+        val start = when (timeRange) {
+            HealthTimeRange.Daily -> targetDate.atStartOfDayIn(timeZone).epochSeconds
+            HealthTimeRange.Weekly -> {
+                val weekStart = getPreviousSunday(targetDate)
+                weekStart.atStartOfDayIn(timeZone).epochSeconds
+            }
+            HealthTimeRange.Monthly -> {
+                val monthStart = LocalDate(targetDate.year, targetDate.month, 1)
+                monthStart.atStartOfDayIn(timeZone).epochSeconds
+            }
+        }
+
+        val end = when (timeRange) {
+            HealthTimeRange.Daily -> targetDate.plus(DatePeriod(days = 1)).atStartOfDayIn(timeZone).epochSeconds
+            HealthTimeRange.Weekly -> {
+                val weekStart = getPreviousSunday(targetDate)
+                weekStart.plus(DatePeriod(days = 7)).atStartOfDayIn(timeZone).epochSeconds
+            }
+            HealthTimeRange.Monthly -> {
+                val monthStart = LocalDate(targetDate.year, targetDate.month, 1)
+                monthStart.plus(DatePeriod(months = 1)).atStartOfDayIn(timeZone).epochSeconds
+            }
+        }
+
+        // Check if there's ANY meaningful data (steps > 0 or sleep entries) in the range
+        val hasStepsData = (healthDao.getTotalStepsExclusiveEnd(start, end) ?: 0L) > 0
+        val sleepTypes = listOf(1, 2) // Sleep and DeepSleep overlay types
+        val hasSleepData = healthDao.getOverlayEntries(start, end, sleepTypes).isNotEmpty()
+
+        canGoBack = hasStepsData || hasSleepData
+    }
 
     Column(
         modifier = Modifier
@@ -166,13 +224,21 @@ fun HealthScreen(
             onRangeSelected = { timeRange = it }
         )
 
+        // Date range navigation
+        DateRangeNavigation(
+            timeRange = timeRange,
+            offset = offset,
+            canGoBack = canGoBack,
+            onOffsetChange = { offset = it }
+        )
+
         // Steps chart
         HealthMetricCard(
             title = "Activity",
             icon = Icons.Filled.DirectionsRun,
             iconTint = healthColors.steps
         ) {
-            StepsChart(healthDao, timeRange)
+            StepsChart(healthDao, timeRange, offset)
         }
 
         // Sleep chart
@@ -181,7 +247,7 @@ fun HealthScreen(
             icon = Icons.Filled.Hotel,
             iconTint = healthColors.lightSleep
         ) {
-            SleepChart(healthDao, timeRange)
+            SleepChart(healthDao, timeRange, offset)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -211,6 +277,55 @@ private fun TimeRangeSelector(
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
+            )
+        }
+    }
+}
+
+/**
+ * Date range navigation with arrows and current period label.
+ */
+@Composable
+private fun DateRangeNavigation(
+    timeRange: HealthTimeRange,
+    offset: Int,
+    canGoBack: Boolean,
+    onOffsetChange: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = { onOffsetChange(offset + 1) },
+            enabled = canGoBack
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = "Previous ${timeRange.name.lowercase()}",
+                tint = if (canGoBack) MaterialTheme.colorScheme.onSurface
+                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+        }
+
+        Text(
+            text = getDateRangeLabel(timeRange, offset, TimeZone.currentSystemDefault()),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        IconButton(
+            onClick = { onOffsetChange(offset - 1) },
+            enabled = offset > 0
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Next ${timeRange.name.lowercase()}",
+                tint = if (offset > 0) MaterialTheme.colorScheme.onSurface
+                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
             )
         }
     }

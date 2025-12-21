@@ -1,10 +1,16 @@
 package coredevices.pebble.ui.health
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import io.rebble.libpebblecommon.health.DailySleepData
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import io.rebble.libpebblecommon.health.StackedSleepData
 import io.rebble.libpebblecommon.health.fetchDailySleepData
 import io.rebble.libpebblecommon.health.fetchStackedSleepData
+import io.rebble.libpebblecommon.health.getDateRangeLabel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.datetime.TimeZone
 import io.github.koalaplot.core.bar.DefaultBar
 import io.github.koalaplot.core.bar.DefaultBarPosition
 import io.github.koalaplot.core.bar.DefaultVerticalBarPlotEntry
@@ -56,36 +63,36 @@ private val dailyShape = RoundedCornerShape(5.dp)
 
 @OptIn(ExperimentalKoalaPlotApi::class)
 @Composable
-fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange) {
+fun SleepChart(healthDao: HealthDao, timeRange: HealthTimeRange, offset: Int = 0) {
     var dailySleepData by remember { mutableStateOf<DailySleepData?>(null) }
     var stackedSleepData by remember { mutableStateOf<List<StackedSleepData>>(emptyList()) }
     var avgSleepHours by remember { mutableStateOf(0f) }
     var metrics by remember { mutableStateOf<SleepMetrics?>(null) }
 
-    LaunchedEffect(timeRange) {
+    LaunchedEffect(timeRange, offset) {
         try {
             when (timeRange) {
                 HealthTimeRange.Daily -> {
-                    val (daily, avg) = fetchDailySleepData(healthDao)
+                    val (daily, avg) = fetchDailySleepData(healthDao, offset)
                     dailySleepData = daily
                     avgSleepHours = avg
                 }
                 else -> {
-                    val (stacked, avg) = fetchStackedSleepData(healthDao, timeRange)
+                    val (stacked, avg) = fetchStackedSleepData(healthDao, timeRange, offset)
                     stackedSleepData = stacked
                     avgSleepHours = avg
                 }
             }
 
             // Always fetch metrics
-            metrics = fetchSleepMetrics(healthDao, timeRange)
+            metrics = fetchSleepMetrics(healthDao, timeRange, offset)
         } catch (e: Exception) {
             println("Error fetching sleep data: ${e.message}")
             e.printStackTrace()
             dailySleepData = null
             stackedSleepData = emptyList()
             avgSleepHours = 0f
-            metrics = fetchSleepMetrics(healthDao, timeRange)
+            metrics = fetchSleepMetrics(healthDao, timeRange, offset)
         }
     }
 
