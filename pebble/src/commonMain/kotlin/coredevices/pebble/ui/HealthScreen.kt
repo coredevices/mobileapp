@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -232,22 +233,25 @@ fun HealthScreen(
             onOffsetChange = { offset = it }
         )
 
-        // Steps chart
-        HealthMetricCard(
-            title = "Activity",
-            icon = Icons.Filled.DirectionsRun,
-            iconTint = healthColors.steps
-        ) {
-            StepsChart(healthDao, timeRange, offset)
-        }
+        key(timeRange) {
 
-        // Sleep chart
-        HealthMetricCard(
-            title = "Sleep",
-            icon = Icons.Filled.Hotel,
-            iconTint = healthColors.lightSleep
-        ) {
-            SleepChart(healthDao, timeRange, offset)
+            // Steps chart
+            HealthMetricCard(
+                title = "Activity",
+                icon = Icons.Filled.DirectionsRun,
+                iconTint = healthColors.steps
+            ) {
+                StepsChart(healthDao, timeRange, offset)
+            }
+
+            // Sleep chart
+            HealthMetricCard(
+                title = "Sleep",
+                icon = Icons.Filled.Hotel,
+                iconTint = healthColors.lightSleep
+            ) {
+                SleepChart(healthDao, timeRange, offset)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
