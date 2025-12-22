@@ -2,24 +2,19 @@ package coredevices.coreapp.ui.navigation
 
 import CommonRoutes
 import CoreRoute
+import androidx.navigation.NavUri
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-/**
- * Note - I tried getting native compose navigation deep links to work, but they just wouldn't, so
- * doing it ourselves.
- */
 class CoreDeepLinkHandler {
-    private val _navigateToDeepLink = MutableSharedFlow<CoreRoute>(extraBufferCapacity = 1, replay = 1)
+    private val _navigateToDeepLink = MutableSharedFlow<Any>(extraBufferCapacity = 1, replay = 1)
     val navigateToDeepLink = _navigateToDeepLink.asSharedFlow()
 
-    fun handle(uri: Uri) {
-        val route = uri.decodeDeepLink()
-        logger.d { "handle: uri = $uri route = $route" }
-        if (route == null) return
-        _navigateToDeepLink.tryEmit(route)
+    fun handle(uri: Uri): Boolean {
+        logger.d { "handle: uri = $uri" }
+        return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
     }
 
     companion object {
@@ -35,19 +30,5 @@ class CoreDeepLinkHandler {
             .appendPath(VIEW_BUG_REPORT_PATH)
             .appendQueryParameter(CONVERSATION_ID_QUERY_PARAM, conversationId)
             .build()
-
-        fun Uri.decodeDeepLink(): CoreRoute? {
-            if (scheme != SCHEME) return null
-            if (host != HOST) return null
-            val pathSegment = pathSegments.firstOrNull() ?: return null
-            return when (pathSegment) {
-                VIEW_BUG_REPORT_PATH -> {
-                    val conversationId = getQueryParameter(CONVERSATION_ID_QUERY_PARAM)
-                    if (conversationId == null) return null
-                    CommonRoutes.ViewBugReportRoute(conversationId)
-                }
-                else -> null
-            }
-        }
     }
 }

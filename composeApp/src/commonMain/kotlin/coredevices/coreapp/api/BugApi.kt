@@ -49,7 +49,8 @@ class BugApi(
         val timezone: String,
         val summary: String,
         val latestLogs: String,
-        val googleIdToken: String? = null
+        val googleIdToken: String? = null,
+        val sourceIsExperimentalDevice: Boolean = false
     )
 
     @Serializable
@@ -127,7 +128,8 @@ class BugApi(
         timezone: String,
         summary: String,
         latestLogs: String,
-        googleIdToken: String? = null
+        googleIdToken: String? = null,
+        sourceIsExperimentalDevice: Boolean = false
     ): BugReportResult {
         val url = "$baseUrl/bug-reports/create"
         
@@ -147,7 +149,8 @@ class BugApi(
                     timezone = timezone,
                     summary = summary,
                     latestLogs = latestLogs,
-                    googleIdToken = null // Don't send in body anymore
+                    googleIdToken = null, // Don't send in body anymore
+                    sourceIsExperimentalDevice = sourceIsExperimentalDevice
                 ))
             }
             

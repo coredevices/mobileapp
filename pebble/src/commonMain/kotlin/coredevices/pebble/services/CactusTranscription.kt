@@ -1,6 +1,7 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
+import com.cactus.CactusInitParams
 import com.cactus.CactusSTT
 import com.cactus.SpeechRecognitionParams
 import com.russhwolf.settings.Settings
@@ -8,6 +9,7 @@ import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
 import coredevices.util.CactusSTTMode
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.calculateDefaultSTTModel
 import io.ktor.utils.io.CancellationException
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
@@ -30,6 +32,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.writeIntLe
 import kotlinx.io.writeShortLe
 import kotlinx.io.writeString
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -37,12 +40,12 @@ internal expect fun tempTranscriptionDirectory(): Path
 class CactusTranscription(private val settings: Settings): TranscriptionProvider {
     private val scope = CoroutineScope(Dispatchers.Default)
     private val logger = Logger.withTag("CactusTranscription")
-    private var sttModel = CactusSTT(com.cactus.TranscriptionProvider.WHISPER)
+    private var sttModel = CactusSTT()
 
     private var initJob: Job? = null
 
     private val sttMode get() = CactusSTTMode.fromId(settings.getInt("cactus_mode", 0))
-    private val sttModelName get() = settings.getString("cactus_stt_model", CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL)
+    private val sttModelName get() = settings.getString("cactus_stt_model", calculateDefaultSTTModel())
     private var lastInitedModel: String? = null
 
     private fun writeWavHeader(sink: Sink, sampleRate: Int, audioSize: Int) {
@@ -87,17 +90,15 @@ class CactusTranscription(private val settings: Settings): TranscriptionProvider
         when (sttMode) {
             CactusSTTMode.Disabled -> {}
             CactusSTTMode.Local, CactusSTTMode.RemoteFirst -> {
+                val start = Clock.System.now()
                 if (sttModelName != lastInitedModel) {
-                    sttModel.stop()
-                    sttModel = CactusSTT(com.cactus.TranscriptionProvider.WHISPER)
+                    sttModel = CactusSTT()
                 }
                 if (!sttModel.isReady()) {
-                    if (!sttModel.init(sttModelName)) {
-                        throw IllegalStateException("Failed to initialize Cactus STT model")
-                    } else {
-                        logger.d { "Cactus STT model initialized successfully" }
-                        lastInitedModel = sttModelName
-                    }
+                    sttModel.initializeModel(CactusInitParams(sttModelName))
+                    val duration = Clock.System.now() - start
+                    logger.d { "Cactus STT model initialized successfully in $duration" }
+                    lastInitedModel = sttModelName
                 }
                 if (sttMode == CactusSTTMode.RemoteFirst) {
                     CommonBuildKonfig.WISPR_KEY?.let {
@@ -162,14 +163,16 @@ class CactusTranscription(private val settings: Settings): TranscriptionProvider
                         logger.e { "Cactus STT model initialization timed out" }
                         return@withContext TranscriptionResult.Error("Cactus STT model initialization timed out")
                     }
+                    val start = Clock.System.now()
+                    sttModel.reset()
 
                     val transcription = sttModel.transcribe(
-                        SpeechRecognitionParams(),
                         tempFile.toString(),
-                        sttMode.cactusValue,
-                        CommonBuildKonfig.WISPR_KEY
+                        mode = sttMode.cactusValue,
+                        apiKey = CommonBuildKonfig.WISPR_KEY
                     )
-                    logger.d { "Transcription complete, success = ${transcription?.success}" }
+                    val duration = Clock.System.now() - start
+                    logger.d { "Transcription complete, success = ${transcription?.success}, duration = $duration" }
                     return@withContext transcription?.let { transcription ->
                         if (transcription.success) {
                             TranscriptionResult.Success(
@@ -191,7 +194,7 @@ class CactusTranscription(private val settings: Settings): TranscriptionProvider
                         TranscriptionResult.Failed
                     }
                 } finally {
-                    SystemFileSystem.delete(tempFile, mustExist = false)
+                    //SystemFileSystem.delete(tempFile, mustExist = false)
                 }
             }
         } catch (e: CancellationException) {

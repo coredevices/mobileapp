@@ -32,7 +32,7 @@ class WeatherFetcher(
     private val logger = Logger.withTag("WeatherFetcher")
 
     suspend fun fetchWeather() {
-        if (!coreConfigFlow.value.weatherPins) {
+        if (!coreConfigFlow.value.weatherPinsV2) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)
                 libPebble.delete(it.nightUuid)

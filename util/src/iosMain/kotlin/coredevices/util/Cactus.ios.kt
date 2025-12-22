@@ -30,3 +30,5 @@ actual fun getModelDirectories(): List<String> {
         "$cachesDir/vosk-model",
     ) + voskModelPaths + whisperModelPaths
 }
+
+actual fun calculateDefaultSTTModel(): String = CommonBuildKonfig.CACTUS_DEFAULT_STT_MODEL_IOS

@@ -10,7 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.navigation.NavDeepLink
 import androidx.navigation.NavHostController
+import androidx.navigation.NavUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
@@ -45,8 +47,12 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 // Now that we know the graph is set up, start collecting deep links
                 scope.launch {
                     deepLinks.navigateToDeepLink.collect { route ->
-                        logger.d { "navigateToDeepLink $it" }
-                        navController.navigate(route)
+                        logger.d { "navigateToDeepLink $route" }
+                        if (route is NavUri) {
+                            navController.navigate(route)
+                        } else {
+                            navController.navigate(route)
+                        }
                     }
                 }
             }
@@ -99,7 +105,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                     coreNav = coreNav,
                 )
             }
-            composable<CommonRoutes.ViewBugReportRoute> {
+            composable<CommonRoutes.ViewBugReportRoute>(
+                deepLinks = listOf(
+                    NavDeepLink("pebblecore://deep-link/view-bug-report?conversationId={conversationId}")
+                )
+            ) {
                 val route: CommonRoutes.ViewBugReportRoute = it.toRoute()
                 ViewBugReportScreen(
                     coreNav = coreNav,

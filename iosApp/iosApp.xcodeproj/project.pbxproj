@@ -16,6 +16,8 @@
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
 		67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */; };
+		67EA51BE2EF9889B003958BE /* CoreAudioTypes.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BD2EF9889B003958BE /* CoreAudioTypes.framework */; };
+		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
 		AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */; };
 /* End PBXBuildFile section */
@@ -32,6 +34,8 @@
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		677B8EF52DBFE88C0060DBD6 /* startup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = startup.js; path = ../libpebble3/src/androidMain/assets/startup.js; sourceTree = SOURCE_ROOT; };
 		67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		67EA51BD2EF9889B003958BE /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = SDKROOT; };
+		67EA51BF2EF988F7003958BE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		67F184432D7F650200F47423 /* HaversineSatelliteLibrary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = HaversineSatelliteLibrary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F184472D7F8B0200F47423 /* FirebaseAuth.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = FirebaseAuth.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		67F1844B2D7F8B1100F47423 /* FirebaseCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = FirebaseCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -49,6 +53,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */,
+				67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */,
+				67EA51BE2EF9889B003958BE /* CoreAudioTypes.framework in Frameworks */,
 				AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -76,6 +82,8 @@
 		42799AB246E5F90AF97AA0EF /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				67EA51BF2EF988F7003958BE /* UIKit.framework */,
+				67EA51BD2EF9889B003958BE /* CoreAudioTypes.framework */,
 				676C54442D8382FC00E26B6F /* AVFoundation.framework */,
 				67F1844B2D7F8B1100F47423 /* FirebaseCore.framework */,
 				67F184472D7F8B0200F47423 /* FirebaseAuth.framework */,
@@ -215,9 +223,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -294,9 +306,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

@@ -296,25 +296,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                     }
                 }
 
-                val showCompanionWarning = platform == Platform.Android && entry.androidCompanion != null
-                if (showCompanionWarning) {
-                    ElevatedCard(
-                        modifier = Modifier.padding(10.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 6.dp
-                        ),
-                    ) {
-                        Text(
-                            "This app requires an Android companion to be installed - this is not yet supported in the Pebble app",
-                            modifier = Modifier.padding(10.dp),
-                        )
-                    }
-                }
-
                 val connectedIdentifier = lastConnectedWatch?.identifier
                 val showStartApp =
                     entry.isCompatible && entry.commonAppType is CommonAppType.Locker && !appIsRunning

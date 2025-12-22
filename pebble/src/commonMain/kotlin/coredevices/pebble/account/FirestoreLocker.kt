@@ -9,6 +9,9 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FieldPath
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import dev.gitlive.firebase.firestore.FirebaseFirestoreException
+import dev.gitlive.firebase.firestore.FirestoreExceptionCode
+import dev.gitlive.firebase.firestore.code
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import kotlinx.coroutines.CoroutineScope
@@ -25,40 +28,65 @@ import kotlin.uuid.Uuid
 
 class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
     suspend fun getLockerEntriesForUser(uid: String): List<FirestoreLockerEntry> {
-        return firestore.collection("lockers")
-            .document(uid)
-            .collection("entries")
-            .get()
-            .documents
-            .map {
-                it.data()
-            }
+        try {
+            return firestore.collection("lockers")
+                .document(uid)
+                .collection("entries")
+                .get()
+                .documents
+                .map {
+                    it.data()
+                }
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
+    }
+
+    suspend fun isLockerEntriesEmptyForUser(uid: String): Boolean {
+        try {
+            val querySnapshot = firestore.collection("lockers")
+                .document(uid)
+                .collection("entries")
+                .limit(1)
+                .get()
+            return querySnapshot.documents.isEmpty()
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
     }
 
     suspend fun addLockerEntryForUser(
         uid: String,
         entry: FirestoreLockerEntry
     ) {
-        firestore.collection("lockers")
-            .document(uid)
-            .collection("entries")
-            .document("${entry.appstoreId}-${entry.uuid}")
-            .set(entry)
+        try {
+            firestore.collection("lockers")
+                .document(uid)
+                .collection("entries")
+                .document("${entry.appstoreId}-${entry.uuid}")
+                .set(entry)
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
     }
 
     suspend fun removeLockerEntryForUser(
         uid: String,
         uuid: Uuid
     ) {
-        firestore.collection("locker")
-            .document(uid)
-            .collection("entries")
-            .where {
-                FieldPath("uuid") equalTo uuid.toString()
-            }
-            .get()
-            .documents
-            .forEach { it.reference.delete() }
+        try {
+            firestore.collection("locker")
+                .document(uid)
+                .collection("entries")
+                .where {
+                    FieldPath("uuid") equalTo uuid.toString()
+                }
+                .get()
+                .documents
+                .forEach { it.reference.delete() }
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
     }
 
     suspend fun getLockerEntryForUser(
@@ -66,15 +94,19 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
         appstoreId: String,
         uuid: Uuid
     ): FirestoreLockerEntry? {
-        val document = firestore.collection("locker")
-            .document(uid)
-            .collection("entries")
-            .document("${appstoreId}-${uuid}")
-            .get()
-        return if (document.exists) {
-            document.data()
-        } else {
-            null
+        try {
+            val document = firestore.collection("locker")
+                .document(uid)
+                .collection("entries")
+                .document("${appstoreId}-${uuid}")
+                .get()
+            return if (document.exists) {
+                document.data()
+            } else {
+                null
+            }
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
         }
     }
 }
@@ -116,26 +148,36 @@ class FirestoreLocker(
 
     suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModel? {
         val user = Firebase.auth.currentUser ?: return null
-        val fsLocker = dao.getLockerEntriesForUser(user.uid)
+        val fsLocker = try {
+            dao.getLockerEntriesForUser(user.uid)
+        } catch (e: FirestoreDaoException) {
+            logger.e(e) { "Error fetching locker entries from Firestore (uid ${user.uid}): ${e.message}" }
+            return null
+        }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
+        val applications = fsLocker.chunked(10).also {
+            logger.d { "Fetching locker entries in ${it.size} chunks" }
+        }.flatMap { lockerEntries ->
+            val result = lockerEntries.map { lockerEntry ->
+                scope.async {
+                    getLockerEntryFromStore(lockerEntry, useCache = !forceRefresh) ?: run {
+                        logger.w { "Failed to fetch locker entry for appstoreId=${lockerEntry.appstoreId}, uuid=${lockerEntry.uuid}" }
+                        null
+                    }
+                }
+            }.awaitAll()
+            if (fsLocker.size > 20) {
+                delay(50)
+            }
+            result
+        }
+        if (applications.all { it == null }) {
+            logger.e { "Failed to fetch any locker entries from appstores" }
+            return null
+        }
         return try {
             LockerModel(
-                applications = fsLocker.chunked(10).also {
-                    logger.d { "Fetching locker entries in ${it.size} chunks" }
-                }.flatMap { lockerEntries ->
-                    val result = lockerEntries.map { lockerEntry ->
-                        scope.async {
-                            getLockerEntryFromStore(lockerEntry, useCache = !forceRefresh) ?: run {
-                                logger.w { "Failed to fetch locker entry for appstoreId=${lockerEntry.appstoreId}, uuid=${lockerEntry.uuid}" }
-                                null
-                            }
-                        }
-                    }.awaitAll().filterNotNull()
-                    if (fsLocker.size > 20) {
-                        delay(50)
-                    }
-                    result
-                }
+                applications = applications.filterNotNull()
             )
         } catch (e: IllegalStateException) {
             logger.e(e) { "Error fetching locker entries" }
@@ -145,8 +187,7 @@ class FirestoreLocker(
 
     suspend fun isLockerEmpty(): Boolean {
         val user = Firebase.auth.currentUser ?: return true
-        val fsLocker = dao.getLockerEntriesForUser(user.uid)
-        return fsLocker.isEmpty()
+        return dao.isLockerEntriesEmptyForUser(user.uid)
     }
 
     suspend fun addApp(id: String, sourceUrl: String): Boolean {
@@ -169,8 +210,13 @@ class FirestoreLocker(
             appstoreId = lockerEntry.id,
             appstoreSource = sourceUrl
         )
-        dao.addLockerEntryForUser(user.uid, firestoreEntry)
-        return true
+        return try {
+            dao.addLockerEntryForUser(user.uid, firestoreEntry)
+            true
+        } catch (e: FirestoreDaoException) {
+            logger.e(e) { "Error adding locker entry to Firestore for user ${user.uid}, appstoreId=$id: ${e.message}" }
+            false
+        }
     }
 
     suspend fun removeApp(uuid: Uuid): Boolean {
@@ -178,8 +224,30 @@ class FirestoreLocker(
             logger.e { "No authenticated user" }
             return false
         }
-        dao.removeLockerEntryForUser(user.uid, uuid)
-        return true
+        return try {
+            dao.removeLockerEntryForUser(user.uid, uuid)
+            true
+        } catch (e: FirestoreDaoException) {
+            logger.e(e) { "Error removing locker entry from Firestore for user ${user.uid}, uuid=$uuid: ${e.message}" }
+            false
+        }
+    }
+}
+
+sealed class FirestoreDaoException(override val cause: Throwable? = null, private val code: FirestoreExceptionCode?) : Exception() {
+    class NetworkException(cause: Throwable? = null, code: FirestoreExceptionCode?) : FirestoreDaoException(cause, code)
+    class UnknownException(cause: Throwable? = null, code: FirestoreExceptionCode?) : FirestoreDaoException(cause, code)
+
+    override val message: String?
+        get() = "FirestoreDaoException with code: ${code?.name}"
+
+    companion object {
+        fun fromFirebaseException(e: FirebaseFirestoreException): FirestoreDaoException {
+            return when (e.code) {
+                FirestoreExceptionCode.UNAVAILABLE, FirestoreExceptionCode.DEADLINE_EXCEEDED -> NetworkException(e, e.code)
+                else -> UnknownException(e, e.code)
+            }
+        }
     }
 }
 

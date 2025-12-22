@@ -20,6 +20,7 @@ import coredevices.analytics.AnalyticsBackend
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.iosDefaultModule
 import coredevices.coreapp.di.utilModule
+import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
@@ -67,7 +68,12 @@ object IOSDelegate : KoinComponent {
     fun handleOpenUrl(url: NSURL): Boolean {
         logger.d("IOSDelegate handleOpenUrl $url")
         val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
-        return GIDSignIn.sharedInstance.handleURL(url) || pebbleDeepLinkHandler.handle(url.toUri())
+        val coreDeepLinkHandler: CoreDeepLinkHandler = get()
+        val uri = url.toUri()
+        return GIDSignIn.sharedInstance.handleURL(url) ||
+                uri?.let {
+                    pebbleDeepLinkHandler.handle(uri) || coreDeepLinkHandler.handle(uri)
+                } ?: false
     }
 
     private fun initPebble() {

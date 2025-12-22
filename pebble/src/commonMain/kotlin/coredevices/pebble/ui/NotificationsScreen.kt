@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -150,10 +151,18 @@ fun NotificationAppCard(
         },
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(app.name, fontSize = 17.sp)
+                Text(text = app.name,
+                    fontSize = 17.sp,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 if (entry.count > 0) {
                     Badge(modifier = Modifier.padding(horizontal = 7.dp)) {
-                        Text("${entry.count}")
+                        Text(
+                            text = "${entry.count}",
+                            maxLines = 1,
+                        )
                     }
                 }
             }

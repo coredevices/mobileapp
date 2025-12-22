@@ -13,7 +13,6 @@ import coredevices.pebble.account.UsersMeResponse
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.services.PebbleHttpClient.Companion.delete
 import coredevices.pebble.services.PebbleHttpClient.Companion.get
-import coredevices.pebble.services.PebbleHttpClient.Companion.getWithWeatherAuth
 import coredevices.pebble.services.PebbleHttpClient.Companion.put
 import coredevices.pebble.weather.WeatherResponse
 import coredevices.util.CoreConfigFlow
@@ -316,8 +315,8 @@ class RealPebbleWebServices(
     }
 
     suspend fun getWeather(location: GeolocationPositionResult.Success): WeatherResponse? {
-        val url = "https://weather.rebble.io/api/v1/geocode/${location.latitude}/${location.longitude}/"
-        return httpClient.getWithWeatherAuth(url)
+        val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}/"
+        return httpClient.get(url, auth = false)
     }
 
     suspend fun searchUuidInSources(uuid: Uuid): List<Pair<String, AppstoreSource>> {
@@ -602,8 +601,8 @@ data class StoreLatestRelease(
     @SerialName("published_date")
     val publishedDate: String,
     @SerialName("release_notes")
-    val releaseNotes: String,
-    val version: String,
+    val releaseNotes: String?,
+    val version: String?,
 )
 
 @Serializable
@@ -613,7 +612,7 @@ data class StoreChangelogEntry(
     @SerialName("release_notes")
     val releaseNotes: String?,
     @SerialName("version")
-    val version: String,
+    val version: String?,
 )
 
 //@Serializable

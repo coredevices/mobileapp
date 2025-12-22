@@ -22,7 +22,7 @@ import androidx.compose.ui.window.DialogProperties
 import co.touchlab.kermit.Logger
 import com.cactus.CactusLM
 import com.cactus.CactusSTT
-import com.cactus.TranscriptionProvider
+import com.cactus.CactusInitParams
 import coredevices.util.deleteRecursive
 import coredevices.util.getModelDirectories
 import kotlinx.coroutines.Dispatchers
@@ -41,8 +41,7 @@ sealed interface ModelType {
 @Composable
 fun ModelDownloadDialog(
     onDismissRequest: (success: Boolean) -> Unit,
-    models: Set<ModelType>,
-    sttProvider: TranscriptionProvider = TranscriptionProvider.WHISPER,
+    models: Set<ModelType>
 ) {
     val scope = rememberCoroutineScope()
     var job by remember { mutableStateOf<Job?>(null) }
@@ -60,20 +59,28 @@ fun ModelDownloadDialog(
                     val modelName = model.modelName
                     when (model) {
                         is ModelType.STT -> {
-                            val stt = CactusSTT(sttProvider)
-                            if (!stt.isModelDownloaded(modelName)) {
-                                if (!stt.download(modelName) || !stt.init(modelName)) {
+                            val stt = CactusSTT()
+                            try {
+                                // Download the model (throws exception on failure)
+                                stt.downloadModel(modelName)
+
+                                // Initialize the model (throws exception on failure)
+                                stt.initializeModel(CactusInitParams(model = modelName))
+                            } catch (e: Exception) {
+                                // Retry after wiping model directories
+                                Logger.e("ModelDownloadDialog", e) { "Error downloading STT model, retrying after wiping models" }
+                                try {
                                     withContext(Dispatchers.IO) {
                                         getModelDirectories().forEach {
                                             deleteRecursive(Path(it))
                                         }
                                     }
-                                    Logger.e("ModelDownloadDialog") { "Error downloading STT model, retrying after wiping models" }
-                                    if (!stt.download(modelName) || !stt.init(modelName)) {
-                                        Logger.e("ModelDownloadDialog") { "Error downloading STT model" }
-                                        onDismissRequest(false)
-                                        return@launch
-                                    }
+                                    stt.downloadModel(modelName)
+                                    stt.initializeModel(CactusInitParams(model = modelName))
+                                } catch (e: Exception) {
+                                    Logger.e("ModelDownloadDialog", e) { "Error downloading STT model after retry" }
+                                    onDismissRequest(false)
+                                    return@launch
                                 }
                             }
                         }

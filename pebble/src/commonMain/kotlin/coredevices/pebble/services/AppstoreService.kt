@@ -65,7 +65,7 @@ class AppstoreService(
 
     suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, useCache: Boolean = true): StoreAppResponse? {
         val cacheDir = getTempFilePath(appContext, "locker_cache")
-        SystemFileSystem.createDirectories(cacheDir)
+        SystemFileSystem.createDirectories(cacheDir, false)
 
         val parameters = buildMap {
             put("platform", platform.storeString())
@@ -165,7 +165,7 @@ class AppstoreService(
 
     private fun cacheCategories(categories: List<StoreCategory>, type: AppType) {
         val cacheDir = getTempFilePath(appContext, "category_cache")
-        SystemFileSystem.createDirectories(cacheDir)
+        SystemFileSystem.createDirectories(cacheDir, false)
         val hash = calculateCategoryCacheKey(type)
         val cacheFile = Path(cacheDir, "$hash.json")
         try {
@@ -179,7 +179,7 @@ class AppstoreService(
 
     suspend fun fetchCategories(type: AppType): List<StoreCategory> {
         val cacheDir = getTempFilePath(appContext, "category_cache")
-        SystemFileSystem.createDirectories(cacheDir)
+        SystemFileSystem.createDirectories(cacheDir, false)
         val hash = calculateCategoryCacheKey(type)
         val cacheFile = Path(cacheDir, "$hash.json")
         try {

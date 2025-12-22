@@ -52,6 +52,6 @@ data class CoreConfig(
     val useNativeAppStore: Boolean = false,
     val ignoreOtherPebbleApps: Boolean = false,
     val disableCompanionDeviceManager: Boolean = false,
-    val weatherPins: Boolean = false,
+    val weatherPinsV2: Boolean = true,
     val disableFirmwareUpdateNotifications: Boolean = false,
 )

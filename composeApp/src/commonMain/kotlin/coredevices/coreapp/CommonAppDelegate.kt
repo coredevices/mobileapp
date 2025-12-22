@@ -2,8 +2,7 @@ package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
 import com.cactus.CactusSTT
-import com.cactus.TranscriptionProvider
-import com.cactus.services.CactusTelemetry
+import com.cactus.services.CactusConfig
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
@@ -18,6 +17,7 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
@@ -57,7 +57,7 @@ class CommonAppDelegate(
         GlobalScope.launch {
             try {
                 if (!settings.hasKey("cactus_stt_model")) {
-                    val model = CactusSTT().getVoiceModels(TranscriptionProvider.WHISPER)
+                    val model = CactusSTT().getVoiceModels()
                         .firstOrNull { it.isDownloaded }
                     model?.let {
                         settings.putString("cactus_stt_model", it.slug)
@@ -85,7 +85,8 @@ class CommonAppDelegate(
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)
         }
-        CactusTelemetry.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
+        CactusConfig.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
+        CommonBuildKonfig.CACTUS_PRO_KEY?.let { CactusConfig.setProKey(it) }
         migrateCactusModelSetting()
         pushMessaging.init()
         bugReports.init()

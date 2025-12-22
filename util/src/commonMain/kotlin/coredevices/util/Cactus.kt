@@ -15,3 +15,4 @@ enum class CactusSTTMode(val cactusValue: TranscriptionMode, val id: Int) {
         }
     }
 }
+expect fun calculateDefaultSTTModel(): String

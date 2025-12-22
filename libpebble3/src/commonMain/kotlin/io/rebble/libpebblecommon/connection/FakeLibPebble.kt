@@ -175,7 +175,7 @@ class FakeLibPebble : LibPebble {
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
     override fun notificationApps(): Flow<List<AppWithCount>> =
-        _notificationApps.map { it.map { AppWithCount(it, 0) } }
+        _notificationApps.map { it.map { AppWithCount(it, 44) } }
 
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
         MutableStateFlow(emptyList())

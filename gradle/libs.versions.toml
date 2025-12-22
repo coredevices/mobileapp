@@ -19,6 +19,7 @@ kotlinx-datetime = "0.7.1"
 koin = "4.1.1"
 atomicfu = "0.29.0"
 compose-multiplatform = "1.9.3"
+pebblekit = "510b3ead6e"
 settings = "1.3.0"
 kable = "0.40.0"
 kmpio = "0.2.3"
@@ -49,8 +50,9 @@ coil = "3.3.0"
 uri = "0.0.21"
 algolia = "3.36.0"
 coredevices-speex = "1946c84"
-cactus = "1.0.2-beta"
+cactus = "1.3.0-beta"
 paging = "3.4.0-alpha04"
+reorderable = "3.0.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -103,6 +105,7 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }
 koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
+pebblekit = { module = "com.github.pebble-dev:PebbleKitAndroid2", version.ref = "pebblekit" }
 settings = { group = "com.russhwolf", name = "multiplatform-settings-no-arg", version.ref = "settings" }
 settings-serialization = { group = "com.russhwolf", name = "multiplatform-settings-serialization", version.ref = "settings" }
 kable = { group = "com.juul.kable", name = "kable-core", version.ref = "kable" }
@@ -137,3 +140,4 @@ coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 uri = { group = "com.eygraber", name = "uri-kmp", version.ref = "uri" }
 algolia = { module = "com.algolia:algoliasearch-client-kotlin", version.ref = "algolia" }
 coredevices-speex = { group = "io.github.coredevices.speex", name = "speex", version.ref = "coredevices-speex" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }

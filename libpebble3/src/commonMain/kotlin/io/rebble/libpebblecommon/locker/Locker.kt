@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.locker
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
@@ -65,11 +67,13 @@ class Locker(
     private val timeProvider: TimeProvider,
     private val errorTracker: ErrorTracker,
     private val coroutineScope: LibPebbleCoroutineScope,
+    private val settings: Settings,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
+        private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position"
     }
 
     override suspend fun sideloadApp(pbwPath: Path): Boolean =
@@ -252,8 +256,10 @@ class Locker(
             val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
                 .first()
                 .map { it.properties.id }
+            val needToInsertAllSystemApps = !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
+            settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
 
-            val systemAppsToInsert = SystemApps.entries.filter { !lockerApps.contains(it.uuid) }
+            val systemAppsToInsert = SystemApps.entries.filter { needToInsertAllSystemApps || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->
                     LockerEntry(
                         id = systemApp.uuid,
@@ -269,12 +275,11 @@ class Locker(
                                 sdkVersion = "",
                                 processInfoFlags = 0,
                                 name = it.codename,
-                                pbwIconResourceId = 0
-
+                                pbwIconResourceId = 0,
                             )
-
                         },
-                        systemApp = true
+                        systemApp = true,
+                        orderIndex = systemApp.defaultOrder,
                     )
                 }
 
@@ -446,12 +451,12 @@ abstract class LockerPBWCache(context: AppContext) {
     private val pkjsCacheDir = Path(getLockerPBWCacheDirectory(context), "pkjs")
 
     protected fun pathForApp(appId: Uuid, version: String): Path {
-        SystemFileSystem.createDirectories(cacheDir)
+        SystemFileSystem.createDirectories(cacheDir, false)
         return Path(cacheDir, "${appId}_${version}.pbw")
     }
 
     protected fun pkjsPathForApp(appId: Uuid): Path {
-        SystemFileSystem.createDirectories(pkjsCacheDir)
+        SystemFileSystem.createDirectories(pkjsCacheDir, false)
         return Path(pkjsCacheDir, "$appId.js")
     }
 

@@ -300,6 +300,7 @@ fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?) {
                                     stringResource(route.title),
                                     fontSize = 9.sp,
                                     color = if (viewModel.selectedTab.value == route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
