@@ -202,12 +202,22 @@ class HealthService(
 
         val daysOfData = maxOf(averages.stepDaysWithData, averages.sleepDaysWithData)
 
+        // Calculate last night's sleep (sleep sessions from ~6pm yesterday to ~2pm today)
+        val yesterday = today.minus(kotlinx.datetime.DatePeriod(days = 1))
+        val sleepWindowStart = yesterday.startOfDayEpochSeconds(timeZone) + (18 * 3600) // 6pm yesterday
+        val sleepWindowEnd = todayStart + (14 * 3600) // 2pm today
+
+        val lastNightSleepMinutes = (healthDao.getTotalSleepMinutes(sleepWindowStart, sleepWindowEnd) ?: 0L) +
+                                    (healthDao.getDeepSleepMinutes(sleepWindowStart, sleepWindowEnd) ?: 0L)
+        val lastNightSleepHours = if (lastNightSleepMinutes > 0) lastNightSleepMinutes / 60f else null
+
         return HealthDebugStats(
             totalSteps30Days = averages.totalSteps,
             averageStepsPerDay = averages.averageStepsPerDay,
             totalSleepSeconds30Days = averages.totalSleepSeconds,
             averageSleepSecondsPerDay = averages.averageSleepSecondsPerDay,
             todaySteps = todaySteps,
+            lastNightSleepHours = lastNightSleepHours,
             latestDataTimestamp = latestTimestamp,
             daysOfData = daysOfData
         )
@@ -603,6 +613,7 @@ data class HealthDebugStats(
     val totalSleepSeconds30Days: Long,
     val averageSleepSecondsPerDay: Int,
     val todaySteps: Long,
+    val lastNightSleepHours: Float?,
     val latestDataTimestamp: Long?,
     val daysOfData: Int
 )

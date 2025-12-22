@@ -298,6 +298,7 @@ class FakeLibPebble : LibPebble {
             totalSleepSeconds30Days = 0L,
             averageSleepSecondsPerDay = 0,
             todaySteps = 0L,
+            lastNightSleepHours = null,
             latestDataTimestamp = null,
             daysOfData = 0
         )

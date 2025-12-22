@@ -171,12 +171,22 @@ class Health(
 
         val daysOfData = maxOf(averages.stepDaysWithData, averages.sleepDaysWithData)
 
+        // Calculate last night's sleep (sleep sessions from ~6pm yesterday to ~2pm today)
+        val yesterday = today.minus(DatePeriod(days = 1))
+        val sleepWindowStart = yesterday.atStartOfDayIn(timeZone).epochSeconds + (18 * 3600) // 6pm yesterday
+        val sleepWindowEnd = todayStart + (14 * 3600) // 2pm today
+
+        val lastNightSleepMinutes = (healthDao.getTotalSleepMinutes(sleepWindowStart, sleepWindowEnd) ?: 0L) +
+                                    (healthDao.getDeepSleepMinutes(sleepWindowStart, sleepWindowEnd) ?: 0L)
+        val lastNightSleepHours = if (lastNightSleepMinutes > 0) lastNightSleepMinutes / 60f else null
+
         return HealthDebugStats(
             totalSteps30Days = averages.totalSteps,
             averageStepsPerDay = averages.averageStepsPerDay,
             totalSleepSeconds30Days = averages.totalSleepSeconds,
             averageSleepSecondsPerDay = averages.averageSleepSecondsPerDay,
             todaySteps = todaySteps,
+            lastNightSleepHours = lastNightSleepHours,
             latestDataTimestamp = latestTimestamp,
             daysOfData = daysOfData
         )
