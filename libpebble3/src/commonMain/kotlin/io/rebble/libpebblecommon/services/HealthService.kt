@@ -40,14 +40,17 @@ import kotlin.uuid.Uuid
  * - Sending health statistics back to the watch (averages, daily summaries)
  * - Managing sync lifecycle and preventing battery drain
  *
- * Battery optimization:
- * - Full stats sync only on connection or once per 12 hours
+ * Sync behavior:
+ * - Automatic sync on connection
+ * - No throttling when app is in foreground (immediate sync)
+ * - 30-minute throttle when app is in background (battery saving)
+ * - Full stats sync on connection or once per 12 hours
  * - Daily stats update runs every 24 hours
- * - Incremental "today" updates when receiving new data
+ * - Immediate "today" updates when receiving new data
  *
  * Conflict resolution:
  * - Steps: "highest step count wins" strategy
- * - Sleep: Phone database is source of truth, watch sleep data is ignored
+ * - Phone database is source of truth during reconciliation
  */
 class HealthService(
     private val protocolHandler: PebbleProtocolHandler,
@@ -59,12 +62,11 @@ class HealthService(
 ) : ProtocolService {
     private val healthSessions = mutableMapOf<UByte, HealthSession>()
     private val isAppOpen = MutableStateFlow(false)
-    private val isHealthScreenActive = MutableStateFlow(false) // Track if HealthScreen is currently open
     private val lastFullStatsUpdate = MutableStateFlow(0L) // Epoch millis of last full stats push
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null) // Date of last today movement update
     private val lastTodayUpdateTime = MutableStateFlow(0L) // Epoch millis of last today update
     private val lastDataReceptionTime = MutableStateFlow(0L) // Epoch millis of last data reception from watch
-    private val acceptSleepData = MutableStateFlow(true) // When false, drops incoming sleep data (used during reconciliation)
+    private val acceptHealthData = MutableStateFlow(true) // When false, drops all incoming health data (used during reconciliation)
 
     companion object {
         private val logger = Logger.withTag("HealthService")
@@ -78,10 +80,10 @@ class HealthService(
         private const val TWENTY_FOUR_HOURS_MS = 24 * 60 * 60_000L
         private const val HEALTH_STATS_AVERAGE_DAYS = 30
         private const val HEALTH_SYNC_WAIT_MS = 8_000L
-        private const val HEALTH_SYNC_POLL_MS = 1000L // Reduced from 500ms to save battery
+        private const val HEALTH_SYNC_POLL_MS = 1000L
         private const val RECONCILE_DELAY_MS = 1000L
         private const val FULL_STATS_THROTTLE_HOURS = 12L
-        private const val TODAY_UPDATE_THROTTLE_MS = 30 * 60_000L // 30 minutes minimum between today updates
+        private const val BACKGROUND_THROTTLE_MS = 30 * 60_000L // 30 minutes throttle when app is in background
         private const val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
     }
 
@@ -131,19 +133,6 @@ class HealthService(
         }
     }
 
-    /**
-     * Called when HealthScreen becomes active (user opens the health tab).
-     * Enables real-time data reception from watch.
-     */
-    fun setHealthScreenActive(active: Boolean) {
-        if (!isActiveConnection("health screen state change")) return
-        isHealthScreenActive.value = active
-        if (active) {
-            logger.i { "HEALTH_SERVICE: HealthScreen opened - enabling real-time updates" }
-        } else {
-            logger.i { "HEALTH_SERVICE: HealthScreen closed - throttling to background mode (30min)" }
-        }
-    }
 
     /**
      * Force a complete health data overwrite on the watch, ignoring the 12-hour throttle.
@@ -244,22 +233,22 @@ class HealthService(
         }
 
         try {
-            // Temporarily reject sleep data during reconciliation to prevent stale data from idle watches
-            acceptSleepData.value = false
-            logger.i { "HEALTH_SYNC: Blocking sleep data during reconciliation - phone DB is source of truth" }
+            // Temporarily reject all health data during reconciliation to prevent stale data from idle watches
+            acceptHealthData.value = false
+            logger.i { "HEALTH_SYNC: Blocking all health data during reconciliation - phone DB is source of truth" }
 
-            // Request steps/activity data from the watch (sleep data will be filtered)
+            // Request health data from the watch (will be filtered during reconciliation)
             sendHealthDataRequest(fullSync = false)
             val newDataArrived = waitForNewerHealthData(baselineTimestamp)
 
             if (newDataArrived) {
-                logger.i { "HEALTH_SYNC: Newer steps/activity data pulled from watch and merged with database" }
+                logger.i { "HEALTH_SYNC: Reconciliation complete - data pulled from watch" }
                 // Wait to ensure all async database writes complete before we read back for stats
                 delay(RECONCILE_DELAY_MS)
             }
         } finally {
-            // Re-enable sleep data acceptance after reconciliation
-            acceptSleepData.value = true
+            // Re-enable health data acceptance after reconciliation
+            acceptHealthData.value = true
         }
 
         // Push full stats to watch on connection (assume watch may have switched or been reset)
@@ -406,14 +395,14 @@ class HealthService(
         val sessionId = packet.sessionId.get()
         val session = healthSessions[sessionId] ?: return
 
-        // Throttle data reception if HealthScreen is not active
+        // Throttle data reception if app is in background
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         val timeSinceLastReception = now - lastDataReceptionTime.value
-        val healthScreenActive = isHealthScreenActive.value
+        val appInForeground = isAppOpen.value
 
-        if (!healthScreenActive && timeSinceLastReception < TODAY_UPDATE_THROTTLE_MS) {
+        if (!appInForeground && timeSinceLastReception < BACKGROUND_THROTTLE_MS) {
             logger.d {
-                "HEALTH_DATA: Throttling data reception - HealthScreen inactive and last reception was ${timeSinceLastReception / 60_000}min ago (need ${TODAY_UPDATE_THROTTLE_MS / 60_000}min)"
+                "HEALTH_DATA: Throttling data reception - app in background and last reception was ${timeSinceLastReception / 60_000}min ago (need ${BACKGROUND_THROTTLE_MS / 60_000}min)"
             }
             return
         }
@@ -441,15 +430,13 @@ class HealthService(
             processHealthData(session, payload)
 
             // Update today's movement and recent sleep data when we finish receiving a batch
-            // Throttled to max once per 30 minutes to reduce battery drain
             if (itemsLeft.toInt() == 0) {
                 val timeZone = TimeZone.currentSystemDefault()
                 val today = kotlin.time.Clock.System.now().toLocalDateTime(timeZone).date
                 val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
                 val timeSinceLastUpdate = now - lastTodayUpdateTime.value
 
-                val shouldUpdate = lastTodayUpdateDate.value != today ||
-                                   timeSinceLastUpdate >= TODAY_UPDATE_THROTTLE_MS
+                val shouldUpdate = lastTodayUpdateDate.value != today
 
                 if (shouldUpdate) {
                     logger.d { "HEALTH_DATA: Received new data, updating today's movement and recent sleep data (last update ${timeSinceLastUpdate / 60_000}min ago)" }
@@ -458,7 +445,7 @@ class HealthService(
                     lastTodayUpdateDate.value = today
                     lastTodayUpdateTime.value = now
                 } else {
-                    logger.d { "HEALTH_DATA: Skipping today update - throttled (last update ${timeSinceLastUpdate / 60_000}min ago, need ${TODAY_UPDATE_THROTTLE_MS / 60_000}min)" }
+                    logger.d { "HEALTH_DATA: Skipping today update - already updated today" }
                 }
             }
         }
@@ -521,6 +508,12 @@ class HealthService(
         val records = parseStepsData(payload, itemSize)
         if (records.isEmpty()) return
 
+        // Drop all data if we're blocking during reconciliation
+        if (!acceptHealthData.value) {
+            logger.i { "HEALTH_DATA: Dropped ${records.size} step records during reconciliation" }
+            return
+        }
+
         val totalSteps = records.sumOf { it.steps }
         val totalActiveKcal = records.sumOf { it.activeGramCalories } / 1000
         val totalRestingKcal = records.sumOf { it.restingGramCalories } / 1000
@@ -546,31 +539,20 @@ class HealthService(
         val allRecords = parseOverlayData(payload, itemSize)
         if (allRecords.isEmpty()) return
 
-        // Filter out sleep records if we're blocking sleep data (during reconciliation)
-        val records = if (acceptSleepData.value) {
-            allRecords
-        } else {
-            allRecords.filter { record ->
-                val overlayType = io.rebble.libpebblecommon.health.OverlayType.fromValue(record.type)
-                overlayType != null && !isSleepType(overlayType)
-            }.also {
-                val droppedCount = allRecords.size - it.size
-                if (droppedCount > 0) {
-                    logger.i { "HEALTH_DATA: Dropped $droppedCount sleep records during reconciliation (phone DB is source of truth)" }
-                }
-            }
+        // Drop all data if we're blocking during reconciliation
+        if (!acceptHealthData.value) {
+            logger.i { "HEALTH_DATA: Dropped ${allRecords.size} overlay records during reconciliation" }
+            return
         }
 
-        if (records.isEmpty()) return
-
-        val sleepRecords = records.filter { type ->
+        val sleepRecords = allRecords.filter { type ->
             val overlayType = io.rebble.libpebblecommon.health.OverlayType.fromValue(type.type)
             overlayType != null && isSleepType(overlayType)
         }
         val totalSleepMinutes = sleepRecords.sumOf { (it.duration / 60).toInt() }
         val totalSleepHours = totalSleepMinutes / 60.0
 
-        val activityRecords = records.filter { type ->
+        val activityRecords = allRecords.filter { type ->
             val overlayType = io.rebble.libpebblecommon.health.OverlayType.fromValue(type.type)
             overlayType == io.rebble.libpebblecommon.health.OverlayType.Walk || overlayType == io.rebble.libpebblecommon.health.OverlayType.Run
         }
@@ -580,10 +562,10 @@ class HealthService(
         logger.i {
             val sleepHrs = (totalSleepHours * 10).toInt() / 10.0
             val distKm = (activityDistanceKm * 100).toInt() / 100.0
-            "HEALTH_DATA: Received ${records.size} overlay records - sleep=${sleepRecords.size} (${sleepHrs}h), activities=${activityRecords.size} (steps=$activitySteps, distance=${distKm}km)"
+            "HEALTH_DATA: Received ${allRecords.size} overlay records - sleep=${sleepRecords.size} (${sleepHrs}h), activities=${activityRecords.size} (steps=$activitySteps, distance=${distKm}km)"
         }
-        healthDao.insertOverlayDataWithDeduplication(records)
-        logger.d { "HEALTH_DATA: Processed ${records.size} overlay records (see deduplication summary above)" }
+        healthDao.insertOverlayDataWithDeduplication(allRecords)
+        logger.d { "HEALTH_DATA: Processed ${allRecords.size} overlay records (see deduplication summary above)" }
     }
 
     private fun isSleepType(type: io.rebble.libpebblecommon.health.OverlayType): Boolean =

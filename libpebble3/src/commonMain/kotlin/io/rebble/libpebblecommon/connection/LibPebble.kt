@@ -120,7 +120,6 @@ interface HealthApi {
     fun sendHealthAveragesToWatch()
     fun forceHealthDataOverwrite()
     fun forceSyncLast24Hours()
-    fun setHealthScreenActive(active: Boolean)
 }
 
 interface Timeline {

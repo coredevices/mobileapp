@@ -26,7 +26,6 @@ interface HealthServiceAccessor {
     fun sendHealthAveragesToWatch()
     fun forceHealthDataOverwrite()
     fun forceSyncLast24Hours()
-    fun setHealthScreenActive(active: Boolean)
 }
 
 /**
@@ -97,21 +96,6 @@ class RealHealthServiceAccessor(
             logger.i { "Forced 24-hour health data sync from watch" }
         } catch (e: Exception) {
             logger.e(e) { "Failed to force 24h sync" }
-        }
-    }
-
-    override fun setHealthScreenActive(active: Boolean) {
-        val service = registry.getActiveHealthService()
-        if (service == null) {
-            logger.d { "No active watch to set health screen state for" }
-            return
-        }
-
-        try {
-            service.setHealthScreenActive(active)
-            logger.i { "HealthScreen state changed: active=$active" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to set health screen state" }
         }
     }
 }
@@ -219,12 +203,6 @@ class Health(
     override fun forceSyncLast24Hours() {
         libPebbleCoroutineScope.launch {
             healthServiceAccessor.forceSyncLast24Hours()
-        }
-    }
-
-    override fun setHealthScreenActive(active: Boolean) {
-        libPebbleCoroutineScope.launch {
-            healthServiceAccessor.setHealthScreenActive(active)
         }
     }
 }
