@@ -115,7 +115,6 @@ class BasicNotificationProcessor(
         sbn: StatusBarNotification,
         channel: ChannelItem?,
     ): List<UInt>? {
-        logger.w { "vibration pattern info: ${sbn.getNotification().extras.getString("extraautonotificationinfo", "")}" }
         // TODO we're only picking the pattern from the first contact. I don't know if the first
         //  contact is always the one that sent the message, in a group chat?
         val vibePatternForContact = findVibePattern(contactEntries.firstOrNull()?.vibePatternName)
