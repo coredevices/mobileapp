@@ -73,3 +73,17 @@ class RawOverlayRecord : StructMappable() {
     val activeKiloCalories = SUShort(m, endianness = Endian.Little)
     val distanceCm = SUShort(m, endianness = Endian.Little)
 }
+
+/**
+ * Debug statistics for health data, used for diagnostics and testing.
+ */
+data class HealthDebugStats(
+    val totalSteps30Days: Long,
+    val averageStepsPerDay: Int,
+    val totalSleepSeconds30Days: Long,
+    val averageSleepSecondsPerDay: Int,
+    val todaySteps: Long,
+    val lastNightSleepHours: Float?,
+    val latestDataTimestamp: Long?,
+    val daysOfData: Int
+)

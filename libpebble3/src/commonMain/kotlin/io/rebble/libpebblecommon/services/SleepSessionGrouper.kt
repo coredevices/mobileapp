@@ -19,7 +19,9 @@ internal data class SleepSession(
 /**
  * Groups consecutive sleep entries into sessions.
  * Sleep and DeepSleep entries that are close together (within 1 hour) are part of the same session.
- * Only counts Sleep entries toward total sleep duration, DeepSleep only contributes to deep sleep counter.
+ *
+ * Only Sleep type entries count toward total sleep duration.
+ * DeepSleep is tracked separately as it's a subset of the total sleep (portion of sleep that was deep).
  */
 internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
     val sessions = mutableListOf<SleepSession>()
@@ -36,11 +38,11 @@ internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<Sle
         if (existingSession != null) {
             // Add to existing session
             existingSession.end = maxOf(existingSession.end, entryEnd)
-            // Only count Sleep entries toward total sleep duration
+            // Only Sleep entries count toward total duration
             if (overlayType == OverlayType.Sleep) {
                 existingSession.totalSleep += entry.duration
             }
-            // DeepSleep entries only contribute to deep sleep counter
+            // DeepSleep is tracked separately (it's a subset of total sleep)
             if (overlayType == OverlayType.DeepSleep) {
                 existingSession.deepSleep += entry.duration
             }
@@ -76,7 +78,26 @@ internal suspend fun fetchAndGroupDailySleep(
 
     val sleepEntries = healthDao.getOverlayEntries(searchStart, searchEnd, HealthConstants.SLEEP_TYPES)
 
+    val logger = co.touchlab.kermit.Logger.withTag("SleepSessionGrouper")
+    logger.d {
+        val entries = sleepEntries.map { entry ->
+            val type = OverlayType.fromValue(entry.type)?.name ?: "Unknown"
+            val durationHrs = entry.duration / 3600.0
+            "  $type: start=${entry.startTime}, duration=${String.format("%.1f", durationHrs)}h"
+        }.joinToString("\n")
+        "Found ${sleepEntries.size} sleep entries in window [${searchStart}-${searchEnd}]:\n$entries"
+    }
+
     val sessions = groupSleepSessions(sleepEntries)
+
+    logger.d {
+        val sessionsInfo = sessions.mapIndexed { idx, session ->
+            val totalHrs = session.totalSleep / 3600.0
+            val deepHrs = session.deepSleep / 3600.0
+            "  Session $idx: total=${String.format("%.1f", totalHrs)}h, deep=${String.format("%.1f", deepHrs)}h, start=${session.start}, end=${session.end}"
+        }.joinToString("\n")
+        "Grouped into ${sessions.size} sessions:\n$sessionsInfo"
+    }
 
     // Find the longest sleep session (main sleep, not naps)
     return sessions.maxByOrNull { it.totalSleep }

@@ -1,4 +1,4 @@
-package io.rebble.libpebblecommon.services
+package io.rebble.libpebblecommon.health.parsers
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -7,12 +7,23 @@ import io.rebble.libpebblecommon.health.OverlayType
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
-private val logger = Logger.withTag("HealthPayloadParser")
+private val logger = Logger.withTag("HealthDataParser")
 
 /**
- * Parses step/movement data from the watch's health payload
+ * Parses step/movement data from the watch's health payload.
+ *
+ * Supports multiple firmware versions:
+ * - Firmware 3.10 and below (version 5)
+ * - Firmware 3.11 (version 6) - adds calorie and distance data
+ * - Firmware 4.0 (version 7) - adds heart rate data
+ * - Firmware 4.1 (version 8) - adds heart rate weight
+ * - Firmware 4.3 (version 13) - adds heart rate zone
+ *
+ * @param payload Raw byte array from the watch
+ * @param itemSize Size of each data item in bytes
+ * @return List of parsed health data entities ready for database insertion
  */
-internal fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity> {
+fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity> {
     if (payload.isEmpty() || itemSize.toInt() == 0) {
         logger.w { "Cannot parse steps data: empty payload or zero item size" }
         return emptyList()
@@ -121,10 +132,15 @@ internal fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDa
 /**
  * Parses overlay data (sleep, activities) from the watch's health payload.
  *
- * All overlay data is accepted since only the active watch can send data
- * (enforced by isActiveConnection() check in HealthService).
+ * Overlay types include:
+ * - Sleep and nap sessions (deep sleep, light sleep, naps)
+ * - Walk and run activities with step counts and distance
+ *
+ * @param payload Raw byte array from the watch
+ * @param itemSize Size of each data item in bytes
+ * @return List of parsed overlay data entities ready for database insertion
  */
-internal fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEntity> {
+fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEntity> {
     if (payload.isEmpty() || itemSize.toInt() == 0) {
         logger.w { "Cannot parse overlay data: empty payload or zero item size" }
         return emptyList()
@@ -179,8 +195,6 @@ internal fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<Overla
             distanceCm = buffer.getUShort().toInt()
         }
 
-        // Accept all overlay data (sleep, activities, etc.)
-        // Note: Only the active watch can send data due to isActiveConnection() check in HealthService
         records.add(
             OverlayDataEntity(
                 startTime = startTime.toLong(),
@@ -206,11 +220,7 @@ internal fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<Overla
     return records
 }
 
-
-
-private fun OverlayType.isSleep(): Boolean =
-    this == OverlayType.Sleep || this == OverlayType.DeepSleep || this == OverlayType.Nap || this == OverlayType.DeepNap
-
+// Firmware version constants for health data parsing
 private val VERSION_FW_3_10_AND_BELOW: UShort = 5u
 private val VERSION_FW_3_11: UShort = 6u
 private val VERSION_FW_4_0: UShort = 7u

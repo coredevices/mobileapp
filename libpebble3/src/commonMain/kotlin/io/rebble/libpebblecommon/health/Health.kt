@@ -7,7 +7,6 @@ import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
-import io.rebble.libpebblecommon.services.HealthDebugStats
 import io.rebble.libpebblecommon.services.calculateHealthAverages
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import kotlinx.coroutines.flow.Flow
@@ -186,8 +185,8 @@ class Health(
 
         val daysOfData = maxOf(averages.stepDaysWithData, averages.sleepDaysWithData)
 
-        val lastNightSleepSeconds =
-                fetchAndGroupDailySleep(healthDao, todayStart, timeZone)?.totalSleep ?: 0L
+        val lastNightSession = fetchAndGroupDailySleep(healthDao, todayStart, timeZone)
+        val lastNightSleepSeconds = lastNightSession?.totalSleep ?: 0L
         val lastNightSleepHours =
                 if (lastNightSleepSeconds > 0) lastNightSleepSeconds / 3600f else null
 

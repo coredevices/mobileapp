@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -290,8 +291,8 @@ class FakeLibPebble : LibPebble {
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
 
     override suspend fun getHealthDebugStats():
-            io.rebble.libpebblecommon.services.HealthDebugStats {
-        return io.rebble.libpebblecommon.services.HealthDebugStats(
+            HealthDebugStats {
+        return HealthDebugStats(
                 totalSteps30Days = 0L,
                 averageStepsPerDay = 0,
                 totalSleepSeconds30Days = 0L,

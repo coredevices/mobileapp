@@ -8,7 +8,10 @@ import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.dao.insertOverlayDataWithDeduplication
 import io.rebble.libpebblecommon.database.dao.removeDuplicateOverlayEntries
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.isSleepType
+import io.rebble.libpebblecommon.health.parsers.parseOverlayData
+import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.packets.DataLoggingIncomingPacket
 import io.rebble.libpebblecommon.packets.HealthSyncIncomingPacket
 import io.rebble.libpebblecommon.packets.HealthSyncOutgoingPacket
@@ -609,14 +612,3 @@ class HealthService(
 
     private data class HealthSession(val tag: UInt, val appUuid: Uuid, val itemSize: UShort)
 }
-
-data class HealthDebugStats(
-        val totalSteps30Days: Long,
-        val averageStepsPerDay: Int,
-        val totalSleepSeconds30Days: Long,
-        val averageSleepSecondsPerDay: Int,
-        val todaySteps: Long,
-        val lastNightSleepHours: Float?,
-        val latestDataTimestamp: Long?,
-        val daysOfData: Int
-)

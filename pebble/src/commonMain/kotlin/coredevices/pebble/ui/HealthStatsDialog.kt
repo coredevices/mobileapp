@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coredevices.ui.M3Dialog
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.services.HealthDebugStats
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import kotlinx.coroutines.launch
 
 @Composable
@@ -45,6 +45,12 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
         scope.launch {
             try {
                 isRefreshing = true
+
+                // Clean duplicates first
+                Logger.i("HealthStatsDialog") { "Cleaning duplicate sleep entries..." }
+                libPebble.forceHealthDataOverwrite()
+                kotlinx.coroutines.delay(500) // Give it time to complete
+
                 // Pull latest data from watch
                 libPebble.requestHealthData(fullSync = false)
 
@@ -103,7 +109,9 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
                     }
                 }
             },
-            buttons = { TextButton(onClick = onDismissRequest) { Text("Close") } },
+            buttons = {
+                TextButton(onClick = onDismissRequest) { Text("Close") }
+            },
     ) {
         Box(Modifier.heightIn(max = 400.dp)) {
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
