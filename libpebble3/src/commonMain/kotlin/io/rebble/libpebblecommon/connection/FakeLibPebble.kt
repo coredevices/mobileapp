@@ -47,10 +47,6 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
-import kotlin.random.Random
-import kotlin.time.Duration
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +57,10 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.io.files.Path
+import kotlin.random.Random
+import kotlin.time.Duration
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 class FakeLibPebble : LibPebble {
     override fun init() {
@@ -81,8 +81,8 @@ class FakeLibPebble : LibPebble {
     }
 
     override suspend fun sendNotification(
-            notification: TimelineNotification,
-            actionHandlers: Map<UByte, CustomTimelineActionHandler>?
+        notification: TimelineNotification,
+        actionHandlers: Map<UByte, CustomTimelineActionHandler>?
     ) {
         // No-op
     }
@@ -107,11 +107,12 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override fun checkForFirmwareUpdates() {}
+    override fun checkForFirmwareUpdates() {
+    }
 
     // Scanning interface
     override val bluetoothEnabled: StateFlow<BluetoothState> =
-            MutableStateFlow(BluetoothState.Enabled)
+        MutableStateFlow(BluetoothState.Enabled)
 
     override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(false)
 
@@ -149,9 +150,9 @@ class FakeLibPebble : LibPebble {
     val locker = MutableStateFlow(fakeLockerEntries)
 
     override fun getLocker(
-            type: AppType,
-            searchQuery: String?,
-            limit: Int
+        type: AppType,
+        searchQuery: String?,
+        limit: Int
     ): Flow<List<LockerWrapper>> {
         return locker
     }
@@ -160,12 +161,13 @@ class FakeLibPebble : LibPebble {
         return flow { emit(fakeLockerEntries.first()) }
     }
 
-    override suspend fun setAppOrder(id: Uuid, order: Int) {}
+    override suspend fun setAppOrder(id: Uuid, order: Int) {
+    }
 
     override suspend fun waitUntilAppSyncedToWatch(
-            id: Uuid,
-            identifier: PebbleIdentifier,
-            timeout: Duration,
+        id: Uuid,
+        identifier: PebbleIdentifier,
+        timeout: Duration,
     ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
@@ -173,17 +175,19 @@ class FakeLibPebble : LibPebble {
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
     override fun notificationApps(): Flow<List<AppWithCount>> =
-            _notificationApps.map { it.map { AppWithCount(it, 44) } }
+        _notificationApps.map { it.map { AppWithCount(it, 44) } }
 
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
-            MutableStateFlow(emptyList())
+        MutableStateFlow(emptyList())
 
     override fun mostRecentNotificationsFor(
-            pkg: String?,
-            channelId: String?,
-            contactId: String?,
-            limit: Int
-    ): Flow<List<NotificationEntity>> = flow { emit(fakeNotifications) }
+        pkg: String?,
+        channelId: String?,
+        contactId: String?,
+        limit: Int
+    ): Flow<List<NotificationEntity>> = flow {
+        emit(fakeNotifications)
+    }
 
     private val fakeNotifications by lazy { fakeNotifications() }
 
@@ -197,14 +201,14 @@ class FakeLibPebble : LibPebble {
 
     private fun fakeNotification(): NotificationEntity {
         return NotificationEntity(
-                pkg = randomName(),
-                key = randomName(),
-                groupKey = randomName(),
-                channelId = randomName(),
-                timestamp = Instant.DISTANT_PAST.asMillisecond(),
-                title = randomName(),
-                body = randomName(),
-                decision = NotificationDecision.SendToWatch,
+            pkg = randomName(),
+            key = randomName(),
+            groupKey = randomName(),
+            channelId = randomName(),
+            timestamp = Instant.DISTANT_PAST.asMillisecond(),
+            title = randomName(),
+            body = randomName(),
+            decision = NotificationDecision.SendToWatch,
         )
     }
 
@@ -213,18 +217,18 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun updateNotificationAppState(
-            packageName: String,
-            vibePatternName: String?,
-            colorName: String?,
-            iconName: String?,
+        packageName: String,
+        vibePatternName: String?,
+        colorName: String?,
+        iconName: String?,
     ) {
         TODO("Not yet implemented")
     }
 
     override fun updateNotificationChannelMuteState(
-            packageName: String,
-            channelId: String,
-            muteState: MuteState
+        packageName: String,
+        channelId: String,
+        muteState: MuteState
     ) {
         // No-op
     }
@@ -251,19 +255,16 @@ class FakeLibPebble : LibPebble {
 
     // OtherPebbleApps interface
     override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =
-            MutableStateFlow(emptyList())
+        MutableStateFlow(emptyList())
 
     override suspend fun getAccountToken(appUuid: Uuid): String? {
         return ""
     }
 
     override val userFacingErrors: Flow<UserFacingError>
-        get() = flow {}
+        get() = flow { }
 
-    override fun getContactsWithCounts(
-            searchTerm: String,
-            onlyNotified: Boolean
-    ): PagingSource<Int, ContactWithCount> {
+    override fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount> {
         return TODO()
     }
 
@@ -272,35 +273,35 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun updateContactState(
-            contactId: String,
-            muteState: MuteState,
-            vibePatternName: String?,
-    ) {}
+        contactId: String,
+        muteState: MuteState,
+        vibePatternName: String?,
+    ) {
+    }
 
     override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
         return null
     }
 
     override val analyticsEvents: Flow<AnalyticsEvent>
-        get() = flow {}
+        get() = flow { }
     override val healthSettings: Flow<HealthSettings>
         get() = flow { emit(HealthSettings()) }
     override val healthUpdateFlow: Flow<Unit>
-        get() = flow {}
+        get() = flow { }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
 
-    override suspend fun getHealthDebugStats():
-            HealthDebugStats {
+    override suspend fun getHealthDebugStats(): HealthDebugStats {
         return HealthDebugStats(
-                totalSteps30Days = 0L,
-                averageStepsPerDay = 0,
-                totalSleepSeconds30Days = 0L,
-                averageSleepSecondsPerDay = 0,
-                todaySteps = 0L,
-                lastNightSleepHours = null,
-                latestDataTimestamp = null,
-                daysOfData = 0
+            totalSteps30Days = 0L,
+            averageStepsPerDay = 0,
+            totalSleepSeconds30Days = 0L,
+            averageSleepSecondsPerDay = 0,
+            todaySteps = 0L,
+            lastNightSleepHours = null,
+            latestDataTimestamp = null,
+            daysOfData = 0
         )
     }
 
@@ -335,11 +336,11 @@ class FakeLibPebble : LibPebble {
     override fun vibePatterns(): Flow<List<VibePattern>> {
         return flow {
             emit(
-                    listOf(
-                            VibePattern("Test", listOf(100, 200, 300), false),
-                            VibePattern("Test2", listOf(100, 200, 300), false),
-                            VibePattern("Test3", listOf(100, 200, 300), false),
-                    )
+                listOf(
+                    VibePattern("Test", listOf(100, 200, 300), false),
+                    VibePattern("Test2", listOf(100, 200, 300), false),
+                    VibePattern("Test3", listOf(100, 200, 300), false),
+                )
             )
         }
     }
@@ -364,62 +365,53 @@ fun fakeWatches(): List<PebbleDevice> {
 fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
     val name = "Core $num"
-    val fakeIdentifier =
-            if (PlatformUtils.IS_JVM) {
-                randomMacAddress().asPebbleBleIdentifier()
-            } else {
-                Uuid.random().toString().asPebbleBleIdentifier()
-            }
+    val fakeIdentifier = if (PlatformUtils.IS_JVM) {
+            randomMacAddress().asPebbleBleIdentifier()
+        } else {
+            Uuid.random().toString().asPebbleBleIdentifier()
+        }
     return if (connected) {
         val updating = Random.nextBoolean()
-        val fwupState =
-                if (updating) {
-                    val fakeUpdate =
-                            FirmwareUpdateCheckResult.FoundUpdate(
-                                    version =
-                                            FirmwareVersion.from(
-                                                    "v4.9.9-core1",
-                                                    isRecovery = false,
-                                                    gitHash = "",
-                                                    timestamp = Instant.DISTANT_PAST,
-                                                    isDualSlot = false,
-                                                    isSlot0 = false,
-                                            )!!,
-                                    url = "",
-                                    notes = "v4.9.9-core1 is great",
-                            )
-                    FirmwareUpdater.FirmwareUpdateStatus.InProgress(
-                            fakeUpdate,
-                            MutableStateFlow(0.47f)
-                    )
-                } else {
-                    FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
-                }
-        val fwupAvailable =
-                if (!updating && Random.nextBoolean()) {
-                    FirmwareUpdateCheckResult.FoundUpdate(
-                            version =
-                                    FirmwareVersion.from(
-                                            "v4.9.9-core2",
-                                            isRecovery = false,
-                                            gitHash = "",
-                                            timestamp = kotlin.time.Instant.DISTANT_PAST,
-                                            isDualSlot = false,
-                                            isSlot0 = false,
-                                    )!!,
-                            url = "http://something",
-                            notes = "update!!",
-                    )
-                } else {
-                    null
-                }
+        val fwupState = if (updating) {
+            val fakeUpdate = FirmwareUpdateCheckResult.FoundUpdate(
+                version = FirmwareVersion.from(
+                    "v4.9.9-core1",
+                    isRecovery = false,
+                    gitHash = "",
+                    timestamp = Instant.DISTANT_PAST,
+                    isDualSlot = false,
+                    isSlot0 = false,
+                )!!,
+                url = "",
+                notes = "v4.9.9-core1 is great",
+            )
+            FirmwareUpdater.FirmwareUpdateStatus.InProgress(fakeUpdate, MutableStateFlow(0.47f))
+        } else {
+            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
+        }
+        val fwupAvailable = if (!updating && Random.nextBoolean()) {
+            FirmwareUpdateCheckResult.FoundUpdate(
+                version = FirmwareVersion.from(
+                    "v4.9.9-core2",
+                    isRecovery = false,
+                    gitHash = "",
+                    timestamp = kotlin.time.Instant.DISTANT_PAST,
+                    isDualSlot = false,
+                    isSlot0 = false,
+                )!!,
+                url = "http://something",
+                notes = "update!!",
+            )
+        } else {
+            null
+        }
         FakeConnectedDevice(
-                identifier = fakeIdentifier,
-                firmwareUpdateAvailable = fwupAvailable,
-                firmwareUpdateState = fwupState,
-                name = name,
-                nickname = null,
-                connectionFailureInfo = null,
+            identifier = fakeIdentifier,
+            firmwareUpdateAvailable = fwupAvailable,
+            firmwareUpdateState = fwupState,
+            name = name,
+            nickname = null,
+            connectionFailureInfo = null,
         )
     } else {
         object : DiscoveredPebbleDevice {
@@ -428,35 +420,37 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
             override val nickname: String? = "Faker 1234"
             override val connectionFailureInfo: ConnectionFailureInfo? = null
 
-            override fun connect() {}
+            override fun connect() {
+            }
         }
     }
 }
 
 class FakeConnectedDevice(
-        override val identifier: PebbleIdentifier,
-        override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
-        override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
-        override val name: String,
-        override val nickname: String?,
-        override val color: WatchColor = run {
-            val white = Random.nextBoolean()
-            if (white) {
-                WatchColor.Pebble2DuoWhite
-            } else {
-                WatchColor.Pebble2DuoBlack
-            }
-        },
-        override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
-        override val lastConnected: Instant = Instant.DISTANT_PAST,
-        override val serial: String = "XXXXXXXXXXXX",
-        override val runningFwVersion: String = "v1.2.3-core",
-        override val connectionFailureInfo: ConnectionFailureInfo?,
-        override val usingBtClassic: Boolean = false,
+    override val identifier: PebbleIdentifier,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
+    override val name: String,
+    override val nickname: String?,
+    override val color: WatchColor = run {
+        val white = Random.nextBoolean()
+        if (white) {
+            WatchColor.Pebble2DuoWhite
+        } else {
+            WatchColor.Pebble2DuoBlack
+        }
+    },
+    override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+    override val lastConnected: Instant = Instant.DISTANT_PAST,
+    override val serial: String = "XXXXXXXXXXXX",
+    override val runningFwVersion: String = "v1.2.3-core",
+    override val connectionFailureInfo: ConnectionFailureInfo?,
+    override val usingBtClassic: Boolean = false,
 ) : ConnectedPebbleDevice {
 
     override fun forget() {}
-    override fun setNickname(nickname: String?) {}
+    override fun setNickname(nickname: String?) {
+    }
 
     override fun connect() {}
 
@@ -486,41 +480,38 @@ class FakeConnectedDevice(
     override suspend fun stopApp(uuid: Uuid) {}
 
     override val runningApp: StateFlow<Uuid?> = MutableStateFlow(null)
-    override val watchInfo: WatchInfo =
-            WatchInfo(
-                    runningFwVersion =
-                            FirmwareVersion.from(
-                                    runningFwVersion,
-                                    isRecovery = false,
-                                    gitHash = "",
-                                    timestamp = kotlin.time.Instant.DISTANT_PAST,
-                                    isDualSlot = false,
-                                    isSlot0 = false,
-                            )!!,
-                    recoveryFwVersion =
-                            FirmwareVersion.from(
-                                    runningFwVersion,
-                                    isRecovery = true,
-                                    gitHash = "",
-                                    timestamp = kotlin.time.Instant.DISTANT_PAST,
-                                    isDualSlot = false,
-                                    isSlot0 = false,
-                            )!!,
-                    platform = watchType,
-                    bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
-                    board = "board",
-                    serial = serial,
-                    btAddress = "11:22:33:44:55:66",
-                    resourceCrc = -9999999,
-                    resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
-                    language = "en-GB",
-                    languageVersion = 1,
-                    capabilities = emptySet(),
-                    isUnfaithful = false,
-                    healthInsightsVersion = null,
-                    javascriptVersion = null,
-                    color = color,
-            )
+    override val watchInfo: WatchInfo = WatchInfo(
+        runningFwVersion = FirmwareVersion.from(
+            runningFwVersion,
+            isRecovery = false,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
+        )!!,
+        recoveryFwVersion = FirmwareVersion.from(
+                runningFwVersion,
+                isRecovery = true,
+                gitHash = "",
+                timestamp = kotlin.time.Instant.DISTANT_PAST,
+                isDualSlot = false,
+                isSlot0 = false,
+        )!!,
+        platform = watchType,
+        bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        board = "board",
+        serial = serial,
+        btAddress = "11:22:33:44:55:66",
+        resourceCrc = -9999999,
+        resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        language = "en-GB",
+        languageVersion = 1,
+        capabilities = emptySet(),
+        isUnfaithful = false,
+        healthInsightsVersion = null,
+        javascriptVersion = null,
+        color = color,
+    )
 
     override suspend fun updateTime() {}
 
@@ -528,10 +519,10 @@ class FakeConnectedDevice(
         return MutableSharedFlow()
     }
 
-    override val transactionSequence: Iterator<UByte> = iterator {}
+    override val transactionSequence: Iterator<UByte> = iterator { }
 
     override suspend fun sendAppMessage(appMessageData: AppMessageData): AppMessageResult =
-            AppMessageResult.ACK(appMessageData.transactionId)
+        AppMessageResult.ACK(appMessageData.transactionId)
 
     override suspend fun sendAppMessageResult(appMessageResult: AppMessageResult) {}
 
@@ -542,12 +533,13 @@ class FakeConnectedDevice(
     override suspend fun updateTrack(track: MusicTrack) {}
 
     override suspend fun updatePlaybackState(
-            state: PlaybackState,
-            trackPosMs: UInt,
-            playbackRatePct: UInt,
-            shuffle: Boolean,
-            repeatType: RepeatType
-    ) {}
+        state: PlaybackState,
+        trackPosMs: UInt,
+        playbackRatePct: UInt,
+        shuffle: Boolean,
+        repeatType: RepeatType
+    ) {
+    }
 
     override suspend fun updatePlayerInfo(packageId: String, name: String) {}
 
@@ -572,39 +564,42 @@ class FakeConnectedDevice(
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
 
-    override fun installLanguagePack(path: Path, name: String) {}
+    override fun installLanguagePack(path: Path, name: String) {
+    }
 
-    override fun installLanguagePack(url: String, name: String) {}
+    override fun installLanguagePack(url: String, name: String) {
+    }
 
     override val languagePackInstallState: LanguagePackInstallState =
-            LanguagePackInstallState.Idle()
+        LanguagePackInstallState.Idle()
     override val installedLanguagePack: InstalledLanguagePack? = null
 }
 
 class FakeConnectedDeviceInRecovery(
-        override val identifier: PebbleIdentifier,
-        override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
-        override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
-        override val name: String,
-        override val nickname: String?,
-        override val color: WatchColor = run {
-            val white = Random.nextBoolean()
-            if (white) {
-                WatchColor.Pebble2DuoWhite
-            } else {
-                WatchColor.Pebble2DuoBlack
-            }
-        },
-        override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
-        override val lastConnected: Instant = Instant.DISTANT_PAST,
-        override val serial: String = "XXXXXXXXXXXX",
-        override val runningFwVersion: String = "v1.2.3-core",
-        override val connectionFailureInfo: ConnectionFailureInfo?,
-        override val usingBtClassic: Boolean = false,
+    override val identifier: PebbleIdentifier,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
+    override val name: String,
+    override val nickname: String?,
+    override val color: WatchColor = run {
+        val white = Random.nextBoolean()
+        if (white) {
+            WatchColor.Pebble2DuoWhite
+        } else {
+            WatchColor.Pebble2DuoBlack
+        }
+    },
+    override val watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+    override val lastConnected: Instant = Instant.DISTANT_PAST,
+    override val serial: String = "XXXXXXXXXXXX",
+    override val runningFwVersion: String = "v1.2.3-core",
+    override val connectionFailureInfo: ConnectionFailureInfo?,
+    override val usingBtClassic: Boolean = false,
 ) : ConnectedPebbleDeviceInRecovery {
 
     override fun forget() {}
-    override fun setNickname(nickname: String?) {}
+    override fun setNickname(nickname: String?) {
+    }
 
     override fun connect() {}
 
@@ -616,41 +611,38 @@ class FakeConnectedDeviceInRecovery(
 
     override fun checkforFirmwareUpdate() {}
 
-    override val watchInfo: WatchInfo =
-            WatchInfo(
-                    runningFwVersion =
-                            FirmwareVersion.from(
-                                    runningFwVersion,
-                                    isRecovery = false,
-                                    gitHash = "",
-                                    timestamp = kotlin.time.Instant.DISTANT_PAST,
-                                    isDualSlot = false,
-                                    isSlot0 = false,
-                            )!!,
-                    recoveryFwVersion =
-                            FirmwareVersion.from(
-                                    runningFwVersion,
-                                    isRecovery = true,
-                                    gitHash = "",
-                                    timestamp = kotlin.time.Instant.DISTANT_PAST,
-                                    isDualSlot = false,
-                                    isSlot0 = false,
-                            )!!,
-                    platform = watchType,
-                    bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
-                    board = "board",
-                    serial = serial,
-                    btAddress = "11:22:33:44:55:66",
-                    resourceCrc = -9999999,
-                    resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
-                    language = "en-GB",
-                    languageVersion = 1,
-                    capabilities = emptySet(),
-                    isUnfaithful = false,
-                    healthInsightsVersion = null,
-                    javascriptVersion = null,
-                    color = color,
-            )
+    override val watchInfo: WatchInfo = WatchInfo(
+        runningFwVersion = FirmwareVersion.from(
+            runningFwVersion,
+            isRecovery = false,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
+        )!!,
+        recoveryFwVersion = FirmwareVersion.from(
+            runningFwVersion,
+            isRecovery = true,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
+        )!!,
+        platform = watchType,
+        bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        board = "board",
+        serial = serial,
+        btAddress = "11:22:33:44:55:66",
+        resourceCrc = -9999999,
+        resourceTimestamp = kotlin.time.Instant.DISTANT_PAST,
+        language = "en-GB",
+        languageVersion = 1,
+        capabilities = emptySet(),
+        isUnfaithful = false,
+        healthInsightsVersion = null,
+        javascriptVersion = null,
+        color = color,
+    )
 
     override suspend fun startDevConnection() {}
     override suspend fun stopDevConnection() {}
@@ -678,15 +670,15 @@ fun fakeNotificationApps(): List<NotificationAppItem> {
 
 fun fakeNotificationApp(): NotificationAppItem {
     return NotificationAppItem(
-            name = randomName(),
-            packageName = randomName(),
-            muteState = if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
-            channelGroups = if (Random.nextBoolean()) emptyList() else fakeChannelGroups(),
-            stateUpdated = Instant.DISTANT_PAST.asMillisecond(),
-            lastNotified = Instant.DISTANT_PAST.asMillisecond(),
-            vibePatternName = null,
-            colorName = null,
-            iconCode = null,
+        name = randomName(),
+        packageName = randomName(),
+        muteState = if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
+        channelGroups = if (Random.nextBoolean()) emptyList() else fakeChannelGroups(),
+        stateUpdated = Instant.DISTANT_PAST.asMillisecond(),
+        lastNotified = Instant.DISTANT_PAST.asMillisecond(),
+        vibePatternName = null,
+        colorName = null,
+        iconCode = null,
     )
 }
 
@@ -694,11 +686,11 @@ fun fakeChannelGroups(): List<ChannelGroup> {
     return buildList {
         for (i in 1..Random.nextInt(2, 5)) {
             add(
-                    ChannelGroup(
-                            id = randomName(),
-                            name = randomName(),
-                            channels = fakeChannels(),
-                    )
+                ChannelGroup(
+                    id = randomName(),
+                    name = randomName(),
+                    channels = fakeChannels(),
+                )
             )
         }
     }
@@ -708,12 +700,11 @@ fun fakeChannels(): List<ChannelItem> {
     return buildList {
         for (i in 1..Random.nextInt(1, 8)) {
             add(
-                    ChannelItem(
-                            id = randomName(),
-                            name = randomName(),
-                            muteState =
-                                    if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
-                    )
+                ChannelItem(
+                    id = randomName(),
+                    name = randomName(),
+                    muteState = if (Random.nextBoolean()) MuteState.Always else MuteState.Never,
+                )
             )
         }
     }
@@ -732,69 +723,66 @@ fun fakeLockerEntries(): List<LockerWrapper> {
 fun randomName(): String {
     val length = Random.nextInt(5, 20)
     val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    return (1..length).map { allowedChars[Random.nextInt(0, allowedChars.length)] }.joinToString("")
+    return (1..length)
+        .map { allowedChars[Random.nextInt(0, allowedChars.length)] }
+        .joinToString("")
 }
 
 fun randomMacAddress(): String {
     val allowedChars = "0123456789ABCDEF"
     return (1..6).joinToString(":") {
-        (1..2).map { allowedChars[Random.nextInt(0, allowedChars.length)] }.joinToString("")
+        (1..2).map {
+            allowedChars[Random.nextInt(
+                0, 
+                allowedChars.length
+            )]
+        }.joinToString("")
     }
 }
 
 fun fakeLockerEntry(): LockerWrapper {
     val appType = if (Random.nextBoolean()) AppType.Watchface else AppType.Watchapp
     return LockerWrapper.NormalApp(
-            properties =
-                    AppProperties(
-                            id = Uuid.random(),
-                            type = appType,
-                            title = randomName(),
-                            developerName = "Core Devices",
-                            platforms =
-                                    listOf(
-                                            AppPlatform(
-                                                    watchType = WatchType.CHALK,
-                                                    screenshotImageUrl =
-                                                            "https://assets2.rebble.io/180x180/ZiFWSDWHTwearl6RNBNA",
-                                                    listImageUrl =
-                                                            "https://assets2.rebble.io/exact/180x180/LVK5AGVeS1ufpR8NNk7C",
-                                                    iconImageUrl = "",
-                                            ),
-                                            AppPlatform(
-                                                    watchType = WatchType.DIORITE,
-                                                    screenshotImageUrl =
-                                                            "https://assets2.rebble.io/144x168/u8q7BQv0QjGkLXy4WydA",
-                                                    listImageUrl =
-                                                            "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
-                                                    iconImageUrl = "",
-                                            ),
-                                            AppPlatform(
-                                                    watchType = WatchType.BASALT,
-                                                    screenshotImageUrl =
-                                                            "https://assets2.rebble.io/144x168/LVK5AGVeS1ufpR8NNk7C",
-                                                    listImageUrl =
-                                                            "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
-                                                    iconImageUrl = "",
-                                            ),
-                                            AppPlatform(
-                                                    watchType = WatchType.APLITE,
-                                                    screenshotImageUrl =
-                                                            "https://assets2.rebble.io/144x168/7fNxWcZ3RZ2clRNWA68Q",
-                                                    listImageUrl =
-                                                            "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
-                                                    iconImageUrl = "",
-                                            )
-                                    ),
-                            version = "1.0",
-                            hearts = 50,
-                            category = "fun stuff",
-                            iosCompanion = null,
-                            androidCompanion = null,
-                            order = 0,
-                    ),
-            sideloaded = false,
-            configurable = Random.nextBoolean(),
-            sync = true,
+        properties = AppProperties(
+            id = Uuid.random(),
+            type = appType,
+            title = randomName(),
+            developerName = "Core Devices",
+            platforms = listOf(
+                AppPlatform(
+                    watchType = WatchType.CHALK,
+                    screenshotImageUrl = "https://assets2.rebble.io/180x180/ZiFWSDWHTwearl6RNBNA",
+                    listImageUrl = "https://assets2.rebble.io/exact/180x180/LVK5AGVeS1ufpR8NNk7C",
+                    iconImageUrl = "",
+                ),
+                AppPlatform(
+                    watchType = WatchType.DIORITE,
+                    screenshotImageUrl = "https://assets2.rebble.io/144x168/u8q7BQv0QjGkLXy4WydA",
+                    listImageUrl = "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
+                    iconImageUrl = "",
+                ),
+                AppPlatform(
+                    watchType = WatchType.BASALT,
+                    screenshotImageUrl = "https://assets2.rebble.io/144x168/LVK5AGVeS1ufpR8NNk7C",
+                    listImageUrl = "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
+                    iconImageUrl = "",
+                ),
+                AppPlatform(
+                    watchType = WatchType.APLITE,
+                    screenshotImageUrl = "https://assets2.rebble.io/144x168/7fNxWcZ3RZ2clRNWA68Q",
+                    listImageUrl = "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
+                    iconImageUrl = "",
+                )
+            ),
+            version = "1.0",
+            hearts = 50,
+            category = "fun stuff",
+            iosCompanion = null,
+            androidCompanion = null,
+            order = 0,
+        ),
+        sideloaded = false,
+        configurable = Random.nextBoolean(),
+        sync = true,
     )
 }
