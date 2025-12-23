@@ -84,7 +84,7 @@ internal suspend fun sendWeeklyMovementData(
     val allAggregates = healthDao.getDailyMovementAggregates(rangeStart, rangeEnd)
     val aggregatesByDayStart =
             allAggregates.associateBy {
-                kotlinx.datetime.LocalDate.parse(it.day).atStartOfDayIn(timeZone).epochSeconds
+                LocalDate.parse(it.day).atStartOfDayIn(timeZone).epochSeconds
             }
 
     var anySent = false
