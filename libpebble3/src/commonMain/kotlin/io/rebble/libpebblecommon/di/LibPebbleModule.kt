@@ -400,7 +400,7 @@ fun initKoin(
                 singleOf(::Datalogging)
                 singleOf(::HealthServiceRegistry)
                 singleOf(::RealHealthServiceAccessor) bind HealthServiceAccessor::class
-                singleOf (::Health)
+                singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
                 singleOf(::PhoneContactsSyncer)
