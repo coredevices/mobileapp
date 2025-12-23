@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
@@ -15,14 +16,14 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.launch
+import kotlin.uuid.Uuid
 
 class Datalogging(
-        private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
-        private val webServices: WebServices,
-        private val healthDao: HealthDao,
-        private val knownWatchDao: io.rebble.libpebblecommon.database.dao.KnownWatchDao,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val webServices: WebServices,
+    private val healthDao: HealthDao,
+    private val knownWatchDao: KnownWatchDao,
 ) {
     private val logger = Logger.withTag("Datalogging")
 

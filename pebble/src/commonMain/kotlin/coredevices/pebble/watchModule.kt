@@ -152,11 +152,6 @@ val watchModule = module {
         )
     }
 
-    // Provide HealthDao from LibPebble's internal Koin instance
-    single {
-        getLibPebbleKoin().get<HealthDao>()
-    }
-
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }
 
