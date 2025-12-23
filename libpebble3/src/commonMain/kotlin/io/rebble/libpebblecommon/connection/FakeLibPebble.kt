@@ -162,6 +162,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
+
     }
 
     override suspend fun waitUntilAppSyncedToWatch(
@@ -329,9 +330,11 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
-    override fun insertOrReplace(pin: TimelinePin) {}
+    override fun insertOrReplace(pin: TimelinePin) {
+    }
 
-    override fun delete(pinUuid: Uuid) {}
+    override fun delete(pinUuid: Uuid) {
+    }
 
     override fun vibePatterns(): Flow<List<VibePattern>> {
         return flow {
@@ -345,7 +348,10 @@ class FakeLibPebble : LibPebble {
         }
     }
 
-    override fun addCustomVibePattern(name: String, pattern: List<Long>) {
+    override fun addCustomVibePattern(
+        name: String, 
+        pattern: List<Long>
+    ) {
         TODO("Not yet implemented")
     }
 
@@ -366,10 +372,10 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
     val num = Random.nextInt(1111, 9999)
     val name = "Core $num"
     val fakeIdentifier = if (PlatformUtils.IS_JVM) {
-            randomMacAddress().asPebbleBleIdentifier()
-        } else {
-            Uuid.random().toString().asPebbleBleIdentifier()
-        }
+        randomMacAddress().asPebbleBleIdentifier()
+    } else {
+        Uuid.random().toString().asPebbleBleIdentifier()
+    }
     return if (connected) {
         val updating = Random.nextBoolean()
         val fwupState = if (updating) {
@@ -490,12 +496,12 @@ class FakeConnectedDevice(
             isSlot0 = false,
         )!!,
         recoveryFwVersion = FirmwareVersion.from(
-                runningFwVersion,
-                isRecovery = true,
-                gitHash = "",
-                timestamp = kotlin.time.Instant.DISTANT_PAST,
-                isDualSlot = false,
-                isSlot0 = false,
+            runningFwVersion,
+            isRecovery = true,
+            gitHash = "",
+            timestamp = kotlin.time.Instant.DISTANT_PAST,
+            isDualSlot = false,
+            isSlot0 = false,
         )!!,
         platform = watchType,
         bootloaderTimestamp = kotlin.time.Instant.DISTANT_PAST,
@@ -733,7 +739,7 @@ fun randomMacAddress(): String {
     return (1..6).joinToString(":") {
         (1..2).map {
             allowedChars[Random.nextInt(
-                0, 
+                0,
                 allowedChars.length
             )]
         }.joinToString("")
@@ -760,8 +766,7 @@ fun fakeLockerEntry(): LockerWrapper {
                     screenshotImageUrl = "https://assets2.rebble.io/144x168/u8q7BQv0QjGkLXy4WydA",
                     listImageUrl = "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",
                     iconImageUrl = "",
-                ),
-                AppPlatform(
+                ), AppPlatform(
                     watchType = WatchType.BASALT,
                     screenshotImageUrl = "https://assets2.rebble.io/144x168/LVK5AGVeS1ufpR8NNk7C",
                     listImageUrl = "https://assets2.rebble.io/exact/144x168/LVK5AGVeS1ufpR8NNk7C",

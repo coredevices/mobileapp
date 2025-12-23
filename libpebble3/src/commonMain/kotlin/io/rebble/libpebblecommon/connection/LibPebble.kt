@@ -131,8 +131,8 @@ interface Timeline {
 
 interface Errors {
     /**
-    * Errors which should be displayed to the user (e.g. using a snackbar).
-    */
+     * Errors which should be displayed to the user (e.g. using a snackbar).
+     */
     val userFacingErrors: Flow<UserFacingError>
 }
 
@@ -199,9 +199,9 @@ interface RequestSync {
 }
 
 interface LockerApi {
-    /** 
-    * @return true if the app was successfully synced and launched on all connected watches.
-    */
+    /**
+     * @return true if the app was successfully synced and launched on all connected watches.
+     */
     suspend fun sideloadApp(pbwPath: Path): Boolean
     fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
@@ -224,7 +224,9 @@ interface NotificationApps {
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
     fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>>
 
-    /** Update mute state of the specified app. Updates all apps if [packageName] is null. */
+    /**
+     * Update mute state of the specified app. Updates all apps if [packageName] is null.
+     */
     fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState)
     fun updateNotificationAppState(
         packageName: String,
@@ -292,7 +294,7 @@ class LibPebble3(
     private val legacyPhoneReceiver: LegacyPhoneReceiver,
     private val vibePatternDao: VibePatternDao,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
-    NotificationApps by notificationApi, Calendar by phoneCalendarSyncer, 
+    NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
@@ -336,7 +338,7 @@ class LibPebble3(
 
     override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
 
-    override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? ) {
+    override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
         timelineNotificationsDao.insertOrReplace(notification)
         actionHandlers?.let { actionOverrides.setActionHandlers(notification.itemId, actionHandlers) }
     }
