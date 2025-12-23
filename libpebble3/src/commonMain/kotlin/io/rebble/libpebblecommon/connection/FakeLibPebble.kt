@@ -349,7 +349,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun addCustomVibePattern(
-        name: String, 
+        name: String,
         pattern: List<Long>
     ) {
         TODO("Not yet implemented")
