@@ -74,6 +74,7 @@ class DataLoggingService(
                         itemSize = session.itemSize,
                     )
                 }
+
                 is DataLoggingIncomingPacket.CloseSession -> {
                     val id = it.sessionId.get()
                     logger.d { "Session closed: $id" }
