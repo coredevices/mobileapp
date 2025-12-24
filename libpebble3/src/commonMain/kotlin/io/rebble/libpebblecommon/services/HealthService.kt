@@ -229,7 +229,8 @@ class HealthService(
             }
 
             // Request health data from the watch (will be filtered during reconciliation)
-            sendHealthDataRequest(fullSync = false)
+            // On first sync (empty database), request all historical data from the watch
+            sendHealthDataRequest(fullSync = isFirstSync)
             val newDataArrived = waitForNewerHealthData(baselineTimestamp)
 
             if (newDataArrived) {
