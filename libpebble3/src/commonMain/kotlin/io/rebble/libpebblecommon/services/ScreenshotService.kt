@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.packets.ScreenshotVersion
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket.Companion.deserialize
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.createImageBitmapFromPixelArray
+import io.rebble.libpebblecommon.util.isScreenshotFinished
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +47,7 @@ class ScreenshotService(
                 var header: ParsedScreenshotHeader? = null
                 var data: DataBuffer? = null
                 var finished = false
+                var expectedSize = 0
 
                 /** Returns true if screenshot is incomplete */
                 fun handleBytes(bytes: UByteArray): Boolean {
@@ -54,7 +56,7 @@ class ScreenshotService(
                         throw IllegalStateException("buffer is null")
                     }
                     buffer.putBytes(bytes)
-                    if (buffer.remaining == 0) {
+                    if (isScreenshotFinished(buffer, expectedSize)) {
                         finished = true
                     }
                     return !finished
@@ -79,6 +81,7 @@ class ScreenshotService(
                             }
                             logger.v { "header: $header" }
                             val bufferSize = (parsedHeader.height * parsedHeader.width) / parsedHeader.version.bitsPerPixel
+                            expectedSize = bufferSize
                             data = DataBuffer(bufferSize)
                             handleBytes(headerPacket.data.get())
                         } else {
