@@ -74,5 +74,7 @@ actual val platformModule: Module = module {
         fallbackToResetRequest = true,
         closeGattServerWhenBtDisabled = false,
         delayBleConnectionsAfterAppStart = true,
+        desiredTxWindow = 6,
+        desiredRxWindow = 6,
     ) }
 }

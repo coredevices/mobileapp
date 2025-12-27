@@ -226,6 +226,7 @@ actual class GattServer(
         return try {
             withTimeout(SEND_TIMEOUT) {
                 while (true) {
+                    val startCount = peripheralManagerReadyCount.value
                     if (peripheralManager.updateValue(
                             value = data.toNSData(),
                             forCharacteristic = cbCharacteristic,
@@ -235,7 +236,7 @@ actual class GattServer(
                         return@withTimeout true
                     }
                     // Write did not succeed; wait for queue to drain
-                    peripheralManagerReady.first()
+                    peripheralManagerReadyCount.first { it > startCount }
                 }
                 false
             }
@@ -338,13 +339,11 @@ actual class GattServer(
         }
     }
 
-    private val peripheralManagerReady = MutableSharedFlow<Unit>()
+    private val peripheralManagerReadyCount = MutableStateFlow(0L)
 
     override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
-        runBlocking {
-            peripheralManagerReady.emit(Unit)
-        }
+        peripheralManagerReadyCount.value++
     }
 }
 
