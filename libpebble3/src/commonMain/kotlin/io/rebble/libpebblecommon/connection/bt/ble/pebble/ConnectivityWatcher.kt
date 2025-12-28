@@ -88,14 +88,29 @@ class ConnectivityStatus(characteristicValue: ByteArray) {
     val pairingErrorCode: PairingErrorCode
 
     init {
-        val flags = characteristicValue[0]
-        connected = flags and 0b1 > 0
-        paired = flags and 0b10 > 0
-        encrypted = flags and 0b100 > 0
-        hasBondedGateway = flags and 0b1000 > 0
-        supportsPinningWithoutSlaveSecurity = flags and 0b10000 > 0
-        hasRemoteAttemptedToUseStalePairing = flags and 0b100000 > 0
-        pairingErrorCode = PairingErrorCode.getByValue(characteristicValue[3])
+        // Handle empty array (can happen with recovery firmware)
+        if (characteristicValue.isEmpty()) {
+            connected = false
+            paired = false
+            encrypted = false
+            hasBondedGateway = false
+            supportsPinningWithoutSlaveSecurity = false
+            hasRemoteAttemptedToUseStalePairing = false
+            pairingErrorCode = PairingErrorCode.NO_ERROR
+        } else {
+            val flags = characteristicValue[0]
+            connected = flags and 0b1 > 0
+            paired = flags and 0b10 > 0
+            encrypted = flags and 0b100 > 0
+            hasBondedGateway = flags and 0b1000 > 0
+            supportsPinningWithoutSlaveSecurity = flags and 0b10000 > 0
+            hasRemoteAttemptedToUseStalePairing = flags and 0b100000 > 0
+            pairingErrorCode = if (characteristicValue.size > 3) {
+                PairingErrorCode.getByValue(characteristicValue[3])
+            } else {
+                PairingErrorCode.NO_ERROR
+            }
+        }
     }
 
     override fun toString(): String =
