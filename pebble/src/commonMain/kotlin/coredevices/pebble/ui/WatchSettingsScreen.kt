@@ -251,6 +251,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
         }
         var showBtClassicInfoDialog by remember { mutableStateOf(false) }
         var showLockerImportDialog by remember { mutableStateOf(false) }
+        var showHealthStatsDialog by remember { mutableStateOf(false) }
         var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
         var speechRecognitionEnabled by mutableStateOf(
             CactusSTTMode.fromId(settings.getInt(SettingsKeys.KEY_CACTUS_MODE, 0))
@@ -303,6 +304,12 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams, experi
                     else -> RequestedSTTMode.Enabled(mode, model)
                 },
                 debugOptionsEnabled
+            )
+        }
+        if (showHealthStatsDialog) {
+            HealthStatsDialog(
+                libPebble = libPebble,
+                onDismissRequest = { showHealthStatsDialog = false },
             )
         }
         if (showBtClassicInfoDialog) {
@@ -826,6 +833,15 @@ please disable the option.""".trimIndent(),
                                 sleepInsightsEnabled = it
                             )
                         )
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "View debug stats",
+                    description = "Health statistics and averages",
+                    section = Section.Health,
+                    keywords = "health steps sleep stats debug",
+                    action = {
+                        showHealthStatsDialog = true
                     },
                 ),
                 basicSettingsToggleItem(

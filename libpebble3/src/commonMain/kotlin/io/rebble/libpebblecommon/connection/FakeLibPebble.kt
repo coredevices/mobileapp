@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -287,8 +288,38 @@ class FakeLibPebble : LibPebble {
         get() = flow { }
     override val healthSettings: Flow<HealthSettings>
         get() = flow { emit(HealthSettings()) }
+    override val healthUpdateFlow: Flow<Unit>
+        get() = flow { }
 
-    override fun updateHealthSettings(healthSettings: HealthSettings) {
+    override fun updateHealthSettings(healthSettings: HealthSettings) {}
+
+    override suspend fun getHealthDebugStats(): HealthDebugStats {
+        return HealthDebugStats(
+            totalSteps30Days = 0L,
+            averageStepsPerDay = 0,
+            totalSleepSeconds30Days = 0L,
+            averageSleepSecondsPerDay = 0,
+            todaySteps = 0L,
+            lastNightSleepHours = null,
+            latestDataTimestamp = null,
+            daysOfData = 0
+        )
+    }
+
+    override fun requestHealthData(fullSync: Boolean) {
+        // No-op for fake implementation
+    }
+
+    override fun sendHealthAveragesToWatch() {
+        // No-op for fake implementation
+    }
+
+    override fun forceHealthDataOverwrite() {
+        // No-op for fake implementation
+    }
+
+    override fun forceSyncLast24Hours() {
+        // No-op for fake implementation
     }
 
     override suspend fun getCurrentPosition(): GeolocationPositionResult {

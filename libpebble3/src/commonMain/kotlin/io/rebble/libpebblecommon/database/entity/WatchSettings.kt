@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.entity
 
+import androidx.room.ColumnInfo
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
@@ -32,6 +33,8 @@ data class WatchSettings(
     val sleepInsightsEnabled: Boolean,
     val ageYears: Byte,
     val gender: Byte,
+    @ColumnInfo(defaultValue = "0")
+    val imperialUnits: Boolean = false,
 ) : BlobDbItem {
     override fun key(): UByteArray = SFixedString(
         mapper = StructMapper(),
@@ -51,6 +54,7 @@ data class WatchSettings(
             sleepInsightsEnabled = sleepInsightsEnabled,
             ageYears = ageYears,
             gender = gender,
+            imperialUnits = imperialUnits,
         ).toBytes()
     }
 
@@ -77,6 +81,7 @@ class WatchSettingsBlobItem(
     sleepInsightsEnabled: Boolean,
     ageYears: Byte,
     gender: Byte,
+    imperialUnits: Boolean,
 ) : StructMappable(endianness = Endian.Little) {
     val heightMm = SUShort(m, heightMm)
     val weightDag = SUShort(m, weightDag)
@@ -85,6 +90,7 @@ class WatchSettingsBlobItem(
     val sleepInsightsEnabled = SByte(m, if (sleepInsightsEnabled) 0x01 else 0x00)
     val ageYears = SByte(m, ageYears)
     val gender = SByte(m, gender)
+    val imperialUnits = SByte(m, if (imperialUnits) 0x01 else 0x00)
 }
 
 enum class HealthGender(
@@ -108,6 +114,7 @@ fun WatchSettings.toHealthSettings() = HealthSettings(
     trackingEnabled = trackingEnabled,
     activityInsightsEnabled = activityInsightsEnabled,
     sleepInsightsEnabled = sleepInsightsEnabled,
+    imperialUnits = imperialUnits,
 )
 
 fun HealthSettings.toDbItem() = WatchSettings(
@@ -119,4 +126,5 @@ fun HealthSettings.toDbItem() = WatchSettings(
     trackingEnabled = trackingEnabled,
     activityInsightsEnabled = activityInsightsEnabled,
     sleepInsightsEnabled = sleepInsightsEnabled,
+    imperialUnits = imperialUnits,
 )
