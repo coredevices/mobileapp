@@ -10,6 +10,7 @@ import coredevices.pebble.Platform
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.cache.HttpCache
+import io.ktor.client.plugins.UserAgent
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.Url
@@ -45,6 +46,10 @@ class AppstoreService(
     private val logger = Logger.withTag("AppstoreService-${parseUrl(source.url)?.host ?: "unknown"}")
     private val httpClient = httpClient.config {
         install(HttpCache)
+        install(UserAgent) {
+            // TODO: Replace it with an actual version whenever you do it in BootConfig
+            agent = "CoreApp/9.9.9 (${platform.storeString()})"
+        }
     }
     private val searchClient = source.algoliaAppId?.let { appId ->
         source.algoliaApiKey?.let { apiKey ->

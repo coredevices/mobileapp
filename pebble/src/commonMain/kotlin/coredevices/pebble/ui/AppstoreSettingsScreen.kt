@@ -30,8 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -39,7 +37,6 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.pebble.services.StoreCollection
@@ -59,17 +56,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 import kotlin.collections.buildMap
 
 class AppstoreSettingsScreenViewModel(
     private val sourceDao: AppstoreSourceDao,
     private val collectionDao: AppstoreCollectionDao,
-    private val pebbleAccount: PebbleAccount,
-    private val pebbleWebServices: RealPebbleWebServices,
-    private val uriHandler: UriHandler
+    private val pebbleWebServices: RealPebbleWebServices
 ): ViewModel() {
-    val pebbleLoggedIn = pebbleAccount.loggedIn
     val sources = sourceDao.getAllSources()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     private var homeCacheFaces: List<Pair<AppstoreSource, AppStoreHome?>>? = null
@@ -147,11 +140,7 @@ class AppstoreSettingsScreenViewModel(
 
     fun changeSourceEnabled(sourceId: Int, isEnabled: Boolean) {
         viewModelScope.launch {
-            if (sources.value.firstOrNull { parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
-                uriHandler.openUri(REBBLE_LOGIN_URI)
-            } else {
-                sourceDao.setSourceEnabled(sourceId, isEnabled)
-            }
+            sourceDao.setSourceEnabled(sourceId, isEnabled)
         }
     }
 
@@ -176,8 +165,7 @@ class AppstoreSettingsScreenViewModel(
 
 @Composable
 fun AppstoreSettingsScreen(nav: CoreNav) {
-    val uriHandler = LocalUriHandler.current
-    val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
+    val viewModel = koinViewModel<AppstoreSettingsScreenViewModel>()
     val sources by viewModel.sources.collectAsState()
     val collections by viewModel.collections.collectAsState()
     AppstoreSettingsScreen(
