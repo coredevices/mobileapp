@@ -81,7 +81,6 @@ import coredevices.pebble.services.displayName
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
-import coredevices.util.isIOS
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -483,9 +482,6 @@ private fun Screenshot(watch: PebbleDevice, scope: CoroutineScope) {
         return
     }
     val platform = koinInject<Platform>()
-    if (platform.isIOS) {
-        return
-    }
     if (watch !is ConnectedPebbleDevice) {
         return
     }
