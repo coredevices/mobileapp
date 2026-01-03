@@ -154,7 +154,7 @@ class NotificationHandler(
             appEntry.muteExpiration != null -> {
                 // Temporary mute: check if it hasn't expired yet
                 val now = timeProvider.now()
-                appEntry.muteExpiration.instant > now.instant && appEntry.muteState != MuteState.Never
+                appEntry.muteExpiration.instant > now && appEntry.muteState != MuteState.Never
             }
             else -> {
                 // Permanent or schedule-based mute
