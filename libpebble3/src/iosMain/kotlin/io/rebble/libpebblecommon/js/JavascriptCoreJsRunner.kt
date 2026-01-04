@@ -46,7 +46,6 @@ class JavascriptCoreJsRunner(
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
-    private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -102,9 +101,7 @@ class JavascriptCoreJsRunner(
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
-        val bundle = pkjsBundleIdentifier
-            ?.let { NSBundle.bundleWithIdentifier(it) ?: error("PKJS bundle with identifier $it not found") }
-            ?: NSBundle.mainBundle
+        val bundle = NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
             ?: error("Startup script not found in bundle")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
