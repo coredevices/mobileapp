@@ -29,9 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,7 +83,6 @@ import coredevices.pebble.services.displayName
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
-import coredevices.util.isIOS
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -103,6 +104,9 @@ import org.koin.compose.koinInject
 import theme.coreOrange
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
+
+
+import PlatformShareLauncher
 
 private val logger = Logger.withTag("WatchScreen")
 
@@ -483,16 +487,10 @@ private fun Screenshot(watch: PebbleDevice, scope: CoroutineScope) {
         return
     }
     val platform = koinInject<Platform>()
-    if (platform.isIOS) {
-        return
-    }
     if (watch !is ConnectedPebbleDevice) {
         return
     }
-    if (watch.watchInfo.platform.watchType.isColor()) {
-        // TODO remove once colour is supported
-        return
-    }
+
     var screenshot by remember { mutableStateOf<ImageBitmap?>(null) }
     var takingScreenshot by remember { mutableStateOf(false) }
     fun takeScreenshot() {
@@ -506,21 +504,19 @@ private fun Screenshot(watch: PebbleDevice, scope: CoroutineScope) {
             logger.v { "screenshot = $screenshot" }
         }
     }
-    LaunchedEffect(Unit) {
-        takeScreenshot()
-    }
-    Box(
+
+    Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ElevatedCard(
-            shape = CutCornerShape(0.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 8.dp,
-            ),
-            modifier = Modifier.background(Color.Transparent),
-        ) {
-            screenshot?.let {
+        screenshot?.let {
+            ElevatedCard(
+                shape = CutCornerShape(0.dp),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 8.dp,
+                ),
+                modifier = Modifier.background(Color.Transparent).padding(bottom = 8.dp),
+            ) {
                 val height = 140.dp
                 val width = height / it.height * it.width
                 Image(
@@ -528,43 +524,38 @@ private fun Screenshot(watch: PebbleDevice, scope: CoroutineScope) {
                     contentDescription = "Screenshot",
                     modifier = Modifier.height(height).width(width),
                 )
-            } ?: Box(modifier = Modifier.height(140.dp))
-        }
-        IconButton(
-            onClick = {
-                scope.launch {
-                    takeScreenshot()
-                }
-            },
-            enabled = !takingScreenshot,
-            modifier = Modifier.align(Alignment.CenterEnd)
-        ) {
-            val rotation = if (takingScreenshot) {
-                val infiniteTransition =
-                    rememberInfiniteTransition()
-                infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(
-                            durationMillis = 1000,
-                            easing = LinearEasing
-                        ),
-                        repeatMode = RepeatMode.Restart
-                    )
-                )
-            } else {
-                remember { mutableStateOf(0f) }
             }
+        }
 
-            Icon(
-                Icons.Default.Refresh,
-                contentDescription = "Refresh Screenshot",
-                modifier = Modifier.graphicsLayer(rotationZ = rotation.value)
+        }
+
+        FlowRow(
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            PebbleElevatedButton(
+                text = if (takingScreenshot) "Taking..." else "Screenshot",
+                onClick = { takeScreenshot() },
+                enabled = !takingScreenshot,
+                icon = if (screenshot == null) Icons.Default.Image else Icons.Default.Refresh,
+                primaryColor = true,
+                modifier = Modifier.padding(5.dp),
             )
+            
+            if (screenshot != null) {
+                val platformShareLauncher = koinInject<PlatformShareLauncher>()
+                PebbleElevatedButton(
+                    text = "Share",
+                    onClick = { 
+                        platformShareLauncher.shareImage(screenshot!!, "pebble_screenshot.png")
+                    },
+                    icon = Icons.Default.Share,
+                    primaryColor = false,
+                    modifier = Modifier.padding(5.dp),
+                )
+            }
         }
     }
-}
 
 @Composable
 private fun DevConnection(
