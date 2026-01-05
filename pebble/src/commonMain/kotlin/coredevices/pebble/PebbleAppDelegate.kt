@@ -8,7 +8,6 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
-import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
@@ -47,8 +46,7 @@ class PebbleAppDelegate(
     private val appUpdate: AppUpdate,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
-    private val appstoreSourceDao: AppstoreSourceDao,
-    private val pebbleAccount: PebbleAccountProvider
+    private val appstoreSourceDao: AppstoreSourceDao
 ) {
     companion object {
         private val INITIAL_APPSTORE_SOURCES = listOf(
@@ -64,8 +62,7 @@ class PebbleAppDelegate(
                 title = "Rebble App Feed",
                 algoliaAppId = "7683OW76EQ",
                 algoliaApiKey = "252f4938082b8693a8a9fc0157d1d24f",
-                algoliaIndexName = "rebble-appstore-production",
-                enabled = false
+                algoliaIndexName = "rebble-appstore-production"
             )
         )
     }
@@ -87,19 +84,6 @@ class PebbleAppDelegate(
             }
         } else {
             logger.d { "Appstore sources database already initialized" }
-        }
-
-        GlobalScope.launch {
-            val rebbleSource = appstoreSourceDao.getAllSources().first()
-                .firstOrNull { it.title == "Rebble" }
-            if (rebbleSource == null) {
-                return@launch
-            }
-            pebbleAccount.get().loggedIn.collect {
-                if (it == null) {
-                    appstoreSourceDao.setSourceEnabled(rebbleSource.id, false)
-                }
-            }
         }
     }
 
