@@ -306,7 +306,7 @@ navigator.geolocation.clearWatch = (id) => {
             if (onSuccess) {
                 const callback = (e) => {
                     try {
-                        if (e.payload.data.transactionId === transactionId) {
+                        if (e.payload.transactionId === transactionId) {
                             onSuccess(e.payload);
                         }
                     } catch (error) {
@@ -319,7 +319,7 @@ navigator.geolocation.clearWatch = (id) => {
             if (onFailure) {
                 const callback = (e) => {
                     try {
-                        if (e.payload.data.transactionId === transactionId) {
+                        if (e.payload.transactionId === transactionId) {
                             onFailure(e.payload, e.payload.error);
                         }
                     } catch (error) {
