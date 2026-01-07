@@ -73,6 +73,7 @@ enum class NotificationProperties(
     YoutubeReVanced(pkgName = "app.revanced.android.youtube", color = TimelineColor.Red, icon = TimelineIcon.NotificationYoutube),
     Signal(pkgName = "org.thoughtcrime.securesms", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationSignal),
     Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
+    WSJ(pkgName = "wsj.reader_sp", color = TimelineColor.DarkGray, icon = TimelineIcon.NewsEvent),
     ;
 
     companion object {
