@@ -149,11 +149,23 @@ class NotificationHandler(
         }
         val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
         val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
+        // Check if mute has expired
+        val isMuted = when {
+            appEntry.muteExpiration != null -> {
+                // Temporary mute: check if it hasn't expired yet
+                val now = timeProvider.now()
+                appEntry.muteExpiration.instant > now && appEntry.muteState != MuteState.Never
+            }
+            else -> {
+                // Permanent or schedule-based mute
+                appEntry.muteState == MuteState.Always
+            }
+        }
         val decision = when {
             sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
                 NotSentLocalOnly
             anyContactMuted -> NotSendContactMuted
-            !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
+            !anyContactStarred && isMuted -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
             !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn

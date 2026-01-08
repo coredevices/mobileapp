@@ -33,6 +33,18 @@ data class MillisecondInstant(val instant: Instant) {
 
 fun Instant.asMillisecond(): MillisecondInstant = MillisecondInstant(this)
 
+/**
+ * Compare this MillisecondInstant with an Instant to check if this is after the given instant.
+ * Useful for checking if a mute expiration has passed.
+ */
+fun MillisecondInstant.isAfter(other: Instant): Boolean = instant > other
+
+/**
+ * Get the epoch milliseconds from a MillisecondInstant.
+ * Useful for comparisons when the instant property is not accessible from other modules.
+ */
+fun MillisecondInstant.toEpochMilliseconds(): Long = instant.toEpochMilliseconds()
+
 class RoomTypeConverters {
     @TypeConverter
     fun ListUIntToString(value: List<UInt>): String = value.joinToString(",");
