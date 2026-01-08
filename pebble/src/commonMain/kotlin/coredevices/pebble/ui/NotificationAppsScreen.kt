@@ -50,6 +50,7 @@ import org.koin.compose.viewmodel.koinViewModel
 class NotificationAppsScreenViewModel : ViewModel() {
     val onlyNotified = mutableStateOf(false)
     val sortBy = mutableStateOf(NotificationAppSort.Recent)
+    val sortAscending = mutableStateOf(false)
 }
 
 @Composable
@@ -76,11 +77,20 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack
         val pebbleFeatures: PebbleFeatures = koinInject()
         val libPebble = rememberLibPebble()
         val libPebbleConfig by libPebble.config.collectAsState()
+        val frozenSortState = remember(viewModel.sortBy.value, viewModel.sortAscending.value, apps.size) {
+            apps.associate {
+                val isEnabled = it.app.muteState == MuteState.Never
+                it.app.packageName to isEnabled
+            }
+        }
         val filteredAndSortedApps by remember(
             apps,
             topBarParams.searchState,
             viewModel.onlyNotified.value,
-            viewModel.sortBy.value
+            topBarParams.searchState,
+            viewModel.onlyNotified.value,
+            viewModel.sortBy.value,
+            viewModel.sortAscending.value
         ) {
             derivedStateOf {
                 val filtered = apps.asSequence().filter { app ->
@@ -91,17 +101,31 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack
                     }
                 }
 
-                when (viewModel.sortBy.value) {
+                val list = when (viewModel.sortBy.value) {
                     NotificationAppSort.Name -> {
-                        filtered.toList()
+                        filtered.sortedByDescending { it.app.name }
                     }
 
                     NotificationAppSort.Count -> {
-                        filtered.sortedByDescending { it.count }.toList()
+                        filtered.sortedBy { it.count }
                     }
 
-                    NotificationAppSort.Recent -> filtered.sortedByDescending { it.app.lastNotified.instant }
-                        .toList()
+                    NotificationAppSort.Recent -> filtered.sortedBy { it.app.lastNotified.instant }
+
+                    NotificationAppSort.Enabled -> {
+                        filtered.sortedByDescending { entry ->
+                            frozenSortState[entry.app.packageName] ?: run {
+                                val app = entry.app
+                                app.muteState == MuteState.Never
+                            }
+                        }
+                    }
+                }
+
+                if (viewModel.sortAscending.value) {
+                    list.toList()
+                } else {
+                    list.toList().reversed()
                 }
             }
         }
@@ -191,7 +215,12 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack
                             }.forEach { sortOption ->
                                 androidx.compose.material3.DropdownMenuItem(
                                     onClick = {
-                                        viewModel.sortBy.value = sortOption
+                                        if (viewModel.sortBy.value == sortOption) {
+                                            viewModel.sortAscending.value = !viewModel.sortAscending.value
+                                        } else {
+                                            viewModel.sortBy.value = sortOption
+                                            viewModel.sortAscending.value = false
+                                        }
                                         expanded.value = false
                                     },
                                     text = { Text(sortOption.name) },
