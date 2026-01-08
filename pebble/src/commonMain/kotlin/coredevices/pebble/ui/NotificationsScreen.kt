@@ -65,6 +65,13 @@ enum class NotificationAppSort {
     Count,
 }
 
+/** Filter by notification app enabled state (show all, only enabled, or only disabled). */
+enum class EnabledFilter(val label: String) {
+    All("All"),
+    EnabledOnly("Enabled only"),
+    DisabledOnly("Disabled only"),
+}
+
 @Composable
 fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack: Boolean) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
