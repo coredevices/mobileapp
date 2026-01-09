@@ -1,5 +1,15 @@
 package io.rebble.libpebblecommon.services
 
+/**
+ * Health statistics computation and database storage.
+ *
+ * Computes 16 health statistics (weekly movement/sleep + averages) and stores them
+ * in the HealthStat Room entity. The @GenerateRoomEntity infrastructure automatically
+ * syncs these stats to the watch via BlobDB.
+ *
+ * This replaces the old direct BlobDB sending approach with a declarative Room-based pattern.
+ */
+
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
@@ -104,6 +114,9 @@ internal suspend fun updateHealthStatsInDatabase(
 
     return true
 }
+
+// Payload generation functions - construct binary data for BlobDB
+// These are called during stat computation and results are stored in HealthStat entity
 
 /** Creates a sleep data payload for BlobDB */
 private fun sleepPayload(
