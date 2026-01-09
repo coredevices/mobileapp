@@ -159,7 +159,10 @@ class NotificationHandler(
             !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
             else -> result.decision
         }
-        notificationDao.insert(notification.toEntity(decision, channel?.id))
+
+        if (decision != NotificationDecision.NotSentAppMuted || decision != NotificationDecision.NotSendChannelMuted || decision != NotificationDecision.NotSendContactMuted) {
+            notificationDao.insert(notification.toEntity(decision, channel?.id))
+        }
         if (decision != SendToWatch) {
             verboseLog { "Not sending notification from ${sbn.packageName.obfuscate(privateLogger)} because $decision" }
             return null
