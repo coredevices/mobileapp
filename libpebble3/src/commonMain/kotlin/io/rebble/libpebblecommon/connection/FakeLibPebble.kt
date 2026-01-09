@@ -314,14 +314,6 @@ class FakeLibPebble : LibPebble {
         // No-op for fake implementation
     }
 
-    override fun forceHealthDataOverwrite() {
-        // No-op for fake implementation
-    }
-
-    override fun forceSyncLast24Hours() {
-        // No-op for fake implementation
-    }
-
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
         TODO("Not yet implemented")
     }
@@ -579,6 +571,13 @@ class FakeConnectedDevice(
     override val languagePackInstallState: LanguagePackInstallState =
         LanguagePackInstallState.Idle()
     override val installedLanguagePack: InstalledLanguagePack? = null
+    override suspend fun requestHealthData(fullSync: Boolean) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun sendHealthAveragesToWatch() {
+        TODO("Not yet implemented")
+    }
 }
 
 class FakeConnectedDeviceInRecovery(

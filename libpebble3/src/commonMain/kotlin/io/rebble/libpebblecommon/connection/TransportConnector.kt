@@ -278,6 +278,7 @@ class RealPebbleConnector(
                 devConnection = devConnectionManager,
                 screenshot = screenshotService,
                 language = languagePackInstaller,
+                health = healthService,
             )
         )
     }

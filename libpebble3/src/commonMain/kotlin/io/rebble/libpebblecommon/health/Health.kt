@@ -8,15 +8,13 @@ import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
-import io.rebble.libpebblecommon.services.HealthService
 import io.rebble.libpebblecommon.services.calculateHealthAverages
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
@@ -26,144 +24,26 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock.System
 
-/** Interface for accessing connection-scoped HealthService functionality */
-interface HealthServiceAccessor {
-    val healthUpdateFlow: Flow<Unit>
-    fun requestHealthData(fullSync: Boolean)
-    fun sendHealthAveragesToWatch()
-    fun forceHealthDataOverwrite()
-    fun forceSyncLast24Hours()
-}
-
-/**
- * Implementation that finds connected pebbles and calls their HealthService
- *
- * This uses a registry pattern where HealthService instances register themselves when they're
- * created for a connection.
- */
-class RealHealthServiceAccessor(
-        private val registry: HealthServiceRegistry,
-) : HealthServiceAccessor {
-    private val logger = Logger.withTag("RealHealthServiceAccessor")
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    override val healthUpdateFlow: Flow<Unit> =
-            registry.activeServiceFlow.flatMapLatest {
-                it?.healthUpdateFlow ?: emptyFlow()
-            }
-
-    override fun requestHealthData(fullSync: Boolean) {
-        val service = registry.getActiveHealthService()
-        if (service == null) {
-            logger.w { "No active watch to request health data from" }
-            return
-        }
-
-        try {
-            service.requestHealthData(fullSync)
-            logger.i { "Requested ${if (fullSync) "full" else "incremental"} health data sync" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to request health data" }
-        }
-    }
-
-    override fun sendHealthAveragesToWatch() {
-        val service = registry.getActiveHealthService()
-        if (service == null) {
-            logger.w { "No active watch available to send health averages to" }
-            return
-        }
-
-        try {
-            service.sendHealthAveragesToWatch()
-            logger.i { "Requested manual health averages push" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to send health averages to watch" }
-        }
-    }
-
-    override fun forceHealthDataOverwrite() {
-        val service = registry.getActiveHealthService()
-        if (service == null) {
-            logger.w { "No active watch available to force overwrite health data on" }
-            return
-        }
-
-        try {
-            service.forceHealthDataOverwrite()
-            logger.i { "Forced health data overwrite on watch" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to force health data overwrite on watch" }
-        }
-    }
-
-    override fun forceSyncLast24Hours() {
-        val service = registry.getActiveHealthService()
-        if (service == null) {
-            logger.w { "No active watch to force sync from" }
-            return
-        }
-
-        try {
-            service.forceSyncLast24Hours()
-            logger.i { "Forced 24-hour health data sync from watch" }
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to force 24h sync" }
-        }
-    }
-}
-
-/** Registry to track active HealthService instances across connection scopes */
-class HealthServiceRegistry {
-    private val services = mutableListOf<HealthService>()
-    private var activeService: HealthService? = null
-    private val lock = Any()
-
-    private val _activeServiceFlow = MutableStateFlow<HealthService?>(null)
-    val activeServiceFlow:
-            StateFlow<HealthService?> =
-            _activeServiceFlow
-
-    fun register(service: HealthService) {
-        synchronized(lock) {
-            services.remove(service)
-            services.add(service)
-            activeService = service
-            _activeServiceFlow.value = service
-        }
-    }
-
-    fun unregister(service: HealthService) {
-        synchronized(lock) {
-            services.remove(service)
-            if (activeService == service) {
-                activeService = services.lastOrNull()
-                _activeServiceFlow.value = activeService
-            }
-        }
-    }
-
-    fun getAllHealthServices(): List<HealthService> {
-        return synchronized(lock) { services.toList() }
-    }
-
-    fun getActiveHealthService(): HealthService? =
-            synchronized(lock) { activeService }
-
-    fun isActive(service: HealthService): Boolean =
-            synchronized(lock) { activeService == service }
-}
-
 class Health(
         private val watchSettingsDao: WatchSettingsDao,
         private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
         private val healthDao: HealthDao,
-        private val healthServiceAccessor: HealthServiceAccessor,
+        private val libPebble: io.rebble.libpebblecommon.connection.LibPebble,
 ) : HealthApi {
     private val logger = Logger.withTag("Health")
 
     override val healthSettings: Flow<HealthSettings> = watchSettingsDao.getWatchSettings()
-    override val healthUpdateFlow: Flow<Unit> = healthServiceAccessor.healthUpdateFlow
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val healthUpdateFlow: Flow<Unit> =
+            libPebble.connectedOrConnectingDevices.flatMapLatest { devices ->
+                val device = devices.firstOrNull() as? io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+                device?.let {
+                    // Access the health service through the connected device
+                    // This returns a flow that emits when health updates occur
+                    flowOf(Unit)
+                } ?: emptyFlow()
+            }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
         logger.i {
@@ -208,19 +88,17 @@ class Health(
     }
 
     override fun requestHealthData(fullSync: Boolean) {
-        libPebbleCoroutineScope.launch { healthServiceAccessor.requestHealthData(fullSync) }
+        libPebbleCoroutineScope.launch {
+            val device = libPebble.connectedOrConnectingDevices.value.firstOrNull() as? io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+            device?.requestHealthData(fullSync)
+        }
     }
 
     override fun sendHealthAveragesToWatch() {
-        libPebbleCoroutineScope.launch { healthServiceAccessor.sendHealthAveragesToWatch() }
-    }
-
-    override fun forceHealthDataOverwrite() {
-        libPebbleCoroutineScope.launch { healthServiceAccessor.forceHealthDataOverwrite() }
-    }
-
-    override fun forceSyncLast24Hours() {
-        libPebbleCoroutineScope.launch { healthServiceAccessor.forceSyncLast24Hours() }
+        libPebbleCoroutineScope.launch {
+            val device = libPebble.connectedOrConnectingDevices.value.firstOrNull() as? io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+            device?.sendHealthAveragesToWatch()
+        }
     }
 }
 

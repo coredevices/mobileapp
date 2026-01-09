@@ -8,7 +8,6 @@ import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.dao.insertOverlayDataWithDeduplication
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.health.HealthDebugStats
-import io.rebble.libpebblecommon.health.HealthServiceRegistry
 import io.rebble.libpebblecommon.health.OverlayType
 import io.rebble.libpebblecommon.health.isSleepType
 import io.rebble.libpebblecommon.health.parsers.parseOverlayData
@@ -19,8 +18,9 @@ import io.rebble.libpebblecommon.packets.HealthSyncOutgoingPacket
 import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import kotlin.time.Clock.System
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,8 +67,7 @@ class HealthService(
         private val healthDao: HealthDao,
         private val appRunStateService: AppRunStateService,
         private val blobDBService: BlobDBService,
-        private val healthServiceRegistry: HealthServiceRegistry,
-) : ProtocolService {
+) : ProtocolService, io.rebble.libpebblecommon.connection.ConnectedPebble.Health {
     private val healthSessions = mutableMapOf<UByte, HealthSession>()
     private val isAppOpen = MutableStateFlow(false)
     private val lastFullStatsUpdate = MutableStateFlow(0L) // Epoch millis of last full stats push
@@ -92,9 +91,9 @@ class HealthService(
         private const val HEALTH_OVERLAY_TAG: UInt = 84u
         private const val HEALTH_HR_TAG: UInt = 85u
 
-        private const val TWENTY_FOUR_HOURS_MS = 24 * 60 * 60_000L
+        private val TWENTY_FOUR_HOURS_MS = 1.days.inWholeMilliseconds
         private const val HEALTH_STATS_AVERAGE_DAYS = 30
-        private const val HEALTH_SYNC_WAIT_MS = 8_000L
+        private val HEALTH_SYNC_WAIT_MS = 8.seconds.inWholeMilliseconds
         private const val HEALTH_SYNC_POLL_MS = 1000L
         private const val RECONCILE_DELAY_MS = 1000L
         private const val FULL_STATS_THROTTLE_HOURS = 12L
@@ -107,9 +106,6 @@ class HealthService(
     val healthUpdateFlow: SharedFlow<Unit> = _healthUpdateFlow
 
     fun init() {
-        // Register this service instance so it can be accessed for manual sync requests
-        healthServiceRegistry.register(this)
-
         listenForHealthUpdates()
         startPeriodicStatsUpdate()
 
@@ -118,15 +114,6 @@ class HealthService(
             logger.i { "HEALTH_SERVICE: Watch connected - performing smart reconciliation" }
             reconcileWatchWithDatabase()
         }
-
-        // Unregister when the connection scope is cancelled
-        scope.launch {
-            try {
-                awaitCancellation()
-            } finally {
-                healthServiceRegistry.unregister(this@HealthService)
-            }
-        }
     }
 
     /**
@@ -134,83 +121,18 @@ class HealthService(
      * @param fullSync If true, requests all historical data. If false, requests data since last
      * sync.
      */
-    fun requestHealthData(fullSync: Boolean = false) {
-        if (!isActiveConnection("health data request")) return
-        scope.launch { sendHealthDataRequest(fullSync) }
+    override suspend fun requestHealthData(fullSync: Boolean) {
+        sendHealthDataRequest(fullSync)
     }
 
     /** Manually push the latest averaged health stats to the connected watch. */
-    fun sendHealthAveragesToWatch() {
-        if (!isActiveConnection("manual health averages push")) return
-        scope.launch {
-            logger.i { "HEALTH_STATS: Manual health averages send requested" }
-            updateHealthStats()
-            lastFullStatsUpdate.value = System.now().toEpochMilliseconds()
-        }
-    }
-
-    /**
-     * Force a complete health data overwrite on the watch, ignoring the 12-hour throttle. Useful
-     * for debugging or when you know the watch has incorrect data.
-     */
-    fun forceHealthDataOverwrite() {
-        if (!isActiveConnection("force overwrite request")) return
-        scope.launch {
-            logger.i {
-                "HEALTH_STATS: Force overwrite requested - pushing all health data to watch"
-            }
-
-            val timeZone = TimeZone.currentSystemDefault()
-            val today = System.now().toLocalDateTime(timeZone).date
-            lastTodayUpdateDate.value = null
-            updateHealthStats()
-            lastFullStatsUpdate.value = System.now().toEpochMilliseconds()
-            lastTodayUpdateDate.value = today
-        }
-    }
-
-    /**
-     * Force sync health data from the last 24 hours. Pulls all data from the watch including sleep
-     * data.
-     */
-    fun forceSyncLast24Hours() {
-        if (!isActiveConnection("force 24h sync")) return
-        scope.launch {
-            logger.i { "HEALTH_SERVICE: Force syncing last 24 hours of health data" }
-
-            // Request data from 24 hours ago (86400 seconds)
-            val packet = HealthSyncOutgoingPacket.RequestSync(86400u)
-            protocolHandler.send(packet)
-
-            // Wait for data to arrive (with timeout)
-            val previousLatest = healthDao.getLatestTimestamp() ?: 0L
-            val newDataArrived = waitForNewerHealthData(previousLatest)
-
-            if (newDataArrived) {
-                logger.i { "HEALTH_SERVICE: Force sync completed - new data received" }
-                // Wait to ensure all async database writes complete
-                delay(RECONCILE_DELAY_MS)
-                // Update stats with the new data
-                updateHealthStats()
-                lastFullStatsUpdate.value = System.now().toEpochMilliseconds()
-            } else {
-                logger.i { "HEALTH_SERVICE: Force sync completed - no new data from watch" }
-            }
-        }
-    }
-
-    private fun isActiveConnection(reason: String): Boolean {
-        val active = healthServiceRegistry.isActive(this)
-        if (!active) {
-            logger.d {
-                "HEALTH_SERVICE: Ignoring $reason because this watch is not the active connection"
-            }
-        }
-        return active
+    override suspend fun sendHealthAveragesToWatch() {
+        logger.i { "HEALTH_STATS: Manual health averages send requested" }
+        updateHealthStats()
+        lastFullStatsUpdate.value = System.now().toEpochMilliseconds()
     }
 
     private suspend fun reconcileWatchWithDatabase() {
-        if (!isActiveConnection("reconcile")) return
         val baselineTimestamp = healthDao.getLatestTimestamp() ?: 0L
         val isFirstSync = baselineTimestamp == 0L
         val now = System.now().toEpochMilliseconds()
@@ -337,7 +259,6 @@ class HealthService(
         logger.i {
             "HEALTH_SYNC: Watch requested health sync (payload=${packet.payload.size} bytes)"
         }
-        if (!isActiveConnection("health sync request")) return
         scope.launch { sendHealthDataRequest(fullSync = false) }
     }
 
@@ -379,7 +300,6 @@ class HealthService(
 
                 // Only update if it's been at least 24 hours since last update
                 if (hoursSinceLastUpdate >= 24) {
-                    if (!isActiveConnection("scheduled daily stats update")) continue
                     logger.i {
                         "HEALTH_STATS: Running scheduled daily stats update (${hoursSinceLastUpdate}h since last)"
                     }
@@ -391,7 +311,6 @@ class HealthService(
     }
 
     private fun handleSessionOpen(packet: DataLoggingIncomingPacket.OpenSession) {
-        if (!isActiveConnection("health session open")) return
         val tag = packet.tag.get()
         val sessionId = packet.sessionId.get()
         if (tag !in HEALTH_TAGS) return
@@ -405,7 +324,6 @@ class HealthService(
     }
 
     private fun handleSendDataItems(packet: DataLoggingIncomingPacket.SendDataItems) {
-        if (!isActiveConnection("incoming health data")) return
         val sessionId = packet.sessionId.get()
         val session = healthSessions[sessionId] ?: return
 
@@ -469,7 +387,6 @@ class HealthService(
     }
 
     private fun handleSessionClose(packet: DataLoggingIncomingPacket.CloseSession) {
-        if (!isActiveConnection("health session close")) return
         val sessionId = packet.sessionId.get()
         healthSessions.remove(sessionId)?.let { session ->
             logger.i { "HEALTH_SESSION: Closed session $sessionId for ${tagName(session.tag)}" }
@@ -595,7 +512,6 @@ class HealthService(
             type.isSleepType()
 
     private suspend fun updateHealthStats() {
-        if (!isActiveConnection("health stats update")) return
         val latestTimestamp = healthDao.getLatestTimestamp()
         if (latestTimestamp == null || latestTimestamp <= 0) {
             logger.d { "Skipping health stats update; no health data available" }

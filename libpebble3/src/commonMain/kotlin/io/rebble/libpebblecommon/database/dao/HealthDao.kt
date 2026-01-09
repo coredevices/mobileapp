@@ -118,7 +118,7 @@ interface HealthDao {
 
         @Query(
                 """
-        SELECT 
+        SELECT
             date(timestamp, 'unixepoch', 'localtime') as day,
             SUM(steps) AS steps,
             SUM(activeGramCalories) AS activeGramCalories,
@@ -131,6 +131,12 @@ interface HealthDao {
         """
         )
         suspend fun getDailyMovementAggregates(start: Long, end: Long): List<DailyMovementAggregate>
+
+        @Query("DELETE FROM health_data WHERE timestamp < :expirationTimestamp")
+        suspend fun deleteExpiredHealthData(expirationTimestamp: Long): Int
+
+        @Query("DELETE FROM overlay_data WHERE startTime < :expirationTimestamp")
+        suspend fun deleteExpiredOverlayData(expirationTimestamp: Long): Int
 }
 
 data class HealthAggregates(

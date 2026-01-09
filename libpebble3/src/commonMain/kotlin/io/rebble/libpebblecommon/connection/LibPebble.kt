@@ -120,8 +120,6 @@ interface HealthApi {
     suspend fun getHealthDebugStats(): HealthDebugStats
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()
-    fun forceHealthDataOverwrite()
-    fun forceSyncLast24Hours()
 }
 
 interface Timeline {

@@ -112,7 +112,8 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.PKJS,
     ConnectedPebble.CompanionAppControl,
     ConnectedPebble.Screenshot,
-    ConnectedPebble.Language
+    ConnectedPebble.Language,
+    ConnectedPebble.Health
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -222,6 +223,11 @@ object ConnectedPebble {
 
     interface Language : LanguageInstall, LanguageState
 
+    interface Health {
+        suspend fun requestHealthData(fullSync: Boolean)
+        suspend fun sendHealthAveragesToWatch()
+    }
+
     class Services(
         val debug: Debug,
         val appRunState: AppRunState,
@@ -237,6 +243,7 @@ object ConnectedPebble {
         val devConnection: DevConnection,
         val screenshot: Screenshot,
         val language: LanguageInstall,
+        val health: Health,
     )
 
     class PrfServices(
