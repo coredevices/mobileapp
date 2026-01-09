@@ -44,6 +44,7 @@ data class BlobDbDaos(
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
     private val watchSettingsDao: WatchSettingsDao,
+    private val healthStatDao: HealthStatDao,
     private val platformConfig: PlatformConfig,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
@@ -52,6 +53,7 @@ data class BlobDbDaos(
         add(timelinePinDao)
         add(timelineReminderDao)
         add(watchSettingsDao)
+        add(healthStatDao)
         if (platformConfig.syncNotificationApps) {
             add(notificationAppRealDao)
         }
