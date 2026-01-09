@@ -325,6 +325,7 @@ fun initKoin(
                 single { get<Database>().contactDao() }
                 single { get<Database>().vibePatternDao() }
                 single { get<Database>().healthDao() }
+                single { get<Database>().healthStatDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
