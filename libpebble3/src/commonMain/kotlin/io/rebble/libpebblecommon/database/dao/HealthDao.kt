@@ -118,18 +118,18 @@ interface HealthDao {
 }
 
 data class HealthAggregates(
-    steps: Long?,
-    activeGramCalories: Long?,
-    restingGramCalories: Long?,
-    activeMinutes: Long?,
-    distanceCm: Long?,
+    val steps: Long?,
+    val activeGramCalories: Long?,
+    val restingGramCalories: Long?,
+    val activeMinutes: Long?,
+    val distanceCm: Long?,
 )
 
 data class DailyMovementAggregate(
-    day: String, // YYYY-MM-DD
-    steps: Long?,
-    activeGramCalories: Long?,
-    restingGramCalories: Long?,
-    activeMinutes: Long?,
-    distanceCm: Long?
+    val day: String, // YYYY-MM-DD
+    val steps: Long?,
+    val activeGramCalories: Long?,
+    val restingGramCalories: Long?,
+    val activeMinutes: Long?,
+    val distanceCm: Long?
 )
