@@ -22,6 +22,9 @@ import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatDao
+import io.rebble.libpebblecommon.database.entity.HealthStatEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatSyncEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
@@ -67,8 +70,10 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         VibePatternEntity::class,
         HealthDataEntity::class,
         OverlayDataEntity::class,
+        HealthStatEntity::class,
+        HealthStatSyncEntity::class,
     ],
-    version = 28,
+    version = 29,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -88,6 +93,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 25, to = 26),
         AutoMigration(from = 26, to = 27),
         AutoMigration(from = 27, to = 28),
+        AutoMigration(from = 28, to = 29),
     ],
     exportSchema = true,
 )

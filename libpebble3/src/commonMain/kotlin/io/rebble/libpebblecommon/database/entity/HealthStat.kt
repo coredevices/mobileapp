@@ -5,6 +5,7 @@ import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import kotlin.time.Clock
 
 @GenerateRoomEntity(
     primaryKey = "key",
@@ -17,7 +18,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 data class HealthStat(
     val key: String,
     val payload: ByteArray,
-    val lastUpdated: Long = System.currentTimeMillis(),
+    val lastUpdated: Long = Clock.System.now().toEpochMilliseconds(),
 ) : BlobDbItem {
     override fun key(): UByteArray =
         key.encodeToByteArray().toUByteArray()

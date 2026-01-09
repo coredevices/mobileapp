@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.services
 
 import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.entity.HealthStat
