@@ -28,10 +28,10 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock.System
 
 class Health(
-        private val watchSettingsDao: WatchSettingsDao,
-        private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
-        private val healthDao: HealthDao,
-        private val watches: StateFlow<List<PebbleDevice>>,
+    private val watchSettingsDao: WatchSettingsDao,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    private val healthDao: HealthDao,
+    private val watches: StateFlow<List<PebbleDevice>>,
 ) : HealthApi {
     private val logger = Logger.withTag("Health")
 
@@ -39,14 +39,14 @@ class Health(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val healthUpdateFlow: Flow<Unit> =
-            watches.flatMapLatest { devices ->
-                val device = devices.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
-                device?.let {
-                    // Access the health service through the connected device
-                    // This returns a flow that emits when health updates occur
-                    flowOf(Unit)
-                } ?: emptyFlow()
-            }
+        watches.flatMapLatest { devices ->
+            val device = devices.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
+            device?.let {
+                // Access the health service through the connected device
+                // This returns a flow that emits when health updates occur
+                flowOf(Unit)
+            } ?: emptyFlow()
+        }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
         logger.d {
@@ -80,17 +80,17 @@ class Health(
         val lastNightSession = fetchAndGroupDailySleep(healthDao, todayStart, timeZone)
         val lastNightSleepSeconds = lastNightSession?.totalSleep ?: 0L
         val lastNightSleepHours =
-                if (lastNightSleepSeconds > 0) lastNightSleepSeconds / 3600f else null
+            if (lastNightSleepSeconds > 0) lastNightSleepSeconds / 3600f else null
 
         return HealthDebugStats(
-                totalSteps30Days = averages.totalSteps,
-                averageStepsPerDay = averages.averageStepsPerDay,
-                totalSleepSeconds30Days = averages.totalSleepSeconds,
-                averageSleepSecondsPerDay = averages.averageSleepSecondsPerDay,
-                todaySteps = todaySteps,
-                lastNightSleepHours = lastNightSleepHours,
-                latestDataTimestamp = latestTimestamp,
-                daysOfData = daysOfData
+            totalSteps30Days = averages.totalSteps,
+            averageStepsPerDay = averages.averageStepsPerDay,
+            totalSleepSeconds30Days = averages.totalSleepSeconds,
+            averageSleepSecondsPerDay = averages.averageSleepSecondsPerDay,
+            todaySteps = todaySteps,
+            lastNightSleepHours = lastNightSleepHours,
+            latestDataTimestamp = latestTimestamp,
+            daysOfData = daysOfData
         )
     }
 
@@ -110,14 +110,14 @@ class Health(
 }
 
 data class HealthSettings(
-        val heightMm: Short = 1700, // 170cm in mm (default height)
-        val weightDag: Short = 7000, // 70kg in decagrams (default weight)
-        val trackingEnabled: Boolean = false,
-        val activityInsightsEnabled: Boolean = false,
-        val sleepInsightsEnabled: Boolean = false,
-        val ageYears: Int = 35,
-        val gender: HealthGender = HealthGender.Female,
-        val imperialUnits: Boolean = false, // false = metric (km/kg), true = imperial (mi/lb)
+    val heightMm: Short = 1700, // 170cm in mm (default height)
+    val weightDag: Short = 7000, // 70kg in decagrams (default weight)
+    val trackingEnabled: Boolean = false,
+    val activityInsightsEnabled: Boolean = false,
+    val sleepInsightsEnabled: Boolean = false,
+    val ageYears: Int = 35,
+    val gender: HealthGender = HealthGender.Female,
+    val imperialUnits: Boolean = false, // false = metric (km/kg), true = imperial (mi/lb)
 )
 
 /** Time range for displaying health data */
@@ -129,29 +129,29 @@ enum class HealthTimeRange {
 
 /** Data structure for stacked sleep charts (weekly/monthly views). */
 data class StackedSleepData(
-        val label: String,
-        val lightSleepHours: Float,
-        val deepSleepHours: Float
+    val label: String,
+    val lightSleepHours: Float,
+    val deepSleepHours: Float
 )
 
 /** Data structure for weekly aggregated data (for monthly charts broken into weeks). */
 data class WeeklyAggregatedData(
-        val label: String, // e.g., "Mar 27 - Apr 4"
-        val value: Float?, // null when there's no data for this week
-        val weekIndex: Int // Position in the overall sequence
+    val label: String, // e.g., "Mar 27 - Apr 4"
+    val value: Float?, // null when there's no data for this week
+    val weekIndex: Int // Position in the overall sequence
 )
 
 /** Represents a segment of sleep in the daily view. */
 data class SleepSegment(
-        val startHour: Float, // Hour of day (0-24)
-        val durationHours: Float,
-        val type: OverlayType // Sleep or DeepSleep
+    val startHour: Float, // Hour of day (0-24)
+    val durationHours: Float,
+    val type: OverlayType // Sleep or DeepSleep
 )
 
 /** Daily sleep data with all segments and timing information. */
 data class DailySleepData(
-        val segments: List<SleepSegment>,
-        val bedtime: Float, // Start hour
-        val wakeTime: Float, // End hour
-        val totalSleepHours: Float
+    val segments: List<SleepSegment>,
+    val bedtime: Float, // Start hour
+    val wakeTime: Float, // End hour
+    val totalSleepHours: Float
 )

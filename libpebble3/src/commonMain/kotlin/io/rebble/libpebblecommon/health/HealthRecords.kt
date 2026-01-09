@@ -20,31 +20,31 @@ enum class OverlayType(val value: Int) {
 }
 
 data class StepsRecord(
-        val version: UShort,
-        val timestamp: UInt,
-        val steps: UByte,
-        val orientation: UByte,
-        val intensity: UShort,
-        val lightIntensity: UByte,
-        val flags: UByte,
-        val restingGramCalories: UShort,
-        val activeGramCalories: UShort,
-        val distanceCm: UShort,
-        val heartRate: UByte = 0u,
-        val heartRateWeight: UShort = 0u,
-        val heartRateZone: UByte = 0u
+    val version: UShort,
+    val timestamp: UInt,
+    val steps: UByte,
+    val orientation: UByte,
+    val intensity: UShort,
+    val lightIntensity: UByte,
+    val flags: UByte,
+    val restingGramCalories: UShort,
+    val activeGramCalories: UShort,
+    val distanceCm: UShort,
+    val heartRate: UByte = 0u,
+    val heartRateWeight: UShort = 0u,
+    val heartRateZone: UByte = 0u
 )
 
 data class OverlayRecord(
-        val version: UShort,
-        val type: OverlayType,
-        val offsetUTC: UInt,
-        val startTime: UInt,
-        val duration: UInt,
-        val steps: UShort,
-        val restingKiloCalories: UShort,
-        val activeKiloCalories: UShort,
-        val distanceCm: UShort
+    val version: UShort,
+    val type: OverlayType,
+    val offsetUTC: UInt,
+    val startTime: UInt,
+    val duration: UInt,
+    val steps: UShort,
+    val restingKiloCalories: UShort,
+    val activeKiloCalories: UShort,
+    val distanceCm: UShort
 )
 
 class RawStepsRecord : StructMappable() {
