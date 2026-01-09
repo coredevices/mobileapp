@@ -128,11 +128,6 @@ class NotificationHandler(
             }
             return null
         }
-        notificationAppDao.insertOrReplace(
-            appEntry.copy(
-                lastNotified = timeProvider.now().asMillisecond()
-            )
-        )
         val channel = appEntry.getChannelFor(sbn)
         val result = extractNotification(sbn, appEntry, channel)
         if (notificationConfig.value.dumpNotificationContent) {
@@ -162,6 +157,11 @@ class NotificationHandler(
 
         if (decision != NotificationDecision.NotSentAppMuted || decision != NotificationDecision.NotSendChannelMuted || decision != NotificationDecision.NotSendContactMuted) {
             notificationDao.insert(notification.toEntity(decision, channel?.id))
+            notificationAppDao.insertOrReplace(
+                appEntry.copy(
+                    lastNotified = timeProvider.now().asMillisecond()
+                )
+            )
         }
         if (decision != SendToWatch) {
             verboseLog { "Not sending notification from ${sbn.packageName.obfuscate(privateLogger)} because $decision" }
