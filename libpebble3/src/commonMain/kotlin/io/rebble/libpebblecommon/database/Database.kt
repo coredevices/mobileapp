@@ -9,6 +9,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
+import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
@@ -20,6 +21,10 @@ import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatDao
+import io.rebble.libpebblecommon.database.entity.HealthStatEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatSyncEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
@@ -27,6 +32,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -62,8 +68,12 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationEntity::class,
         ContactEntity::class,
         VibePatternEntity::class,
+        HealthDataEntity::class,
+        OverlayDataEntity::class,
+        HealthStatEntity::class,
+        HealthStatSyncEntity::class,
     ],
-    version = 27,
+    version = 28,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -82,6 +92,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26),
         AutoMigration(from = 26, to = 27),
+        AutoMigration(from = 27, to = 28),
     ],
     exportSchema = true,
 )
@@ -100,6 +111,8 @@ abstract class Database : RoomDatabase() {
     abstract fun notificationsDao(): NotificationDao
     abstract fun contactDao(): ContactDao
     abstract fun vibePatternDao(): VibePatternDao
+    abstract fun healthDao(): HealthDao
+    abstract fun healthStatDao(): HealthStatDao
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -52,6 +53,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
@@ -290,8 +292,30 @@ class FakeLibPebble : LibPebble {
         get() = flow { }
     override val healthSettings: Flow<HealthSettings>
         get() = flow { emit(HealthSettings()) }
+    override val healthUpdateFlow: Flow<Unit>
+        get() = flow { }
 
-    override fun updateHealthSettings(healthSettings: HealthSettings) {
+    override fun updateHealthSettings(healthSettings: HealthSettings) {}
+
+    override suspend fun getHealthDebugStats(): HealthDebugStats {
+        return HealthDebugStats(
+            totalSteps30Days = 0L,
+            averageStepsPerDay = 0,
+            totalSleepSeconds30Days = 0L,
+            averageSleepSecondsPerDay = 0,
+            todaySteps = 0L,
+            lastNightSleepHours = null,
+            latestDataTimestamp = null,
+            daysOfData = 0
+        )
+    }
+
+    override fun requestHealthData(fullSync: Boolean) {
+        // No-op for fake implementation
+    }
+
+    override fun sendHealthAveragesToWatch() {
+        // No-op for fake implementation
     }
 
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
@@ -551,6 +575,16 @@ class FakeConnectedDevice(
     override val languagePackInstallState: LanguagePackInstallState =
         LanguagePackInstallState.Idle()
     override val installedLanguagePack: InstalledLanguagePack? = null
+
+    override val healthUpdateFlow: SharedFlow<Unit> = MutableSharedFlow(replay = 0)
+
+    override suspend fun requestHealthData(fullSync: Boolean) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun sendHealthAveragesToWatch() {
+        TODO("Not yet implemented")
+    }
 }
 
 class FakeConnectedDeviceInRecovery(

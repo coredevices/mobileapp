@@ -32,6 +32,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppType
@@ -115,7 +116,11 @@ data class OtherPebbleApp(
 
 interface HealthApi {
     val healthSettings: Flow<HealthSettings>
+    val healthUpdateFlow: Flow<Unit>
     fun updateHealthSettings(healthSettings: HealthSettings)
+    suspend fun getHealthDebugStats(): HealthDebugStats
+    fun requestHealthData(fullSync: Boolean = false)
+    fun sendHealthAveragesToWatch()
 }
 
 interface Timeline {
