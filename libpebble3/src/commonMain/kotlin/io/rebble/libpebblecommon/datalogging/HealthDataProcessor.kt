@@ -9,14 +9,10 @@ import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.health.parsers.parseOverlayData
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
-import io.rebble.libpebblecommon.services.app.AppRunStateService
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -31,20 +27,19 @@ import kotlin.uuid.Uuid
  *
  * This class is called by Datalogging when health tags (81-85) are received,
  * and handles session tracking, data parsing, and database storage.
+ *
+ * All received health data is processed immediately to prevent data loss.
  */
 class HealthDataProcessor(
     private val scope: ConnectionCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
-    private val appRunStateService: AppRunStateService,
 ) {
     private val logger = Logger.withTag("HealthDataProcessor")
 
     private val healthSessions = mutableMapOf<UByte, HealthSession>()
-    private val isAppOpen = MutableStateFlow(false)
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null)
     private val lastTodayUpdateTime = MutableStateFlow(0L)
-    private val lastDataReceptionTime = MutableStateFlow(0L)
     private val _healthDataUpdated = MutableSharedFlow<Unit>(replay = 0)
 
     val healthDataUpdated: SharedFlow<Unit> = _healthDataUpdated
@@ -55,24 +50,8 @@ class HealthDataProcessor(
         private const val HEALTH_OVERLAY_TAG: UInt = 84u
         private const val HEALTH_HR_TAG: UInt = 85u
 
-        private const val BACKGROUND_THROTTLE_MS = 30 * 60 * 1000L // 30 minutes
-
         val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG)
     }
-
-    init {
-        // Track app open/close state for throttling
-        scope.launch {
-            appRunStateService
-                .runningApp
-                .map { it != null }
-                .distinctUntilChanged()
-                .collect { isOpen ->
-                    isAppOpen.value = isOpen
-                }
-        }
-    }
-
 
     fun handleSessionOpen(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
         if (tag !in HEALTH_TAGS) return
@@ -85,20 +64,6 @@ class HealthDataProcessor(
 
     fun handleSendDataItems(sessionId: UByte, payload: ByteArray, itemsLeft: UInt) {
         val session = healthSessions[sessionId] ?: return
-
-        // Throttle data reception if app is in background
-        val now = System.now().toEpochMilliseconds()
-        val timeSinceLastReception = now - lastDataReceptionTime.value
-        val appInForeground = isAppOpen.value
-
-        if (!appInForeground && timeSinceLastReception < BACKGROUND_THROTTLE_MS) {
-            logger.d {
-                "HEALTH_DATA: Throttling data reception - app in background and last reception was ${timeSinceLastReception / 60_000}min ago (need ${BACKGROUND_THROTTLE_MS / 60_000}min)"
-            }
-            return
-        }
-
-        lastDataReceptionTime.value = now
 
         val payloadSize = payload.size
 
