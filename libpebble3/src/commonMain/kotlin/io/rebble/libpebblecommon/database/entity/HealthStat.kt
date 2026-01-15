@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.database.entity
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlin.time.Clock
@@ -23,8 +24,8 @@ data class HealthStat(
     override fun key(): UByteArray =
         key.encodeToByteArray().toUByteArray()
 
-    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray =
-        payload.toUByteArray()
+    override fun value(params: ValueParams): UByteArray? =
+    payload.toUByteArray()
 
     override fun recordHashCode(): Int =
         key.hashCode() + payload.contentHashCode()
