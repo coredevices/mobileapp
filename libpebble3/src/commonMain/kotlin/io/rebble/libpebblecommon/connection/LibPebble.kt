@@ -116,7 +116,6 @@ data class OtherPebbleApp(
 
 interface HealthApi {
     val healthSettings: Flow<HealthSettings>
-    val healthUpdateFlow: Flow<Unit>
     fun updateHealthSettings(healthSettings: HealthSettings)
     suspend fun getHealthDebugStats(): HealthDebugStats
     fun requestHealthData(fullSync: Boolean = false)
@@ -320,6 +319,7 @@ class LibPebble3(
             libPebbleCoroutineScope.launch { forEachConnectedWatch { updateTime() } }
         }
         housekeeping.init()
+        health.init()
         legacyPhoneReceiver.init(currentCall)
         libPebbleCoroutineScope.launch {
             vibePatternDao.ensureAllDefaultsInserted()

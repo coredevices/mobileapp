@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 28,
-    "identityHash": "2d7c6217b18e4a12cd36a1e1da819f88",
+    "identityHash": "db4da49068b38530833a55e238e8a479",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -851,8 +851,8 @@
         ]
       },
       {
-        "tableName": "WatchSettingsEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `id` TEXT NOT NULL, `heightMm` INTEGER NOT NULL, `weightDag` INTEGER NOT NULL, `trackingEnabled` INTEGER NOT NULL, `activityInsightsEnabled` INTEGER NOT NULL, `sleepInsightsEnabled` INTEGER NOT NULL, `ageYears` INTEGER NOT NULL, `gender` INTEGER NOT NULL, `imperialUnits` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "tableName": "HealthSettingsEntryEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `id` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "recordHashcode",
@@ -880,53 +880,10 @@
             "notNull": true
           },
           {
-            "fieldPath": "record.heightMm",
-            "columnName": "heightMm",
-            "affinity": "INTEGER",
+            "fieldPath": "record.value",
+            "columnName": "value",
+            "affinity": "TEXT",
             "notNull": true
-          },
-          {
-            "fieldPath": "record.weightDag",
-            "columnName": "weightDag",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.trackingEnabled",
-            "columnName": "trackingEnabled",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.activityInsightsEnabled",
-            "columnName": "activityInsightsEnabled",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.sleepInsightsEnabled",
-            "columnName": "sleepInsightsEnabled",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.ageYears",
-            "columnName": "ageYears",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.gender",
-            "columnName": "gender",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "record.imperialUnits",
-            "columnName": "imperialUnits",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -937,8 +894,8 @@
         }
       },
       {
-        "tableName": "WatchSettingsSyncEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordId` TEXT NOT NULL, `transport` TEXT NOT NULL, `watchSynchHashcode` INTEGER NOT NULL, PRIMARY KEY(`recordId`, `transport`), FOREIGN KEY(`recordId`) REFERENCES `WatchSettingsEntity`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
+        "tableName": "HealthSettingsEntrySyncEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordId` TEXT NOT NULL, `transport` TEXT NOT NULL, `watchSynchHashcode` INTEGER NOT NULL, PRIMARY KEY(`recordId`, `transport`), FOREIGN KEY(`recordId`) REFERENCES `HealthSettingsEntryEntity`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "recordId",
@@ -968,7 +925,7 @@
         },
         "foreignKeys": [
           {
-            "table": "WatchSettingsEntity",
+            "table": "HealthSettingsEntryEntity",
             "onDelete": "CASCADE",
             "onUpdate": "CASCADE",
             "columns": [
@@ -1398,7 +1355,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2d7c6217b18e4a12cd36a1e1da819f88')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'db4da49068b38530833a55e238e8a479')"
     ]
   }
 }

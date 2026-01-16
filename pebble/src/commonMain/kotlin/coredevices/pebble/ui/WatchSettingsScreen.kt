@@ -387,7 +387,11 @@ please disable the option.""".trimIndent(),
         LaunchedEffect(Unit) {
             appUpdateTracker.acknowledgeCurrentVersion()
         }
-        val healthSettings by libPebble.healthSettings.collectAsState(HealthSettings())
+        val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
+        val healthSettings = healthSettingsNullable
+        if (healthSettings == null) {
+            return
+        }
         val weatherFetcher: WeatherFetcher = koinInject()
 
         val settingsItems = remember(
@@ -856,6 +860,7 @@ please disable the option.""".trimIndent(),
                     action = {
                         showHealthStatsDialog = true
                     },
+                    show = { debugOptionsEnabled },
                 ),
                 basicSettingsToggleItem(
                     title = "Weather Pins",

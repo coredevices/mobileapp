@@ -98,6 +98,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
+import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
@@ -111,7 +112,6 @@ import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
-import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.GetBytesService
 import io.rebble.libpebblecommon.services.HealthService
@@ -320,7 +320,7 @@ fun initKoin(
                 single { get<Database>().timelinePinDao() }
                 single { get<Database>().timelineReminderDao() }
                 single { get<Database>().calendarDao() }
-                single { get<Database>().watchSettingsDao() }
+                single { get<Database>().healthSettingsDao() }
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }

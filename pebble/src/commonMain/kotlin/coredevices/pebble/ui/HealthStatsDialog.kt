@@ -33,10 +33,9 @@ import co.touchlab.kermit.Logger
 import coredevices.ui.M3Dialog
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.health.HealthDebugStats
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = Logger.withTag("HealthStatsDialog")
 
@@ -51,21 +50,10 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
             try {
                 isRefreshing = true
                 // Pull ALL data from watch to reconcile any missing steps
-                libPebble.requestHealthData(fullSync = true)
+                val requested = libPebble.requestHealthData(fullSync = true)
 
-                // Wait for sync update with timeout
-                try {
-                    withTimeout(10_000) {
-                        libPebble.healthUpdateFlow.collect {
-                            // First emission means we got an update
-                            throw CancellationException("Got update")
-                        }
-                    }
-                } catch (e: CancellationException) {
-                    // Expected - flow collection cancelled by us
-                } catch (e: Exception) {
-                    Logger.w("HealthStatsDialog") { "Timeout waiting for health sync" }
-                }
+                // We don't know how long it will actually take for datalogging to sync health data
+                delay(5.seconds)
 
                 // Update stats
                 stats = libPebble.getHealthDebugStats()
@@ -152,7 +140,9 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
                         ) {
                             Text("Last Night's Sleep", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                s.lastNightSleepHours?.let { String.format("%.1fh", it) }
+                                s.lastNightSleepHours?.let {
+                                    "${it.format(1)}h"
+                                }
                                     ?: "--",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color =
@@ -176,7 +166,7 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
-                                "${String.format("%.1f", avgSleepHrs)}h/night",
+                                "${avgSleepHrs.format(1)}h/night",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -193,3 +183,6 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
         }
     }
 }
+
+expect fun Double.format(digits: Int): String
+fun Float.format(digits: Int): String = toDouble().format(digits)

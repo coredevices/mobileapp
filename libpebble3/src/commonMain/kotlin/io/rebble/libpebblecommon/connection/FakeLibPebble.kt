@@ -20,13 +20,14 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
-import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.health.HealthDebugStats
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
 import io.rebble.libpebblecommon.locker.AppPlatform
@@ -53,7 +54,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
@@ -291,9 +291,16 @@ class FakeLibPebble : LibPebble {
     override val analyticsEvents: Flow<AnalyticsEvent>
         get() = flow { }
     override val healthSettings: Flow<HealthSettings>
-        get() = flow { emit(HealthSettings()) }
-    override val healthUpdateFlow: Flow<Unit>
-        get() = flow { }
+        get() = flow { emit(HealthSettings(
+            heightMm = 1700,
+            weightDag = 7000,
+            trackingEnabled = false,
+            activityInsightsEnabled = false,
+            sleepInsightsEnabled = false,
+            ageYears = 35,
+            gender = HealthGender.Female,
+            imperialUnits = false,
+        )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
 
@@ -576,15 +583,7 @@ class FakeConnectedDevice(
         LanguagePackInstallState.Idle()
     override val installedLanguagePack: InstalledLanguagePack? = null
 
-    override val healthUpdateFlow: SharedFlow<Unit> = MutableSharedFlow(replay = 0)
-
-    override suspend fun requestHealthData(fullSync: Boolean) {
-        TODO("Not yet implemented")
-    }
-
-    override suspend fun sendHealthAveragesToWatch() {
-        TODO("Not yet implemented")
-    }
+    override suspend fun requestHealthData(fullSync: Boolean): Boolean = true
 }
 
 class FakeConnectedDeviceInRecovery(

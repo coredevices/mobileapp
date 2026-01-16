@@ -6,7 +6,7 @@ import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.dao.insertOverlayDataWithDeduplication
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
-import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.health.parsers.parseOverlayData
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
@@ -32,7 +32,7 @@ import kotlin.uuid.Uuid
  * Battery optimization is handled by throttling sync REQUESTS, not data reception.
  */
 class HealthDataProcessor(
-    private val scope: ConnectionCoroutineScope,
+    private val scope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
 ) {

@@ -225,9 +225,7 @@ object ConnectedPebble {
     interface Language : LanguageInstall, LanguageState
 
     interface Health {
-        val healthUpdateFlow: SharedFlow<Unit>
-        suspend fun requestHealthData(fullSync: Boolean)
-        suspend fun sendHealthAveragesToWatch()
+        suspend fun requestHealthData(fullSync: Boolean): Boolean
     }
 
     class Services(

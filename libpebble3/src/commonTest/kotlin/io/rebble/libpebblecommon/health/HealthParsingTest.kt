@@ -15,46 +15,46 @@ class HealthParsingTest {
         // ActiveCal(2), Distance(2), HR(1), HRWeight(2), HRZone(1)
 
         val buffer = DataBuffer(UByteArray(100))
-        buffer.endian = Endian.Little
+        buffer.setEndian(Endian.Little)
 
         // Header
         buffer.putUShort(1u) // Version
         buffer.putUInt(1600000000u) // Timestamp
-        buffer.putByte(0u) // Unused
-        buffer.putByte(16u) // RecordLength (approx)
-        buffer.putByte(2u) // RecordNum (2 records)
+        buffer.putUByte(0u) // Unused
+        buffer.putUByte(16u) // RecordLength (approx)
+        buffer.putUByte(2u) // RecordNum (2 records)
 
         // Record 1
-        buffer.putByte(100u) // Steps
-        buffer.putByte(1u) // Orientation
+        buffer.putUByte(100u) // Steps
+        buffer.putUByte(1u) // Orientation
         buffer.putUShort(500u) // Intensity
-        buffer.putByte(10u) // Light
-        buffer.putByte(2u) // Flags (Active)
+        buffer.putUByte(10u) // Light
+        buffer.putUByte(2u) // Flags (Active)
         buffer.putUShort(10u) // RestingCal
         buffer.putUShort(50u) // ActiveCal
         buffer.putUShort(7000u) // Distance
-        buffer.putByte(60u) // HR
+        buffer.putUByte(60u) // HR
         buffer.putUShort(1u) // HRWeight
-        buffer.putByte(1u) // HRZone
+        buffer.putUByte(1u) // HRZone
 
         // Record 2
-        buffer.putByte(150u) // Steps
-        buffer.putByte(2u) // Orientation
+        buffer.putUByte(150u) // Steps
+        buffer.putUByte(2u) // Orientation
         buffer.putUShort(600u) // Intensity
-        buffer.putByte(20u) // Light
-        buffer.putByte(0u) // Flags
+        buffer.putUByte(20u) // Light
+        buffer.putUByte(0u) // Flags
         buffer.putUShort(12u) // RestingCal
         buffer.putUShort(60u) // ActiveCal
         buffer.putUShort(8000u) // Distance
-        buffer.putByte(65u) // HR
+        buffer.putUByte(65u) // HR
         buffer.putUShort(1u) // HRWeight
-        buffer.putByte(1u) // HRZone
+        buffer.putUByte(1u) // HRZone
 
-        val data = buffer.data.toByteArray()
+        val data = buffer.array()
 
         // Now verify parsing logic (mimicking Datalogging.kt)
         val readBuffer = DataBuffer(data.toUByteArray())
-        readBuffer.endian = Endian.Little
+        readBuffer.setEndian(Endian.Little)
 
         val version = readBuffer.getUShort()
         val timestamp = readBuffer.getUInt()
@@ -64,7 +64,7 @@ class HealthParsingTest {
 
         assertEquals(1u, version)
         assertEquals(1600000000u, timestamp)
-        assertEquals(2u, recordNum)
+        assertEquals(2, recordNum)
 
         var currentTimestamp = timestamp
 
