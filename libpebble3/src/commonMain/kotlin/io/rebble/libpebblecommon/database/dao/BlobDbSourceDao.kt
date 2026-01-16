@@ -45,6 +45,7 @@ interface BlobDbRecord {
 data class ValueParams(
     val platform: WatchType,
     val capabilities: Set<ProtocolCapsFlag>,
+    val vibePatternDao: VibePatternDao? = null,
 )
 
 interface BlobDbItem {

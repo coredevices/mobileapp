@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -107,7 +108,9 @@ fun NotificationAppScreen(
         appWrapper?.let { appWrapper ->
             val app = appWrapper.app
             val bootConfig = rememberBootConfig()
-            Column {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
                 NotificationAppCard(
                     entry = appWrapper,
                     notificationApps = notificationApps,
@@ -150,70 +153,73 @@ fun NotificationAppScreen(
                         )
                     },
                 )
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    ElevatedCard(
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 6.dp
-                        ),
-                        modifier = Modifier.padding(10.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            modifier = Modifier.fillMaxWidth(),
+                // Channels section - only available on Android (iOS doesn't have notification channels)
+                if (platform == Platform.Android) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        ElevatedCard(
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 6.dp
+                            ),
+                            modifier = Modifier.padding(10.dp),
                         ) {
-                            Text("Channels", fontSize = 20.sp, modifier = Modifier.padding(5.dp))
-                            FilterChip(
-                                modifier = Modifier.padding(5.dp),
-                                onClick = {
-                                    viewModel.onlyNotified.value = !viewModel.onlyNotified.value
-                                },
-                                label = {
-                                    Text("Notified only")
-                                },
-                                selected = viewModel.onlyNotified.value,
-                                leadingIcon = if (viewModel.onlyNotified.value) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Filled.Done,
-                                            contentDescription = "Done icon",
-                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Channels", fontSize = 20.sp, modifier = Modifier.padding(5.dp))
+                                FilterChip(
+                                    modifier = Modifier.padding(5.dp),
+                                    onClick = {
+                                        viewModel.onlyNotified.value = !viewModel.onlyNotified.value
+                                    },
+                                    label = {
+                                        Text("Notified only")
+                                    },
+                                    selected = viewModel.onlyNotified.value,
+                                    leadingIcon = if (viewModel.onlyNotified.value) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Filled.Done,
+                                                contentDescription = "Done icon",
+                                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
                         }
                     }
-                }
-                LazyColumn {
-                    items(
-                        items = channelGroups,
-                        key = { it.id },
-                    ) { group ->
-                        if (channelGroups.size > 1) {
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        text = group.name ?: "Default Group",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                    )
-                                }
-                            )
+                    LazyColumn {
+                        items(
+                            items = channelGroups,
+                            key = { it.id },
+                        ) { group ->
+                            if (channelGroups.size > 1) {
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            text = group.name ?: "Default Group",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                        )
+                                    }
+                                )
+                            }
+                            group.channels.forEach { channel ->
+                                ChannelCard(
+                                    channelItem = channel,
+                                    app = app,
+                                    notificationApps = notificationApps,
+                                    channelCounts = channelCounts,
+                                    nav = nav,
+                                )
+                            }
+                            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                         }
-                        group.channels.forEach { channel ->
-                            ChannelCard(
-                                channelItem = channel,
-                                app = app,
-                                notificationApps = notificationApps,
-                                channelCounts = channelCounts,
-                                nav = nav,
-                            )
-                        }
-                        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                     }
                 }
             }

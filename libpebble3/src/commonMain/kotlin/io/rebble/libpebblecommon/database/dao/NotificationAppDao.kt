@@ -90,7 +90,13 @@ interface NotificationAppRealDao : NotificationAppItemDao {
         val existingItem = getEntry(writeItem.packageName)
         logger.d { "existingItem=$existingItem writeItem=$writeItem" }
         if (existingItem == null || writeItem.stateUpdated.instant > existingItem.stateUpdated.instant) {
-            insertOrReplace(writeItem)
+            // Watch can't modify these fields, so always preserve existing values from phone
+            val itemToSave = writeItem.copy(
+                vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
+                colorName = existingItem?.colorName ?: writeItem.colorName,
+                iconCode = existingItem?.iconCode ?: writeItem.iconCode,
+            )
+            insertOrReplace(itemToSave)
             markSyncedToWatch(
                 NotificationAppItemSyncEntity(
                     recordId = writeItem.packageName,
