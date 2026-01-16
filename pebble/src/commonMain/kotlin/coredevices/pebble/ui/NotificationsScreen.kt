@@ -130,9 +130,8 @@ fun NotificationAppCard(
     clickable: Boolean,
     showBadge: Boolean,
 ) {
-    val reallyClickable = clickable && platform == Platform.Android
     val app = entry.app
-    val modifier = if (reallyClickable) {
+    val modifier = if (clickable) {
         Modifier.clickable {
             nav.navigateTo(PebbleNavBarRoutes.NotificationAppRoute(app.packageName))
         }
@@ -170,7 +169,7 @@ fun NotificationAppCard(
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (reallyClickable) {
+                if (clickable) {
                     Icon(
                         Icons.Default.MoreHoriz,
                         "Details",

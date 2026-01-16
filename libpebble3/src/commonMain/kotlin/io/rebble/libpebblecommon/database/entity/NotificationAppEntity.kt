@@ -22,7 +22,9 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 import kotlinx.serialization.Serializable
+import io.rebble.libpebblecommon.timeline.toPebbleColor
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlin.time.Instant
 
 @Immutable
@@ -55,14 +57,36 @@ data class NotificationAppItem(
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
 
     override fun value(params: ValueParams): UByteArray? {
-        val m = StructMapper()
-        val entity = NotificationAppBlobItem(
-            attributes = attributes {
-                appName { name }
-                muteDayOfWeek { muteState.value }
-                lastUpdated { stateUpdated.instant }
-            }.map { it.asAttribute() }
-        )
+        val attributesList = attributes {
+            appName { name }
+            muteDayOfWeek { muteState.value }
+            lastUpdated { stateUpdated.instant }
+            
+            vibePatternName?.let { name ->
+                val pattern = params.vibePatternDao?.let { dao ->
+                    runBlocking {
+                        dao.getVibePattern(name)
+                    }
+                }
+                pattern?.let {
+                    vibrationPattern { it.pattern }
+                }
+            }
+            
+            colorName?.let { name ->
+                io.rebble.libpebblecommon.timeline.TimelineColor.findByName(name)?.let { color ->
+                    backgroundColor { color.toPebbleColor() }
+                }
+            }
+            
+            iconCode?.let { code ->
+                io.rebble.libpebblecommon.packets.blobdb.TimelineIcon.fromCode(code)?.let { icon ->
+                    icon { icon }
+                }
+            }
+        }.map { it.asAttribute() }
+        
+        val entity = NotificationAppBlobItem(attributes = attributesList)
         return entity.toBytes()
     }
 

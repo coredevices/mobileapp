@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.dao.ValueParams
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
@@ -45,6 +46,7 @@ data class BlobDbDaos(
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
     private val watchSettingsDao: WatchSettingsDao,
+    private val vibePatternDao: VibePatternDao,
     private val platformConfig: PlatformConfig,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
@@ -58,6 +60,8 @@ data class BlobDbDaos(
         }
         // because typing
     } as Set<BlobDbDao<BlobDbRecord>>
+    
+    fun getVibePatternDao(): VibePatternDao = vibePatternDao
 }
 
 interface TimeProvider {
@@ -140,6 +144,7 @@ class BlobDB(
         val params = ValueParams(
             platform = watchType,
             capabilities = capabilities,
+            vibePatternDao = blobDatabases.getVibePatternDao(),
         )
         watchScope.launch {
             if (unfaithful || !previouslyConnected) {
