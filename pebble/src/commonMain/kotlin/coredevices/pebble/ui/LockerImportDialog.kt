@@ -24,20 +24,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import co.touchlab.kermit.Logger
+import coredevices.pebble.account.FirestoreLocker
+import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.services.RealPebbleWebServices
 import coredevices.ui.M3Dialog
+import coredevices.util.CoreConfig
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import org.koin.compose.koinInject
+
+private val logger = Logger.withTag("LockerImportDialog")
 
 @Composable
 fun LockerImportDialog(
     onDismissRequest: () -> Unit,
-    onImportFromPebbleAccount: suspend ((progress: Float) -> Unit) -> Unit,
-    onStartFresh: () -> Unit,
-    isRebble: Boolean
+    isRebble: Boolean,
+    topBarParams: TopBarParams?,
+    onEnabled: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(-1f) }
+    val libPebble = rememberLibPebble()
+    val firestoreLocker: FirestoreLocker = koinInject()
+    val webServices = koinInject<RealPebbleWebServices>()
     M3Dialog(
         onDismissRequest = {
             if (!loading) {
@@ -55,7 +66,7 @@ fun LockerImportDialog(
         buttons = {
             TextButton(
                 onClick = {
-                    onStartFresh()
+                    onDismissRequest()
                 },
                 enabled = !loading,
             ) {
@@ -65,9 +76,18 @@ fun LockerImportDialog(
                 onClick = {
                     scope.launch {
                         loading = true
-                        onImportFromPebbleAccount { p ->
-                            progress = p
+                        try {
+                            firestoreLocker.importPebbleLocker(webServices, "https://appstore-api.rebble.io/api").collect {
+                                progress = it.first.toFloat() / it.second.toFloat()
+                            }
+                            progress = -1f
+                            libPebble.requestLockerSync().await()
+                            onEnabled()
+                        } catch (e: Exception) {
+                            logger.e(e) { "Error importing locker from pebble account: ${e.message}" }
+                            topBarParams?.showSnackbar("Error importing locker")
                         }
+                        onDismissRequest()
                     }
                 },
                 enabled = !loading,
@@ -129,9 +149,9 @@ fun LockerImportDialogPreview() {
     PreviewWrapper {
         LockerImportDialog(
             onDismissRequest = {},
-            onImportFromPebbleAccount = {},
-            onStartFresh = {},
             isRebble = true,
+            topBarParams = koinInject(),
+            onEnabled = {},
         )
     }
 }
@@ -142,9 +162,9 @@ fun LockerImportDialogNotRebblePreview() {
     PreviewWrapper {
         LockerImportDialog(
             onDismissRequest = {},
-            onImportFromPebbleAccount = {},
-            onStartFresh = {},
             isRebble = false,
+            topBarParams = koinInject(),
+            onEnabled = {},
         )
     }
 }

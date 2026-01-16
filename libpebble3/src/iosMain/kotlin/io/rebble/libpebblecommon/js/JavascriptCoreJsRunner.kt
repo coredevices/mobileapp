@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
@@ -46,14 +47,13 @@ class JavascriptCoreJsRunner(
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
-    private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
     private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
     private val functionRefs = mutableListOf<StableRef<*>>()
-    private var navigatorRef: StableRef<Map<String, Any>>? = null
+    private var navigatorRef: StableRef<JSValue>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
 
@@ -70,8 +70,10 @@ class JavascriptCoreJsRunner(
         // Create stable references for the eval/evalRaw functions to prevent GC from moving them
         val evalFn: (String) -> JSValue? = ::eval
         val evalRawFn: (String) -> JSValue? = ::evalRaw
-        functionRefs.add(StableRef.create(evalFn))
-        functionRefs.add(StableRef.create(evalRawFn))
+        val evalRef = StableRef.create(evalFn)
+        val evalRawRef = StableRef.create(evalRawFn)
+        functionRefs.add(evalRef)
+        functionRefs.add(evalRawRef)
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
@@ -84,27 +86,28 @@ class JavascriptCoreJsRunner(
         )
         interfacesRef = StableRef.create(instances)
         instances.forEach {
-            // Create a stable reference to prevent Kotlin GC from collecting/moving this map
-            // while JavaScriptCore still has references to it
-            val interfRef = StableRef.create(it.interf)
-            interfaceMapRefs.add(interfRef)
+            // Create a JavaScript object and set properties individually to avoid passing
+            // Kotlin Map objects which can be moved by GC
+            val jsObject = jsContext.evaluateScript("({})")!!
 
-            // Also create stable references for all functions in the map
-            it.interf.values.forEach { value ->
+            // Create stable references for all functions and set them on the JS object
+            it.interf.forEach { (key, value) ->
                 if (value != null) {
                     functionRefs.add(StableRef.create(value))
+                    jsObject[key] = value
                 }
             }
 
-            jsContext[it.name] = it.interf
+            // Store a reference to the Kotlin interf map to keep it alive
+            interfaceMapRefs.add(StableRef.create(it.interf))
+
+            jsContext[it.name] = jsObject
             it.onRegister(jsContext)
         }
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
-        val bundle = pkjsBundleIdentifier
-            ?.let { NSBundle.bundleWithIdentifier(it) ?: error("PKJS bundle with identifier $it not found") }
-            ?: NSBundle.mainBundle
+        val bundle = NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
             ?: error("Startup script not found in bundle")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
@@ -143,9 +146,12 @@ class JavascriptCoreJsRunner(
 
     @OptIn(NativeRuntimeApi::class)
     private fun tearDownJsContext() {
-        scope.cancel()
         _readyState.value = false
         runBlocking(threadContext) {
+            // Cancel the scope and wait for all jobs to complete before closing threadContext
+            scope.cancel()
+            scope.coroutineContext[kotlinx.coroutines.Job]?.join()
+
             interfacesRef?.let {
                 it.get().forEach { iface -> iface.close() }
                 it.dispose()
@@ -171,16 +177,18 @@ class JavascriptCoreJsRunner(
         evaluateInternalScript("JSTimeout")
     }
 
-    private val navigator = mapOf(
-        "userAgent" to "PKJS",
-        "geolocation" to emptyMap<String, Any>(),
-        "language" to NSLocale.currentLocale.localeIdentifier
-    )
-
     private fun setupNavigator() {
-        // Create stable reference to prevent GC from collecting navigator while JS holds references
-        navigatorRef = StableRef.create(navigator)
-        jsContext?.set("navigator", navigator)
+        // Create a JavaScript object for navigator to avoid passing Kotlin Map objects
+        val navigatorObj = jsContext?.evaluateScript("({})")!!
+        val geolocationObj = jsContext?.evaluateScript("({})")!!
+
+        navigatorObj["userAgent"] = "PKJS"
+        navigatorObj["geolocation"] = geolocationObj
+        navigatorObj["language"] = NSLocale.currentLocale.localeIdentifier
+
+        // Keep a reference to prevent the JSValue from being collected
+        navigatorRef = StableRef.create(navigatorObj)
+        jsContext?.set("navigator", navigatorObj)
     }
 
     override suspend fun start() {
@@ -192,6 +200,8 @@ class JavascriptCoreJsRunner(
         evaluateInternalScript("startup")
         logger.d { "Startup script evaluated" }
         loadAppJs(jsPath.toString())
+        // Uncomment to reproduce JSCore crash
+//        reproduceProductionCrash(scope, this)
     }
 
     override suspend fun stop() {
@@ -215,20 +225,6 @@ class JavascriptCoreJsRunner(
             jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
         }
         return true
-    }
-
-    override suspend fun signalAppMessageAck(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
-    }
-
-    override suspend fun signalAppMessageNack(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {

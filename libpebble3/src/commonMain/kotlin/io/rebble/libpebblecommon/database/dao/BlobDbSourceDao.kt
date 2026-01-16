@@ -42,8 +42,13 @@ interface BlobDbRecord {
     val record: BlobDbItem
 }
 
+data class ValueParams(
+    val platform: WatchType,
+    val capabilities: Set<ProtocolCapsFlag>,
+)
+
 interface BlobDbItem {
     fun key(): UByteArray
-    fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray?
+    fun value(params: ValueParams): UByteArray?
     fun recordHashCode(): Int
 }

@@ -115,7 +115,7 @@ class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
 private val logger = Logger.withTag("WatchHomeScreen")
 
 @Composable
-fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
+fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
@@ -382,7 +382,7 @@ fun WatchHomeScreen(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen
                     startDestination = currentTab.route,
                     modifier = Modifier.padding(windowInsets),
                 ) {
-                    addNavBarRoutes(navBarNav, topBarParams, experimentalRoute, indexScreen, viewModel)
+                    addNavBarRoutes(navBarNav, topBarParams, indexScreen, viewModel)
                 }
             }
         }
@@ -431,7 +431,7 @@ fun WatchHomePreview() {
     PreviewWrapper {
         val viewModel: WatchHomeViewModel = koinInject()
         viewModel.selectedTab.value = WatchHomeNavTab.Watches
-        WatchHomeScreen(NoOpCoreNav, null, { _, _ ->})
+        WatchHomeScreen(NoOpCoreNav,  { _, _ ->})
     }
 }
 

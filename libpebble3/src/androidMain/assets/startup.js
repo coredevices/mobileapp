@@ -248,16 +248,16 @@ navigator.geolocation.clearWatch = (id) => {
         const payload = data ? JSON.parse(data) : {};
         dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_ACK, { payload });
 
-        if (payload.transactionId !== undefined) {
-            removeAppMessageCallbacksForTransactionId(payload.transactionId);
+        if (payload.data !== undefined && payload.data.transactionId !== undefined) {
+            removeAppMessageCallbacksForTransactionId(payload.data.transactionId);
         }
     }
     global.signalAppMessageNack = (data) => {
         const payload = data ? JSON.parse(data) : {};
         dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE_NACK, { payload });
 
-        if (payload.transactionId !== undefined) {
-            removeAppMessageCallbacksForTransactionId(payload.transactionId);
+        if (payload.data !== undefined && payload.data.transactionId !== undefined) {
+            removeAppMessageCallbacksForTransactionId(payload.data.transactionId);
         }
     }
     global.signalShowConfiguration = () => {

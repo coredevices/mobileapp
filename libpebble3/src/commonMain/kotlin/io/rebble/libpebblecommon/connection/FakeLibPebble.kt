@@ -46,6 +46,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
@@ -171,6 +172,8 @@ class FakeLibPebble : LibPebble {
     ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
+    override suspend fun addAppToLocker(app: LockerEntry) {
+    }
 
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 

@@ -23,3 +23,10 @@ actual fun createImageBitmapFromPixelArray(
         null
     }
 }
+
+actual fun isScreenshotFinished(
+    buffer: DataBuffer,
+    expectedSize: Int
+): Boolean {
+    return buffer.remaining == 0
+}

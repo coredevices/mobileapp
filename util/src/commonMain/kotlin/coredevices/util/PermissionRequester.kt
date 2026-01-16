@@ -35,6 +35,7 @@ fun Permission.name(): String = when (this) {
     Permission.ExternalStorage -> "External Storage"
     Permission.SetAlarms -> "Set Alarms"
     Permission.BatteryOptimization -> "Exempt from Battery Optimizations"
+    Permission.Beeper -> "Access Beeper"
 }
 
 fun Permission.description(): String = when (this) {
@@ -52,6 +53,7 @@ fun Permission.description(): String = when (this) {
     Permission.ExternalStorage -> "To store recordings"
     Permission.SetAlarms -> "To notify when a reminder is triggered"
     Permission.BatteryOptimization -> "To handle recordings in the background"
+    Permission.Beeper -> "To send messages via Beeper"
 }
 
 abstract class PermissionRequester(

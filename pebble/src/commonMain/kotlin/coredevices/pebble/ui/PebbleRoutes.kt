@@ -154,7 +154,6 @@ inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
 fun NavGraphBuilder.addNavBarRoutes(
     nav: NavBarNav,
     topBarParams: TopBarParams,
-    experimentalRoute: CoreRoute?,
     indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit,
     viewModel: WatchHomeViewModel,
 ) {
@@ -208,7 +207,7 @@ fun NavGraphBuilder.addNavBarRoutes(
         NotificationAppScreen(topBarParams, route.packageName, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchSettingsRoute>(viewModel) {
-        WatchSettingsScreen(nav, topBarParams, experimentalRoute)
+        WatchSettingsScreen(nav, topBarParams)
     }
     composableWithAnimations<PebbleNavBarRoutes.PermissionsRoute>(viewModel) {
         PermissionsScreen(nav, topBarParams)
@@ -252,9 +251,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
 }
 
-fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, experimentalRoute: CoreRoute?, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
+fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     composable<PebbleRoutes.WatchHomeRoute> {
-        WatchHomeScreen(coreNav, experimentalRoute, indexScreen)
+        WatchHomeScreen(coreNav, indexScreen)
     }
     composable<PebbleRoutes.FirmwareSideloadRoute> {
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()
@@ -273,6 +272,6 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, experimentalRoute: CoreRou
         )
     }
     composable<PebbleRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(coreNav)
+        AppstoreSettingsScreen(coreNav, topBarParams = null)
     }
 }

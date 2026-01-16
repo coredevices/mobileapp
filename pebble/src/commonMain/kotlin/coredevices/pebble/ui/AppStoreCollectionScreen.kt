@@ -204,6 +204,7 @@ fun AppStoreCollectionScreen(
                         navBarNav,
                         false,
                         width = 120.dp,
+                        topBarParams = topBarParams,
                     )
                 }
                 if (!reachedMax) {

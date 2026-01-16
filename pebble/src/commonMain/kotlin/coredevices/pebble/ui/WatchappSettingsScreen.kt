@@ -145,7 +145,7 @@ private class SettingsRequestInterceptor(
     private val onError: suspend () -> Unit,
     private val onSuccess: suspend (String) -> Unit,
 ) : RequestInterceptor {
-    private val PREFIX = "pebblejs://close#"
+    private val PREFIX = "pebblejs://close" // non-compliant intercept for close, because some apps just use "close"
     private val scope = CoroutineScope(Dispatchers.Default)
 
     override fun onInterceptUrlRequest(
@@ -155,8 +155,14 @@ private class SettingsRequestInterceptor(
         if (!request.url.startsWith(PREFIX)) {
             return WebRequestInterceptResult.Allow
         }
-        val data = request.url.removePrefix(PREFIX).decodeURLPart()
-        if (data.isNotEmpty()) {
+
+        // Matches PREFIX followed by #, /, or /? 
+        // Ideally all apps would send pebblejs://close#param1=value1&param2=value2 but it's not the case.
+        // The original Pebble Technology Corp App did deviate from the official spec and handled these wrong cases too.
+        val closeUrlRegex = Regex("""^pebblejs://close(?:#|/\?|/)(.*)$""")
+
+        val data = closeUrlRegex.find(request.url)?.groupValues?.get(1)?.decodeURLPart()
+        if (data?.isNotEmpty() == true) {
             scope.launch {
                 delay(10)
                 onSuccess(data)

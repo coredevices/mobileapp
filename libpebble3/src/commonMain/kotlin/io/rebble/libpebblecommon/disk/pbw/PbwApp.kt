@@ -49,7 +49,7 @@ class PbwApp(private val path: Path) {
     }
 }
 
-fun PbwApp.toLockerEntry(now: Instant): LockerEntry {
+fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
     val platforms = info.targetPlatforms.mapNotNull {
         val watchType = WatchType.fromCodename(it) ?: run {
@@ -77,5 +77,6 @@ fun PbwApp.toLockerEntry(now: Instant): LockerEntry {
         sideloadeTimestamp = now.asMillisecond(),
         platforms = platforms,
         appstoreData = null,
+        orderIndex = orderIndex,
     )
 }

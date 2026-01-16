@@ -7,7 +7,9 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.util.asFlow
 import kotlinx.coroutines.launch
+import java.io.Serializable
 import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlin.uuid.toKotlinUuid
 
 class PebbleKitClassicStartListeners(
@@ -23,21 +25,23 @@ class PebbleKitClassicStartListeners(
         coroutineScope.launch {
             IntentFilter(INTENT_APP_START).asFlow(context, exported = true).collect { intent ->
                 logger.v { "Got intent: $intent" }
-                val uuid = intent.getSerializableExtra(APP_UUID) as UUID? ?: return@collect
+                val uuid = intent.getSerializableExtra(APP_UUID)?.asUuid() ?: return@collect
                 logger.d { "Got app start: $uuid" }
-                libPebble.launchApp(uuid.toKotlinUuid())
+                libPebble.launchApp(uuid)
             }
         }
 
         coroutineScope.launch {
             IntentFilter(INTENT_APP_STOP).asFlow(context, exported = true).collect { intent ->
-                val uuid = intent.getSerializableExtra(APP_UUID) as UUID? ?: return@collect
+                val uuid = intent.getSerializableExtra(APP_UUID)?.asUuid() ?: return@collect
                 logger.d { "Got app stop: $uuid" }
-                libPebble.stopApp(uuid.toKotlinUuid())
+                libPebble.stopApp(uuid)
             }
         }
     }
 }
+
+fun Serializable.asUuid(): Uuid? = (this as? UUID)?.toKotlinUuid() ?: (this as? String)?.let { Uuid.parse(it) }
 
 /**
  * Intent broadcast to pebble.apk responsible for launching a watch-app on the connected watch. This intent is

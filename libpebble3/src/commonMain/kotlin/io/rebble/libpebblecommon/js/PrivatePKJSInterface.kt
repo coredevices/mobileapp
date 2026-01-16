@@ -123,6 +123,12 @@ abstract class PrivatePKJSInterface(
         }))
     }
 
+    private suspend fun sendAppMessageNack(transactionId: Int) {
+        val payload = buildAppMessageNack(transactionId, "nack")
+        logger.v { "AppMessage NACK: $transactionId" }
+        jsRunner.eval("signalAppMessageNack($payload)")
+    }
+
     open fun sendAppMessageString(jsonAppMessage: String): Int {
         logger.v { "sendAppMessageString" }
         val request = AppMessageRequest(jsonAppMessage)
@@ -139,9 +145,7 @@ abstract class PrivatePKJSInterface(
                     jsRunner.eval("signalAppMessageAck(${Json.encodeToString(Json.encodeToString(payload))})")
                 }
                 is AppMessageResult.NACK -> {
-                    val payload = buildAppMessageNack(result.transactionId.toInt(), "nack")
-                    logger.v { "AppMessage NACK: ${result.transactionId}" }
-                    jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})")
+                    sendAppMessageNack(result.transactionId.toInt())
                 }
             }
         }
@@ -149,8 +153,7 @@ abstract class PrivatePKJSInterface(
             if (!outgoingAppMessages.tryEmit(request)) {
                 logger.e { "Failed to emit outgoing AppMessage" }
                 job.cancel("Failed to emit outgoing AppMessage")
-                val payload = buildAppMessageNack(-1, "disconnected")
-                scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                scope.launch { sendAppMessageNack(-1) }
                 return -1
             }
             val transactionId = runBlocking {
@@ -163,15 +166,13 @@ abstract class PrivatePKJSInterface(
             return when (transactionId) {
                 null -> {
                     logger.e { "Timeout while waiting for AppMessage transaction ID" }
-                    val payload = buildAppMessageNack(-1, "timeout")
-                    scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                    scope.launch { sendAppMessageNack(-1) }
                     job.cancel("Timeout while waiting for AppMessage transaction ID")
                     -1
                 }
                 is AppMessageRequest.State.DataError -> {
                     logger.e { "Data error while sending AppMessage" }
-                    val payload = buildAppMessageNack(-1, "data_error")
-                    scope.launch { jsRunner.eval("signalAppMessageNack(${Json.encodeToString(Json.encodeToString(payload))})") }
+                    scope.launch { sendAppMessageNack(-1) }
                     job.cancel("Data error while sending AppMessage")
                     -1
                 }

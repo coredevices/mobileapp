@@ -394,20 +394,6 @@ class WebViewJsRunner(
         return true
     }
 
-    override suspend fun signalAppMessageAck(data: String?): Boolean {
-        withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageAck(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
-        }
-        return true
-    }
-
-    override suspend fun signalAppMessageNack(data: String?): Boolean {
-        withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageNack(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
-        }
-        return true
-    }
-
     override suspend fun signalShowConfiguration() {
         readyState.first { it }
         withContext(Dispatchers.Main) {

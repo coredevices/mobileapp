@@ -174,6 +174,7 @@ fun MyCollectionScreen(
                                 navBarNav,
                                 runningApp == entry.uuid,
                                 width = 120.dp,
+                                topBarParams = topBarParams,
                             )
                         }
                     }

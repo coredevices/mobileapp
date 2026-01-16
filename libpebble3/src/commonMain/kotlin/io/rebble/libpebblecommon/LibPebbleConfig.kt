@@ -101,6 +101,7 @@ data class NotificationConfig(
     val obfuscateContent: Boolean = true,
     val sendLocalOnlyNotifications: Boolean = false,
     val storeNotifiationsForDays: Int = 7,
+    val storeDisabledNotifications: Boolean = false,
     val addShowsUserInterfaceActions: Boolean = false,
     val alwaysSendNotifications: Boolean = true,
     /**

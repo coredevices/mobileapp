@@ -15,15 +15,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
@@ -56,6 +53,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
@@ -160,7 +158,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
             null
         ) ?: mutableStateOf(null)
         val appIsRunning = runningApp == uuid
-        val platform: Platform = koinInject()
         val connected = lastConnectedWatch is ConnectedPebbleDevice
         val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val viewModel = koinViewModel<LockerAppViewModel>()
@@ -299,6 +296,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                 val connectedIdentifier = lastConnectedWatch?.identifier
                 val showStartApp =
                     entry.isCompatible && entry.commonAppType is CommonAppType.Locker && !appIsRunning
+                            && !viewModel.addedToLocker
                 if (showStartApp) {
                     val loadToWatchText = if (entry.isSynced()) {
                         ""
@@ -339,20 +337,32 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                             it.distinctBy { it.source.url }.size < it.size
                         } ?: false
                     }
+                    val storeApp = entry.commonAppType.storeApp
                     var variantsExpanded by remember { mutableStateOf(false) }
                     Row(Modifier.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                         PebbleElevatedButton(
-                            text = "Add To Locker",
+                            text = "Add To Watch",
                             onClick = {
                                 // Global scope because it could take a second to download/sync/load app
                                 GlobalScope.launch {
-                                    viewModel.addedToLocker = true
-                                    webServices.addToLocker(entry.commonAppType.storedId, entry.commonAppType.storeSource.url)
-                                    libPebble.requestLockerSync()
+                                    val lockerEntry = storeApp?.toLockerEntry(entry.commonAppType.storeSource.url, timelineToken = null) // TODO timeline token
+                                    val watch = lastConnectedWatch as? ConnectedPebbleDevice
+                                    if (lockerEntry != null) {
+                                        viewModel.addedToLocker = true
+                                        libPebble.addAppToLocker(lockerEntry)
+                                        if (watch != null) {
+                                            libPebble.launchApp(
+                                                entry,
+                                                topBarParams,
+                                                watch.identifier
+                                            )
+                                        }
+                                        webServices.addToLocker(entry.commonAppType, timelineToken = lockerEntry.userToken)
+                                    }
                                 }
                             },
                             icon = Icons.Default.Add,
-                            contentDescription = "Add To Locker",
+                            contentDescription = "Add To Watch",
                             primaryColor = true,
                             modifier = Modifier.padding(end = 8.dp),
                         )
@@ -436,7 +446,11 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid, navBarNav: NavBarNav
                             text = "Move To Top",
                             onClick = {
                                 scope.launch {
-                                    libPebble.setAppOrder(entry.uuid, -1)
+                                    val index = when (entry.type) {
+                                        AppType.Watchface -> -1
+                                        AppType.Watchapp -> SystemApps.entries.size
+                                    }
+                                    libPebble.setAppOrder(entry.uuid, index)
                                 }
                             },
                             icon = Icons.Default.VerticalAlignTop,

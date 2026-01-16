@@ -220,4 +220,8 @@ private fun Permission.asAndroidPermissions(): List<String> = when (this) {
 
     Permission.SetAlarms -> throw IllegalArgumentException("Shouldn't be calling this for SetAlarms")
     Permission.BatteryOptimization -> throw IllegalArgumentException("Shouldn't be calling this for BatteryOptimization")
+    Permission.Beeper -> listOf(
+        "com.beeper.android.permission.READ_PERMISSION",
+        "com.beeper.android.permission.SEND_PERMISSION"
+    )
 }

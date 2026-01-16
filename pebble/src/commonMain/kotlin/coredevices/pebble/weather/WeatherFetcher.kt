@@ -100,9 +100,10 @@ class WeatherFetcher(
             libPebble.delete(day.dayUuid)
         }
 
+        val dayTempString = dailyForecast.day?.temp ?: "-"
         createTimelinePin(
             title = "Sunset",
-            subtitle = "-/${dailyForecast.night.temp}°",
+            subtitle = "$dayTempString/${dailyForecast.night.temp}°",
             dayOrNight = dailyForecast.night,
             timestamp = dailyForecast.sunset,
             uuid = day.nightUuid,

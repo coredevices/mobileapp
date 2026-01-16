@@ -75,7 +75,7 @@ fun BootConfig.Config.Notifications.iconUrlFor(bundleId: String, size: Int): Str
 expect fun bootConfigPlatform(): String
 
 interface BootConfigProvider {
-    suspend fun setUrl(url: String)
+    suspend fun setUrl(url: String?)
     fun getUrl(): String?
     suspend fun getBootConfig(): BootConfig?
 }
@@ -86,9 +86,13 @@ class RealBootConfigProvider(
 ) : BootConfigProvider {
     private val logger = Logger.withTag("PebbleAccount")
 
-    override suspend fun setUrl(url: String) {
+    override suspend fun setUrl(url: String?) {
         logger.d("setUrl $url")
-        settings.putString(BOOTCONFIG_URL_KEY, url)
+        if (url != null) {
+            settings.putString(BOOTCONFIG_URL_KEY, url)
+        } else {
+            settings.remove(BOOTCONFIG_URL_KEY)
+        }
         // Force to fetch it again (just in case that doesn't work right away)
         settings.remove(BOOTCONFIG_KEY)
         fetch()

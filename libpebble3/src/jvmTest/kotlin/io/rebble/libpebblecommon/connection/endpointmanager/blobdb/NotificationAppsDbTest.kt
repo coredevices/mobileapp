@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import coredev.BlobDatabase
 import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.asNotificationAppItem
@@ -142,7 +143,8 @@ class NotificationAppsDbTest {
             colorName = null,
             iconCode = null,
         )
-        val encoded = item.value(WatchType.APLITE, emptySet())!!
+        val params = ValueParams(WatchType.APLITE, emptySet())
+        val encoded = item.value(params)!!
         val write = DbWrite(
             token = 1.toUShort(),
             database = BlobDatabase.CannedResponses,

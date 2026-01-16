@@ -1,5 +1,6 @@
 package coredevices.coreapp.ui.navigation
 
+import BugReportButton
 import CommonRoutes
 import CoreNav
 import CoreRoute
@@ -48,10 +49,14 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 scope.launch {
                     deepLinks.navigateToDeepLink.collect { route ->
                         logger.d { "navigateToDeepLink $route" }
-                        if (route is NavUri) {
-                            navController.navigate(route)
-                        } else {
-                            navController.navigate(route)
+                        try {
+                            if (route is NavUri) {
+                                navController.navigate(route)
+                            } else {
+                                navController.navigate(route)
+                            }
+                        } catch (e: IllegalArgumentException) {
+                            logger.w(e) { "Failed to navigate to $route" }
                         }
                     }
                 }
@@ -76,14 +81,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
         }
     }
     val experimentalDevices: ExperimentalDevices = koinInject()
-    val experimentalRoute = if (experimentsEnabled()) {
-        experimentalDevices.home()
-    } else {
-        null
-    }
     NavHost(navController, startDestination = startDestination) {
         experimentalDevices.addExperimentalRoutes(this, coreNav)
-        addPebbleRoutes(coreNav, experimentalRoute, indexScreen = { topBarParams, navBarNav ->
+        addPebbleRoutes(coreNav, indexScreen = { topBarParams, navBarNav ->
             experimentalDevices.IndexScreen(coreNav, topBarParams)
         })
         if (CommonBuildKonfig.QA) {

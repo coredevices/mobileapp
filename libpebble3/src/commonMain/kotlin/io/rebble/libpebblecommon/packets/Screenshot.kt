@@ -52,8 +52,8 @@ enum class ScreenshotResponseCode(val rawCode: UByte) {
 }
 
 enum class ScreenshotVersion(val rawCode: UInt, val bitsPerPixel: Int) {
-    BLACK_WHITE_1_BIT(1u, 8),
-    COLOR_8_BIT(2u, 1);
+    BLACK_WHITE_1_BIT(1u, 1),
+    COLOR_8_BIT(2u, 8);
 
     companion object {
         fun fromRawCode(rawCode: UInt): ScreenshotVersion {

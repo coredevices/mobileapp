@@ -53,6 +53,7 @@ class IosPermissionRequester(
             Permission.ExternalStorage -> TODO()
             Permission.SetAlarms -> TODO()
             Permission.BatteryOptimization -> TODO()
+            Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
         }
     }
 
@@ -71,6 +72,7 @@ class IosPermissionRequester(
         Permission.ExternalStorage -> TODO()
         Permission.SetAlarms -> TODO()
         Permission.BatteryOptimization -> TODO()
+        Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
     }
 
     override fun openPermissionsScreen(uiContext: PlatformUiContext) {

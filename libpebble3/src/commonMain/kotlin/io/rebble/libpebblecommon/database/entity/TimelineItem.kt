@@ -1,13 +1,12 @@
 package io.rebble.libpebblecommon.database.entity
 
 import androidx.room.Embedded
-import co.touchlab.kermit.Logger
 import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondDuration
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
-import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
@@ -18,8 +17,8 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createStringListAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createTextAttribute
-import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUByteAttribute
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntAttribute
 import io.rebble.libpebblecommon.util.TimelineAttributeFactory.createUIntListAttribute
 import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.serialization.Serializable
@@ -133,6 +132,15 @@ sealed class BaseAttribute {
         override fun asAttribute(): TimelineItem.Attribute =
             createUIntAttribute(attribute, value)
     }
+
+    @Serializable
+    data class UByteAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UByte,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            createUByteAttribute(attribute, value)
+    }
 }
 
 @Serializable
@@ -162,7 +170,7 @@ interface DbTimelineItem : BlobDbItem {
 
     override fun recordHashCode(): Int = content.hashCode()
     override fun key(): UByteArray = SUUID(StructMapper(), itemId).toBytes()
-    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
+    override fun value(params: ValueParams): UByteArray? {
         val item = TimelineItem(
             itemId = itemId,
             parentId = content.parentId,
@@ -172,7 +180,7 @@ interface DbTimelineItem : BlobDbItem {
             flags = TimelineItem.Flag.makeFlags(content.flags),
             layout = content.layout,
             attributes = content.attributes.filterNot {
-                it.attribute == TimelineAttribute.VibrationPattern && !capabilities.contains(
+                it.attribute == TimelineAttribute.VibrationPattern && !params.capabilities.contains(
                     ProtocolCapsFlag.SupportsCustomVibePatterns)
             }.map { it.asAttribute() },
             actions = content.actions.map { it.asAction() },

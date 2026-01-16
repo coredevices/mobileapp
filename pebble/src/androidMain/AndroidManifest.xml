@@ -8,7 +8,6 @@
         <provider
             android:authorities="coredevices.coreapp.pebblekit"
             android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider"
-            android:permission="io.rebble.pebblekit2.permission.READ_PROVIDER"
             android:exported="true" />
     </application>
 </manifest>

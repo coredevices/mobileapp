@@ -4,6 +4,7 @@ import CommonRoutes
 import CoreNav
 import DocumentAttachment
 import NextBugReportContext
+import PlatformShareLauncher
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.InsertPhoto
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.BottomAppBarDefaults
@@ -70,7 +73,9 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.setUser
+import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.ui.SignInButton
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.Platform
 import coredevices.util.emailOrNull
@@ -81,6 +86,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -148,21 +154,16 @@ fun BugReportScreen(
             it.toUserProps()
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser.toUserProps())
-        val googleAuthUtil = if (platform.isAndroid) {
-            val context = getAndroidActivity()
-            koinInject<GoogleAuthUtil> { parametersOf(context) }
-        } else {
-            koinInject<GoogleAuthUtil>()
-        }
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val analyticsBackend: AnalyticsBackend = koinInject()
-        val canSendReports = bugReportProcessor.canSendReports()
 
-        fun sendLogs() {
+        val keyboardController = LocalSoftwareKeyboardController.current
+        val canSendReports = bugReportProcessor.canSendReports()
+        val platformShareLauncher: PlatformShareLauncher = koinInject()
+
+        fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
 
             // Check if user is signed in before proceeding
-            if (user == null) {
+            if (user == null && !shareLocally) {
                 setStatus("Please sign in with Google before submitting a bug report")
                 return
             }
@@ -173,7 +174,7 @@ fun BugReportScreen(
             scope.launch {
                 // Extract Google ID token from current user
                 val currentUser = user
-                if (currentUser == null) {
+                if (currentUser == null && !shareLocally) {
                     setStatus("Please sign in with Google before submitting a bug report")
                     setSending(false)
                     return@launch
@@ -181,8 +182,8 @@ fun BugReportScreen(
 
                 val params = BugReportGenerationParams(
                     userMessage = userMessage,
-                    userName = currentUser.userName,
-                    userEmail = currentUser.userEmail,
+                    userName = currentUser?.userName,
+                    userEmail = currentUser?.userEmail,
                     screenContext = nextBugReportContext.nextContext ?: "",
                     attachments = attachments ?: emptyList(),
                     sendRecording = sendRecording,
@@ -190,7 +191,8 @@ fun BugReportScreen(
                     imageAttachments = imageAttachments ?: emptyList(),
                     fetchPebbleLogs = pebble,
                     fetchPebbleCoreDump = pebble,
-                    includeExperimentalDebugInfo = !pebble
+                    includeExperimentalDebugInfo = !pebble,
+                    shareLocally = shareLocally,
                 )
 
                 // Process bug report directly in all cases for Phase 1
@@ -209,10 +211,20 @@ fun BugReportScreen(
                         }
 
                         BugReportState.GatheringWatchLogs -> {
-                            coreNav.goBack()
+                            if (!shareLocally) {
+                                coreNav.goBack()
+                            } else {
+                                setStatus("Gathering Watch Logs")
+                            }
                         }
 
                         BugReportState.UploadingAttachments -> Unit
+                        is BugReportState.ReadyToShare -> {
+                            platformShareLauncher.share(it.name, it.file)
+                            setSending(false)
+                            setStatus("")
+                            setSendingProgress(null)
+                        }
                     }
                 }
             }
@@ -224,29 +236,6 @@ fun BugReportScreen(
 
         fun openImageAttachmentScreen() {
             imageAttachmentScreenLauncher?.invoke()
-        }
-
-        fun signIn() {
-            scope.launch {
-                val credential = try {
-                    googleAuthUtil.signInGoogle() ?: return@launch
-                } catch (e: Exception) {
-                    setStatus(e.message ?: "Unknown error")
-                    return@launch
-                }
-                try {
-                    if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
-                        Logger.i { "Successfully linked anonymous user to account" }
-                    }
-                } catch (_: FirebaseAuthUserCollisionException) {
-                    Logger.i { "User is already created, not linking anonymous user" }
-                }
-                Firebase.auth.signInWithCredential(credential)
-                Firebase.auth.currentUser?.emailOrNull?.let {
-                    analyticsBackend.setUser(email = it)
-                }
-                analyticsBackend.logEvent("signed_in_google")
-            }
         }
 
         Scaffold(
@@ -262,7 +251,16 @@ fun BugReportScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    actions = {
+                        TopBarIconButtonWithToolTip(
+                            onClick = {
+                                sendLogs(shareLocally = true)
+                            },
+                            icon = Icons.Filled.Share,
+                            description = "Share",
+                        )
+                    },
                 )
             },
             bottomBar = {
@@ -288,7 +286,7 @@ fun BugReportScreen(
                             enabled = !sending && !showSuccess && user != null && canSendReports,
                             onClick = {
                                 keyboardController?.hide()
-                                sendLogs()
+                                sendLogs(shareLocally = false)
                             },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                         ) {
@@ -351,12 +349,7 @@ fun BugReportScreen(
                         modifier = Modifier.padding(4.dp),
                         color = MaterialTheme.colorScheme.error
                     )
-                    Button(
-                        onClick = { signIn() },
-                        enabled = !sending
-                    ) {
-                        Text("Sign in with Google")
-                    }
+                    SignInButton(onError = setStatus, enabled = !sending)
                     Spacer(Modifier.height(8.dp))
                 }
                 if (recordingPath != null) {

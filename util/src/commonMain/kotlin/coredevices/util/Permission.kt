@@ -15,4 +15,5 @@ enum class Permission {
     ExternalStorage,
     SetAlarms,
     BatteryOptimization,
+    Beeper
 }
