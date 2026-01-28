@@ -63,6 +63,7 @@ enum class NotificationAppSort {
     Name,
     Recent,
     Count,
+    Enabled,
 }
 
 @Composable
