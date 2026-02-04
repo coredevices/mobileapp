@@ -1,1 +1,1 @@
-Pebble is the official Android app for managing your Pebble and Core Devices smartwatch.
+Pebble is the Android app for managing Pebble and Core Devices smartwatch.
