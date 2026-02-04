@@ -10,7 +10,8 @@ import io.rebble.libpebblecommon.music.PlaybackStatus
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.services.MusicService
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
@@ -55,7 +56,8 @@ class MusicControlManager(
     private val logger = Logger.withTag("MusicControlManager")
     private var lastSentStatus: PlaybackStatus? = null
     private var lastPosition: TimestampedPosition = TimestampedPosition(Instant.DISTANT_PAST, 0, 1.0f)
-    private val playbackStateUpdates = MutableStateFlow(DEFAULT)
+    private val playbackStateUpdates = MutableSharedFlow<PlaybackStateData>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        .also { it.tryEmit(DEFAULT) }
 
     fun init() {
         musicControlService.updateRequestTrigger.onEach {
@@ -125,12 +127,14 @@ class MusicControlManager(
                 status?.playbackState ?: PlaybackState.Paused
             }
 
-            playbackStateUpdates.value = PlaybackStateData(
-                state = playbackState,
-                trackPosMs = status?.playbackPositionMs?.toUInt() ?: 0u,
-                playbackRatePct = (status?.playbackRate?.times(100)?.toInt() ?: 0).toUInt(),
-                shuffle = status?.shuffle ?: false,
-                repeatType = status?.repeat ?: RepeatType.Off,
+            playbackStateUpdates.emit(
+                PlaybackStateData(
+                    state = playbackState,
+                    trackPosMs = status?.playbackPositionMs?.toUInt() ?: 0u,
+                    playbackRatePct = (status?.playbackRate?.times(100)?.toInt() ?: 0).toUInt(),
+                    shuffle = status?.shuffle ?: false,
+                    repeatType = status?.repeat ?: RepeatType.Off,
+                )
             )
             lastPosition = TimestampedPosition(
                 timestamp = clock.now(),
