@@ -20,6 +20,7 @@ enum class SystemApps(
     Health(SystemAppIDs.HEALTH_APP_UUID, "Health", AppType.Watchapp, WatchType.entries, defaultOrder = -5),
     Workout(SystemAppIDs.WORKOUT_APP_UUID, "Workout", AppType.Watchapp, WatchType.entries, defaultOrder = -4),
     Watchfaces(SystemAppIDs.WATCHFACES_APP_UUID, "Watchfaces", AppType.Watchapp, WatchType.entries, defaultOrder = -3),
+    Timeline(SystemAppIDs.TIMELINE_MENU_ENTRY_UUID, "Timeline", AppType.Watchapp, WatchType.entries, defaultOrder = -3),
     // Faces
     Tictoc(SystemAppIDs.TICTOC_APP_UUID, "Tictoc", AppType.Watchface, WatchType.entries, defaultOrder = -2),
     Kickstart(SystemAppIDs.KICKSTART_APP_UUID, "Kickstart", AppType.Watchface, WatchType.entries, defaultOrder = -1),
