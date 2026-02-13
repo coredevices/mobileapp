@@ -3,8 +3,7 @@ package coredevices.pebble.account
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.pebble.services.AppstoreService
-import coredevices.pebble.services.RealPebbleWebServices
-import coredevices.pebble.services.toLockerEntry
+import coredevices.pebble.services.REBBLE_FEED_URL
 import coredevices.pebble.ui.CommonAppType
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -13,15 +12,8 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreException
 import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.code
-import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -92,35 +84,21 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
     }
 }
 
-class FirestoreLocker(
+interface FirestoreLocker {
+    suspend fun readLocker(): List<FirestoreLockerEntry>?
+    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper?
+    suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean
+    suspend fun removeApp(uuid: Uuid): Boolean
+}
+
+class RealFirestoreLocker(
     private val dao: FirestoreLockerDao,
-): KoinComponent {
+): KoinComponent, FirestoreLocker {
     companion object {
         private val logger = Logger.withTag("FirestoreLocker")
     }
-    /**
-     * Imports locker entries from the Pebble API locker into Firestore.
-     * @param equivalentSourceUrl The appstore source URL to associate with the imported entries.
-     */
-    fun importPebbleLocker(webServices: RealPebbleWebServices, equivalentSourceUrl: String) = flow {
-        val user = Firebase.auth.currentUser ?: error("No authenticated user")
-        val pebbleLocker = webServices.fetchPebbleLocker() ?: error("Failed to fetch Pebble locker")
-        val size = pebbleLocker.applications.size
-        emit(0 to size)
-        for (i in pebbleLocker.applications.indices) {
-            val entry = pebbleLocker.applications[i]
-            val firestoreEntry = FirestoreLockerEntry(
-                uuid = Uuid.parse(entry.uuid),
-                appstoreId = entry.id,
-                appstoreSource = equivalentSourceUrl,
-                timelineToken = entry.userToken,
-            )
-            dao.addLockerEntryForUser(user.uid, firestoreEntry)
-            emit((i + 1) to size)
-        }
-    }
 
-    suspend fun readLocker(): List<FirestoreLockerEntry>? {
+    override suspend fun readLocker(): List<FirestoreLockerEntry>? {
         val user = Firebase.auth.currentUser ?: return null
         return try {
             dao.getLockerEntriesForUser(user.uid)
@@ -130,7 +108,7 @@ class FirestoreLocker(
         }
     }
 
-    suspend fun fetchLocker(forceRefresh: Boolean = false): LockerModelWrapper? {
+    override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
         val fsLocker = try {
             dao.getLockerEntriesForUser(user.uid)
@@ -139,10 +117,30 @@ class FirestoreLocker(
             return null
         }
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
-        val appsBySource = fsLocker.groupBy { it.appstoreSource }
+        val appsBySource = fsLocker.groupBy { it.appstoreSource }.let {
+            if (REBBLE_FEED_URL in it) {
+                it
+            } else {
+                // Force it to at least maybe call rebble sync
+                it + (REBBLE_FEED_URL to emptyList())
+            }
+        }
         val apps = appsBySource.flatMap { (source, entries) ->
             val appstore: AppstoreService = get { parametersOf(AppstoreSource(url = source, title = "")) }
-            appstore.fetchAppStoreApps(entries, useCache = !forceRefresh)
+            val appsForSource = appstore.fetchAppStoreApps(entries, useCache = !forceRefresh)
+            if (source == REBBLE_FEED_URL) {
+                appsForSource.filter { f -> entries.none { e -> Uuid.parse(f.uuid) == e.uuid } }.forEach { entry ->
+                    // Add to firestore locker
+                    val firestoreEntry = FirestoreLockerEntry(
+                        uuid = Uuid.parse(entry.uuid),
+                        appstoreId = entry.id,
+                        appstoreSource = source,
+                        timelineToken = entry.userToken,
+                    )
+                    dao.addLockerEntryForUser(user.uid, firestoreEntry)
+                }
+            }
+            appsForSource
         }
         return LockerModelWrapper(
             locker = LockerModel(
@@ -152,17 +150,12 @@ class FirestoreLocker(
         )
     }
 
-    suspend fun isLockerEmpty(): Boolean {
-        val user = Firebase.auth.currentUser ?: return true
-        return dao.isLockerEntriesEmptyForUser(user.uid)
-    }
-
-    suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
+    override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false
         }
-        if (entry.storeApp == null) {
+        if (entry.storeApp?.uuid == null) {
             return false
         }
         val firestoreEntry = FirestoreLockerEntry(
@@ -180,7 +173,7 @@ class FirestoreLocker(
         }
     }
 
-    suspend fun removeApp(uuid: Uuid): Boolean {
+    override suspend fun removeApp(uuid: Uuid): Boolean {
         val user = Firebase.auth.currentUser ?: run {
             logger.e { "No authenticated user" }
             return false

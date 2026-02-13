@@ -13,7 +13,7 @@ class SyncWorker(
     private val commonAppDelegate: CommonAppDelegate = get()
 
     override suspend fun doWork(): Result {
-        commonAppDelegate.doBackgroundSync()
+        commonAppDelegate.doBackgroundSync(force = false)
         return Result.success()
     }
 }

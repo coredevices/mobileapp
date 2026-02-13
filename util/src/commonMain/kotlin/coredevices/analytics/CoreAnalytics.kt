@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 interface CoreAnalytics {
@@ -25,12 +24,15 @@ interface CoreAnalytics {
     suspend fun processHeartbeat()
     fun updateLastConnectedSerial(serial: String?)
     fun updateRingTransferDurationMetric(duration: Duration)
+    fun updateRingLifetimeCollectionCount(serial: String, count: Int)
 }
 
 expect fun createAnalyticsCache(): Settings
 
 private const val KEY_RING_TRANSFER_DURATION_TOTAL_MS = "coreanalytics_ring_transfer_duration_ms"
 private const val KEY_RING_TRANSFER_DURATION_START_TIMESTAMP = "coreanalytics_ring_transfer_start_timestamp"
+private const val KEY_RING_LIFETIME_COLLECTION_COUNT = "coreanalytics_ring_lifetime_collection_count"
+private const val KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL = "coreanalytics_ring_lifetime_collection_count_serial"
 
 class RealCoreAnalytics(
     private val analyticsBackend: AnalyticsBackend,
@@ -55,7 +57,7 @@ class RealCoreAnalytics(
 
     override suspend fun processHeartbeat() {
         val duration = heartbeatDuration()
-        if (duration < 3.seconds) {
+        if (duration < 22.hours) {
             logger.d { "Not processing heartbeat; duration is only $duration" }
             return
         }
@@ -68,11 +70,25 @@ class RealCoreAnalytics(
                     withContext(Dispatchers.IO) {
                         cache.getLong(KEY_RING_TRANSFER_DURATION_TOTAL_MS, 0L)
                     }
+                ) +
+                HeartbeatMetric(
+                    "ring.lifetime_collection_count",
+                    withContext(Dispatchers.IO) {
+                        cache.getInt(KEY_RING_LIFETIME_COLLECTION_COUNT, 0)
+                    }
+                ) +
+                HeartbeatMetric(
+                    "ring.lifetime_collection_count_serial",
+                    withContext(Dispatchers.IO) {
+                        cache.getStringOrNull(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL) ?: "<none>"
+                    }
                 )
         logger.d { "processHeartbeat: $heartbeatMetrics" }
         withContext(Dispatchers.IO) {
             cache.remove(KEY_RING_TRANSFER_DURATION_TOTAL_MS)
             cache.remove(KEY_RING_TRANSFER_DURATION_START_TIMESTAMP)
+            cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT)
+            cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
         }
         logEvent("heartbeat", heartbeatMetrics.associate { it.name to it.value })
     }
@@ -89,6 +105,19 @@ class RealCoreAnalytics(
         val current = cache.getLong(KEY_RING_TRANSFER_DURATION_TOTAL_MS, 0L)
         val newDurationMs = duration.inWholeMilliseconds
         cache[KEY_RING_TRANSFER_DURATION_TOTAL_MS] = current + newDurationMs
+    }
+
+    override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {
+        val existingSerial = cache.getStringOrNull(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
+        if (existingSerial != serial) {
+            cache[KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL] = serial
+            cache[KEY_RING_LIFETIME_COLLECTION_COUNT] = count
+        } else {
+            val existingCount = cache.getInt(KEY_RING_LIFETIME_COLLECTION_COUNT, 0)
+            if (count > existingCount) {
+                cache[KEY_RING_LIFETIME_COLLECTION_COUNT] = count
+            }
+        }
     }
 
     private suspend fun heartbeatDuration(): Duration {

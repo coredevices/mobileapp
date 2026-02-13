@@ -64,7 +64,11 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
 
         var currentTimestamp = timestamp
 
-        repeat(recordNum.toInt()) {
+        for (j in 0 until recordNum.toInt()) {
+            if (buffer.remaining < 5) { // minimum bytes per record: steps(1)+orientation(1)+intensity(2)+lightIntensity(1)
+                logger.w { "Buffer exhausted during steps parsing at record $j/$recordNum in packet $i" }
+                break
+            }
             val steps = buffer.getUByte().toInt()
             val orientation = buffer.getUByte().toInt()
             val intensity = buffer.getUShort().toInt()
@@ -124,7 +128,13 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
         val consumed = buffer.readPosition - itemStart
         val expected = itemSize.toInt()
         if (consumed < expected) {
-            buffer.getBytes(expected - consumed)
+            val skipAmount = expected - consumed
+            if (buffer.remaining >= skipAmount) {
+                buffer.getBytes(skipAmount)
+            } else {
+                logger.w { "Buffer exhausted skipping steps padding: consumed=$consumed, expected=$expected, remaining=${buffer.remaining}" }
+                break
+            }
         } else if (consumed > expected) {
             logger.w { "Health steps item over-read: consumed=$consumed, expected=$expected" }
         }
@@ -215,7 +225,13 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
         val consumed = buffer.readPosition - itemStart
         val expected = itemSize.toInt()
         if (consumed < expected) {
-            buffer.getBytes(expected - consumed)
+            val skipAmount = expected - consumed
+            if (buffer.remaining >= skipAmount) {
+                buffer.getBytes(skipAmount)
+            } else {
+                logger.w { "Buffer exhausted skipping overlay padding: consumed=$consumed, expected=$expected, remaining=${buffer.remaining}" }
+                break
+            }
         } else if (consumed > expected) {
             logger.w { "Health overlay item over-read: consumed=$consumed, expected=$expected" }
         }

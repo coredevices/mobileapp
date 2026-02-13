@@ -6,12 +6,14 @@ import com.oldguy.common.io.File
 import com.oldguy.common.io.FileMode
 import com.oldguy.common.io.ZipEntry
 import com.oldguy.common.io.ZipFile
+import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -36,6 +38,7 @@ import kotlinx.io.writeString
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
 
@@ -103,6 +106,7 @@ class BugReportProcessor(
     private val pebbleAppDelegate: PebbleAppDelegate,
     private val clock: Clock,
     private val appContext: AppContext,
+    private val coreBackgroundSync: CoreBackgroundSync,
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
 
@@ -112,6 +116,25 @@ class BugReportProcessor(
         } catch (e: Exception) {
             logger.e(e) { "Error grabbing PKJS sessions: ${e.message}" }
             "Error grabbing PKJS sessions\n"
+        }
+    }
+
+    private fun getSTTSummary(): String {
+        return try {
+            // Lazy grab in case of init issues
+            val transcriptionService = KoinPlatform.getKoin().get<CactusTranscriptionService>()
+            val lastModel = transcriptionService.lastModelUsed
+            val isModelReady = transcriptionService.isModelReady
+            val configuredModel = transcriptionService.configuredModel
+            val configuredMode = transcriptionService.configuredMode
+            "\nSTT Summary\n" +
+                    "Configured mode: $configuredMode\n" +
+                    "Configured model: $configuredModel\n" +
+                    "Is model ready: $isModelReady\n" +
+                    "Last model used: $lastModel\n"
+        } catch (e: Exception) {
+            logger.e(e) { "Error grabbing STT sessions: ${e.message}" }
+            "Error grabbing STT sessions\n"
         }
     }
 
@@ -151,9 +174,13 @@ class BugReportProcessor(
         }
     }
 
-    private fun createSummaryAttachment(attachments: List<DocumentAttachment>): DocumentAttachment {
+    private suspend fun createSummaryAttachment(attachments: List<DocumentAttachment>): DocumentAttachment {
         val summaryWithAttachmentCount =
             createSummary("", attachments)
+        val logsDir = Path(getLogsCacheDir())
+        if (!SystemFileSystem.exists(logsDir)) {
+            SystemFileSystem.createDirectories(logsDir)
+        }
         val summaryFile = Path(getLogsCacheDir() + "/summary.txt")
         SystemFileSystem.sink(summaryFile, append = false).buffered().use { sink ->
             sink.writeString(summaryWithAttachmentCount)
@@ -215,21 +242,24 @@ class BugReportProcessor(
         }
     }
 
-    private fun createSummary(
+    private suspend fun createSummary(
         screenContext: String,
         attachments: List<DocumentAttachment>
     ): String {
         val deviceSummary = generateDeviceSummary(experimentalDevices)
         val pkjsSummary = getPKJSSummary()
+        val sttSummary = getSTTSummary()
         val summaryWithAttachmentCount = buildString {
             append(deviceSummary)
             append(pkjsSummary)
+            append(sttSummary)
             if (screenContext.isNotEmpty()) {
                 append("\n${screenContext}")
             }
             attachments.onEach {
                 append("\nAttachment: ${it.fileName}")
             }
+            append("\nTime since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
         }
         return summaryWithAttachmentCount
     }

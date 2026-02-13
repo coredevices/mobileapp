@@ -44,23 +44,9 @@ import org.koin.dsl.module
 actual val platformModule: Module = module {
     single {
         PhoneCapabilities(
-            setOf(
-                ProtocolCapsFlag.SupportsAppRunStateProtocol,
-                ProtocolCapsFlag.SupportsInfiniteLogDump,
+            CommonPhoneCapabilities + setOf(
                 ProtocolCapsFlag.SupportsExtendedMusicProtocol,
                 ProtocolCapsFlag.SupportsTwoWayDismissal,
-                ProtocolCapsFlag.SupportsAppDictation,
-                //ProtocolCapsFlag.SupportsLocalization
-                ProtocolCapsFlag.Supports8kAppMessage,
-//                ProtocolCapsFlag.SupportsHealthInsights,
-//                ProtocolCapsFlag.SupportsAppDictation,
-//                ProtocolCapsFlag.SupportsUnreadCoreDump,
-//                ProtocolCapsFlag.SupportsWeatherApp,
-//                ProtocolCapsFlag.SupportsRemindersApp,
-//                ProtocolCapsFlag.SupportsWorkoutApp,
-//                ProtocolCapsFlag.SupportsSmoothFwInstallProgress,
-//                ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection,
-                ProtocolCapsFlag.SupportsSettingsSync,
             )
         )
     }

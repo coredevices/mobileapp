@@ -97,13 +97,9 @@ fun NotificationAppScreen(
             }
         }
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {}
             topBarParams.title("App Notifications")
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                nav.goBack()
-            }
         }
         appWrapper?.let { appWrapper ->
             val app = appWrapper.app

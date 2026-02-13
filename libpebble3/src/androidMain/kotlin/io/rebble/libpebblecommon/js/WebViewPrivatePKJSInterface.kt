@@ -2,13 +2,13 @@ package io.rebble.libpebblecommon.js
 
 import android.net.Uri
 import android.webkit.JavascriptInterface
+import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import androidx.core.net.toUri
-import kotlinx.coroutines.channels.Channel
 
 class WebViewPrivatePKJSInterface(
     jsRunner: WebViewJsRunner,
@@ -18,7 +18,8 @@ class WebViewPrivatePKJSInterface(
     logMessages: Channel<String>,
     jsTokenUtil: JsTokenUtil,
     remoteTimelineEmulator: RemoteTimelineEmulator,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator) {
+    httpInterceptorManager: HttpInterceptorManager,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager) {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)
@@ -106,8 +107,8 @@ class WebViewPrivatePKJSInterface(
     }
 
     @JavascriptInterface
-    override fun onIntercepted(url: String, method: String, body: String): String {
-        return super.onIntercepted(url, method, body)
+    override fun onIntercepted(callbackId: String, url: String, method: String, body: String?) {
+        return super.onIntercepted(callbackId, url, method, body)
     }
 
     @JavascriptInterface

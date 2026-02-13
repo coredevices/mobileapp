@@ -16,6 +16,11 @@ data class LockerModel(
 )
 
 @Serializable
+data class LockerAddResponse(
+    val application: LockerEntry,
+)
+
+@Serializable
 data class LockerEntry(
     val id: String,
     val uuid: String,
@@ -31,6 +36,7 @@ data class LockerEntry(
     val developer: LockerEntryDeveloper,
     @SerialName("hardware_platforms") val hardwarePlatforms: List<LockerEntryPlatform>,
     val compatibility: LockerEntryCompatibility,
+    val capabilities: List<String>? = null,
     val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null,
     val source: String? = null,
@@ -88,7 +94,9 @@ data class LockerEntryCompatibilityPhonePlatformDetails(
 @Serializable
 data class LockerEntryCompatibilityWatchPlatformDetails(
     val supported: Boolean,
-    val firmware: LockerEntryFirmwareVersion
+    val firmware: LockerEntryFirmwareVersion,
+    @SerialName("has_binary")
+    val hasBinary: Boolean? = null,
 )
 
 @Serializable

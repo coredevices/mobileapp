@@ -1,14 +1,14 @@
 package coredevices.pebble
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.heartbeatWatchConnectGoalName
 import coredevices.analytics.heartbeatWatchConnectedName
-import coredevices.coreapp.util.AppUpdate
-import coredevices.database.AppstoreSource
-import coredevices.database.AppstoreSourceDao
+import coredevices.database.WeatherLocationDao
+import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
-import coredevices.pebble.services.PebbleAccountProvider
+import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
@@ -30,7 +30,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.joinAll
@@ -44,70 +43,20 @@ class PebbleAppDelegate(
     private val permissionsRequester: PermissionRequester,
     private val appResumed: AppResumed,
     private val doneInitialOnboarding: DoneInitialOnboarding,
-    private val appUpdate: AppUpdate,
     private val analytics: CoreAnalytics,
     private val clock: Clock,
-    private val appstoreSourceDao: AppstoreSourceDao,
-    private val pebbleAccount: PebbleAccountProvider
+    private val weatherLocationDao: WeatherLocationDao,
+    private val settings: Settings,
+    private val appstoreSourceInitializer: AppstoreSourceInitializer,
 ) {
-    companion object {
-        private val INITIAL_APPSTORE_SOURCES = listOf(
-            AppstoreSource(
-                url = "https://appstore-api.repebble.com/api",
-                title = "Pebble App Feed",
-                algoliaAppId = "GM3S9TRYO4",
-                algoliaApiKey = "0b83b4f8e4e8e9793d2f1f93c21894aa",
-                algoliaIndexName = "apps"
-            ),
-            AppstoreSource(
-                url = "https://appstore-api.rebble.io/api",
-                title = "Rebble App Feed",
-                algoliaAppId = "7683OW76EQ",
-                algoliaApiKey = "252f4938082b8693a8a9fc0157d1d24f",
-                algoliaIndexName = "rebble-appstore-production",
-                enabled = false
-            )
-        )
-    }
     private val logger = Logger.withTag("PebbleAppDelegate")
-
-    private suspend fun initAppstoreSourcesDB() {
-        val current = appstoreSourceDao.getAllSources().first()
-        //TODO: remove the migration stuff after a while
-        val needsInit = current.isEmpty() ||
-                current.any { it.algoliaAppId == null } || // migrate old entries
-                current.firstOrNull { it.url == "https://appstore-api.repebble.com/api" }?.title != "Pebble App Feed" // migrate title change
-        if (needsInit) {
-            logger.d { "Initializing appstore sources database" }
-            current.forEach { source ->
-                appstoreSourceDao.deleteSourceById(source.id)
-            }
-            INITIAL_APPSTORE_SOURCES.forEach { source ->
-                appstoreSourceDao.insertSource(source)
-            }
-        } else {
-            logger.d { "Appstore sources database already initialized" }
-        }
-
-        GlobalScope.launch {
-            val rebbleSource = appstoreSourceDao.getAllSources().first()
-                .firstOrNull { it.title == "Rebble" }
-            if (rebbleSource == null) {
-                return@launch
-            }
-            pebbleAccount.get().loggedIn.collect {
-                if (it == null) {
-                    appstoreSourceDao.setSourceEnabled(rebbleSource.id, false)
-                }
-            }
-        }
-    }
 
     fun init() {
         logger.d { "init()" }
         permissionsRequester.init()
         GlobalScope.launch {
-            initAppstoreSourcesDB()
+            appstoreSourceInitializer.initAppstoreSourcesDB()
+            weatherLocationDao.insertDefaultWeatherLocationOnce(settings)
             // Don't initialize everything if the user just started the app for the first time and
             // hasn't gone through onboarding yet - it would create permission prompts on ios (we
             // want to control when those are shown).

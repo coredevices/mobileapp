@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Done
@@ -44,19 +45,33 @@ import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.everNotified
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 class NotificationAppsScreenViewModel : ViewModel() {
     val onlyNotified = mutableStateOf(false)
     val sortBy = mutableStateOf(NotificationAppSort.Recent)
+    val searchState = SearchState()
 }
 
 @Composable
-fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefaultTab: () -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationAppsScreenViewModel>()
-
+        val listState = rememberLazyListState()
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(viewModel.searchState)
+            launch {
+                topBarParams.scrollToTop.collect {
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else {
+                        gotoDefaultTab()
+                    }
+                }
+            }
+        }
         val notificationApi: NotificationApps = koinInject()
         val platform = koinInject<Platform>()
         val appsFlow = remember { notificationApi.notificationApps() }
@@ -67,14 +82,14 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
         val libPebbleConfig by libPebble.config.collectAsState()
         val filteredAndSortedApps by remember(
             apps,
-            topBarParams.searchState,
+            viewModel.searchState,
             viewModel.onlyNotified.value,
             viewModel.sortBy.value
         ) {
             derivedStateOf {
                 val filtered = apps.asSequence().filter { app ->
-                    if (topBarParams.searchState.query.isNotEmpty()) {
-                        app.app.name.contains(topBarParams.searchState.query, ignoreCase = true)
+                    if (viewModel.searchState.query.isNotEmpty()) {
+                        app.app.name.contains(viewModel.searchState.query, ignoreCase = true)
                     } else {
                         app.app.everNotified() || !viewModel.onlyNotified.value
                     }
@@ -197,7 +212,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            LazyColumn {
+            LazyColumn(state = listState) {
                 item(key = "toggle_all") {
                     ListItem(
                         headlineContent = {

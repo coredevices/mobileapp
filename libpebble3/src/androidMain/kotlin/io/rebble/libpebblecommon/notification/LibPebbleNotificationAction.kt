@@ -8,6 +8,7 @@ import android.os.Build
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.stripBidiIsolates
 
@@ -51,9 +52,13 @@ data class LibPebbleNotificationAction(
             packageName: String,
             action: Action,
             notificationConfig: NotificationConfig,
+            notificationProperties: NotificationProperties?,
         ): LibPebbleNotificationAction? {
-            if (action.showsUserInterface() && !notificationConfig.addShowsUserInterfaceActions) {
-                return null
+            if (action.showsUserInterface()) {
+                val showUserInterfaceActions = notificationConfig.addShowsUserInterfaceActions || notificationProperties?.addShowsUserInterfaceActions == true
+                if (!showUserInterfaceActions) {
+                    return null
+                }
             }
             val semanticAction = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 SemanticAction.fromId(action.semanticAction)

@@ -21,6 +21,7 @@ actual val pkjsPlatformModule: Module = module {
             urlOpenRequests = params.get(),
             logMessages = params.get(),
             remoteTimelineEmulator = get(),
+            httpInterceptorManager = get(),
         )
     } bind JsRunner::class
 }

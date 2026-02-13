@@ -32,6 +32,7 @@ import okio.deflate
 import okio.inflate
 import okio.use
 import org.koin.mp.KoinPlatform
+import utils.CactusLogger
 
 fun initLogging() {
     Logger.addLogWriter(object : LogWriter() {
@@ -48,6 +49,15 @@ fun initLogging() {
         }
     })
     Logger.addLogWriter(KoinPlatform.getKoin().get<FileLogWriter>())
+    try {
+        CactusLogger.setLogWriter(object : LogWriter() {
+            override fun log(severity: Severity, message: String, tag: String, throwable: Throwable?) {
+                Logger.log(severity, tag, throwable, message)
+            }
+        })
+    } catch (e: Exception) {
+        Logger.e(e) { "Failed to add LogWriter to CactusLogger" }
+    }
 }
 
 expect fun generateDeviceSummaryPlatformDetails(): String

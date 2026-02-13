@@ -3,23 +3,24 @@ package coredevices.pebble.ui
 import CoreNav
 import CoreRoute
 import NoOpCoreNav
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Notes
-import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Close
@@ -35,9 +36,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -45,23 +46,26 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TooltipState
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopSearchBar
+import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -74,7 +78,6 @@ import co.touchlab.kermit.Logger
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
-import coreapp.pebble.generated.resources.faces
 import coreapp.pebble.generated.resources.index
 import coreapp.pebble.generated.resources.notifications
 import coreapp.pebble.generated.resources.settings
@@ -85,7 +88,10 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.util.CoreConfigFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -96,24 +102,47 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
     val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
-    val searchQuery = mutableStateOf(SearchState(query = "", typing = false))
-    val showSearch = mutableStateOf(false)
-    val searchAvailable = mutableStateOf(false)
-    val actions = mutableStateOf<@Composable RowScope.() -> Unit>({})
-    val title = mutableStateOf("")
-    val canGoBack = mutableStateOf(false)
+    private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
+    private val searchStateFlow = MutableStateFlow<SearchState?>(null)
+    private val titleFlow = MutableStateFlow("")
+    private val canGoBackFlow = MutableStateFlow(false)
     val disableNextTransitionAnimation = mutableStateOf(false)
     val indexEnabled = coreConfig.flow.map {
         it.enableIndex
     }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.enableIndex)
+    val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow) { actions, searchState, title, canGoBack ->
+        Params(actions, searchState, title, canGoBack)
+    }.debounce(50.milliseconds)
+
+    fun setActions(actions: @Composable RowScope.() -> Unit) {
+        actionsFlow.value = actions
+    }
+    fun setTitle(title: String) {
+        titleFlow.value = title
+    }
+    fun setSearchState(searchState: SearchState?) {
+        searchStateFlow.value = searchState
+    }
+    fun setCanGoBack(canGoBack: Boolean) {
+        canGoBackFlow.value = canGoBack
+    }
 }
+
+data class Params(
+    val actions: @Composable RowScope.() -> Unit = {},
+    val searchState: SearchState? = null,
+    val title: String = "",
+    val canGoBack: Boolean = false,
+)
 
 private val logger = Logger.withTag("WatchHomeScreen")
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
@@ -127,7 +156,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         // Create NavControllers for each tab
         val watchesNavController = rememberNavController()
         val watchfacesNavController = rememberNavController()
-        val watchappsNavController = rememberNavController()
         val notificationsNavController = rememberNavController()
         val indexNavController = rememberNavController()
         val settingsNavController = rememberNavController()
@@ -135,7 +163,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val navControllers = remember(
             watchesNavController,
             watchfacesNavController,
-            watchappsNavController,
             notificationsNavController,
             indexNavController,
             settingsNavController
@@ -143,7 +170,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             mapOf(
                 WatchHomeNavTab.Watches to watchesNavController,
                 WatchHomeNavTab.WatchFaces to watchfacesNavController,
-                WatchHomeNavTab.WatchApps to watchappsNavController,
                 WatchHomeNavTab.Notifications to notificationsNavController,
                 WatchHomeNavTab.Index to indexNavController,
                 WatchHomeNavTab.Settings to settingsNavController,
@@ -163,13 +189,15 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         delay(50)
                         viewModel.disableNextTransitionAnimation.value = false
                     }
+                    viewModel.setCanGoBack(pebbleNavHostController.previousBackStackEntry != null)
                 }
             pebbleNavHostController.addOnDestinationChangedListener(listener)
             onDispose {
                 pebbleNavHostController.removeOnDestinationChangedListener(listener)
             }
         }
-        val goBack = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+        val overrideGoBack = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+        val scrollToTopFlow = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val systemNavBarBottomHeight =
             WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val platform = koinInject<Platform>()
@@ -207,8 +235,9 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     it.consumed = true
                     logger.v { "navigateToPebbleDeepLink: $it" }
                     val tab = when (it.route) {
-                        is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchApps
-                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchApps
+                        is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchFaces
+                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchFaces
+                        is PebbleNavBarRoutes.IndexRoute -> WatchHomeNavTab.Index
                         else -> null
                     }
                     if (tab != null) {
@@ -222,20 +251,20 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                 }
             }
         }
+        val params by viewModel.paramsFlow.collectAsState(Params())
 
         Scaffold(
             topBar = {
                 Crossfade(
                     modifier = Modifier.animateContentSize(),
-                    targetState = viewModel.showSearch.value,
+                    targetState = params.searchState?.show == true,
                     label = "Search"
                 ) { showSearch ->
                     val focusRequester = remember { FocusRequester() }
                     val focusManager = LocalFocusManager.current
                     val keyboardController = LocalSoftwareKeyboardController.current
                     val onSearchDone = {
-                        viewModel.searchQuery.value =
-                            viewModel.searchQuery.value.copy(typing = false)
+                        params.searchState?.typing = false
                         keyboardController?.hide()
                         focusManager.clearFocus()
                     }
@@ -243,45 +272,59 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                         LaunchedEffect(focusRequester) {
                             focusRequester.requestFocus()
                         }
-                        // TODO SearchBar
-                        OutlinedTextField(
-                            value = viewModel.searchQuery.value.query,
-                            onValueChange = {
-                                viewModel.searchQuery.value = SearchState(query = it, typing = true)
+                        TopSearchBar(
+                            state = rememberSearchBarState(),
+                            inputField = {
+                                SearchBarDefaults.InputField(
+                                    query = params.searchState?.query ?: "",
+                                    onQueryChange = {
+                                        params.searchState?.query = it
+                                        params.searchState?.typing = true
+                                    },
+                                    onSearch = {
+                                        onSearchDone()
+                                    },
+                                    expanded = false,
+                                    onExpandedChange = { },
+                                    placeholder = { Text("Search") },
+                                    modifier = Modifier.focusRequester(focusRequester),
+                                    trailingIcon = {
+                                        IconButton(onClick = {
+                                            params.searchState?.show = false
+                                            params.searchState?.query = ""
+                                        }) {
+                                            Icon(
+                                                Icons.Outlined.Close,
+                                                contentDescription = "Clear search"
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        IconButton(onClick = onSearchDone) {
+                                            Icon(
+                                                Icons.Outlined.Search,
+                                                contentDescription = "Search"
+                                            )
+                                        }
+                                    },
+                                )
                             },
-                            label = { Text("Search") },
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    viewModel.showSearch.value = false
-                                    viewModel.searchQuery.value =
-                                        SearchState(query = "", typing = false)
-                                }) {
-                                    Icon(
-                                        Icons.Outlined.Close,
-                                        contentDescription = "Clear search"
-                                    )
-                                }
-                            },
-                            leadingIcon = {
-                                IconButton(onClick = onSearchDone) {
-                                    Icon(
-                                        Icons.Outlined.Search,
-                                        contentDescription = "Search"
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(TopAppBarDefaults.windowInsets.asPaddingValues())
-                                .focusRequester(focusRequester),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { onSearchDone() }),
                         )
                     } else {
                         TopAppBar(
                             navigationIcon = {
-                                if (viewModel.canGoBack.value) {
-                                    IconButton(onClick = { goBack.tryEmit(Unit) }) {
+                                AnimatedVisibility(
+                                    visible = params.canGoBack,
+                                    enter = fadeIn() + expandHorizontally(),
+                                    exit = fadeOut() + shrinkHorizontally()
+                                ) {
+                                    IconButton(onClick = {
+                                        if (overrideGoBack.subscriptionCount.value > 0) {
+                                            overrideGoBack.tryEmit(Unit)
+                                        } else {
+                                            pebbleNavHostController.popBackStack()
+                                        }
+                                    }) {
                                         Icon(
                                             Icons.AutoMirrored.Default.ArrowBack,
                                             contentDescription = stringResource(coreapp.util.generated.resources.Res.string.back)
@@ -291,17 +334,17 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                             },
                             title = {
                                 Text(
-                                    text = viewModel.title.value,
+                                    text = params.title,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontSize = 28.sp,
                                     maxLines = 1,
                                 )
                             },
                             actions = {
-                                viewModel.actions.value(this)
-                                if (viewModel.searchAvailable.value) {
+                                params.actions(this)
+                                if (params.searchState != null) {
                                     TopBarIconButtonWithToolTip(
-                                        onClick = { viewModel.showSearch.value = true },
+                                        onClick = { params.searchState?.show = true },
                                         icon = Icons.Filled.Search,
                                         description = "Search",
                                     )
@@ -320,7 +363,10 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                             selected = viewModel.selectedTab.value == route,
                             onClick = {
                                 if (viewModel.selectedTab.value == route) {
-                                    pebbleNavHostController.popBackStack(route.route::class, false)
+                                    val popped = pebbleNavHostController.popBackStack(route.route::class, false)
+                                    if (!popped) {
+                                        scrollToTopFlow.tryEmit(Unit)
+                                    }
                                 } else {
                                     // Disable animations when switching between tabs
                                     viewModel.disableNextTransitionAnimation.value = true
@@ -364,20 +410,14 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { windowInsets ->
-            val topBarParams = remember(viewModel.searchQuery.value) {
+            val topBarParams = remember(pebbleNavHostController) {
                 TopBarParams(
-                    searchState = viewModel.searchQuery.value,
-                    searchAvailable = {
-                        logger.d { "searchAvailable()" }
-                        viewModel.searchAvailable.value = it
-                        viewModel.searchQuery.value = SearchState(query = "", typing = false)
-                        viewModel.showSearch.value = false
-                    },
-                    actions = { viewModel.actions.value = it },
-                    title = { viewModel.title.value = it },
-                    canGoBack = { viewModel.canGoBack.value = it },
-                    goBack = goBack,
+                    searchAvailable = { viewModel.setSearchState(it) },
+                    actions = { viewModel.setActions(it) },
+                    title = { viewModel.setTitle(it) },
+                    overrideGoBack = overrideGoBack,
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },
+                    scrollToTop = scrollToTopFlow,
                 )
             }
             val navBarNav = remember(pebbleNavHostController) {
@@ -404,6 +444,12 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     modifier = Modifier.padding(windowInsets),
                 ) {
                     addNavBarRoutes(navBarNav, topBarParams, indexScreen, viewModel)
+                }
+                // Handle back button when search bar is visible
+                // Placed AFTER NavHost so it registers later and takes priority
+                BackHandler(enabled = params.searchState?.show == true) {
+                    params.searchState?.show = false
+                    params.searchState?.query = ""
                 }
             }
         }
@@ -436,18 +482,17 @@ enum class WatchHomeNavTab(
     val route: NavBarRoute,
     val badge: (@Composable () -> Int)? = null,
 ) {
-    WatchFaces(Res.string.faces, Icons.Filled.BrowseGallery, PebbleNavBarRoutes.WatchfacesRoute),
-    WatchApps(Res.string.apps, Icons.Filled.AutoAwesomeMotion, PebbleNavBarRoutes.WatchappsRoute),
+    WatchFaces(Res.string.apps, Icons.Filled.BrowseGallery, PebbleNavBarRoutes.WatchfacesRoute),
+    Index(
+        Res.string.index,
+        Icons.AutoMirrored.Outlined.Notes,
+        PebbleNavBarRoutes.IndexRoute
+    ),
     Watches(Res.string.devices, Icons.Outlined.Watch, PebbleNavBarRoutes.WatchesRoute),
     Notifications(
         Res.string.notifications,
         Icons.Outlined.Notifications,
         PebbleNavBarRoutes.NotificationsRoute
-    ),
-    Index(
-        Res.string.index,
-        Icons.AutoMirrored.Outlined.Notes,
-        PebbleNavBarRoutes.IndexRoute
     ),
     Settings(
         Res.string.settings,
@@ -458,7 +503,7 @@ enum class WatchHomeNavTab(
     companion object {
         fun navBarEntries(indexEnabled: Boolean): List<WatchHomeNavTab> {
             return if (indexEnabled) {
-                entries.filter { it != Notifications }
+                entries
             } else {
                 entries.filter { it != Index }
             }

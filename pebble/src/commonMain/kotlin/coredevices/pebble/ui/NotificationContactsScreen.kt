@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -49,28 +50,42 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 class ContactsViewModel(
 ) : ViewModel() {
     val onlyNotified = mutableStateOf(false)
+    val searchState = SearchState()
 }
 
 @Composable
-fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefaultTab: () -> Unit) {
     val viewModel = koinViewModel<ContactsViewModel>()
     val libPebble = rememberLibPebble()
     val items = remember(
-        topBarParams.searchState.query,
+        viewModel.searchState.query,
         viewModel.onlyNotified.value,
     ) {
         Pager(
             config = PagingConfig(pageSize = 20, enablePlaceholders = true),
             pagingSourceFactory = {
-                libPebble.getContactsWithCounts(topBarParams.searchState.query, viewModel.onlyNotified.value)
+                libPebble.getContactsWithCounts(viewModel.searchState.query, viewModel.onlyNotified.value)
             }
         ).flow
+    }
+    val listState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        topBarParams.searchAvailable(viewModel.searchState)
+        launch {
+            topBarParams.scrollToTop.collect {
+                if (listState.firstVisibleItemIndex > 0) {
+                    listState.animateScrollToItem(0)
+                } else {
+                    gotoDefaultTab()
+                }
+            }
+        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val contacts = items.collectAsLazyPagingItems()
@@ -114,7 +129,7 @@ fun NotificationContactsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
                 }
             }
 
-            LazyColumn {
+            LazyColumn(state = listState) {
                 items(
                     count = contacts.itemCount,
                     key = contacts.itemKey { it.contact.lookupKey }
@@ -136,13 +151,9 @@ fun ContactNotificationViewerScreen(
     contactId: String,
 ) {
     LaunchedEffect(Unit) {
-        topBarParams.searchAvailable(false)
+        topBarParams.searchAvailable(null)
         topBarParams.actions {}
         topBarParams.title("Contact Notifications")
-        topBarParams.canGoBack(true)
-        topBarParams.goBack.collect {
-            nav.goBack()
-        }
     }
     val libPebble = rememberLibPebble()
     val flow = remember {

@@ -57,8 +57,8 @@ class RealFirmwareUpdateUiTracker(
         activeNotificationKeys.add(notificationKey)
         notifyFirmwareUpdate(
             appContext = appContext,
-            title = "Firmware update available",
-            body = "Firmware ${update.version.stringVersion} is available for $watchName:\n${update.notes}",
+            title = "PebbleOS update available",
+            body = "PebbleOS ${update.version.stringVersion} is available for $watchName:\n${update.notes}",
             key = notificationKey,
             identifier = identifier,
         )

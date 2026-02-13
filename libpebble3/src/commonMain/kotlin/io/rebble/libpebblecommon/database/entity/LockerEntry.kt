@@ -47,6 +47,12 @@ data class LockerEntry(
     val orderIndex: Int = 0,
     @ColumnInfo(defaultValue = "0")
     val systemApp: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val active: Boolean = false,
+    @ColumnInfo(defaultValue = "NULL")
+    val capabilities: List<String>? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val grantedPermissions: List<String>? = null,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), id).toBytes()
 

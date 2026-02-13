@@ -77,6 +77,11 @@ class AppFetchProvider(
         val manifest = app.getManifest(variant)
         val binary = app.getBinaryFor(variant)
         binary.use {
+            if (manifest == null || binary == null) {
+                logger.e { "No manifest or binary found for $appId" }
+                appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
+                return
+            }
             val resources = app.getResourcesFor(variant)
             resources.use {
                 val worker = app.getWorkerFor(variant)

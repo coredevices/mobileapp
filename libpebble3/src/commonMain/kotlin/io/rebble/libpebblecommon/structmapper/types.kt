@@ -219,6 +219,21 @@ class SUUID(mapper: StructMapper, default: Uuid = Uuid.NIL) :
         default
     )
 
+class SUUIDList(mapper: StructMapper, default: List<Uuid> = emptyList()) :
+    StructElement<List<Uuid>>(
+        { buf, el ->
+            el.get().forEach { uuidEntry ->
+                buf.putBytes(uuidEntry.toByteArray().asUByteArray())
+            }
+        },
+        { buf, el ->
+            throw IllegalStateException("Not supported")
+        },
+        mapper,
+        (2 * ULong.SIZE_BYTES) * default.size,
+        default
+    )
+
 /**
  * Represents a string (UTF-8) in a struct, includes framing for length
  */
@@ -235,6 +250,21 @@ class SString(mapper: StructMapper, default: String = "") :
             val len = buf.getUByte().toInt()
             el.set(buf.getBytes(len).toByteArray().decodeToString(), len)
         }, mapper, default.encodeToByteArray().size + 1, default
+    )
+
+class SLongString(mapper: StructMapper, default: String = "", endianness: Endian = Endian.Unspecified) :
+    StructElement<String>(
+        { buf, el ->
+            val bytes = el.get().encodeToByteArray()
+            buf.putUShort(bytes.size.toUShort())
+            buf.putBytes(
+                bytes.toUByteArray()
+            )
+        },
+        { buf, el ->
+            val len = buf.getUShort().toInt()
+            el.set(buf.getBytes(len).toByteArray().decodeToString(), len)
+        }, mapper, default.encodeToByteArray().size + 2, default, endianness
     )
 
 /**

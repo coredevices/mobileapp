@@ -30,6 +30,7 @@ abstract class PrivatePKJSInterface(
     private val logMessages: Channel<String>,
     private val jsTokenUtil: JsTokenUtil,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val httpInterceptorManager: HttpInterceptorManager,
 ) {
     companion object {
         private val logger = Logger.withTag("PrivatePKJSInterface")
@@ -80,12 +81,15 @@ abstract class PrivatePKJSInterface(
     }
 
     open fun shouldIntercept(url: String): Boolean {
-        return remoteTimelineEmulator.shouldIntercept(url)
+        return httpInterceptorManager.shouldIntercept(url)
     }
 
-    open fun onIntercepted(url: String, method: String, body: String): String {
+    open fun onIntercepted(callbackId: String, url: String, method: String, body: String?) {
         val uuid = Uuid.parse(jsRunner.appInfo.uuid)
-        return runBlocking { remoteTimelineEmulator.onIntercepted(url, method, body, uuid) }
+        scope.launch {
+            val result = httpInterceptorManager.onIntercepted(url, method, body, uuid)
+            jsRunner.signalInterceptResponse(callbackId, result)
+        }
     }
 
     open fun getVersionCode(): Int {

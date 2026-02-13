@@ -431,25 +431,51 @@ navigator.geolocation.clearWatch = (id) => {
         xhr.originalSetRequestHeader(header, value);
     };
 
+    const pendingInterceptedXHRs = new Map();
+    let interceptCallbackCount = 0;
+
+    global.signalInterceptResponse = (result) => {
+        const status = result.status;
+        const response = result.response;
+        const callbackId = result.callbackId;
+        const xhr = pendingInterceptedXHRs.get(callbackId);
+        if (!xhr) return;
+
+        pendingInterceptedXHRs.delete(callbackId);
+
+        // Define the read-only properties to simulate a successful response
+        Object.defineProperty(xhr, 'readyState', { value: XMLHttpRequest.DONE, configurable: true });
+        Object.defineProperty(xhr, 'status', { value: status, configurable: true });
+        Object.defineProperty(xhr, 'statusText', { value: status === 200 ? 'OK' : 'Error', configurable: true });
+        Object.defineProperty(xhr, 'response', { value: response, configurable: true });
+        Object.defineProperty(xhr, 'responseText', { value: response, configurable: true });
+
+        // Dispatch events to notify any listeners that the request is complete
+        xhr.dispatchEvent(new Event('readystatechange'));
+        xhr.dispatchEvent(new Event('load'));
+        xhr.dispatchEvent(new Event('loadend'));
+    };
+
     XMLHttpRequest.prototype.originalSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function(body) {
         const xhr = this;
 
         if (xhr.pkjsIntercept) {
             try {
-                const response = _Pebble.onIntercepted(xhr.pkjsUrl, xhr.pkjsMethod, body)
-                // Define the read-only properties to simulate a successful response
-                Object.defineProperty(xhr, 'readyState', { value: XMLHttpRequest.DONE, configurable: true });
-                Object.defineProperty(xhr, 'status', { value: 200, configurable: true });
-                Object.defineProperty(xhr, 'statusText', { value: 'OK', configurable: true });
-                Object.defineProperty(xhr, 'response', { value: response, configurable: true });
-                Object.defineProperty(xhr, 'responseText', { value: response, configurable: true });
-                // Dispatch events to notify any listeners that the request is complete
-                xhr.dispatchEvent(new Event('readystatechange'));
-                xhr.dispatchEvent(new Event('load'));
-                xhr.dispatchEvent(new Event('loadend'));
+                const callbackId = `intercept_${++interceptCallbackCount}`;
+                pendingInterceptedXHRs.set(callbackId, xhr);
+
+                // Call into Android, passing the callbackId
+                // The Android side should now be asynchronous and eventually call signalInterceptResponse
+                _Pebble.onIntercepted(callbackId, xhr.pkjsUrl, xhr.pkjsMethod, body);
+
+                // We return here. The XHR is now "in flight" from the JS perspective.
                 return;
             } catch (error) {
+                console.error("Error initiating intercepted XHR", error);
+                // Fallback or trigger error event
+                xhr.dispatchEvent(new Event('error'));
+                return;
             }
         }
 

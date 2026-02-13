@@ -7,12 +7,15 @@ import com.algolia.client.api.SearchClient
 import com.algolia.client.exception.AlgoliaApiException
 import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
+import coredevices.database.AppstoreCollection
+import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.services.AppstoreService.BulkFetchParams.Companion.encodeToJson
 import coredevices.pebble.ui.CommonApp
 import coredevices.pebble.ui.asCommonApp
+import coredevices.pebble.ui.cachedCategoriesOrDefaults
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -33,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.io.IOException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,6 +48,9 @@ class AppstoreService(
     httpClient: HttpClient,
     val source: AppstoreSource,
     private val cache: AppstoreCache,
+    private val appstoreCollectionDao: AppstoreCollectionDao,
+    private val pebbleAccountProvider: PebbleAccountProvider,
+    private val pebbleWebServices: PebbleWebServices,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -67,16 +74,28 @@ class AppstoreService(
         coerceInputValues = true
     }
 
-    private fun supportsBulkFetch(): Boolean = source.url.startsWith("https://appstore-api.repebble.com/")
+    private fun supportsBulkFetch(): Boolean = !source.isRebbleFeed()
 
     suspend fun fetchAppStoreApps(
         entries: List<FirestoreLockerEntry>,
         useCache: Boolean = true,
     ): List<LockerEntry> {
-        return if (!supportsBulkFetch()) {
+        return if (pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()) {
+            fetchAppStoreAppsFromPwsLocker()
+        } else if (!supportsBulkFetch()) {
             fetchAppStoreAppsOneByOne(entries, useCache)
         } else {
             fetchAppStoreAppsInBulk(entries)
+        }
+    }
+
+    private suspend fun fetchAppStoreAppsFromPwsLocker(): List<LockerEntry> {
+        val locker = pebbleWebServices.fetchPebbleLocker()
+        if (locker == null) {
+            logger.w { "Failed to fetch Pebble locker" }
+            return emptyList()
+        } else {
+            return locker.applications
         }
     }
 
@@ -178,7 +197,7 @@ class AppstoreService(
         return result
     }
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?): AppStoreHome? {
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, useCache: Boolean): AppStoreHome? {
         val typeString = type.storeString()
         val parameters = buildMap {
             set("platform", platform.storeString())
@@ -188,6 +207,12 @@ class AppstoreService(
 //            set("firmware_version", "")
             set("filter_hardware", "true")
         }
+        if (useCache) {
+            val cacheHit = cache.readHome(type, source, parameters)
+            if (cacheHit != null) {
+                return cacheHit
+            }
+        }
         val home = try {
             httpClient.get(
                 url = Url("${source.url}/v1/home/$typeString")
@@ -196,23 +221,36 @@ class AppstoreService(
                     parameter(it.key, it.value)
                 }
             }
-        } catch (e: IOException) {
+                .takeIf {
+                    logger.v { "${it.call.request.url}" }
+                    if (!it.status.isSuccess()) {
+                        logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
+                        false
+                    } else {
+                        true
+                    }
+                }?.body<AppStoreHome>()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             logger.w(e) { "Error loading app store home" }
             return null
         }
-            .takeIf {
-                logger.v { "${it.call.request.url}" }
-                if (!it.status.isSuccess()) {
-                    logger.w { "Failed to fetch home of type ${type.code}, status: ${it.status}, source = ${source.url}" }
-                    false
-                } else {
-                    true
-                }
-            }?.body<AppStoreHome>()
         home?.let {
             cache.writeCategories(home.categories, type, source)
+            appstoreCollectionDao.updateListOfCollections(type, home.collections.map {
+                AppstoreCollection(
+                    sourceId = source.id,
+                    title = it.name,
+                    slug = it.slug,
+                    type = type,
+                    enabled = enableByDefault(source, type, it.slug),
+                )
+            }, sourceId = source.id)
+            cache.writeHome(home, type, source, parameters)
         }
         return home?.copy(applications = home.applications.filter { app ->
+            if (app.uuid == null) return@filter false
             try {
                 if (Uuid.parse(app.uuid) == Uuid.NIL) {
                     logger.w { "App ${app.title} has NIL UUID, skipping" }
@@ -227,16 +265,8 @@ class AppstoreService(
         })
     }
 
-    suspend fun fetchCategories(type: AppType): List<StoreCategory>? {
-        val cacheHit = cache.readCategories(type, source)
-        if (cacheHit != null) {
-            return cacheHit
-        }
-        val categories = fetchAppStoreHome(type, null)?.categories
-        if (categories != null) {
-            cache.writeCategories(categories, type, source)
-        }
-        return categories
+    suspend fun cachedCategoriesOrDefaults(appType: AppType?): List<StoreCategory> {
+        return source.cachedCategoriesOrDefaults(appType, cache)
     }
 
     fun fetchAppStoreCollection(
@@ -261,18 +291,7 @@ class AppstoreService(
                 }
                 logger.v { "get ${url} with parameters $parameters" }
                 val categories = scope.async {
-                    appType?.let {
-                        fetchCategories(appType)
-                    } ?: run {
-                        buildList {
-                            addAll(
-                                fetchCategories(AppType.Watchface) ?: emptyList()
-                            )
-                            addAll(
-                                fetchCategories(AppType.Watchapp) ?: emptyList()
-                            )
-                        }
-                    }
+                    cachedCategoriesOrDefaults(appType)
                 }
                 return try {
                     val response = httpClient.get(url = Url(url)) {
@@ -300,7 +319,7 @@ class AppstoreService(
                         LoadResult.Page(
                             data = apps,
                             prevKey = if (offset > 0) (offset - params.loadSize).coerceAtLeast(0) else null,
-                            nextKey = if (response.data.size == params.loadSize) offset + params.loadSize else null,
+                            nextKey = if (response.links.nextPage != null) offset + params.loadSize else null,
                         )
                     } else {
                         LoadResult.Error(IllegalStateException("Null response"))
@@ -354,7 +373,7 @@ class AppstoreService(
         }
     }
 
-    suspend fun search(search: String, type: AppType? = null): List<StoreSearchResult> {
+    suspend fun search(search: String, appType: AppType, watchType: WatchType): List<StoreSearchResult> {
         if (searchClient == null) {
             logger.w { "searchClient is null, cannot search" }
             return emptyList()
@@ -366,7 +385,13 @@ class AppstoreService(
 //                searchParams = SearchParams.of(SearchParamsString(search)),
                 searchParams = SearchParamsObject(
                     query = search,
-                    tagFilters = type?.let { TagFilters.of(type.code) },
+                    tagFilters = TagFilters.of(
+                        listOf(
+                            TagFilters.of(appType.code),
+                            TagFilters.of(platform.storeString()),
+                            TagFilters.of(watchType.codename),
+                        )
+                    ),
                 ),
             ).hits.mapNotNull {
                 it.additionalProperties?.let { props ->
@@ -387,5 +412,14 @@ class AppstoreService(
             logger.w(e) { "error searching for $search" }
             emptyList()
         }
+    }
+}
+
+fun enableByDefault(source: AppstoreSource, type: AppType, slug: String): Boolean {
+    val isFirstSource = INITIAL_APPSTORE_SOURCES.first().url == source.url
+    return when (slug) {
+        "all-generated" -> false
+        "all" -> true
+        else -> isFirstSource
     }
 }

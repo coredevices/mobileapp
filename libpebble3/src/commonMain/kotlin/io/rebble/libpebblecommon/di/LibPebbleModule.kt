@@ -102,6 +102,8 @@ import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
+import io.rebble.libpebblecommon.js.HttpInterceptorManager
+import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.locker.Locker
@@ -111,6 +113,7 @@ import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
@@ -132,6 +135,7 @@ import io.rebble.libpebblecommon.time.createTimeChanged
 import io.rebble.libpebblecommon.timeline.TimelineApi
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.weather.WeatherManager
 import io.rebble.libpebblecommon.web.FirmwareDownloader
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import io.rebble.libpebblecommon.web.RealFirmwareUpdateManager
@@ -276,6 +280,22 @@ class HackyProvider<T>(val getter: () -> T) {
 
 expect val platformModule: Module
 
+val CommonPhoneCapabilities = setOf(
+    ProtocolCapsFlag.SupportsAppRunStateProtocol,
+    ProtocolCapsFlag.SupportsInfiniteLogDump,
+//    ProtocolCapsFlag.SupportsLocalization,
+    ProtocolCapsFlag.SupportsAppDictation,
+    ProtocolCapsFlag.Supports8kAppMessage,
+    ProtocolCapsFlag.SupportsSettingsSync,
+//    ProtocolCapsFlag.SupportsHealthInsights,
+//    ProtocolCapsFlag.SupportsUnreadCoreDump,
+    ProtocolCapsFlag.SupportsWeatherApp,
+//    ProtocolCapsFlag.SupportsRemindersApp,
+//    ProtocolCapsFlag.SupportsWorkoutApp,
+//    ProtocolCapsFlag.SupportsSmoothFwInstallProgress,
+//    ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection,
+)
+
 // https://insert-koin.io/docs/reference/koin-core/context-isolation/
 private object LibPebbleKoinContext {
     private val koinApp = koinApplication()
@@ -292,7 +312,8 @@ fun initKoin(
     appContext: AppContext,
     tokenProvider: TokenProvider,
     proxyTokenProvider: StateFlow<String?>,
-    transcriptionProvider: TranscriptionProvider
+    transcriptionProvider: TranscriptionProvider,
+    injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -312,6 +333,7 @@ fun initKoin(
                 single { webServices }
                 single { tokenProvider }
                 single { transcriptionProvider }
+                single { injectedPKJSHttpInterceptors }
                 single { getRoomDatabase(get()) }
                 singleOf(::StaticLockerPBWCache) bind LockerPBWCache::class
                 singleOf(::PebbleDeviceFactory)
@@ -331,6 +353,8 @@ fun initKoin(
                 single { get<Database>().healthStatDao() }
                 singleOf(::HealthDataProcessor)
                 single { get<Database>().watchPrefDao() }
+                single { get<Database>().weatherAppDao() }
+                single { get<Database>().appPrefsDao() }
                 singleOf(::WatchManager) bind WatchConnector::class
                 single { bleScanner() }
                 singleOf(::RealScanning) bind Scanning::class
@@ -339,6 +363,8 @@ fun initKoin(
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
                 singleOf(::RemoteTimelineEmulator)
+                singleOf(::WeatherManager)
+                singleOf(::HttpInterceptorManager)
                 singleOf(::RealWatchPrefs) bind WatchPrefs::class
                 singleOf(::WebSyncManager) bind RequestSync::class
                 singleOf(::TimelineApi) bind Timeline::class
@@ -346,6 +372,7 @@ fun initKoin(
                 single { createTimeChanged(get()) }
                 single {
                     LibPebble3(
+                        get(),
                         get(),
                         get(),
                         get(),

@@ -35,7 +35,7 @@ fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings) {
+    val mapped = remember(settings, quickLaunchOptions) {
         settings.map { item ->
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
@@ -178,18 +178,20 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
     ).map { apps ->
         apps.filter { app -> app.isSynced() }
     }.collectAsState(emptyList())
-    return listOf(QuickLaunchOption(null, "None")) +
-            QuickLaunchOption(QUIET_TIME_TOGGLE_UUID, "Quiet Time") +
-            QuickLaunchOption(BACKLIGHT_UUID, "Backlight") +
-            QuickLaunchOption(MOTION_BACKLIGHT_UUID, "Backlight") +
-            QuickLaunchOption(AIRPLANE_MODE_UUID, "Airplane Mode") +
-            QuickLaunchOption(TIMELINE_PAST_UUID, "Timeline Past") +
-            QuickLaunchOption(TIMELINE_FUTURE_UUID, "Timeline Future") +
+    return remember(installedApps) {
+        listOf(QuickLaunchOption(null, "None")) +
+                QuickLaunchOption(QUIET_TIME_TOGGLE_UUID, "Quiet Time") +
+                QuickLaunchOption(BACKLIGHT_UUID, "Backlight") +
+                QuickLaunchOption(MOTION_BACKLIGHT_UUID, "Backlight") +
+                QuickLaunchOption(AIRPLANE_MODE_UUID, "Airplane Mode") +
+                QuickLaunchOption(TIMELINE_PAST_UUID, "Timeline Past") +
+                QuickLaunchOption(TIMELINE_FUTURE_UUID, "Timeline Future") +
 
-            QuickLaunchOption(HEALTH_APP_UUID, "Health") +
-            installedApps.map { app ->
-                QuickLaunchOption(app.properties.id, app.properties.title)
-            }
+                QuickLaunchOption(HEALTH_APP_UUID, "Health") +
+                installedApps.map { app ->
+                    QuickLaunchOption(app.properties.id, app.properties.title)
+                }
+    }
 }
 
 private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble: LibPebble, options: List<QuickLaunchOption>): SettingsItem {

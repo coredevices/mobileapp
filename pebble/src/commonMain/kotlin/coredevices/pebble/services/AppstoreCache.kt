@@ -19,11 +19,52 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
-class AppstoreCache(
-    private val appContext: AppContext,
-) {
-    private val appCacheDir = getTempFilePath(appContext, "locker_cache")
-    private val categoryCacheDir = getTempFilePath(appContext, "category_cache")
+interface AppstoreCache {
+    suspend fun readApp(
+        id: String,
+        parameters: Map<String, String>,
+        source: AppstoreSource,
+    ): StoreAppResponse?
+
+    suspend fun writeApp(
+        app: StoreAppResponse,
+        parameters: Map<String, String>,
+        source: AppstoreSource,
+    )
+
+    suspend fun writeCategories(
+        categories: List<StoreCategory>,
+        type: AppType,
+        source: AppstoreSource,
+    )
+
+    suspend fun readCategories(
+        type: AppType,
+        source: AppstoreSource,
+    ): List<StoreCategory>?
+
+    suspend fun writeHome(
+        home: AppStoreHome,
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    )
+
+    suspend fun readHome(
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ): AppStoreHome?
+
+    suspend fun clearCache()
+}
+
+class RealAppstoreCache(
+    appContext: AppContext,
+) : AppstoreCache {
+    private val appCacheDir by lazy { getTempFilePath(appContext, "locker_cache") }
+    private val categoryCacheDir by lazy {  getTempFilePath(appContext, "category_cache") }
+    private val homeCacheDir by lazy {  getTempFilePath(appContext, "home_cache") }
     private val logger = Logger.withTag("AppstoreCache")
     private val json = Json {
         ignoreUnknownKeys = true
@@ -32,9 +73,12 @@ class AppstoreCache(
 
     companion object {
         private val STORE_APP_CACHE_AGE = 4.hours
+        private val STORE_HOME_CACHE_AGE = 4.hours
     }
 
-    suspend fun readApp(
+    // Apps
+
+    override suspend fun readApp(
         id: String,
         parameters: Map<String, String>,
         source: AppstoreSource,
@@ -55,7 +99,7 @@ class AppstoreCache(
         return@withContext null
     }
 
-    suspend fun writeApp(
+    override suspend fun writeApp(
         app: StoreAppResponse,
         parameters: Map<String, String>,
         source: AppstoreSource,
@@ -75,13 +119,13 @@ class AppstoreCache(
         }
     }
 
-    private fun createAppCacheDir() {
+    private fun createCacheDir(dir: Path) {
         try {
-            if (!SystemFileSystem.exists(appCacheDir)) {
-                SystemFileSystem.createDirectories(appCacheDir, false)
+            if (!SystemFileSystem.exists(dir)) {
+                SystemFileSystem.createDirectories(dir, false)
             }
         } catch (e: Exception) {
-            logger.e(e) { "Failed to create cache directory: $appCacheDir" }
+            logger.e(e) { "Failed to create cache directory: $dir" }
         }
     }
 
@@ -101,12 +145,14 @@ class AppstoreCache(
         parameters: Map<String, String>,
         source: AppstoreSource,
     ): Path {
-        createAppCacheDir()
+        createCacheDir(appCacheDir)
         val hash = calculateAppCacheKey(id, parameters, source)
         return Path(appCacheDir, "$hash.json")
     }
 
-    suspend fun writeCategories(
+    // Categories
+
+    override suspend fun writeCategories(
         categories: List<StoreCategory>,
         type: AppType,
         source: AppstoreSource,
@@ -121,7 +167,7 @@ class AppstoreCache(
         }
     }
 
-    suspend fun readCategories(
+    override suspend fun readCategories(
         type: AppType,
         source: AppstoreSource,
     ): List<StoreCategory>? = withContext(Dispatchers.Default) {
@@ -143,7 +189,7 @@ class AppstoreCache(
     }
 
     private fun cacheFileForCategories(appType: AppType, source: AppstoreSource): Path {
-        createCategoryCacheDir()
+        createCacheDir(categoryCacheDir)
         val hash = calculateCategoryCacheKey(appType, source)
         return Path(categoryCacheDir, "$hash.json")
     }
@@ -154,19 +200,103 @@ class AppstoreCache(
         return hash.toHexString()
     }
 
-    private fun createCategoryCacheDir() {
+    // Home
+
+    private fun cacheFileForHome(
+        appType: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ): Path {
+        createCacheDir(homeCacheDir)
+        val hash = calculateHomeCacheKey(appType, source, parameters)
+        return Path(homeCacheDir, "$hash.json")
+    }
+
+    private fun calculateHomeCacheKey(
+        appType: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ): String {
+        val data = source.url + appType.code + parameters.entries.sortedBy { it.key }
+        val hash = sha1(data.encodeToByteArray())
+        return hash.toHexString()
+    }
+
+    override suspend fun writeHome(
+        home: AppStoreHome,
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ) = withContext(Dispatchers.Default) {
+        val cacheFile = cacheFileForHome(type, source, parameters)
+        val toCache = CachedStoreHome(
+            home = home,
+            lastUpdated = Clock.System.now(),
+        )
         try {
-            if (!SystemFileSystem.exists(categoryCacheDir)) {
-                SystemFileSystem.createDirectories(categoryCacheDir, false)
+            SystemFileSystem.sink(cacheFile).buffered().use {
+                it.writeString(Json.encodeToString(toCache))
             }
         } catch (e: Exception) {
-            logger.e(e) { "Failed to create category cache directory: $categoryCacheDir" }
+            logger.w(e) { "Failed to write cached home for type ${type.code}" }
         }
+    }
+
+    override suspend fun readHome(
+        type: AppType,
+        source: AppstoreSource,
+        parameters: Map<String, String>,
+    ): AppStoreHome? = withContext(Dispatchers.Default) {
+        val cacheFile = cacheFileForHome(type, source, parameters)
+        try {
+            if (SystemFileSystem.exists(cacheFile)) {
+                SystemFileSystem.source(cacheFile).buffered().use {
+                    val cachedJson = it.readString()
+                    val cached: CachedStoreHome = Json.decodeFromString(cachedJson)
+                    if (Clock.System.now() - cached.lastUpdated < STORE_HOME_CACHE_AGE) {
+                        return@withContext cached.home
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to read cached home for type ${type.code}" }
+        }
+        return@withContext null
+    }
+
+    // Maintainence
+
+    override suspend fun clearCache() = withContext(Dispatchers.Default) {
+        logger.i { "Clearing cache!" }
+        homeCacheDir.clear()
+        categoryCacheDir.clear()
+        appCacheDir.clear()
+    }
+}
+
+private suspend fun Path.clear() {
+    try {
+        if (SystemFileSystem.exists(this@clear)) {
+            // list handles getting all children in the directory
+            SystemFileSystem.list(this@clear).forEach { child ->
+                // Use SystemFileSystem.delete to remove each file or directory
+                // mustSetDeleteOnExit is usually false for immediate deletion
+                SystemFileSystem.delete(child, mustExist = false)
+            }
+        }
+    } catch (e: Exception) {
+        Logger.withTag("AppstoreCache").e(e) { "Failed to clear directory: ${this@clear}" }
     }
 }
 
 @Serializable
 private data class CachedStoreAppResponse(
     val response: StoreAppResponse,
+    val lastUpdated: Instant
+)
+
+@Serializable
+private data class CachedStoreHome(
+    val home: AppStoreHome,
     val lastUpdated: Instant
 )

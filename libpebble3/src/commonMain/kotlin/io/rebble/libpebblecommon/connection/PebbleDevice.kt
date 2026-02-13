@@ -189,7 +189,7 @@ object ConnectedPebble {
     }
 
     interface CompanionAppControl {
-        val currentCompanionAppSession: StateFlow<CompanionApp?>
+        val currentCompanionAppSessions: StateFlow<List<CompanionApp>>
     }
 
     interface Time {

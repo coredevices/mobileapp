@@ -3,14 +3,14 @@ name: Build
 on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: macos-15
-
+  android:
+    runs-on: ubuntu-latest
     steps:
       - name: Setup JDK
-        uses: actions/setup-java@v1.4.4
+        uses: actions/setup-java@v4
         with:
-          java-version: 21
+          distribution: 'temurin'
+          java-version: 17
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -19,28 +19,50 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            ~/.gradle/caches
             ~/.gradle/wrapper
-            ~/.konan/cache
-            ~/.konan/dependencies
-          key: build-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          key: android-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          restore-keys: |
+            android-deps-${{ runner.os }}-
+      - name: Use dummy google-services json
+        run: mv composeApp/src/google-services-dummy.json composeApp/src/google-services.json
+      - name: Build and Test
+        run: ./gradlew :composeApp:assembleDebug testDebugUnitTest jvmTest lintDebug
+        env:
+          GITHUB_ACTOR: ${{ secrets.READ_PACKAGES_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache build deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.konan
+          key: ios-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          restore-keys: |
+            ios-deps-${{ runner.os }}-
       - name: Set up Xcode
         run: |
           ls /Applications/Xcode*
           swift --version
-          sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-          gem install xcpretty
+          sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
       - name: Use dummy google-services json
         run: mv composeApp/src/google-services-dummy.json composeApp/src/google-services.json
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2.2.0
-
       - name: Build
-        run: ./gradlew :composeApp:compileKotlinIosArm64 :libpebble3:linkDebugFrameworkIosArm64 :composeApp:assembleDebug
-        env:
-          GITHUB_ACTOR: ${{ secrets.READ_PACKAGES_ACTOR }}
-          GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}
-      - name: Test
-        run: ./gradlew testDebugUnitTest jvmTest lintDebug
+        run: ./gradlew :composeApp:compileKotlinIosArm64 :libpebble3:linkDebugFrameworkIosArm64
         env:
           GITHUB_ACTOR: ${{ secrets.READ_PACKAGES_ACTOR }}
           GITHUB_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}

@@ -126,6 +126,14 @@ class AttributesListBuilder internal constructor() {
         string(TimelineAttribute.AppName, block)
     }
 
+    fun headings(block: () -> List<String>) {
+        stringList(TimelineAttribute.Headings, block)
+    }
+
+    fun paragraphs(block: () -> List<String>) {
+        stringList(TimelineAttribute.Paragraphs, block)
+    }
+
     fun muteDayOfWeek(block: () -> UByte) {
         attributes.add(BaseAttribute.UByteAttribute(TimelineAttribute.MuteDayOfWeek, block()))
     }

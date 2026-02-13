@@ -32,7 +32,7 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
         watches: List<WatchIdentifier>?
     ): Map<WatchIdentifier, TransmissionResult> {
         return runOnConnectedWatches(watches) { watch ->
-            val companionApp = watch.currentCompanionAppSession.value as? PebbleKit2
+            val companionApp = watch.currentCompanionAppSessions.value.filterIsInstance<PebbleKit2>().firstOrNull()
 
             if (companionApp == null || companionApp.uuid.toJavaUuid() != watchappUUID) {
                 return@runOnConnectedWatches TransmissionResult.FailedDifferentAppOpen

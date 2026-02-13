@@ -40,8 +40,10 @@ fun SignInButton(onError: (String) -> Unit = {}, enabled: Boolean = true) {
                     return@launch
                 }
                 try {
-                    if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
-                        Logger.i { "Successfully linked anonymous user to account" }
+                    if (Firebase.auth.currentUser?.isAnonymous == true) {
+                        if (Firebase.auth.currentUser?.linkWithCredential(credential) != null) {
+                            Logger.i { "Successfully linked anonymous user to account" }
+                        }
                     }
                 } catch (_: FirebaseAuthUserCollisionException) {
                     Logger.i { "User is already created, not linking anonymous user" }

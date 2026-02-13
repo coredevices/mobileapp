@@ -74,6 +74,10 @@ data class WatchConfig(
      * This prevents music app from jumping to the top of the list.
      */
     val alwaysSendMusicPaused: Boolean = false,
+    /**
+     * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
+     */
+    val appMessageToMultipleCompanions: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

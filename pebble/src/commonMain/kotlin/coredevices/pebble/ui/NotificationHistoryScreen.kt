@@ -11,12 +11,9 @@ import androidx.compose.ui.Modifier
 fun NotificationHistoryScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {}
 //        topBarParams.title("Notification History")
-            topBarParams.canGoBack(false)
-            topBarParams.goBack.collect {
-            }
         }
 
         NotificationHistoryList(

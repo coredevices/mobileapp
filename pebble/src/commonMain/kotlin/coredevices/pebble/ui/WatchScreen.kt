@@ -120,13 +120,9 @@ fun WatchScreen(
         }
         val watch by watchesFlow.collectAsState(null)
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {}
             topBarParams.title("Device")
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                navBarNav.goBack()
-            }
         }
         watch?.let { WatchScreenContent(navBarNav, topBarParams, it, libPebble) }
     }

@@ -1,7 +1,7 @@
 package coredevices.pebble
 
 import com.eygraber.uri.Uri
-import coredevices.pebble.PebbleDeepLinkHandler.Companion.parseTokenFrom
+import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.parseTokenFrom
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

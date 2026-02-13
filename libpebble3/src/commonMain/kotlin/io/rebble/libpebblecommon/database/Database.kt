@@ -22,6 +22,10 @@ import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
+import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntryEntity
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -48,6 +52,8 @@ import io.rebble.libpebblecommon.database.entity.TimelineReminderSyncEntity
 import io.rebble.libpebblecommon.database.entity.VibePatternEntity
 import io.rebble.libpebblecommon.database.entity.WatchPrefItemEntity
 import io.rebble.libpebblecommon.database.entity.WatchPrefItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntryEntity
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntrySyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
@@ -79,8 +85,12 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         HealthStatSyncEntity::class,
         WatchPrefItemEntity::class,
         WatchPrefItemSyncEntity::class,
+        WeatherAppEntryEntity::class,
+        WeatherAppEntrySyncEntity::class,
+        AppPrefsEntryEntity::class,
+        AppPrefsEntrySyncEntity::class,
     ],
-    version = 30,
+    version = 33,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -102,6 +112,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 27, to = 28),
         AutoMigration(from = 28, to = 29),
         AutoMigration(from = 29, to = 30, spec = AutoMigration30::class),
+        AutoMigration(from = 30, to = 31),
+        AutoMigration(from = 31, to = 32),
+        AutoMigration(from = 32, to = 33),
     ],
     exportSchema = true,
 )
@@ -123,6 +136,8 @@ abstract class Database : RoomDatabase() {
     abstract fun healthDao(): HealthDao
     abstract fun healthStatDao(): HealthStatDao
     abstract fun watchPrefDao(): WatchPrefRealDao
+    abstract fun weatherAppDao(): WeatherAppRealDao
+    abstract fun appPrefsDao(): AppPrefsEntryDao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")
