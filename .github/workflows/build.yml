@@ -4,13 +4,14 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: macos-15
+    # runs-on: macos-15  # GitHub-hosted runner
+    runs-on: [self-hosted, macOS, ARM64]  # Self-hosted Mac Mini
 
     steps:
-      - name: Setup JDK
-        uses: actions/setup-java@v1.4.4
-        with:
-          java-version: 21
+      # - name: Setup JDK  # Not needed on self-hosted runner (Java pre-installed)
+      #   uses: actions/setup-java@v1.4.4
+      #   with:
+      #     java-version: 17
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -19,20 +20,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            ~/.gradle/caches
             ~/.gradle/wrapper
+            .gradle
             ~/.konan/cache
             ~/.konan/dependencies
-          key: build-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          key: build-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
       - name: Set up Xcode
         run: |
           ls /Applications/Xcode*
           swift --version
           sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
-          gem install xcpretty
+          # gem install xcpretty  # Already installed on self-hosted runner
       - name: Use dummy google-services json
         run: mv composeApp/src/google-services-dummy.json composeApp/src/google-services.json
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2.2.0
+      # - name: Set up Swift  # Not needed on self-hosted runner (comes with Xcode)
+      #   uses: swift-actions/setup-swift@v2.2.0
 
       - name: Build
         run: ./gradlew :composeApp:compileKotlinIosArm64 :libpebble3:linkDebugFrameworkIosArm64 :composeApp:assembleDebug

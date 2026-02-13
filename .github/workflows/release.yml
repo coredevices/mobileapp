@@ -6,22 +6,25 @@ on:
 
 jobs:
   publish-swift:
-    runs-on: macos-latest
+    # runs-on: macos-latest  # GitHub-hosted runner
+    runs-on: [self-hosted, macOS, ARM64]  # Self-hosted Mac Mini
     steps:
-      - name: Setup JDK
-        uses: actions/setup-java@v1.4.4
-        with:
-          java-version: 21
+      # - name: Setup JDK  # Not needed on self-hosted runner (Java pre-installed)
+      #   uses: actions/setup-java@v1.4.4
+      #   with:
+      #     java-version: 21
       - name: Checkout source
         uses: actions/checkout@v4
       - name: Cache build deps
         uses: actions/cache@v4
         with:
           path: |
+            ~/.gradle/caches
             ~/.gradle/wrapper
+            .gradle
             ~/.konan/cache
             ~/.konan/dependencies
-          key: build-deps-${{ runner.os }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
+          key: build-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
 
       - name: Build XCFrameworks
         run: ./gradlew assembleXCFramework
@@ -65,21 +68,24 @@ jobs:
           git push origin swiftpm-${{ github.event.release.tag_name }}
 
   publish-maven:
-    runs-on: macos-latest
+    # runs-on: macos-latest  # GitHub-hosted runner
+    runs-on: [self-hosted, macOS, ARM64]  # Self-hosted Mac Mini
 
     steps:
-      - name: Setup JDK
-        uses: actions/setup-java@v1.4.4
-        with:
-          java-version: 17
+      # - name: Setup JDK  # Not needed on self-hosted runner (Java pre-installed)
+      #   uses: actions/setup-java@v1.4.4
+      #   with:
+      #     java-version: 17
       - name: Cache build deps
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
+            ~/.gradle/caches
             ~/.gradle/wrapper
+            .gradle
             ~/.konan/cache
             ~/.konan/dependencies
-          key: build-deps-${{ hashFiles('~/.gradle/**') }}-${{ hashFiles('~/.konan/**') }}
+          key: build-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/**', 'gradlew*', 'gradle.properties', '*.gradle*') }}
 
       - name: Checkout source
         uses: actions/checkout@v2
