@@ -1203,6 +1203,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     SystemApps.Health -> "drawable/health.png"
                     SystemApps.Weather -> "drawable/weather.png"
                     SystemApps.Tictoc -> "drawable/tictoc.png"
+                    SystemApps.Timeline -> "drawable/timeline.png"
                     SystemApps.Kickstart -> "drawable/kickstart.png"
                 }
                 Res.getUri(resUri)
