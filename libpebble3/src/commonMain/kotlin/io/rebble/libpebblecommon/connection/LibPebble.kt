@@ -34,6 +34,7 @@ import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -423,5 +424,10 @@ class LibPebble3(
             val libPebble = koin.get<LibPebble>()
             return libPebble
         }
+
+        /**
+         * Returns the [RemoteTimelineEmulator] from the LibPebble Koin context.
+         */
+        fun getRemoteTimelineEmulator(): RemoteTimelineEmulator = koin.get()
     }
 }
