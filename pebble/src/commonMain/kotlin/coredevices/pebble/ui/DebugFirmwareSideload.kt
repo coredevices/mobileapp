@@ -84,7 +84,15 @@ private sealed class UiFirmwareUpdateStatus {
                     "Couldn't start: ${status.error.message()}"
                 )
 
-                is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle -> Idle
+                is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle -> {
+                    // Check if there was a failure
+                    val failure = status.lastFailure
+                    if (failure != null) {
+                        Error(failure, failure.message ?: "Unknown error")
+                    } else {
+                        Idle
+                    }
+                }
             }
         }
     }
