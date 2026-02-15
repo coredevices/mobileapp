@@ -9,6 +9,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.web.withTimeoutOr
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.allocArrayOf
@@ -16,13 +18,17 @@ import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import platform.CoreBluetooth.CBATTErrorRequestNotSupported
@@ -82,6 +88,7 @@ private fun ByteArray.toNSData(): NSData = memScoped {
 
 actual class GattServer(
     private val bleConfigFlow: BleConfigFlow,
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
     private val logger = Logger.withTag("GattServer")
     private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
@@ -202,32 +209,73 @@ actual class GattServer(
         registeredDevices.remove(identifier)
     }
 
+    private data class MessageToSend(
+        val identifier: PebbleBleIdentifier,
+        val serviceUuid: Uuid,
+        val characteristicUuid: Uuid,
+        val data: ByteArray,
+    ) {
+        val status = MutableStateFlow<Boolean?>(null)
+    }
+
+    private val sendQueue = Channel<MessageToSend>(50)
+
     actual suspend fun sendData(
         identifier: PebbleBleIdentifier,
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
     ): Boolean {
-        val cbCharacteristic = findCharacteristic(
+        val message = MessageToSend(
+            identifier = identifier,
             serviceUuid = serviceUuid,
             characteristicUuid = characteristicUuid,
+            data = data,
+        )
+        return withTimeoutOr(
+            timeout = SEND_TIMEOUT,
+            block = {
+                sendQueue.send(message)
+                message.status.filterNotNull().first()
+            },
+            onTimeout = {
+                logger.w { "Timeout sending data to $identifier" }
+                false
+            },
+        )
+    }
+
+    actual fun initServer() {
+        libPebbleCoroutineScope.launch {
+            sendQueue.consumeEach { messageToSend ->
+                val result = realSend(messageToSend)
+                messageToSend.status.value = result
+            }
+        }
+    }
+
+    private suspend fun realSend(messageToSend: MessageToSend): Boolean {
+        val cbCharacteristic = findCharacteristic(
+            serviceUuid = messageToSend.serviceUuid,
+            characteristicUuid = messageToSend.characteristicUuid,
         )
         if (cbCharacteristic == null) {
-            logger.w("sendData: couldn't find characteristic for $serviceUuid / $characteristicUuid")
+            logger.w("sendData: couldn't find characteristic for $messageToSend")
             return false
         }
         val central = (cbCharacteristic.subscribedCentrals as? List<CBCentral>)?.firstOrNull {
-            it.identifier.asUuid().toString().asPebbleBleIdentifier() == identifier
+            it.identifier.asUuid().toString().asPebbleBleIdentifier() == messageToSend.identifier
         }
         if (central == null) {
-            logger.w("sendData: couldn't find central for $identifier")
+            logger.w("sendData: couldn't find central for ${messageToSend.identifier}")
             return false
         }
         return try {
             withTimeout(SEND_TIMEOUT) {
                 while (true) {
+                    peripheralManagerReady.value = false
                     if (peripheralManager.updateValue(
-                            value = data.toNSData(),
+                            value = messageToSend.data.toNSData(),
                             forCharacteristic = cbCharacteristic,
                             onSubscribedCentrals = listOf(central),
                         )
@@ -235,7 +283,7 @@ actual class GattServer(
                         return@withTimeout true
                     }
                     // Write did not succeed; wait for queue to drain
-                    peripheralManagerReady.first()
+                    peripheralManagerReady.first { ready -> ready }
                 }
                 false
             }
@@ -338,19 +386,17 @@ actual class GattServer(
         }
     }
 
-    private val peripheralManagerReady = MutableSharedFlow<Unit>()
+    private val peripheralManagerReady = MutableStateFlow(true)
 
     override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
-        runBlocking {
-            peripheralManagerReady.emit(Unit)
-        }
+        peripheralManagerReady.value = true
     }
 }
 
 private val SEND_TIMEOUT = 8.seconds
 
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
-    return GattServer(bleConfigFlow)
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+    return GattServer(bleConfigFlow, libPebbleCoroutineScope)
 }

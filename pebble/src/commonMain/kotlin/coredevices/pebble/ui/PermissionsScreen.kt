@@ -39,14 +39,10 @@ private val logger = Logger.withTag("PermissionsScreen")
 fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {
             }
             topBarParams.title("Permissions")
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                navBarNav.goBack()
-            }
         }
         val permissionRequester: PermissionRequester = koinInject()
 

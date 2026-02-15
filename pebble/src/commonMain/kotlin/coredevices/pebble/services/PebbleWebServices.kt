@@ -14,6 +14,7 @@ import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.services.PebbleHttpClient.Companion.delete
 import coredevices.pebble.services.PebbleHttpClient.Companion.get
 import coredevices.pebble.services.PebbleHttpClient.Companion.put
+import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.weather.WeatherResponse
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
@@ -26,6 +27,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.put
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
@@ -36,7 +38,7 @@ import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.services.WatchInfo
-import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.web.LockerAddResponse
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerEntryCompanions
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
@@ -53,9 +55,20 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.io.IOException
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -69,11 +82,14 @@ interface PebbleAccountProvider {
     fun get(): PebbleAccount
 }
 
+fun PebbleAccountProvider.isLoggedIn(): Boolean = get().loggedIn.value != null
+
+private val logger = Logger.withTag("PebbleHttpClient")
+
 class PebbleHttpClient(
     private val pebbleAccount: PebbleAccountProvider,
     httpClient: HttpClient = HttpClient(),
 ) : PebbleBootConfigService {
-    private val logger = Logger.withTag("PebbleHttpClient")
     private val httpClient = httpClient.config {
         install(HttpCache)
     }
@@ -81,11 +97,11 @@ class PebbleHttpClient(
         internal suspend fun PebbleHttpClient.put(
             url: String,
             auth: Boolean,
-        ): Boolean {
+        ): HttpResponse? {
             val token = pebbleAccount.get().loggedIn.value
             if (auth && token == null) {
                 logger.i("not logged in")
-                return false
+                return null
             }
             val response = try {
                 httpClient.put(url) {
@@ -95,10 +111,10 @@ class PebbleHttpClient(
                 }
             } catch (e: IOException) {
                 logger.w(e) { "Error doing put: ${e.message}" }
-                return false
+                return null
             }
             logger.v { "post url=$url result=${response.status}" }
-            return response.status.isSuccess()
+            return response
         }
 
         internal suspend fun PebbleHttpClient.delete(
@@ -122,19 +138,6 @@ class PebbleHttpClient(
             }
             logger.v { "delete url=$url result=${response.status}" }
             return response.status.isSuccess()
-        }
-
-        internal suspend inline fun <reified T> PebbleHttpClient.getWithWeatherAuth(
-            url: String,
-        ): T? {
-            val token = pebbleAccount.get().loggedIn.value
-            if (token == null) {
-                logger.i("not logged in")
-                return null
-            }
-            return get(url = url, auth = false, parameters = mapOf(
-                "access_token" to token
-            ))
         }
 
         internal suspend inline fun <reified T> PebbleHttpClient.get(
@@ -180,20 +183,27 @@ class PebbleHttpClient(
     override suspend fun getBootConfig(url: String): BootConfig? = get(url, auth = false)
 }
 
+interface PebbleWebServices {
+    suspend fun fetchUsersMe(): UsersMeResponse?
+    suspend fun fetchPebbleLocker(): LockerModel?
+    suspend fun addToLegacyLocker(uuid: String): Boolean
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
+    suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>>
+    suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
+    suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
+    suspend fun removeFromLegacyLocker(id: Uuid): Boolean
+    suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse?
+}
+
 class RealPebbleWebServices(
     private val httpClient: PebbleHttpClient,
     private val firmwareUpdateCheck: FirmwareUpdateCheck,
     private val bootConfig: BootConfigProvider,
     private val memfault: Memfault,
-    private val platform: Platform,
     private val appstoreSourceDao: AppstoreSourceDao,
     private val firestoreLocker: FirestoreLocker,
     private val coreConfig: CoreConfigFlow
-) : WebServices, KoinComponent {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-    }
+) : WebServices, PebbleWebServices, KoinComponent {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val logger = Logger.withTag("PebbleWebServices")
@@ -214,11 +224,11 @@ class RealPebbleWebServices(
         private suspend fun RealPebbleWebServices.put(
             url: BootConfig.Config.() -> String,
             auth: Boolean,
-        ): Boolean {
+        ): HttpResponse? {
             val bootConfig = bootConfig.getBootConfig()
             if (bootConfig == null) {
                 logger.i("No bootconfig!")
-                return false
+                return null
             }
             return httpClient.put(url(bootConfig.config), auth)
         }
@@ -238,7 +248,7 @@ class RealPebbleWebServices(
 
     private suspend fun getAllSources(enabledOnly: Boolean = true): List<AppstoreSource> {
         return if (enabledOnly) {
-            appstoreSourceDao.getAllEnabledSources().first()
+            appstoreSourceDao.getAllEnabledSourcesFlow().first()
         } else {
             appstoreSourceDao.getAllSources().first()
         }
@@ -254,16 +264,7 @@ class RealPebbleWebServices(
         }
     }
 
-    private fun appstoreServiceForUrl(sourceUrl: String): AppstoreService {
-        return get {
-            parametersOf(AppstoreSource(
-                url = sourceUrl,
-                title = ""
-            ))
-        }
-    }
-
-    suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
+    override suspend fun fetchPebbleLocker(): LockerModel? = get({ locker.getEndpoint }, auth = true)
 
     override suspend fun fetchLocker(): LockerModelWrapper? {
         return if (coreConfig.value.useNativeAppStore) {
@@ -278,8 +279,12 @@ class RealPebbleWebServices(
             firestoreLocker.removeApp(id)
             return true
         } else {
-            return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
+            return removeFromLegacyLocker(id)
         }
+    }
+
+    override suspend fun removeFromLegacyLocker(id: Uuid): Boolean {
+        return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = true)
     }
 
     override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult =
@@ -289,35 +294,27 @@ class RealPebbleWebServices(
         memfault.uploadChunk(chunk, watchInfo)
     }
 
-    suspend fun addToLegacyLocker(uuid: String): Boolean =
-        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)
+    override suspend fun addToLegacyLocker(uuid: String): Boolean =
+        put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.status?.isSuccess() == true
 
-    suspend fun addToLocker(id: String, sourceUrl: String): Boolean = firestoreLocker.addApp(id, sourceUrl)
+    override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? {
+        return put({ locker.addEndpoint.replace("\$\$app_uuid\$\$", uuid) }, auth = true)?.body()
+    }
 
-    suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
+    override suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean = firestoreLocker.addApp(entry, timelineToken)
 
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean = true): List<Pair<AppstoreSource, AppStoreHome?>> {
-        val typeString = type.storeString()
-        val parameters = buildMap {
-            set("platform", platform.storeString())
-            if (hardwarePlatform != null) {
-                set("hardware", hardwarePlatform.codename)
-            }
-//            set("firmware_version", "")
-            set("filter_hardware", "true")
-        }
-        return getAllSources(enabledOnly).map {
-            it to appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform)
+    override suspend fun fetchUsersMe(): UsersMeResponse? = get({ links.usersMe }, auth = true)
+
+    override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
+        return getAllSources(enabledOnly).mapNotNull {
+            val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
+            if (home == null) return@mapNotNull null
+            AppStoreHomeResult(it, home)
         }
     }
 
-    suspend fun fetchAppStoreApp(id: String, hardwarePlatform: WatchType?, sourceUrl: String, useCache: Boolean = true): StoreAppResponse? {
-        val appstore = appstoreServiceForUrl(sourceUrl)
-        return appstore.fetchAppStoreApp(id, hardwarePlatform, useCache)
-    }
-
-    suspend fun getWeather(location: GeolocationPositionResult.Success, units: WeatherUnit, language: String): WeatherResponse? {
-        val url = "https://weather-api.repebble.com/api/v1/geocode/${location.latitude}/${location.longitude}?language=$language&units=${units.code}"
+    override suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse? {
+        val url = "https://weather-api.repebble.com/api/v1/geocode/$latitude/$longitude?language=$language&units=${units.code}"
         return httpClient.get(url, auth = false)
     }
 
@@ -329,13 +326,13 @@ class RealPebbleWebServices(
         }.awaitAll().filterNotNull()
     }
 
-    suspend fun searchAppStore(search: String, type: AppType?): List<Pair<AppstoreSource, StoreSearchResult>> {
+    override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
         return getAllSources().map { source ->
             scope.async {
                 val appstore = appstoreServiceForSource(source)
                 try {
-                    appstore.search(search, type).map {
+                    appstore.search(search, appType, watchType).map {
                         Pair(source, it)
                     }
                 } catch (e: AlgoliaApiException) {
@@ -350,6 +347,11 @@ class RealPebbleWebServices(
 //        logger.v { "search response: $response" }
     }
 }
+
+data class AppStoreHomeResult(
+    val source: AppstoreSource,
+    val result: AppStoreHome,
+)
 
 fun AppType.storeString() = when (this) {
     AppType.Watchapp -> "apps"
@@ -538,6 +540,36 @@ data class StoreCollection(
 )
 
 @Serializable
+data class BulkStoreResponse(
+    val data: List<StoreApplication>
+)
+
+object HeaderImageSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("HeaderImage", PrimitiveKind.STRING).nullable
+
+    override fun deserialize(decoder: Decoder): String? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return null
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonArray -> {
+                val firstMap = element.firstOrNull() as? JsonObject
+                val firstValue = firstMap?.values?.firstOrNull() as? JsonPrimitive
+                firstValue?.contentOrNull
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeString(value)
+        }
+    }
+}
+
+@Serializable
 data class StoreApplication(
     val author: String,
     val capabilities: List<String>,
@@ -554,14 +586,19 @@ data class StoreApplication(
     val description: String,
     @SerialName("developer_id")
     val developerId: String,
-//    @SerialName("header_images")
-//    val headerImages: List<Map<String, String>>,
+    @SerialName("hardware_platforms")
+    val hardwarePlatforms: List<StoreHardwarePlatform>? = null,
+    @SerialName("header_images")
+    @Serializable(with = HeaderImageSerializer::class)
+    val headerImage: String?,
     val hearts: Int,
     @SerialName("icon_image")
     val iconImage: Map<String, String>,
+    @SerialName("icon_resource_id")
+    val iconResourceId: Int? = null,
     val id: String,
     @SerialName("latest_release")
-    val latestRelease: StoreLatestRelease,
+    val latestRelease: StoreLatestRelease? = null,
 //    val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
@@ -574,7 +611,7 @@ data class StoreApplication(
     val source: String?,
     val title: String,
     val type: String,
-    val uuid: String = Uuid.NIL.toString(),
+    val uuid: String? = Uuid.NIL.toString(),
     val visible: Boolean,
     val website: String?,
 )
@@ -608,6 +645,17 @@ data class StoreLatestRelease(
 )
 
 @Serializable
+data class StoreHardwarePlatform(
+    val name: String,
+    @SerialName("sdk_version")
+    val sdkVersion: String?,
+    @SerialName("pebble_process_info_flags")
+    val pebbleProcessInfoFlags: Int?,
+    val description: String,
+    val images: Map<String, String>,
+)
+
+@Serializable
 data class StoreChangelogEntry(
     @SerialName("published_date")
     val publishedDate: String,
@@ -624,8 +672,50 @@ data class StoreChangelogEntry(
 //    val orig: String,
 //)
 
-fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
-    val app = data.firstOrNull() ?: return null
+private const val FALLBACK_SDK_VERSION = "5.86"
+private const val FALLBACK_ICON_RESOURCE_ID = 0
+
+fun StoreApplication.asLockerEntryPlatform(
+    platformName: String,
+    fallbackFlags: Int,
+): LockerEntryPlatform? {
+    val lockerEntryPlatform = hardwarePlatforms?.firstOrNull { it.name == platformName }
+    val sdkVersion = if (hardwarePlatforms != null) {
+        lockerEntryPlatform?.sdkVersion
+    } else {
+        FALLBACK_SDK_VERSION
+    }
+    val pebbleProcessInfoFlags = if (hardwarePlatforms != null) {
+        lockerEntryPlatform?.pebbleProcessInfoFlags
+    } else {
+        fallbackFlags
+    }
+    if (sdkVersion == null || pebbleProcessInfoFlags == null) {
+        return null
+    }
+    return LockerEntryPlatform(
+        name = platformName,
+        sdkVersion = sdkVersion,
+        pebbleProcessInfoFlags = pebbleProcessInfoFlags,
+        description = description,
+        images = LockerEntryPlatformImages(
+            icon = iconImage["48x48"] ?: "",
+            list = listImage["144x144"] ?: "",
+            screenshot = screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
+        )
+    )
+}
+
+fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
+    val app = this
+    if (app.latestRelease == null) {
+        logger.w { "no latest release" }
+        return null
+    }
+    if (app.uuid == null) {
+        logger.w { "no uuid" }
+        return null
+    }
     return LockerEntry(
         id = app.id,
         uuid = app.uuid,
@@ -638,7 +728,7 @@ fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
         isTimelineEnabled = app.capabilities.contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
-                if (!it.startsWith("http") && sourceUrl != null) {
+                if (!it.startsWith("http")) {
                     val sourcePrefix = Url(sourceUrl)
                     URLBuilder(sourcePrefix).apply {
                         path(it)
@@ -647,114 +737,49 @@ fun StoreAppResponse.toLockerEntry(sourceUrl: String? = null): LockerEntry? {
                     it
                 }
             },
-            iconResourceId = 0,
+            iconResourceId = app.iconResourceId ?: FALLBACK_ICON_RESOURCE_ID,
             releaseId = ""
         ),
         links = LockerEntryLinks("", "", ""),
+        capabilities = app.capabilities,
         compatibility = app.compatibility,
         companions = app.companions,
         category = app.category,
+        userToken = timelineToken,
         hardwarePlatforms = buildList {
-            var flags = 0
+            var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {
-                flags = flags or (0x1 shl 0)
+                fallbackFlags = fallbackFlags or (0x1 shl 0)
             }
             app.compatibility.aplite.takeIf { it.supported }?.let {
-                val flagsFinal = flags or (0x1 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "aplite",
-                        sdkVersion = "5.86", //TODO: grab from API if we can
-                        pebbleProcessInfoFlags = flagsFinal, //TODO: ditto
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x1 shl 6)
+                app.asLockerEntryPlatform("aplite", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.basalt.takeIf { it.supported }?.let {
-                val flagsFinal = flags or (0x2 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "basalt",
-                        sdkVersion = "5.86", //TODO
-                        pebbleProcessInfoFlags = flagsFinal,
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x2 shl 6)
+                app.asLockerEntryPlatform("basalt", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.chalk.takeIf { it.supported }?.let {
-                val flagsFinal = flags or (0x3 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "chalk",
-                        sdkVersion = "5.86",
-                        pebbleProcessInfoFlags = flagsFinal,
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x3 shl 6)
+                app.asLockerEntryPlatform("chalk", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.diorite.takeIf { it.supported }?.let {
-                val flagsFinal = flags or (0x4 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "diorite",
-                        sdkVersion = "5.86",
-                        pebbleProcessInfoFlags = flagsFinal,
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x4 shl 6)
+                app.asLockerEntryPlatform("diorite", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.emery.takeIf { it.supported }?.let {
-                val flagsFinal = flags or (0x5 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "emery",
-                        sdkVersion = "5.86",
-                        pebbleProcessInfoFlags = flagsFinal,
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x5 shl 6)
+                app.asLockerEntryPlatform("emery", fallbackFlagsFinal)?.let { add(it) }
             }
             app.compatibility.flint.takeIf { it?.supported ?: false }?.let {
-                val flagsFinal = flags or (0x6 shl 6)
-                add(
-                    LockerEntryPlatform(
-                        name = "flint",
-                        sdkVersion = "5.86",
-                        pebbleProcessInfoFlags = flagsFinal,
-                        description = app.description,
-                        images = LockerEntryPlatformImages(
-                            icon = app.iconImage["48x48"] ?: "",
-                            list = app.listImage["144x144"] ?: "",
-                            screenshot = app.screenshotImages.firstOrNull()?.values?.firstOrNull() ?: "",
-                        )
-                    )
-                )
+                val fallbackFlagsFinal = fallbackFlags or (0x6 shl 6)
+                app.asLockerEntryPlatform("flint", fallbackFlagsFinal)?.let { add(it) }
             }
-        }
+            app.compatibility.gabbro.takeIf { it?.supported ?: false }?.let {
+                val fallbackFlagsFinal = fallbackFlags or (0x6 shl 7)
+                app.asLockerEntryPlatform("gabbro", fallbackFlagsFinal)?.let { add(it) }
+            }
+        },
+        source = sourceUrl,
     )
 }

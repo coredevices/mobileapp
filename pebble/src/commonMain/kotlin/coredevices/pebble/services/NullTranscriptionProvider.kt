@@ -9,7 +9,8 @@ class NullTranscriptionProvider: TranscriptionProvider {
     @OptIn(ExperimentalUnsignedTypes::class)
     override suspend fun transcribe(
         encoderInfo: VoiceEncoderInfo,
-        audioFrames: Flow<UByteArray>
+        audioFrames: Flow<UByteArray>,
+        isNotificationReply: Boolean
     ): TranscriptionResult {
         audioFrames.collect {  }
         return TranscriptionResult.Disabled

@@ -48,7 +48,7 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
         appendLine()
 
         memoryInfo?.let {
-            appendLine("Total Memory: ${memoryInfo.totalMem}")
+            appendLine("Total Memory: ${memoryInfo.totalMem} (${memoryInfo.totalMem / (1024 * 1024 * 1024)} GB)")
             appendLine("Low Memory: ${memoryInfo.lowMemory}")
             appendLine("Threshold: ${memoryInfo.threshold}")
         } ?: appendLine("Memory Info: <Failed>")

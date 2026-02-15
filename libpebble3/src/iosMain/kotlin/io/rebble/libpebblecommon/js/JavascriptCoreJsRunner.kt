@@ -6,11 +6,11 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.newSingleThreadContext
@@ -47,11 +47,12 @@ class JavascriptCoreJsRunner(
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
-    private val pkjsBundleIdentifier: String? = "coredevices.coreapp",
+    private val httpInterceptorManager: HttpInterceptorManager,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
+    private val interfaceInstanceRefs = mutableListOf<StableRef<RegisterableJsInterface>>()
     private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
     private val functionRefs = mutableListOf<StableRef<*>>()
     private var navigatorRef: StableRef<JSValue>? = null
@@ -78,15 +79,21 @@ class JavascriptCoreJsRunner(
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, evalFn, remoteTimelineEmulator, appInfo),
+            XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
             JSTimeout(interfacesScope, evalRawFn),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
         interfacesRef = StableRef.create(instances)
         instances.forEach {
+            // Pin each interface instance individually to prevent K/N GC from moving
+            // the receiver object that bound function references (this::method) point to.
+            // Without this, JSC can call an ObjC block whose captured receiver pointer
+            // has been invalidated by K/N GC compaction.
+            interfaceInstanceRefs.add(StableRef.create(it))
+
             // Create a JavaScript object and set properties individually to avoid passing
             // Kotlin Map objects which can be moved by GC
             val jsObject = jsContext.evaluateScript("({})")!!
@@ -108,9 +115,7 @@ class JavascriptCoreJsRunner(
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
-        val bundle = pkjsBundleIdentifier
-            ?.let { NSBundle.bundleWithIdentifier(it) ?: error("PKJS bundle with identifier $it not found") }
-            ?: NSBundle.mainBundle
+        val bundle = NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
             ?: error("Startup script not found in bundle")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
@@ -160,6 +165,9 @@ class JavascriptCoreJsRunner(
                 it.dispose()
             }
             interfacesRef = null
+            // Dispose all interface instance references
+            interfaceInstanceRefs.forEach { it.dispose() }
+            interfaceInstanceRefs.clear()
             // Dispose all interface map references
             interfaceMapRefs.forEach { it.dispose() }
             interfaceMapRefs.clear()
@@ -203,6 +211,8 @@ class JavascriptCoreJsRunner(
         evaluateInternalScript("startup")
         logger.d { "Startup script evaluated" }
         loadAppJs(jsPath.toString())
+        // Uncomment to reproduce JSCore crash
+//        reproduceProductionCrash(scope, this)
     }
 
     override suspend fun stop() {
@@ -221,25 +231,18 @@ class JavascriptCoreJsRunner(
         signalReady()
     }
 
+    override suspend fun signalInterceptResponse(
+        callbackId: String,
+        result: InterceptResponse
+    ) {
+        TODO("Not supported")
+    }
+
     override suspend fun signalNewAppMessageData(data: String?): Boolean {
         withContext(threadContext) {
             jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
         }
         return true
-    }
-
-    override suspend fun signalAppMessageAck(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageAck(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
-    }
-
-    override suspend fun signalAppMessageNack(data: String?): Boolean {
-        withContext(threadContext) {
-            jsContext?.evalCatching("globalThis.signalAppMessageNack(${Json.encodeToString(data)})")
-        }
-        return jsContext != null
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {

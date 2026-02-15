@@ -12,6 +12,8 @@ import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
+import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
+import io.rebble.libpebblecommon.js.InterceptResponse.Companion.OK
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -32,8 +34,8 @@ class RemoteTimelineEmulator(
     private val json: Json,
     private val timelinePinRealDao: TimelinePinRealDao,
     private val timelineReminderRealDao: TimelineReminderRealDao,
-) {
-    fun shouldIntercept(url: String): Boolean {
+) : HttpInterceptor {
+    override fun shouldIntercept(url: String): Boolean {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
             return false
         }
@@ -46,14 +48,14 @@ class RemoteTimelineEmulator(
                 && uri.path?.toLowerCase(Locale.current)?.startsWith("/v1/user/pins") == true
     }
 
-    suspend fun onIntercepted(url: String, method: String, body: String, appUuid: Uuid): String {
+    override suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
             logger.w { "Shouldn't have received onIntercepted if we aren't configured to intercept?" }
-            return ""
+            return ERROR
         }
         val uri = Uri.parseOrNull(url)
-        if (uri?.authority == null) {
-            return ""
+        if (uri?.authority == null || body == null) {
+            return ERROR
         }
 //        logger.v { "onIntercepted: uri=$uri method=$method body=$body" }
         if (method == "PUT" || method == "POST") {
@@ -68,7 +70,7 @@ class RemoteTimelineEmulator(
                 deletePin(appUuid = appUuid, pinIdentifier = pinIdentifer)
             }
         }
-        return ""
+        return OK
     }
 
     suspend fun insertPin(pinJson: String, appUuid: Uuid) {

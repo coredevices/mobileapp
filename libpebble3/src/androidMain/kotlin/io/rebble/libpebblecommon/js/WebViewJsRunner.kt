@@ -38,6 +38,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
@@ -56,6 +58,7 @@ class WebViewJsRunner(
     urlOpenRequests: Channel<String>,
     logMessages: Channel<String>,
     remoteTimelineEmulator: RemoteTimelineEmulator,
+    httpInterceptorManager: HttpInterceptorManager,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -67,8 +70,8 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private val initializedLock = Object()
-    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil, remoteTimelineEmulator)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(
@@ -363,6 +366,18 @@ class WebViewJsRunner(
         } ?: error("WebView not initialized")
     }
 
+    override suspend fun signalInterceptResponse(callbackId: String, result: InterceptResponse) {
+        val jsonString = buildJsonObject {
+            put("callbackId", callbackId)
+            put("response", result.result)
+            put("status", result.status)
+        }.toString()
+        withContext(Dispatchers.Main) {
+            // No Json.encodeToString here, we want the raw object {} in the JS call
+            webView?.evaluateJavascript("window.signalInterceptResponse($jsonString)", null)
+        }
+    }
+
     override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
         withContext(Dispatchers.Main) {
@@ -390,20 +405,6 @@ class WebViewJsRunner(
         readyState.first { it }
         withContext(Dispatchers.Main) {
             webView?.evaluateJavascript("window.signalNewAppMessageData(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
-        }
-        return true
-    }
-
-    override suspend fun signalAppMessageAck(data: String?): Boolean {
-        withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageAck(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
-        }
-        return true
-    }
-
-    override suspend fun signalAppMessageNack(data: String?): Boolean {
-        withContext(Dispatchers.Main) {
-            webView?.evaluateJavascript("window.signalAppMessageNack(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
         }
         return true
     }

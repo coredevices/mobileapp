@@ -23,7 +23,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.FAKE
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.META_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_CHARACTERISTIC_SERVER
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PPOGATT_DEVICE_SERVICE_UUID_SERVER
-import kotlinx.coroutines.TimeoutCancellationException
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.web.withTimeoutOr
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,15 +34,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 
 private fun getService(appContext: AppContext): BluetoothManager? =
     appContext.context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
     return try {
         val callback = GattServerCallback(bleConfigFlow)
         getService(appContext)?.openGattServer(appContext.context, callback)?.let {
@@ -58,12 +61,15 @@ data class RegisteredDevice(
     val dataChannel: SendChannel<ByteArray>,
     val device: BluetoothDevice,
     val notificationsEnabled: Boolean,
+    val writing: MutableStateFlow<Boolean> = MutableStateFlow(false),
+    val mutex: Mutex = Mutex(),
 )
 
 class GattServerCallback(
     private val bleConfigFlow: BleConfigFlow,
 ) : BluetoothGattServerCallback() {
     private val logger = Logger.withTag("GattServerCallback")
+
     //    private val _connectionState = MutableStateFlow<ServerConnectionstateChanged?>(null)
 //    val connectionState = _connectionState.asSharedFlow()
     val registeredDevices: MutableMap<String, RegisteredDevice> = mutableMapOf()
@@ -174,16 +180,14 @@ class GattServerCallback(
 //        logger.d("/onDescriptorWriteRequest")
     }
 
-    val notificationSent = MutableStateFlow<NotificationSent?>(null)
-
     override fun onNotificationSent(device: BluetoothDevice, status: Int) {
 //        logger.d("onNotificationSent: ${device.address}")
-        notificationSent.tryEmit(
-            NotificationSent(
-                deviceId = device.address.asPebbleBleIdentifier(),
-                status = status,
-            )
-        )
+        val device = registeredDevices[device.address]
+        if (device == null) {
+            logger.e("onNotificationSent device not registered!")
+            return
+        }
+        device.writing.value = false
     }
 }
 
@@ -323,51 +327,51 @@ actual class GattServer(
             logger.e("sendData: couldn't find characteristic")
             return false
         }
-        callback.notificationSent.value = null // TODO better way of doing this?
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val writeRes = server.notifyCharacteristicChanged(
-                registeredDevice.device,
-                characteristic,
-                false,
-                data
-            )
-            if (writeRes != BluetoothStatusCodes.SUCCESS) {
-                logger.e("couldn't notify data characteristic: $writeRes")
-                return false
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            characteristic.value = data
-            @Suppress("DEPRECATION")
-            if (!server.notifyCharacteristicChanged(
-                    registeredDevice.device,
-                    characteristic,
-                    false
-                )
-            ) {
-                logger.e("couldn't notify data characteristic")
-                return false
-            }
-        }
-        return try {
-            val res = withTimeout(cbTimeout) {
-                callback.notificationSent.filterNotNull()
-                    .first { identifier == it.deviceId }
-            }
-            if (res.status != GATT_SUCCESS) {
-                logger.e("characteristic notify error: ${res.status}")
+        return withTimeoutOr(
+            timeout = cbTimeout.milliseconds,
+            block = {
+                registeredDevice.mutex.withLock {
+                    registeredDevice.writing.value = true
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        val writeRes = server.notifyCharacteristicChanged(
+                            registeredDevice.device,
+                            characteristic,
+                            false,
+                            data
+                        )
+                        if (writeRes != BluetoothStatusCodes.SUCCESS) {
+                            logger.e("couldn't notify data characteristic: $writeRes")
+                            return@withLock false
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        characteristic.value = data
+                        @Suppress("DEPRECATION")
+                        if (!server.notifyCharacteristicChanged(
+                                registeredDevice.device,
+                                characteristic,
+                                false
+                            )
+                        ) {
+                            logger.e("couldn't notify data characteristic")
+                            return@withLock false
+                        }
+                    }
+                    registeredDevice.writing.first { writing -> !writing }
+                    true
+                }
+            },
+            onTimeout = {
+                logger.w { "Timeout sending data to $identifier" }
                 false
-            } else {
-                true
-            }
-        } catch (e: TimeoutCancellationException) {
-            logger.e("characteristic notify timed out")
-            false
-        }
+            })
     }
 
     actual fun wasRestoredWithSubscribedCentral(): Boolean {
         return false
+    }
+
+    actual fun initServer() {
     }
 }
 

@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
+import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.VibePatternEntity
@@ -68,6 +69,9 @@ class NotificationApi(
         contactId = contactId,
         limit = limit,
     )
+
+    override fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>> =
+        notificationsDao.mostRecentParticipants(limit).map { row -> row.flatMap { it.people } }
 
     override fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState) {
         libPebbleCoroutineScope.launch {

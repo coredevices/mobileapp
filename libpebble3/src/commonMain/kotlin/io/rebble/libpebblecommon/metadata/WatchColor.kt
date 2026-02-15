@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.metadata
 
 import androidx.compose.ui.graphics.Color
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.CORE_GETAFIX_EVT
 
 enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescription: String, val platform: WatchType, val color: Color = Color.Black) {
     ClassicBlack(1, "pebble_black", "Pebble Classic - Black", WatchType.APLITE),
@@ -26,6 +27,10 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     TimeRoundRoseGold14(21, "pebble_time_round_rose_gold", "Pebble Time Round - Rose Gold", WatchType.CHALK),
     TimeRoundRainbowSilver14(22, "pebble_time_round_silver_rainbow", "Pebble Time Round - Silver Rainbow", WatchType.CHALK),
     TimeRoundRainbowBlack20(23, "pebble_time_round_black_rainbow", "Pebble Time Round - Black Rainbow", WatchType.CHALK),
+    // Was: 34
+    TimeRoundBlackSilverPolish20(-999, "pebble_time_round_polished_silver", "Pebble Time Round - Polished Silver", WatchType.CHALK),
+    // Was: 35
+    TimeRoundBlackGoldPolish20(-999, "pebble_time_round_polished_gold", "Pebble Time Round - Polished Gold", WatchType.CHALK),
     Pebble2SEBlack(24, "pebble_2_se_black_charcoal", "Pebble 2 SE - Black Charcoal", WatchType.DIORITE),
     Pebble2HRBlack(25, "pebble_2_hr_black_charcoal", "Pebble 2 HR - Black Charcoal", WatchType.DIORITE),
     Pebble2SEWhite(26, "pebble_2_se_white_gray", "Pebble 2 SE - White/Gray", WatchType.DIORITE, color = Color.White),
@@ -42,6 +47,9 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     PebbleTime2BlackRed(37, "pebble_time_2_black_red", "Pebble Time 2 - Black/Red", WatchType.EMERY),
     PebbleTime2SilverBlue(38, "pebble_time_2_silver_blue", "Pebble Time 2 - Silver/Blue", WatchType.EMERY),
     PebbleTime2SilverGray(39, "pebble_time_2_silver_gray", "Pebble Time 2 - Silver/Gray", WatchType.EMERY),
+    PebbleRound2Black(40, "pebble_round_2_black", "Pebble Round 2 - Black", WatchType.GABBRO),
+    PebbleRound2Silver(41, "pebble_round_2_silver", "Pebble Round 2 - Silver", WatchType.GABBRO),
+    PebbleRound2Gold(42, "pebble_round_2_gold", "Pebble Round 2 - Gold", WatchType.GABBRO),
     Unknown(-1, "unknown_unknown", "Unknown Watch!", WatchType.APLITE);
 
     companion object {

@@ -5,7 +5,6 @@ import com.cactus.CactusSTT
 import com.cactus.services.CactusConfig
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
-import coredevices.EnableExperimentalDevices
 import coredevices.ExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.CoreAnalytics
@@ -18,20 +17,23 @@ import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
+import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Instant
 
 class CommonAppDelegate(
     private val pushMessaging: PushMessaging,
@@ -43,8 +45,9 @@ class CommonAppDelegate(
     private val pebbleAppDelegate: PebbleAppDelegate,
     private val appUpdate: AppUpdate,
     private val weatherFetcher: WeatherFetcher,
-    private val enableExperimentalDevices: EnableExperimentalDevices,
     private val experimentalDevices: ExperimentalDevices,
+    private val coreConfigHolder: CoreConfigHolder,
+    private val appContext: AppContext,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -104,30 +107,70 @@ class CommonAppDelegate(
         }
     }
 
-    override suspend fun doBackgroundSync() {
+    override suspend fun doBackgroundSync(force: Boolean) {
         if (!syncInProgress.compareAndSet(false, true)) {
             logger.d { "Skipping background sync - already in progress" }
             return
         }
-        logger.d { "doBackgroundSync" }
-        val jobs = listOf(
-            GlobalScope.launch {
-                coreAnalytics.processHeartbeat()
-            },
-            GlobalScope.launch {
-                pebbleAppDelegate.performBackgroundWork()
-            },
-            GlobalScope.launch {
-                appUpdate.updateAvailable.value
-            },
-            GlobalScope.launch {
-                weatherFetcher.fetchWeather()
-            },
-        )
+
+        val now = Clock.System.now()
+        val lastFullSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        val doFullSync = force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
+        logger.d { "doBackgroundSync: doFullSync=$doFullSync" }
+        if (doFullSync) {
+            settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
+        }
+        val jobs = if (doFullSync) {
+            listOf(
+                GlobalScope.launch {
+                    coreAnalytics.processHeartbeat()
+                },
+                GlobalScope.launch {
+                    pebbleAppDelegate.performBackgroundWork()
+                },
+                GlobalScope.launch {
+                    appUpdate.updateAvailable.value
+                },
+                GlobalScope.launch {
+                    weatherFetcher.fetchWeather()
+                },
+            )
+        } else {
+            listOf(
+                GlobalScope.launch {
+                    weatherFetcher.fetchWeather()
+                },
+            )
+        }
         jobs.joinAll()
         syncInProgress.value = false
-        logger.d { "doBackgroundSync / finished" }
+        logger.d { "doBackgroundSync / finished doFullSync=$doFullSync" }
+    }
+
+    override suspend fun timeSinceLastSync(): Duration {
+        val now = Clock.System.now()
+        val lastFullSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        return now - lastFullSync
+    }
+
+    override fun updateFullSyncPeriod(interval: Duration) {
+        coreConfigHolder.update(
+            coreConfigHolder.config.value.copy(
+                regularSyncInterval = interval,
+            )
+        )
+    }
+
+    override fun updateWeatherSyncPeriod(interval: Duration) {
+        coreConfigHolder.update(
+            coreConfigHolder.config.value.copy(
+                weatherSyncInterval = interval,
+            )
+        )
+        rescheduleBgRefreshTask(appContext, coreConfigHolder.config.value)
     }
 }
 
-val BACKGROUND_REFRESH_PERIOD = 4.hours
+expect fun rescheduleBgRefreshTask(appContext: AppContext, coreConfig: CoreConfig)
+
+private const val KEY_LAST_FULL_SYNC_MS = "last_full_sync_time_ms"

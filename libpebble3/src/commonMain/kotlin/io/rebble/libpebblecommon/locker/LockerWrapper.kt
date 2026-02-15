@@ -17,6 +17,20 @@ enum class AppType(val code: String) {
     }
 }
 
+enum class AppCapability(val code: String) {
+    Health("health"),
+    Location("location"),
+    Timeline("timeline"),
+    // Not included: "configurable" (separate field in database, doesn't require permission grant)
+    ;
+
+    companion object {
+        fun fromString(values: List<String>?): List<AppCapability> = values?.mapNotNull { value ->
+            entries.firstOrNull { it.code == value }
+        } ?: emptyList()
+    }
+}
+
 @Immutable
 data class AppPlatform(
     val watchType: WatchType,
@@ -31,6 +45,7 @@ data class AppProperties(
     val type: AppType,
     val title: String,
     val developerName: String,
+    val developerId: String?,
     val platforms: List<AppPlatform>,
     val version: String?,
     val hearts: Int?,
@@ -38,6 +53,9 @@ data class AppProperties(
     val iosCompanion: CompanionApp?,
     val androidCompanion: CompanionApp?,
     val order: Int,
+    val sourceLink: String?,
+    val storeId: String?,
+    val capabilities: List<AppCapability>,
 )
 
 data class AppBasicProperties(

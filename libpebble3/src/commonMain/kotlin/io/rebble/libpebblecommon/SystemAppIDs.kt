@@ -19,4 +19,10 @@ object SystemAppIDs {
     val KICKSTART_APP_UUID = Uuid.parse("3af858c3-16cb-4561-91e7-f1ad2df8725f")
     val MISSED_CALLS_APP_UUID = Uuid.parse("af760190-bfc0-11e4-bb52-0800200c9a66")
     val ANDROID_NOTIFICATIONS_UUID = Uuid.parse("ed429c16-f674-4220-95da-454f303f15e2")
+    val TIMELINE_FUTURE_UUID = Uuid.parse("79C76B48-6111-4E80-8DEB-3119EEBEF33E")
+    val TIMELINE_PAST_UUID = Uuid.parse("daae3686-bff6-4ba5-921b-262f847bb6e8")
+    val QUIET_TIME_TOGGLE_UUID = Uuid.parse("2220d805-cf9a-4e12-92b9-5ca778aff6bb")
+    val BACKLIGHT_UUID = Uuid.parse("d0f12e6c-97eb-2287-a2f5-115dfaa1d168")
+    val MOTION_BACKLIGHT_UUID = Uuid.parse("d4f7be63-97e6-4952-b265-dd4bce11c155")
+    val AIRPLANE_MODE_UUID = Uuid.parse("88c28c12-7f81-42db-aaa6-14ccef6f27e5")
 }

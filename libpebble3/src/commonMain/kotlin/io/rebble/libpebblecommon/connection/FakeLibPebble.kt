@@ -17,14 +17,18 @@ import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
+import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
+import io.rebble.libpebblecommon.database.entity.WatchPref
+import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -40,21 +44,26 @@ import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.VibePattern
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.weather.WeatherLocationData
+import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.io.files.Path
 import kotlin.random.Random
 import kotlin.time.Duration
@@ -146,6 +155,10 @@ class FakeLibPebble : LibPebble {
         return flow { emit(emptyList()) }
     }
 
+    override fun getAllLockerUuids(): Flow<List<Uuid>> {
+        return flow { emit(emptyList()) }
+    }
+
     val locker = MutableStateFlow(fakeLockerEntries)
 
     override fun getLocker(
@@ -171,6 +184,14 @@ class FakeLibPebble : LibPebble {
     ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
+    override suspend fun addAppToLocker(app: LockerEntry) {
+    }
+
+    override fun restoreSystemAppOrder() {
+    }
+
+    override val activeWatchface: StateFlow<LockerWrapper?>
+        get() = MutableStateFlow(fakeLockerEntry())
 
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
@@ -187,6 +208,20 @@ class FakeLibPebble : LibPebble {
         limit: Int
     ): Flow<List<NotificationEntity>> = flow {
         emit(fakeNotifications)
+    }
+
+    override fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>> {
+        return flow {
+            emit(
+                listOf(
+                    "Alice",
+                    "Bob Smith",
+                    "Charlie Johnson",
+                    "David Williams",
+                    "Eve Jones",
+                )
+            )
+        }
     }
 
     private val fakeNotifications by lazy { fakeNotifications() }
@@ -286,9 +321,38 @@ class FakeLibPebble : LibPebble {
     override val analyticsEvents: Flow<AnalyticsEvent>
         get() = flow { }
     override val healthSettings: Flow<HealthSettings>
-        get() = flow { emit(HealthSettings()) }
+        get() = flow { emit(HealthSettings(
+            heightMm = 1700,
+            weightDag = 7000,
+            trackingEnabled = false,
+            activityInsightsEnabled = false,
+            sleepInsightsEnabled = false,
+            ageYears = 35,
+            gender = HealthGender.Female,
+            imperialUnits = false,
+        )) }
 
-    override fun updateHealthSettings(healthSettings: HealthSettings) {
+    override fun updateHealthSettings(healthSettings: HealthSettings) {}
+
+    override suspend fun getHealthDebugStats(): HealthDebugStats {
+        return HealthDebugStats(
+            totalSteps30Days = 0L,
+            averageStepsPerDay = 0,
+            totalSleepSeconds30Days = 0L,
+            averageSleepSecondsPerDay = 0,
+            todaySteps = 0L,
+            lastNightSleepHours = null,
+            latestDataTimestamp = null,
+            daysOfData = 0
+        )
+    }
+
+    override fun requestHealthData(fullSync: Boolean) {
+        // No-op for fake implementation
+    }
+
+    override fun sendHealthAveragesToWatch() {
+        // No-op for fake implementation
     }
 
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
@@ -326,6 +390,26 @@ class FakeLibPebble : LibPebble {
 
     override fun deleteCustomPattern(name: String) {
         TODO("Not yet implemented")
+    }
+
+    private val _watchPrefs = MutableStateFlow(
+        WatchPref.enumeratePrefs().map { WatchPreference(it, null) }
+    )
+
+    override val watchPrefs: Flow<List<WatchPreference<*>>> = _watchPrefs.asStateFlow()
+
+    override fun setWatchPref(watchPref: WatchPreference<*>) {
+        _watchPrefs.update { current ->
+            val index = current.indexOfFirst { it.pref.id == watchPref.pref.id }
+            if (index != -1) {
+                current.toMutableList().apply { set(index, watchPref) }
+            } else {
+                current + watchPref
+            }
+        }
+    }
+
+    override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
     }
 }
 
@@ -421,6 +505,7 @@ class FakeConnectedDevice(
     override val runningFwVersion: String = "v1.2.3-core",
     override val connectionFailureInfo: ConnectionFailureInfo?,
     override val usingBtClassic: Boolean = false,
+    override val capabilities: Set<ProtocolCapsFlag> = emptySet()
 ) : ConnectedPebbleDevice {
 
     override fun forget() {}
@@ -436,6 +521,7 @@ class FakeConnectedDevice(
     override fun resetIntoPrf() {}
 
     override fun createCoreDump() {}
+    override fun factoryReset() {}
 
     override suspend fun sendPPMessage(bytes: ByteArray) {}
 
@@ -525,7 +611,7 @@ class FakeConnectedDevice(
 
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)
-    override val currentCompanionAppSession: StateFlow<CompanionApp?> = MutableStateFlow(null)
+    override val currentCompanionAppSessions: StateFlow<List<CompanionApp>> = MutableStateFlow(emptyList())
 
     override suspend fun startDevConnection() {}
     override suspend fun stopDevConnection() {}
@@ -548,6 +634,8 @@ class FakeConnectedDevice(
     override val languagePackInstallState: LanguagePackInstallState =
         LanguagePackInstallState.Idle()
     override val installedLanguagePack: InstalledLanguagePack? = null
+
+    override suspend fun requestHealthData(fullSync: Boolean): Boolean = true
 }
 
 class FakeConnectedDeviceInRecovery(
@@ -570,6 +658,7 @@ class FakeConnectedDeviceInRecovery(
     override val runningFwVersion: String = "v1.2.3-core",
     override val connectionFailureInfo: ConnectionFailureInfo?,
     override val usingBtClassic: Boolean = false,
+    override val capabilities: Set<ProtocolCapsFlag> = emptySet(),
 ) : ConnectedPebbleDeviceInRecovery {
 
     override fun forget() {}
@@ -754,6 +843,10 @@ fun fakeLockerEntry(): LockerWrapper {
             iosCompanion = null,
             androidCompanion = null,
             order = 0,
+            developerId = "123",
+            sourceLink = "https://example.com",
+            storeId = "6962e51d29173c0009b18f8e",
+            capabilities = emptyList(),
         ),
         sideloaded = false,
         configurable = Random.nextBoolean(),

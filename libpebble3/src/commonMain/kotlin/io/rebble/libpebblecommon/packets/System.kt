@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.serialization.Serializable
 
 sealed class SystemPacket(endpoint: ProtocolEndpoint) : PebblePacket(endpoint)
 
@@ -346,6 +347,7 @@ open class WatchFactoryData(message: Message) : SystemPacket(endpoint) {
     }
 }
 
+@Serializable
 enum class ProtocolCapsFlag(val value: Int) {
     SupportsAppRunStateProtocol(0),
     SupportsInfiniteLogDump(1),
@@ -365,6 +367,8 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsCustomVibePatterns(15),
     JavascriptBytecodeVersionAppended(16),
     SupportsFwUpdateAcrossDisconnection(21),
+    SupportsBlobDbVersion(22),
+    SupportsSettingsSync(23),
     ;
 
     companion object {

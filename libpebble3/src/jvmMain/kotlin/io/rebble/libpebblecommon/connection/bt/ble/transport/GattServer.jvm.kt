@@ -3,11 +3,12 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
-actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow): GattServer? {
+actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
     TODO("Not yet implemented")
 }
 
@@ -41,5 +42,8 @@ actual class GattServer {
 
     actual fun wasRestoredWithSubscribedCentral(): Boolean {
         TODO("Not yet implemented")
+    }
+
+    actual fun initServer() {
     }
 }

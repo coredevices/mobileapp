@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AppShortcut
-import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.Card
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
@@ -23,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -132,8 +130,11 @@ fun SelectIconOrNone(
             Text("Icon")
         },
         supportingContent = {
-            currentIcon?.let { icon ->
-                IconImage(icon, modifier = Modifier.size(45.dp))
+            Column {
+                currentIcon?.let { icon ->
+                    IconImage(icon, modifier = Modifier.size(45.dp))
+                }
+                Text(currentIcon?.name ?: "Default")
             }
         },
         trailingContent = {

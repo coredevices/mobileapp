@@ -7,8 +7,8 @@ import coredev.BlobDatabase
 import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
@@ -47,11 +47,17 @@ data class LockerEntry(
     val orderIndex: Int = 0,
     @ColumnInfo(defaultValue = "0")
     val systemApp: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val active: Boolean = false,
+    @ColumnInfo(defaultValue = "NULL")
+    val capabilities: List<String>? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val grantedPermissions: List<String>? = null,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), id).toBytes()
 
-    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
-        return asMetadata(platform)?.toBytes()
+    override fun value(params: ValueParams): UByteArray? {
+        return asMetadata(params.platform)?.toBytes()
     }
 
     // Only some fields should trigger a watch resync if changed:
@@ -107,6 +113,8 @@ data class LockerEntryAppstoreData(
     val shareLink: String,
     val pbwLink: String,
     val userToken: String?,
+    val sourceLink: String? = null,
+    val storeId: String? = null,
 )
 
 @Serializable

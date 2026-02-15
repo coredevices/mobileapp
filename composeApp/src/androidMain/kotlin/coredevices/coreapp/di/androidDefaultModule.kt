@@ -21,6 +21,7 @@ import coredevices.util.GoogleAuthUtil
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
+import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.flow.combine
@@ -59,4 +60,5 @@ val androidDefaultModule = module {
         )
     }
     single { createAndroidAnalytics(get()) }
+    singleOf(::ModelDownloadManager)
 }

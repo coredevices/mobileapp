@@ -81,7 +81,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
-    override suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus {
+    override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         val writeItem = write.asNotificationAppItem()
         if (writeItem == null) {
             logger.e { "Couldn't decode app notification item from write: $write" }
@@ -90,7 +90,13 @@ interface NotificationAppRealDao : NotificationAppItemDao {
         val existingItem = getEntry(writeItem.packageName)
         logger.d { "existingItem=$existingItem writeItem=$writeItem" }
         if (existingItem == null || writeItem.stateUpdated.instant > existingItem.stateUpdated.instant) {
-            insertOrReplace(writeItem)
+            // Watch can't modify these fields, so always preserve existing values from phone
+            val itemToSave = writeItem.copy(
+                vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
+                colorName = existingItem?.colorName ?: writeItem.colorName,
+                iconCode = existingItem?.iconCode ?: writeItem.iconCode,
+            )
+            insertOrReplace(itemToSave)
             markSyncedToWatch(
                 NotificationAppItemSyncEntity(
                     recordId = writeItem.packageName,

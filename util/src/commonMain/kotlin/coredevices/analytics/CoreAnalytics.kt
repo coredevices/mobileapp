@@ -1,13 +1,18 @@
 package coredevices.analytics
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.database.HeartbeatStateDao
 import coredevices.database.HeartbeatStateEntity
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -18,7 +23,16 @@ interface CoreAnalytics {
     suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: Instant)
     suspend fun processHeartbeat()
     fun updateLastConnectedSerial(serial: String?)
+    fun updateRingTransferDurationMetric(duration: Duration)
+    fun updateRingLifetimeCollectionCount(serial: String, count: Int)
 }
+
+expect fun createAnalyticsCache(): Settings
+
+private const val KEY_RING_TRANSFER_DURATION_TOTAL_MS = "coreanalytics_ring_transfer_duration_ms"
+private const val KEY_RING_TRANSFER_DURATION_START_TIMESTAMP = "coreanalytics_ring_transfer_start_timestamp"
+private const val KEY_RING_LIFETIME_COLLECTION_COUNT = "coreanalytics_ring_lifetime_collection_count"
+private const val KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL = "coreanalytics_ring_lifetime_collection_count_serial"
 
 class RealCoreAnalytics(
     private val analyticsBackend: AnalyticsBackend,
@@ -28,6 +42,7 @@ class RealCoreAnalytics(
     private val logger = Logger.withTag("RealCoreAnalytics")
     // We can't see libpebble from util right now, so it has to be this way around
     private val lastConnectedSerial = MutableStateFlow<String?>(null)
+    private val cache = createAnalyticsCache()
 
     override fun logEvent(
         name: String,
@@ -48,9 +63,33 @@ class RealCoreAnalytics(
         }
         val heartbeatMetrics = processHeartbeatStates() +
                 HeartbeatMetric("heartbeat_duration_ms", duration.inWholeMilliseconds) +
-                HeartbeatMetric("last_connected_serial", lastConnectedSerial.value ?: "<none>")
-                HeartbeatMetric("core_user_id", Firebase.auth.currentUser?.emailOrNull ?: "<none>")
+                HeartbeatMetric("last_connected_serial", lastConnectedSerial.value ?: "<none>") +
+                HeartbeatMetric("core_user_id", Firebase.auth.currentUser?.emailOrNull ?: "<none>") +
+                HeartbeatMetric(
+                    "ring.transfer_duration_total_ms",
+                    withContext(Dispatchers.IO) {
+                        cache.getLong(KEY_RING_TRANSFER_DURATION_TOTAL_MS, 0L)
+                    }
+                ) +
+                HeartbeatMetric(
+                    "ring.lifetime_collection_count",
+                    withContext(Dispatchers.IO) {
+                        cache.getInt(KEY_RING_LIFETIME_COLLECTION_COUNT, 0)
+                    }
+                ) +
+                HeartbeatMetric(
+                    "ring.lifetime_collection_count_serial",
+                    withContext(Dispatchers.IO) {
+                        cache.getStringOrNull(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL) ?: "<none>"
+                    }
+                )
         logger.d { "processHeartbeat: $heartbeatMetrics" }
+        withContext(Dispatchers.IO) {
+            cache.remove(KEY_RING_TRANSFER_DURATION_TOTAL_MS)
+            cache.remove(KEY_RING_TRANSFER_DURATION_START_TIMESTAMP)
+            cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT)
+            cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
+        }
         logEvent("heartbeat", heartbeatMetrics.associate { it.name to it.value })
     }
 
@@ -58,8 +97,37 @@ class RealCoreAnalytics(
         lastConnectedSerial.value = serial
     }
 
+    override fun updateRingTransferDurationMetric(duration: Duration) {
+        val ts = clock.now().toEpochMilliseconds()
+        if (cache.getLong(KEY_RING_TRANSFER_DURATION_START_TIMESTAMP, -1L) == -1L) {
+            cache[KEY_RING_TRANSFER_DURATION_START_TIMESTAMP] = ts
+        }
+        val current = cache.getLong(KEY_RING_TRANSFER_DURATION_TOTAL_MS, 0L)
+        val newDurationMs = duration.inWholeMilliseconds
+        cache[KEY_RING_TRANSFER_DURATION_TOTAL_MS] = current + newDurationMs
+    }
+
+    override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {
+        val existingSerial = cache.getStringOrNull(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
+        if (existingSerial != serial) {
+            cache[KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL] = serial
+            cache[KEY_RING_LIFETIME_COLLECTION_COUNT] = count
+        } else {
+            val existingCount = cache.getInt(KEY_RING_LIFETIME_COLLECTION_COUNT, 0)
+            if (count > existingCount) {
+                cache[KEY_RING_LIFETIME_COLLECTION_COUNT] = count
+            }
+        }
+    }
+
     private suspend fun heartbeatDuration(): Duration {
-        val earliestTimestamp = heartbeatStateDao.getEarliestTimestamp()
+        val ringTimestamp = withContext(Dispatchers.IO) {
+            cache.getLong(KEY_RING_TRANSFER_DURATION_START_TIMESTAMP, -1L).takeIf { it != -1L }
+        }?.let { Instant.fromEpochMilliseconds(it) }
+        val earliestTimestamp = listOfNotNull(
+            heartbeatStateDao.getEarliestTimestamp(),
+            ringTimestamp?.toEpochMilliseconds(),
+        ).minOrNull()
         if (earliestTimestamp == null) {
             return Duration.ZERO
         }

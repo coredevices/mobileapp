@@ -15,7 +15,8 @@ class JSCPrivatePKJSInterface(
     logMessages: Channel<String>,
     jsTokenUtil: JsTokenUtil,
     remoteTimelineEmulator: RemoteTimelineEmulator,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator), RegisterableJsInterface {
+    httpInterceptorManager: HttpInterceptorManager,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(

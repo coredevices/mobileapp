@@ -43,7 +43,7 @@ class Cohorts(
         val response: CohortsResponse? = httpClient.get(uri.toString(), auth = true)
         if (response == null) {
             logger.i { "No response from cohorts" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         logger.v { "response: $response" }
         // (differently from memfault) cohorts always returns the latest (we didn't pass the current
@@ -58,7 +58,7 @@ class Cohorts(
         )
         if (latestFwVersion == null) {
             logger.e { "Couldn't parse firmware version from response" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         if (watch.runningFwVersion.isRecovery || latestFwVersion > watch.runningFwVersion) {
             return FirmwareUpdateCheckResult.FoundUpdate(

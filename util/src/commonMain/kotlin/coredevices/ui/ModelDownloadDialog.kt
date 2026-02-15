@@ -24,7 +24,6 @@ import com.cactus.CactusLM
 import com.cactus.CactusSTT
 import com.cactus.CactusInitParams
 import coredevices.util.deleteRecursive
-import coredevices.util.getModelDirectories
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -70,11 +69,7 @@ fun ModelDownloadDialog(
                                 // Retry after wiping model directories
                                 Logger.e("ModelDownloadDialog", e) { "Error downloading STT model, retrying after wiping models" }
                                 try {
-                                    withContext(Dispatchers.IO) {
-                                        getModelDirectories().forEach {
-                                            deleteRecursive(Path(it))
-                                        }
-                                    }
+
                                     stt.downloadModel(modelName)
                                     stt.initializeModel(CactusInitParams(model = modelName))
                                 } catch (e: Exception) {

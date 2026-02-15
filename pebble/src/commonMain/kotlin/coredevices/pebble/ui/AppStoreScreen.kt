@@ -18,7 +18,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.pebble.account.BootConfig
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.rememberLibPebble
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_ADD_TO_LOCKER_RESULT
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_LOAD_TO_DEVICE_RESULT
 import coredevices.pebble.ui.PebbleRequestInterceptor.Companion.ARGS_QUERY
@@ -55,21 +55,15 @@ val appStoreLogger = Logger.withTag("AppStoreScreen")
 @Composable
 fun AppStoreScreen(
     nav: NavBarNav,
-    type: AppType,
+    type: AppType?,
     topBarParams: TopBarParams,
+    deepLinkId: String?,
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val bootConfigProvider = koinInject<BootConfigProvider>()
         var bootConfig by remember { mutableStateOf<BootConfig?>(null) }
         val libPebble = rememberLibPebble()
-
-        LaunchedEffect(Unit) {
-            bootConfig = bootConfigProvider.getBootConfig()
-            topBarParams.searchAvailable(true)
-            topBarParams.actions { }
-            topBarParams.title("")
-            topBarParams.canGoBack(true)
-        }
+        val searchState = rememberSearchState()
 
         val url = remember(bootConfig) {
             val watch = libPebble.watches.value
@@ -78,15 +72,22 @@ fun AppStoreScreen(
                 .firstOrNull()
             val watchType = watch?.watchType ?: WatchHardwarePlatform.CORE_ASTERIX
             (bootConfig?.let {
-                when (type) {
-                    AppType.Watchface -> it.config.webViews.appStoreWatchFaces
-                    AppType.Watchapp -> it.config.webViews.appStoreWatchApps
+                when {
+                    deepLinkId != null -> {
+                        it.config.webViews.appStoreApplication.replace("\$\$id\$\$", deepLinkId)
+                    }
+                    type != null -> {
+                        when (type) {
+                            AppType.Watchface -> it.config.webViews.appStoreWatchFaces
+                            AppType.Watchapp -> it.config.webViews.appStoreWatchApps
+                        }
+                    } else -> null
                 }
             } ?: "about:blank").replace("\$\$hardware\$\$", watchType.watchType.codename)
         }
 
         val scope = rememberCoroutineScope()
-        val webServices = koinInject<RealPebbleWebServices>()
+        val webServices = koinInject<PebbleWebServices>()
         val watchesFiltered = remember {
             libPebble.watches.map {
                 it.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
@@ -130,7 +131,11 @@ fun AppStoreScreen(
                                     return@launch
                                 }
                                 appStoreLogger.v { "Launch app" }
-                                val commonEntry = entry.asCommonApp(watch.watchType.watchType)
+                                val commonEntry = entry.asCommonApp(
+                                    watchType = watch.watchType.watchType,
+                                    appstoreSource = null,
+                                    categories = null,
+                                )
                                 if (!libPebble.launchApp(
                                         commonEntry,
                                         topBarParams,
@@ -163,19 +168,25 @@ fun AppStoreScreen(
             }
         }
 
-        LaunchedEffect(topBarParams.searchState.typing) {
-            topBarParams.goBack.collect {
-                if (interceptor.navigator?.goBack() != true) {
-                    nav.goBack()
+        LaunchedEffect(Unit) {
+            bootConfig = bootConfigProvider.getBootConfig()
+            topBarParams.searchAvailable(searchState)
+            topBarParams.actions { }
+            topBarParams.title("")
+            launch {
+                topBarParams.overrideGoBack.collect {
+                    if (interceptor.navigator?.goBack() != true) {
+                        nav.goBack()
+                    }
                 }
             }
         }
 
-        LaunchedEffect(topBarParams.searchState.typing) {
-            if (!topBarParams.searchState.typing && topBarParams.searchState.query.isNotEmpty()) {
-                appStoreLogger.d { "Search: ${topBarParams.searchState.query}" }
+        LaunchedEffect(searchState.typing) {
+            if (!searchState.typing && searchState.query.isNotEmpty()) {
+                appStoreLogger.d { "Search: ${searchState.query}" }
                 val args = buildJsonObject {
-                    put(ARGS_QUERY, JsonPrimitive(topBarParams.searchState.query))
+                    put(ARGS_QUERY, JsonPrimitive(searchState.query))
                 }
                 interceptor.invokeMethod(method = SEARCH, args = args)
             }

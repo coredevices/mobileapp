@@ -441,7 +441,7 @@ class AndroidSystemCalendar(
 
     private val observerHandler = Handler(Looper.getMainLooper())
 
-    override fun registerForCalendarChanges(): Flow<Unit> {
+    override fun registerForCalendarChanges(): Flow<Unit>? {
         val flow = MutableSharedFlow<Unit>()
         val observer = object : ContentObserver(observerHandler) {
             override fun onChange(selfChange: Boolean) {
@@ -451,7 +451,7 @@ class AndroidSystemCalendar(
                 }
             }
         }
-        try {
+        return try {
             contentResolver.registerContentObserver(
                 CalendarContract.Instances.CONTENT_URI,
                 false,
@@ -462,10 +462,11 @@ class AndroidSystemCalendar(
                 false,
                 observer
             );
+            flow
         } catch (e: SecurityException) {
             logger.e(e) { "Error registering for calendar changes" }
+            null
         }
-        return flow
     }
 
     override fun hasPermission(): Boolean {

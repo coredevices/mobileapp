@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.audio
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.SystemAppIDs
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.AudioStream
@@ -139,7 +140,11 @@ class VoiceSessionManager(
                 _currentSession.value = CurrentSession(setupRequest, resultCompletable)
                 logger.i { "Voice session initialized with ID: ${setupRequest.sessionId}" }
                 val result = try {
-                    transcriptionProvider.transcribe(setupRequest.encoderInfo, audioFrameFlow)
+                    transcriptionProvider.transcribe(
+                        setupRequest.encoderInfo,
+                        audioFrameFlow,
+                        isNotificationReply = setupRequest.appUuid == Uuid.NIL || setupRequest.appUuid == SystemAppIDs.NOTIFICATIONS_APP_UUID
+                    )
                 } catch (e: CancellationException) {
                     logger.d { "Voice session cancelled" }
                     throw e
