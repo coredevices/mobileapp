@@ -65,6 +65,12 @@ enum class NotificationAppSort {
     Count,
 }
 
+enum class EnabledFilter(val label: String) {
+    All("All"),
+    EnabledOnly("Enabled"),
+    DisabledOnly("Disabled"),
+}
+
 @Composable
 fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     LaunchedEffect(Unit) {
