@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.installedLanguagePac
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlin.time.Instant
 
@@ -48,6 +49,7 @@ class PebbleDeviceFactory {
                 lastConnected = knownWatchProperties.lastConnected.asLastConnected(),
                 watchType = knownWatchProperties.watchType,
                 color = knownWatchProperties.color,
+                capabilities = knownWatchProperties.capabilities,
             )
         }
         if (bluetoothState.enabled() && !connectGoal && state.isActive()) {
@@ -71,6 +73,7 @@ class PebbleDeviceFactory {
                     lastConnected = knownWatchProperties?.lastConnected.asLastConnected(),
                     watchType = state.watchInfo.platform,
                     color = state.watchInfo.color,
+                    capabilities = state.watchInfo.capabilities,
                 )
                 val activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic)
                 when (state) {
@@ -174,6 +177,7 @@ internal class RealKnownPebbleDevice(
     override val lastConnected: Instant,
     override val watchType: WatchHardwarePlatform,
     override val color: WatchColor?,
+    override val capabilities: Set<ProtocolCapsFlag>,
 ) : KnownPebbleDevice,
     PebbleDevice by pebbleDevice {
     override fun forget() {
@@ -260,7 +264,8 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.CompanionAppControl by services.companionAppControl,
     ConnectedPebble.DevConnection by services.devConnection,
     ConnectedPebble.Screenshot by services.screenshot,
-    ConnectedPebble.LanguageInstall by services.language {
+    ConnectedPebble.LanguageInstall by services.language,
+    ConnectedPebble.Health by services.health {
 
     override fun toString(): String =
         "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"

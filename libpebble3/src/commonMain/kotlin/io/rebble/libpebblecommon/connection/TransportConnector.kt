@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.services.DataLoggingService
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.FirmwareVersion.Companion.slot
 import io.rebble.libpebblecommon.services.GetBytesService
+import io.rebble.libpebblecommon.services.HealthService
 import io.rebble.libpebblecommon.services.LogDumpService
 import io.rebble.libpebblecommon.services.MusicService
 import io.rebble.libpebblecommon.services.PutBytesService
@@ -145,6 +146,7 @@ class RealPebbleConnector(
     private val watchConfig: WatchConfigFlow,
     private val appOrderManager: AppOrderManager,
     private val languagePackInstaller: RealLanguagePackInstaller,
+    private val healthService: HealthService,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -192,6 +194,8 @@ class RealPebbleConnector(
         systemService.init()
         appRunStateService.init()
         dataLoggingService.initialInit()
+        // Allow the service to buffer up writeback sync messages
+        blobDBService.init()
 
         val watchInfo = negotiator.negotiate(systemService, appRunStateService)
         if (watchInfo == null) {
@@ -239,7 +243,6 @@ class RealPebbleConnector(
             return
         }
 
-        blobDBService.init()
         blobDB.init(
             watchType = watchInfo.platform.watchType,
             unfaithful = watchInfo.isUnfaithful,
@@ -275,6 +278,7 @@ class RealPebbleConnector(
                 devConnection = devConnectionManager,
                 screenshot = screenshotService,
                 language = languagePackInstaller,
+                health = healthService,
             )
         )
     }

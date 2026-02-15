@@ -59,6 +59,7 @@ class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
 data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimit: Int = 25,
+    val calendarPins: Boolean = true,
     val calendarReminders: Boolean = true,
     val calendarShowDeclinedEvents: Boolean = false,
     val ignoreMissingPrf: Boolean = false,
@@ -73,6 +74,10 @@ data class WatchConfig(
      * This prevents music app from jumping to the top of the list.
      */
     val alwaysSendMusicPaused: Boolean = false,
+    /**
+     * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
+     */
+    val appMessageToMultipleCompanions: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -101,6 +106,7 @@ data class NotificationConfig(
     val obfuscateContent: Boolean = true,
     val sendLocalOnlyNotifications: Boolean = false,
     val storeNotifiationsForDays: Int = 7,
+    val storeDisabledNotifications: Boolean = false,
     val addShowsUserInterfaceActions: Boolean = false,
     val alwaysSendNotifications: Boolean = true,
     /**

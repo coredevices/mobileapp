@@ -117,6 +117,7 @@ class PKJSApp(
         jsRunner?.outgoingAppMessages?.onEach { request ->
             logger.d { "Sending app message: ${request.data}" }
             val tID = device.transactionSequence.next()
+            request.state.value = AppMessageRequest.State.TransactionId(tID)
             val appMessage = try {
                 request.data.toAppMessageData(appInfo, tID)
             } catch (e: IllegalArgumentException) {
@@ -124,9 +125,10 @@ class PKJSApp(
                 request.state.value = AppMessageRequest.State.DataError
                 return@onEach
             }
-            request.state.value = AppMessageRequest.State.TransactionId(tID)
-            val result = device.sendAppMessage(appMessage)
-            request.state.value = AppMessageRequest.State.Sent(result)
+            scope.launch {
+                val result = device.sendAppMessage(appMessage)
+                request.state.value = AppMessageRequest.State.Sent(result)
+            }
         }?.catch {
             logger.e(it) { "Error sending app message" }
         }?.launchIn(scope) ?: error("JsRunner not initialized")

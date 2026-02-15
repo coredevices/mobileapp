@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.di.logWatchEvent
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
@@ -62,6 +63,7 @@ internal data class KnownWatchProperties(
     val watchType: WatchHardwarePlatform,
     val color: WatchColor?,
     val btClassicMacAddress: String?,
+    val capabilities: Set<ProtocolCapsFlag>,
 )
 
 internal fun WatchInfo.asWatchProperties(lastConnected: MillisecondInstant?, name: String, nickname: String?): KnownWatchProperties =
@@ -74,6 +76,7 @@ internal fun WatchInfo.asWatchProperties(lastConnected: MillisecondInstant?, nam
         watchType = platform,
         color = color,
         btClassicMacAddress = btAddress,
+        capabilities = capabilities,
     )
 
 private fun Watch.asKnownWatchItem(): KnownWatchItem? {
@@ -90,6 +93,7 @@ private fun Watch.asKnownWatchItem(): KnownWatchItem? {
         watchType = knownWatchProps.watchType.revision,
         color = knownWatchProps.color,
         btClassicMacAddress = knownWatchProps.btClassicMacAddress,
+        capabilities = knownWatchProps.capabilities,
     )
 }
 
@@ -137,6 +141,7 @@ private fun KnownWatchItem.asProps(): KnownWatchProperties = KnownWatchPropertie
     color = color,
     nickname = nickname,
     btClassicMacAddress = btClassicMacAddress,
+    capabilities = capabilities ?: emptySet(),
 )
 
 private data class CombinedState(
@@ -739,4 +744,5 @@ fun WatchType.supportsBtClassic(): Boolean = when (this) {
     WatchType.DIORITE -> false
     WatchType.EMERY -> false
     WatchType.FLINT -> false
+    WatchType.GABBRO -> false
 }

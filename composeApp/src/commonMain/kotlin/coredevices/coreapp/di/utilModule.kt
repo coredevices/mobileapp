@@ -21,6 +21,9 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.models.ModelDownloadManager
+import coredevices.util.models.ModelManager
+import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -63,7 +66,10 @@ val utilModule = module {
     single { get<CoreDatabase>().analyticsDao() }
     single { get<CoreDatabase>().appstoreSourceDao() }
     single { get<CoreDatabase>().appstoreCollectionDao() }
+    single { get<CoreDatabase>().weatherLocationDao() }
     singleOf(::UserConfigDao)
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
+    singleOf(::ModelManager)
+    singleOf(::CactusTranscriptionService)
 }

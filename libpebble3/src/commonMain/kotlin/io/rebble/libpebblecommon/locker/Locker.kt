@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LockerApi
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.UserFacingError
@@ -34,11 +35,16 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.IOException
@@ -73,7 +79,7 @@ class Locker(
 
     companion object {
         private val logger = Logger.withTag("Locker")
-        private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position"
+        private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
     }
 
     override suspend fun sideloadApp(pbwPath: Path): Boolean =
@@ -99,11 +105,7 @@ class Locker(
         lockerEntryDao.getAllFlow(type.code, searchQuery, limit)
             .map { entries ->
                 entries.mapNotNull { app ->
-                    if (app.systemApp) {
-                        findSystemApp(app.id)?.wrap(app.orderIndex)
-                    } else {
-                        app.wrap(config)
-                    }
+                    app.wrap(config)
                 }
             }
 
@@ -121,11 +123,11 @@ class Locker(
         }
     }
 
+    override fun getAllLockerUuids(): Flow<List<Uuid>> {
+        return lockerEntryDao.getAllUuidsFlow()
+    }
+
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
-        val asSystemApp = findSystemApp(id)
-        if (asSystemApp != null) {
-            return flow { emit(asSystemApp.wrap(0)) }
-        }
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
 
@@ -183,18 +185,31 @@ class Locker(
         return true
     }
 
+    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry) {
+        val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
+        lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimit)
+    }
+
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
+
+    private fun orderIndexForInsert(type: AppType) = when (type) {
+        AppType.Watchface -> -1
+        AppType.Watchapp -> SystemApps.entries.size
+    }
 
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
-            val newEntity = new.asEntity()
+            val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
             val existing = existingApps.remove(newEntity.id)
             if (existing == null) {
-                new.asEntity()
+                newEntity
             } else {
-                val newWithExistingOrder = newEntity.copy(orderIndex = existing.orderIndex)
+                val newWithExistingOrder = newEntity.copy(
+                    orderIndex = existing.orderIndex,
+                    active = existing.active,
+                )
                 if (newWithExistingOrder != existing && !existing.sideloaded) {
                     newWithExistingOrder
                 } else {
@@ -204,6 +219,7 @@ class Locker(
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
+        logger.v { "Failed to fetch: ${locker.failedToFetchUuids}" }
         val toDelete = existingApps.mapNotNull {
             when {
                 it.value.sideloaded -> null
@@ -225,7 +241,8 @@ class Locker(
      */
     suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
-        val lockerEntry = pbwApp.toLockerEntry(clock.now())
+        val type = if (pbwApp.info.watchapp.watchface) AppType.Watchface else AppType.Watchapp
+        val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type))
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)
         }
@@ -257,15 +274,33 @@ class Locker(
         }
     }
 
-    fun init() {
+    fun init(libPebble: LibPebble) {
         coroutineScope.launch {
-            val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
-                .first()
-                .map { it.properties.id }
-            val needToInsertAllSystemApps = !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
+            val needToInsertAllSystemApps =
+                !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
             settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
+            insertSystemApps(force = needToInsertAllSystemApps)
+        }
+        coroutineScope.launch {
+            libPebble.watches.map { watches -> watches.filterIsInstance<ConnectedPebbleDevice>().firstOrNull() }
+                .flatMapLatest { connectedWatch ->
+                    connectedWatch?.runningApp ?: flowOf(null)
+                }
+                .distinctUntilChanged()
+                .collect {
+                    if (it != null) {
+                        maybeSetActiveWatchface(it, onlyIfNotAlreadySet = false)
+                    }
+                }
+        }
+    }
 
-            val systemAppsToInsert = SystemApps.entries.filter { needToInsertAllSystemApps || !lockerApps.contains(it.uuid) }
+    private suspend fun insertSystemApps(force: Boolean) {
+        val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
+            .first()
+            .map { it.properties.id }
+        val systemAppsToInsert =
+            SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->
                     LockerEntry(
                         id = systemApp.uuid,
@@ -286,11 +321,33 @@ class Locker(
                         },
                         systemApp = true,
                         orderIndex = systemApp.defaultOrder,
+                        capabilities = emptyList(),
                     )
                 }
 
-            if (systemAppsToInsert.isNotEmpty()) {
-                lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimit)
+        if (systemAppsToInsert.isNotEmpty()) {
+            lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimit)
+        }
+    }
+
+    override fun restoreSystemAppOrder() {
+        libPebbleCoroutineScope.launch {
+            insertSystemApps(force = true)
+        }
+    }
+
+    override val activeWatchface: StateFlow<LockerWrapper?> =
+        lockerEntryDao.getActiveWatchface().map { it?.wrap(config) }.stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
+
+    fun maybeSetActiveWatchface(uuid: Uuid, onlyIfNotAlreadySet: Boolean) {
+        libPebbleCoroutineScope.launch {
+            val currentActive = activeWatchface.value
+            if (currentActive != null && onlyIfNotAlreadySet) {
+                return@launch
+            }
+            val entry = getApp(uuid)
+            if (entry?.type == AppType.Watchface.code && currentActive?.properties?.id != uuid) {
+                lockerEntryDao.setActive(uuid)
             }
         }
     }
@@ -316,11 +373,18 @@ fun SystemApps.wrap(order: Int): LockerWrapper.SystemApp = LockerWrapper.SystemA
         iosCompanion = null,
         androidCompanion = null,
         order = order,
+        developerId = null,
+        storeId = null,
+        sourceLink = null,
+        capabilities = emptyList(),
     ),
     systemApp = this,
 )
 
-fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
+fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
+    if (systemApp) {
+        return findSystemApp(id)?.wrap(orderIndex)
+    }
     val type = AppType.fromString(type) ?: return null
     return LockerWrapper.NormalApp(
         properties = AppProperties(
@@ -344,6 +408,10 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
             iosCompanion = iosCompanion,
             androidCompanion = androidCompanion,
             order = orderIndex,
+            developerId = appstoreData?.developerId,
+            storeId = appstoreData?.storeId,
+            sourceLink = appstoreData?.sourceLink,
+            capabilities = AppCapability.fromString(capabilities),
         ),
         sideloaded = sideloaded,
         configurable = configurable,
@@ -353,7 +421,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper.NormalApp? {
 
 fun findSystemApp(uuid: Uuid): SystemApps? = SystemApps.entries.find { it.uuid == uuid }
 
-fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
+fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(uuid)
     return LockerEntry(
         id = uuid,
@@ -373,6 +441,8 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
             shareLink = links.share,
             pbwLink = pbw?.file ?: "", // FIXME
             userToken = userToken,
+            sourceLink = source,
+            storeId = id,
         ),
         platforms = hardwarePlatforms.map { platform ->
             LockerEntryPlatform(
@@ -407,7 +477,11 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(): LockerEntry {
                 pebblekitVersion = it.pebblekitVersion,
             )
         },
-        orderIndex = -1,
+        orderIndex = orderIndex,
+        capabilities = buildList {
+            capabilities?.let { addAll(it) }
+            if (isTimelineEnabled == true) { add(AppCapability.Timeline.code) }
+        },
     )
 }
 

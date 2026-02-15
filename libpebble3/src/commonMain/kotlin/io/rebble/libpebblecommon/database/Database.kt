@@ -2,13 +2,16 @@ package io.rebble.libpebblecommon.database
 
 import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
+import androidx.room.DeleteTable
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
+import androidx.room.migration.AutoMigrationSpec
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
+import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.KnownWatchDao
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
@@ -18,8 +21,20 @@ import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
+import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
+import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntryEntity
+import io.rebble.libpebblecommon.database.entity.AppPrefsEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryEntity
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntrySyncEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatDao
+import io.rebble.libpebblecommon.database.entity.HealthStatEntity
+import io.rebble.libpebblecommon.database.entity.HealthStatSyncEntity
 import io.rebble.libpebblecommon.database.entity.KnownWatchItem
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
@@ -27,6 +42,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntrySyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemEntity
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -34,9 +50,10 @@ import io.rebble.libpebblecommon.database.entity.TimelinePinSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderEntity
 import io.rebble.libpebblecommon.database.entity.TimelineReminderSyncEntity
 import io.rebble.libpebblecommon.database.entity.VibePatternEntity
-import io.rebble.libpebblecommon.database.entity.WatchSettingsDao
-import io.rebble.libpebblecommon.database.entity.WatchSettingsEntity
-import io.rebble.libpebblecommon.database.entity.WatchSettingsSyncEntity
+import io.rebble.libpebblecommon.database.entity.WatchPrefItemEntity
+import io.rebble.libpebblecommon.database.entity.WatchPrefItemSyncEntity
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntryEntity
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntrySyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
@@ -56,14 +73,24 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         NotificationAppItemEntity::class,
         NotificationAppItemSyncEntity::class,
         CalendarEntity::class,
-        WatchSettingsEntity::class,
-        WatchSettingsSyncEntity::class,
+        HealthSettingsEntryEntity::class,
+        HealthSettingsEntrySyncEntity::class,
         LockerAppPermission::class,
         NotificationEntity::class,
         ContactEntity::class,
         VibePatternEntity::class,
+        HealthDataEntity::class,
+        OverlayDataEntity::class,
+        HealthStatEntity::class,
+        HealthStatSyncEntity::class,
+        WatchPrefItemEntity::class,
+        WatchPrefItemSyncEntity::class,
+        WeatherAppEntryEntity::class,
+        WeatherAppEntrySyncEntity::class,
+        AppPrefsEntryEntity::class,
+        AppPrefsEntrySyncEntity::class,
     ],
-    version = 27,
+    version = 33,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -82,6 +109,12 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26),
         AutoMigration(from = 26, to = 27),
+        AutoMigration(from = 27, to = 28),
+        AutoMigration(from = 28, to = 29),
+        AutoMigration(from = 29, to = 30, spec = AutoMigration30::class),
+        AutoMigration(from = 30, to = 31),
+        AutoMigration(from = 31, to = 32),
+        AutoMigration(from = 32, to = 33),
     ],
     exportSchema = true,
 )
@@ -95,12 +128,21 @@ abstract class Database : RoomDatabase() {
     abstract fun timelinePinDao(): TimelinePinRealDao
     abstract fun calendarDao(): CalendarDao
     abstract fun timelineReminderDao(): TimelineReminderRealDao
-    abstract fun watchSettingsDao(): WatchSettingsDao
+    abstract fun healthSettingsDao(): HealthSettingsEntryDao
     abstract fun lockerAppPermissionDao(): LockerAppPermissionDao
     abstract fun notificationsDao(): NotificationDao
     abstract fun contactDao(): ContactDao
     abstract fun vibePatternDao(): VibePatternDao
+    abstract fun healthDao(): HealthDao
+    abstract fun healthStatDao(): HealthStatDao
+    abstract fun watchPrefDao(): WatchPrefRealDao
+    abstract fun weatherAppDao(): WeatherAppRealDao
+    abstract fun appPrefsDao(): AppPrefsEntryDao
 }
+
+@DeleteTable(tableName = "WatchSettingsEntity")
+@DeleteTable(tableName = "WatchSettingsSyncEntity")
+class AutoMigration30 : AutoMigrationSpec
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
 expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {

@@ -20,9 +20,8 @@ abstract class JsRunner(
     abstract suspend fun start()
     abstract suspend fun stop()
     abstract suspend fun loadAppJs(jsUrl: String)
+    abstract suspend fun signalInterceptResponse(callbackId: String, result: InterceptResponse)
     abstract suspend fun signalNewAppMessageData(data: String?): Boolean
-    abstract suspend fun signalAppMessageAck(data: String?): Boolean
-    abstract suspend fun signalAppMessageNack(data: String?): Boolean
     abstract suspend fun signalTimelineToken(callId: String, token: String)
     abstract suspend fun signalTimelineTokenFail(callId: String)
     abstract suspend fun signalReady()

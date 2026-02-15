@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.database
 
 import androidx.room.TypeConverter
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.BaseAttribute
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
@@ -8,7 +9,9 @@ import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import kotlinx.serialization.SerializationException
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
@@ -16,6 +19,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
 private val json = Json { ignoreUnknownKeys = true }
+private val logger = Logger.withTag("RoomTypeConverters")
 
 // Hashcode on Duration can vary (because nanoseconds) before/after serialization (which is only milliseconds)
 data class MillisecondDuration(val duration: Duration) {
@@ -90,7 +94,12 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringToTimelineAttributeList(value: String): List<BaseAttribute> {
-        return json.decodeFromString(value)
+        return try {
+            json.decodeFromString(value)
+        } catch (e: SerializationException) {
+            logger.e(e) { "Failed to decode timeline attributes, returning empty list. JSON: ${value.take(200)}" }
+            emptyList()
+        }
     }
 
     @TypeConverter
@@ -100,7 +109,12 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringToTimelineActionList(value: String): List<BaseAction> {
-        return json.decodeFromString(value)
+        return try {
+            json.decodeFromString(value)
+        } catch (e: SerializationException) {
+            logger.e(e) { "Failed to decode timeline actions, returning empty list. JSON: ${value.take(200)}" }
+            emptyList()
+        }
     }
 
     @TypeConverter
@@ -133,6 +147,16 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringListToString(list: List<String>): String {
+        return json.encodeToString(list)
+    }
+
+    @TypeConverter
+    fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
+        return json.decodeFromString(value)
+    }
+
+    @TypeConverter
+    fun CapabilitySetToString(list: Set<ProtocolCapsFlag>): String {
         return json.encodeToString(list)
     }
 }

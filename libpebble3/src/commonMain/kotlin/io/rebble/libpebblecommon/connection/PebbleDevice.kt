@@ -13,11 +13,13 @@ import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.music.MusicAction
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.files.Path
 import kotlin.time.Instant
@@ -72,6 +74,7 @@ interface KnownPebbleDevice : PebbleDevice {
     val lastConnected: Instant
     val watchType: WatchHardwarePlatform
     val color: WatchColor?
+    val capabilities: Set<ProtocolCapsFlag>
     fun forget()
     fun setNickname(nickname: String?)
 }
@@ -112,7 +115,8 @@ sealed interface ConnectedPebbleDevice :
     ConnectedPebble.PKJS,
     ConnectedPebble.CompanionAppControl,
     ConnectedPebble.Screenshot,
-    ConnectedPebble.Language
+    ConnectedPebble.Language,
+    ConnectedPebble.Health
 
 /**
  * Put all specific functionality here, rather than directly in [ConnectedPebbleDevice].
@@ -132,6 +136,7 @@ object ConnectedPebble {
         suspend fun sendPing(cookie: UInt): UInt
         fun resetIntoPrf()
         fun createCoreDump()
+        fun factoryReset()
     }
 
     interface DevConnection {
@@ -184,7 +189,7 @@ object ConnectedPebble {
     }
 
     interface CompanionAppControl {
-        val currentCompanionAppSession: StateFlow<CompanionApp?>
+        val currentCompanionAppSessions: StateFlow<List<CompanionApp>>
     }
 
     interface Time {
@@ -222,6 +227,10 @@ object ConnectedPebble {
 
     interface Language : LanguageInstall, LanguageState
 
+    interface Health {
+        suspend fun requestHealthData(fullSync: Boolean): Boolean
+    }
+
     class Services(
         val debug: Debug,
         val appRunState: AppRunState,
@@ -237,6 +246,7 @@ object ConnectedPebble {
         val devConnection: DevConnection,
         val screenshot: Screenshot,
         val language: LanguageInstall,
+        val health: Health,
     )
 
     class PrfServices(

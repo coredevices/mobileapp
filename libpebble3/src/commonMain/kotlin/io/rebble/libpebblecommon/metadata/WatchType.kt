@@ -7,6 +7,7 @@ enum class WatchType(val codename: String) {
     DIORITE("diorite"),
     EMERY("emery"),
     FLINT("flint"),
+    GABBRO("gabbro"),
     ;
 
     fun getCompatibleAppVariants(): List<WatchType> {
@@ -22,6 +23,7 @@ enum class WatchType(val codename: String) {
                 APLITE
             )
             FLINT -> listOf(FLINT, DIORITE, APLITE)
+            GABBRO -> listOf(GABBRO, CHALK)
         }
     }
 
@@ -51,4 +53,5 @@ fun WatchType.isColor(): Boolean = when (this) {
     WatchType.DIORITE -> false
     WatchType.EMERY -> true
     WatchType.FLINT -> false
+    WatchType.GABBRO -> true
 }

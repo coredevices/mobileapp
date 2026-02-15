@@ -54,12 +54,11 @@ class GCloudTranscription(private val url: String) {
     }
 
     @OptIn(ExperimentalEncodingApi::class)
-    suspend fun recognize(sampleRateHertz: Int, audioContent: ByteString, encoding: Encoding): String? {
+    suspend fun recognize(sampleRateHertz: Int, audioContent: ByteString, encoding: Encoding, languageCode: String): String? {
         val token = Firebase.auth.currentUser?.getIdToken(false) ?: throw Exception("User is not authenticated")
-        val locale = Locale.current.toLanguageTag()
         val body = RecognizeRequest(
             audioContent = Base64.encode(audioContent),
-            languageCode = locale,
+            languageCode = languageCode,
             audioFormat = encoding,
             sampleRateHertz = sampleRateHertz
         )

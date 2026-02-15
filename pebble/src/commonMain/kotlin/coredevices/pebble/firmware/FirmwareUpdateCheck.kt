@@ -10,12 +10,10 @@ class FirmwareUpdateCheck(
     private val memfault: Memfault,
     private val cohorts: Cohorts,
 ) {
-    suspend fun checkForUpdates(watch: WatchInfo): FirmwareUpdateCheckResult {
-        if (watch.platform.isCoreDevice()) {
-            return memfault.getLatestFirmware(watch)
-        } else {
-            return cohorts.getLatestFirmware(watch)
-        }
+    suspend fun checkForUpdates(watch: WatchInfo): FirmwareUpdateCheckResult = when {
+        watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed("Unknown platform")
+        watch.platform.isCoreDevice() -> memfault.getLatestFirmware(watch)
+        else -> cohorts.getLatestFirmware(watch)
     }
 }
 

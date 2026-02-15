@@ -54,6 +54,7 @@ class IosPermissionRequester(
             Permission.SetAlarms -> TODO()
             Permission.BatteryOptimization -> TODO()
             Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
+            Permission.Reminders -> requestRemindersPermission()
         }
     }
 
@@ -73,10 +74,39 @@ class IosPermissionRequester(
         Permission.SetAlarms -> TODO()
         Permission.BatteryOptimization -> TODO()
         Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
+        Permission.Reminders -> hasRemindersPermission()
     }
 
     override fun openPermissionsScreen(uiContext: PlatformUiContext) {
         // no-op
+    }
+
+    private fun hasRemindersPermission(): Boolean = EKEventStore.authorizationStatusForEntityType(
+        EKEntityType.EKEntityTypeReminder
+    ) == EKAuthorizationStatusAuthorized
+
+    private suspend fun requestRemindersPermission(): PermissionResult {
+        if (hasRemindersPermission()) return PermissionResult.Granted
+
+        return suspendCancellableCoroutine { continuation ->
+            val es = EKEventStore()
+            val majorVersion =
+                UIDevice.currentDevice.systemVersion.split(".").firstOrNull()?.toIntOrNull() ?: 0
+            val completionHandler = { granted: Boolean, error: NSError? ->
+                val result = if (granted) {
+                    PermissionResult.Granted
+                } else {
+                    logger.e { "Error getting iOS reminders access: $error" }
+                    PermissionResult.Rejected
+                }
+                continuation.resumeIfActive(result, "requestRemindersPermission")
+            }
+            if (majorVersion >= 17) {
+                es.requestFullAccessToRemindersWithCompletion(completionHandler)
+            } else {
+                es.requestAccessToEntityType(EKEntityType.EKEntityTypeReminder, completionHandler)
+            }
+        }
     }
 
     private fun hasCalendarPermission(): Boolean = EKEventStore.authorizationStatusForEntityType(

@@ -42,6 +42,7 @@ class BasicNotificationProcessor(
         app: NotificationAppItem,
         channel: ChannelItem?,
     ): NotificationResult {
+        val appProperties = NotificationProperties.lookup(app.packageName)
         // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
         // effectively doing the deduping right now. I'm sure we'll find cases where it isn't, but
         // let's try that for now.
@@ -49,7 +50,8 @@ class BasicNotificationProcessor(
             sbn,
             app,
             channel,
-            notificationConfigFlow.value
+            notificationConfigFlow.value,
+            appProperties,
         )
         val title = stripBidiIsolates(
             sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)
@@ -64,7 +66,6 @@ class BasicNotificationProcessor(
             contactDao.getContact(it)
         }
         val sendVibePattern = selectVibrationPattern(contactEntries, app, sbn, channel)
-        val appProperties = NotificationProperties.lookup(app.packageName)
 
         val color = selectColor(app, sbn, appProperties)
         val icon = selectIcon(app, sbn, appProperties)

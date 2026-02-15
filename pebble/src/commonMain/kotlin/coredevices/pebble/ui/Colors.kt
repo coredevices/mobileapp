@@ -63,9 +63,13 @@ fun ColorPickerDialog(
     onColorSelected: (TimelineColor?) -> Unit,
     onDismissWithoutResult: () -> Unit,
     selectedColorName: String?,
+    availableColors: List<TimelineColor>? = null,
+    defaultToListTab: Boolean = false,
 ) {
     val sortedColors = remember {
-        TimelineColor.entries.map { it.toHsvColor() }
+        TimelineColor.entries.filter {
+            availableColors == null || availableColors.contains(it)
+        }.map { it.toHsvColor() }
             .sortedWith(
                 compareBy(
                     {
@@ -83,7 +87,8 @@ fun ColorPickerDialog(
     val selectedHsvColor = remember(selectedColorName) {
         sortedColors.find { it.timelineColor.name == selectedColorName }
     }
-    val selectedTab = remember { mutableStateOf(ColorTab.entries.first()) }
+    val defaultTab = if (defaultToListTab) ColorTab.List else ColorTab.Grid
+    val selectedTab = remember { mutableStateOf(defaultTab) }
     Dialog(
         onDismissRequest = { onDismissWithoutResult() }
     ) {
@@ -226,6 +231,8 @@ private fun ColumnScope.ColorList(
 fun SelectColorOrNone(
     currentColorName: String?,
     onChangeColor: (TimelineColor?) -> Unit,
+    availableColors: List<TimelineColor>? = null,
+    defaultToListTab: Boolean = false,
 ) {
     var showColorChooser by remember { mutableStateOf(false) }
     if (showColorChooser) {
@@ -238,6 +245,8 @@ fun SelectColorOrNone(
                 showColorChooser = false
             },
             selectedColorName = currentColorName,
+            availableColors = availableColors,
+            defaultToListTab = defaultToListTab,
         )
     }
     ListItem(
@@ -260,7 +269,7 @@ fun SelectColorOrNone(
                         .background(bgColor, shape = RoundedCornerShape(8.dp))
                 ) {
                     Text(
-                        text = color?.displayName ?: "",
+                        text = color?.displayName ?: "Default",
                         color = textColor,
                         modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
                     )

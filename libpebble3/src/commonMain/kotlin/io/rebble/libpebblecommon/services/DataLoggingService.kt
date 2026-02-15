@@ -48,8 +48,11 @@ class DataLoggingService(
                 is DataLoggingIncomingPacket.OpenSession -> {
                     val id = it.sessionId.get()
                     val tag = it.tag.get()
+                    val applicationUuid = it.applicationUUID.get()
+                    val itemSize = it.dataItemSize.get()
                     logger.d { "Session opened: $id tag: $tag (accepted: $acceptSessions)" }
-                    sessions[id] = DataLoggingSession(id, tag, it.applicationUUID.get())
+                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize)
+                    datalogging.openSession(id, tag, applicationUuid, itemSize)
                     sendAckNack(id)
                 }
 
@@ -67,16 +70,24 @@ class DataLoggingService(
                         return@onEach
                     }
                     datalogging.logData(
+                        sessionId = id,
                         uuid = session.uuid,
                         tag = session.tag,
                         data = it.payload.get().toByteArray(),
                         watchInfo = info,
+                        itemSize = session.itemSize,
+                        itemsLeft = it.itemsLeftAfterThis.get(),
                     )
                 }
 
                 is DataLoggingIncomingPacket.CloseSession -> {
                     val id = it.sessionId.get()
+                    val session = sessions[id]
                     logger.d { "Session closed: $id" }
+                    if (session != null) {
+                        datalogging.closeSession(id, session.tag)
+                    }
+                    sessions.remove(id)
                     sendAckNack(id)
                 }
             }
@@ -88,4 +99,5 @@ data class DataLoggingSession(
     val id: UByte,
     val tag: UInt,
     val uuid: Uuid,
+    val itemSize: UShort,
 )

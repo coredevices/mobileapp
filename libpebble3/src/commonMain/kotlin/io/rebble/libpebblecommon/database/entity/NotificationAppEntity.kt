@@ -8,8 +8,7 @@ import coredev.GenerateRoomEntity
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
-import io.rebble.libpebblecommon.metadata.WatchType
-import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
@@ -23,7 +22,9 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 import kotlinx.serialization.Serializable
+import io.rebble.libpebblecommon.timeline.toPebbleColor
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlin.time.Instant
 
 @Immutable
@@ -55,25 +56,37 @@ data class NotificationAppItem(
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
 
-    override fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray? {
-        val m = StructMapper()
-        val entity = NotificationAppBlobItem(
-            attributes = listOf(
-                Attribute(
-                    TimelineAttribute.AppName.id,
-                    SFixedString(m, name.length, name).toBytes()
-                ),
-                Attribute(TimelineAttribute.MuteDayOfWeek.id, SUByte(m, muteState.value).toBytes()),
-                Attribute(
-                    TimelineAttribute.LastUpdated.id,
-                    SUInt(
-                        m,
-                        stateUpdated.instant.epochSeconds.toUInt(),
-                        endianness = Endian.Little
-                    ).toBytes()
-                ),
-            )
-        )
+    override fun value(params: ValueParams): UByteArray? {
+        val attributesList = attributes {
+            appName { name }
+            muteDayOfWeek { muteState.value }
+            lastUpdated { stateUpdated.instant }
+            
+            vibePatternName?.let { name ->
+                val pattern = params.vibePatternDao?.let { dao ->
+                    runBlocking {
+                        dao.getVibePattern(name)
+                    }
+                }
+                pattern?.let {
+                    vibrationPattern { it.pattern }
+                }
+            }
+            
+            colorName?.let { name ->
+                io.rebble.libpebblecommon.timeline.TimelineColor.findByName(name)?.let { color ->
+                    backgroundColor { color.toPebbleColor() }
+                }
+            }
+            
+            iconCode?.let { code ->
+                io.rebble.libpebblecommon.packets.blobdb.TimelineIcon.fromCode(code)?.let { icon ->
+                    icon { icon }
+                }
+            }
+        }.map { it.asAttribute() }
+        
+        val entity = NotificationAppBlobItem(attributes = attributesList)
         return entity.toBytes()
     }
 

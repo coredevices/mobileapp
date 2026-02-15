@@ -9,7 +9,8 @@ import platform.Foundation.NSUserDomainMask
 
 actual fun getTempFilePath(
     appContext: AppContext,
-    name: String
+    name: String,
+    subdir: String?,
 ): Path {
     val fm = NSFileManager.defaultManager
     val nsUrl = fm.URLsForDirectory(NSCachesDirectory, NSUserDomainMask).first()!! as NSURL

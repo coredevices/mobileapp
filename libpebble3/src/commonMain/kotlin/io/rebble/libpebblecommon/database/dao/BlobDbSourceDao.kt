@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Instant
 
 interface BlobDbDao<T : BlobDbRecord> {
     // Compiler will choke on these methods unless they are overridden in each Dao
@@ -29,7 +30,7 @@ interface BlobDbDao<T : BlobDbRecord> {
     @Upsert
     suspend fun insertOrReplaceAll(items: List<T>)
     suspend fun markAllDeletedFromWatch(transport: String)
-    suspend fun handleWrite(write: DbWrite, transport: String): BlobResponse.BlobStatus = BlobResponse.BlobStatus.Success
+    suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus = BlobResponse.BlobStatus.Success
     // TODO decide how to handle records which are synced to watches which haven't been connected
     //  for a while (so that we aren't storing them forever if the watch is never connected again).
     suspend fun deleteStaleRecords(timestampMs: Long)
@@ -42,8 +43,16 @@ interface BlobDbRecord {
     val record: BlobDbItem
 }
 
+data class ValueParams(
+    val platform: WatchType,
+    val capabilities: Set<ProtocolCapsFlag>,
+    val vibePatternDao: VibePatternDao? = null,
+)
+
 interface BlobDbItem {
     fun key(): UByteArray
-    fun value(platform: WatchType, capabilities: Set<ProtocolCapsFlag>): UByteArray?
+    fun value(params: ValueParams): UByteArray?
     fun recordHashCode(): Int
+    /** Only needed for tables which use insert-with-timestamp */
+    fun timestamp(): Instant? = null
 }

@@ -16,7 +16,6 @@ To fully enable PebbleKit Android 2 support, you have to add this provider to yo
 <provider
     android:authorities="[YOUR_PACKAGE].pebblekit"
     android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider"
-    android:permission="io.rebble.pebblekit2.permission.READ_PROVIDER"
     android:exported="true" />
 ```
 

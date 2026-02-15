@@ -1,11 +1,7 @@
 package coredevices.pebble.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+
+import PlatformShareLauncher
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,8 +28,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,7 +58,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
@@ -72,7 +67,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.ExperimentalSettingsApi
 import com.russhwolf.settings.Settings
+import com.russhwolf.settings.serialization.decodeValue
+import com.russhwolf.settings.serialization.encodeValue
 import coredevices.pebble.account.GithubAccount
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.Github
@@ -93,20 +91,19 @@ import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.forDevice
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
-import io.rebble.libpebblecommon.metadata.isColor
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
+import io.rebble.libpebblecommon.timeline.TimelineColor
+import io.rebble.libpebblecommon.timeline.toPebbleColor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import theme.coreOrange
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
-
-
-import PlatformShareLauncher
 
 private val logger = Logger.withTag("WatchScreen")
 
@@ -123,13 +120,9 @@ fun WatchScreen(
         }
         val watch by watchesFlow.collectAsState(null)
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {}
             topBarParams.title("Device")
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                navBarNav.goBack()
-            }
         }
         watch?.let { WatchScreenContent(navBarNav, topBarParams, it, libPebble) }
     }
@@ -250,40 +243,16 @@ private fun WatchScreenContent(
                     primaryColor = false,
                     modifier = Modifier.padding(vertical = 5.dp),
                 )
+                
+                var showNotificationDialog by remember { mutableStateOf(false) }
+                if (showNotificationDialog) {
+                    NotificationDialog(
+                        onDismiss = { showNotificationDialog = false },
+                    )
+                }
+                
                 PebbleElevatedButton(
-                    onClick = {
-                        scope.launch {
-                            val testActionId: UByte = 0u
-                            val notif = buildTimelineNotification(
-                                timestamp = Clock.System.now(),
-                                parentId = Uuid.NIL,
-                            ) {
-                                layout = TimelineItem.Layout.GenericNotification
-                                attributes {
-                                    title { "Test Notification" }
-                                    body { "This is a test notification" }
-                                    tinyIcon { TimelineIcon.ResultFailed }
-                                }
-                                actions {
-                                    action(TimelineItem.Action.Type.Generic) {
-                                        attributes {
-                                            title { "Test" }
-                                        }
-                                    }
-                                }
-                            }
-                            libPebble.sendNotification(
-                                notif, mapOf(
-                                    testActionId to { _ ->
-                                        TimelineActionResult(
-                                            success = true,
-                                            icon = TimelineIcon.GenericConfirmation,
-                                            title = "Test Success"
-                                        )
-                                    }
-                                ))
-                        }
-                    },
+                    onClick = { showNotificationDialog = true },
                     text = "Write Notification",
                     primaryColor = false,
                     modifier = Modifier.padding(vertical = 5.dp),
@@ -300,13 +269,126 @@ private fun WatchScreenContent(
                     text = "Reset into PRF",
                     description = "This will reset the watch into recovery mode. Not for general public use.",
                     action = {
-                        watch.resetIntoPrf()
+                        if (watch.watchInfo.recoveryFwVersion != null) {
+                            watch.resetIntoPrf()
+                        }
                     },
                     icon = Icons.Default.Warning,
+                    enabled = watch.watchInfo.recoveryFwVersion != null,
+                )
+                ConfirmDumpButton(
+                    text = "Factory reset",
+                    description = "This will wipe the watch completely",
+                    action = {
+                        if (watch.watchInfo.recoveryFwVersion != null) {
+                            watch.factoryReset()
+                        }
+                    },
+                    icon = Icons.Default.Warning,
+                    enabled = watch.watchInfo.recoveryFwVersion != null,
                 )
             }
         }
     }
+}
+
+@Serializable
+data class TestNotificationContent(
+    val title: String = "Test Notification",
+    val body: String = "This is a test notification",
+    val icon: TimelineIcon? = TimelineIcon.GenericSms,
+    val color: TimelineColor? = TimelineColor.Orange,
+)
+
+private const val CUSTOM_NOTIFICATION_CONTENT_KEY = "custom_notification_content"
+
+@OptIn(ExperimentalSerializationApi::class, ExperimentalSettingsApi::class)
+@Composable
+private fun NotificationDialog(
+    onDismiss: () -> Unit,
+) {
+    val settings: Settings = koinInject()
+    var content by remember { mutableStateOf(settings.decodeValue(CUSTOM_NOTIFICATION_CONTENT_KEY, TestNotificationContent())) }
+    val scope = rememberCoroutineScope()
+    val libPebble = rememberLibPebble()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Send Notification") },
+        text = {
+            Column {
+                TextField(
+                    value = content.title,
+                    onValueChange = { content = content.copy(title = it) },
+                    label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                )
+                TextField(
+                    value = content.body,
+                    onValueChange = { content = content.copy(body = it) },
+                    label = { Text("Body") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                SelectColorOrNone(
+                    currentColorName = content.color?.name,
+                    onChangeColor = { color ->
+                        content = content.copy(color = color)
+                    },
+                )
+                SelectIconOrNone(
+                    currentIcon = TimelineIcon.fromCode(content.icon?.code),
+                    onChangeIcon = { icon ->
+                        content = content.copy(icon = icon)
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                settings.encodeValue(CUSTOM_NOTIFICATION_CONTENT_KEY, content)
+                onDismiss()
+                scope.launch {
+                    val testActionId: UByte = 0u
+                    val notif = buildTimelineNotification(
+                        timestamp = Clock.System.now(),
+                        parentId = Uuid.NIL,
+                    ) {
+                        layout = TimelineItem.Layout.GenericNotification
+                        attributes {
+                            title { content.title }
+                            body { content.body }
+                            content.icon?.let { tinyIcon { it } }
+                            content.color?.let { backgroundColor { it.toPebbleColor() } }
+                        }
+                        actions {
+                            action(TimelineItem.Action.Type.Generic) {
+                                attributes {
+                                    title { "Test" }
+                                }
+                            }
+                        }
+                    }
+                    libPebble.sendNotification(
+                        notif, mapOf(
+                            testActionId to { _ ->
+                                TimelineActionResult(
+                                    success = true,
+                                    icon = TimelineIcon.GenericConfirmation,
+                                    title = "Test Success"
+                                )
+                            }
+                        ))
+                }
+            }) {
+                Text("Send")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -314,7 +396,8 @@ private fun ConfirmDumpButton(
     text: String,
     description: String,
     action: () -> Unit,
-    icon: ImageVector
+    icon: ImageVector,
+    enabled: Boolean = true,
 ) {
     var showConfirmationDialog by remember { mutableStateOf(false) }
 
@@ -324,6 +407,7 @@ private fun ConfirmDumpButton(
         primaryColor = false,
         icon = icon,
         modifier = Modifier.padding(vertical = 5.dp),
+        enabled = enabled,
     )
 
     if (showConfirmationDialog) {

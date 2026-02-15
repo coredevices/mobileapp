@@ -2,7 +2,7 @@ package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
-import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.PebbleWebServices
 import io.rebble.libpebblecommon.connection.TokenProvider
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,13 +13,13 @@ interface PebbleAccount {
     val loggedIn: StateFlow<String?>
     val devToken: StateFlow<String?>
 
-    suspend fun setToken(token: String, bootUrl: String)
+    suspend fun setToken(token: String?, bootUrl: String?)
     suspend fun setDevPortalId()
 }
 
 class RealPebbleAccount(
     private val settings: Settings,
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
     private val bootConfigProvider: BootConfigProvider,
 ) : PebbleAccount {
     private val logger = Logger.withTag("PebbleAccount")
@@ -28,11 +28,14 @@ class RealPebbleAccount(
     private val _devToken = MutableStateFlow(getDevPortalId())
     override val devToken = _devToken.asStateFlow()
 
-    override suspend fun setToken(token: String, bootUrl: String) {
+    override suspend fun setToken(token: String?, bootUrl: String?) {
         logger.d("setToken")
-        settings.putString(TOKEN_KEY, token)
+        if (token != null) {
+            settings.putString(TOKEN_KEY, token)
+        } else {
+            settings.remove(TOKEN_KEY)
+        }
         _loggedIn.value = token
-
         bootConfigProvider.setUrl(bootUrl)
         setDevPortalId()
     }

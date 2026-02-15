@@ -8,15 +8,12 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDeepLink
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import coredevices.database.AppstoreSource
-import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 /**
@@ -32,17 +29,11 @@ object PebbleRoutes {
     data class FirmwareSideloadRoute(val identifier: String) : CoreRoute
 
     @Serializable
-    data object CalendarsRoute : CoreRoute
-
-    @Serializable
     data class WatchappSettingsRoute(
         val watchIdentifier: String,
         val title: String,
         val url: String
     ) : CoreRoute
-
-    @Serializable
-    data object AppstoreSettingsRoute : CoreRoute
 }
 
 @Stable
@@ -71,14 +62,10 @@ object PebbleNavBarRoutes {
     data object WatchfacesRoute : NavBarRoute
 
     @Serializable
-    data object WatchappsRoute : NavBarRoute
-
-    @Serializable
     data class LockerAppRoute(
-        val uuid: String,
+        val uuid: String?,
         val storedId: String?,
-        val storeSource: String?,
-        val storeSources: String? = null,
+        val storeSource: Int?,
     ) : NavBarRoute
 
     @Serializable
@@ -86,6 +73,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data object IndexRoute : NavBarRoute
+
+    @Serializable
+    data object AppstoreSettingsRoute : NavBarRoute
 
     @Serializable
     data class NotificationAppRoute(val packageName: String) : NavBarRoute
@@ -97,7 +87,13 @@ object PebbleNavBarRoutes {
     data object PermissionsRoute : NavBarRoute
 
     @Serializable
-    data class AppStoreRoute(val appType: String) : NavBarRoute
+    data object CalendarsRoute : NavBarRoute
+
+    @Serializable
+    data object WeatherRoute : NavBarRoute
+
+    @Serializable
+    data class AppStoreRoute(val appType: String?, val deepLinkId: String?) : NavBarRoute
 
     @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
@@ -110,7 +106,10 @@ object PebbleNavBarRoutes {
     data class AppStoreCollectionRoute(val sourceId: Int, val path: String, val title: String, val appType: String? = null) : NavBarRoute
 
     @Serializable
-    data class MyCollectionRoute(val appType: String, val myCollectionType: String) : NavBarRoute
+    data class MyCollectionRoute(val appType: String) : NavBarRoute
+
+    @Serializable
+    data class OfflineModelsRoute(val openSttDialog: Boolean = false) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -159,7 +158,7 @@ fun NavGraphBuilder.addNavBarRoutes(
 ) {
     composableWithAnimations<PebbleNavBarRoutes.AppStoreRoute>(viewModel) {
         val route: PebbleNavBarRoutes.AppStoreRoute = it.toRoute()
-        AppStoreScreen(nav, AppType.fromString(route.appType)!!, topBarParams)
+        AppStoreScreen(nav, route.appType?.let { AppType.fromString(it) }, topBarParams, route.deepLinkId)
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchesRoute>(viewModel) {
         WatchesScreen(nav, topBarParams)
@@ -168,36 +167,24 @@ fun NavGraphBuilder.addNavBarRoutes(
         val route: PebbleNavBarRoutes.WatchRoute = it.toRoute()
         WatchScreen(nav, topBarParams, route.identifier)
     }
-    composableWithAnimations<PebbleNavBarRoutes.WatchappsRoute>(viewModel) {
-        LockerScreen(
-            nav,
-            topBarParams,
-            LockerTab.Apps
-        )
-    }
     composableWithAnimations<PebbleNavBarRoutes.WatchfacesRoute>(viewModel) {
         LockerScreen(
             nav,
             topBarParams,
-            LockerTab.Watchfaces
         )
     }
     composableWithAnimations<PebbleNavBarRoutes.LockerAppRoute>(viewModel) {
         val route: PebbleNavBarRoutes.LockerAppRoute = it.toRoute()
         LockerAppScreen(
             topBarParams,
-            Uuid.parse(route.uuid),
+            route.uuid?.let { Uuid.parse(it) },
             nav,
             route.storedId,
-            route.storeSource?.let { Json.decodeFromString<AppstoreSource>(route.storeSource) },
-            route.storeSources?.let {
-                Json.decodeFromString<List<Pair<String, AppstoreSource>>>(route.storeSources)
-            },
+            route.storeSource,
         )
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
-        val coreConfigHolder = koinInject<CoreConfigHolder>()
-        NotificationsScreen(topBarParams, nav, coreConfigHolder.config.value.enableIndex)
+        NotificationsScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav)
@@ -246,8 +233,20 @@ fun NavGraphBuilder.addNavBarRoutes(
             navBarNav = nav,
             topBarParams = topBarParams,
             appType = AppType.fromString(route.appType)!!,
-            type = MyCollectionType.fromCode(route.myCollectionType)!!,
         )
+    }
+    composable<PebbleNavBarRoutes.CalendarsRoute> {
+        CalendarScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.WeatherRoute> {
+        WeatherScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
+        AppstoreSettingsScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.OfflineModelsRoute> {
+        val route: PebbleNavBarRoutes.OfflineModelsRoute = it.toRoute()
+        ModelManagementScreen(nav, topBarParams, route.openSttDialog)
     }
 }
 
@@ -259,9 +258,6 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()
         DebugFirmwareSideload(route.identifier, coreNav)
     }
-    composable<PebbleRoutes.CalendarsRoute> {
-        CalendarScreen(coreNav)
-    }
     composable<PebbleRoutes.WatchappSettingsRoute> {
         val route: PebbleRoutes.WatchappSettingsRoute = it.toRoute()
         WatchappSettingsScreen(
@@ -270,8 +266,5 @@ fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (
             title = route.title,
             url = route.url,
         )
-    }
-    composable<PebbleRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(coreNav)
     }
 }

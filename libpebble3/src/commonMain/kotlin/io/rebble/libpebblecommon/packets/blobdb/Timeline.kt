@@ -295,7 +295,7 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     ForegroundColor(0x1Bu),
     BackgroundColor(0x1Cu),
     SecondaryColor(0x1Du),
-    AppName(30u),
+    AppName(30u, 40),
     DisplayRecurring(0x1Fu),
     ShortSubtitle(0x24u),
     Timestamp(0x25u),

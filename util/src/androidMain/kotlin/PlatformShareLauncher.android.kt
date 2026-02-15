@@ -21,7 +21,9 @@ actual class PlatformShareLauncher(private val context: Context) {
     }
     actual fun shareImage(image: ImageBitmap, filename: String) {
         val bitmap = image.asAndroidBitmap()
-        val file = File(context.cacheDir, filename)
+        val dir = context.cacheDir.resolve("screenshots")
+        dir.mkdirs()
+        val file = File(dir, filename)
         file.outputStream().use {
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }

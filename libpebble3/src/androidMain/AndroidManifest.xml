@@ -39,6 +39,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <uses-feature android:name="android.software.companion_device_setup"/>
 
+    <!-- This should not be used in the new apps any more, leaving here for the backwards compatibility -->
     <uses-permission android:name="io.rebble.pebblekit2.permission.RECEIVE_DATA_FROM_WATCH" />
 
     <application>
@@ -66,8 +67,7 @@
         </service>
 
         <service android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleSenderReceiver"
-                 android:exported="true"
-                 android:permission="io.rebble.pebblekit2.permission.SEND_DATA_TO_WATCH">
+                 android:exported="true">
             <intent-filter>
                 <action android:name="io.rebble.pebblekit2.SEND_DATA_TO_WATCH"/>
             </intent-filter>

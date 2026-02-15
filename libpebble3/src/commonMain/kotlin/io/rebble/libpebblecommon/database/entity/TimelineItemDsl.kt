@@ -122,6 +122,22 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
     }
 
+    fun appName(block: () -> String) {
+        string(TimelineAttribute.AppName, block)
+    }
+
+    fun headings(block: () -> List<String>) {
+        stringList(TimelineAttribute.Headings, block)
+    }
+
+    fun paragraphs(block: () -> List<String>) {
+        stringList(TimelineAttribute.Paragraphs, block)
+    }
+
+    fun muteDayOfWeek(block: () -> UByte) {
+        attributes.add(BaseAttribute.UByteAttribute(TimelineAttribute.MuteDayOfWeek, block()))
+    }
+
     fun vibrationPattern(block: () -> List<UInt>) {
         uIntList(TimelineAttribute.VibrationPattern, block)
     }

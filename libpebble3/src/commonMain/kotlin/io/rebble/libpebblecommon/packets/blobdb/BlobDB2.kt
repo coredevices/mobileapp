@@ -6,6 +6,8 @@ import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.StartSync
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.SyncDone
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.Write
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.WriteBack
+import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.Version
+import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command.Message.MarkAllDirty
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
@@ -28,6 +30,8 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
         Write(0x08u), // Watch -> Phone
         WriteBack(0x09u), // Watch -> Phone
         SyncDone(0x0Au), // Watch -> Phone
+        Version(0x0Bu), // Phone -> Watch
+        MarkAllDirty(0x0Cu), // Phone -> Watch
 
         InvalidMessage(0xFFu)
     }
@@ -103,6 +107,17 @@ sealed class BlobDB2Command(message: Message, token: UShort) : PebblePacket(endp
     ) : BlobDB2Command(SyncDone, token) {
         val database = SUByte(m, database.id)
     }
+
+    class Version(
+        token: UShort = 0u,
+    ) : BlobDB2Command(Message.Version, token)
+
+    class MarkAllDirty(
+        token: UShort = 0u,
+        database: BlobDatabase = BlobDatabase.Invalid
+    ) : BlobDB2Command(Message.MarkAllDirty, token) {
+        val database = SUByte(m, database.id)
+    }
 }
 
 sealed class BlobDB2Response(
@@ -125,6 +140,8 @@ sealed class BlobDB2Response(
         WriteResponse(RESPONSE_MESSAGE_OFF or Write.value), // Phone -> Watch
         WriteBackResponse(RESPONSE_MESSAGE_OFF or WriteBack.value), // Phone -> Watch
         SyncDoneResponse(RESPONSE_MESSAGE_OFF or SyncDone.value), // Phone -> Watch
+        VersionResponse(RESPONSE_MESSAGE_OFF or Version.value), // Watch -> Phone
+        MarkAllDirtyResponse(RESPONSE_MESSAGE_OFF or MarkAllDirty.value), // Watch -> Phone
 
         InvalidMessage(0xFFu)
     }
@@ -167,6 +184,15 @@ sealed class BlobDB2Response(
         token: UShort = 0u,
         status: BlobResponse.BlobStatus = BlobResponse.BlobStatus.GeneralFailure
     ) : BlobDB2Response(Message.SyncDoneResponse, token, status)
+
+    class VersionResponseCmd : BlobDB2Response(Message.VersionResponse) {
+        val version = SUByte(m)
+    }
+
+    class MarkAllDirtyResponse(
+        token: UShort = 0u,
+        status: BlobResponse.BlobStatus = BlobResponse.BlobStatus.GeneralFailure
+    ) : BlobDB2Response(Message.MarkAllDirtyResponse, token, status)
 }
 
 fun blobDB2PacketsRegister() {
@@ -211,4 +237,12 @@ fun blobDB2PacketsRegister() {
         BlobDB2Response.endpoint,
         BlobDB2Response.Message.SyncDoneResponse.value
     ) { BlobDB2Response.SyncDoneResponse() }
+    PacketRegistry.register(
+        BlobDB2Response.endpoint,
+        BlobDB2Response.Message.VersionResponse.value
+    ) { BlobDB2Response.VersionResponseCmd() }
+    PacketRegistry.register(
+        BlobDB2Response.endpoint,
+        BlobDB2Response.Message.MarkAllDirtyResponse.value
+    ) { BlobDB2Response.MarkAllDirtyResponse() }
 }

@@ -405,7 +405,7 @@ fun SelectVibePatternOrNone(
         },
         supportingContent = {
             Column {
-                Text(currentPattern ?: "None")
+                Text(currentPattern ?: "Default")
                 if (subtext != null) {
                     Text(subtext, fontSize = 12.sp)
                 }

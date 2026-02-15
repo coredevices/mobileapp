@@ -95,11 +95,13 @@ kotlin {
                 optIn("kotlinx.cinterop.ExperimentalForeignApi")
                 optIn("androidx.compose.material3.ExperimentalMaterial3Api")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("kotlin.uuid.ExperimentalUuidApi")
             }
         }
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.coroutines)
                 implementation(compose.runtime)
                 implementation(compose.ui)
                 implementation(compose.foundation)
@@ -121,11 +123,11 @@ kotlin {
                 implementation(libs.webview)
                 implementation(compose.components.uiToolingPreview)
                 implementation(libs.cactus)
-                api(libs.settings)
                 implementation(project(":libpebble3"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
+                api(libs.settings)
             }
         }
 
@@ -200,9 +202,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_IOS", "whisper-medium-pro")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_ANDROID", "whisper-tiny")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_DEFAULT_STT_MODEL_ANDROID_HEAVY", "whisper-small")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "qwen3-0.6")
     }
 }

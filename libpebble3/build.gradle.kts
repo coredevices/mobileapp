@@ -172,6 +172,7 @@ kotlin {
             implementation(compose.ui)
             implementation(project(":blobannotations"))
             implementation(libs.settings)
+            implementation(libs.settings.serialization)
             implementation(libs.uri)
         }
 
