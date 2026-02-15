@@ -1,7 +1,5 @@
 package coredevices.pebble.ui
 
-import CoreNav
-import NoOpCoreNav
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,20 +7,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,21 +36,15 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.PebbleAccount
-import coredevices.pebble.services.AppStoreHome
-import coredevices.pebble.services.RealPebbleWebServices
-import coredevices.pebble.services.StoreCollection
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.ui.M3Dialog
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.locker.AppType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -64,87 +55,27 @@ import org.koin.core.parameter.parametersOf
 class AppstoreSettingsScreenViewModel(
     private val sourceDao: AppstoreSourceDao,
     private val collectionDao: AppstoreCollectionDao,
-    private val pebbleWebServices: RealPebbleWebServices,
+    private val pebbleWebServices: PebbleWebServices,
 ) : ViewModel() {
     val sources = sourceDao.getAllSources()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    private var homeCacheFaces: List<Pair<AppstoreSource, AppStoreHome?>>? = null
-    private var homeCacheApps: List<Pair<AppstoreSource, AppStoreHome?>>? = null
 
-    private suspend fun getCachedFacesHome(): List<Pair<AppstoreSource, AppStoreHome?>> {
-        if (homeCacheFaces == null) {
-            homeCacheFaces =
-                pebbleWebServices.fetchAppStoreHome(AppType.Watchface, null, enabledOnly = false)
+    fun updateCollections() {
+        viewModelScope.launch {
+            pebbleWebServices.fetchAppStoreHome(AppType.Watchapp, null, enabledOnly = false, useCache = false)
         }
-        return homeCacheFaces!!
+        viewModelScope.launch {
+            pebbleWebServices.fetchAppStoreHome(AppType.Watchface, null, enabledOnly = false, useCache = false)
+        }
     }
 
-    private suspend fun getCachedAppsHome(): List<Pair<AppstoreSource, AppStoreHome?>> {
-        if (homeCacheApps == null) {
-            homeCacheApps =
-                pebbleWebServices.fetchAppStoreHome(AppType.Watchapp, null, enabledOnly = false)
-        }
-        return homeCacheApps!!
-    }
-
-    val collections =
-        sourceDao.getAllSources().combine(collectionDao.getAllCollections()) { sources, _ ->
-            buildMap {
-                val apps = viewModelScope.async(Dispatchers.IO) {
-                    getCachedAppsHome().mapNotNull {
-                        it.second?.let { home ->
-                            it.first to collectionsToListItems(
-                                it.first.id,
-                                AppType.Watchapp,
-                                home.collections
-                            )
-                        }
-                    }
-                }
-                val faces = viewModelScope.async(Dispatchers.IO) {
-                    getCachedFacesHome().mapNotNull {
-                        it.second?.let { home ->
-                            it.first to collectionsToListItems(
-                                it.first.id,
-                                AppType.Watchface,
-                                home.collections
-                            )
-                        }
-                    }
-                }
-                put(AppType.Watchapp, apps.await())
-                put(AppType.Watchface, faces.await())
+    val collections: StateFlow<Map<AppstoreSource, Map<AppType, List<AppstoreCollection>>>?> =
+        sourceDao.getAllSources().combine(collectionDao.getAllCollectionsFlow()) { sources, collections ->
+            sources.associateWith { source ->
+                collections.filter { it.sourceId == source.id }
+                    .groupBy { it.type }
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, null)
-
-    private suspend fun collectionsToListItems(
-        sourceId: Int,
-        type: AppType,
-        list: List<StoreCollection>
-    ): List<AppstoreCollection> {
-        return list.map { col ->
-            collectionDao.getCollection(sourceId, col.slug, type)
-                ?: col.toAppstoreCollection(
-                    sourceId,
-                    type,
-                    sourceId == sources.first { it.isNotEmpty() }.first().id
-                )
-        }
-    }
-
-    private fun StoreCollection.toAppstoreCollection(
-        sourceId: Int,
-        type: AppType,
-        enabled: Boolean
-    ): AppstoreCollection {
-        return AppstoreCollection(
-            sourceId = sourceId,
-            title = name,
-            slug = slug,
-            type = type,
-            enabled = enabled,
-        )
-    }
 
     fun removeSource(sourceId: Int) {
         viewModelScope.launch {
@@ -172,7 +103,7 @@ class AppstoreSettingsScreenViewModel(
 }
 
 @Composable
-fun AppstoreSettingsScreen(nav: CoreNav, topBarParams: TopBarParams?) {
+fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
@@ -181,30 +112,21 @@ fun AppstoreSettingsScreen(nav: CoreNav, topBarParams: TopBarParams?) {
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()
     val pebbleLoggedIn = pebbleAccount.loggedIn
-    val bootConfig = koinInject<BootConfigProvider>()
-    var showLockerImportDialog by remember { mutableStateOf<Int?>(null) }
-
-    if (showLockerImportDialog != null) {
-        val isRebble = remember {
-            parseUrl(bootConfig.getUrl() ?: "")?.host?.endsWith("rebble.io") == true
-        }
-        val sourceId = showLockerImportDialog
-        if (sourceId != null) {
-            LockerImportDialog(
-                onDismissRequest = { showLockerImportDialog = null },
-                isRebble = isRebble,
-                topBarParams = topBarParams,
-                onEnabled = {
-                    scope.launch {
-                        sourceDao.setSourceEnabled(sourceId, true)
-                    }
+    LaunchedEffect(Unit) {
+        topBarParams.searchAvailable(null)
+        topBarParams.actions {
+            TopBarIconButtonWithToolTip(
+                onClick = {
+                    viewModel.updateCollections()
                 },
+                icon = Icons.Filled.Refresh,
+                description = "Refresh Collections",
             )
         }
+        topBarParams.title("Appstore Sources")
     }
 
     AppstoreSettingsScreen(
-        nav = nav,
         sources = sources,
         collections = collections,
         onSourceRemoved = viewModel::removeSource,
@@ -213,12 +135,8 @@ fun AppstoreSettingsScreen(nav: CoreNav, topBarParams: TopBarParams?) {
             scope.launch {
                 if (sources.firstOrNull {
                         parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false
-                    }?.id == sourceId && isEnabled) {
-                    if (pebbleLoggedIn.value == null) {
+                    }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
                         uriHandler.openUri(REBBLE_LOGIN_URI)
-                    } else {
-                        showLockerImportDialog = sourceId
-                    }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
                 }
@@ -230,9 +148,8 @@ fun AppstoreSettingsScreen(nav: CoreNav, topBarParams: TopBarParams?) {
 
 @Composable
 fun AppstoreSettingsScreen(
-    nav: CoreNav,
     sources: List<AppstoreSource>,
-    collections: Map<AppType, List<Pair<AppstoreSource, List<AppstoreCollection>>>>?,
+    collections: Map<AppstoreSource, Map<AppType, List<AppstoreCollection>>>?,
     onSourceRemoved: (Int) -> Unit,
     onSourceAdded: (title: String, url: String) -> Unit,
     onSourceEnableChange: (Int, Boolean) -> Unit,
@@ -240,23 +157,6 @@ fun AppstoreSettingsScreen(
 ) {
     var createSourceOpen by remember { mutableStateOf(false) }
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Appstore Sources") },
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            nav.goBack()
-                        }
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                }
-            )
-        },
         /*floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -281,10 +181,7 @@ fun AppstoreSettingsScreen(
         LazyColumn(Modifier.padding(insets)) {
             items(sources.size, { sources[it].id }) { i ->
                 val source = sources[i]
-                val collections = collections
-                    ?.mapValues {
-                        it.value.filter { it.first.id == source.id }.flatMap { it.second }
-                    }
+                val collections = collections?.get(source)
                 AppstoreSourceItem(
                     source = source,
                     collections = collections,
@@ -426,14 +323,13 @@ fun AppstoreSettingsScreenPreview() {
     val sourceB = AppstoreSource(id = 2, title = "Source 2", url = "https://example.com/source2")
     PreviewWrapper {
         AppstoreSettingsScreen(
-            nav = NoOpCoreNav,
             sources = listOf(
                 sourceA,
                 sourceB
             ),
             collections = mapOf(
-                AppType.Watchapp to listOf(
-                    sourceA to listOf(
+                sourceA to mapOf(
+                    AppType.Watchapp to listOf(
                         AppstoreCollection(
                             sourceId = sourceA.id,
                             title = "Featured Apps",
@@ -442,43 +338,12 @@ fun AppstoreSettingsScreenPreview() {
                             enabled = true
                         )
                     )
-                ),
-                AppType.Watchface to listOf(
-                    sourceA to listOf(
-                        AppstoreCollection(
-                            sourceId = sourceA.id,
-                            title = "Featured Faces",
-                            slug = "featured-faces",
-                            type = AppType.Watchface,
-                            enabled = false
-                        )
-                    ),
-                    sourceB to listOf(
-                        AppstoreCollection(
-                            sourceId = sourceB.id,
-                            title = "Top faces",
-                            slug = "featured-apps",
-                            type = AppType.Watchface,
-                            enabled = true
-                        )
-                    )
-                ),
+                )
             ),
             onSourceRemoved = {},
             onSourceAdded = { _, _ -> },
             onSourceEnableChange = { _, _ -> },
             onCollectionEnabledChanged = { _, _ -> },
-        )
-    }
-}
-
-@Preview
-@Composable
-fun PreviewCreateAppstoreSourceDialog() {
-    PreviewWrapper {
-        CreateAppstoreSourceDialog(
-            onDismissRequest = {},
-            onSourceCreated = { _, _ -> }
         )
     }
 }

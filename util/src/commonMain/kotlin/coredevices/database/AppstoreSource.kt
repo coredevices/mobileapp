@@ -34,7 +34,10 @@ interface AppstoreSourceDao {
     fun getAllSources(): Flow<List<AppstoreSource>>
 
     @Query("SELECT * FROM AppstoreSource WHERE enabled = 1")
-    fun getAllEnabledSources(): Flow<List<AppstoreSource>>
+    fun getAllEnabledSourcesFlow(): Flow<List<AppstoreSource>>
+
+    @Query("SELECT * FROM AppstoreSource WHERE enabled = 1")
+    suspend fun getAllEnabledSources(): List<AppstoreSource>
 
     @Query("DELETE FROM AppstoreSource WHERE id = :sourceId")
     suspend fun deleteSourceById(sourceId: Int)

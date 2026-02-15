@@ -10,7 +10,6 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.okio.asKotlinxIoRawSource
 import kotlinx.io.readString
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okio.FileSystem
 import okio.Path.Companion.toPath
@@ -52,14 +51,6 @@ object DiskUtil {
 
     fun pkjsFileExists(pbwPath: Path): Boolean {
         return openZip(pbwPath).exists("pebble-js-app.js".toPath())
-    }
-
-    /**
-     * @throws IllegalStateException if pbw does not contain manifest with that watch type
-     */
-    fun requirePbwManifest(pbwPath: Path, watchType: WatchType): PbwManifest {
-        return getPbwManifest(pbwPath, watchType)
-            ?: throw IllegalStateException("Pbw does not contain manifest for watch type $watchType")
     }
 
     /**

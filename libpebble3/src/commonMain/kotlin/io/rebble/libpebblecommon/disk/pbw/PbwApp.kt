@@ -5,40 +5,41 @@ import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.disk.PbwBinHeader
+import io.rebble.libpebblecommon.disk.pbw.DiskUtil.getPbwManifest
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.pkjsFileExists
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwAppInfo
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
-import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwManifest
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwPKJSFile
 import io.rebble.libpebblecommon.metadata.WatchType
-import kotlin.time.Instant
+import io.rebble.libpebblecommon.metadata.pbw.manifest.PbwManifest
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class PbwApp(private val path: Path) {
     val info by lazy { requirePbwAppInfo(path) }
     val hasPKJS by lazy { pkjsFileExists(path) }
-    fun getManifest(watchType: WatchType) = requirePbwManifest(path, watchType)
-    fun getBinaryFor(watchType: WatchType): Source {
-        val filename = getManifest(watchType).application.name
+    fun getManifest(watchType: WatchType): PbwManifest? = getPbwManifest(path, watchType)
+    fun getBinaryFor(watchType: WatchType): Source? {
+        val filename = getManifest(watchType)?.application?.name ?: return null
         return requirePbwBinaryBlob(path, watchType, filename)
     }
     fun getResourcesFor(watchType: WatchType): Source? {
-        val resources = getManifest(watchType).resources ?: return null
+        val resources = getManifest(watchType)?.resources ?: return null
         return requirePbwBinaryBlob(path, watchType, resources.name)
     }
-    fun getBinaryHeaderFor(watchType: WatchType): PbwBinHeader {
-        return getBinaryFor(watchType).use { source ->
+    fun getBinaryHeaderFor(watchType: WatchType): PbwBinHeader? {
+        return getBinaryFor(watchType)?.use { source ->
             PbwBinHeader.parseFileHeader(source.readByteArray(PbwBinHeader.SIZE).asUByteArray())
         }
     }
     fun getWorkerFor(watchType: WatchType): Source? {
-        val filename = getManifest(watchType).worker ?: return null
+        val filename = getManifest(watchType)?.worker ?: return null
         return requirePbwBinaryBlob(path, watchType, filename.name)
     }
     fun getPKJSFile(): Source {
@@ -56,7 +57,7 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
             Logger.w { "Unknown watch type in pbw while processing sideload request: $it" }
             return@mapNotNull null
         }
-        val header = getBinaryHeaderFor(watchType)
+        val header = getBinaryHeaderFor(watchType) ?: return@mapNotNull null
         LockerEntryPlatform(
             lockerEntryId = uuid,
             sdkVersion = "${header.sdkVersionMajor.get()}.${header.sdkVersionMinor.get()}",
@@ -78,5 +79,6 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         platforms = platforms,
         appstoreData = null,
         orderIndex = orderIndex,
+        capabilities = info.capabilities,
     )
 }

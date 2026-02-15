@@ -75,6 +75,7 @@ import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.setUser
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButton
 import coredevices.util.GoogleAuthUtil
 import coredevices.util.Platform
@@ -365,6 +366,16 @@ fun BugReportScreen(
                         )
                     }
                 }
+                PebbleElevatedButton(
+                    onClick = {
+                        scope.launch {
+                            platform.openUrl("https://pbl.zip/bugs")
+                        }
+                    },
+                    modifier = Modifier.padding(8.dp),
+                    text = "How to submit a great bug report",
+                    primaryColor = false,
+                )
                 Text(
                     "Tap to see what's working and what's still in development",
                     textAlign = TextAlign.Center,

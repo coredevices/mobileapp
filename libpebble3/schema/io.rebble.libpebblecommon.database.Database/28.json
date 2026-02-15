@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 28,
-    "identityHash": "e611e7f4cfae6b8ae185697e7129781d",
+    "identityHash": "4731fddaa90180caf287f416caec8868",
     "entities": [
       {
         "tableName": "KnownWatchItem",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transportIdentifier` TEXT NOT NULL, `transportType` TEXT NOT NULL, `name` TEXT NOT NULL, `runningFwVersion` TEXT NOT NULL, `serial` TEXT NOT NULL, `connectGoal` INTEGER NOT NULL, `lastConnected` INTEGER, `watchType` TEXT, `color` INTEGER, `nickname` TEXT, `btClassicMacAddress` TEXT, PRIMARY KEY(`transportIdentifier`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transportIdentifier` TEXT NOT NULL, `transportType` TEXT NOT NULL, `name` TEXT NOT NULL, `runningFwVersion` TEXT NOT NULL, `serial` TEXT NOT NULL, `connectGoal` INTEGER NOT NULL, `lastConnected` INTEGER, `watchType` TEXT, `color` INTEGER, `nickname` TEXT, `btClassicMacAddress` TEXT, `capabilities` TEXT, PRIMARY KEY(`transportIdentifier`))",
         "fields": [
           {
             "fieldPath": "transportIdentifier",
@@ -67,6 +67,11 @@
           {
             "fieldPath": "btClassicMacAddress",
             "columnName": "btClassicMacAddress",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "capabilities",
+            "columnName": "capabilities",
             "affinity": "TEXT"
           }
         ],
@@ -651,7 +656,7 @@
       },
       {
         "tableName": "NotificationAppItemEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `muteExpiration` INTEGER DEFAULT null, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, PRIMARY KEY(`packageName`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, PRIMARY KEY(`packageName`))",
         "fields": [
           {
             "fieldPath": "recordHashcode",
@@ -707,12 +712,6 @@
             "columnName": "lastNotified",
             "affinity": "INTEGER",
             "notNull": true
-          },
-          {
-            "fieldPath": "record.muteExpiration",
-            "columnName": "muteExpiration",
-            "affinity": "INTEGER",
-            "defaultValue": "null"
           },
           {
             "fieldPath": "record.vibePatternName",
@@ -1155,11 +1154,104 @@
             "name"
           ]
         }
+      },
+      {
+        "tableName": "WatchPrefItemEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `id` TEXT NOT NULL, `value` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "recordHashcode",
+            "columnName": "recordHashcode",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deleted",
+            "columnName": "deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sync",
+            "columnName": "sync",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "record.id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "record.value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "record.timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "WatchPrefItemSyncEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordId` TEXT NOT NULL, `transport` TEXT NOT NULL, `watchSynchHashcode` INTEGER NOT NULL, PRIMARY KEY(`recordId`, `transport`), FOREIGN KEY(`recordId`) REFERENCES `WatchPrefItemEntity`(`id`) ON UPDATE CASCADE ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transport",
+            "columnName": "transport",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchSynchHashcode",
+            "columnName": "watchSynchHashcode",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "recordId",
+            "transport"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "WatchPrefItemEntity",
+            "onDelete": "CASCADE",
+            "onUpdate": "CASCADE",
+            "columns": [
+              "recordId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e611e7f4cfae6b8ae185697e7129781d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4731fddaa90180caf287f416caec8868')"
     ]
   }
 }

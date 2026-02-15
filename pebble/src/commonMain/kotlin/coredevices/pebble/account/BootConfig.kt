@@ -41,6 +41,8 @@ data class BootConfig(
             val appStoreWatchApps: String,
             @SerialName("appstore/watchfaces")
             val appStoreWatchFaces: String,
+            @SerialName("appstore/application")
+            val appStoreApplication: String,
         )
 
         @Serializable

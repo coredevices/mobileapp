@@ -1,0 +1,5 @@
+Pebble is the official Android app for managing your Pebble and Core Devices smartwatch. Pair your watch, customize your settings, and discover a growing ecosystem of watchfaces, apps, and tools designed for your watch.
+
+Features include:
+- Bluetooth pairing and reconnection
+- Watchface and app gallery browsing

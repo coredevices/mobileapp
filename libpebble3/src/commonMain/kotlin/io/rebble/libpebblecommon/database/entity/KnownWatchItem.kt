@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothClassic
 import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothLe
 import io.rebble.libpebblecommon.database.entity.TransportType.Socket
 import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 
 @Entity
 data class KnownWatchItem(
@@ -25,6 +26,7 @@ data class KnownWatchItem(
     val color: WatchColor? = null,
     val nickname: String? = null,
     val btClassicMacAddress: String? = null,
+    val capabilities: Set<ProtocolCapsFlag>? = null,
 )
 
 enum class TransportType {

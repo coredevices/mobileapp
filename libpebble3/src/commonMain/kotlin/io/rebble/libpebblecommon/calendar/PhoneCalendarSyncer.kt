@@ -16,10 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
-import kotlin.concurrent.atomics.AtomicBoolean
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -36,17 +36,10 @@ class PhoneCalendarSyncer(
 ) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
     private val syncTrigger = MutableSharedFlow<Unit>()
-    private val initialized = AtomicBoolean(false)
+    private var changesFlow: Flow<Unit>? = null
+    private val changesJobMutex = Mutex()
 
     fun init() {
-        if (!systemCalendar.hasPermission()) {
-            logger.w { "No permission" }
-            return
-        }
-        if (!initialized.compareAndSet(expectedValue = false, newValue = true)) {
-            logger.d { "Already initialized" }
-            return
-        }
         logger.v { "init()" }
         libPebbleCoroutineScope.launch {
             libPebbleCoroutineScope.launch {
@@ -57,19 +50,18 @@ class PhoneCalendarSyncer(
             // Make sure the above is collecting already
             delay(1.seconds)
             requestSync()
+            tryStartListeningForChanges()
             libPebbleCoroutineScope.launch {
-                systemCalendar.registerForCalendarChanges().sample(5.seconds).collect {
-                    requestSync()
-                }
-            }
-            libPebbleCoroutineScope.launch {
+                var previousPinsEnabled = watchConfig.value.calendarPins
                 var previousRemindersEnabled = watchConfig.value.calendarReminders
                 var previousShowDeclinedEvents = watchConfig.value.calendarShowDeclinedEvents
                 watchConfig.flow.collect {
-                    if (it.watchConfig.calendarShowDeclinedEvents != previousShowDeclinedEvents ||
+                    if (it.watchConfig.calendarPins != previousPinsEnabled ||
+                        it.watchConfig.calendarShowDeclinedEvents != previousShowDeclinedEvents ||
                         it.watchConfig.calendarReminders != previousRemindersEnabled
                     ) {
                         requestSync()
+                        previousPinsEnabled = it.watchConfig.calendarPins
                         previousRemindersEnabled = it.watchConfig.calendarReminders
                         previousShowDeclinedEvents = it.watchConfig.calendarShowDeclinedEvents
                     }
@@ -78,11 +70,33 @@ class PhoneCalendarSyncer(
         }
     }
 
+    private suspend fun tryStartListeningForChanges() = changesJobMutex.withLock {
+        if (changesFlow != null) {
+            return@withLock
+        }
+        changesFlow = systemCalendar.registerForCalendarChanges()?.sample(5.seconds)
+        changesFlow?.let {
+            libPebbleCoroutineScope.launch {
+                it.collect {
+                    requestSync()
+                }
+            }
+        }
+    }
+
+    fun handlePermissionsGranted() {
+        libPebbleCoroutineScope.launch {
+            tryStartListeningForChanges()
+            requestSync()
+        }
+    }
+
     private suspend fun requestSync() {
         syncTrigger.emit(Unit)
     }
 
     private suspend fun syncDeviceCalendarsToDb() {
+        val pinsEnabled = watchConfig.value.calendarPins
         val remindersEnabled = watchConfig.value.calendarReminders
         val showDeclinedEvents = watchConfig.value.calendarShowDeclinedEvents
         logger.d("syncDeviceCalendarsToDb remindersEnabled=$remindersEnabled showDeclinedEvents=$showDeclinedEvents")
@@ -116,7 +130,7 @@ class PhoneCalendarSyncer(
         val startDate = timeProvider.now() - 1.days
         val endDate = (startDate + 7.days)
         val newPins = allCalendars.flatMap { calendar ->
-            if (!calendar.enabled) {
+            if (!calendar.enabled || !pinsEnabled) {
                 return@flatMap emptyList()
             }
             val events = systemCalendar.getCalendarEvents(calendar, startDate, endDate)

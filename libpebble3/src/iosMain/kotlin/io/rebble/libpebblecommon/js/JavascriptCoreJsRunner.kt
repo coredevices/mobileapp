@@ -47,10 +47,12 @@ class JavascriptCoreJsRunner(
     urlOpenRequests: Channel<String>,
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val httpInterceptorManager: HttpInterceptorManager,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
     private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
+    private val interfaceInstanceRefs = mutableListOf<StableRef<RegisterableJsInterface>>()
     private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
     private val functionRefs = mutableListOf<StableRef<*>>()
     private var navigatorRef: StableRef<JSValue>? = null
@@ -77,15 +79,21 @@ class JavascriptCoreJsRunner(
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, evalFn, remoteTimelineEmulator, appInfo),
+            XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
             JSTimeout(interfacesScope, evalRawFn),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil, remoteTimelineEmulator),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator),
+            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
         interfacesRef = StableRef.create(instances)
         instances.forEach {
+            // Pin each interface instance individually to prevent K/N GC from moving
+            // the receiver object that bound function references (this::method) point to.
+            // Without this, JSC can call an ObjC block whose captured receiver pointer
+            // has been invalidated by K/N GC compaction.
+            interfaceInstanceRefs.add(StableRef.create(it))
+
             // Create a JavaScript object and set properties individually to avoid passing
             // Kotlin Map objects which can be moved by GC
             val jsObject = jsContext.evaluateScript("({})")!!
@@ -157,6 +165,9 @@ class JavascriptCoreJsRunner(
                 it.dispose()
             }
             interfacesRef = null
+            // Dispose all interface instance references
+            interfaceInstanceRefs.forEach { it.dispose() }
+            interfaceInstanceRefs.clear()
             // Dispose all interface map references
             interfaceMapRefs.forEach { it.dispose() }
             interfaceMapRefs.clear()
@@ -218,6 +229,13 @@ class JavascriptCoreJsRunner(
             }
         }
         signalReady()
+    }
+
+    override suspend fun signalInterceptResponse(
+        callbackId: String,
+        result: InterceptResponse
+    ) {
+        TODO("Not supported")
     }
 
     override suspend fun signalNewAppMessageData(data: String?): Boolean {

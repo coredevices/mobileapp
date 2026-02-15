@@ -28,7 +28,7 @@ object TimelineAttributeFactory {
     }
 
     fun createUIntAttribute(type: TimelineAttribute, value: UInt): TimelineItem.Attribute {
-        val content = SUInt(StructMapper(), value or 0x80000000u, Endian.Little).toBytes()
+        val content = SUInt(StructMapper(), value, Endian.Little).toBytes()
         return createAttribute(type.id, content)
     }
 

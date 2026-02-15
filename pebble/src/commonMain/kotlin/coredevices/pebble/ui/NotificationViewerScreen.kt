@@ -46,12 +46,8 @@ fun AppNotificationViewerScreen(
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {}
-            topBarParams.canGoBack(true)
-            topBarParams.goBack.collect {
-                nav.goBack()
-            }
         }
         val libPebble = rememberLibPebble()
         val appWrapperFlow = remember(packageName) {

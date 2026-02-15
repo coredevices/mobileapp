@@ -13,9 +13,9 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction.ActionType
 import io.rebble.libpebblecommon.notification.NotificationDecision
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
-import io.rebble.libpebblecommon.util.PebbleColor
 import io.rebble.libpebblecommon.util.toPebbleColor
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -46,6 +46,7 @@ data class LibPebbleNotification(
             app: NotificationAppItem,
             channel: ChannelItem?,
             notificationConfig: NotificationConfig,
+            notificationProperties: NotificationProperties?,
         ): List<LibPebbleNotificationAction> {
             val dismissAction = LibPebbleNotificationAction.dismissActionFromNotification(
                 packageName = sbn.packageName,
@@ -70,6 +71,7 @@ data class LibPebbleNotification(
                     packageName = sbn.packageName,
                     action = it,
                     notificationConfig = notificationConfig,
+                    notificationProperties = notificationProperties,
                 )
             }
             val replyActions = actions.filter { it.type == ActionType.Reply }

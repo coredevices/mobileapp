@@ -142,6 +142,12 @@ class SystemService(
         }
     }
 
+    override fun factoryReset() {
+        scope.launch {
+            protocolHandler.send(ResetMessage.FactoryReset)
+        }
+    }
+
     fun init() {
         scope.launch {
             protocolHandler.inboundMessages.collect { packet ->

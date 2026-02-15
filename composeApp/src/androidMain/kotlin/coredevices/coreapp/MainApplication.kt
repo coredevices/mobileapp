@@ -1,7 +1,9 @@
 package coredevices.coreapp
 
 import android.app.Application
+import android.os.Build.VERSION.SDK_INT
 import android.os.StrictMode
+import androidx.compose.foundation.layout.add
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -12,6 +14,8 @@ import co.touchlab.kermit.Severity
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
@@ -28,18 +32,23 @@ import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.watchModule
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigHolder
 import coredevices.util.R
+import io.rebble.libpebblecommon.connection.AppContext
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
 import kotlin.time.toJavaDuration
 
+private val logger = Logger.withTag("MainApplication")
+
 class MainApplication : Application(), SingletonImageLoader.Factory {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val fileLogWriter: FileLogWriter by inject()
-    private val logger = Logger.withTag("MainApplication")
+    private val coreConfigHolder: CoreConfigHolder by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -70,18 +79,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
                 showPushNotification = false,
             )
         )
-        val workRequest = PeriodicWorkRequestBuilder<SyncWorker>(
-            repeatInterval = BACKGROUND_REFRESH_PERIOD.toJavaDuration(),
-        ).setConstraints(
-            Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-        ).build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            uniqueWorkName = "core_refresh",
-            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
-            request = workRequest,
-        )
+        scheduleBackgroundJob(AppContext(this), coreConfigHolder.config.value)
         commonAppDelegate.init()
     }
 
@@ -143,7 +141,28 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
             }
             .components {
                 add(SvgDecoder.Factory())
+                if (SDK_INT >= 28) {
+                    add(AnimatedImageDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
             }
             .build()
     }
+}
+
+fun scheduleBackgroundJob(appContext: AppContext, coreConfig: CoreConfig) {
+    logger.d { "scheduleBackgroundJob for ${coreConfig.weatherSyncInterval}" }
+    val workRequest = PeriodicWorkRequestBuilder<SyncWorker>(
+        repeatInterval = coreConfig.weatherSyncInterval.toJavaDuration(),
+    ).setConstraints(
+        Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+    ).build()
+    WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
+        uniqueWorkName = "core_refresh",
+        existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+        request = workRequest,
+    )
 }

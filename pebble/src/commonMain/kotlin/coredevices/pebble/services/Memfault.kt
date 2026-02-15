@@ -2,6 +2,7 @@ package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.pebble.Platform
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.util.CommonBuildKonfig
 import io.ktor.client.HttpClient
@@ -14,6 +15,7 @@ import io.ktor.client.request.setBody
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.encodeURLParameter
 import io.ktor.http.isSuccess
+import io.ktor.http.userAgent
 import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -25,6 +27,7 @@ import kotlin.time.Instant
 class Memfault(
     private val httpClient: HttpClient,
     private val settings: Settings,
+    private val platform: Platform,
 ) {
     private val logger = Logger.withTag("Memfault")
 
@@ -58,7 +61,7 @@ class Memfault(
             }
         }  catch (e: IOException) {
             logger.w(e) { "Error checking for updates from memfault: ${e.message}" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         return when (response.status) {
             HttpStatusCode.OK -> try {
@@ -74,7 +77,7 @@ class Memfault(
                 )
                 logger.d { "fwVersion=$fwVersion" }
                 if (fwVersion == null) {
-                    FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                    FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
                 } else {
                     FirmwareUpdateCheckResult.FoundUpdate(
                         version = fwVersion,
@@ -84,10 +87,10 @@ class Memfault(
                 }
             } catch (e: NoTransformationFoundException) {
                 logger.e("error: ${e.message}", e)
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             } catch (e: ContentConvertException) {
                 logger.e("error: ${e.message}", e)
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             }
 
             HttpStatusCode.NoContent -> {
@@ -97,7 +100,7 @@ class Memfault(
 
             else -> {
                 logger.e { "Error fetching latest FW: ${response.status}" }
-                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for firmware update")
+                FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
             }
         }
     }
@@ -119,6 +122,7 @@ class Memfault(
             httpClient.post(url) {
                 header("Memfault-Project-Key", token)
                 setBody(chunk)
+                userAgent(platform.name)
             }
         } catch (e: IOException) {
             logger.w(e) { "Error sending chunk to memfault: ${e.message}" }

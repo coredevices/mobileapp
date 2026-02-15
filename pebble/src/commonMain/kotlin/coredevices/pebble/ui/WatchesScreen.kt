@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Battery0Bar
@@ -139,9 +140,10 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
 
         val title = stringResource(Res.string.devices)
+        val listState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(false)
+            topBarParams.searchAvailable(null)
             topBarParams.actions {
                 if (isScanningBle) {
                     TopBarIconButtonWithToolTip(
@@ -163,7 +165,11 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 }
             }
             topBarParams.title(title)
-            topBarParams.canGoBack(false)
+            launch {
+                topBarParams.scrollToTop.collect {
+                    listState.animateScrollToItem(0)
+                }
+            }
 
             if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
                 firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
@@ -301,7 +307,8 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                state = listState,
             ) {
                 items(
                     items = watches,
@@ -374,7 +381,7 @@ fun PebbleDevice.stateText(
     val installingState = when (firmwareUpdateState) {
         is FirmwareUpdater.FirmwareUpdateStatus.InProgress -> {
             val progress by firmwareUpdateState.progress.collectAsState()
-            " - Updating to firmware ${firmwareUpdateState.update.version.stringVersion} (${(progress * 100).toInt()}%)"
+            " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion} (${(progress * 100).toInt()}%)"
         }
 
         is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.ErrorStarting -> " - Error starting update: ${firmwareUpdateState.error.message()}"
@@ -384,7 +391,7 @@ fun PebbleDevice.stateText(
             is LanguagePackInstallState.Downloading -> " - downloading language pack: ${languagePackInstallState.language}"
         }
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
-        is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to firmware ${firmwareUpdateState.update.version.stringVersion}"
+        is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion}"
     }
     val btClassicText = when {
         this is ActiveDevice && usingBtClassic -> " (BT Classic)"
@@ -581,7 +588,7 @@ fun WatchDetails(
         if (showFirmwareUpdateConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showFirmwareUpdateConfirmDialog = false },
-                title = { Text("Install Firmware ${firmwareUpdateAvailable.version.stringVersion}") },
+                title = { Text("Install PebbleOS ${firmwareUpdateAvailable.version.stringVersion}") },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Text(firmwareUpdateAvailable.notes)
@@ -597,20 +604,20 @@ fun WatchDetails(
             )
         }
         PebbleElevatedButton(
-            text = "Update Firmware to ${firmwareUpdateAvailable.version.stringVersion}",
+            text = "Update PebbleOS to ${firmwareUpdateAvailable.version.stringVersion}",
             onClick = {
                 logger.d { "Starting firmware update from watches screen" }
                 showFirmwareUpdateConfirmDialog = true
             },
             enabled = bluetoothState.enabled(),
             icon = Icons.Default.SystemUpdateAlt,
-            contentDescription = "Update Firmware",
+            contentDescription = "Update PebbleOS",
             primaryColor = true,
             modifier = Modifier.padding(vertical = 5.dp),
         )
     } else if (loggedIn == null && watch is CommonConnectedDevice && !watch.watchType.isCoreDevice()) {
         PebbleElevatedButton(
-            text = "Login to Rebble to check for firmware updates",
+            text = "Login to Rebble to check for PebbleOS updates",
             onClick = {
                 uriHandler.openUri(REBBLE_LOGIN_URI)
             },

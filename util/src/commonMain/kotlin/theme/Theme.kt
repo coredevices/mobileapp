@@ -26,6 +26,7 @@ import theme.CoreAppTheme.Companion.asCoreAppTheme
 val coreOrange = Color(0xFFFA4A36)
 val coreGrey = Color(0xFF333333)
 val coreDarkGrey = Color(0xFF2B2930)
+val coreDarkGreen = Color(0xFF157a30)
 private val error = Color(0xFFFA6B66)
 val greyScheme = darkColorScheme(
     primary = coreOrange,

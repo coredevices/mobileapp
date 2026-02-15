@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.navigation.NavDeepLink
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.NavUri
 import androidx.navigation.compose.NavHost
@@ -24,6 +25,7 @@ import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
+import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
 import coredevices.ui.GenericWebViewScreen
@@ -38,6 +40,7 @@ private val logger = Logger.withTag("AppNavHost")
 @Composable
 fun AppNavHost(navController: NavHostController, startDestination: Any) {
     val deepLinks: CoreDeepLinkHandler = koinInject()
+    val pebbleDeepLinks: PebbleDeepLinkHandler = koinInject()
     val scope = rememberCoroutineScope()
     LaunchedEffect(navController) { // React to NavController changes
         // This ensures the graph is available before doing any deep link
@@ -57,6 +60,20 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                             }
                         } catch (e: IllegalArgumentException) {
                             logger.w(e) { "Failed to navigate to $route" }
+                        }
+                    }
+                }
+                scope.launch {
+                    pebbleDeepLinks.navigateToPebbleDeepLink.collect { route ->
+                        if (route == null) {
+                            return@collect
+                        }
+                        val isOnWatchHome = navController.currentBackStackEntry?.destination?.hasRoute<PebbleRoutes.WatchHomeRoute>() == true
+                        // Pebble deep links need us to navigate to WatchHomeScreen - but only if we
+                        // aren't already there.
+                        if (!isOnWatchHome) {
+                            logger.d { "Navigating to WatchHomeRoute for pebble deep link" }
+                            navController.navigate(PebbleRoutes.WatchHomeRoute)
                         }
                     }
                 }
@@ -87,7 +104,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             experimentalDevices.IndexScreen(coreNav, topBarParams)
         })
         if (CommonBuildKonfig.QA) {
-            composable<CommonRoutes.BugReport> {
+            composable<CommonRoutes.BugReport>(
+                deepLinks = listOf(
+                    NavDeepLink("pebblecore://deep-link/bug-report?pebble={pebble}")
+                )
+            ) {
                 val route: CommonRoutes.BugReport = it.toRoute()
                 BugReportScreen(
                     coreNav = coreNav,

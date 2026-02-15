@@ -6,8 +6,10 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SUByte
+import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.SUShort
 import io.rebble.libpebblecommon.util.Endian
+import kotlin.time.Instant
 
 open class BlobCommand constructor(message: Message, token: UShort, database: BlobDatabase) :
     PebblePacket(
@@ -15,8 +17,9 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
     ) {
     enum class Message(val value: UByte) {
         Insert(0x01u),
+        InsertWithTimestamp(0x0Du),
         Delete(0x04u),
-        Clear(0x05u)
+        Clear(0x05u),
     }
 
     val command = SUByte(m, message.value)
@@ -31,6 +34,22 @@ open class BlobCommand constructor(message: Message, token: UShort, database: Bl
     ) : BlobCommand(
         Message.Insert, token, database
     ) {
+        val keySize = SUByte(m, key.size.toUByte())
+        val targetKey = SBytes(m, key.size, key)
+        val valSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)
+        val targetValue = SBytes(m, value.size, value)
+    }
+
+    open class InsertWithTimestampCommand(
+        token: UShort,
+        database: BlobDatabase,
+        key: UByteArray,
+        value: UByteArray,
+        timestamp: Instant,
+    ) : BlobCommand(
+        Message.InsertWithTimestamp, token, database
+    ) {
+        val timestamp = SUInt(m,timestamp.epochSeconds.toUInt(), endianness = Endian.Little)
         val keySize = SUByte(m, key.size.toUByte())
         val targetKey = SBytes(m, key.size, key)
         val valSize = SUShort(m, value.size.toUShort(), endianness = Endian.Little)

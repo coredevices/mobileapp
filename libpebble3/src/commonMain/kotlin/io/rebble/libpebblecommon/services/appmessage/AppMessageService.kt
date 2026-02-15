@@ -13,6 +13,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -35,7 +37,7 @@ class AppMessageService(
     private val scope: ConnectionCoroutineScope
 ) : ProtocolService, ConnectedPebble.AppMessages {
     private val logger = Logger.withTag("AppMessageService")
-    private val receivedMessages = HashMap<Uuid, Channel<AppMessageData>>()
+    private val receivedMessages = HashMap<Uuid, MutableSharedFlow<AppMessageData>>()
     override val transactionSequence: Iterator<UByte> = AppMessageTransactionSequence().iterator()
     private val mapAccessMutex = Mutex()
 
@@ -43,7 +45,7 @@ class AppMessageService(
         protocolHandler.inboundMessages.onEach {
             when (it) {
                 is AppMessage.AppMessagePush -> {
-                    getReceivedMessagesChannel(it.uuid.get()).trySend(it.appMessageData())
+                    getReceivedMessagesChannel(it.uuid.get()).emit(it.appMessageData())
                 }
             }
         }.launchIn(scope)
@@ -79,8 +81,8 @@ class AppMessageService(
 
     override suspend fun sendAppMessageResult(appMessageResult: AppMessageResult) {
         val appMessage = when (appMessageResult) {
-            is AppMessageResult.ACK -> AppMessage.AppMessageACK(appMessageResult.transactionId.toUByte())
-            is AppMessageResult.NACK -> AppMessage.AppMessageNACK(appMessageResult.transactionId.toUByte())
+            is AppMessageResult.ACK -> AppMessage.AppMessageACK(appMessageResult.transactionId)
+            is AppMessageResult.NACK -> AppMessage.AppMessageNACK(appMessageResult.transactionId)
         }
         protocolHandler.send(appMessage)
     }
@@ -94,14 +96,14 @@ class AppMessageService(
     }
 
     override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> {
-        return suspend { getReceivedMessagesChannel(appUuid) }.asFlow().flatMapConcat { it.receiveAsFlow() }
+        return suspend { getReceivedMessagesChannel(appUuid) }.asFlow().flatMapConcat { it }
     }
 
-    private suspend fun getReceivedMessagesChannel(appUuid: Uuid): Channel<AppMessageData> {
+    private suspend fun getReceivedMessagesChannel(appUuid: Uuid): MutableSharedFlow<AppMessageData> {
         receivedMessages[appUuid]?.let { return it }
 
         return mapAccessMutex.withLock {
-            receivedMessages.getOrPut(appUuid) { Channel(APPMESSAGE_BUFFER_SIZE) }
+            receivedMessages.getOrPut(appUuid) { MutableSharedFlow() }
         }
     }
 }

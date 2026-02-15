@@ -1,0 +1,1 @@
+Pebble is the Android app for managing Pebble and Core Devices smartwatch.

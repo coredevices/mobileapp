@@ -68,13 +68,22 @@ enum class NotificationAppSort {
 }
 
 @Composable
-fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack: Boolean) {
+fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    LaunchedEffect(Unit) {
+        topBarParams.title("Notifications")
+        topBarParams.actions {}
+    }
+
+    NotificationsScreenContent(topBarParams, nav)
+}
+
+@Composable
+fun NotificationsScreenContent(topBarParams: TopBarParams, nav: NavBarNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val viewModel = koinViewModel<NotificationScreenViewModel>()
         val pebbleFeatures = koinInject<PebbleFeatures>()
-
-        LaunchedEffect(Unit) {
-            topBarParams.title("Notifications")
+        fun gotoDefaultTab() {
+            viewModel.tab.value = NotificationTab.Apps
         }
 
         Column {
@@ -99,8 +108,8 @@ fun NotificationsScreen(topBarParams: TopBarParams, nav: NavBarNav, canGoBack: B
                 }
             }
             when (viewModel.tab.value) {
-                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav, canGoBack)
-                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav, canGoBack)
+                NotificationTab.Apps -> NotificationAppsScreen(topBarParams, nav, ::gotoDefaultTab)
+                NotificationTab.Contacts -> NotificationContactsScreen(topBarParams, nav, ::gotoDefaultTab)
 //            NotificationTab.Rules -> NotificationRulesScreen(topBarParams, nav)
 //            NotificationTab.History -> NotificationHistoryScreen(topBarParams, nav)
             }
@@ -115,7 +124,6 @@ fun NotificationsScreenPreview() {
         NotificationsScreen(
             topBarParams = WrapperTopBarParams,
             nav = NoOpNavBarNav,
-            canGoBack = false,
         )
     }
 }
@@ -132,9 +140,8 @@ fun NotificationAppCard(
     clickable: Boolean,
     showBadge: Boolean,
 ) {
-    val reallyClickable = clickable && platform == Platform.Android
     val app = entry.app
-    val modifier = if (reallyClickable) {
+    val modifier = if (clickable) {
         Modifier.clickable {
             nav.navigateTo(PebbleNavBarRoutes.NotificationAppRoute(app.packageName))
         }
@@ -187,7 +194,7 @@ fun NotificationAppCard(
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (reallyClickable) {
+                if (clickable) {
                     Icon(
                         Icons.Default.MoreHoriz,
                         "Details",

@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
@@ -58,7 +59,7 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
     ) {
         server?.stopSuspend()
         logger.i { "Starting server for $identifier on port $PORT" }
-        server = embeddedServer(CIO, configure = {
+        val newServer = embeddedServer(CIO, configure = {
             connectors.add(EngineConnectorBuilder().apply {
                 host = "0.0.0.0"
                 port = PORT
@@ -133,7 +134,20 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                     }
                 }
             }
-        }.startSuspend()
+        }
+        // Assign before starting so stop() can always reach the server,
+        // even if startSuspend() is cancelled by collectLatest.
+        server = newServer
+        try {
+            newServer.startSuspend()
+        } catch (e: CancellationException) {
+            newServer.stop()
+            throw e
+        } catch (e: Exception) {
+            newServer.stop()
+            server = null
+            logger.e(e) { "Failed to start dev connection server on port $PORT" }
+        }
     }
 
     override fun stop() {

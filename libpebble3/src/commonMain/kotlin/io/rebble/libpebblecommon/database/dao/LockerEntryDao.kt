@@ -24,6 +24,12 @@ interface LockerEntryRealDao : LockerEntryDao {
     @Query("""
         SELECT id FROM LockerEntryEntity
         WHERE deleted = 0
+    """)
+    fun getAllUuidsFlow(): Flow<List<Uuid>>
+
+    @Query("""
+        SELECT id FROM LockerEntryEntity
+        WHERE deleted = 0
         AND type = :type
         ORDER BY orderIndex ASC
         LIMIT :limit
@@ -130,4 +136,34 @@ interface LockerEntryRealDao : LockerEntryDao {
         END
     """)
     suspend fun updateSync(syncLimit: Int)
+
+    @Query("""
+        UPDATE LockerEntryEntity
+        SET active = 1
+        WHERE id = :uuid
+        AND active != 1
+    """)
+    suspend fun _setActiveForUuid(uuid: String)
+
+    @Query("""
+        UPDATE LockerEntryEntity
+        SET active = 0
+        WHERE id != :uuid
+        AND active = 1
+    """)
+    suspend fun _setNonActiveExceptUuid(uuid: String)
+
+    @Transaction
+    suspend fun setActive(uuid: Uuid) {
+        _setNonActiveExceptUuid(uuid.toString())
+        _setActiveForUuid(uuid.toString())
+    }
+
+    @Query("""
+        SELECT * FROM LockerEntryEntity
+        WHERE active = 1
+        AND type = 'watchface'
+        LIMIT 1
+    """)
+    fun getActiveWatchface(): Flow<LockerEntry?>
 }

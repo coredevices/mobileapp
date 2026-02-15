@@ -103,7 +103,7 @@ sealed class BaseAttribute {
         override val attribute: TimelineAttribute,
         val icon: TimelineIcon,
     ) : BaseAttribute() {
-        override fun asAttribute(): TimelineItem.Attribute = createUIntAttribute(attribute, icon.id)
+        override fun asAttribute(): TimelineItem.Attribute = createUIntAttribute(attribute, icon.id or 0x80000000u)
     }
 
     @Serializable
