@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,20 +26,24 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.HeartBroken
+import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,16 +71,18 @@ import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
+import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
+import coredevices.util.CoreConfigFlow
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
-import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
+import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +90,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -105,22 +111,27 @@ class LockerAppViewModel(
 //    var storeEntries by mutableStateOf<List<AppVariant>?>(null)
     var addedToLocker by mutableStateOf(false)
     var selectedStoreEntry by mutableStateOf<CommonApp?>(null)
+    var hearts by mutableStateOf<Int?>(null)
 
-    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource) {
+    fun loadAppFromStore(id: String, watchType: WatchType, source: AppstoreSource, useCache: Boolean) {
         val service = get<AppstoreService> { parametersOf(source) }
         viewModelScope.launch {
-            val result = service.fetchAppStoreApp(id, watchType)?.data?.firstOrNull()
+            val result = service.fetchAppStoreApp(id, watchType, useCache)?.data?.firstOrNull()
 //            if (result != null) {
 //                storeEntries = getAppVariants(Uuid.parse(result.uuid), watchType, sources)
 //            }
             selectedStoreEntry = result?.asCommonApp(
-                watchType,
-                platform,
-                source,
-                service.cachedCategoriesOrDefaults(AppType.fromString(result.type))
-            )
+                watchType = watchType,
+                platform = platform,
+                source = source,
+                categories = service.cachedCategoriesOrDefaults(AppType.fromString(result.type)),
+            ).also {
+                hearts = it?.hearts
+            }
         }
     }
+
+    fun serviceFor(entry: CommonApp) = get<AppstoreService> { parametersOf(entry.appstoreSource) }
 
 //    private suspend fun getAppVariants(
 //        uuid: Uuid,
@@ -174,63 +185,70 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val connected = lastConnectedWatch is ConnectedPebbleDevice
         val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
         val viewModel = koinViewModel<LockerAppViewModel>()
-        var showRemoveConfirmDialog by remember { mutableStateOf(false) }
+        var showRemoveConfirmDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, watchType)
         val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
             lockerEntry ?: viewModel.selectedStoreEntry
         }
+        val storeEntry = viewModel.selectedStoreEntry
         val storeSource = appstoreSourceFromId(storeSourceId)
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
+        val coreConfigFlow: CoreConfigFlow = koinInject()
+        val coreConfig by coreConfigFlow.flow.collectAsState()
+
+        fun reloadFromStore(useCache: Boolean) {
+            if (storeId != null && storeSource != null) {
+                viewModel.loadAppFromStore(
+                    id = storeId,
+                    watchType = watchType,
+                    source = storeSource,
+                    useCache = useCache,
+                )
+            }
+        }
 
         LaunchedEffect(storeId, storeSource, watchType) {
-            if (storeId != null && storeSource != null) {
-                viewModel.loadAppFromStore(storeId, watchType, storeSource)
-            }
+            reloadFromStore(useCache = true)
         }
 
         LaunchedEffect(entry) {
             topBarParams.searchAvailable(null)
             topBarParams.actions {
-                if (showRemoveConfirmDialog && entry != null) {
-                    AlertDialog(
-                        onDismissRequest = { showRemoveConfirmDialog = false },
-                        title = { Text("Remove ${entry.title}?") },
-                        text = { Text("Are you sure you want to remove this app from your Pebble?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                // Don't use local scope: that will die because we moved back
-                                GlobalScope.launch {
-                                    showRemoveConfirmDialog = false
-                                    logger.d { "removing app ${entry.uuid}" }
-                                    topBarParams.showSnackbar("Removing ${entry.title}")
+                if (entry != null) {
+                    ConfirmDialog(
+                        show = showRemoveConfirmDialog,
+                        title = "Remove ${entry.title}?",
+                        text = "Are you sure you want to remove this app from your Pebble?",
+                        onConfirm = {
+                            // Don't use local scope: that will die because we moved back
+                            GlobalScope.launch {
+                                logger.d { "removing app ${entry.uuid}" }
+                                topBarParams.showSnackbar("Removing ${entry.title}")
+                                if (!coreConfig.useNativeAppStoreV2) {
                                     withContext(Dispatchers.Main) {
                                         navBarNav.goBack()
                                     }
-                                    val removed = libPebble.removeApp(entry.uuid)
-                                    nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
-                                    logger.d { "removed = $removed" }
-                                    topBarParams.showSnackbar("Removed ${entry.title}")
                                 }
-                            }) { Text("Remove") }
+                                val removed = libPebble.removeApp(entry.uuid)
+                                nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
+                                logger.d { "removed = $removed" }
+                                topBarParams.showSnackbar("Removed ${entry.title}")
+                            }
                         },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                showRemoveConfirmDialog = false
-                            }) { Text("Cancel") }
-                        }
+                        confirmText = "Remove",
                     )
                 }
                 val showRemove = entry?.commonAppType is CommonAppType.Locker
                 if (showRemove) {
                     TopBarIconButtonWithToolTip(
-                        onClick = { showRemoveConfirmDialog = true },
+                        onClick = { showRemoveConfirmDialog.value = true },
                         icon = Icons.Filled.Delete,
                         description = "Remove",
-                        enabled = !showRemoveConfirmDialog,
+                        enabled = !showRemoveConfirmDialog.value,
                     )
                 }
             }
@@ -240,9 +258,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 5.dp)
         ) {
             entry?.let { entry ->
-                if (entry.commonAppType is CommonAppType.Store && entry.commonAppType.headerImageUrl != null) {
+                if (storeEntry?.commonAppType is CommonAppType.Store && storeEntry.commonAppType.headerImageUrl != null) {
                     AsyncImage(
-                        model = entry.commonAppType.headerImageUrl,
+                        model = storeEntry.commonAppType.headerImageUrl,
                         contentDescription = "banner",
                         modifier = Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.FillWidth,
@@ -270,14 +288,76 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 modifier = Modifier.padding(vertical = 5.dp),
                             )
                         }
-                        if (entry.hearts != null) {
-                            Row(modifier = Modifier.padding(vertical = 5.dp)) {
-                                Icon(
-                                    Icons.Outlined.Favorite,
-                                    contentDescription = "Hearts",
-                                )
+                        val hearts = if (viewModel.hearts != null) {
+                            viewModel.hearts
+                        } else {
+                            entry.hearts
+                        }
+                        val isHearted = entry.isHearted()
+                        if (hearts != null && isHearted != null) {
+                            Row(modifier = Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                val service = remember(entry) { viewModel.serviceFor(entry) }
+                                val loggedInForHearts = remember(entry) { service.isLoggedIn() }
+                                val addUrl = remember(storeEntry) {
+                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.addHeartUrl
+                                }
+                                val removeUrl = remember(storeEntry) {
+                                    (storeEntry?.commonAppType as? CommonAppType.Store)?.removeHeartUrl
+                                }
+                                var isChanging by remember { mutableStateOf(false) }
+                                val canAddAndRemove = loggedInForHearts && addUrl != null && removeUrl != null && entry.storeId != null && !isChanging
+                                val icon = remember(entry, isHearted) {
+                                    when {
+                                        isHearted -> Icons.Outlined.Favorite
+                                        else -> Icons.Outlined.FavoriteBorder
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (entry.storeId == null) {
+                                            return@IconButton
+                                        }
+                                        scope.launch {
+                                            if (canAddAndRemove) {
+                                                if (!isHearted) {
+                                                    isChanging = true
+                                                    val result = service.addHeart(addUrl, entry.storeId)
+                                                    isChanging = false
+                                                    if (result) {
+                                                        viewModel.hearts?.let { viewModel.hearts = it + 1 }
+                                                        reloadFromStore(useCache = false)
+                                                    } else {
+                                                        topBarParams.showSnackbar("Failed to heart app")
+                                                    }
+                                                } else {
+                                                    isChanging = true
+                                                    val result = service.removeHeart(removeUrl, entry.storeId)
+                                                    isChanging = false
+                                                    if (result) {
+                                                        viewModel.hearts?.let { viewModel.hearts = it - 1 }
+                                                        reloadFromStore(useCache = false)
+                                                    } else {
+                                                        topBarParams.showSnackbar("Failed to remove heart")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.animateContentSize(),
+                                    enabled = canAddAndRemove,
+                                ) {
+                                    Icon(
+                                        icon,
+                                        contentDescription = "Hearts",
+                                        tint = if (isHearted) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            LocalContentColor.current
+                                        },
+                                    )
+                                }
                                 Text(
-                                    text = "${entry.hearts}",
+                                    text = "$hearts",
                                     modifier = Modifier.padding(start = 5.dp),
                                 )
                             }
@@ -369,9 +449,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     )
                 }
                 // Only show for store, right now (until we figure out populating data or locker)
-                if (entry.capabilities.isNotEmpty() && entry.commonAppType is CommonAppType.Store) {
+                if (storeEntry?.capabilities?.isNotEmpty() == true) {
                     FlowRow(modifier = Modifier.padding(5.dp)) {
-                        entry.capabilities.forEach { permission ->
+                        storeEntry.capabilities.forEach { permission ->
                             PermissionItem(permission, entry, topBarParams)
                         }
                     }
@@ -486,14 +566,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         )
                     }
                 }
-                val screenshotsToDisplay = remember(entry) {
-                    when (entry.commonAppType) {
+                val screenshotsToDisplay = remember(storeEntry) {
+                    when (storeEntry?.commonAppType) {
                         is CommonAppType.Store -> {
 //                            when (entry.type) {
 //                                AppType.Watchface -> entry.commonAppType.allScreenshotUrls.drop(1)
 //                                AppType.Watchapp -> entry.commonAppType.allScreenshotUrls
 //                            }
-                            entry.commonAppType.allScreenshotUrls.drop(1)
+                            storeEntry.commonAppType.allScreenshotUrls.drop(1)
                         }
                         else -> emptyList()
                     }
@@ -577,6 +657,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                     )
                 }
+                storeSource?.let { storeSource ->
+                    PropertyRow(
+                        name = "STORE",
+                        value = storeSource.title,
+                    )
+                }
             }
         }
     }
@@ -600,7 +686,7 @@ private fun PropertyRow(
         Text(
             text = name,
             color = Color.Gray,
-            modifier = Modifier.width(120.dp),
+            modifier = Modifier.width(130.dp),
             maxLines = 1
         )
         if (!multiRow) {
@@ -667,7 +753,7 @@ suspend fun LibPebble.launchApp(
         try {
             withTimeout(15.seconds) {
                 topBarParams.showSnackbar("Waiting to sync $typeText to watch...")
-                setAppOrder(entry.uuid, -1)
+                setAppOrder(entry.uuid, orderIndexForInsert(entry.type))
             }
         } catch (_: TimeoutCancellationException) {
             logger.w { "timed out waiting for order change to sync to watch" }

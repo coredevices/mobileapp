@@ -28,7 +28,20 @@ interface PebbleQuietTimeActions {
 }
 
 interface PebbleTimelineActions {
-    fun insertTimelinePin(pinJson: String, appUuid: String)
+    /**
+     * Builds a pin from individual parameters (generating a UUID internally), inserts it, and
+     * returns the generated pin ID.
+     *
+     * @param epochSeconds Unix timestamp for the pin. Uses current time if null or <= 0.
+     */
+    fun insertTimelinePinRich(
+        appUuid: String,
+        title: String,
+        body: String,
+        subtitle: String?,
+        iconCode: String?,
+        epochSeconds: Long?,
+    ): String = ""
     fun deleteTimelinePin(appUuid: String, pinId: String)
 }
 
@@ -37,6 +50,8 @@ interface PebbleWatchInfoActions {
     fun isWatchConnected(): Boolean
     fun getConnectedWatchName(): String?
     suspend fun getWatchScreenshotBase64(): String
+    /** Returns the watch screenshot as raw PNG bytes, or null on failure. */
+    suspend fun getWatchScreenshotBytes(): ByteArray? = null
     fun setBacklightMotion(enabled: Boolean)
 }
 

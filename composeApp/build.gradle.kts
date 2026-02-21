@@ -14,6 +14,7 @@ plugins {
     alias(libs.plugins.firebaseCrashlytics)
     alias(libs.plugins.androidVersion)
     alias(libs.plugins.nativeCocoaPods)
+    alias(libs.plugins.kotlinx.atomicfu)
 }
 
 val properties = Properties().apply {
@@ -117,7 +118,7 @@ kotlin {
                 }.standardOutput.asText.get().trim()
                 linkerOpts(
                     "-framework", "LibPebbleSwift", "-F"+dir.absolutePath,
-                    "-framework", "CoreML",
+                    "-weak_framework", "CoreML",
                     "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
                 )
             }

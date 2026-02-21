@@ -1,11 +1,7 @@
 package coredevices.pebble.account
 
 import com.russhwolf.settings.Settings
-import coredevices.pebble.services.Github
-import coredevices.pebble.services.OAuthService
 import coredevices.pebble.services.OAuthToken
-import dev.gitlive.firebase.auth.OAuthCredential
-import io.rebble.libpebblecommon.connection.TokenProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

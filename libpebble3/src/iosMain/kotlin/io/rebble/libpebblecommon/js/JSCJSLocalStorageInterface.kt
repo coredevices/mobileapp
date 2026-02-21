@@ -24,6 +24,15 @@ class JSCJSLocalStorageInterface(
         "key" to this::key
     )
     override val name = "localStorage"
+
+    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+        "getItem" -> getItem(args.getOrNull(0))
+        "setItem" -> { setItem(args.getOrNull(0), args.getOrNull(1)); null }
+        "removeItem" -> { removeItem(args.getOrNull(0)); null }
+        "clear" -> { clear(); null }
+        "key" -> key((args[0] as Number).toDouble())
+        else -> error("Unknown method: $method")
+    }
     private lateinit var localStorage: JSManagedValue
     override fun onRegister(jsContext: JSContext) {
         localStorage = JSManagedValue(jsContext["localStorage"]!!)

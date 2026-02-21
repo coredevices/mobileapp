@@ -16,6 +16,8 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
@@ -24,6 +26,8 @@ import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
+import platform.Foundation.NSData
+import platform.Foundation.create
 import kotlin.experimental.ExperimentalObjCName
 import kotlin.native.ObjCName
 import kotlin.time.Clock
@@ -37,11 +41,20 @@ private val shortcutsLogger = Logger.withTag("IOSDelegateShortcuts")
  * All methods here are exposed to Swift via @ObjCName and are called from PebbleShortcuts.swift.
  * This keeps shortcut-related glue separated from the core iOS app delegate logic.
  */
+@OptIn(ExperimentalObjCName::class)
 object IOSDelegateShortcuts : KoinComponent {
     private val appActions: PebbleAppActions by inject()
     private val notificationActions: PebbleNotificationActions by inject()
     private val quietTimeActions: PebbleQuietTimeActions by inject()
     private val timelineActions: PebbleTimelineActions by inject()
+
+    @ObjCName("IOSShortcutItem")
+    data class IOSShortcutItem(
+        val id: String,
+        val title: String,
+        val subtitle: String? = null,
+        val isMuted: Boolean = false
+    )
 
     /**
      * Called from the iOS Shortcut to send a simple notification (title + body) to the watch.
@@ -54,53 +67,35 @@ object IOSDelegateShortcuts : KoinComponent {
 
     /**
      * Called from the iOS Shortcut to get the list of timeline colors for the picker.
-     * Returns JSON: [{"id":"","title":"None"},{"id":"Orange","title":"Orange"},...]
      */
     @OptIn(ExperimentalObjCName::class)
     @ObjCName("getTimelineColorsForShortcutsWithCompletion")
-    fun getTimelineColorsForShortcuts(callback: (String) -> Unit) {
-        GlobalScope.launch {
-            fun escape(s: String) = s
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-            val none = """{"id":"","title":"None"}"""
-            val colors = TimelineColor.entries.map {
-                """{"id":"${it.name}","title":"${escape(it.displayName)}"}"""
-            }
-            val json = listOf(none) + colors
-            withContext(Dispatchers.Main) { callback("[${json.joinToString(",")}]") }
+    fun getTimelineColorsForShortcuts(callback: (List<IOSShortcutItem>) -> Unit) {
+        val none = IOSShortcutItem("", "None")
+        val colors = TimelineColor.entries.map {
+            IOSShortcutItem(it.name, it.displayName)
         }
+        callback(listOf(none) + colors)
     }
 
     /**
      * Called from the iOS Shortcut to get the list of timeline icons for the picker.
-     * Returns JSON: [{"id":"","title":"None"},{"id":"system://images/GENERIC_SMS","title":"Generic Sms"},...]
      */
     @OptIn(ExperimentalObjCName::class)
     @ObjCName("getTimelineIconsForShortcutsWithCompletion")
-    fun getTimelineIconsForShortcuts(callback: (String) -> Unit) {
-        GlobalScope.launch {
-            fun escape(s: String) = s
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-            fun iconTitle(icon: TimelineIcon) = icon.code
-                .replace("system://images/", "")
-                .replace("_", " ")
-                .lowercase()
-                .split(" ")
-                .joinToString(" ") { it.replaceFirstChar { c -> c.uppercaseChar() } }
+    fun getTimelineIconsForShortcuts(callback: (List<IOSShortcutItem>) -> Unit) {
+        fun iconTitle(icon: TimelineIcon) = icon.code
+            .replace("system://images/", "")
+            .replace("_", " ")
+            .lowercase()
+            .split(" ")
+            .joinToString(" ") { it.replaceFirstChar { c -> c.uppercaseChar() } }
 
-            val none = """{"id":"","title":"None"}"""
-            val icons = TimelineIcon.entries.map {
-                """{"id":"${escape(it.code)}","title":"${escape(iconTitle(it))}"}"""
-            }
-            val json = listOf(none) + icons
-            withContext(Dispatchers.Main) { callback("[${json.joinToString(",")}]") }
+        val none = IOSShortcutItem("", "None")
+        val icons = TimelineIcon.entries.map {
+            IOSShortcutItem(it.code, iconTitle(it))
         }
+        callback(listOf(none) + icons)
     }
 
     /**
@@ -178,7 +173,7 @@ object IOSDelegateShortcuts : KoinComponent {
      */
     @OptIn(ExperimentalObjCName::class)
     @ObjCName("getLockerWatchfacesForShortcutsWithCompletion")
-    fun getLockerWatchfacesForShortcuts(callback: (String) -> Unit) {
+    fun getLockerWatchfacesForShortcuts(callback: (List<IOSShortcutItem>) -> Unit) {
         getLockerItemsForShortcutsByType(AppType.Watchface, callback)
     }
 
@@ -187,23 +182,17 @@ object IOSDelegateShortcuts : KoinComponent {
      */
     @OptIn(ExperimentalObjCName::class)
     @ObjCName("getLockerWatchappsForShortcutsWithCompletion")
-    fun getLockerWatchappsForShortcuts(callback: (String) -> Unit) {
+    fun getLockerWatchappsForShortcuts(callback: (List<IOSShortcutItem>) -> Unit) {
         getLockerItemsForShortcutsByType(AppType.Watchapp, callback)
     }
 
-    private fun getLockerItemsForShortcutsByType(type: AppType, callback: (String) -> Unit) {
+    private fun getLockerItemsForShortcutsByType(type: AppType, callback: (List<IOSShortcutItem>) -> Unit) {
         GlobalScope.launch {
             val libPebble: LibPebble = get()
             val list = libPebble.getAllLockerBasicInfo().first().filter { it.type == type }
-            fun escape(s: String) = s
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-            val json = list.joinToString(",") { """{"id":"${it.id}","title":"${escape(it.title)}"}""" }
-                .let { "[$it]" }
+            val items = list.map { IOSShortcutItem(it.id.toString(), it.title) }
             withContext(Dispatchers.Main) {
-                callback(json)
+                callback(items)
             }
         }
     }
@@ -222,22 +211,20 @@ object IOSDelegateShortcuts : KoinComponent {
      */
     @OptIn(ExperimentalObjCName::class)
     @ObjCName("getNotificationAppsForShortcutsWithCompletion")
-    fun getNotificationAppsForShortcuts(callback: (String) -> Unit) {
+    fun getNotificationAppsForShortcuts(callback: (List<IOSShortcutItem>) -> Unit) {
         GlobalScope.launch {
             val libPebble: LibPebble = get()
             val list = libPebble.notificationApps().first()
-            fun escape(s: String) = s
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-            val json = list.joinToString(",") { entry ->
+            val items = list.map { entry ->
                 val app = entry.app
-                val muted = app.muteState == MuteState.Always
-                """{"id":"${escape(app.packageName)}","title":"${escape(app.name)}","muted":$muted}"""
-            }.let { "[$it]" }
+                IOSShortcutItem(
+                    id = app.packageName,
+                    title = app.name,
+                    isMuted = app.muteState == MuteState.Always
+                )
+            }
             withContext(Dispatchers.Main) {
-                callback(json)
+                callback(items)
             }
         }
     }
@@ -252,14 +239,28 @@ object IOSDelegateShortcuts : KoinComponent {
     }
 
     /**
-     * Called from the iOS Shortcut to insert a timeline pin under the Settings app.
-     * Uses [SystemAppIDs.SETTINGS_APP_UUID] so pins appear in the timeline under Settings.
+     * Called from the iOS Shortcut to insert a timeline pin built from individual components.
+     * UUID generation, ISO-8601 formatting, and JSON construction all happen on the Kotlin side.
+     *
+     * @param epochSeconds Unix epoch for the pin time. Pass 0 (or negative) to use current time.
+     * @return The generated pin ID, for use with [deleteTimelinePin].
      */
     @OptIn(ExperimentalObjCName::class)
-    @ObjCName("insertTimelinePinWithPinJson")
-    fun insertTimelinePin(pinJson: String) {
-        timelineActions.insertTimelinePin(pinJson, SystemAppIDs.SETTINGS_APP_UUID.toString())
-    }
+    @ObjCName("insertTimelinePinRichWithTitleBodySubtitleIconCodeEpochSeconds")
+    fun insertTimelinePinRich(
+        title: String,
+        body: String,
+        subtitle: String?,
+        iconCode: String?,
+        epochSeconds: Long,
+    ): String = timelineActions.insertTimelinePinRich(
+        appUuid = SystemAppIDs.SETTINGS_APP_UUID.toString(),
+        title = title,
+        body = body,
+        subtitle = subtitle?.takeIf { it.isNotEmpty() },
+        iconCode = iconCode?.takeIf { it.isNotEmpty() },
+        epochSeconds = epochSeconds.takeIf { it > 0 },
+    )
 
     /**
      * Called from the iOS Shortcut to delete a timeline pin by id (pins use Settings app).
@@ -362,5 +363,31 @@ object IOSDelegateShortcuts : KoinComponent {
         }
     }
 
+    /**
+     * Called from the iOS Shortcut to get the watch screenshot as raw PNG bytes.
+     * Passes null to the callback if no watch connected or screenshot failed.
+     * This avoids the base64 encode/decode round-trip used by [getWatchScreenshot].
+     */
+    @OptIn(ExperimentalObjCName::class)
+    @ObjCName("getWatchScreenshotRawBytes")
+    fun getWatchScreenshotBytes(callback: (NSData?) -> Unit) {
+        GlobalScope.launch {
+            try {
+                val watchInfoActions: PebbleWatchInfoActions = get()
+                val bytes = watchInfoActions.getWatchScreenshotBytes()
+                withContext(Dispatchers.Main) { 
+                    callback(bytes?.toNSData()) 
+                }
+            } catch (e: Exception) {
+                shortcutsLogger.e(e) { "getWatchScreenshotBytes failed" }
+                withContext(Dispatchers.Main) { callback(null) }
+            }
+        }
+    }
+
+}
+
+private fun ByteArray.toNSData(): NSData = usePinned {
+    NSData.create(bytes = it.addressOf(0), length = size.toULong())
 }
 

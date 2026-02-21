@@ -188,6 +188,7 @@ kotlin {
 
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.ktor.websockets)
         }
 
         jvmMain.dependencies {

@@ -3,6 +3,67 @@ import ComposeApp
 import Foundation
 import UIKit
 
+// Enums
+
+@available(iOS 16.0, *)
+enum QuietTimeShowOption: String, AppEnum {
+    case hide = "Hide"
+    case show = "Show"
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Quiet Time Notifications")
+    }
+
+    static var caseDisplayRepresentations: [QuietTimeShowOption: DisplayRepresentation] {
+        [.hide: "Hide", .show: "Show"]
+    }
+}
+
+@available(iOS 16.0, *)
+enum QuietTimeInterruptionsOption: String, AppEnum {
+    case allOff = "AllOff"
+    case phoneCalls = "PhoneCalls"
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Quiet Time Interruptions")
+    }
+
+    static var caseDisplayRepresentations: [QuietTimeInterruptionsOption: DisplayRepresentation] {
+        [.allOff: "All Off", .phoneCalls: "Phone Calls"]
+    }
+}
+
+@available(iOS 16.0, *)
+enum NotificationFilterOption: String, AppEnum {
+    case allOn = "AllOn"
+    case phoneCalls = "PhoneCalls"
+    case allOff = "AllOff"
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Notification Filter")
+    }
+
+    static var caseDisplayRepresentations: [NotificationFilterOption: DisplayRepresentation] {
+        [.allOn: "All On", .phoneCalls: "Phone Calls", .allOff: "All Off"]
+    }
+}
+
+@available(iOS 16.0, *)
+enum NotificationMuteAction: String, AppEnum {
+    case mute = "Mute"
+    case unmute = "Unmute"
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "Notification")
+    }
+
+    static var caseDisplayRepresentations: [NotificationMuteAction: DisplayRepresentation] {
+        [.mute: "Mute", .unmute: "Unmute"]
+    }
+}
+
+// Entities
+
 @available(iOS 16.0, *)
 struct LockerWatchfaceEntity: AppEntity {
     var id: String
@@ -21,64 +82,34 @@ struct LockerWatchfaceEntity: AppEntity {
 
 @available(iOS 16.0, *)
 struct LockerWatchfaceEntityQuery: EntityQuery, EntityStringQuery {
+    /// Resolves specific identifiers into entities.
     func entities(for identifiers: [String]) async throws -> [LockerWatchfaceEntity] {
-        let all = await fetchLockerItems()
+        let all = await fetchLockerWatchfaces()
         return identifiers.compactMap { id in
-            all.first(where: { $0.id == id }).map { LockerWatchfaceEntity(id: $0.id, title: $0.title) }
+            all.first(where: { $0.id == id })
         }
     }
 
+    /// Provides the default list of entities for the picker.
     func suggestedEntities() async throws -> [LockerWatchfaceEntity] {
-        await fetchLockerItems()
+        await fetchLockerWatchfaces()
     }
 
+    /// Filters entities based on a search string.
     func entities(matching string: String) async throws -> [LockerWatchfaceEntity] {
-        let all = await fetchLockerItems()
+        let all = await fetchLockerWatchfaces()
         guard !string.isEmpty else { return all }
         return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
     }
 
-    private func fetchLockerItems() async -> [LockerWatchfaceEntity] {
+    private func fetchLockerWatchfaces() async -> [LockerWatchfaceEntity] {
         await withCheckedContinuation { continuation in
-            IOSDelegateShortcuts.shared.getLockerWatchfacesForShortcutsWithCompletion(callback: { json in
-                let items = Self.parseLockerItemsJSON(json)
-                continuation.resume(returning: items)
-            }) 
-        }
-    }
-
-    private static func parseLockerItemsJSON(_ json: String) -> [LockerWatchfaceEntity] {
-        guard let data = json.data(using: .utf8),
-              let array = try? JSONDecoder().decode([[String: String]].self, from: data) else {
-            return []
-        }
-        return array.compactMap { dict in
-            guard let id = dict["id"], let title = dict["title"] else { return nil }
-            return LockerWatchfaceEntity(id: id, title: title)
+            IOSDelegateShortcuts.shared.getLockerWatchfacesForShortcutsWithCompletion(callback: { items in
+                continuation.resume(returning: items.map { LockerWatchfaceEntity(id: $0.id, title: $0.title) })
+            })
         }
     }
 }
-
-@available(iOS 16.0, *)
-struct LaunchWatchfaceOnWatchIntent: AppIntent {
-    static var title: LocalizedStringResource = "Launch Watchface on Watch"
-    static var description = IntentDescription("Launches the selected watchface on your connected watch. Only works for watchfaces already on the watch (pre-loaded).", categoryName: "Watch")
-
-    @Parameter(title: "Watchface")
-    var watchface: LockerWatchfaceEntity?
-
-    static var parameterSummary: some ParameterSummary {
-        Summary("Launch \(\.$watchface) on watch")
-    }
-
-    func perform() async throws -> some IntentResult {
-        if let watchface {
-            IOSDelegateShortcuts.shared.launchAppByUuidWithUuid(uuid: watchface.id)
-        }
-        return .result()
-    }
-}
-
 
 @available(iOS 16.0, *)
 struct LockerWatchappEntity: AppEntity {
@@ -98,41 +129,175 @@ struct LockerWatchappEntity: AppEntity {
 
 @available(iOS 16.0, *)
 struct LockerWatchappEntityQuery: EntityQuery, EntityStringQuery {
+    /// Resolves specific identifiers into entities.
     func entities(for identifiers: [String]) async throws -> [LockerWatchappEntity] {
-        let all = await fetchLockerItems()
+        let all = await fetchLockerWatchapps()
         return identifiers.compactMap { id in
-            all.first(where: { $0.id == id }).map { LockerWatchappEntity(id: $0.id, title: $0.title) }
+            all.first(where: { $0.id == id })
         }
     }
 
+    /// Provides the default list of entities for the picker.
     func suggestedEntities() async throws -> [LockerWatchappEntity] {
-        await fetchLockerItems()
+        await fetchLockerWatchapps()
     }
 
+    /// Filters entities based on a search string.
     func entities(matching string: String) async throws -> [LockerWatchappEntity] {
-        let all = await fetchLockerItems()
+        let all = await fetchLockerWatchapps()
         guard !string.isEmpty else { return all }
         return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
     }
 
-    private func fetchLockerItems() async -> [LockerWatchappEntity] {
+    private func fetchLockerWatchapps() async -> [LockerWatchappEntity] {
         await withCheckedContinuation { continuation in
-            IOSDelegateShortcuts.shared.getLockerWatchappsForShortcutsWithCompletion(callback: { json in
-                let items = Self.parseLockerItemsJSON(json)
-                continuation.resume(returning: items)
+            IOSDelegateShortcuts.shared.getLockerWatchappsForShortcutsWithCompletion(callback: { items in
+                continuation.resume(returning: items.map { LockerWatchappEntity(id: $0.id, title: $0.title) })
             })
         }
     }
+}
 
-    private static func parseLockerItemsJSON(_ json: String) -> [LockerWatchappEntity] {
-        guard let data = json.data(using: .utf8),
-              let array = try? JSONDecoder().decode([[String: String]].self, from: data) else {
-            return []
+@available(iOS 16.0, *)
+struct TimelineColorEntity: AppEntity {
+    var id: String
+    var title: String
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(name: "Color")
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(title)") }
+    static var defaultQuery = TimelineColorEntityQuery()
+}
+
+@available(iOS 16.0, *)
+struct TimelineColorEntityQuery: EntityQuery, EntityStringQuery {
+    /// Resolves specific identifiers into entities.
+    func entities(for identifiers: [String]) async throws -> [TimelineColorEntity] {
+        let all = await fetchItems()
+        return identifiers.compactMap { id in all.first(where: { $0.id == id }) }
+    }
+    
+    /// Provides the default list of entities for the picker.
+    func suggestedEntities() async throws -> [TimelineColorEntity] { await fetchItems() }
+
+    /// Filters entities based on a search string.
+    func entities(matching string: String) async throws -> [TimelineColorEntity] {
+        let all = await fetchItems()
+        guard !string.isEmpty else { return all }
+        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
+    }
+    private func fetchItems() async -> [TimelineColorEntity] {
+        await withCheckedContinuation { cont in
+            IOSDelegateShortcuts.shared.getTimelineColorsForShortcutsWithCompletion(callback: { items in
+                cont.resume(returning: items.map { TimelineColorEntity(id: $0.id, title: $0.title) })
+            })
         }
-        return array.compactMap { dict in
-            guard let id = dict["id"], let title = dict["title"] else { return nil }
-            return LockerWatchappEntity(id: id, title: title)
+    }
+}
+
+@available(iOS 16.0, *)
+struct TimelineIconEntity: AppEntity {
+    var id: String
+    var title: String
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(name: "Icon")
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(title)") }
+    static var defaultQuery = TimelineIconEntityQuery()
+}
+
+@available(iOS 16.0, *)
+struct TimelineIconEntityQuery: EntityQuery, EntityStringQuery {
+    /// Resolves specific identifiers into entities.
+    func entities(for identifiers: [String]) async throws -> [TimelineIconEntity] {
+        let all = await fetchItems()
+        return identifiers.compactMap { id in all.first(where: { $0.id == id }) }
+    }
+
+    /// Provides the default list of entities for the picker.
+    func suggestedEntities() async throws -> [TimelineIconEntity] { await fetchItems() }
+
+    /// Filters entities based on a search string.
+    func entities(matching string: String) async throws -> [TimelineIconEntity] {
+        let all = await fetchItems()
+        guard !string.isEmpty else { return all }
+        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
+    }
+
+    private func fetchItems() async -> [TimelineIconEntity] {
+        await withCheckedContinuation { cont in
+            IOSDelegateShortcuts.shared.getTimelineIconsForShortcutsWithCompletion(callback: { items in
+                cont.resume(returning: items.map { TimelineIconEntity(id: $0.id, title: $0.title) })
+            })
         }
+    }
+}
+
+@available(iOS 16.0, *)
+struct NotificationAppEntity: AppEntity {
+    var id: String
+    var title: String
+    var muted: Bool
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(
+        name: "Notification App"
+    )
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(title)")
+    }
+
+    static var defaultQuery = NotificationAppEntityQuery()
+}
+
+@available(iOS 16.0, *)
+struct NotificationAppEntityQuery: EntityQuery, EntityStringQuery {
+    /// Resolves specific identifiers into entities.
+    func entities(for identifiers: [String]) async throws -> [NotificationAppEntity] {
+        let all = await fetchNotificationApps()
+        return identifiers.compactMap { id in
+            all.first(where: { $0.id == id })
+        }
+    }
+
+    /// Provides the default list of entities for the picker.
+    func suggestedEntities() async throws -> [NotificationAppEntity] {
+        await fetchNotificationApps()
+    }
+
+    /// Filters entities based on a search string.
+    func entities(matching string: String) async throws -> [NotificationAppEntity] {
+        let all = await fetchNotificationApps()
+        guard !string.isEmpty else { return all }
+        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
+    }
+
+    private func fetchNotificationApps() async -> [NotificationAppEntity] {
+        await withCheckedContinuation { continuation in
+            IOSDelegateShortcuts.shared.getNotificationAppsForShortcutsWithCompletion(callback: { items in
+                continuation.resume(returning: items.map { NotificationAppEntity(id: $0.id, title: $0.title, muted: $0.isMuted) })
+            })
+        }
+    }
+}
+
+// Intents
+
+@available(iOS 16.0, *)
+struct LaunchWatchfaceOnWatchIntent: AppIntent {
+    static var title: LocalizedStringResource = "Launch Watchface on Watch"
+    static var description = IntentDescription("Launches the selected watchface on your connected watch. Only works for watchfaces already on the watch (pre-loaded).", categoryName: "Watch")
+
+    @Parameter(title: "Watchface")
+    var watchface: LockerWatchfaceEntity?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Launch \(\.$watchface) on watch")
+    }
+
+    func perform() async throws -> some IntentResult {
+        if let watchface {
+            IOSDelegateShortcuts.shared.launchAppByUuidWithUuid(uuid: watchface.id)
+        }
+        return .result()
     }
 }
 
@@ -155,7 +320,6 @@ struct LaunchWatchappOnWatchIntent: AppIntent {
         return .result()
     }
 }
-
 
 @available(iOS 16.0, *)
 struct SendSimpleNotificationIntent: AppIntent {
@@ -182,71 +346,6 @@ struct SendSimpleNotificationIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         IOSDelegateShortcuts.shared.sendSimpleNotificationToWatchWithTitleBody(title: title, body: message)
         return .result()
-    }
-}
-
-
-@available(iOS 16.0, *)
-struct TimelineColorEntity: AppEntity {
-    var id: String
-    var title: String
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(name: "Color")
-    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(title)") }
-    static var defaultQuery = TimelineColorEntityQuery()
-}
-
-@available(iOS 16.0, *)
-struct TimelineColorEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [String]) async throws -> [TimelineColorEntity] {
-        let all = await fetchItems()
-        return identifiers.compactMap { id in all.first(where: { $0.id == id }) }
-    }
-    func suggestedEntities() async throws -> [TimelineColorEntity] { await fetchItems() }
-    func entities(matching string: String) async throws -> [TimelineColorEntity] {
-        let all = await fetchItems()
-        guard !string.isEmpty else { return all }
-        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
-    }
-    private func fetchItems() async -> [TimelineColorEntity] {
-        await withCheckedContinuation { cont in
-            IOSDelegateShortcuts.shared.getTimelineColorsForShortcutsWithCompletion(callback: { json in
-                let items = (try? JSONDecoder().decode([[String: String]].self, from: Data(json.utf8))) ?? []
-                cont.resume(returning: items.compactMap { d in guard let id = d["id"], let t = d["title"] else { return nil }; return TimelineColorEntity(id: id, title: t) })
-            })
-        }
-    }
-}
-
-@available(iOS 16.0, *)
-struct TimelineIconEntity: AppEntity {
-    var id: String
-    var title: String
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(name: "Icon")
-    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(title)") }
-    static var defaultQuery = TimelineIconEntityQuery()
-}
-
-@available(iOS 16.0, *)
-struct TimelineIconEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [String]) async throws -> [TimelineIconEntity] {
-        let all = await fetchItems()
-        return identifiers.compactMap { id in all.first(where: { $0.id == id }) }
-    }
-    func suggestedEntities() async throws -> [TimelineIconEntity] { await fetchItems() }
-    func entities(matching string: String) async throws -> [TimelineIconEntity] {
-        let all = await fetchItems()
-        guard !string.isEmpty else { return all }
-        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
-    }
-    private func fetchItems() async -> [TimelineIconEntity] {
-        await withCheckedContinuation { cont in
-            IOSDelegateShortcuts.shared.getTimelineIconsForShortcutsWithCompletion(callback: { json in
-                let items = (try? JSONDecoder().decode([[String: String]].self, from: Data(json.utf8))) ?? []
-                cont.resume(returning: items.compactMap { d in guard let id = d["id"], let t = d["title"] else { return nil }; return TimelineIconEntity(id: id, title: t) })
-            })
-        }
     }
 }
 
@@ -310,20 +409,6 @@ struct SetQuietTimeIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
-enum QuietTimeShowOption: String, AppEnum {
-    case hide = "Hide"
-    case show = "Show"
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Quiet Time Notifications")
-    }
-
-    static var caseDisplayRepresentations: [QuietTimeShowOption: DisplayRepresentation] {
-        [.hide: "Hide", .show: "Show"]
-    }
-}
-
-@available(iOS 16.0, *)
 struct SetQuietTimeShowNotificationsIntent: AppIntent {
     static var title: LocalizedStringResource = "Set Quiet Time Show Notifications"
     static var description = IntentDescription("Choose to show or hide notifications during Quiet Time on your watch.", categoryName: "Preferences")
@@ -338,20 +423,6 @@ struct SetQuietTimeShowNotificationsIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         IOSDelegateShortcuts.shared.setQuietTimeShowNotificationsWithShow(show: option == .show)
         return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-enum QuietTimeInterruptionsOption: String, AppEnum {
-    case allOff = "AllOff"
-    case phoneCalls = "PhoneCalls"
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Quiet Time Interruptions")
-    }
-
-    static var caseDisplayRepresentations: [QuietTimeInterruptionsOption: DisplayRepresentation] {
-        [.allOff: "All Off", .phoneCalls: "Phone Calls"]
     }
 }
 
@@ -410,21 +481,6 @@ struct SetMotionBacklightIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
-enum NotificationFilterOption: String, AppEnum {
-    case allOn = "AllOn"
-    case phoneCalls = "PhoneCalls"
-    case allOff = "AllOff"
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Notification Filter")
-    }
-
-    static var caseDisplayRepresentations: [NotificationFilterOption: DisplayRepresentation] {
-        [.allOn: "All On", .phoneCalls: "Phone Calls", .allOff: "All Off"]
-    }
-}
-
-@available(iOS 16.0, *)
 struct SetNotificationFilterIntent: AppIntent {
     static var title: LocalizedStringResource = "Set Notification Filter"
     static var description = IntentDescription("Choose which notifications trigger alerts on your watch (all, phone calls only, or all off).", categoryName: "Preferences")
@@ -439,79 +495,6 @@ struct SetNotificationFilterIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         IOSDelegateShortcuts.shared.setNotificationFilterWithAlertMaskName(alertMaskName: option.rawValue)
         return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct NotificationAppEntity: AppEntity {
-    var id: String
-    var title: String
-    var muted: Bool
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(
-        name: "Notification App"
-    )
-
-    var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(title)")
-    }
-
-    static var defaultQuery = NotificationAppEntityQuery()
-}
-
-@available(iOS 16.0, *)
-struct NotificationAppEntityQuery: EntityQuery, EntityStringQuery {
-    func entities(for identifiers: [String]) async throws -> [NotificationAppEntity] {
-        let all = await fetchNotificationApps()
-        return identifiers.compactMap { id in
-            all.first(where: { $0.id == id }).map { NotificationAppEntity(id: $0.id, title: $0.title, muted: $0.muted) }
-        }
-    }
-
-    func suggestedEntities() async throws -> [NotificationAppEntity] {
-        await fetchNotificationApps()
-    }
-
-    func entities(matching string: String) async throws -> [NotificationAppEntity] {
-        let all = await fetchNotificationApps()
-        guard !string.isEmpty else { return all }
-        return all.filter { $0.title.localizedCaseInsensitiveContains(string) }
-    }
-
-    private func fetchNotificationApps() async -> [NotificationAppEntity] {
-        await withCheckedContinuation { continuation in
-            IOSDelegateShortcuts.shared.getNotificationAppsForShortcutsWithCompletion(callback: { json in
-                let items = Self.parseNotificationAppsJSON(json)
-                continuation.resume(returning: items)
-            })
-        }
-    }
-
-    private static func parseNotificationAppsJSON(_ json: String) -> [NotificationAppEntity] {
-        struct Item: Decodable {
-            let id: String
-            let title: String
-            let muted: Bool
-        }
-        guard let data = json.data(using: .utf8),
-              let array = try? JSONDecoder().decode([Item].self, from: data) else {
-            return []
-        }
-        return array.map { NotificationAppEntity(id: $0.id, title: $0.title, muted: $0.muted) }
-    }
-}
-
-@available(iOS 16.0, *)
-enum NotificationMuteAction: String, AppEnum {
-    case mute = "Mute"
-    case unmute = "Unmute"
-
-    static var typeDisplayRepresentation: TypeDisplayRepresentation {
-        TypeDisplayRepresentation(name: "Notification")
-    }
-
-    static var caseDisplayRepresentations: [NotificationMuteAction: DisplayRepresentation] {
-        [.mute: "Mute", .unmute: "Unmute"]
     }
 }
 
@@ -532,28 +515,10 @@ struct SetNotificationAppMuteIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         if let app {
-        IOSDelegateShortcuts.shared.setNotificationAppMuteStateWithPackageNameMute(packageName: app.id, mute: action == .mute)
+            IOSDelegateShortcuts.shared.setNotificationAppMuteStateWithPackageNameMute(packageName: app.id, mute: action == .mute)
         }
         return .result()
     }
-}
-
-@available(iOS 16.0, *)
-private func buildPinJson(id: String, title: String, body: String, subtitle: String?, icon: TimelineIconEntity?, dateForPin: Date) -> String? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    formatter.timeZone = TimeZone(identifier: "UTC")!
-    let timeString = formatter.string(from: dateForPin)
-    var layout: [String: Any] = [
-        "type": "genericPin",
-        "title": title,
-        "body": body.isEmpty ? " " : body
-    ]
-    if let s = subtitle, !s.isEmpty { layout["subtitle"] = s }
-    if let iconCode = icon?.id, !iconCode.isEmpty { layout["tinyIcon"] = iconCode }
-    let pin: [String: Any] = ["id": id, "time": timeString, "layout": layout]
-    guard let data = try? JSONSerialization.data(withJSONObject: pin) else { return nil }
-    return String(data: data, encoding: .utf8)
 }
 
 @available(iOS 16.0, *)
@@ -591,11 +556,15 @@ struct InsertTimelinePinIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        let id = UUID().uuidString
-        let dateForPin = pinDate ?? Date()
-        guard let pinJson = buildPinJson(id: id, title: title, body: body, subtitle: subtitle, icon: icon, dateForPin: dateForPin) else { return .result(value: "") }
-        IOSDelegateShortcuts.shared.insertTimelinePinWithPinJson(pinJson: pinJson)
-        return .result(value: returnId ? id : "")
+        let epochSeconds = Int64(pinDate?.timeIntervalSince1970 ?? 0)
+        let pinId = IOSDelegateShortcuts.shared.insertTimelinePinRichWithTitleBodySubtitleIconCodeEpochSeconds(
+            title: title,
+            body: body,
+            subtitle: subtitle,
+            iconCode: icon?.id,
+            epochSeconds: epochSeconds
+        )
+        return .result(value: returnId ? pinId : "")
     }
 }
 
@@ -706,21 +675,17 @@ struct GetWatchScreenshotIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        let base64 = await withCheckedContinuation { (continuation: CheckedContinuation<String, Never>) in
-            IOSDelegateShortcuts.shared.getWatchScreenshotWithCompletion(completion: { continuation.resume(returning: $0) })
-        }
-        let data: Data
-        if base64.isEmpty {
-            data = Data()
-        } else if let decoded = Data(base64Encoded: base64) {
-            data = decoded
-        } else {
-            data = Data()
+        let data = await withCheckedContinuation { (continuation: CheckedContinuation<Data, Never>) in
+            IOSDelegateShortcuts.shared.getWatchScreenshotRawBytes(callback: { bytes in
+                continuation.resume(returning: bytes ?? Data())
+            })
         }
         let file = IntentFile(data: data, filename: "watch_screenshot.png")
         return .result(value: file)
     }
 }
+
+// Shortcuts Provider
 
 @available(iOS 16.0, *)
 struct PebbleShortcutsProvider: AppShortcutsProvider {

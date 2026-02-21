@@ -48,6 +48,54 @@ class JSCPrivatePKJSInterface(
 
     override val name: String = "_Pebble"
 
+    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+        "sendAppMessageString" -> sendAppMessageString(args[0].toString())
+        "privateLog" -> { privateLog(args[0].toString()); null }
+        "onConsoleLog" -> {
+            val level = args.getOrNull(0)
+            val message = args.getOrNull(1)
+            val trace = args.getOrNull(2)
+            if (level == null) {
+                logger.w { "onConsoleLog called with null level" }
+            } else {
+                val sourceLine = trace
+                    ?.toString()
+                    ?.split("\n")
+                    ?.getOrNull(2)
+                    ?.trim()
+                    ?.substringAfter("code@")
+                onConsoleLog(level.toString(), message.toString(), sourceLine)
+            }
+            null
+        }
+        "onError" -> {
+            onError(
+                args.getOrNull(0)?.toString(),
+                args.getOrNull(1)?.toString(),
+                (args.getOrNull(2) as? Number)?.toDouble(),
+                (args.getOrNull(3) as? Number)?.toDouble()
+            )
+            null
+        }
+        "onUnhandledRejection" -> { onUnhandledRejection(args[0].toString()); null }
+        "logInterceptedSend" -> { logInterceptedSend(); null }
+        "getVersionCode" -> getVersionCode()
+        "getTimelineTokenAsync" -> getTimelineTokenAsync()
+        "privateFnConfirmReadySignal" -> {
+            val success = when (val v = args[0]) {
+                is Boolean -> v
+                is Number -> v.toInt() != 0
+                else -> false
+            }
+            privateFnConfirmReadySignal(success)
+            null
+        }
+        "getActivePebbleWatchInfo" -> getActivePebbleWatchInfo()
+        "insertTimelinePin" -> { insertTimelinePin(args[0].toString()); null }
+        "deleteTimelinePin" -> { deleteTimelinePin(args[0].toString()); null }
+        else -> error("Unknown method: $method")
+    }
+
     override fun close() {
         // No-op
     }

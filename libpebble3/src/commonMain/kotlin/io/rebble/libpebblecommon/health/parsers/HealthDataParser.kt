@@ -39,7 +39,6 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
     }
 
     val packetCount = payload.size / itemSize.toInt()
-    logger.d { "Parsing $packetCount steps packets" }
 
     for (i in 0 until packetCount) {
         val itemStart = buffer.readPosition

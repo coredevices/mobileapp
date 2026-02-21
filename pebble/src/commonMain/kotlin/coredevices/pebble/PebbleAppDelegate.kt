@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -197,13 +198,13 @@ class PebbleAppDelegate(
         appResumed.onAppResumed()
     }
 
-    suspend fun performBackgroundWork() {
+    suspend fun performBackgroundWork(scope: CoroutineScope) {
         val jobs = listOf(
-            GlobalScope.launch {
+            scope.launch {
                 // TODO not suspending
                 libPebble.checkForFirmwareUpdates()
             },
-            GlobalScope.launch {
+            scope.launch {
                 libPebble.requestLockerSync().await()
             },
         )

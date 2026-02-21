@@ -3,6 +3,7 @@ package coredevices.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.Icon
@@ -10,11 +11,13 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,8 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
 @Composable
@@ -144,4 +152,33 @@ fun ShowOnceTooltipBox(
     ) {
         content()
     }
+}
+
+@Composable
+fun ConfirmDialog(
+    show: MutableState<Boolean>,
+    title: String,
+    text: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+) {
+    if (!show.value) return
+    AlertDialog(
+        onDismissRequest = {
+            show.value = false
+        },
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(onClick = {
+                show.value = false
+                onConfirm()
+            }) { Text(confirmText) }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                show.value = false
+            }) { Text("Cancel") }
+        }
+    )
 }

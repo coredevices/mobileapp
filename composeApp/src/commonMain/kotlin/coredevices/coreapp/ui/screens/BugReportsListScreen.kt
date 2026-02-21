@@ -46,6 +46,7 @@ import coredevices.util.Platform
 import coredevices.util.emailOrNull
 import coredevices.util.getAndroidActivity
 import coredevices.util.isAndroid
+import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -62,13 +63,8 @@ fun BugReportsListScreen(
         val scope = rememberCoroutineScope()
         val bugReports: BugReports = koinInject()
         val logger = remember { Logger.withTag("BugReportsListScreen") }
-        val platform = koinInject<Platform>()
-        val googleAuthUtil = if (platform.isAndroid) {
-            val context = getAndroidActivity()
-            koinInject<GoogleAuthUtil> { parametersOf(context) }
-        } else {
-            koinInject<GoogleAuthUtil>()
-        }
+        val context = rememberUiContext()
+        val googleAuthUtil = koinInject<GoogleAuthUtil>()
         val tickets by bugReports.ticketDetails.collectAsState()
         val ticketDetails = tickets?.ticketDetails
 
@@ -84,7 +80,7 @@ fun BugReportsListScreen(
         fun signIn() {
             scope.launch {
                 try {
-                    val credential = googleAuthUtil.signInGoogle() ?: return@launch
+                    val credential = googleAuthUtil.signInGoogle(context!!) ?: return@launch
                     Firebase.auth.signInWithCredential(credential)
                 } catch (e: Exception) {
                     logger.e(e) { "Failed to sign in" }

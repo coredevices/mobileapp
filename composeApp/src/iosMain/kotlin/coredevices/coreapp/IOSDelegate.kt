@@ -32,10 +32,13 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -45,6 +48,7 @@ import org.koin.core.component.inject
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import platform.BackgroundTasks.BGAppRefreshTask
 import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
@@ -73,6 +77,7 @@ object IOSDelegate : KoinComponent {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val doneInitialOnboarding: DoneInitialOnboarding by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
+    private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun handleOpenUrl(url: NSURL): Boolean {
         logger.d("IOSDelegate handleOpenUrl $url")
@@ -135,6 +140,7 @@ object IOSDelegate : KoinComponent {
                         .build()
                 }
                 .components {
+                    add(AnimatedSkiaImageDecoder.Factory())
                     add(SvgDecoder.Factory())
                 }
                 .build()
@@ -145,20 +151,37 @@ object IOSDelegate : KoinComponent {
         if (crashedPreviously) {
             logger.e { "Previous app crash detected!" }
         }
+
         BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
             identifier = REFRESH_TASK_IDENTIFIER,
             usingQueue = null,
         ) { task ->
-            if (task == null) {
-                logger.e { "task is null!" }
-                return@registerForTaskWithIdentifier
+            if (task == null) return@registerForTaskWithIdentifier
+
+            // Create a job for this specific execution
+            val job = bgTaskScope.launch {
+                try {
+                    logger.d { "Background refresh task started" }
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                    logger.d { "Background refresh task completed successfully" }
+                    task.setTaskCompletedWithSuccess(true)
+                } catch (e: Exception) {
+                    logger.e(e) { "Background refresh task failed" }
+                    task.setTaskCompletedWithSuccess(false)
+                } finally {
+                    // Use NonCancellable to ensure the reschedule happens
+                    // even if the job was just cancelled by the expirationHandler
+                    requestBgRefresh(force = false, coreConfigHolder.config.value)
+                }
             }
-            runBlocking {
-                commonAppDelegate.doBackgroundSync(force = false)
+
+            task.expirationHandler = {
+                logger.w { "Background refresh task expired!" }
+                job.cancel()
+                task.setTaskCompletedWithSuccess(false)
             }
-            task.setTaskCompletedWithSuccess(true)
-            requestBgRefresh(force = false, coreConfigHolder.config.value)
         }
+
         requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
@@ -280,7 +303,7 @@ fun requestBgRefresh(force: Boolean, coreConfig: CoreConfig) {
                 logger.d { "Existing scheduled task is too far in the future" }
                 false
             } else {
-                logger.d { "Existing valid task" }
+                logger.d { "Existing valid task: $alreadyScheduledNext" }
                 true
             }
         }

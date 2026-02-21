@@ -36,7 +36,8 @@ import kotlin.uuid.toJavaUuid
 
 class PebbleKit2(
     private val device: CompanionAppDevice,
-    private val appInfo: PbwAppInfo
+    private val appInfo: PbwAppInfo,
+    private val pkjsRunning: Boolean,
 ) : LibPebbleKoinComponent, CompanionApp {
     private val nextTransactionId = atomic(0)
     private val targetPackages = appInfo.companionApp?.android?.apps.orEmpty().mapNotNull { it.pkg }
@@ -73,7 +74,10 @@ class PebbleKit2(
                         downloadUrl
                     )
                 )
-                launchNackAllIncomingMessages(scope)
+                if (!pkjsRunning) {
+                    // Don't auto-NACK if PKJS is running
+                    launchNackAllIncomingMessages(scope)
+                }
             }
         }
     }

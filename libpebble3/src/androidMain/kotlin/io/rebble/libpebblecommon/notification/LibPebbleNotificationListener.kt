@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.notification
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
 import android.content.ComponentName
@@ -18,6 +19,7 @@ import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.calls.NotificationCallDetector
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
@@ -48,6 +50,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     private val notificationHandler: NotificationHandler = get()
+    private val notificationCallDetector: NotificationCallDetector = get()
     private val connection: AndroidPebbleNotificationListenerConnection = get()
 
     private val configHolder: NotificationConfigFlow = get()
@@ -162,6 +165,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
     // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            notificationCallDetector.handleCallNotificationPosted(sbn)
+            return
+        }
+
         if (!configHolder.value.sendNotifications) {
             logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - sendNotifications is off" }
             return
@@ -180,6 +188,10 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         rankingMap: RankingMap,
         reason: Int
     ) {
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            notificationCallDetector.handleCallNotificationRemoved(sbn)
+            return
+        }
         notificationHandler.handleNotificationRemoved(sbn)
     }
 

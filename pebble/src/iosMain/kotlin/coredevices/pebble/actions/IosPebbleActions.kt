@@ -1,18 +1,19 @@
 package coredevices.pebble.actions
 
 import coredevices.pebble.actions.watch.deleteTimelinePin
-import coredevices.pebble.actions.watch.insertTimelinePin
-import coredevices.pebble.actions.watch.launchAppByUuid
-import coredevices.pebble.actions.watch.sendDetailedNotification
-import coredevices.pebble.actions.watch.sendSimpleNotification
-import coredevices.pebble.actions.watch.setNotificationBacklight
-import coredevices.pebble.actions.watch.setNotificationFilter
 import coredevices.pebble.actions.watch.getConnectedWatchName
 import coredevices.pebble.actions.watch.getWatchBatteryLevel
 import coredevices.pebble.actions.watch.getWatchScreenshotBase64
+import coredevices.pebble.actions.watch.getWatchScreenshotBytes
 import coredevices.pebble.actions.watch.healthDebugStatsToJson
+import coredevices.pebble.actions.watch.insertTimelinePinRich
 import coredevices.pebble.actions.watch.isWatchConnected
+import coredevices.pebble.actions.watch.launchAppByUuid
+import coredevices.pebble.actions.watch.sendDetailedNotification
+import coredevices.pebble.actions.watch.sendSimpleNotification
 import coredevices.pebble.actions.watch.setBacklightMotion
+import coredevices.pebble.actions.watch.setNotificationBacklight
+import coredevices.pebble.actions.watch.setNotificationFilter
 import coredevices.pebble.actions.watch.setQuietTimeEnabled
 import coredevices.pebble.actions.watch.setQuietTimeInterruptions
 import coredevices.pebble.actions.watch.setQuietTimeShowNotifications
@@ -83,14 +84,27 @@ class IosPebbleQuietTimeActions(
 }
 
 class IosPebbleTimelineActions(
-    private val remoteTimelineEmulator: RemoteTimelineEmulator,
+    private val libPebble: LibPebble,
 ) : PebbleTimelineActions {
-    override fun insertTimelinePin(pinJson: String, appUuid: String) {
-        insertTimelinePin(remoteTimelineEmulator, pinJson, Uuid.parse(appUuid))
-    }
+    override fun insertTimelinePinRich(
+        appUuid: String,
+        title: String,
+        body: String,
+        subtitle: String?,
+        iconCode: String?,
+        epochSeconds: Long?,
+    ): String = insertTimelinePinRich(
+        libPebble = libPebble,
+        appUuid = Uuid.parse(appUuid),
+        title = title,
+        body = body,
+        subtitle = subtitle,
+        iconCode = iconCode,
+        epochSeconds = epochSeconds,
+    )
 
     override fun deleteTimelinePin(appUuid: String, pinId: String) {
-        deleteTimelinePin(remoteTimelineEmulator, Uuid.parse(appUuid), pinId)
+        deleteTimelinePin(libPebble, Uuid.parse(appUuid), pinId)
     }
 }
 
@@ -103,6 +117,9 @@ class IosPebbleWatchInfoActions(
 
     override suspend fun getWatchScreenshotBase64(): String =
         getWatchScreenshotBase64(libPebble)
+
+    override suspend fun getWatchScreenshotBytes(): ByteArray? =
+        getWatchScreenshotBytes(libPebble)
 
     override fun setBacklightMotion(enabled: Boolean) {
         setBacklightMotion(libPebble, enabled)

@@ -8,7 +8,8 @@ import io.rebble.libpebblecommon.pebblekit.two.PebbleKit2
 
 actual fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
-    appInfo: PbwAppInfo
+    appInfo: PbwAppInfo,
+    pkjsRunning: Boolean,
 ): CompanionApp? {
     val hasAnyPebbleKit2CompanionApps =
         appInfo.companionApp
@@ -17,7 +18,7 @@ actual fun createPlatformSpecificCompanionAppControl(
             ?.any { it.pkg != null } == true
 
     return if (hasAnyPebbleKit2CompanionApps) {
-        PebbleKit2(device, appInfo)
+        PebbleKit2(device, appInfo, pkjsRunning)
     } else {
         PebbleKitClassic(device, appInfo)
     }

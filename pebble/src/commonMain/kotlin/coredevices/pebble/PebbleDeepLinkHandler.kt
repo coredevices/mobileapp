@@ -189,7 +189,7 @@ class RealPebbleDeepLinkHandler(
         logger.v { "handleAppstore: $path" }
         GlobalScope.launch {
             val appId = path.removePrefix("/").removeSuffix("/")
-            if (coreConfigFlow.value.useNativeAppStore) {
+            if (coreConfigFlow.value.useNativeAppStoreV2) {
                 val store = appstoreSourceDao.getAllEnabledSourcesFlow().firstOrNull()?.find {
                     it.url == storeUrl
                 }
