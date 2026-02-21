@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val logger = Logger.withTag("AppstoreSources")
-private const val PEBBLE_FEED_URL = "https://appstore-api.repebble.com/api"
+const val PEBBLE_FEED_URL = "https://appstore-api.repebble.com/api"
 const val REBBLE_FEED_URL = "https://appstore-api.rebble.io/api"
 
 val INITIAL_APPSTORE_SOURCES = listOf(

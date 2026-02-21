@@ -5,9 +5,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.rememberLibPebble
+import coredevices.ui.ConfirmDialog
 import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.BACKLIGHT_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.HEALTH_APP_UUID
@@ -46,27 +48,51 @@ fun watchPrefs(): List<SettingsItem> {
             }
         }
     }
-    return mapped
+    val showConfirmReset = remember { mutableStateOf(false) }
+    ConfirmDialog(
+        show = showConfirmReset,
+        title = "Reset To Defaults?",
+        text = "Reset all settings to defaults",
+        onConfirm = {
+            settings.forEach { setting ->
+                if (setting.value != setting.pref.defaultValue) {
+                    @Suppress("UNCHECKED_CAST")
+                    val pref = setting.pref as WatchPref<Any?>
+                    libPebble.setWatchPref(WatchPreference(pref, pref.defaultValue))
+                }
+            }
+        },
+        confirmText = "Reset",
+    )
+    val reset = basicSettingsActionItem(
+        title = "Reset To Defaults",
+        topLevelType = TopLevelType.Watch,
+        section = Section.Defaults,
+        action = {
+            showConfirmReset.value = true
+        },
+        description = "Reset all watch settings to defaults",
+    )
+    return listOf(reset) + mapped
 }
 
 fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.TimezoneSourceIsManual -> Section.Time
     BoolWatchPref.Clock24h -> Section.Time
-    BoolWatchPref.StandbyMode -> Section.Default
+    BoolWatchPref.StandbyMode -> Section.Other
     BoolWatchPref.LeftHandedMode -> Section.Display
     BoolWatchPref.Backlight -> Section.Display
     BoolWatchPref.AmbientLightSensor -> Section.Display
     BoolWatchPref.BacklightMotion -> Section.Display
     BoolWatchPref.DynamicBacklightIntensity -> Section.Display
-    BoolWatchPref.LanguageEnglish -> Section.Default
+    BoolWatchPref.LanguageEnglish -> Section.Other
     ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
     ColorWatchPref.AppMenuHighlightColor -> Section.Display
     EnumWatchPref.TextSize -> Section.Notifications
-    NumberWatchPref.MotionSensitivity -> Section.Display
+    EnumWatchPref.MotionSensitivity -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
     NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
-    NumberWatchPref.DynamicBacklightMaxThreshold -> Section.Display
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSelect -> Section.QuickLaunch
@@ -88,6 +114,8 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
+    BoolWatchPref.MenuScrollWrapAround -> Section.Display
+    EnumWatchPref.MenuScrollVibe -> Section.Display
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
@@ -103,6 +131,8 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
             libPebble.setWatchPref(item.copy(value = it))
         },
         isDebugSetting = pref.isDebugSetting,
+        defaultValue = pref.defaultValue,
+        unit = pref.unit,
     )
 }
 

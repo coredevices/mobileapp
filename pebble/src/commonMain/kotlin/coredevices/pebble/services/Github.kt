@@ -15,7 +15,6 @@ import io.ktor.client.request.url
 import io.ktor.http.ContentType
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
-import io.ktor.http.parseUrl
 import io.ktor.serialization.kotlinx.json.json
 import kotlin.time.Clock
 import kotlinx.serialization.Serializable

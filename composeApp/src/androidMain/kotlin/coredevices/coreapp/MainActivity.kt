@@ -16,6 +16,7 @@ import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.pebble.PebbleAndroidDelegate
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.util.OAuthRedirectHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private val themeProvider: ThemeProvider by inject()
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val coreDeepLinkHandler: CoreDeepLinkHandler by inject()
+    private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
 
     companion object {
         private val logger = Logger.withTag(MainActivity::class.simpleName!!)
@@ -63,12 +65,14 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent) {
         val uri = intent.data?.toKmpUriOrNull()
-        logger.d { "handleIntent uri = $uri" }
-        uri?.let {
-            pebbleDeepLinkHandler.handle(it)
-            coreDeepLinkHandler.handle(it)
+        if (!oAuthRedirectHandler.handleOAuthRedirect(uri)) {
+            logger.d { "handleIntent uri = $uri" }
+            uri?.let {
+                pebbleDeepLinkHandler.handle(it)
+                coreDeepLinkHandler.handle(it)
+            }
+            setIntent(null)
         }
-        setIntent(null)
     }
 
     override fun onResume() {

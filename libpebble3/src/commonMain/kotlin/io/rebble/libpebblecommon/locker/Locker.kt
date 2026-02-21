@@ -133,7 +133,7 @@ class Locker(
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
         libPebbleCoroutineScope.async {
-            lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimit)
+            lockerEntryDao.setOrder(id, order, config.value.lockerSyncLimitV2)
         }.await()
     }
 
@@ -187,15 +187,10 @@ class Locker(
 
     override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry) {
         val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
-        lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimit)
+        lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
     }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
-
-    private fun orderIndexForInsert(type: AppType) = when (type) {
-        AppType.Watchface -> -1
-        AppType.Watchapp -> SystemApps.entries.size
-    }
 
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
@@ -206,19 +201,20 @@ class Locker(
             if (existing == null) {
                 newEntity
             } else {
-                val newWithExistingOrder = newEntity.copy(
+                val newWithExistingLocalProps = newEntity.copy(
                     orderIndex = existing.orderIndex,
                     active = existing.active,
+                    grantedPermissions = existing.grantedPermissions,
                 )
-                if (newWithExistingOrder != existing && !existing.sideloaded) {
-                    newWithExistingOrder
+                if (newWithExistingLocalProps != existing && !existing.sideloaded) {
+                    newWithExistingLocalProps
                 } else {
                     null
                 }
             }
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
-        lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimit)
+        lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimitV2)
         logger.v { "Failed to fetch: ${locker.failedToFetchUuids}" }
         val toDelete = existingApps.mapNotNull {
             when {
@@ -262,7 +258,7 @@ class Locker(
         } else {
             null
         }
-        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimit)
+        lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimitV2)
         return try {
             withTimeout(40.seconds) {
                 tasks?.awaitAll()
@@ -326,7 +322,7 @@ class Locker(
                 }
 
         if (systemAppsToInsert.isNotEmpty()) {
-            lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimit)
+            lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimitV2)
         }
     }
 
@@ -415,7 +411,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
         ),
         sideloaded = sideloaded,
         configurable = configurable,
-        sync = orderIndex < config.value.lockerSyncLimit,
+        sync = orderIndex < config.value.lockerSyncLimitV2,
     )
 }
 
@@ -604,4 +600,9 @@ abstract class LockerPBWCache(context: AppContext) {
             }
         }
     }
+}
+
+fun orderIndexForInsert(type: AppType) = when (type) {
+    AppType.Watchface -> -1
+    AppType.Watchapp -> SystemApps.entries.size
 }

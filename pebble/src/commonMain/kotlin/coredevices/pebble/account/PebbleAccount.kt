@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.TokenProvider
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 interface PebbleAccount {
@@ -41,7 +42,7 @@ class RealPebbleAccount(
     }
 
     override suspend fun setDevPortalId() {
-        val devPortalId = pebbleWebServices.fetchUsersMe()?.users?.firstOrNull()?.id
+        val devPortalId = pebbleWebServices.fetchUsersMePebble()?.users?.firstOrNull()?.id
         if (devPortalId == null) {
             logger.e { "couldn't fetch dev portal id" }
             return
@@ -75,4 +76,6 @@ data class UsersMeResponse(
 @Serializable
 data class UsersMeUser(
     val id: String,
+    @SerialName("voted_ids")
+    val votedIds: List<String>,
 )

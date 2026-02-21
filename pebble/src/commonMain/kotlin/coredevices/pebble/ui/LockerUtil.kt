@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
@@ -77,6 +79,7 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import theme.coreOrange
@@ -89,8 +92,8 @@ private val logger = Logger.withTag("LockerUtil")
 @Composable
 private fun firestoreLockerContents(coreConfig: CoreConfig): List<FirestoreLockerEntry>? {
     val firestoreLocker: FirestoreLocker = koinInject()
-    val firestoreLockerContents by produceState<List<FirestoreLockerEntry>?>(null, coreConfig.useNativeAppStore) {
-        if (coreConfig.useNativeAppStore) {
+    val firestoreLockerContents by produceState<List<FirestoreLockerEntry>?>(null, coreConfig.useNativeAppStoreV2) {
+        if (coreConfig.useNativeAppStoreV2) {
             value = firestoreLocker.readLocker()
         }
     }
@@ -109,7 +112,7 @@ private fun LockerWrapper.findStoreSource(
     appstoreSources: List<AppstoreSource>?,
     coreConfig: CoreConfig,
 ): AppstoreSource? {
-    if (!coreConfig.useNativeAppStore) {
+    if (!coreConfig.useNativeAppStoreV2) {
         return null
     }
     val firestoreEntry = firestoreLockerContents?.find { entry ->
@@ -133,12 +136,32 @@ fun appstoreCategories(appType: AppType?, sources: List<AppstoreSource>?): Map<A
 }
 
 @Composable
+fun currentHearts(): Map<Int, Set<String>>? {
+    val heartsDao: HeartsDao = koinInject()
+    val hearts by heartsDao.getAllHeartsFlow().map { list ->
+        buildMap {
+            for (h in list) getOrPut(h.sourceId) { mutableSetOf() }.add(h.appId)
+        }
+    }.collectAsState(null)
+    return hearts
+}
+
+fun Map<Int, Set<String>>?.hasHeart(sourceId: Int?, appId: String?): Boolean {
+    if (sourceId == null || appId == null) {
+        return false
+    }
+    return this?.get(sourceId)?.contains(appId) ?: false
+}
+
+@Composable
 fun loadLockerEntries(
+    currentHearts: Map<Int, Set<String>>?,
     type: AppType,
     searchQuery: String,
     watchType: WatchType,
     showIncompatible: Boolean,
     showScaled: Boolean,
+    hearted: Boolean,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -157,10 +180,10 @@ fun loadLockerEntries(
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents(coreConfig)
     val categories = appstoreCategories(type, appstoreSources)
-    if (entries == null || appstoreSources == null || categories == null) {
+    if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
         return null
     }
-    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled) {
+    return remember(entries, watchType, appstoreSources, firestoreLockerContents, coreConfig, showIncompatible, showScaled, hearted) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources, coreConfig)
             val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource])
@@ -170,9 +193,22 @@ fun loadLockerEntries(
             if (!showScaled && !app.isNativelyCompatible) {
                 return@mapNotNull null
             }
+            if (hearted && !currentHearts.hasHeart(sourceId = appstoreSource?.id, appId = app.storeId)) {
+                return@mapNotNull null
+            }
             app
         }
     }
+}
+
+@Composable
+fun CommonApp.isHearted(): Boolean? {
+    val heartsDao: HeartsDao = koinInject()
+    if (appstoreSource == null || storeId == null) {
+        return null
+    }
+    val hearted by heartsDao.isHeartedFlow(sourceId = appstoreSource.id, appId = storeId).collectAsState(null)
+    return hearted
 }
 
 @Composable
@@ -362,6 +398,8 @@ sealed class CommonAppType {
         val storeSource: AppstoreSource,
         val headerImageUrl: String?,
         val allScreenshotUrls: List<String>,
+        val addHeartUrl: String?,
+        val removeHeartUrl: String?,
     ) : CommonAppType()
 
     data class System(
@@ -370,7 +408,11 @@ sealed class CommonAppType {
     ) : CommonAppType(), CommonAppTypeLocal
 }
 
-fun LockerWrapper.asCommonApp(watchType: WatchType?, appstoreSource: AppstoreSource?, categories: List<StoreCategory>?): CommonApp {
+fun LockerWrapper.asCommonApp(
+    watchType: WatchType?,
+    appstoreSource: AppstoreSource?,
+    categories: List<StoreCategory>?,
+): CommonApp {
     val compatiblePlatform = findCompatiblePlatform(watchType)
     val anyPlatform = properties.platforms.firstOrNull()
     return CommonApp(
@@ -427,7 +469,12 @@ fun WatchType.performsScaling(): Boolean = when (this) {
     else -> false
 }
 
-fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource, categories: List<StoreCategory>): CommonApp? {
+fun StoreApplication.asCommonApp(
+    watchType: WatchType,
+    platform: Platform,
+    source: AppstoreSource,
+    categories: List<StoreCategory>,
+): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
@@ -447,6 +494,8 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
             storeApp = this,
             headerImageUrl = headerImage,
             allScreenshotUrls = screenshotImages.mapNotNull { it.values.firstOrNull() },
+            addHeartUrl = links.addHeart,
+            removeHeartUrl = links.removeHeart,
         ),
         type = appType,
         category = category,
@@ -477,24 +526,24 @@ fun StoreApplication.asCommonApp(watchType: WatchType, platform: Platform, sourc
 }
 
 
-
-fun StoreSearchResult.asCommonApp(watchType: WatchType, platform: Platform, source: AppstoreSource): CommonApp? {
+fun StoreSearchResult.asCommonApp(
+    watchType: WatchType,
+    platform: Platform,
+    source: AppstoreSource,
+): CommonApp? {
     val appType = AppType.fromString(type)
     if (appType == null) {
         logger.w { "StoreApplication.asCommonApp() unknown type: $type" }
         return null
     }
-    val screenshotPlatform = assetCollections.find {
-        it.hardwarePlatform == watchType.codename
-    } ?: assetCollections.find {
-        watchType.getCompatibleAppVariants().any { plat -> plat.codename == it.hardwarePlatform }
-    }
+    val screenshotWatchType = watchType.getBestVariant(assetCollections.map { it.hardwarePlatform })
+    val screenshotPlatform = screenshotWatchType?.let { assetCollections.find { it.hardwarePlatform == screenshotWatchType.codename } }
     return CommonApp(
         title = title,
         developerName = author,
         uuid = Uuid.parse(uuid),
         androidCompanion = null,
-        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList()),
+        commonAppType = CommonAppType.Store(storeSource = source, storeApp = null, headerImageUrl = null, allScreenshotUrls = emptyList(), addHeartUrl = null, removeHeartUrl = null),
         type = appType,
         category = category,
         version = null,
@@ -571,7 +620,7 @@ class NativeLockerAddUtil(
         source: AppstoreSource?,
         uuid: Uuid,
     ) {
-        if (!coreConfig.value.useNativeAppStore) {
+        if (!coreConfig.value.useNativeAppStoreV2) {
             return
         }
         if (source == null) {
@@ -631,10 +680,11 @@ fun AppsFilterRow(
     selectedType: MutableState<AppType>?,
     showIncompatible: MutableState<Boolean>?,
     showScaled: MutableState<Boolean>?,
+    hearted: MutableState<Boolean>?,
 ) {
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
-        if (!hasShownScrollHint && scrollState.maxValue > 0 && selectedType != null && showIncompatible != null && showScaled != null) {
+        if (!hasShownScrollHint && scrollState.maxValue > 0) {
             hasShownScrollHint = true
             // Wait a small bit for the layout to settle and user to focus
             delay(500.milliseconds)
@@ -700,25 +750,6 @@ fun AppsFilterRow(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            if (showIncompatible != null) {
-                FilterChip(
-                    selected = showIncompatible.value,
-                    onClick = { showIncompatible.value = !showIncompatible.value },
-                    label = { Text("Show Incompatible") },
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (showIncompatible.value) {
-                        {
-                            Icon(
-                                imageVector = Icons.Filled.Done,
-                                contentDescription = "Show Incompatible",
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
             if (watchType.performsScaling() && showScaled != null) {
                 FilterChip(
                     selected = showScaled.value,
@@ -730,6 +761,44 @@ fun AppsFilterRow(
                             Icon(
                                 imageVector = Icons.Filled.Done,
                                 contentDescription = "Show Scaled",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (hearted != null) {
+                FilterChip(
+                    selected = hearted.value,
+                    onClick = { hearted.value = !hearted.value },
+                    label = { Text("Hearted") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (hearted.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = "Hearted",
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (showIncompatible != null) {
+                FilterChip(
+                    selected = showIncompatible.value,
+                    onClick = { showIncompatible.value = !showIncompatible.value },
+                    label = { Text("Show Incompatible") },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    leadingIcon = if (showIncompatible.value) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Done,
+                                contentDescription = "Show Incompatible",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }

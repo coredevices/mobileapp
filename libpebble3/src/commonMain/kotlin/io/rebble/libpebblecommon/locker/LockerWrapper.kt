@@ -83,6 +83,6 @@ sealed class LockerWrapper {
 }
 
 fun LockerWrapper.findCompatiblePlatform(watchType: WatchType?): AppPlatform? {
-    return properties.platforms.firstOrNull { it.watchType == watchType } ?:
-    properties.platforms.firstOrNull { watchType?.getCompatibleAppVariants()?.contains(it.watchType) == true }
+    val useWatchType = watchType?.getBestVariant(properties.platforms.map { it.watchType.codename })
+    return properties.platforms.firstOrNull { it.watchType == useWatchType }
 }

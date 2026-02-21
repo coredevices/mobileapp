@@ -51,6 +51,7 @@ import coredevices.ui.M3Dialog
 import dev.jordond.compass.Place
 import dev.jordond.compass.autocomplete.Autocomplete
 import dev.jordond.compass.autocomplete.mobile
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -69,7 +70,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {
             TopBarIconButtonWithToolTip(
-                onClick = { scope.launch { weatherFetcher.fetchWeather() } },
+                onClick = { scope.launch { weatherFetcher.fetchWeather(GlobalScope) } },
                 icon = Icons.Filled.Refresh,
                 description = "Refresh Weather",
             )
@@ -88,7 +89,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             onConfirm = {
                 scope.launch {
                     weatherLocationDao.delete(location)
-                    weatherFetcher.fetchWeather()
+                    weatherFetcher.fetchWeather(GlobalScope)
                 }
                 locationToDelete = null
             },
@@ -101,7 +102,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             onAddLocation = { location ->
                 scope.launch {
                     weatherLocationDao.upsert(location)
-                    weatherFetcher.fetchWeather()
+                    weatherFetcher.fetchWeather(GlobalScope)
                 }
             },
             allowCurrentLocation = !locations.any { it.currentLocation },
@@ -131,7 +132,7 @@ fun WeatherScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             mutableLocations.forEachIndexed { index, location ->
                 weatherLocationDao.updateOrder(location.key, index)
             }
-            weatherFetcher.fetchWeather()
+            weatherFetcher.fetchWeather(GlobalScope)
         }
     }
 

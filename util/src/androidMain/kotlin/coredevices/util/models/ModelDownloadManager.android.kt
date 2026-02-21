@@ -1,7 +1,6 @@
 package coredevices.util.models
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.job.JobInfo
@@ -160,8 +159,9 @@ class ModelDownloadService : JobService(), KoinComponent {
             .build()
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(modelSlug.hashCode(), notification)
-        @SuppressLint("NewApi")
-        setNotification(params, modelSlug.hashCode(), notification, JOB_END_NOTIFICATION_POLICY_DETACH)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            setNotification(params, modelSlug.hashCode(), notification, JOB_END_NOTIFICATION_POLICY_DETACH)
+        }
         scope.launch {
             try {
                 modelDownloadManager.updateDownloadStatus(ModelDownloadStatus.Downloading(modelSlug))

@@ -51,10 +51,8 @@ class JavascriptCoreJsRunner(
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
-    private var interfacesRef: StableRef<List<RegisterableJsInterface>>? = null
-    private val interfaceInstanceRefs = mutableListOf<StableRef<RegisterableJsInterface>>()
-    private val interfaceMapRefs = mutableListOf<StableRef<Map<String, *>>>()
-    private val functionRefs = mutableListOf<StableRef<*>>()
+    private val interfaces = mutableMapOf<String, RegisterableJsInterface>()
+    private var dispatcherRef: StableRef<*>? = null
     private var navigatorRef: StableRef<JSValue>? = null
     @OptIn(DelicateCoroutinesApi::class)
     private val threadContext = newSingleThreadContext("JSRunner-${appInfo.uuid}")
@@ -69,55 +67,55 @@ class JavascriptCoreJsRunner(
         fun eval(js: String) = this.jsContext?.evalCatching(js)
         fun evalRaw(js: String): JSValue? = this.jsContext?.evaluateScript(js)
 
-        // Create stable references for the eval/evalRaw functions to prevent GC from moving them
         val evalFn: (String) -> JSValue? = ::eval
         val evalRawFn: (String) -> JSValue? = ::evalRaw
-        val evalRef = StableRef.create(evalFn)
-        val evalRawRef = StableRef.create(evalRawFn)
-        functionRefs.add(evalRef)
-        functionRefs.add(evalRawRef)
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
             XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
             JSTimeout(interfacesScope, evalRawFn),
+            WebSocketManager(interfacesScope, evalFn),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
-        interfacesRef = StableRef.create(instances)
-        instances.forEach {
-            // Pin each interface instance individually to prevent K/N GC from moving
-            // the receiver object that bound function references (this::method) point to.
-            // Without this, JSC can call an ObjC block whose captured receiver pointer
-            // has been invalidated by K/N GC compaction.
-            interfaceInstanceRefs.add(StableRef.create(it))
 
-            // Create a JavaScript object and set properties individually to avoid passing
-            // Kotlin Map objects which can be moved by GC
-            val jsObject = jsContext.evaluateScript("({})")!!
+        // Store instances for dispatch (Kotlin-side only, not exposed to JSC)
+        instances.forEach { interfaces[it.name] = it }
 
-            // Create stable references for all functions and set them on the JS object
-            it.interf.forEach { (key, value) ->
-                if (value != null) {
-                    functionRefs.add(StableRef.create(value))
-                    jsObject[key] = value
-                }
-            }
+        // Register a single native dispatcher — the only Kotlin object in JSC's graph.
+        // Previously, ~35 Kotlin function references were individually set as JSValue
+        // properties, each becoming a KotlinBase wrapper. JSC's GC would call [KotlinBase hash]
+        // on these from its Heap Helper Thread, racing with K/N's GC and causing EXC_BAD_ACCESS.
+        val dispatcher: (String, String, Any?) -> Any? = { objectName, methodName, args ->
+            val iface = interfaces[objectName]
+            val argList = (args as? List<*>) ?: emptyList<Any?>()
+            iface?.dispatch(methodName, argList)
+        }
+        dispatcherRef = StableRef.create(dispatcher)
+        jsContext["__nativeDispatch"] = dispatcher
 
-            // Store a reference to the Kotlin interf map to keep it alive
-            interfaceMapRefs.add(StableRef.create(it.interf))
-
-            jsContext[it.name] = jsObject
-            it.onRegister(jsContext)
+        // Generate pure JS proxy objects — these contain no KotlinBase references.
+        // Each method delegates to __nativeDispatch which routes to the Kotlin dispatch table.
+        instances.forEach { iface ->
+            val methods = iface.interf.keys.joinToString(",") { "'$it'" }
+            jsContext.evaluateScript("""
+                var ${iface.name} = {};
+                [$methods].forEach(function(m) {
+                    ${iface.name}[m] = function() {
+                        return __nativeDispatch('${iface.name}', m, Array.from(arguments));
+                    };
+                });
+            """.trimIndent())
+            iface.onRegister(jsContext)
         }
     }
 
     private fun evaluateInternalScript(filenameNoExt: String) {
         val bundle = NSBundle.mainBundle
         val path = bundle.pathForResource(filenameNoExt, "js")
-            ?: error("Startup script not found in bundle")
+            ?: error("Startup script not found in bundle: $filenameNoExt")
         val js = SystemFileSystem.source(Path(path)).buffered().use {
             it.readString()
         }
@@ -160,21 +158,10 @@ class JavascriptCoreJsRunner(
             scope.cancel()
             scope.coroutineContext[kotlinx.coroutines.Job]?.join()
 
-            interfacesRef?.let {
-                it.get().forEach { iface -> iface.close() }
-                it.dispose()
-            }
-            interfacesRef = null
-            // Dispose all interface instance references
-            interfaceInstanceRefs.forEach { it.dispose() }
-            interfaceInstanceRefs.clear()
-            // Dispose all interface map references
-            interfaceMapRefs.forEach { it.dispose() }
-            interfaceMapRefs.clear()
-            // Dispose all function references
-            functionRefs.forEach { it.dispose() }
-            functionRefs.clear()
-            // Dispose navigator reference
+            interfaces.values.forEach { it.close() }
+            interfaces.clear()
+            dispatcherRef?.dispose()
+            dispatcherRef = null
             navigatorRef?.dispose()
             navigatorRef = null
             jsContext = null
@@ -186,6 +173,7 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         evaluateInternalScript("XMLHTTPRequest")
         evaluateInternalScript("JSTimeout")
+        evaluateInternalScript("WebSocket")
     }
 
     private fun setupNavigator() {

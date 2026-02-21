@@ -55,6 +55,29 @@ class XMLHTTPRequestManager(
 
     override val name = "_XMLHTTPRequestManager"
 
+    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+        "getXHRInstanceID" -> getXHRInstanceID()
+        "open" -> {
+            open(
+                (args[0] as Number).toDouble(),
+                args[1].toString(),
+                args[2].toString(),
+                when (val v = args[3]) {
+                    is Boolean -> v
+                    is Number -> v.toInt() != 0
+                    else -> true
+                },
+                args[4].toString(),
+                args[5].toString()
+            )
+            null
+        }
+        "setRequestHeader" -> { setRequestHeader((args[0] as Number).toDouble(), args[1].toString(), args[2] ?: ""); null }
+        "send" -> { send((args[0] as Number).toDouble(), args[1]?.toString() ?: "", args.getOrNull(2)); null }
+        "abort" -> { abort((args[0] as Number).toDouble()); null }
+        else -> error("Unknown method: $method")
+    }
+
     private fun getXHRInstanceID(): Int {
         val id = ++lastInstance
         instances[id] = XHRInstance(id)

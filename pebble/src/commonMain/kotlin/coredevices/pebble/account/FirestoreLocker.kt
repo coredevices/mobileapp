@@ -12,6 +12,8 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreException
 import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.code
+import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
+import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.serialization.Serializable
@@ -142,11 +144,25 @@ class RealFirestoreLocker(
             }
             appsForSource
         }
+        // Deduplicate by UUID (same app can exist in multiple stores).
+        // Prefer the entry with the higher version, or the earlier source if tied.
+        val sourceCount = appsBySource.keys.size
+        val sourcePriority = appsBySource.keys.withIndex().associate { (i, url) -> url to (sourceCount - i) }
+        val dedupedApps = apps.groupBy { it.uuid }.values.map { duplicates ->
+            if (duplicates.size == 1) {
+                duplicates.first()
+            } else {
+                duplicates.maxWith(
+                    Comparator<LockerEntry> { a, b -> compareVersionStrings(a.version, b.version) }
+                        .thenBy { sourcePriority[it.source] ?: 0 }
+                )
+            }
+        }
         return LockerModelWrapper(
             locker = LockerModel(
-                applications = apps
+                applications = dedupedApps
             ),
-            failedToFetchUuids = fsLocker.map { it.uuid }.toSet().minus(apps.map { Uuid.parse(it.uuid) }.toSet()),
+            failedToFetchUuids = fsLocker.map { it.uuid }.toSet().minus(dedupedApps.map { Uuid.parse(it.uuid) }.toSet()),
         )
     }
 
@@ -212,3 +228,20 @@ data class FirestoreLockerEntry(
     val appstoreSource: String,
     val timelineToken: String?,
 )
+
+/**
+ * Compare two version strings numerically by major.minor segments.
+ * null versions sort lower than non-null.
+ */
+private fun compareVersionStrings(a: String?, b: String?): Int {
+    if (a == null && b == null) return 0
+    if (a == null) return -1
+    if (b == null) return 1
+    val aMatch = APP_VERSION_REGEX.find(a)
+    val bMatch = APP_VERSION_REGEX.find(b)
+    val aMajor = aMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+    val aMinor = aMatch?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0
+    val bMajor = bMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+    val bMinor = bMatch?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0
+    return compareValuesBy(aMajor to aMinor, bMajor to bMinor, { it.first }, { it.second })
+}

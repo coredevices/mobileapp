@@ -95,7 +95,11 @@ class CompanionAppLifecycleManager(
             } else null
             pkjsApp?.let { add(it) }
             if (libPebbleConfigFlow.value.watchConfig.appMessageToMultipleCompanions || pkjsApp == null) {
-                createPlatformSpecificCompanionAppControl(device, pbw.info)?.let {
+                createPlatformSpecificCompanionAppControl(
+                    device = device,
+                    appInfo = pbw.info,
+                    pkjsRunning = pkjsApp != null,
+                )?.let {
                     add(it)
                 }
             }
@@ -142,4 +146,8 @@ class PKJSStateFlow(private val runningAppStateFlow: StateFlow<List<CompanionApp
     }
 }
 
-expect fun createPlatformSpecificCompanionAppControl(device: CompanionAppDevice, appInfo: PbwAppInfo): CompanionApp?
+expect fun createPlatformSpecificCompanionAppControl(
+    device: CompanionAppDevice,
+    appInfo: PbwAppInfo,
+    pkjsRunning: Boolean,
+): CompanionApp?

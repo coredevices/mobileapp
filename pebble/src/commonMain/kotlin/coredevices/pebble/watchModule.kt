@@ -116,7 +116,7 @@ val watchModule = module {
         )
     ) }
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get(), get(), get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) binds arrayOf(WebServices::class, PebbleWebServices::class)

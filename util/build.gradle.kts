@@ -121,6 +121,7 @@ kotlin {
                 implementation(libs.ktor.client.serialization.json)
                 implementation(libs.ktor.client.logging)
                 implementation(libs.webview)
+                implementation(libs.uri)
                 implementation(compose.components.uiToolingPreview)
                 implementation(libs.cactus)
                 implementation(project(":libpebble3"))

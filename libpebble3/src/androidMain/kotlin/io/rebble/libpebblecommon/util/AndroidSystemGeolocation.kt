@@ -5,8 +5,8 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
-import android.os.CancellationSignal
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.core.location.LocationListenerCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.location.LocationRequestCompat
@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -126,35 +127,28 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                     cont.resume(null)
                     return@suspendCancellableCoroutine
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    logger.d { "Requesting current location from provider: $bestProvider" }
-                    val cancellationSignal = CancellationSignal()
-                    cont.invokeOnCancellation {
-                        cancellationSignal.cancel()
-                    }
-                    locationManager.getCurrentLocation(
-                        bestProvider,
-                        cancellationSignal,
-                        context.mainExecutor
-                    ) { location ->
-                        cont.resume(
-                            location ?: if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) > MAX_FALLBACK_TIME) {
-                                logger.w { "No current location available, last location too old" }
-                                null
-                            } else {
-                                logger.w { "No current location available, returning last known location" }
-                                lastKnownLocation
-                            }
-                        )
-                    }
-                } else {
-                    logger.d { "Requesting single update for location" }
-                    locationManager.requestSingleUpdate(
-                        bestProvider,
-                        { location ->
-                            cont.resume(location)
-                        },
-                        context.mainLooper
+                
+                logger.d { "Requesting current location from provider: $bestProvider" }
+                val cancellationSignal = androidx.core.os.CancellationSignal()
+                cont.invokeOnCancellation {
+                    cancellationSignal.cancel()
+                }
+                
+                val executor: Executor = ContextCompat.getMainExecutor(context)
+                LocationManagerCompat.getCurrentLocation(
+                    locationManager,
+                    bestProvider,
+                    cancellationSignal,
+                    executor
+                ) { location ->
+                    cont.resume(
+                        location ?: if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) > MAX_FALLBACK_TIME) {
+                            logger.w { "No current location available, last location too old" }
+                            null
+                        } else {
+                            logger.w { "No current location available, returning last known location" }
+                            lastKnownLocation
+                        }
                     )
                 }
             }

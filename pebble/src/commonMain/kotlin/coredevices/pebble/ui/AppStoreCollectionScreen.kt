@@ -28,6 +28,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
 import androidx.paging.filter
 import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSourceDao
@@ -55,6 +56,7 @@ class AppStoreCollectionScreenViewModel(
 ): ViewModel(), KoinComponent {
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
+    val hearted = mutableStateOf(false)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
     private var loadedAppsWatchType: WatchType? = null
@@ -112,12 +114,15 @@ fun AppStoreCollectionScreen(
     LaunchedEffect(watchType) {
         viewModel.maybeLoad(watchType)
     }
-    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value, viewModel.showIncompatible.value) {
+    val currentHearts = currentHearts()
+    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value, viewModel.showIncompatible.value, viewModel.hearted.value) {
         viewModel.loadedApps?.map {
             it.filter { app ->
                 if (!viewModel.showScaled.value && !app.isNativelyCompatible) {
                     false
                 } else if (!viewModel.showIncompatible.value && !app.isCompatible) {
+                    false
+                } else if (viewModel.hearted.value && !currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) {
                     false
                 } else {
                     true
@@ -137,8 +142,9 @@ fun AppStoreCollectionScreen(
                 selectedType = null,
                 showIncompatible = viewModel.showIncompatible,
                 showScaled = viewModel.showScaled,
+                hearted = viewModel.hearted,
             )
-            if (apps == null || apps.itemCount == 0) {
+            if (apps == null || apps.loadState.refresh is LoadState.Loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
