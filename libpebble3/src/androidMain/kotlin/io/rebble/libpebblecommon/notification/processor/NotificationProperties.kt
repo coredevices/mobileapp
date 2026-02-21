@@ -50,7 +50,7 @@ enum class NotificationProperties(
     ElementX(pkgName = "io.element.android.x", color = TimelineColor.MediumAquamarine, icon = TimelineIcon.NotificationElement),
     GoogleChat(pkgName = "com.google.android.apps.dynamite", color = TimelineColor.IslamicGreen, icon = TimelineIcon.NotificationGoogleChat),
     GoogleTasks(pkgName = "com.google.android.apps.tasks", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationGoogleTasks, addShowsUserInterfaceActions = true),
-    HomeAssistant(pkgName = "io.homeassistant.companion.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationHomeAssistant),
+    HomeAssistant(pkgName = "io.homeassistant.companion.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationHomeAssistant, addShowsUserInterfaceActions = true),
     Steam(pkgName = "com.valvesoftware.android.steam.community", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationSteam),
     MicrosoftTeams(pkgName = "com.microsoft.teams", color = TimelineColor.Indigo, icon = TimelineIcon.NotificationTeams),
     Threads(pkgName = "com.instagram.barcelona", color = TimelineColor.DarkGray, icon = TimelineIcon.NotificationThreads),

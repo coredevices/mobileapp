@@ -57,7 +57,6 @@ import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
-import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
@@ -94,12 +93,6 @@ val watchModule = module {
         )
     } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
 
-    // Expose RemoteTimelineEmulator from LibPebble's Koin so IosPebbleTimelineActions can resolve it
-    single<RemoteTimelineEmulator> {
-        get<LibPebble3>()
-        LibPebble3.getRemoteTimelineEmulator()
-    }
-
     includes(platformWatchModule)
 
     single { object : PebbleAccountProvider {
@@ -123,7 +116,7 @@ val watchModule = module {
         )
     ) }
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get(), get(), get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get())
     }
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) binds arrayOf(WebServices::class, PebbleWebServices::class)

@@ -6,7 +6,8 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 
 actual fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
-    appInfo: PbwAppInfo
+    appInfo: PbwAppInfo,
+    pkjsRunning: Boolean,
 ): CompanionApp? {
     // No JVM specific PebbleKit exists (yet?)
     return null

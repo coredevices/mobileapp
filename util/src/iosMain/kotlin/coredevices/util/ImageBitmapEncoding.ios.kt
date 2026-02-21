@@ -7,9 +7,15 @@ import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 
-actual fun imageBitmapToPngBase64(bitmap: ImageBitmap): String {
+fun imageBitmapToPngBase64(bitmap: ImageBitmap): String {
     val skiaBitmap = bitmap.asSkiaBitmap()
     skiaBitmap.setAlphaType(ColorAlphaType.OPAQUE)
     val data = Image.makeFromBitmap(skiaBitmap).encodeToData(EncodedImageFormat.PNG) ?: return ""
     return Base64.encode(data.bytes)
+}
+
+fun imageBitmapToPngBytes(bitmap: ImageBitmap): ByteArray? {
+    val skiaBitmap = bitmap.asSkiaBitmap()
+    skiaBitmap.setAlphaType(ColorAlphaType.OPAQUE)
+    return Image.makeFromBitmap(skiaBitmap).encodeToData(EncodedImageFormat.PNG)?.bytes
 }

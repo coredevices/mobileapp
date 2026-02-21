@@ -25,6 +25,14 @@ class JSTimeout(private val scope: CoroutineScope, private val evalRaw: (String)
     )
     override val name = "_Timeout"
 
+    override fun dispatch(method: String, args: List<Any?>) = when (method) {
+        "setTimeout" -> setTimeout((args[0] as Number).toDouble())
+        "setInterval" -> setInterval((args[0] as Number).toDouble())
+        "clearTimeout" -> { clearTimeout((args[0] as Number).toInt()); null }
+        "clearInterval" -> { clearInterval((args[0] as Number).toInt()); null }
+        else -> error("Unknown method: $method")
+    }
+
     private fun triggerTimeout(id: Int) {
         jsFunTriggerTimeout.value?.callWithArguments(listOf(id.toDouble()))
     }

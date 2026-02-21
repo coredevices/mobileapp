@@ -133,6 +133,7 @@ class LockerViewModel(
     val type = mutableStateOf(AppType.Watchface)
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
+    val hearted = mutableStateOf(false)
     var storeIsRefreshing by mutableStateOf(false)
     var lockerIsRefreshing by mutableStateOf(false)
 
@@ -257,7 +258,7 @@ fun LockerScreen(
                 )
             }
             topBarParams.title(title)
-            if (coreConfig.useNativeAppStore) {
+            if (coreConfig.useNativeAppStoreV2) {
                 viewModel.maybeRefreshStore(watchType)
             }
             launch {
@@ -289,22 +290,25 @@ fun LockerScreen(
 
         val uriHandler = LocalUriHandler.current
 
-        if (coreConfig.useNativeAppStore) {
+        if (coreConfig.useNativeAppStoreV2) {
             LaunchedEffect(viewModel.searchState.query, viewModel.type.value) {
                 if (viewModel.searchState.query.isNotEmpty()) {
                     viewModel.searchStore(viewModel.searchState.query, watchType, platform, viewModel.type.value)
                 }
             }
         }
+        val currentHearts = currentHearts()
         val lockerEntries = loadLockerEntries(
+            currentHearts = currentHearts,
             type = viewModel.type.value,
             searchQuery = viewModel.searchState.query,
             watchType = watchType,
             showIncompatible = viewModel.showIncompatible.value,
             showScaled = viewModel.showScaled.value,
+            hearted = viewModel.hearted.value,
         )
         val activeWatchface = loadActiveWatchface(watchType)
-        if (lockerEntries == null || activeWatchface == null) {
+        if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
             return
@@ -312,7 +316,7 @@ fun LockerScreen(
 
         Scaffold(
             floatingActionButton = {
-                if (loggedIn != null && !coreConfig.useNativeAppStore) {
+                if (loggedIn != null && !coreConfig.useNativeAppStoreV2) {
                     FloatingActionButton(
                         onClick = {
                             navBarNav.navigateTo(
@@ -334,14 +338,16 @@ fun LockerScreen(
                     selectedType = viewModel.type,
                     showIncompatible = viewModel.showIncompatible,
                     showScaled = viewModel.showScaled,
+                    hearted = viewModel.hearted,
                 )
-                if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStore) {
-                    val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value, viewModel.showScaled.value) {
+                if (viewModel.searchState.query.isNotEmpty() && coreConfig.useNativeAppStoreV2) {
+                    val resultQuery = remember(lockerEntries, viewModel.showIncompatible.value, viewModel.showScaled.value, viewModel.hearted.value) {
                         viewModel.storeSearchResults.map { searchResults ->
                             lockerEntries + searchResults.filter { searchResult ->
                                 !lockerEntries.any { lockerEntry -> searchResult.uuid == lockerEntry.uuid }
                                         && (viewModel.showIncompatible.value || searchResult.isCompatible)
                                         && (viewModel.showScaled.value || searchResult.isNativelyCompatible)
+                                        && (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = searchResult.appstoreSource?.id, appId = searchResult.storeId))
                             }
                         }
                     }
@@ -353,7 +359,8 @@ fun LockerScreen(
                             navBarNav = navBarNav,
                             topBarParams = topBarParams,
                             lazyListState = searchListState,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            appType = viewModel.type.value,
                         )
                     }
                 } else {
@@ -367,7 +374,7 @@ fun LockerScreen(
                             viewModel.lockerIsRefreshing = false
                         }
                     }) {
-                        if (coreConfig.useNativeAppStore) {
+                        if (coreConfig.useNativeAppStoreV2) {
                             val myApps by remember(lockerEntries) {
                                 derivedStateOf {
                                     lockerEntries.filter {
@@ -547,7 +554,9 @@ fun LockerScreen(
                                                 collection,
                                                 watchType,
                                                 lockerEntries,
-                                                viewModel.showScaled,
+                                                viewModel.showScaled.value,
+                                                viewModel.type.value,
+                                                viewModel.hearted.value,
                                             ) {
                                                 collection.applicationIds.mapNotNull { appId ->
                                                     home.applications.find { app ->
@@ -558,9 +567,10 @@ fun LockerScreen(
                                                         source,
                                                         home.categories
                                                     )
-                                                }.filter {
-                                                    it.type == viewModel.type.value &&
-                                                            (viewModel.showScaled.value || it.isNativelyCompatible)
+                                                }.filter { app ->
+                                                    app.type == viewModel.type.value &&
+                                                            (viewModel.showScaled.value || app.isNativelyCompatible) &&
+                                                    (!viewModel.hearted.value || currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId))
                                                 }
                                                     .distinctBy { it.uuid }
                                             }
@@ -708,79 +718,120 @@ fun SearchResultsList(
     topBarParams: TopBarParams,
     lazyListState: LazyListState,
     modifier: Modifier = Modifier,
+    appType: AppType,
 ) {
     val storeApps = results.filter { it.commonAppType is CommonAppType.Store }
     val lockerApps = results.filter { it.commonAppType is CommonAppType.Locker || it.commonAppType is CommonAppType.System }
     val scope = rememberCoroutineScope()
-    LazyColumn(modifier, lazyListState) {
-        if (lockerApps.isNotEmpty()) {
-            item {
-                Text(
-                    "From my apps",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+    if (appType == AppType.Watchface) {
+        LazyVerticalGrid(
+            columns = GridCells.FixedSize(120.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            if (lockerApps.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
+                items(
+                    items = lockerApps,
+                    key = { it.storeId ?: it.uuid },
+                ) { entry ->
+                    NativeWatchfaceCard(
+                        entry,
+                        navBarNav,
+                        width = 120.dp,
+                        topBarParams = topBarParams,
+                        highlightInLocker = false,
+                    )
+                }
             }
-            items(
-                items = lockerApps,
-                key = { it.uuid }
-            ) { entry ->
-                NativeWatchfaceListItem(
-                    entry,
-                    onClick = {
-                        navBarNav.navigateTo(
-                            PebbleNavBarRoutes.LockerAppRoute(
-                                uuid = entry.uuid.toString(),
-                                storedId = entry.storeId,
-                                storeSource = entry.appstoreSource?.id,
-                            )
-                        )
-                    },
-                    topBarParams = topBarParams,
-                    highlightInLocker = false,
-                )
+            if (storeApps.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
+                items(
+                    items = storeApps,
+                    key = { it.storeId ?: it.uuid },
+                ) { entry ->
+                    NativeWatchfaceCard(
+                        entry,
+                        navBarNav,
+                        width = 120.dp,
+                        topBarParams = topBarParams,
+                        highlightInLocker = true,
+                    )
+                }
             }
         }
-        if (storeApps.isNotEmpty()) {
-            item {
-                Text(
-                    "From the store",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            items(
-                items = storeApps,
-                key = { it.uuid }
-            ) { entry ->
-                NativeWatchfaceListItem(
-                    entry,
-                    onClick = {
-                        scope.launch {
-//                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
-//                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
-//                                sources.maxByOrNull { (id, source) ->
-//                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
-//                                        ?.data
-//                                        ?.firstOrNull()
-//                                        ?.latestRelease?.version ?: "0"
-//                                } ?: (null to null)
-//                            }
+    } else {
+        LazyColumn(modifier, lazyListState) {
+            if (lockerApps.isNotEmpty()) {
+                item {
+                    Text(
+                        "From my apps",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                items(
+                    items = lockerApps,
+                    key = { it.uuid }
+                ) { entry ->
+                    NativeWatchfaceListItem(
+                        entry,
+                        onClick = {
                             navBarNav.navigateTo(
                                 PebbleNavBarRoutes.LockerAppRoute(
                                     uuid = entry.uuid.toString(),
                                     storedId = entry.storeId,
                                     storeSource = entry.appstoreSource?.id,
-//                                    storeSources = Json.encodeToString(sources)
                                 )
                             )
-                        }
-                    },
-                    topBarParams = topBarParams,
-                    highlightInLocker = false,
-                )
+                        },
+                        topBarParams = topBarParams,
+                        highlightInLocker = false,
+                    )
+                }
+            }
+            if (storeApps.isNotEmpty()) {
+                item {
+                    Text(
+                        "From the store",
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                items(
+                    items = storeApps,
+                    key = { it.uuid }
+                ) { entry ->
+                    NativeWatchfaceListItem(
+                        entry,
+                        onClick = {
+                            scope.launch {
+    //                            val sources = withContext(Dispatchers.IO) { pebbleWebServices.searchUuidInSources(entry.uuid) }
+    //                            val (bestId, bestSource) = withContext(Dispatchers.IO) {
+    //                                sources.maxByOrNull { (id, source) ->
+    //                                    pebbleWebServices.fetchAppStoreApp(id, null, source.url)
+    //                                        ?.data
+    //                                        ?.firstOrNull()
+    //                                        ?.latestRelease?.version ?: "0"
+    //                                } ?: (null to null)
+    //                            }
+                                navBarNav.navigateTo(
+                                    PebbleNavBarRoutes.LockerAppRoute(
+                                        uuid = entry.uuid.toString(),
+                                        storedId = entry.storeId,
+                                        storeSource = entry.appstoreSource?.id,
+    //                                    storeSources = Json.encodeToString(sources)
+                                    )
+                                )
+                            }
+                        },
+                        topBarParams = topBarParams,
+                        highlightInLocker = false,
+                    )
+                }
             }
         }
     }
@@ -1203,6 +1254,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                     SystemApps.Health -> "drawable/health.png"
                     SystemApps.Weather -> "drawable/weather.png"
                     SystemApps.Tictoc -> "drawable/tictoc.png"
+                    SystemApps.Timeline -> "drawable/timeline.png"
                     SystemApps.Kickstart -> "drawable/kickstart.png"
                 }
                 Res.getUri(resUri)

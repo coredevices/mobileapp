@@ -33,6 +33,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.CoreUsersMe
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreAppResponse
 import coredevices.pebble.services.StoreCategory
@@ -172,7 +173,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { storeCollectionDao } bind AppstoreCollectionDao::class
     val webServices = object : PebbleWebServices {
-        override suspend fun fetchUsersMe(): UsersMeResponse? = null
+        override suspend fun fetchUsersMePebble(): UsersMeResponse? = null
+        override suspend fun fetchUsersMeCore(): CoreUsersMe? = null
 
         override suspend fun fetchPebbleLocker(): LockerModel? = null
 
@@ -266,7 +268,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { firestoreLocker } bind FirestoreLocker::class
     val coreConfig = CoreConfig(
-        useNativeAppStore = true
+        useNativeAppStoreV2 = true
     )
     single { CoreConfigFlow(MutableStateFlow(coreConfig)) }
     val requiredPermissions = RequiredPermissions(

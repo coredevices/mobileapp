@@ -6,6 +6,7 @@ import com.oldguy.common.io.File
 import com.oldguy.common.io.FileMode
 import com.oldguy.common.io.ZipEntry
 import com.oldguy.common.io.ZipFile
+import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.coreapp.api.BugApi
@@ -13,16 +14,26 @@ import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.generateDeviceSummary
 import coredevices.coreapp.util.getLogsCacheDir
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
+import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
+import coredevices.util.CompanionDevice
+import coredevices.util.CoreConfigFlow
+import coredevices.util.PermissionRequester
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,7 +118,12 @@ class BugReportProcessor(
     private val clock: Clock,
     private val appContext: AppContext,
     private val coreBackgroundSync: CoreBackgroundSync,
-) {
+    private val settings: Settings,
+    private val libPebble: LibPebble,
+    private val coreConfigFlow: CoreConfigFlow,
+    private val permissionRequester: PermissionRequester,
+    private val companionDevice: CompanionDevice,
+    ) {
     private val logger = Logger.withTag("BugReportProcessor")
 
     private fun getPKJSSummary(): String {
@@ -127,11 +143,17 @@ class BugReportProcessor(
             val isModelReady = transcriptionService.isModelReady
             val configuredModel = transcriptionService.configuredModel
             val configuredMode = transcriptionService.configuredMode
+            val lastSuccessfulMode = when (transcriptionService.lastSuccessfulMode) {
+                CactusSTTMode.LocalOnly -> "Local"
+                CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
+                null -> "None"
+            }
             "\nSTT Summary\n" +
                     "Configured mode: $configuredMode\n" +
                     "Configured model: $configuredModel\n" +
                     "Is model ready: $isModelReady\n" +
-                    "Last model used: $lastModel\n"
+                    "Last model used: $lastModel\n" +
+                    "Last successful mode: $lastSuccessfulMode\n"
         } catch (e: Exception) {
             logger.e(e) { "Error grabbing STT sessions: ${e.message}" }
             "Error grabbing STT sessions\n"
@@ -249,10 +271,14 @@ class BugReportProcessor(
         val deviceSummary = generateDeviceSummary(experimentalDevices)
         val pkjsSummary = getPKJSSummary()
         val sttSummary = getSTTSummary()
+        val pebbleContext = pebbleScreenContext()
         val summaryWithAttachmentCount = buildString {
             append(deviceSummary)
             append(pkjsSummary)
             append(sttSummary)
+            if (pebbleContext.isNotEmpty()) {
+                append("\n${pebbleContext}")
+            }
             if (screenContext.isNotEmpty()) {
                 append("\n${screenContext}")
             }
@@ -260,6 +286,9 @@ class BugReportProcessor(
                 append("\nAttachment: ${it.fileName}")
             }
             append("\nTime since last full background sync: ${coreBackgroundSync.timeSinceLastSync()}")
+            append("Firebase uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_FIREBASE_UPLOADS)}")
+            append("Memfault uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MEMFAULT_UPLOADS)}")
+            append("Mixpanel uploads enabled: ${settings.getBooleanOrNull(KEY_ENABLE_MIXPANEL_UPLOADS)}")
         }
         return summaryWithAttachmentCount
     }
@@ -602,6 +631,44 @@ class BugReportProcessor(
             Result.failure(Exception(userMessage))
         }
     }
+
+    suspend fun pebbleScreenContext(): String {
+        val watches = libPebble.watches.value.sortedByDescending {
+            when (it) {
+                is KnownPebbleDevice -> it.lastConnected.epochSeconds
+                else -> 0
+            }
+        }
+        val lastConnectedWatch = watches.firstOrNull() as? KnownPebbleDevice
+        val watchesWithoutCompanionDevicePermission = watches.mapNotNull {
+            if (it is KnownPebbleDevice && !companionDevice.hasApprovedDevice(it.identifier)) {
+                "[${it.identifier} / ${it.name}]"
+            } else {
+                null
+            }
+        }
+        return buildString {
+            appendLine("lastConnectedFirmwareVersion: ${lastConnectedWatch?.runningFwVersion}")
+            appendLine("lastConnectedSerial: ${lastConnectedWatch?.serial}")
+            appendLine("lastConnectedWatchType: ${lastConnectedWatch?.watchType}")
+            appendLine("activeWatchface: ${libPebble.activeWatchface.value?.let {
+                "${it.properties.id} / ${it.properties.title}"
+            }}")
+            appendLine("otherPebbleApps: ${libPebble.otherPebbleCompanionAppsInstalled().value}")
+            appendLine("libPebbleConfig: ${libPebble.config.value}")
+            appendLine("coreConfig: ${coreConfigFlow.value}")
+            appendLine("watch prefs: ${
+                libPebble.watchPrefs.first().joinToString(", ") { "${it.pref.id}=${it.value}" }
+            }")
+            appendLine("missingPermissions: ${permissionRequester.missingPermissions.value}")
+            appendLine("watchesWithoutCompanionDevicePermission: $watchesWithoutCompanionDevicePermission")
+            appendLine(libPebble.watchesDebugState())
+            appendLine("Watches (most recently connected first):")
+            watches.forEachIndexed { index, watch ->
+                appendLine("watch_$index $watch")
+            }
+        }
+    }
 }
 
 fun Path?.readMostRecent(bytes: Int): String? {
@@ -618,3 +685,4 @@ fun Path?.readMostRecent(bytes: Int): String? {
         null
     }
 }
+

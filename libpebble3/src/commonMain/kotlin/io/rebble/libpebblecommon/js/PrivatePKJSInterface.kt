@@ -203,6 +203,7 @@ abstract class PrivatePKJSInterface(
                     when (it.platform) {
                         "flint" -> if ("diorite" in targetPlatforms) "diorite" else "aplite"
                         "emery" -> "basalt"
+                        "gabbro" -> "chalk"
                         else -> "aplite"
                     }
                 }

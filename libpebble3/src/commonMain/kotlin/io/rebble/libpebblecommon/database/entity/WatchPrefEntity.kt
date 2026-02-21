@@ -204,6 +204,7 @@ enum class BoolWatchPref(
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
+    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
     ;
 
     override val type = WatchPrefType.TypeBoolean
@@ -312,6 +313,22 @@ enum class VibeScore(override val code: UByte, override val displayName: String)
     AlarmsLPM(13u, "ALARMS LPM"),
 }
 
+enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    NoVibe(0u, "No Vibe"),
+    VibeOnWrapAround(1u, "Vibe On Wrap Around"),
+    VibeOnLocked(2u, "Vibe On Locked"),
+}
+
+enum class MotionSensitivityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    VeryLow(10u, "Very Low"),
+    Low(25u, "Low"),
+    MediumLow(40u, "Medium-Low"),
+    Medium(55u, "Medium"),
+    MediumHigh(70u, "Medium-High"),
+    High(85u, "High"),
+    VeryHigh(100u, "Very High"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -384,6 +401,17 @@ enum class EnumWatchPref(
             VibeScore.Mario,
         ),
     ),
+    MenuScrollVibe(
+        "menuScrollVibeBehavior", "Menu Scrolling - Vibration", MenuScrollVibeBehaviour.NoVibe,
+        MenuScrollVibeBehaviour.entries
+    ),
+    MotionSensitivity(
+        id = "motionSensitivity",
+        displayName = "Motion Sensitivity",
+        defaultValue = MotionSensitivityLevel.High,
+        options = MotionSensitivityLevel.entries,
+        isDebugSetting = true,
+    ),
     ;
 
     override val type = WatchPrefType.TypeUInt8
@@ -400,50 +428,36 @@ enum class NumberWatchPref(
     override val type: WatchPrefType,
     val min: Int,
     val max: Int,
+    val unit: String,
     override val isDebugSetting: Boolean = false,
 ) : WatchPref<Long> {
-    MotionSensitivity(
-        id = "motionSensitivity",
-        displayName = "Motion Sensitivity",
-        defaultValue = 85,
-        type = WatchPrefType.TypeUInt8,
-        min = 0,
-        max = 100,
-        isDebugSetting = true,
-    ),
     BacklightTimeoutMs(
         id = "lightTimeoutMs",
-        displayName = "Backlight Timeout (ms)",
+        displayName = "Backlight Timeout",
         defaultValue = 3000,
         type = WatchPrefType.TypeUInt32,
         min = 1,
         max = 10000,
+        unit = "ms",
     ),
     AmbientLightThreshold(
         id = "lightAmbientThreshold",
         displayName = "Ambient Light Threshold",
-        defaultValue = 1,
+        defaultValue = 150,
         type = WatchPrefType.TypeUInt32,
         min = 1,
         max = 4096,
+        unit = "",
         isDebugSetting = true,
     ),
     DynamicBacklightMinThreshold(
         id = "dynBacklightMinThreshold",
         displayName = "Dynamic Backlight Min Threshold",
-        defaultValue = 0,
+        defaultValue = 5,
         type = WatchPrefType.TypeUInt32,
         min = 0,
         max = 4096,
-        isDebugSetting = true,
-    ),
-    DynamicBacklightMaxThreshold(
-        id = "dynBacklightMaxThreshold",
-        displayName = "Dynamic Backlight Max Threshold",
-        defaultValue = 1,
-        type = WatchPrefType.TypeUInt32,
-        min = 0,
-        max = 4096,
+        unit = "",
         isDebugSetting = true,
     ),
     TimelineQuickViewMinsBefore(
@@ -453,14 +467,16 @@ enum class NumberWatchPref(
         type = WatchPrefType.TypeUInt16,
         min = 0,
         max = 30,
+        unit = "minutes",
     ),
     NotificationTimeoutMs(
         id = "notifWindowTimeout",
-        displayName = "Notification Timeout (ms)",
+        displayName = "Notification Timeout",
         defaultValue = 3.minutes.inWholeMilliseconds,
         type = WatchPrefType.TypeUInt32,
         min = 0,
         max = 10.minutes.inWholeMilliseconds.toInt(),
+        unit = "ms",
     ),
     ;
 

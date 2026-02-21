@@ -53,6 +53,7 @@ private val logger = Logger.withTag("MyCollectionScreen")
 class MyCollectionViewModel: ViewModel() {
     val showIncompatible = mutableStateOf(false)
     val showScaled = mutableStateOf(true)
+    val hearted = mutableStateOf(false)
 }
 
 @Composable
@@ -77,12 +78,15 @@ fun MyCollectionScreen(
         topBarParams.title(appType.myCollectionName())
         topBarParams.actions {}
     }
+    val currentHearts = currentHearts()
     val lockerEntries = loadLockerEntries(
+        currentHearts = currentHearts,
         type = appType,
         searchQuery = searchState.query,
         watchType = watchType,
         showIncompatible = viewModel.showIncompatible.value,
         showScaled = viewModel.showScaled.value,
+        hearted = viewModel.hearted.value,
     )
     if (lockerEntries == null) {
         return
@@ -129,6 +133,7 @@ fun MyCollectionScreen(
             selectedType = null,
             showIncompatible = viewModel.showIncompatible,
             showScaled = viewModel.showScaled,
+            hearted = viewModel.hearted,
         )
         when (appType) {
             AppType.Watchface -> {

@@ -12,6 +12,7 @@ import coredevices.util.Platform
 import coredevices.util.emailOrNull
 import coredevices.util.getAndroidActivity
 import coredevices.util.isAndroid
+import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.auth
@@ -21,20 +22,15 @@ import org.koin.core.parameter.parametersOf
 
 @Composable
 fun SignInButton(onError: (String) -> Unit = {}, enabled: Boolean = true) {
-    val platform = koinInject<Platform>()
     val analyticsBackend: AnalyticsBackend = koinInject()
-    val googleAuthUtil = if (platform.isAndroid) {
-        val context = getAndroidActivity()
-        koinInject<GoogleAuthUtil> { parametersOf(context) }
-    } else {
-        koinInject<GoogleAuthUtil>()
-    }
+    val context = rememberUiContext()
+    val googleAuthUtil = koinInject<GoogleAuthUtil>()
     val scope = rememberCoroutineScope()
     Button(
         onClick = {
             scope.launch {
                 val credential = try {
-                    googleAuthUtil.signInGoogle() ?: return@launch
+                    googleAuthUtil.signInGoogle(context!!) ?: return@launch
                 } catch (e: Exception) {
                     onError(e.message ?: "Unknown error")
                     return@launch

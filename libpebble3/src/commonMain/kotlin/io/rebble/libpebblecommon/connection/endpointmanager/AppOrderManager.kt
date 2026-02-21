@@ -35,7 +35,7 @@ class AppOrderManager(
         connectionScope.launch {
             lockerDao.getAppOrderFlow(
                 type = AppType.Watchapp.code,
-                limit = watchConfigFlow.value.lockerSyncLimit,
+                limit = watchConfigFlow.value.lockerSyncLimitV2,
             ).distinctUntilChanged().collect { newOrder ->
                 if (newOrder != stored.watchapps) {
                     stored = stored.copy(watchapps = newOrder)
@@ -46,7 +46,7 @@ class AppOrderManager(
         connectionScope.launch {
             lockerDao.getAppOrderFlow(
                 type = AppType.Watchface.code,
-                limit = watchConfigFlow.value.lockerSyncLimit,
+                limit = watchConfigFlow.value.lockerSyncLimitV2,
             ).distinctUntilChanged().collect { newOrder ->
                 if (newOrder != stored.watchfaces) {
                     stored = stored.copy(watchfaces = newOrder)
