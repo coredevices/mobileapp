@@ -95,6 +95,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSelect -> Section.QuickLaunch
     QuicklaunchWatchPref.QlBack -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSingleClickUp -> Section.QuickLaunch
