@@ -205,6 +205,7 @@ kotlin {
             implementation(libs.firebase.auth)
             implementation(libs.firebase.firestore)
             implementation(libs.firebase.crashlytics)
+            implementation(libs.firebase.messaging)
 
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.contentNegotiation)

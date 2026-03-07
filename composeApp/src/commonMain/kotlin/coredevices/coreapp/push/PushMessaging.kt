@@ -32,7 +32,9 @@ class PushMessaging(
         NotifierManager.addListener(object : NotifierManager.Listener {
             override fun onNewToken(token: String) {
                 logger.v { "onNewToken" }
+                logger.v { "token = $token" }
                 GlobalScope.launch {
+                    logger.d { "fcmToken = $token"  }
                     uploadToken(token)
                 }
             }
@@ -52,6 +54,8 @@ class PushMessaging(
         NotifierManager.setLogger { message -> Logger.v(message) }
 
         GlobalScope.launch {
+            val fcmToken = getFcmToken()
+            logger.d { "token = $fcmToken" }
             Firebase.auth.authStateChanged.drop(1).collect { auth ->
                 logger.d { "Auth changed" }
                 findTokenAndUpload()
@@ -149,6 +153,7 @@ class PushMessaging(
 
     private suspend fun getFcmToken(): String? {
         val token = NotifierManager.getPushNotifier().getToken()
+        logger.d { "fcm-token = $token" }
         if (token != null) {
             return token
         }
