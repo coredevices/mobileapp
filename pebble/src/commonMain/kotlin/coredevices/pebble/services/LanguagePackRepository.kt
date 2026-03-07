@@ -1845,6 +1845,34 @@ private val LanguagePacksJson = """
       "localName": "català",
       "name": "Catalan - by MarSoft",
       "version": 1
+    },
+    {
+      "ISOLocal": "ja_JP",
+      "file": "https://github.com/elliottback/PebbleTimeJapaneseLanguagePack/raw/1e914c39dc459c03ce8a1ae6ee7c17f59f56f21c/pblp_zhs_zht_ja_v5_regular.pbl",
+      "firmware": "4.0.0",
+      "hardware": null,
+      "id": "kuro-japanese-regular-v5",
+      "localName": "日本語",
+      "mobile": {
+        "name": "ios",
+        "version": "2.6.0"
+      },
+      "name": "Japanese (by Kuro)",
+      "version": 5
+    },
+    {
+      "ISOLocal": "ja_JP",
+      "file": "https://github.com/elliottback/PebbleTimeJapaneseLanguagePack/raw/1e914c39dc459c03ce8a1ae6ee7c17f59f56f21c/pblp_zhs_zht_ja_v5_light.pbl",
+      "firmware": "4.0.0",
+      "hardware": null,
+      "id": "kuro-japanese-light-v5",
+      "localName": "日本語 (Light)",
+      "mobile": {
+        "name": "ios",
+        "version": "2.6.0"
+      },
+      "name": "Japanese Light (by Kuro)",
+      "version": 5
     }
   ]
 }
