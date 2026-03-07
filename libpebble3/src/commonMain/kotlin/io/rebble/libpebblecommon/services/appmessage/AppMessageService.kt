@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppIconMessage
 import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppTitleMessage
 import io.rebble.libpebblecommon.packets.AppMessage
 import io.rebble.libpebblecommon.packets.AppMessageTuple
+import io.rebble.libpebblecommon.packets.AppRunStateMessage
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -70,6 +72,18 @@ class AppMessageService(
                         getOrCreateGroup(it.uuid.get()).all.toList()
                     }
                     channels.forEach { channel -> channel.trySend(data) }
+                }
+                is AppRunStateMessage.AppRunStateStop -> {
+                    // Drain every channel of all appMessages after the app stops
+                    val channels = mapAccessMutex.withLock {
+                        channelGroups.get(it.uuid.get())?.all?.toList().orEmpty()
+                    }
+
+                    channels.forEach {
+                        while (it.tryReceive().isSuccess) {
+                            yield()
+                        }
+                    }
                 }
             }
         }.launchIn(scope)
