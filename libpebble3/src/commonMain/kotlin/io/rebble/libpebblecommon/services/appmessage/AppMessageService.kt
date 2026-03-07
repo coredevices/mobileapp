@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppIconMessage
 import io.rebble.libpebblecommon.packets.AppCustomizationSetStockAppTitleMessage
 import io.rebble.libpebblecommon.packets.AppMessage
 import io.rebble.libpebblecommon.packets.AppMessageTuple
+import io.rebble.libpebblecommon.packets.AppRunStateMessage
 import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -42,6 +44,8 @@ class AppMessageService(
     private class ChannelGroup {
         val all = mutableListOf<Channel<InboundAppMessageData>>()
         val unclaimed = ArrayDeque<Channel<InboundAppMessageData>>()
+
+        var lastAppStartTime: Instant = Instant.DISTANT_PAST
 
         init {
             repeat(MAX_SUBSCRIBERS_PER_APP) {
@@ -70,6 +74,23 @@ class AppMessageService(
                         getOrCreateGroup(it.uuid.get()).all.toList()
                     }
                     channels.forEach { channel -> channel.trySend(data) }
+                }
+                is AppRunStateMessage.AppRunStateStop -> {
+                    // Drain every channel of all appMessages after the app stops
+                    val channels = mapAccessMutex.withLock {
+                        channelGroups.get(it.uuid.get())?.all?.toList().orEmpty()
+                    }
+
+                    channels.forEach {
+                        while (it.tryReceive().isSuccess) {
+                            yield()
+                        }
+                    }
+                }
+                is AppRunStateMessage.AppRunStateStart -> {
+                    mapAccessMutex.withLock {
+                        getOrCreateGroup(it.uuid.get()).lastAppStartTime = clock.now()
+                    }
                 }
             }
         }.launchIn(scope)
@@ -124,14 +145,15 @@ class AppMessageService(
     }
 
     override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> = channelFlow {
-        val channel = mapAccessMutex.withLock {
-            getOrCreateGroup(appUuid).claim()
+        val (group, channel) = mapAccessMutex.withLock {
+            val group = getOrCreateGroup(appUuid)
+            group to group.claim()
         }
         try {
             for (msg in channel) {
                 // Messages can buffer up after an app stops on the phone - don't send these stale
                 // messages after the app starts again.
-                if (clock.now() - msg.timestamp > STALE_APPMESSAGE_THRESHOLD) {
+                if (group.lastAppStartTime - msg.timestamp > STALE_APPMESSAGE_THRESHOLD) {
                     logger.w { "Dropping stale AppMessage ${msg.appMessageData.transactionId} for $appUuid" }
                     continue
                 }
