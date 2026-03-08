@@ -1,6 +1,7 @@
 package coredevices.coreapp.push
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
@@ -29,9 +30,11 @@ class PinSyncService : KoinComponent {
     // Inject dependencies via Koin
     private val libPebble: LibPebble by inject()
     private val payloadParser: FCMPayloadParser by inject()
+    private val settings: Settings by inject()
 
     companion object {
         private const val SYNC_BASE_URL = "http://192.168.0.226:5000/v1"
+        private const val TIMELINE_ID_KEY = "pin_sync_timeline_id"
     }
 
     private val client = HttpClient(engine) {
@@ -54,14 +57,15 @@ class PinSyncService : KoinComponent {
     }
 
     /**
-     * Fetch pins from localhost /sync endpoint
+     * Fetch pins from sync endpoint using timeline parameter for incremental updates
      * @return SyncResponse containing pin data, or null if request fails
      */
     private suspend fun fetchPins(): SyncResponse? {
         return try {
-            logger.d { "Fetching pins from $SYNC_BASE_URL/sync" }
+            val syncUrl = buildSyncUrl()
+            logger.d { "Fetching pins from: $syncUrl" }
 
-            val response = client.get("$SYNC_BASE_URL/sync") {
+            val response = client.get(syncUrl) {
                 header("Accept", "application/json")
             }
 
@@ -75,10 +79,16 @@ class PinSyncService : KoinComponent {
 
             val syncResponse = response.body<SyncResponse>()
             logger.d { "Successfully fetched sync response with ${syncResponse.updates.size} updates" }
+
+            // Extract and store timeline ID from syncURL for next request
+            syncResponse.syncURL?.let { nextUrl ->
+                extractAndSaveTimelineId(nextUrl)
+            }
+
             syncResponse
 
         } catch (e: Exception) {
-            logger.e(e) { "Failed to fetch pins from $SYNC_BASE_URL/sync: ${e.message}" }
+            logger.e(e) { "Failed to fetch pins from sync endpoint: ${e.message}" }
             null
         }
     }
@@ -100,6 +110,38 @@ class PinSyncService : KoinComponent {
             }
         } catch (e: Exception) {
             logger.e(e) { "Error processing FCM message with sync: ${e.message}" }
+        }
+    }
+
+    /**
+     * Build sync URL with timeline parameter if available
+     */
+    private fun buildSyncUrl(): String {
+        val timelineId = settings.getStringOrNull(TIMELINE_ID_KEY)
+        return if (timelineId != null) {
+            val url = "$SYNC_BASE_URL/sync?timeline=$timelineId"
+            url
+        } else {
+            val url = "$SYNC_BASE_URL/sync"
+            url
+        }
+    }
+
+    /**
+     * Extract timeline parameter from syncURL and save for next request
+     * Example: "http://127.0.0.1:5000/v1/sync?timeline=34" -> save "34"
+     */
+    private fun extractAndSaveTimelineId(syncUrl: String) {
+        try {
+            val timelineParam = syncUrl.substringAfter("timeline=", "")
+            if (timelineParam.isNotEmpty()) {
+                // Handle multiple parameters by taking only the timeline value
+                val timelineId = timelineParam.substringBefore("&")
+                settings.putString(TIMELINE_ID_KEY, timelineId)
+                logger.d { "Extracted and saved timeline ID: $timelineId" }
+            }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to extract timeline ID from: $syncUrl" }
         }
     }
 
