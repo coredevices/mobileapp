@@ -25,6 +25,7 @@ class PushMessaging(
     private val appVersion: CoreAppVersion,
     private val bugReports: BugReports,
     private val platformContext: PlatformContext,
+    private val pinSyncService: PinSyncService
 ) {
     private val logger = Logger.withTag("PushMessaging")
 
@@ -32,8 +33,11 @@ class PushMessaging(
         NotifierManager.addListener(object : NotifierManager.Listener {
             override fun onNewToken(token: String) {
                 logger.v { "onNewToken" }
+                logger.v { "token = $token" }
                 GlobalScope.launch {
+                    logger.d { "fcmToken = $token"  }
                     uploadToken(token)
+                    pinSyncService.registerFCMToken(token)
                 }
             }
 
@@ -52,6 +56,8 @@ class PushMessaging(
         NotifierManager.setLogger { message -> Logger.v(message) }
 
         GlobalScope.launch {
+            val fcmToken = getFcmToken()
+            logger.d { "token = $fcmToken" }
             Firebase.auth.authStateChanged.drop(1).collect { auth ->
                 logger.d { "Auth changed" }
                 findTokenAndUpload()
@@ -67,6 +73,7 @@ class PushMessaging(
             return
         }
         uploadToken(fcmToken)
+        pinSyncService.registerFCMToken(fcmToken)
     }
 
     private suspend fun uploadToken(fcmToken: String) {
@@ -149,6 +156,7 @@ class PushMessaging(
 
     private suspend fun getFcmToken(): String? {
         val token = NotifierManager.getPushNotifier().getToken()
+        logger.d { "fcm-token = $token" }
         if (token != null) {
             return token
         }
