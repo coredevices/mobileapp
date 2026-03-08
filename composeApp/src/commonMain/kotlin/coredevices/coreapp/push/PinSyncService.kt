@@ -10,6 +10,10 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
@@ -19,6 +23,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 /**
  * Service to fetch pins from localhost /sync endpoint
@@ -111,6 +116,67 @@ class PinSyncService : KoinComponent {
         } catch (e: Exception) {
             logger.e(e) { "Error processing FCM message with sync: ${e.message}" }
         }
+    }
+
+    /**
+     * Register FCM token with the server
+     * @param token The FCM registration token
+     * @return true if registration was successful, false otherwise
+     */
+    suspend fun registerFCMToken(token: String) {
+        if (token.isBlank()) {
+            logger.w { "Cannot register empty FCM token" }
+        }
+
+        if (isTokenAlreadyRegistered(token)) {
+            logger.i { "FCM token already registered" }
+            return
+        }
+
+
+        return try {
+            val response = client.put("$SYNC_BASE_URL/user/fcm_token/$token") {
+                contentType(ContentType.Application.Json)
+                header("Accept", "application/json")
+                // TODO: Replace with actual device ID
+                setBody(
+                    RegisterToken(
+                        deviceId = Uuid.toString(),
+                        platform = "android"
+                    )
+                )
+            }
+
+            when (response.status.value) {
+                200 -> {
+                    logger.i { "Successfully registered FCM token" }
+                    settings.putString("fcm_token_registered", token)
+                }
+
+                409 -> {
+                    logger.w { "FCM token already registered" }
+                    settings.putString("fcm_token_registered", token)
+                }
+
+                else -> {
+                    val errorBody = response.bodyAsText()
+                    logger.e {
+                        "Failed to register FCM token - ${response.status.value} ${response.status.description}: $errorBody"
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to register FCM token: ${e.message}" }
+        }
+    }
+
+    /**
+     * Check if the given token is already registered
+     */
+    private fun isTokenAlreadyRegistered(token: String): Boolean {
+        val registeredToken = settings.getStringOrNull("fcm_token_registered")
+        return registeredToken == token
     }
 
     /**

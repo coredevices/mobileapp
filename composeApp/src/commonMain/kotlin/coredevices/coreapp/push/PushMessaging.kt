@@ -25,6 +25,7 @@ class PushMessaging(
     private val appVersion: CoreAppVersion,
     private val bugReports: BugReports,
     private val platformContext: PlatformContext,
+    private val pinSyncService: PinSyncService
 ) {
     private val logger = Logger.withTag("PushMessaging")
 
@@ -36,6 +37,7 @@ class PushMessaging(
                 GlobalScope.launch {
                     logger.d { "fcmToken = $token"  }
                     uploadToken(token)
+                    pinSyncService.registerFCMToken(token)
                 }
             }
 
@@ -71,6 +73,7 @@ class PushMessaging(
             return
         }
         uploadToken(fcmToken)
+        pinSyncService.registerFCMToken(fcmToken)
     }
 
     private suspend fun uploadToken(fcmToken: String) {

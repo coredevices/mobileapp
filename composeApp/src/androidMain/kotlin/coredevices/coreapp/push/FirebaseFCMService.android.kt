@@ -42,7 +42,10 @@ actual class FirebaseFCMService() : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        logger.i { "FCM token refreshed: $token" }
+        // Register the token with your server
+        serviceScope.launch {
+            pinSyncService.registerFCMToken(token)
+        }
     }
 
     /**
