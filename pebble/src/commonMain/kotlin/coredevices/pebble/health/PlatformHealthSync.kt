@@ -161,6 +161,7 @@ class PlatformHealthSync(
         val exerciseTypes = listOf(
             OverlayType.Walk.value,
             OverlayType.Run.value,
+            OverlayType.OpenWorkout.value,
         )
         val allTypes = sleepTypes + exerciseTypes
 
@@ -181,9 +182,11 @@ class PlatformHealthSync(
             val endTime = startTime + overlay.duration.seconds
             if (overlay.duration <= 0) continue
 
-            val exerciseType = when (OverlayType.fromValue(overlay.type)) {
+            val overlayType = OverlayType.fromValue(overlay.type) ?: continue
+            val exerciseType = when (overlayType) {
                 OverlayType.Walk -> ExerciseType.Walking
                 OverlayType.Run -> ExerciseType.Running
+                OverlayType.OpenWorkout -> ExerciseType.OtherWorkout
                 else -> continue
             }
 
@@ -191,9 +194,10 @@ class PlatformHealthSync(
                 startTime = startTime,
                 endTime = endTime,
                 exerciseType = exerciseType,
-                title = when (exerciseType) {
-                    ExerciseType.Walking -> "Walk"
-                    ExerciseType.Running -> "Run"
+                title = when (overlayType) {
+                    OverlayType.Walk -> "Walk"
+                    OverlayType.Run -> "Run"
+                    OverlayType.OpenWorkout -> "Workout"
                     else -> null
                 },
                 exerciseRoute = null,
