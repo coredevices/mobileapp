@@ -1870,3 +1870,4 @@ enum class WeatherSyncInterval(
         fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
     }
 }
+

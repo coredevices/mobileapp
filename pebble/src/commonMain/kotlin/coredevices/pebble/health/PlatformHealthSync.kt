@@ -14,11 +14,14 @@ import com.viktormykhailiv.kmp.health.records.StepsRecord
 import com.viktormykhailiv.kmp.health.records.metadata.Device
 import com.viktormykhailiv.kmp.health.records.metadata.DeviceType
 import com.viktormykhailiv.kmp.health.records.metadata.Metadata
+import coredevices.util.AppResumed
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.health.OverlayType
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -26,6 +29,7 @@ import kotlin.time.Instant
 class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
+    private val appResumed: AppResumed,
 ) {
     private val logger = Logger.withTag("PlatformHealthSync")
     private val healthManager: HealthManager = HealthManagerFactory().createManager()
@@ -33,6 +37,21 @@ class PlatformHealthSync(
 
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing
+
+    /** Start observing health data updates and app foreground events, auto-syncing to the platform. */
+    fun startAutoSync(scope: CoroutineScope) {
+        scope.launch {
+            libPebble.healthDataUpdated.collect {
+                sync()
+            }
+        }
+        scope.launch {
+            appResumed.appResumed.collect {
+                libPebble.requestHealthData()
+                sync()
+            }
+        }
+    }
 
     /** Check if the health platform is available on this device. */
     suspend fun isAvailable(): Boolean {

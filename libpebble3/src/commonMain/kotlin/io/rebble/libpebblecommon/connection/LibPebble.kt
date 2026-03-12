@@ -58,6 +58,7 @@ import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -126,6 +127,7 @@ interface HealthApi {
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()
     val healthDao: HealthDao
+    val healthDataUpdated: SharedFlow<Unit>
 }
 
 interface Weather {
