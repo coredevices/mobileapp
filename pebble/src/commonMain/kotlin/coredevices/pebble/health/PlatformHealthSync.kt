@@ -168,19 +168,30 @@ class PlatformHealthSync(
         val overlays = healthDao.getOverlayEntriesAfter(lastTimestamp, allTypes)
         if (overlays.isEmpty()) return
 
-        val healthRecords = mutableListOf<HealthRecord>()
-
         val sleepOverlays = overlays.filter { it.type in sleepTypes }
         val exerciseOverlays = overlays.filter { it.type in exerciseTypes }
 
-        // Build sleep sessions: group adjacent sleep overlays (within 2h gap)
-        healthRecords += buildSleepSessions(sleepOverlays)
+        var allSucceeded = true
 
-        // Build exercise records
+        // Write sleep sessions separately so exercise failures don't block sleep
+        val sleepRecords = buildSleepSessions(sleepOverlays)
+        if (sleepRecords.isNotEmpty()) {
+            logger.d { "Writing ${sleepRecords.size} sleep sessions to health platform" }
+            val result = healthManager.writeData(sleepRecords)
+            if (result.isSuccess) {
+                logger.d { "Synced ${sleepRecords.size} sleep records" }
+            } else {
+                allSucceeded = false
+                logger.e { "Failed to write sleep records: ${result.exceptionOrNull()}" }
+            }
+        }
+
+        // Write exercise records separately
+        val exerciseRecords = mutableListOf<HealthRecord>()
         for (overlay in exerciseOverlays) {
+            if (overlay.duration <= 0) continue
             val startTime = Instant.fromEpochSeconds(overlay.startTime)
             val endTime = startTime + overlay.duration.seconds
-            if (overlay.duration <= 0) continue
 
             val overlayType = OverlayType.fromValue(overlay.type) ?: continue
             val exerciseType = when (overlayType) {
@@ -190,7 +201,7 @@ class PlatformHealthSync(
                 else -> continue
             }
 
-            healthRecords += ExerciseSessionRecord(
+            exerciseRecords += ExerciseSessionRecord(
                 startTime = startTime,
                 endTime = endTime,
                 exerciseType = exerciseType,
@@ -204,16 +215,18 @@ class PlatformHealthSync(
                 metadata = createMetadata(overlay.startTime, "exercise"),
             )
         }
-
-        if (healthRecords.isNotEmpty()) {
-            val result = healthManager.writeData(healthRecords)
+        if (exerciseRecords.isNotEmpty()) {
+            val result = healthManager.writeData(exerciseRecords)
             if (result.isSuccess) {
-                tracker.lastSyncedOverlayTimestamp = overlays.maxOf { it.startTime }
-                logger.d { "Synced ${healthRecords.size} sleep/exercise records" }
+                logger.d { "Synced ${exerciseRecords.size} exercise records" }
             } else {
-                logger.e { "Failed to write sleep/exercise records: ${result.exceptionOrNull()}" }
+                allSucceeded = false
+                logger.e { "Failed to write exercise records: ${result.exceptionOrNull()}" }
             }
-        } else {
+        }
+
+        // Only advance tracker if all writes succeeded (or there was nothing to write)
+        if (allSucceeded) {
             tracker.lastSyncedOverlayTimestamp = overlays.maxOf { it.startTime }
         }
     }
@@ -221,34 +234,47 @@ class PlatformHealthSync(
     private fun buildSleepSessions(overlays: List<OverlayDataEntity>): List<SleepSessionRecord> {
         if (overlays.isEmpty()) return emptyList()
 
-        val sorted = overlays.sortedBy { it.startTime }
-        val sessions = mutableListOf<SleepSessionRecord>()
-        var currentGroup = mutableListOf(sorted.first())
+        // Filter to only overlays with positive duration before grouping
+        val valid = overlays.filter { it.duration > 0 }.sortedBy { it.startTime }
+        if (valid.isEmpty()) return emptyList()
 
-        for (i in 1 until sorted.size) {
+        val groups = mutableListOf<MutableList<OverlayDataEntity>>()
+        var currentGroup = mutableListOf(valid.first())
+
+        for (i in 1 until valid.size) {
             val prev = currentGroup.last()
             val prevEnd = prev.startTime + prev.duration
-            val curr = sorted[i]
+            val curr = valid[i]
 
             // Group overlays within 2 hours of each other into one session
             if (curr.startTime - prevEnd <= 2 * 3600) {
                 currentGroup.add(curr)
             } else {
-                sessions += createSleepSession(currentGroup)
+                groups += currentGroup
                 currentGroup = mutableListOf(curr)
             }
         }
-        sessions += createSleepSession(currentGroup)
+        groups += currentGroup
 
-        return sessions
+        return groups.mapNotNull { group ->
+            try {
+                createSleepSession(group)
+            } catch (e: Exception) {
+                logger.e(e) {
+                    "Failed to create sleep session from ${group.size} overlays: " +
+                            group.joinToString { "type=${it.type},start=${it.startTime},dur=${it.duration}" }
+                }
+                null
+            }
+        }
     }
 
     private fun createSleepSession(overlays: List<OverlayDataEntity>): SleepSessionRecord {
         val sessionStart = Instant.fromEpochSeconds(overlays.minOf { it.startTime })
         val sessionEnd = Instant.fromEpochSeconds(overlays.maxOf { it.startTime + it.duration })
 
+        // Build non-overlapping stages sorted by start time
         val stages = overlays
-            .filter { it.duration > 0 }
             .map { overlay ->
                 val stageType = when (OverlayType.fromValue(overlay.type)) {
                     OverlayType.DeepSleep, OverlayType.DeepNap -> SleepStageType.Deep
@@ -261,6 +287,25 @@ class PlatformHealthSync(
                 )
             }
             .sortedBy { it.startTime }
+            .fold(mutableListOf<SleepSessionRecord.Stage>()) { acc, stage ->
+                val prev = acc.lastOrNull()
+                if (prev != null && stage.startTime < prev.endTime) {
+                    // Overlapping stage — trim its start to previous end, or skip if fully contained
+                    if (stage.endTime > prev.endTime) {
+                        acc += SleepSessionRecord.Stage(
+                            startTime = prev.endTime,
+                            endTime = stage.endTime,
+                            type = stage.type,
+                        )
+                    }
+                    // else: fully contained, skip
+                } else {
+                    acc += stage
+                }
+                acc
+            }
+
+        logger.d { "Sleep session: ${stages.size} stages, start=$sessionStart, end=$sessionEnd" }
 
         return SleepSessionRecord(
             startTime = sessionStart,
