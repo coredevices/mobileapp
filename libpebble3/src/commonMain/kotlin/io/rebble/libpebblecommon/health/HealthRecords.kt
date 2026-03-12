@@ -12,7 +12,8 @@ enum class OverlayType(val value: Int) {
     Nap(3),
     DeepNap(4),
     Walk(5),
-    Run(6);
+    Run(6),
+    OpenWorkout(7);
 
     companion object {
         fun fromValue(value: Int): OverlayType? = values().firstOrNull { it.value == value }

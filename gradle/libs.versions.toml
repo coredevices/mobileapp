@@ -54,6 +54,7 @@ cactus = "1.4.3-beta"
 paging = "3.4.0-alpha04"
 reorderable = "3.0.0"
 compass = "2.4.1"
+health-kmp = "1.0.1"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -149,3 +150,4 @@ compass-geocoder = { module = "dev.jordond.compass:geocoder", version.ref = "com
 compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", version.ref = "compass" }
 compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.ref = "compass" }
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
+health-kmp = { module = "com.viktormykhailiv:health-kmp", version.ref = "health-kmp" }

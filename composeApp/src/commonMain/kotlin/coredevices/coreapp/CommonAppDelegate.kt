@@ -11,6 +11,9 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.push.PushMessaging
+import coredevices.pebble.health.PlatformHealthSync
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
 import coredevices.firestore.UsersDao
@@ -55,9 +58,10 @@ class CommonAppDelegate(
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val firestoreLocker: FirestoreLocker,
     private val libPebble: LibPebble,
-) : CoreBackgroundSync {
+) : CoreBackgroundSync, KoinComponent {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
+    private val platformHealthSync: PlatformHealthSync by inject()
 
     /**
      * Fixes case people updated to new version with the setting for model after using the previous default,
@@ -117,6 +121,12 @@ class CommonAppDelegate(
         }
         firestoreLocker.init()
         oneTimeSetLockerOrderMode()
+        // Health: request data from watch, sync to platform, and auto-sync on new data
+        libPebble.requestHealthData()
+        GlobalScope.launch(Dispatchers.Default) {
+            platformHealthSync.sync()
+        }
+        platformHealthSync.startAutoSync(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }
@@ -130,32 +140,35 @@ class CommonAppDelegate(
 
         val now = Clock.System.now()
         val lastFullSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        val lastHealthSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_HEALTH_SYNC_MS, 0L))
         val doFullSync = force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
-        logger.d { "doBackgroundSync: doFullSync=$doFullSync" }
+        val doHealthSync = force || (now - lastHealthSync) >= coreConfigHolder.config.value.healthSyncInterval
+        logger.d { "doBackgroundSync: doFullSync=$doFullSync, doHealthSync=$doHealthSync" }
         if (doFullSync) {
             settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
         }
-        val jobs = if (doFullSync) {
-            listOf(
-                scope.launch {
-                    coreAnalytics.processHeartbeat()
-                },
-                scope.launch {
-                    pebbleAppDelegate.performBackgroundWork(scope)
-                },
-                scope.launch {
-                    appUpdate.updateAvailable.value
-                },
-                scope.launch {
-                    weatherFetcher.fetchWeather(scope)
-                },
-            )
-        } else {
-            listOf(
-                scope.launch {
-                    weatherFetcher.fetchWeather(scope)
-                },
-            )
+        val jobs = mutableListOf(
+            scope.launch {
+                weatherFetcher.fetchWeather(scope)
+            },
+        )
+        if (doHealthSync) {
+            settings.putLong(KEY_LAST_HEALTH_SYNC_MS, now.toEpochMilliseconds())
+            jobs += scope.launch {
+                platformHealthSync.sync()
+                libPebble.requestHealthData()
+            }
+        }
+        if (doFullSync) {
+            jobs += scope.launch {
+                coreAnalytics.processHeartbeat()
+            }
+            jobs += scope.launch {
+                pebbleAppDelegate.performBackgroundWork(scope)
+            }
+            jobs += scope.launch {
+                appUpdate.updateAvailable.value
+            }
         }
         jobs.joinAll()
         syncInProgress.value = false
@@ -189,3 +202,4 @@ class CommonAppDelegate(
 expect fun rescheduleBgRefreshTask(appContext: AppContext, coreConfig: CoreConfig)
 
 private const val KEY_LAST_FULL_SYNC_MS = "last_full_sync_time_ms"
+private const val KEY_LAST_HEALTH_SYNC_MS = "last_health_sync_time_ms"

@@ -10,12 +10,14 @@ import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
+import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.calculateHealthAverages
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
@@ -30,9 +32,10 @@ import kotlin.time.Clock.System
 class Health(
     private val healthSettingsDao: HealthSettingsEntryDao,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
-    private val healthDao: HealthDao,
+    override val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
     private val watchManager: WatchManager,
+    private val healthDataProcessor: HealthDataProcessor,
 ) : HealthApi {
     private val logger = Logger.withTag("Health")
 
@@ -40,6 +43,8 @@ class Health(
         private val HEALTH_STATS_AVERAGE_DAYS = 30
         private val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
     }
+
+    override val healthDataUpdated: SharedFlow<Unit> = healthDataProcessor.healthDataUpdated
 
     override val healthSettings: Flow<HealthSettings> = healthSettingsDao.getWatchSettings()
 

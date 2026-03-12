@@ -9,6 +9,8 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.ui.screens.BugReportProcessor
@@ -82,4 +84,6 @@ val utilModule = module {
     singleOf(::CactusTranscriptionService) bind TranscriptionService::class
     singleOf(::WisprFlowTranscriptionService)
     singleOf(::UsersDaoImpl) bind UsersDao::class
+    singleOf(::HealthSyncTracker)
+    singleOf(::PlatformHealthSync)
 }

@@ -7,6 +7,7 @@ import androidx.paging.PagingSource
 import io.ktor.util.PlatformUtils
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.calls.Call
+import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
@@ -58,6 +59,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -357,6 +359,12 @@ class FakeLibPebble : LibPebble {
     override fun sendHealthAveragesToWatch() {
         // No-op for fake implementation
     }
+
+    override val healthDao: HealthDao
+        get() = throw UnsupportedOperationException("FakeLibPebble does not have a HealthDao")
+
+    override val healthDataUpdated: SharedFlow<Unit>
+        get() = throw UnsupportedOperationException("FakeLibPebble does not have healthDataUpdated")
 
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
         TODO("Not yet implemented")

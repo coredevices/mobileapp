@@ -31,6 +31,9 @@ import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coredevices.pebble.Platform
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInButtons
@@ -55,6 +58,7 @@ enum class OnboardingStage {
 class OnboardingViewModel : ViewModel() {
     val stage = mutableStateOf(OnboardingStage.Welcome)
     val requestedPermissions = mutableStateOf(emptySet<Permission>())
+    val healthPermissionHandled = mutableStateOf(false)
 }
 
 private val logger = Logger.withTag("OnboardingScreen")
@@ -116,7 +120,55 @@ fun OnboardingScreen(
                             it !in viewModel.requestedPermissions.value
                         }
                         logger.v { "permissionToRequest = $permissionToRequest  /  missingPermissions = $missingPermissions " }
-                        if (permissionToRequest == null) {
+                        if (permissionToRequest == null && !viewModel.healthPermissionHandled.value) {
+                            // All regular permissions done — show health sync opt-in
+                            val platformHealthSync: PlatformHealthSync = koinInject()
+                            val healthSyncTracker: HealthSyncTracker = koinInject()
+                            val platform: Platform = koinInject()
+                            val platformName = if (platform == Platform.IOS) "Apple Health" else "Health Connect"
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    text = "Health Sync",
+                                    fontSize = 25.sp,
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    "Sync steps, heart rate, sleep, and workouts from your Pebble to $platformName",
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                PebbleElevatedButton(
+                                    text = "Enable",
+                                    onClick = {
+                                        scope.launch {
+                                            val available = platformHealthSync.isAvailable()
+                                            if (available) {
+                                                val granted = platformHealthSync.requestPermissions()
+                                                if (granted) {
+                                                    healthSyncTracker.enabled = true
+                                                    platformHealthSync.sync()
+                                                }
+                                            }
+                                            viewModel.healthPermissionHandled.value = true
+                                        }
+                                    },
+                                    primaryColor = false,
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                PebbleElevatedButton(
+                                    text = "Skip",
+                                    onClick = {
+                                        viewModel.healthPermissionHandled.value = true
+                                    },
+                                    primaryColor = false,
+                                )
+                            }
+                        } else if (permissionToRequest == null) {
                             viewModel.stage.value = OnboardingStage.SignIn
                         } else {
                             val warnBeforeFullScreenRequest = permissionToRequest.requestIsFullScreen()
