@@ -1845,6 +1845,16 @@ private val LanguagePacksJson = """
       "localName": "català",
       "name": "Catalan - by MarSoft",
       "version": 1
+    },
+    {
+      "ISOLocal": "he_IL",
+      "file": "https://github.com/alonmln/PebbleOS/releases/download/he_IL-v1/he_IL.pbl",
+      "firmware": "4.0.0",
+      "hardware": null,
+      "id": "he_IL_v1",
+      "localName": "עברית",
+      "name": "Hebrew",
+      "version": 1
     }
   ]
 }
