@@ -95,6 +95,10 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override suspend fun sendPin(pin: TimelinePin) {
+        //No-op
+    }
+
     override suspend fun markNotificationRead(itemId: Uuid) {
         // No-op
     }

@@ -87,6 +87,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 
     // Generally, use these. They will act on all watches (or all connected watches, if that makes
     // sense)
+    suspend fun sendPin(pin: TimelinePin)
     suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>? = null)
     suspend fun markNotificationRead(itemId: Uuid)
     suspend fun sendPing(cookie: UInt)
@@ -362,6 +363,10 @@ class LibPebble3(
     }
 
     override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
+
+    override suspend fun sendPin(pin: TimelinePin) {
+        timeline.insertOrReplace(pin)
+    }
 
     override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) {
         timelineNotificationsDao.insertOrReplace(notification)
