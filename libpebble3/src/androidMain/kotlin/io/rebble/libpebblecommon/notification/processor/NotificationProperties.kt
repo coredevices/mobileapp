@@ -75,6 +75,7 @@ enum class NotificationProperties(
     Signal(pkgName = "org.thoughtcrime.securesms", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationSignal),
     Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
     WSJ(pkgName = "wsj.reader_sp", color = TimelineColor.DarkGray, icon = TimelineIcon.NewsEvent),
+    GooglePhoneDialer(pkgName = "com.google.android.dialer", color = TimelineColor.BlueMoon, icon = TimelineIcon.IncomingPhoneCall),
     ;
 
     companion object {
