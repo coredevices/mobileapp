@@ -58,6 +58,10 @@ data class NotificationAppItem(
     val colorName: String?,
     @ColumnInfo(defaultValue = "null")
     val iconCode: String?,
+    @ColumnInfo(defaultValue = "[]")
+    val filterRegexes: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = "null")
+    val filterRegexIsAllowlist: Boolean? = null,
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
@@ -205,6 +209,8 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             vibePatternName = null,
             colorName = null,
             iconCode = null,
+            filterRegexes = emptyList(),
+            filterRegexIsAllowlist = null,
         )
     } catch (e: CancellationException) {
         throw e

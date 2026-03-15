@@ -118,6 +118,12 @@ class NotificationApi(
         }
     }
 
+    override fun updateNotificationAppFilterRegexes(packageName: String, filterRegexes: List<String>, isAllowlist: Boolean?) {
+        libPebbleCoroutineScope.launch {
+            notificationAppDao.updateAppFilterRegexes(packageName, filterRegexes, isAllowlist)
+        }
+    }
+
     override suspend fun getAppIcon(packageName: String): ImageBitmap? {
         return withContext(Dispatchers.IO) {
             iconFor(packageName, appContext)

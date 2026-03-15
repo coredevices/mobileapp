@@ -263,6 +263,8 @@ interface NotificationApps {
         muteState: MuteState,
     )
 
+    fun updateNotificationAppFilterRegexes(packageName: String, filterRegexes: List<String>, isAllowlist: Boolean?)
+
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
 }
