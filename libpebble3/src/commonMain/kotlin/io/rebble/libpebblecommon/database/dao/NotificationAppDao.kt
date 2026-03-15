@@ -82,6 +82,15 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
+    suspend fun updateAppFilterRegexes(packageName: String, filterRegexes: List<String>, filterRegexIsAllowlist: Boolean?) {
+        val existing = getEntry(packageName) ?: return
+        insertOrReplace(existing.copy(
+            filterRegexes = filterRegexes,
+            filterRegexIsAllowlist = filterRegexIsAllowlist,
+        ))
+    }
+
+    @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
         val writeItem = write.asNotificationAppItem()
         if (writeItem == null) {
@@ -96,6 +105,8 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
                 colorName = existingItem?.colorName ?: writeItem.colorName,
                 iconCode = existingItem?.iconCode ?: writeItem.iconCode,
+                filterRegexes = existingItem?.filterRegexes?.ifEmpty { null } ?: writeItem.filterRegexes,
+                filterRegexIsAllowlist = existingItem?.filterRegexIsAllowlist ?: writeItem.filterRegexIsAllowlist,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

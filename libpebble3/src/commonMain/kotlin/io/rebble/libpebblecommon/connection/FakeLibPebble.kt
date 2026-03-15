@@ -269,6 +269,10 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
+    override fun updateNotificationAppFilterRegexes(packageName: String, filterRegexes: List<String>, isAllowlist: Boolean?) {
+        // No-op
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
