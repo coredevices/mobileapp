@@ -294,31 +294,28 @@ private fun RegexFilterSection(
                     if (pattern.isEmpty()) null
                     else try { Regex(pattern); null } catch (e: Exception) { e.message ?: "Invalid regex" }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                OutlinedTextField(
+                    value = pattern,
+                    onValueChange = { newValue ->
+                        regexes[index] = newValue
+                        saveRegexes(regexes, isAllowlist)
+                    },
+                    label = { Text("Regex pattern") },
+                    isError = error != null,
+                    supportingText = if (error != null) {{ Text(error) }} else null,
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                regexes.removeAt(index)
+                                saveRegexes(regexes, isAllowlist)
+                            },
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Remove pattern")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    OutlinedTextField(
-                        value = pattern,
-                        onValueChange = { newValue ->
-                            regexes[index] = newValue
-                            saveRegexes(regexes, isAllowlist)
-                        },
-                        label = { Text("Regex pattern") },
-                        isError = error != null,
-                        supportingText = if (error != null) {{ Text(error) }} else null,
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = {
-                            regexes.removeAt(index)
-                            saveRegexes(regexes, isAllowlist)
-                        },
-                    ) {
-                        Icon(Icons.Filled.Close, contentDescription = "Remove pattern")
-                    }
-                }
+                )
             }
             AssistChip(
                 onClick = { regexes.add("") },
