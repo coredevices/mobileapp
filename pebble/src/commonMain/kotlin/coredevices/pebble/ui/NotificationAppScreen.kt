@@ -115,122 +115,132 @@ fun NotificationAppScreen(
         appWrapper?.let { appWrapper ->
             val app = appWrapper.app
             val bootConfig = rememberBootConfig()
-            Column(
+            LazyColumn(
                 modifier = Modifier.fillMaxSize()
             ) {
-                NotificationAppCard(
-                    entry = appWrapper,
-                    notificationApps = notificationApps,
-                    bootConfig = bootConfig,
-                    platform = platform,
-                    nav = nav,
-                    clickable = false,
-                    showBadge = false,
-                )
-                SelectVibePatternOrNone(
-                    currentPattern = appWrapper.app.vibePatternName,
-                    onChangePattern = { pattern ->
-                        notificationApps.updateNotificationAppState(
-                            packageName = appWrapper.app.packageName,
-                            vibePatternName = pattern?.name,
-                            colorName = appWrapper.app.colorName,
-                            iconCode = appWrapper.app.iconCode,
-                        )
-                    },
-                )
-                SelectColorOrNone(
-                    currentColorName = appWrapper.app.colorName,
-                    onChangeColor = { color ->
-                        notificationApps.updateNotificationAppState(
-                            packageName = appWrapper.app.packageName,
-                            vibePatternName = appWrapper.app.vibePatternName,
-                            colorName = color?.name,
-                            iconCode = appWrapper.app.iconCode,
-                        )
-                    },
-                )
-                SelectIconOrNone(
-                    currentIcon = TimelineIcon.fromCode(appWrapper.app.iconCode),
-                    onChangeIcon = { icon ->
-                        notificationApps.updateNotificationAppState(
-                            packageName = appWrapper.app.packageName,
-                            vibePatternName = appWrapper.app.vibePatternName,
-                            colorName = appWrapper.app.colorName,
-                            iconCode = icon?.code,
-                        )
-                    },
-                )
-                RegexFilterSection(
-                    app = appWrapper.app,
-                    notificationApps = notificationApps,
-                )
+                item {
+                    NotificationAppCard(
+                        entry = appWrapper,
+                        notificationApps = notificationApps,
+                        bootConfig = bootConfig,
+                        platform = platform,
+                        nav = nav,
+                        clickable = false,
+                        showBadge = false,
+                    )
+                }
+                item {
+                    SelectVibePatternOrNone(
+                        currentPattern = appWrapper.app.vibePatternName,
+                        onChangePattern = { pattern ->
+                            notificationApps.updateNotificationAppState(
+                                packageName = appWrapper.app.packageName,
+                                vibePatternName = pattern?.name,
+                                colorName = appWrapper.app.colorName,
+                                iconCode = appWrapper.app.iconCode,
+                            )
+                        },
+                    )
+                }
+                item {
+                    SelectColorOrNone(
+                        currentColorName = appWrapper.app.colorName,
+                        onChangeColor = { color ->
+                            notificationApps.updateNotificationAppState(
+                                packageName = appWrapper.app.packageName,
+                                vibePatternName = appWrapper.app.vibePatternName,
+                                colorName = color?.name,
+                                iconCode = appWrapper.app.iconCode,
+                            )
+                        },
+                    )
+                }
+                item {
+                    SelectIconOrNone(
+                        currentIcon = TimelineIcon.fromCode(appWrapper.app.iconCode),
+                        onChangeIcon = { icon ->
+                            notificationApps.updateNotificationAppState(
+                                packageName = appWrapper.app.packageName,
+                                vibePatternName = appWrapper.app.vibePatternName,
+                                colorName = appWrapper.app.colorName,
+                                iconCode = icon?.code,
+                            )
+                        },
+                    )
+                }
+                item {
+                    RegexFilterSection(
+                        app = appWrapper.app,
+                        notificationApps = notificationApps,
+                    )
+                }
                 // Channels section - only available on Android (iOS doesn't have notification channels)
                 if (platform == Platform.Android) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        ElevatedCard(
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = 6.dp
-                            ),
-                            modifier = Modifier.padding(10.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                modifier = Modifier.fillMaxWidth(),
+                    item {
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            ElevatedCard(
+                                elevation = CardDefaults.cardElevation(
+                                    defaultElevation = 6.dp
+                                ),
+                                modifier = Modifier.padding(10.dp),
                             ) {
-                                Text("Channels", fontSize = 20.sp, modifier = Modifier.padding(5.dp))
-                                FilterChip(
-                                    modifier = Modifier.padding(5.dp),
-                                    onClick = {
-                                        viewModel.onlyNotified.value = !viewModel.onlyNotified.value
-                                    },
-                                    label = {
-                                        Text("Notified only")
-                                    },
-                                    selected = viewModel.onlyNotified.value,
-                                    leadingIcon = if (viewModel.onlyNotified.value) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Filled.Done,
-                                                contentDescription = "Done icon",
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                            )
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Channels", fontSize = 20.sp, modifier = Modifier.padding(5.dp))
+                                    FilterChip(
+                                        modifier = Modifier.padding(5.dp),
+                                        onClick = {
+                                            viewModel.onlyNotified.value = !viewModel.onlyNotified.value
+                                        },
+                                        label = {
+                                            Text("Notified only")
+                                        },
+                                        selected = viewModel.onlyNotified.value,
+                                        leadingIcon = if (viewModel.onlyNotified.value) {
+                                            {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Done,
+                                                    contentDescription = "Done icon",
+                                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                                )
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
-                    LazyColumn {
-                        items(
-                            items = channelGroups,
-                            key = { it.id },
-                        ) { group ->
-                            if (channelGroups.size > 1) {
-                                ListItem(
-                                    headlineContent = {
-                                        Text(
-                                            text = group.name ?: "Default Group",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(vertical = 8.dp),
-                                        )
-                                    }
-                                )
-                            }
-                            group.channels.forEach { channel ->
-                                ChannelCard(
-                                    channelItem = channel,
-                                    app = app,
-                                    notificationApps = notificationApps,
-                                    channelCounts = channelCounts,
-                                    nav = nav,
-                                )
-                            }
-                            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                    items(
+                        items = channelGroups,
+                        key = { it.id },
+                    ) { group ->
+                        if (channelGroups.size > 1) {
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = group.name ?: "Default Group",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                    )
+                                }
+                            )
                         }
+                        group.channels.forEach { channel ->
+                            ChannelCard(
+                                channelItem = channel,
+                                app = app,
+                                notificationApps = notificationApps,
+                                channelCounts = channelCounts,
+                                nav = nav,
+                            )
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                     }
                 }
             }
