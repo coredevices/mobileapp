@@ -36,6 +36,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -43,9 +44,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -256,13 +261,26 @@ private fun RegexFilterSection(
     val regexes = remember(app.filterRegexes) { mutableStateListOf(*app.filterRegexes.toTypedArray()) }
     var isAllowlist by remember(app.filterRegexIsAllowlist) { mutableStateOf(app.filterRegexIsAllowlist == true) }
 
-    fun saveRegexes(patterns: List<String>, allowlist: Boolean) {
-        val valid = patterns.filter { it.isNotEmpty() && try { Regex(it); true } catch (_: Exception) { false } }
+    fun saveRegexes(patterns: List<String>, allowlist: Boolean, removeEmpty: Boolean = false) {
+        var cleanedPatterns = patterns
+        if (removeEmpty) {
+            cleanedPatterns = cleanedPatterns.filter { it.isNotEmpty() }
+        }
+        cleanedPatterns = cleanedPatterns.filter { it.isEmpty() || try { Regex(it); true } catch (_: Exception) { false } }
         notificationApps.updateNotificationAppFilterRegexes(
             packageName = app.packageName,
-            filterRegexes = valid,
-            isAllowlist = if (valid.isNotEmpty()) allowlist else null,
+            filterRegexes = cleanedPatterns,
+            isAllowlist = allowlist,
         )
+    }
+
+    var regexFocusIndex by remember { mutableStateOf(-1) }
+    val currentRegexes by rememberUpdatedState(regexes)
+    val currentIsAllowlist by rememberUpdatedState(isAllowlist)
+    DisposableEffect(Unit) {
+        onDispose {
+            saveRegexes(currentRegexes, currentIsAllowlist, removeEmpty = true)
+        }
     }
 
     ElevatedCard(
@@ -294,11 +312,17 @@ private fun RegexFilterSection(
                     if (pattern.isEmpty()) null
                     else try { Regex(pattern); null } catch (e: Exception) { e.message ?: "Invalid regex" }
                 }
+                val focusRequester = remember { FocusRequester() }
+                LaunchedEffect(Unit) {
+                    if (regexFocusIndex == index) {
+                        focusRequester.requestFocus()
+                        regexFocusIndex = -1
+                    }
+                }
                 OutlinedTextField(
                     value = pattern,
                     onValueChange = { newValue ->
                         regexes[index] = newValue
-                        saveRegexes(regexes, isAllowlist)
                     },
                     label = { Text("Regex pattern") },
                     isError = error != null,
@@ -314,11 +338,20 @@ private fun RegexFilterSection(
                             Icon(Icons.Filled.Close, contentDescription = "Remove pattern")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            if (!state.isFocused) {
+                                saveRegexes(regexes, isAllowlist)
+                            }
+                        },
                 )
             }
             AssistChip(
-                onClick = { regexes.add("") },
+                onClick = {
+                    regexFocusIndex = regexes.size
+                    regexes.add("")
+                },
                 label = { Text("Add pattern (regex)") },
                 leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
                 modifier = Modifier.padding(top = 4.dp),
