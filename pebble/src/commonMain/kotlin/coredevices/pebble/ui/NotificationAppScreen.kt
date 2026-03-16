@@ -56,7 +56,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.Platform
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
@@ -319,6 +321,9 @@ private fun RegexFilterSection(
     var regexFocusIndex by remember { mutableStateOf(-1) }
     val currentRegexes by rememberUpdatedState(regexes)
     val currentIsAllowlist by rememberUpdatedState(isAllowlist)
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        saveRegexes(currentRegexes, currentIsAllowlist, removeEmpty = true)
+    }
     DisposableEffect(Unit) {
         onDispose {
             saveRegexes(currentRegexes, currentIsAllowlist, removeEmpty = true)
