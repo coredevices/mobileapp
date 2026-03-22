@@ -134,6 +134,11 @@ data class NotificationConfig(
     val sendNotifications: Boolean = true,
     val useAndroidVibePatterns: Boolean = false,
     val overrideDefaultVibePattern: String? = null,
+    /**
+     * User-defined canned responses appended to every reply action sent to the watch.
+     * Shown under "Canned messages" in the watch action menu.
+     */
+    val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

@@ -706,6 +706,16 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
+                basicSettingsActionItem(
+                    title = "Quick replies",
+                    description = "Preset messages for notification replies on the watch (canned messages)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    action = {
+                        navBarNav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
                 SettingsItem(
                     title = "Vibration Pattern",
                     topLevelType = TopLevelType.Phone,

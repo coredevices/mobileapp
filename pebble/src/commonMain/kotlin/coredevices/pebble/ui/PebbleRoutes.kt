@@ -86,6 +86,9 @@ object PebbleNavBarRoutes {
     data object WeatherRoute : NavBarRoute
 
     @Serializable
+    data object CannedRepliesRoute : NavBarRoute
+
+    @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
         NavBarRoute
 
@@ -222,6 +225,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.CannedRepliesRoute> {
+        CannedRepliesScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
         AppstoreSettingsScreen(nav, topBarParams)
