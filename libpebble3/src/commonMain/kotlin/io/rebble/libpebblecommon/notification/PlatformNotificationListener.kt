@@ -9,7 +9,9 @@ import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
@@ -47,6 +49,7 @@ class NotificationApi(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appContext: AppContext,
     private val vibePatternDao: VibePatternDao,
+    private val notificationRuleDao: NotificationRuleDao,
 ) : NotificationApps, Vibrations {
     fun init() {
         notificationAppsSync.init()
@@ -118,9 +121,30 @@ class NotificationApi(
         }
     }
 
-    override fun updateNotificationAppFilterRegexes(packageName: String, filterRegexes: List<String>, isAllowlist: Boolean?) {
+    override fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean) {
         libPebbleCoroutineScope.launch {
-            notificationAppDao.updateAppFilterRegexes(packageName, filterRegexes, isAllowlist)
+            notificationAppDao.updateFilterIsAllowlist(packageName, isAllowlist)
+        }
+    }
+
+    override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
+        notificationRuleDao.getRulesForApp(packageName = packageName)
+
+    override fun addNotificationRule(rule: NotificationRuleEntity) {
+        libPebbleCoroutineScope.launch {
+            notificationRuleDao.insert(rule)
+        }
+    }
+
+    override fun updateNotificationRule(rule: NotificationRuleEntity) {
+        libPebbleCoroutineScope.launch {
+            notificationRuleDao.update(rule)
+        }
+    }
+
+    override fun deleteNotificationRule(rule: NotificationRuleEntity) {
+        libPebbleCoroutineScope.launch {
+            notificationRuleDao.deleteById(rule.id)
         }
     }
 

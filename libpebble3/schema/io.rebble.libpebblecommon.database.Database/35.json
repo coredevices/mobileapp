@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 35,
-    "identityHash": "41347b65bb46d97b27360b5975388bc7",
+    "identityHash": "ac1a67cb25fa95064f3c42d996cf2ca4",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -685,7 +685,7 @@
       },
       {
         "tableName": "NotificationAppItemEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `muteExpiration` INTEGER DEFAULT null, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, `filterRegexes` TEXT NOT NULL DEFAULT '[]', `filterRegexIsAllowlist` INTEGER DEFAULT null, PRIMARY KEY(`packageName`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `muteExpiration` INTEGER DEFAULT null, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, `filterIsAllowlist` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`packageName`))",
         "fields": [
           {
             "fieldPath": "recordHashcode",
@@ -767,17 +767,11 @@
             "defaultValue": "null"
           },
           {
-            "fieldPath": "record.filterRegexes",
-            "columnName": "filterRegexes",
-            "affinity": "TEXT",
-            "notNull": true,
-            "defaultValue": "'[]'"
-          },
-          {
-            "fieldPath": "record.filterRegexIsAllowlist",
-            "columnName": "filterRegexIsAllowlist",
+            "fieldPath": "record.filterIsAllowlist",
+            "columnName": "filterIsAllowlist",
             "affinity": "INTEGER",
-            "defaultValue": "null"
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -1731,11 +1725,76 @@
             ]
           }
         ]
+      },
+      {
+        "tableName": "NotificationRuleEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `targetType` INTEGER NOT NULL, `target` TEXT, `matchType` INTEGER NOT NULL, `matchField` INTEGER NOT NULL, `pattern` TEXT NOT NULL, `caseSensitive` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetType",
+            "columnName": "targetType",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "target",
+            "columnName": "target",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "matchType",
+            "columnName": "matchType",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchField",
+            "columnName": "matchField",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pattern",
+            "columnName": "pattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "caseSensitive",
+            "columnName": "caseSensitive",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_NotificationRuleEntity_targetType_target",
+            "unique": false,
+            "columnNames": [
+              "targetType",
+              "target"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_NotificationRuleEntity_targetType_target` ON `${TABLE_NAME}` (`targetType`, `target`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '41347b65bb46d97b27360b5975388bc7')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac1a67cb25fa95064f3c42d996cf2ca4')"
     ]
   }
 }
