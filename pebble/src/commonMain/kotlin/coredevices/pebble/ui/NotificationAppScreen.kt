@@ -6,20 +6,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.DensitySmall
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -35,36 +40,33 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.Platform
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.isAfter
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.MatchField
+import io.rebble.libpebblecommon.database.entity.MatchType
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
+import io.rebble.libpebblecommon.database.entity.TargetType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -176,7 +178,7 @@ fun NotificationAppScreen(
                     )
                 }
                 item {
-                    RegexFilterSection(
+                    NotificationRulesSection(
                         app = appWrapper.app,
                         notificationApps = notificationApps,
                     )
@@ -256,113 +258,203 @@ fun NotificationAppScreen(
 }
 
 @Composable
-private fun RegexFilterSection(
+private fun NotificationRulesSection(
     app: NotificationAppItem,
     notificationApps: NotificationApps,
 ) {
-    val regexes = remember(app.filterRegexes) { mutableStateListOf(*app.filterRegexes.toTypedArray()) }
-    var isAllowlist by remember(app.filterRegexIsAllowlist) { mutableStateOf(app.filterRegexIsAllowlist == true) }
-
-    fun saveRegexes(patterns: List<String>, allowlist: Boolean, removeEmpty: Boolean = false) {
-        var cleanedPatterns = patterns
-        if (removeEmpty) {
-            cleanedPatterns = cleanedPatterns.filter { it.isNotEmpty() }
-        }
-        cleanedPatterns = cleanedPatterns.filter { it.isEmpty() || try { Regex(it); true } catch (_: Exception) { false } }
-        notificationApps.updateNotificationAppFilterRegexes(
-            packageName = app.packageName,
-            filterRegexes = cleanedPatterns,
-            isAllowlist = allowlist,
-        )
-    }
-
-    var regexFocusIndex by remember { mutableStateOf(-1) }
-    val currentRegexes by rememberUpdatedState(regexes)
-    val currentIsAllowlist by rememberUpdatedState(isAllowlist)
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        saveRegexes(currentRegexes, currentIsAllowlist, removeEmpty = true)
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            saveRegexes(currentRegexes, currentIsAllowlist, removeEmpty = true)
-        }
-    }
+    val rules by notificationApps.notificationRulesForApp(app.packageName).collectAsState(emptyList())
+    var editingRule by remember { mutableStateOf<NotificationRuleEntity?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
 
     ElevatedCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         modifier = Modifier.padding(10.dp).fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text("Filter notifications by text", fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text("Notification filter rules", fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 SegmentedButton(
-                    selected = !isAllowlist,
+                    selected = !app.filterIsAllowlist,
                     onClick = {
-                        isAllowlist = false
-                        saveRegexes(regexes, false)
+                        if (app.filterIsAllowlist) {
+                            notificationApps.updateFilterIsAllowlist(app.packageName, false)
+                        }
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                 ) { Text("Block if matching") }
                 SegmentedButton(
-                    selected = isAllowlist,
+                    selected = app.filterIsAllowlist,
                     onClick = {
-                        isAllowlist = true
-                        saveRegexes(regexes, true)
+                        if (!app.filterIsAllowlist) {
+                            notificationApps.updateFilterIsAllowlist(app.packageName, true)
+                        }
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                 ) { Text("Allow if matching") }
             }
-            regexes.forEachIndexed { index, pattern ->
-                val error = remember(pattern) {
-                    if (pattern.isEmpty()) null
-                    else try { Regex(pattern); null } catch (e: Exception) { e.message ?: "Invalid regex" }
-                }
-                val focusRequester = remember { FocusRequester() }
-                LaunchedEffect(Unit) {
-                    if (regexFocusIndex == index) {
-                        focusRequester.requestFocus()
-                        regexFocusIndex = -1
-                    }
-                }
-                OutlinedTextField(
-                    value = pattern,
-                    onValueChange = { newValue ->
-                        regexes[index] = newValue
+            rules.forEach { rule ->
+                ListItem(
+                    headlineContent = {
+                        Text(rule.pattern, maxLines = 1)
                     },
-                    label = { Text("Regex pattern") },
-                    isError = error != null,
-                    supportingText = if (error != null) {{ Text(error) }} else null,
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                regexes.removeAt(index)
-                                saveRegexes(regexes, isAllowlist)
-                            },
-                        ) {
-                            Icon(Icons.Filled.Close, contentDescription = "Remove pattern")
+                    supportingContent = {
+                        val matchTypeLabel = if (rule.matchType == MatchType.Regex) "Regex" else "Text"
+                        val fieldLabel = when (rule.matchField) {
+                            MatchField.Title -> "Title"
+                            MatchField.Body -> "Body"
+                            MatchField.Both -> "Title+Body"
+                        }
+                        val caseLabel = if (rule.caseSensitive) "Case-sensitive" else "Case-insensitive"
+                        Text("$matchTypeLabel on $fieldLabel, $caseLabel")
+                    },
+                    trailingContent = {
+                        Row {
+                            IconButton(onClick = {
+                                editingRule = rule
+                                showDialog = true
+                            }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Edit rule")
+                            }
+                            IconButton(onClick = {
+                                notificationApps.deleteNotificationRule(rule)
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete rule")
+                            }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { state ->
-                            if (!state.isFocused) {
-                                saveRegexes(regexes, isAllowlist)
-                            }
-                        },
                 )
             }
             AssistChip(
                 onClick = {
-                    regexFocusIndex = regexes.size
-                    regexes.add("")
+                    editingRule = null
+                    showDialog = true
                 },
-                label = { Text("Add pattern (regex)") },
+                label = { Text("Add rule") },
                 leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
+
+    if (showDialog) {
+        NotificationRuleDialog(
+            existing = editingRule,
+            onDismiss = { showDialog = false },
+            onSave = { rule ->
+                val entity = rule.copy(
+                    targetType = TargetType.App,
+                    target = app.packageName,
+                )
+                if (editingRule != null) {
+                    notificationApps.updateNotificationRule(entity)
+                } else {
+                    notificationApps.addNotificationRule(entity)
+                }
+                showDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun NotificationRuleDialog(
+    existing: NotificationRuleEntity?,
+    onDismiss: () -> Unit,
+    onSave: (NotificationRuleEntity) -> Unit,
+) {
+    var matchType by remember { mutableStateOf(existing?.matchType ?: MatchType.Text) }
+    var matchField by remember { mutableStateOf(existing?.matchField ?: MatchField.Both) }
+    var pattern by remember { mutableStateOf(existing?.pattern ?: "") }
+    var caseSensitive by remember { mutableStateOf(existing?.caseSensitive ?: false) }
+
+    val regexError = remember(pattern, matchType) {
+        if (matchType == MatchType.Regex && pattern.isNotEmpty()) {
+            try { Regex(pattern); null } catch (e: Exception) { e.message ?: "Invalid regex" }
+        } else null
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existing != null) "Edit rule" else "Add rule") },
+        text = {
+            Column {
+                Text("Match type", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = matchType == MatchType.Text,
+                        onClick = { matchType = MatchType.Text },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    ) { Text("Text") }
+                    SegmentedButton(
+                        selected = matchType == MatchType.Regex,
+                        onClick = { matchType = MatchType.Regex },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    ) { Text("Regex") }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Match field", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = matchField == MatchField.Both,
+                        onClick = { matchField = MatchField.Both },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                    ) { Text("Both") }
+                    SegmentedButton(
+                        selected = matchField == MatchField.Title,
+                        onClick = { matchField = MatchField.Title },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                    ) { Text("Title") }
+                    SegmentedButton(
+                        selected = matchField == MatchField.Body,
+                        onClick = { matchField = MatchField.Body },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                    ) { Text("Body") }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = pattern,
+                    onValueChange = { pattern = it },
+                    label = { Text("Pattern") },
+                    isError = regexError != null,
+                    supportingText = if (regexError != null) {{ Text(regexError) }} else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp)
+                        .clickable { caseSensitive = !caseSensitive },
+                ) {
+                    Checkbox(
+                        checked = caseSensitive,
+                        onCheckedChange = null,
+                    )
+                    Text("Case sensitive", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        NotificationRuleEntity(
+                            id = existing?.id ?: 0,
+                            targetType = existing?.targetType ?: TargetType.App,
+                            target = existing?.target,
+                            matchType = matchType,
+                            matchField = matchField,
+                            pattern = pattern,
+                            caseSensitive = caseSensitive,
+                        )
+                    )
+                },
+                enabled = pattern.isNotBlank() && regexError == null,
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable

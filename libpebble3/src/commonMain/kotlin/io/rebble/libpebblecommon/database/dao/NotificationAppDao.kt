@@ -82,12 +82,9 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
-    suspend fun updateAppFilterRegexes(packageName: String, filterRegexes: List<String>, filterRegexIsAllowlist: Boolean?) {
+    suspend fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean) {
         val existing = getEntry(packageName) ?: return
-        insertOrReplace(existing.copy(
-            filterRegexes = filterRegexes,
-            filterRegexIsAllowlist = filterRegexIsAllowlist,
-        ))
+        insertOrReplace(existing.copy(filterIsAllowlist = isAllowlist))
     }
 
     @Transaction
@@ -105,8 +102,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
                 colorName = existingItem?.colorName ?: writeItem.colorName,
                 iconCode = existingItem?.iconCode ?: writeItem.iconCode,
-                filterRegexes = existingItem?.filterRegexes?.ifEmpty { null } ?: writeItem.filterRegexes,
-                filterRegexIsAllowlist = existingItem?.filterRegexIsAllowlist ?: writeItem.filterRegexIsAllowlist,
+                filterIsAllowlist = existingItem?.filterIsAllowlist ?: writeItem.filterIsAllowlist,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

@@ -15,5 +15,5 @@ enum class NotificationDecision {
     NotSendContactMuted,
     NotSentDuplicate,
     NotSentScreenOn,
-    NotSentRegexFiltered,
+    NotSentRuleFiltered,
 }

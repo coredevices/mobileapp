@@ -178,7 +178,7 @@ fun NotificationDecision.displayName(): String = when (this) {
     NotificationDecision.NotSentDuplicate -> "Duplicate"
     NotificationDecision.NotSendContactMuted -> "Contact Muted"
     NotificationDecision.NotSentScreenOn -> "Screen On"
-    NotificationDecision.NotSentRegexFiltered -> "Regex Filtered"
+    NotificationDecision.NotSentRuleFiltered -> "Rule Filtered"
 }
 
 private val FORMAT = LocalDateTime.Format {

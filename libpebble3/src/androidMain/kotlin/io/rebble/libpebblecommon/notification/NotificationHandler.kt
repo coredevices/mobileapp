@@ -17,6 +17,10 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.entity.MatchField
+import io.rebble.libpebblecommon.database.entity.MatchType
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -27,7 +31,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContac
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
-import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRegexFiltered
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
@@ -51,6 +55,7 @@ class NotificationHandler(
     private val privateLogger: PrivateLogger,
     private val notificationDao: NotificationDao,
     private val context: Context,
+    private val notificationRuleDao: NotificationRuleDao,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -157,18 +162,10 @@ class NotificationHandler(
         val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
         val appProperties = NotificationProperties.lookup(sbn.packageName)
         val showLocalOnlyNotifications = notificationConfig.value.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
-        val regexFiltered = if (appEntry.filterRegexes.isNotEmpty()) {
-            val anyMatches = appEntry.filterRegexes.any { pattern ->
-                val regex = Regex(pattern)
-                val titleMatches = notification.title?.let { regex.containsMatchIn(it) } ?: false
-                val bodyMatches = notification.body?.let { regex.containsMatchIn(it) } ?: false
-                titleMatches || bodyMatches
-            }
-            if (appEntry.filterRegexIsAllowlist == true) !anyMatches else anyMatches
-        } else false
+        val ruleFiltered = checkRuleFiltered(appEntry, notification)
         val decision = when {
             sbn.notification.isLocalOnly() && !showLocalOnlyNotifications -> NotSentLocalOnly
-            regexFiltered -> NotSentRegexFiltered
+            ruleFiltered -> NotSentRuleFiltered
             anyContactMuted -> NotSendContactMuted
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
@@ -192,6 +189,37 @@ class NotificationHandler(
             return null
         }
         return notification
+    }
+
+    private suspend fun checkRuleFiltered(appEntry: NotificationAppItem, notification: LibPebbleNotification): Boolean {
+        val rules = notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        if (rules.isEmpty()) return false
+
+        fun NotificationRuleEntity.matches(): Boolean {
+            val titleText = notification.title ?: ""
+            val bodyText = notification.body ?: ""
+            val textsToCheck = when (matchField) {
+                MatchField.Title -> listOf(titleText)
+                MatchField.Body -> listOf(bodyText)
+                MatchField.Both -> listOf(titleText, bodyText)
+            }
+            return textsToCheck.any { text ->
+                when (matchType) {
+                    MatchType.Text -> text.contains(pattern, ignoreCase = !caseSensitive)
+                    MatchType.Regex -> {
+                        val options = if (!caseSensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
+                        try {
+                            Regex(pattern, options).containsMatchIn(text)
+                        } catch (_: Exception) {
+                            false
+                        }
+                    }
+                }
+            }
+        }
+
+        val anyMatches = rules.any { it.matches() }
+        return if (appEntry.filterIsAllowlist) !anyMatches else anyMatches
     }
 
     private fun screenIsOnAndUnlocked(): Boolean {

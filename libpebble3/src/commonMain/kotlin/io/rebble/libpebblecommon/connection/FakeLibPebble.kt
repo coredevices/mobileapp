@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
@@ -263,7 +264,22 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
-    override fun updateNotificationAppFilterRegexes(packageName: String, filterRegexes: List<String>, isAllowlist: Boolean?) {
+    override fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean) {
+        // No-op
+    }
+
+    override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
+        emptyFlow()
+
+    override fun addNotificationRule(rule: NotificationRuleEntity) {
+        // No-op
+    }
+
+    override fun updateNotificationRule(rule: NotificationRuleEntity) {
+        // No-op
+    }
+
+    override fun deleteNotificationRule(rule: NotificationRuleEntity) {
         // No-op
     }
 
