@@ -345,11 +345,7 @@ private fun NotificationRulesSection(
                     targetType = TargetType.App,
                     target = app.packageName,
                 )
-                if (editingRule != null) {
-                    notificationApps.updateNotificationRule(entity)
-                } else {
-                    notificationApps.addNotificationRule(entity)
-                }
+                notificationApps.upsertNotificationRule(entity)
                 showDialog = false
             },
         )

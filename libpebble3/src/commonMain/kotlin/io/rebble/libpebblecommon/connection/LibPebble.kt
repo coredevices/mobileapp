@@ -266,8 +266,7 @@ interface NotificationApps {
 
     fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean)
     fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
-    fun addNotificationRule(rule: NotificationRuleEntity)
-    fun updateNotificationRule(rule: NotificationRuleEntity)
+    fun upsertNotificationRule(rule: NotificationRuleEntity)
     fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */

@@ -271,11 +271,7 @@ class FakeLibPebble : LibPebble {
     override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
         emptyFlow()
 
-    override fun addNotificationRule(rule: NotificationRuleEntity) {
-        // No-op
-    }
-
-    override fun updateNotificationRule(rule: NotificationRuleEntity) {
+    override fun upsertNotificationRule(rule: NotificationRuleEntity) {
         // No-op
     }
 
