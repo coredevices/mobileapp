@@ -262,7 +262,8 @@ private fun NotificationRulesSection(
     app: NotificationAppItem,
     notificationApps: NotificationApps,
 ) {
-    val rules by notificationApps.notificationRulesForApp(app.packageName).collectAsState(emptyList())
+    val query = remember(app) { notificationApps.notificationRulesForApp(app.packageName) }
+    val rules by query.collectAsState(emptyList())
     var editingRule by remember { mutableStateOf<NotificationRuleEntity?>(null) }
     var showDialog by remember { mutableStateOf(false) }
 
