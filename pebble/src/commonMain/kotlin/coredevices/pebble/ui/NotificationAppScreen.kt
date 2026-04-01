@@ -177,14 +177,16 @@ fun NotificationAppScreen(
                         },
                     )
                 }
-                item {
-                    NotificationRulesSection(
-                        app = appWrapper.app,
-                        notificationApps = notificationApps,
-                    )
-                }
-                // Channels section - only available on Android (iOS doesn't have notification channels)
+                // Rules and channels sections - only available on Android
+                // (iOS doesn't have notification channels)
+                // (Notification filtering pending on-device support on iOS)
                 if (platform == Platform.Android) {
+                    item {
+                        NotificationRulesSection(
+                            app = appWrapper.app,
+                            notificationApps = notificationApps,
+                        )
+                    }
                     item {
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             ElevatedCard(
