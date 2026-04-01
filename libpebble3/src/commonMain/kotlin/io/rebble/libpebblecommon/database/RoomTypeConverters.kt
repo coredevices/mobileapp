@@ -7,9 +7,6 @@ import io.rebble.libpebblecommon.database.entity.BaseAttribute
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.CompanionApp
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
-import io.rebble.libpebblecommon.database.entity.MatchField
-import io.rebble.libpebblecommon.database.entity.MatchType
-import io.rebble.libpebblecommon.database.entity.TargetType
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -174,22 +171,4 @@ class RoomTypeConverters {
     fun CapabilitySetToString(list: Set<ProtocolCapsFlag>): String {
         return json.encodeToString(list)
     }
-
-    @TypeConverter
-    fun TargetTypeToInt(value: TargetType): Int = value.value
-
-    @TypeConverter
-    fun IntToTargetType(value: Int): TargetType = TargetType.fromValue(value)
-
-    @TypeConverter
-    fun MatchTypeToInt(value: MatchType): Int = value.value
-
-    @TypeConverter
-    fun IntToMatchType(value: Int): MatchType = MatchType.fromValue(value)
-
-    @TypeConverter
-    fun MatchFieldToInt(value: MatchField): Int = value.value
-
-    @TypeConverter
-    fun IntToMatchField(value: Int): MatchField = MatchField.fromValue(value)
 }

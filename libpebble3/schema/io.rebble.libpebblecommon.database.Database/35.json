@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 35,
-    "identityHash": "ac1a67cb25fa95064f3c42d996cf2ca4",
+    "identityHash": "d4947667644257e733d82e785ff4eb9b",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -1728,7 +1728,7 @@
       },
       {
         "tableName": "NotificationRuleEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `targetType` INTEGER NOT NULL, `target` TEXT, `matchType` INTEGER NOT NULL, `matchField` INTEGER NOT NULL, `pattern` TEXT NOT NULL, `caseSensitive` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `targetType` TEXT NOT NULL, `target` TEXT, `matchType` TEXT NOT NULL, `matchField` TEXT NOT NULL, `pattern` TEXT NOT NULL, `caseSensitive` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -1739,7 +1739,7 @@
           {
             "fieldPath": "targetType",
             "columnName": "targetType",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -1750,13 +1750,13 @@
           {
             "fieldPath": "matchType",
             "columnName": "matchType",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "matchField",
             "columnName": "matchField",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -1794,7 +1794,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac1a67cb25fa95064f3c42d996cf2ca4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd4947667644257e733d82e785ff4eb9b')"
     ]
   }
 }
