@@ -130,15 +130,9 @@ class NotificationApi(
     override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
         notificationRuleDao.getRulesForApp(packageName = packageName)
 
-    override fun addNotificationRule(rule: NotificationRuleEntity) {
+    override fun upsertNotificationRule(rule: NotificationRuleEntity) {
         libPebbleCoroutineScope.launch {
-            notificationRuleDao.insert(rule)
-        }
-    }
-
-    override fun updateNotificationRule(rule: NotificationRuleEntity) {
-        libPebbleCoroutineScope.launch {
-            notificationRuleDao.update(rule)
+            notificationRuleDao.upsert(rule)
         }
     }
 
