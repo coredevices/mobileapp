@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import coredevices.ui.PebbleElevatedButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.DensitySmall
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -317,32 +317,51 @@ private fun NotificationRulesSection(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text("Notification filter rules", fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                SegmentedButton(
-                    selected = !app.filterIsAllowlist,
-                    onClick = {
-                        if (app.filterIsAllowlist) {
-                            notificationApps.updateFilterIsAllowlist(app.packageName, false)
-                        }
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                ) { Text("Block if matching") }
-                SegmentedButton(
-                    selected = app.filterIsAllowlist,
-                    onClick = {
-                        if (!app.filterIsAllowlist) {
-                            notificationApps.updateFilterIsAllowlist(app.packageName, true)
-                        }
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) { Text("Allow if matching") }
+            if (rules.isEmpty()) {
+                Text(
+                    "No notification rules",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
+                )
+            } else {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    SegmentedButton(
+                        selected = !app.filterIsAllowlist,
+                        onClick = {
+                            if (app.filterIsAllowlist) {
+                                notificationApps.updateFilterIsAllowlist(app.packageName, false)
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    ) { Text("Block if matching") }
+                    SegmentedButton(
+                        selected = app.filterIsAllowlist,
+                        onClick = {
+                            if (!app.filterIsAllowlist) {
+                                notificationApps.updateFilterIsAllowlist(app.packageName, true)
+                            }
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    ) { Text("Allow if matching") }
+                }
+                Spacer(Modifier.height(8.dp))
             }
             rules.forEach { rule ->
-                ListItem(
-                    headlineContent = {
-                        Text(rule.pattern, maxLines = 1)
-                    },
-                    supportingContent = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.shapes.medium,
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(rule.pattern)
+                        Spacer(Modifier.height(2.dp))
                         val matchTypeLabel = if (rule.matchType == MatchType.Regex) "Regex" else "Text"
                         val fieldLabel = when (rule.matchField) {
                             MatchField.Title -> "Title"
@@ -350,33 +369,36 @@ private fun NotificationRulesSection(
                             MatchField.Both -> "Title+Body"
                         }
                         val caseLabel = if (rule.caseSensitive) "Case-sensitive" else "Case-insensitive"
-                        Text("$matchTypeLabel on $fieldLabel, $caseLabel")
-                    },
-                    trailingContent = {
-                        Row {
-                            IconButton(onClick = {
-                                editingRule = rule
-                                showDialog = true
-                            }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "Edit rule")
-                            }
-                            IconButton(onClick = {
-                                notificationApps.deleteNotificationRule(rule)
-                            }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Delete rule")
-                            }
-                        }
-                    },
-                )
+                        Text(
+                            "$matchTypeLabel on $fieldLabel, $caseLabel",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = {
+                        editingRule = rule
+                        showDialog = true
+                    }) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Edit rule")
+                    }
+                    IconButton(onClick = {
+                        notificationApps.deleteNotificationRule(rule)
+                    }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete rule")
+                    }
+                }
             }
-            AssistChip(
+            Spacer(Modifier.height(8.dp))
+            PebbleElevatedButton(
+                text = "Add rule",
                 onClick = {
                     editingRule = null
                     showDialog = true
                 },
-                label = { Text("Add rule") },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
-                modifier = Modifier.padding(top = 4.dp),
+                icon = Icons.Filled.Add,
+                contentDescription = "Add rule",
+                primaryColor = true,
+                modifier = Modifier.align(Alignment.End),
             )
         }
     }
@@ -463,7 +485,7 @@ private fun NotificationRuleDialog(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 12.dp)
                         .clickable { caseSensitive = !caseSensitive },
                 ) {
                     Checkbox(
