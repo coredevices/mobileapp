@@ -162,13 +162,12 @@ class NotificationHandler(
         val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
         val appProperties = NotificationProperties.lookup(sbn.packageName)
         val showLocalOnlyNotifications = notificationConfig.value.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
-        val ruleFiltered = checkRuleFiltered(appEntry, notification)
         val decision = when {
             sbn.notification.isLocalOnly() && !showLocalOnlyNotifications -> NotSentLocalOnly
-            ruleFiltered -> NotSentRuleFiltered
             anyContactMuted -> NotSendContactMuted
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+            checkRuleFiltered(appEntry, notification) -> NotSentRuleFiltered
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
             !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
             else -> result.decision
