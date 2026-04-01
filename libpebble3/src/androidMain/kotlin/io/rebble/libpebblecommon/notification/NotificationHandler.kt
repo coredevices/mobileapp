@@ -192,7 +192,12 @@ class NotificationHandler(
     }
 
     private suspend fun checkRuleFiltered(appEntry: NotificationAppItem, notification: LibPebbleNotification): Boolean {
-        val rules = notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        val rules = try {
+            notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        } catch (e: Exception) {
+            logger.e(e) { "Error loading notification rules, allowing notification" }
+            return false
+        }
         if (rules.isEmpty()) return false
 
         fun NotificationRuleEntity.matches(): Boolean {
