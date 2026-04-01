@@ -208,17 +208,17 @@ class NotificationHandler(
                 MatchField.Body -> listOf(bodyText)
                 MatchField.Both -> listOf(titleText, bodyText)
             }
-            return textsToCheck.any { text ->
-                when (matchType) {
-                    MatchType.Text -> text.contains(pattern, ignoreCase = !caseSensitive)
-                    MatchType.Regex -> {
-                        val options = if (!caseSensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
-                        try {
-                            Regex(pattern, options).containsMatchIn(text)
-                        } catch (_: Exception) {
-                            false
-                        }
+            return when (matchType) {
+                MatchType.Text -> textsToCheck.any { it.contains(pattern, ignoreCase = !caseSensitive) }
+                MatchType.Regex -> {
+                    val options = if (!caseSensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
+                    val regex = try {
+                        Regex(pattern, options)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Invalid regex pattern in notification rule: $pattern" }
+                        return false
                     }
+                    textsToCheck.any { regex.containsMatchIn(it) }
                 }
             }
         }
