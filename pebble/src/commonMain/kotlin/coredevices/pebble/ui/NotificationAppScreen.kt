@@ -401,10 +401,10 @@ private fun NotificationRuleDialog(
     onDismiss: () -> Unit,
     onSave: (NotificationRuleEntity) -> Unit,
 ) {
-    var matchType by remember { mutableStateOf(existing?.matchType ?: MatchType.Text) }
-    var matchField by remember { mutableStateOf(existing?.matchField ?: MatchField.Both) }
-    var pattern by remember { mutableStateOf(existing?.pattern ?: "") }
-    var caseSensitive by remember { mutableStateOf(existing?.caseSensitive ?: false) }
+    var matchType by remember(existing) { mutableStateOf(existing?.matchType ?: MatchType.Text) }
+    var matchField by remember(existing) { mutableStateOf(existing?.matchField ?: MatchField.Both) }
+    var pattern by remember(existing) { mutableStateOf(existing?.pattern ?: "") }
+    var caseSensitive by remember(existing) { mutableStateOf(existing?.caseSensitive ?: false) }
 
     val regexError = remember(pattern, matchType) {
         if (matchType == MatchType.Regex && pattern.isNotEmpty()) {
