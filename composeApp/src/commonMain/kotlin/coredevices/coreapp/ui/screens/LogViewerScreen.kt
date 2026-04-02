@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.filled.WrapText
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +72,7 @@ fun LogViewerScreen(
         var loading by remember { mutableStateOf(true) }
         var autoRefresh by remember { mutableStateOf(false) }
         var watchAppFilter by remember { mutableStateOf(false) }
+        var lineWrap by remember { mutableStateOf(false) }
         val filteredLogLines by remember {
             derivedStateOf {
                 if (watchAppFilter) {
@@ -132,8 +134,8 @@ fun LogViewerScreen(
             loadFullLogs()
         }
 
-        // Scroll to bottom when logs are first loaded
-        LaunchedEffect(filteredLogLines) {
+        // Scroll to bottom when logs change or line wrap is toggled
+        LaunchedEffect(filteredLogLines, lineWrap) {
             filteredLogLines?.let {
                 if (it.isNotEmpty()) {
                     listState.scrollToItem(it.lastIndex)
@@ -154,7 +156,7 @@ fun LogViewerScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Log Viewer") },
+                    title = { Text("Logs") },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
@@ -164,6 +166,13 @@ fun LogViewerScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { lineWrap = !lineWrap }) {
+                            Icon(
+                                Icons.Default.WrapText,
+                                contentDescription = if (lineWrap) "Disable line wrap" else "Enable line wrap",
+                                tint = if (lineWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                         IconButton(onClick = { watchAppFilter = !watchAppFilter }) {
                             Icon(
                                 Icons.Default.Watch,
@@ -266,7 +275,7 @@ fun LogViewerScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .horizontalScroll(horizontalScrollState)
+                            .then(if (!lineWrap) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
                             .padding(horizontal = 8.dp)
                     ) {
                         items(filteredLogLines ?: emptyList()) { line ->
@@ -275,8 +284,8 @@ fun LogViewerScreen(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 lineHeight = 14.sp,
-                                maxLines = 1,
-                                softWrap = false,
+                                maxLines = if (lineWrap) Int.MAX_VALUE else 1,
+                                softWrap = lineWrap,
                             )
                         }
                     }
