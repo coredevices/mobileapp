@@ -13,14 +13,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.Watch
-import androidx.compose.material.icons.filled.WrapText
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,11 +77,13 @@ fun LogViewerScreen(
         var logLines by remember { mutableStateOf<List<String>?>(null) }
         var loading by remember { mutableStateOf(true) }
         var autoRefresh by remember { mutableStateOf(false) }
-        var watchAppFilter by remember { mutableStateOf(false) }
+        var pebblekitFilter by remember { mutableStateOf(false) }
         var lineWrap by remember { mutableStateOf(false) }
+        var hideTimestamps by remember { mutableStateOf(false) }
+        var menuExpanded by remember { mutableStateOf(false) }
         val filteredLogLines by remember {
             derivedStateOf {
-                if (watchAppFilter) {
+                if (pebblekitFilter) {
                     logLines?.filter { line ->
                         "PKJS" in line || "PebbleKit" in line
                     }
@@ -171,7 +175,7 @@ fun LogViewerScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Logs") },
+                    title = { Text("Log Viewer") },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
@@ -181,20 +185,6 @@ fun LogViewerScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { lineWrap = !lineWrap }) {
-                            Icon(
-                                Icons.Default.WrapText,
-                                contentDescription = if (lineWrap) "Disable line wrap" else "Enable line wrap",
-                                tint = if (lineWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        IconButton(onClick = { watchAppFilter = !watchAppFilter }) {
-                            Icon(
-                                Icons.Default.Watch,
-                                contentDescription = if (watchAppFilter) "Show all logs" else "Show watch app logs",
-                                tint = if (watchAppFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
                         IconButton(onClick = {
                             scope.launch {
                                 try {
@@ -205,11 +195,11 @@ fun LogViewerScreen(
                                         .replace(':', '-')
                                         .replace('T', '-')
                                         .substringBefore('.')
-                                    val prefix = if (watchAppFilter) "pebble-watch-logs" else "pebble-app-logs"
+                                    val prefix = if (pebblekitFilter) "pebblekit-logs" else "pebble-app-logs"
                                     val filename = "$prefix-$timestamp.log"
                                     val sharePath = Path(getLogsCacheDir() + "/$filename")
                                     SystemFileSystem.delete(sharePath, mustExist = false)
-                                    if (watchAppFilter && filteredLogLines != null) {
+                                    if (pebblekitFilter && filteredLogLines != null) {
                                         SystemFileSystem.sink(sharePath).buffered().use { sink ->
                                             sink.writeString(filteredLogLines!!.joinToString("\n"))
                                         }
@@ -250,6 +240,34 @@ fun LogViewerScreen(
                                 if (autoRefresh) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (autoRefresh) "Disable auto-refresh" else "Enable auto-refresh"
                             )
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "More options"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Line wrap") },
+                                    onClick = { lineWrap = !lineWrap },
+                                    trailingIcon = { Checkbox(checked = lineWrap, onCheckedChange = null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Hide timestamps") },
+                                    onClick = { hideTimestamps = !hideTimestamps },
+                                    trailingIcon = { Checkbox(checked = hideTimestamps, onCheckedChange = null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("PebbleKit/PKJS only") },
+                                    onClick = { pebblekitFilter = !pebblekitFilter },
+                                    trailingIcon = { Checkbox(checked = pebblekitFilter, onCheckedChange = null) },
+                                )
+                            }
                         }
                     }
                 )
@@ -300,10 +318,12 @@ fun LogViewerScreen(
                                     val (timestamp, severityAndLogger, message) = match.destructured
                                     val severityKey = severityAndLogger.substring(0, 3)
                                     buildAnnotatedString {
-                                        withStyle(SpanStyle(color = timestampColor)) {
-                                            append(timestamp)
+                                        if (!hideTimestamps) {
+                                            withStyle(SpanStyle(color = timestampColor)) {
+                                                append(timestamp)
+                                            }
+                                            append(" ")
                                         }
-                                        append(" ")
                                         withStyle(SpanStyle(color = severityColors[severityKey] ?: defaultSeverityColor)) {
                                             append(severityAndLogger)
                                         }
