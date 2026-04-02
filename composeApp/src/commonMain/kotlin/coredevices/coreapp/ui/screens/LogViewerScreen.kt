@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +54,7 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readString
+import kotlinx.io.writeString
 import org.koin.compose.koinInject
 
 private val logger = Logger.withTag("LogViewerScreen")
@@ -68,6 +70,18 @@ fun LogViewerScreen(
         var logLines by remember { mutableStateOf<List<String>?>(null) }
         var loading by remember { mutableStateOf(true) }
         var autoRefresh by remember { mutableStateOf(false) }
+        var watchAppFilter by remember { mutableStateOf(false) }
+        val filteredLogLines by remember {
+            derivedStateOf {
+                if (watchAppFilter) {
+                    logLines?.filter { line ->
+                        "PKJS" in line || "PebbleKit" in line
+                    }
+                } else {
+                    logLines
+                }
+            }
+        }
         val listState = rememberLazyListState()
         val horizontalScrollState = rememberScrollState()
         val isAtBottom by remember {
@@ -119,8 +133,8 @@ fun LogViewerScreen(
         }
 
         // Scroll to bottom when logs are first loaded
-        LaunchedEffect(logLines) {
-            logLines?.let {
+        LaunchedEffect(filteredLogLines) {
+            filteredLogLines?.let {
                 if (it.isNotEmpty()) {
                     listState.scrollToItem(it.lastIndex)
                 }
@@ -150,6 +164,13 @@ fun LogViewerScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { watchAppFilter = !watchAppFilter }) {
+                            Icon(
+                                Icons.Default.Watch,
+                                contentDescription = if (watchAppFilter) "Show all logs" else "Show watch app logs",
+                                tint = if (watchAppFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                         IconButton(onClick = {
                             scope.launch {
                                 try {
@@ -160,12 +181,19 @@ fun LogViewerScreen(
                                         .replace(':', '-')
                                         .replace('T', '-')
                                         .substringBefore('.')
-                                    val filename = "pebble-app-logs-$timestamp.log"
+                                    val prefix = if (watchAppFilter) "pebble-watch-logs" else "pebble-app-logs"
+                                    val filename = "$prefix-$timestamp.log"
                                     val sharePath = Path(getLogsCacheDir() + "/$filename")
                                     SystemFileSystem.delete(sharePath, mustExist = false)
-                                    SystemFileSystem.source(dumpPath).buffered().use { source ->
+                                    if (watchAppFilter && filteredLogLines != null) {
                                         SystemFileSystem.sink(sharePath).buffered().use { sink ->
-                                            sink.transferFrom(source)
+                                            sink.writeString(filteredLogLines!!.joinToString("\n"))
+                                        }
+                                    } else {
+                                        SystemFileSystem.source(dumpPath).buffered().use { source ->
+                                            SystemFileSystem.sink(sharePath).buffered().use { sink ->
+                                                sink.transferFrom(source)
+                                            }
                                         }
                                     }
                                     platformShareLauncher.share(null, sharePath, "text/plain")
@@ -206,7 +234,7 @@ fun LogViewerScreen(
                 if (!isAtBottom) SmallFloatingActionButton(
                     onClick = {
                         scope.launch {
-                            logLines?.let {
+                            filteredLogLines?.let {
                                 if (it.isNotEmpty()) {
                                     listState.animateScrollToItem(it.lastIndex)
                                 }
@@ -226,7 +254,7 @@ fun LogViewerScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                if (loading && logLines == null) {
+                if (loading && filteredLogLines == null) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -241,7 +269,7 @@ fun LogViewerScreen(
                             .horizontalScroll(horizontalScrollState)
                             .padding(horizontal = 8.dp)
                     ) {
-                        items(logLines ?: emptyList()) { line ->
+                        items(filteredLogLines ?: emptyList()) { line ->
                             Text(
                                 text = line,
                                 fontFamily = FontFamily.Monospace,
