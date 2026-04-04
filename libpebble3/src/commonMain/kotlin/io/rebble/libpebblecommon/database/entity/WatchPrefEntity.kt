@@ -206,6 +206,8 @@ enum class BoolWatchPref(
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true),
+    MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
+    MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     ;
 
     override val type = WatchPrefType.TypeBoolean

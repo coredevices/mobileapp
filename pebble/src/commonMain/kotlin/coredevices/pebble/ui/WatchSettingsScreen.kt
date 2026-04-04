@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -190,6 +191,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     Timeline("Timeline", Icons.Default.Timeline), // watch only
     QuietTime("Quiet Time", Icons.Default.DoNotDisturb),
     Connectivity("Connectivity", Icons.Default.Wifi),
+    Music("Music", Icons.Default.MusicNote), // watch only
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
