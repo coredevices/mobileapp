@@ -86,6 +86,24 @@ class FCMPayloadParser {
         }
     }
 
+    // {uuid:UUID}
+    private fun parseDataSource(uuidString: String?): Uuid? {
+        if (uuidString.isNullOrBlank()) {
+            logger.d { "UUID string is null or blank" }
+            return null
+        }
+
+        return try {
+            val regex = Regex("uuid:\\{([0-9a-fA-F\\-]{36})\\}")
+            val match = regex.find(uuidString)
+            val uuid = match?.groupValues?.get(1) ?: ""
+            Uuid.parse(uuid)
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to parse as standard UUID: $uuidString, error: ${e.message}" }
+            return null
+        }
+    }
+
     /**
      * Parse pins from sync response using serialized data classes
      */
@@ -106,13 +124,24 @@ class FCMPayloadParser {
      * Convert PinData to TimelinePin using serialized data classes
      */
     private fun convertPinDataToTimelinePin(pinData: PinData): TimelinePin? {
+        logger.d {
+            "Converting PinData to TimelinePin: " +
+                    "guid='${pinData.guid}', " +
+                    "dataSource='${pinData.dataSource}', " +
+                    "time='${pinData.time}', " +
+                    "createTime='${pinData.createTime}'" +
+                    "updateTime='${pinData.updateTime}'"
+        }
         return try {
             //TODO correct parentId this is Item ID
-            val parentId = parseUuid(pinData.guid) ?: Uuid.random()
+            val parentId = parseDataSource(pinData.dataSource) ?: Uuid.random()
             val timestamp = parseTimestamp(pinData.time) ?: Clock.System.now()
+            val uid = parseUuid(pinData.guid) ?: Uuid.random()
+
+            logger.d { "Parsed parentId: $parentId, timestamp: $timestamp" }
 
             buildTimelinePin(parentId, timestamp) {
-                itemID = parentId
+                itemID = uid
                 layout = parseLayoutFromData(pinData.layout)
                 flags { isVisible() }
                 attributes { configureAttributesFromPinData(pinData) }

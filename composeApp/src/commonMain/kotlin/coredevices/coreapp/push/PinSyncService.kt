@@ -38,7 +38,7 @@ class PinSyncService : KoinComponent {
     private val settings: Settings by inject()
 
     companion object {
-        private const val SYNC_BASE_URL = "http://192.168.0.226:5000/v1"
+        private const val SYNC_BASE_URL = "http://192.168.0.90:8080/v1"
         private const val TIMELINE_ID_KEY = "pin_sync_timeline_id"
     }
 
@@ -109,7 +109,10 @@ class PinSyncService : KoinComponent {
                     "Sending timeline pin: " +
                             "layout='${timelinePin.content.layout.name}', " +
                             "attributes='${timelinePin.content.attributes.size}', " +
-                            "actions='${timelinePin.content.actions.size}'"
+                            "actions='${timelinePin.content.actions.size}'" +
+                            "timestamp='${timelinePin.content.timestamp}'" +
+                            "parentId='${timelinePin.content.parentId}'" +
+                            "itemId='${timelinePin.itemId}'"
                 }
                 libPebble.sendPin(timelinePin)
             }
