@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import kotlin.time.Clock
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -189,7 +191,7 @@ fun NotificationAppScreen(
                             }
                         }
                     }
-                    LazyColumn {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
                         items(
                             items = channelGroups,
                             key = { it.id },
@@ -219,6 +221,46 @@ fun NotificationAppScreen(
                         }
                     }
                 }
+
+                if (platform == Platform.IOS) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                val expiration = app.muteExpiration
+                val now = Clock.System.now()
+                val isTemporaryMuted = expiration != null && expiration.isAfter(now)
+
+                val muteReasonText = when {
+                    isTemporaryMuted -> {
+                        val duration = expiration!!.instant - now
+                        val timeString = duration.toComponents { hours, minutes, _, _ ->
+                            if (hours > 0) {
+                                "${hours}h ${minutes}m"
+                            } else {
+                                "${minutes}m"
+                            }
+                        }
+                        if (duration.inWholeHours >= 2) {
+                            "Status: Muted for the day ($timeString left)"
+                        } else {
+                            "Status: Muted for 1 hour ($timeString left)"
+                        }
+                    }
+                    app.muteState == MuteState.Always -> "Status: Muted (Always)"
+                    app.muteState == MuteState.Weekdays -> "Status: Muted (Weekdays)"
+                    app.muteState == MuteState.Weekends -> "Status: Muted (Weekends)"
+                    else -> null
+                }
+
+                if (muteReasonText != null) {
+                    Text(
+                        text = muteReasonText,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
     }
@@ -233,18 +275,11 @@ private fun ChannelCard(
     nav: NavBarNav,
 ) {
     val expiration = app.muteExpiration
+    val now = Clock.System.now()
     val appMuted = when {
-        // Check temporary mute first (takes priority)
-        expiration != null -> {
-            // Temporary mute: check if it hasn't expired yet
-            val now = kotlin.time.Clock.System.now()
-            expiration.isAfter(now)
-        }
+        expiration != null && expiration.isAfter(now) -> true
         app.muteState == MuteState.Never -> false
-        else -> {
-            // Permanent or schedule-based mute (Always, Weekdays, Weekends)
-            true
-        }
+        else -> true
     }
     val channelMuted = channelItem.muteState != MuteState.Never
     val count = channelCounts[channelItem.id]?.count

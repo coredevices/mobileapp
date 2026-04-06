@@ -154,16 +154,14 @@ fun NotificationAppCard(
     } else Modifier
     val muted = remember(app) {
         val expiration = app.muteExpiration
+        val now = Clock.System.now()
         when {
             // Check temporary mute first (takes priority)
-            expiration != null -> {
-                // Temporary mute: check if it hasn't expired yet
-                val now = Clock.System.now()
-                expiration.isAfter(now)
-            }
+            expiration != null && expiration.isAfter(now) -> true
             app.muteState == MuteState.Never -> false
             else -> {
                 // Permanent or schedule-based mute (Always, Weekdays, Weekends)
+                // If temporary mute is present but expired, it correctly falls back here.
                 true
             }
         }
