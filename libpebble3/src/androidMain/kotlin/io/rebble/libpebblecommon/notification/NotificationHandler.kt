@@ -17,6 +17,10 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.entity.MatchField
+import io.rebble.libpebblecommon.database.entity.MatchType
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -27,6 +31,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContac
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
@@ -50,6 +55,7 @@ class NotificationHandler(
     private val privateLogger: PrivateLogger,
     private val notificationDao: NotificationDao,
     private val context: Context,
+    private val notificationRuleDao: NotificationRuleDao,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -161,6 +167,7 @@ class NotificationHandler(
             anyContactMuted -> NotSendContactMuted
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+            checkRuleFiltered(appEntry, notification) -> NotSentRuleFiltered
             inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
             !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
             else -> result.decision
@@ -181,6 +188,42 @@ class NotificationHandler(
             return null
         }
         return notification
+    }
+
+    private suspend fun checkRuleFiltered(appEntry: NotificationAppItem, notification: LibPebbleNotification): Boolean {
+        val rules = try {
+            notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        } catch (e: Exception) {
+            logger.e(e) { "Error loading notification rules, allowing notification" }
+            return false
+        }
+        if (rules.isEmpty()) return false
+
+        fun NotificationRuleEntity.matches(): Boolean {
+            val titleText = notification.title ?: ""
+            val bodyText = notification.body ?: ""
+            val textsToCheck = when (matchField) {
+                MatchField.Title -> listOf(titleText)
+                MatchField.Body -> listOf(bodyText)
+                MatchField.Both -> listOf(titleText, bodyText)
+            }
+            return when (matchType) {
+                MatchType.Text -> textsToCheck.any { it.contains(pattern, ignoreCase = !caseSensitive) }
+                MatchType.Regex -> {
+                    val options = if (!caseSensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
+                    val regex = try {
+                        Regex(pattern, options)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Invalid regex pattern in notification rule: $pattern" }
+                        return false
+                    }
+                    textsToCheck.any { regex.containsMatchIn(it) }
+                }
+            }
+        }
+
+        val anyMatches = rules.any { it.matches() }
+        return if (appEntry.filterIsAllowlist) !anyMatches else anyMatches
     }
 
     private fun screenIsOnAndUnlocked(): Boolean {

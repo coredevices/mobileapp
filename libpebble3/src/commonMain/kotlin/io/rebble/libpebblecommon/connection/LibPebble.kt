@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -262,6 +263,11 @@ interface NotificationApps {
         channelId: String,
         muteState: MuteState,
     )
+
+    fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean)
+    fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
+    fun upsertNotificationRule(rule: NotificationRuleEntity)
+    fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
