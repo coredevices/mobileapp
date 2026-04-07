@@ -60,10 +60,10 @@ class CommonAppDelegate(
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val firestoreLocker: FirestoreLocker,
     private val libPebble: LibPebble,
-) : CoreBackgroundSync, KoinComponent {
+    private val platformHealthSync: PlatformHealthSync,
+) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
-    private val platformHealthSync: PlatformHealthSync by inject()
 
     private fun initCactus() {
         val modelProvider = try {
@@ -142,11 +142,6 @@ class CommonAppDelegate(
         }
         firestoreLocker.init()
         oneTimeSetLockerOrderMode()
-        // Health: request data from watch, sync to platform, and auto-sync on new data
-        libPebble.requestHealthData()
-        GlobalScope.launch(Dispatchers.Default) {
-            platformHealthSync.sync()
-        }
         platformHealthSync.startAutoSync(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()

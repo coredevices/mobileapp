@@ -46,8 +46,8 @@ class PlatformHealthSync(
             }
         }
         scope.launch {
+            sync()
             appResumed.appResumed.collect {
-                libPebble.requestHealthData()
                 sync()
             }
         }
