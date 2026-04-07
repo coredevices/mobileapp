@@ -9,6 +9,8 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
+import coredevices.coreapp.push.FCMPayloadParser
+import coredevices.coreapp.push.PinSyncService
 import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.ui.screens.BugReportProcessor
@@ -59,6 +61,8 @@ val utilModule = module {
     singleOf(::NextBugReportContext)
     singleOf(::CommonAppDelegate) bind CoreBackgroundSync::class
     singleOf(::PushMessaging)
+    singleOf(::FCMPayloadParser)
+    singleOf(::PinSyncService)
     singleOf(::CoreDeepLinkHandler)
     singleOf(::RealThemeProvider) bind ThemeProvider::class
     single { Settings() }
