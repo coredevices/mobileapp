@@ -4,19 +4,23 @@ import CoreAppVersion
 import PlatformContext
 import PlatformShareLauncher
 import coredevices.ExperimentalDevices
-import coredevices.coreapp.RealGoogleAuthUtil
+import coredevices.coreapp.auth.RealAppleAuthUtil
+import coredevices.coreapp.auth.RealGithubAuthUtil
+import coredevices.coreapp.auth.RealGoogleAuthUtil
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.IosAppUpdate
 import coredevices.pebble.PebbleIosDelegate
+import coredevices.util.auth.AppleAuthUtil
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
-import coredevices.util.GoogleAuthUtil
+import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.IOSPlatform
 import coredevices.util.IosCompanionDevice
 import coredevices.util.IosPermissionRequester
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
+import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
@@ -32,6 +36,8 @@ import kotlin.time.DurationUnit
 
 val iosDefaultModule = module {
     singleOf(::RealGoogleAuthUtil) bind GoogleAuthUtil::class
+    singleOf(::RealAppleAuthUtil) bind AppleAuthUtil::class
+    singleOf(::RealGithubAuthUtil) bind GitHubAuthUtil::class
     singleOf(::PlatformShareLauncher)
     factory { params ->
         Darwin.create {

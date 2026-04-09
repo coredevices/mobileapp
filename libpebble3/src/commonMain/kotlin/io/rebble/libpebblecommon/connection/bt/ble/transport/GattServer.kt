@@ -18,6 +18,12 @@ import kotlin.uuid.Uuid
 
 expect fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer?
 
+enum class SendResult {
+    Success,
+    Failed,
+    RestartRequired,
+}
+
 expect class GattServer {
     suspend fun addServices()
     suspend fun closeServer()
@@ -29,7 +35,7 @@ expect class GattServer {
     suspend fun sendData(
         identifier: PebbleBleIdentifier, serviceUuid: Uuid,
         characteristicUuid: Uuid, data: ByteArray
-    ): Boolean
+    ): SendResult
     fun wasRestoredWithSubscribedCentral(): Boolean
     fun initServer()
 }
@@ -89,7 +95,15 @@ class GattServerManager(
         characteristicUuid: Uuid,
         data: ByteArray,
     ): Boolean {
-        return gattServer?.sendData(identifier, serviceUuid, characteristicUuid, data) ?: false
+        val result = gattServer?.sendData(identifier, serviceUuid, characteristicUuid, data)
+        return when (result) {
+            SendResult.Success -> true
+            SendResult.Failed, null -> false
+            SendResult.RestartRequired -> {
+                close()
+                false
+            }
+        }
     }
 
     fun wasRestoredWithSubscribedCentral(): Boolean {

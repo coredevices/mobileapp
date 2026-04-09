@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseCore
 import ComposeApp
+import FirebaseAuth
 
 @main
 struct iOSApp: App {
@@ -16,6 +17,8 @@ struct iOSApp: App {
     }
     
     func handleURL(_ url: URL) {
-        IOSDelegate.shared.handleOpenUrl(url: url)
+        if !Auth.auth().canHandle(url) {
+            IOSDelegate.shared.handleOpenUrl(url: url)
+        }
     }
 }

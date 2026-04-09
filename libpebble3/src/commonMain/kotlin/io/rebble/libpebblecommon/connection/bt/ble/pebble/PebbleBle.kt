@@ -35,6 +35,7 @@ class PebbleBle(
     private val gattServerManager: GattServerManager,
     private val batteryWatcher: BatteryWatcher,
     private val preConnectScanner: PreConnectScanner,
+    private val pPoGReset: PPoGReset,
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${identifier.asString}")
 
@@ -128,7 +129,10 @@ class PebbleBle(
             ppogPacketSender.init(device)
         }
 
-        ppog.run()
+        val requestedPpogResetViaCharacteristic = pPoGReset.triggerPpogResetIfNeeded(device)
+        logger.d { "requestedPpogResetViaCharacteristic = $requestedPpogResetViaCharacteristic" }
+
+        ppog.run(requestedPpogResetViaCharacteristic)
         return PebbleConnectionResult.Success
     }
 

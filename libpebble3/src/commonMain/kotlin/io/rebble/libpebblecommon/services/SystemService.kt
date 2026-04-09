@@ -48,7 +48,6 @@ class SystemService(
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
 
-    //    val receivedMessages = Channel<SystemPacket>(Channel.BUFFERED)
     private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
     val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
 
@@ -181,7 +180,9 @@ class SystemService(
                         pongCallback = null
                     }
 
-//                    else -> receivedMessages.trySend(packet)
+                    is TimeMessage.GetTimeUtcRequest-> {
+                        updateTime()
+                    }
                 }
             }
         }

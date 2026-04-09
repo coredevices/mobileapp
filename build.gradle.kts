@@ -11,6 +11,8 @@ plugins {
     alias(libs.plugins.room) apply false
     alias(libs.plugins.nativeCocoaPods) apply false
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.androidKotlinMultiplatformLibrary) apply false
+    alias(libs.plugins.androidLint) apply false
 }
 
 project.gradle.taskGraph.whenReady {

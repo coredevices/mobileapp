@@ -31,6 +31,14 @@ class YahooWeatherInterceptor(
     private val woeidSequence = atomic(0)
     private val cacheMutex = Mutex()
 
+    companion object {
+        private val UUIDS_USE_STANDARD_RESPONSE = listOf(
+            Uuid.parse("1f0b0701-cc8f-47ec-86e7-7181397f9a25"), // Weather land
+            Uuid.parse("1f0b0701-cc8f-47ec-86e7-7181397f9a52"), // Real weather
+            Uuid.parse("1f0b0701-cc8f-47ec-86e7-7181397f8888"), // Love weather
+        )
+    }
+
     override fun shouldIntercept(url: String): Boolean {
         if (!coreConfigHolder.config.value.interceptPKJSWeather) {
             return false
@@ -54,7 +62,7 @@ class YahooWeatherInterceptor(
         }
 
         logger.d { "Intercepting weather request - calling Pebble Service" }
-        return callPebbleService(request)
+        return callPebbleService(request, appUuid)
     }
 
     private suspend fun lookupLocation(params: YahooWeatherParams): YahooLocation? = cacheMutex.withLock {
@@ -104,14 +112,14 @@ class YahooWeatherInterceptor(
         return location
     }
 
-    private suspend fun callPebbleService(request: YahooRequest): InterceptResponse {
+    private suspend fun callPebbleService(request: YahooRequest, appUuid: Uuid): InterceptResponse {
         val location = lookupLocation(request.params)
         if (location == null) {
             return InterceptResponse.ERROR
         }
         return when (request) {
             is YahooRequest.LocationRequest -> handleLocationRequest(location)
-            is YahooRequest.WeatherRequest -> handleWeatherRequest(request, location)
+            is YahooRequest.WeatherRequest -> handleWeatherRequest(request, location, appUuid)
         }
     }
 
@@ -148,6 +156,7 @@ class YahooWeatherInterceptor(
     private suspend fun handleWeatherRequest(
         request: YahooRequest.WeatherRequest,
         location: YahooLocation,
+        appUuid: Uuid,
     ): InterceptResponse {
         val units = request.units.asUnits()
         val weather = pebbleWebServices.getWeather(
@@ -170,7 +179,8 @@ class YahooWeatherInterceptor(
             logger.d { "No temps/firstDay from Pebble service" }
             return InterceptResponse.ERROR
         }
-        val response = if (request.multiItems) {
+        val response = if (request.multiItems && !UUIDS_USE_STANDARD_RESPONSE.contains(appUuid)) {
+            logger.v { "Using alternative Yahoo format" }
             YahooWeatherResponseAlternative(
                 query = YahooWeatherResponseAlternative.QueryAlternative(
                     results = YahooWeatherResponseAlternative.QueryAlternative.ResultsAlternative(
@@ -231,6 +241,7 @@ class YahooWeatherInterceptor(
                 ),
             ).let { Json.encodeToString(YahooWeatherResponseAlternative.serializer(), it) }
         } else {
+            logger.v { "Using standard Yahoo format" }
             YahooWeatherResponse(
                 query = YahooWeatherResponse.Query(
                     results = YahooWeatherResponse.Query.Results(

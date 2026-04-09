@@ -91,6 +91,14 @@
 				<string>pebblejs</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-460977838956-ios-bd3ceed67ca87063303149</string>
+			</array>
+		</dict>
 	</array>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
@@ -133,12 +141,12 @@
 	<string>This app uses your location to facilitate weather and other location-based services on your companion device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app uses your location to facilitate weather and other location-based services on your companion device.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access to create voice notes.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>$(PRODUCT_NAME) needs access to your reminders to create reminders from your Index.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>$(PRODUCT_NAME) needs access to your reminders to create reminders from your Index.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs microphone access to create voice notes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app transcribes your speech to create voice notes and chat with AI.</string>
 	<key>UIApplicationSceneManifest</key>

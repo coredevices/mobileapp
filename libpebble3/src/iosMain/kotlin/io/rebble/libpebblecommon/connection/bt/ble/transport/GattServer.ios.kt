@@ -98,8 +98,9 @@ actual class GattServer(
     )
     private val registeredDevices: MutableMap<PebbleBleIdentifier, RegisteredDevice> =
         mutableMapOf()
-    private val registeredServices = mutableMapOf<Uuid, Map<Uuid, CBMutableCharacteristic>>()
+    private val registeredServices = mutableMapOf<Uuid, CBMutableService>()
     private var wasSubscribedAtRestore = false
+    private var wasRestoredFromKilledState = false
 
     private fun verboseLog(message: () -> String) {
         if (bleConfigFlow.value.verbosePpogLogging) {
@@ -113,18 +114,15 @@ actual class GattServer(
     ) {
         val restoredServices = willRestoreState["kCBRestoredServices"] as? List<CBMutableService>
         restoredServices?.forEach { service ->
-            val characteristics = buildMap {
-                val characteristics = service.characteristics as? List<CBMutableCharacteristic>
-                characteristics?.forEach { c ->
-                    if (c.subscribedCentrals?.isNotEmpty() ?: false) {
-                        logger.d { "${c.UUID} was subscribed at restore time" }
-                        wasSubscribedAtRestore = true
-                    }
-                    put(c.UUID.asUuid(), c)
+            (service.characteristics as? List<CBMutableCharacteristic>)?.forEach { c ->
+                if (c.subscribedCentrals?.isNotEmpty() ?: false) {
+                    logger.d { "${c.UUID} was subscribed at restore time" }
+                    wasSubscribedAtRestore = true
                 }
             }
-            registeredServices.put(service.UUID.asUuid(), characteristics)
+            registeredServices[service.UUID.asUuid()] = service
         }
+        wasRestoredFromKilledState = true
         logger.d { "restoredServices" }
     }
 
@@ -132,10 +130,11 @@ actual class GattServer(
         serviceUuid: Uuid,
         characteristicUuid: Uuid
     ): CBMutableCharacteristic? =
-        registeredServices[serviceUuid]?.get(characteristicUuid)
+        (registeredServices[serviceUuid]?.characteristics as? List<CBMutableCharacteristic>)
+            ?.firstOrNull { it.UUID.asUuid() == characteristicUuid }
 
     actual suspend fun addServices() {
-        logger.d("addServices: waiting for power on")
+        logger.d("addServices: waiting for power on${if (wasRestoredFromKilledState) " (restored from killed state)" else ""}")
         peripheralManagerState.first { it == CBManagerStatePoweredOn }
         addService(
             PPOGATT_DEVICE_SERVICE_UUID_SERVER,
@@ -165,6 +164,7 @@ actual class GattServer(
                 ),
             ),
         )
+        wasRestoredFromKilledState = false
     }
 
     private suspend fun addService(
@@ -172,8 +172,16 @@ actual class GattServer(
         characteristics: List<CBMutableCharacteristic>,
     ) {
         if (findCharacteristic(serviceUuid, characteristics.first().UUID.asUuid()) != null) {
-            logger.d { "service $serviceUuid already present!" }
-            return
+            if (!wasRestoredFromKilledState) {
+                logger.d { "service $serviceUuid already present!" }
+                return
+            }
+            // App was killed and relaunched. Remove and re-add the service to send a
+            // service-changed indication to the connected watch, prompting it to redo
+            // service discovery and re-establish the PPoG session.
+            logger.d { "service $serviceUuid present from state restoration — re-adding to trigger service-changed indication" }
+            peripheralManager.removeService(registeredServices[serviceUuid]!!)
+            registeredServices.remove(serviceUuid)
         }
         logger.d("addService: $serviceUuid")
         val service = CBMutableService(type = serviceUuid.asCbUuid(), primary = true)
@@ -181,7 +189,7 @@ actual class GattServer(
         serviceAdded.onSubscription {
             peripheralManager.addService(service)
         }.first { it.uuid == serviceUuid }
-        registeredServices[serviceUuid] = characteristics.associateBy { it.UUID.asUuid() }
+        registeredServices[serviceUuid] = service
         logger.d("/addService: $serviceUuid")
     }
 
@@ -225,7 +233,7 @@ actual class GattServer(
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
-    ): Boolean {
+    ): SendResult {
         val message = MessageToSend(
             identifier = identifier,
             serviceUuid = serviceUuid,
@@ -236,11 +244,15 @@ actual class GattServer(
             timeout = SEND_TIMEOUT,
             block = {
                 sendQueue.send(message)
-                message.status.filterNotNull().first()
+                if (message.status.filterNotNull().first()) {
+                    SendResult.Success
+                } else {
+                    SendResult.Failed
+                }
             },
             onTimeout = {
                 logger.w { "Timeout sending data to $identifier" }
-                false
+                SendResult.Failed
             },
         )
     }

@@ -1,8 +1,9 @@
 package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
-import com.cactus.CactusSTT
-import com.cactus.services.CactusConfig
+import com.mmk.kmpnotifier.notification.Notifier
+import com.mmk.kmpnotifier.notification.NotifierManager
+import coredevices.util.transcription.CactusModelPathProvider
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
@@ -11,19 +12,27 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.push.PushMessaging
+import coredevices.pebble.health.PlatformHealthSync
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleAppDelegate
-import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
+import coredevices.pebble.account.FirestoreLocker
+import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
+import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,49 +56,82 @@ class CommonAppDelegate(
     private val experimentalDevices: ExperimentalDevices,
     private val coreConfigHolder: CoreConfigHolder,
     private val appContext: AppContext,
+    private val usersDao: UsersDao,
+    private val pebbleAccountProvider: PebbleAccountProvider,
+    private val firestoreLocker: FirestoreLocker,
+    private val libPebble: LibPebble,
+    private val platformHealthSync: PlatformHealthSync,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
 
-    /**
-     * Fixes case people updated to new version with the setting for model after using the previous default,
-     * so we don't try to init with the new default they won't have downloaded.
-     */
-    private fun migrateCactusModelSetting() {
-        GlobalScope.launch {
-            try {
-                if (!settings.hasKey("cactus_stt_model")) {
-                    val model = CactusSTT().getVoiceModels()
-                        .firstOrNull { it.isDownloaded }
-                    model?.let {
-                        settings.putString("cactus_stt_model", it.slug)
+    private fun initCactus() {
+        val modelProvider = try {
+            org.koin.mp.KoinPlatform.getKoin().get<CactusModelPathProvider>()
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus model provider not available" }
+            return
+        }
+        try {
+            modelProvider.initTelemetry()
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus telemetry init skipped" }
+        }
+        try {
+            val incompatible = modelProvider.getIncompatibleModels()
+            if (incompatible.isNotEmpty()) {
+                logger.d { "Incompatible models found, deleting and notifying user to migrate" }
+                coreConfigHolder.update(
+                    coreConfigHolder.config.value.copy(
+                        sttConfig = coreConfigHolder.config.value.sttConfig.copy(
+                            mode = CactusSTTMode.RemoteOnly,
+                            modelName = null,
+                        )
+                    )
+                )
+                incompatible.forEach {
+                    try {
+                        modelProvider.deleteModel(it)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Failed to delete incompatible model $it" }
                     }
                 }
-            } catch (e: Exception) {
-                logger.e(e) { "migrateCactusModelSetting failed" }
+                NotifierManager.getLocalNotifier().notify(
+                    "Offline voice recognition",
+                    "We've made improvements to our offline voice recognition. Please open the app to download the new model from settings."
+                )
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Cactus incompatible model check skipped" }
+        }
+    }
+
+    private fun oneTimeSetLockerOrderMode() {
+        GlobalScope.launch {
+            val key = "HAS_DONE_ONE_OFF_WATCHFACE_ORDER_SETTING"
+            if (!settings.hasKey(key)) {
+                val config = libPebble.config.value
+                libPebble.updateConfig(
+                    config.copy(
+                        watchConfig = config.watchConfig.copy(
+                            orderWatchfacesByLastUsed = true,
+                        )
+                    )
+                )
+                settings.putBoolean(key, true)
             }
         }
     }
 
     fun init() {
+        usersDao.init()
         GlobalScope.launch(Dispatchers.Default) {
-            if (Firebase.auth.currentUser == null) {
-                logger.i { "Logging into firebase anonymously" }
-                try {
-                    Firebase.auth.signInAnonymously().let {
-                        logger.d { "Firebase anonymous UID: ${it.user?.uid}" }
-                    }
-                } catch (e: Exception) {
-                    logger.e(e) { "Failed to sign in anonymously" }
-                }
-            }
+            usersDao.initUserDevToken(pebbleAccountProvider.get().devToken.value)
         }
         Firebase.auth.currentUser?.emailOrNull?.let {
             analyticsBackend.setUser(email = it)
         }
-        CactusConfig.setTelemetryToken("fca9de5c-bbf0-42b4-bd8a-722252542f70")
-        CommonBuildKonfig.CACTUS_PRO_KEY?.let { CactusConfig.setProKey(it) }
-        migrateCactusModelSetting()
+        initCactus()
         pushMessaging.init()
         bugReports.init()
         GlobalScope.launch(Dispatchers.Default) {
@@ -98,48 +140,57 @@ class CommonAppDelegate(
                 experimentalDevices.init()
             }
         }
+        firestoreLocker.init()
+        oneTimeSetLockerOrderMode()
+        platformHealthSync.startAutoSync(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }
     }
 
-    override suspend fun doBackgroundSync(force: Boolean) {
+    override suspend fun doBackgroundSync(scope: CoroutineScope, force: Boolean) {
         if (!syncInProgress.compareAndSet(false, true)) {
             logger.d { "Skipping background sync - already in progress" }
             return
         }
-
         val now = Clock.System.now()
-        val lastFullSync = Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
-        val doFullSync = force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
+        val lastFullSync =
+            Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        val doFullSync =
+            force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
         logger.d { "doBackgroundSync: doFullSync=$doFullSync" }
-        if (doFullSync) {
-            settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
+        try {
+            if (doFullSync) {
+                settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
+            }
+            val jobs = buildList {
+                add(
+                    scope.launch {
+                        weatherFetcher.fetchWeather(scope)
+                    }
+                )
+                add(
+                    scope.launch {
+                        platformHealthSync.sync()
+                        libPebble.requestHealthData()
+                    }
+                )
+                if (doFullSync) {
+                    add(scope.launch {
+                        coreAnalytics.processHeartbeat()
+                    })
+                    add(scope.launch {
+                        pebbleAppDelegate.performBackgroundWork(scope)
+                    })
+                    add(scope.launch {
+                        appUpdate.updateAvailable.value
+                    })
+                }
+            }
+            jobs.joinAll()
+        } finally {
+            syncInProgress.value = false
         }
-        val jobs = if (doFullSync) {
-            listOf(
-                GlobalScope.launch {
-                    coreAnalytics.processHeartbeat()
-                },
-                GlobalScope.launch {
-                    pebbleAppDelegate.performBackgroundWork()
-                },
-                GlobalScope.launch {
-                    appUpdate.updateAvailable.value
-                },
-                GlobalScope.launch {
-                    weatherFetcher.fetchWeather()
-                },
-            )
-        } else {
-            listOf(
-                GlobalScope.launch {
-                    weatherFetcher.fetchWeather()
-                },
-            )
-        }
-        jobs.joinAll()
-        syncInProgress.value = false
         logger.d { "doBackgroundSync / finished doFullSync=$doFullSync" }
     }
 

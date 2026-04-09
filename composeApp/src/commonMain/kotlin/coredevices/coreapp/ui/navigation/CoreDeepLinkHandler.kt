@@ -17,6 +17,10 @@ class CoreDeepLinkHandler {
         return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
     }
 
+    fun clearPendingDeepLink() {
+        _navigateToDeepLink.resetReplayCache()
+    }
+
     companion object {
         private val logger = Logger.withTag("CoreDeepLinkHandler")
         private const val SCHEME = "pebblecore"

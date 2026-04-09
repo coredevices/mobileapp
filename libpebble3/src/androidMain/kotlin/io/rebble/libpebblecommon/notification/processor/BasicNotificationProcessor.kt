@@ -41,6 +41,7 @@ class BasicNotificationProcessor(
         sbn: StatusBarNotification,
         app: NotificationAppItem,
         channel: ChannelItem?,
+        previousUuids: List<Uuid>,
     ): NotificationResult {
         val appProperties = NotificationProperties.lookup(app.packageName)
         // Note: the "if (inflightNotifications.values..." check in [NotificationHandler] is
@@ -86,6 +87,7 @@ class BasicNotificationProcessor(
             people = contactEntries,
             vibrationPattern = sendVibePattern,
             color = color,
+            previousUuids = previousUuids,
         )
         return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
     }

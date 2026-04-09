@@ -109,7 +109,7 @@ fun DebugFirmwareSideload(watchIdentifier: String, coreNav: CoreNav) {
         val watch by watchFlow.collectAsState(null)
         val snackbarHostState = remember { SnackbarHostState() }
         logger.d("watch = $watch")
-        val availableUpdate = (watch as? ConnectedPebble.Firmware)?.firmwareUpdateAvailable
+        val availableUpdate = (watch as? ConnectedPebble.Firmware)?.firmwareUpdateAvailable?.result
         Scaffold(
             topBar = {
                 TopAppBar(

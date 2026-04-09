@@ -57,6 +57,12 @@ actual class DataBuffer {
         }
     }
 
+    private fun checkRemaining(size: Int) {
+        if (_readPosition + size > actualBuf.length.toInt()) {
+            throw IndexOutOfBoundsException("DataBuffer underflow: need $size bytes at position $_readPosition but only ${actualBuf.length.toInt() - _readPosition} remaining")
+        }
+    }
+
     private fun shouldReverse(): Boolean {
         return if (isPlatformBigEndian() && !littleEndian) {
             false
@@ -73,6 +79,7 @@ actual class DataBuffer {
         }
     }
     actual fun getUShort(): UShort {
+        checkRemaining(UShort.SIZE_BYTES)
         memScoped {
             val pShort = alloc<UShortVar>()
             actualBuf.getBytes(pShort.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(UShort.SIZE_BYTES)))
@@ -89,6 +96,7 @@ actual class DataBuffer {
         }
     }
     actual fun getShort(): Short {
+        checkRemaining(Short.SIZE_BYTES)
         memScoped {
             val pShort = alloc<ShortVar>()
             actualBuf.getBytes(pShort.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(Short.SIZE_BYTES)))
@@ -105,6 +113,7 @@ actual class DataBuffer {
         }
     }
     actual fun getUByte(): UByte {
+        checkRemaining(UByte.SIZE_BYTES)
         memScoped {
             val pByte = alloc<UByteVar>()
             actualBuf.getBytes(pByte.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(UByte.SIZE_BYTES)))
@@ -121,6 +130,7 @@ actual class DataBuffer {
         }
     }
     actual fun getByte(): Byte {
+        checkRemaining(Byte.SIZE_BYTES)
         memScoped {
             val pByte = alloc<ByteVar>()
             actualBuf.getBytes(pByte.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(Byte.SIZE_BYTES)))
@@ -136,6 +146,7 @@ actual class DataBuffer {
         }
     }
     actual fun getBytes(count: Int): UByteArray {
+        checkRemaining(count)
         memScoped {
             val pBytes = allocArray<UByteVar>(count)
             actualBuf.getBytes(pBytes.getPointer(this), NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(count)))
@@ -158,6 +169,7 @@ actual class DataBuffer {
         }
     }
     actual fun getUInt(): UInt {
+        checkRemaining(UInt.SIZE_BYTES)
         memScoped {
             val pUInt = alloc<UIntVar>()
             actualBuf.getBytes(pUInt.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(UInt.SIZE_BYTES)))
@@ -174,6 +186,7 @@ actual class DataBuffer {
         }
     }
     actual fun getInt(): Int {
+        checkRemaining(Int.SIZE_BYTES)
         memScoped {
             val pInt = alloc<IntVar>()
             actualBuf.getBytes(pInt.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(Int.SIZE_BYTES)))
@@ -190,6 +203,7 @@ actual class DataBuffer {
         }
     }
     actual fun getULong(): ULong {
+        checkRemaining(ULong.SIZE_BYTES)
         memScoped {
             val pULong = alloc<ULongVar>()
             actualBuf.getBytes(pULong.ptr, NSMakeRange(castToNativeSize(_readPosition), castToNativeSize(ULong.SIZE_BYTES)))

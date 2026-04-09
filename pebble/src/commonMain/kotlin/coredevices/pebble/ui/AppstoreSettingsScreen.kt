@@ -239,7 +239,8 @@ fun AppstoreSourceItem(
                                 AppType.Watchface -> "Watchface Collections"
                             },
                             modifier = Modifier.padding(start = 32.dp),
-                            style = MaterialTheme.typography.labelSmall
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                         cols.forEach { col ->
                             ListItem(

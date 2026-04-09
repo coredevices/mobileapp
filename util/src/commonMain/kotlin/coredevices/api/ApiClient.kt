@@ -63,9 +63,13 @@ abstract class ApiClient(version: String, timeout: Duration = 30.seconds):
     }
 
     protected suspend fun requireUserToken(): String {
-        return Firebase.auth.currentUser?.getIdToken(false) ?: throw ApiAuthException(
-            "No user"
-        )
+        try {
+            return Firebase.auth.currentUser?.getIdToken(false) ?: throw ApiAuthException("No user")
+        } catch (e: ApiAuthException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiAuthException("Network error retrieving token", e)
+        }
     }
 
     protected suspend fun HttpRequestBuilder.firebaseAuth() {

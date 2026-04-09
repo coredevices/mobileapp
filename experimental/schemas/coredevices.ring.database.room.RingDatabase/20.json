@@ -1,0 +1,781 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 20,
+    "identityHash": "2098fc0b304ef8123a47da89577ecd54",
+    "entities": [
+      {
+        "tableName": "LocalReminderData",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `time` INTEGER NOT NULL, `message` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "time",
+            "columnName": "time",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "CachedRecordingMetadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sampleRate` INTEGER NOT NULL, `mimeType` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleRate",
+            "columnName": "sampleRate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "RingDebugTransfer",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `satelliteName` TEXT, `satelliteId` TEXT NOT NULL, `satelliteFirmwareVersion` TEXT NOT NULL, `satelliteLastAdvertisementTimestamp` INTEGER NOT NULL, `collectionIndex` INTEGER NOT NULL, `collectionStartCount` INTEGER NOT NULL DEFAULT -1, `buttonSequence` TEXT, `sampleCount` INTEGER NOT NULL, `sampleRate` INTEGER NOT NULL, `buttonReleaseTimestamp` INTEGER, `transferCompleteTimestamp` INTEGER NOT NULL, `storedPath` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "satelliteName",
+            "columnName": "satelliteName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "satelliteId",
+            "columnName": "satelliteId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "satelliteFirmwareVersion",
+            "columnName": "satelliteFirmwareVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "satelliteLastAdvertisementTimestamp",
+            "columnName": "satelliteLastAdvertisementTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectionIndex",
+            "columnName": "collectionIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectionStartCount",
+            "columnName": "collectionStartCount",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "-1"
+          },
+          {
+            "fieldPath": "buttonSequence",
+            "columnName": "buttonSequence",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sampleCount",
+            "columnName": "sampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleRate",
+            "columnName": "sampleRate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buttonReleaseTimestamp",
+            "columnName": "buttonReleaseTimestamp",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferCompleteTimestamp",
+            "columnName": "transferCompleteTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storedPath",
+            "columnName": "storedPath",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "LocalRecording",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `localTimestamp` INTEGER NOT NULL, `firestoreId` TEXT, `updated` INTEGER NOT NULL DEFAULT 0, `assistantTitle` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localTimestamp",
+            "columnName": "localTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firestoreId",
+            "columnName": "firestoreId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updated",
+            "columnName": "updated",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "assistantTitle",
+            "columnName": "assistantTitle",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_LocalRecording_firestoreId",
+            "unique": true,
+            "columnNames": [
+              "firestoreId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_LocalRecording_firestoreId` ON `${TABLE_NAME}` (`firestoreId`)"
+          },
+          {
+            "name": "index_LocalRecording_localTimestamp",
+            "unique": false,
+            "columnNames": [
+              "localTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_LocalRecording_localTimestamp` ON `${TABLE_NAME}` (`localTimestamp`)"
+          }
+        ]
+      },
+      {
+        "tableName": "ConversationMessageEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recordingId` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `role` TEXT NOT NULL, `content` TEXT, `tool_calls` TEXT, `tool_call_id` TEXT, `semantic_result` TEXT, FOREIGN KEY(`recordingId`) REFERENCES `LocalRecording`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recordingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "document.role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "document.content",
+            "columnName": "content",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "document.tool_calls",
+            "columnName": "tool_calls",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "document.tool_call_id",
+            "columnName": "tool_call_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "document.semantic_result",
+            "columnName": "semantic_result",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_ConversationMessageEntity_recordingId",
+            "unique": false,
+            "columnNames": [
+              "recordingId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_ConversationMessageEntity_recordingId` ON `${TABLE_NAME}` (`recordingId`)"
+          },
+          {
+            "name": "index_ConversationMessageEntity_recordingId_role_timestamp",
+            "unique": false,
+            "columnNames": [
+              "recordingId",
+              "role",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_ConversationMessageEntity_recordingId_role_timestamp` ON `${TABLE_NAME}` (`recordingId`, `role`, `timestamp`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "LocalRecording",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordingId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "RecordingEntryEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recordingId` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `fileName` TEXT, `status` TEXT NOT NULL, `transcription` TEXT, `error` TEXT, `ringTransferInfo` TEXT, `userMessageId` INTEGER, FOREIGN KEY(`recordingId`) REFERENCES `LocalRecording`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recordingId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "fileName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transcription",
+            "columnName": "transcription",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ringTransferInfo",
+            "columnName": "ringTransferInfo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "userMessageId",
+            "columnName": "userMessageId",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_RecordingEntryEntity_userMessageId",
+            "unique": false,
+            "columnNames": [
+              "userMessageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RecordingEntryEntity_userMessageId` ON `${TABLE_NAME}` (`userMessageId`)"
+          },
+          {
+            "name": "index_RecordingEntryEntity_recordingId",
+            "unique": false,
+            "columnNames": [
+              "recordingId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RecordingEntryEntity_recordingId` ON `${TABLE_NAME}` (`recordingId`)"
+          },
+          {
+            "name": "index_RecordingEntryEntity_recordingId_timestamp",
+            "unique": false,
+            "columnNames": [
+              "recordingId",
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RecordingEntryEntity_recordingId_timestamp` ON `${TABLE_NAME}` (`recordingId`, `timestamp`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "LocalRecording",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordingId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "RingTransfer",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recordingId` INTEGER, `recordingEntryId` INTEGER, `isCurrentIndexIteration` INTEGER NOT NULL, `status` TEXT NOT NULL, `fileId` TEXT, `createdAt` INTEGER NOT NULL, `transferInfo_collectionStartIndex` INTEGER, `transferInfo_collectionEndIndex` INTEGER, `transferInfo_buttonPressed` INTEGER, `transferInfo_buttonReleased` INTEGER, `transferInfo_advertisementReceived` INTEGER, `transferInfo_transferCompleted` INTEGER, `transferInfo_buttonReleaseAdvertisementLatencyMs` INTEGER, FOREIGN KEY(`recordingId`) REFERENCES `LocalRecording`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`recordingEntryId`) REFERENCES `RecordingEntryEntity`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordingId",
+            "columnName": "recordingId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "recordingEntryId",
+            "columnName": "recordingEntryId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isCurrentIndexIteration",
+            "columnName": "isCurrentIndexIteration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileId",
+            "columnName": "fileId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transferInfo.collectionStartIndex",
+            "columnName": "transferInfo_collectionStartIndex",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.collectionEndIndex",
+            "columnName": "transferInfo_collectionEndIndex",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.buttonPressed",
+            "columnName": "transferInfo_buttonPressed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.buttonReleased",
+            "columnName": "transferInfo_buttonReleased",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.advertisementReceived",
+            "columnName": "transferInfo_advertisementReceived",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.transferCompleted",
+            "columnName": "transferInfo_transferCompleted",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferInfo.buttonReleaseAdvertisementLatencyMs",
+            "columnName": "transferInfo_buttonReleaseAdvertisementLatencyMs",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_RingTransfer_recordingId",
+            "unique": false,
+            "columnNames": [
+              "recordingId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RingTransfer_recordingId` ON `${TABLE_NAME}` (`recordingId`)"
+          },
+          {
+            "name": "index_RingTransfer_recordingEntryId",
+            "unique": false,
+            "columnNames": [
+              "recordingEntryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RingTransfer_recordingEntryId` ON `${TABLE_NAME}` (`recordingEntryId`)"
+          },
+          {
+            "name": "index_RingTransfer_isCurrentIndexIteration_transferInfo_collectionStartIndex",
+            "unique": false,
+            "columnNames": [
+              "isCurrentIndexIteration",
+              "transferInfo_collectionStartIndex"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RingTransfer_isCurrentIndexIteration_transferInfo_collectionStartIndex` ON `${TABLE_NAME}` (`isCurrentIndexIteration`, `transferInfo_collectionStartIndex`)"
+          },
+          {
+            "name": "index_RingTransfer_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_RingTransfer_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "LocalRecording",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordingId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "RecordingEntryEntity",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recordingEntryId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "BuiltinMcpGroupAssociation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`groupId` INTEGER NOT NULL, `builtinMcpName` TEXT NOT NULL, PRIMARY KEY(`groupId`, `builtinMcpName`), FOREIGN KEY(`groupId`) REFERENCES `McpSandboxGroupEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "builtinMcpName",
+            "columnName": "builtinMcpName",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "groupId",
+            "builtinMcpName"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_BuiltinMcpGroupAssociation_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_BuiltinMcpGroupAssociation_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_BuiltinMcpGroupAssociation_groupId_builtinMcpName",
+            "unique": true,
+            "columnNames": [
+              "groupId",
+              "builtinMcpName"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_BuiltinMcpGroupAssociation_groupId_builtinMcpName` ON `${TABLE_NAME}` (`groupId`, `builtinMcpName`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "McpSandboxGroupEntity",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "groupId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "HttpMcpGroupAssociation",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`groupId` INTEGER NOT NULL, `httpMcpId` INTEGER NOT NULL, PRIMARY KEY(`groupId`, `httpMcpId`), FOREIGN KEY(`groupId`) REFERENCES `McpSandboxGroupEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`httpMcpId`) REFERENCES `HttpMcpServerEntity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "httpMcpId",
+            "columnName": "httpMcpId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "groupId",
+            "httpMcpId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_HttpMcpGroupAssociation_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_HttpMcpGroupAssociation_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_HttpMcpGroupAssociation_httpMcpId",
+            "unique": false,
+            "columnNames": [
+              "httpMcpId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_HttpMcpGroupAssociation_httpMcpId` ON `${TABLE_NAME}` (`httpMcpId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "McpSandboxGroupEntity",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "groupId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "HttpMcpServerEntity",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "httpMcpId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "HttpMcpServerEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cachedTitle` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `streamable` INTEGER NOT NULL, `authHeader` TEXT, `includedPrompts` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cachedTitle",
+            "columnName": "cachedTitle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "streamable",
+            "columnName": "streamable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authHeader",
+            "columnName": "authHeader",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "includedPrompts",
+            "columnName": "includedPrompts",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "McpSandboxGroupEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "views": [
+      {
+        "viewName": "RecordingFeedItem",
+        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT \n        lr.id AS rootRecordingId, \n        lr.localTimestamp,\n        re.*, \n        cm.semantic_result\n    FROM LocalRecording AS lr\n    LEFT JOIN RecordingEntryEntity AS re ON re.id = (\n        SELECT id \n        FROM RecordingEntryEntity \n        WHERE recordingId = lr.id \n        ORDER BY timestamp ASC \n        LIMIT 1\n    )\n    LEFT JOIN ConversationMessageEntity AS cm ON cm.id = (\n        SELECT id \n        FROM ConversationMessageEntity \n        WHERE recordingId = lr.id \n        AND role = 'tool' \n        ORDER BY timestamp DESC \n        LIMIT 1\n    )"
+      },
+      {
+        "viewName": "RingTransferFeedItem",
+        "createSql": "CREATE VIEW `${VIEW_NAME}` AS SELECT\n            RT.id AS transfer_id,\n            RT.recordingId AS transfer_recordingId,\n            RT.recordingEntryId AS transfer_recordingEntryId,\n            RT.isCurrentIndexIteration AS transfer_isCurrentIndexIteration,\n            RT.status AS transfer_status,\n            RT.fileId AS transfer_fileId,\n            RT.createdAt AS transfer_createdAt,\n            RT.transferInfo_collectionStartIndex AS transfer_transferInfo_collectionStartIndex,\n            RT.transferInfo_collectionEndIndex AS transfer_transferInfo_collectionEndIndex,\n            RT.transferInfo_buttonPressed AS transfer_transferInfo_buttonPressed,\n            RT.transferInfo_buttonReleased AS transfer_transferInfo_buttonReleased,\n            RT.transferInfo_advertisementReceived AS transfer_transferInfo_advertisementReceived,\n            RT.transferInfo_transferCompleted AS transfer_transferInfo_transferCompleted,\n            RT.transferInfo_buttonReleaseAdvertisementLatencyMs AS transfer_transferInfo_buttonReleaseAdvertisementLatencyMs,\n\n            RF.rootRecordingId AS feedItem_rootRecordingId,\n            RF.localTimestamp AS feedItem_localTimestamp,\n            RF.semantic_result AS feedItem_semantic_result,\n            RF.id AS feedItem_id,\n            RF.recordingId AS feedItem_recordingId,\n            RF.timestamp AS feedItem_timestamp,\n            RF.fileName AS feedItem_fileName,\n            RF.status AS feedItem_status,\n            RF.transcription AS feedItem_transcription,\n            RF.error AS feedItem_error,\n            RF.ringTransferInfo AS feedItem_ringTransferInfo,\n            RF.userMessageId AS feedItem_userMessageId\n\n        FROM RingTransfer AS RT\n        LEFT JOIN RecordingFeedItem AS RF ON RT.recordingId = RF.rootRecordingId\n        UNION ALL\n        SELECT \n            RT.id AS transfer_id,\n            RT.recordingId AS transfer_recordingId,\n            RT.recordingEntryId AS transfer_recordingEntryId,\n            RT.isCurrentIndexIteration AS transfer_isCurrentIndexIteration,\n            RT.status AS transfer_status,\n            RT.fileId AS transfer_fileId,\n            RT.createdAt AS transfer_createdAt,\n            RT.transferInfo_collectionStartIndex AS transfer_transferInfo_collectionStartIndex,\n            RT.transferInfo_collectionEndIndex AS transfer_transferInfo_collectionEndIndex,\n            RT.transferInfo_buttonPressed AS transfer_transferInfo_buttonPressed,\n            RT.transferInfo_buttonReleased AS transfer_transferInfo_buttonReleased,\n            RT.transferInfo_advertisementReceived AS transfer_transferInfo_advertisementReceived,\n            RT.transferInfo_transferCompleted AS transfer_transferInfo_transferCompleted,\n            RT.transferInfo_buttonReleaseAdvertisementLatencyMs AS transfer_transferInfo_buttonReleaseAdvertisementLatencyMs,\n\n            RF.rootRecordingId AS feedItem_rootRecordingId,\n            RF.localTimestamp AS feedItem_localTimestamp,\n            RF.semantic_result AS feedItem_semantic_result,\n            RF.id AS feedItem_id,\n            RF.recordingId AS feedItem_recordingId,\n            RF.timestamp AS feedItem_timestamp,\n            RF.fileName AS feedItem_fileName,\n            RF.status AS feedItem_status,\n            RF.transcription AS feedItem_transcription,\n            RF.error AS feedItem_error,\n            RF.ringTransferInfo AS feedItem_ringTransferInfo,\n            RF.userMessageId AS feedItem_userMessageId\n            \n        FROM RecordingFeedItem AS RF\n        LEFT JOIN RingTransfer AS RT ON RF.rootRecordingId = RT.recordingId\n        WHERE RT.id IS NULL"
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2098fc0b304ef8123a47da89577ecd54')"
+    ]
+  }
+}

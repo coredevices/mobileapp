@@ -139,8 +139,8 @@ class WatchManagerTest {
         override fun checkForUpdates() {
         }
 
-        override val availableUpdates: Flow<FirmwareUpdateCheckResult?>
-            get() = MutableStateFlow(null)
+        override val availableUpdates: Flow<FirmwareUpdateCheckState>
+            get() = MutableStateFlow(FirmwareUpdateCheckState(false, null))
 
     }
     private val firmwareUpdater = object : FirmwareUpdater {
@@ -195,7 +195,7 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
 
-        override suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
+        override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
             TODO("Not yet implemented")
         }
     }

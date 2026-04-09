@@ -123,7 +123,7 @@ private data class Watch(
      */
     val asPersisted: KnownWatchItem?,
     val forget: Boolean,
-    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     val lastFirmwareUpdateState: FirmwareUpdateStatus,
     val connectionFailureInfo: ConnectionFailureInfo?,
 ) {
@@ -180,7 +180,10 @@ class WatchManager(
                     activeConnection = null,
                     asPersisted = it,
                     forget = false,
-                    firmwareUpdateAvailable = null,
+                    firmwareUpdateAvailable = FirmwareUpdateCheckState(
+                        checkingForUpdates = false,
+                        result = null,
+                    ),
                     lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
                     nickname = it.nickname,
                     connectionFailureInfo = null,
@@ -321,7 +324,7 @@ class WatchManager(
                     }
 
                     val firmwareUpdateAvailable = active[identifier]?.firmwareUpdateAvailable
-                    if (firmwareUpdateAvailable != device.firmwareUpdateAvailable) {
+                    if (firmwareUpdateAvailable != device.firmwareUpdateAvailable && firmwareUpdateAvailable != null) {
                         updateWatch(identifier) {
                             it.copy(firmwareUpdateAvailable = firmwareUpdateAvailable)
                         }
@@ -417,7 +420,7 @@ class WatchManager(
                         activeConnection = null,
                         asPersisted = null,
                         forget = false,
-                        firmwareUpdateAvailable = null,
+                        firmwareUpdateAvailable = FirmwareUpdateCheckState(checkingForUpdates = false, result = null),
                         lastFirmwareUpdateState = FirmwareUpdateStatus.NotInProgress.Idle(),
                         nickname = null,
                         connectionFailureInfo = null,
@@ -698,7 +701,7 @@ data class CurrentAndPreviousState(
 
 data class ActivePebbleState(
     val connectingPebbleState: ConnectingPebbleState,
-    val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     val firmwareUpdateStatus: FirmwareUpdateStatus,
     val batteryLevel: Int?,
     val languagePackInstallState: LanguagePackInstallState,
@@ -710,7 +713,8 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
             map.values.mapNotNull { watchValue ->
                 val connector = watchValue.activeConnection?.pebbleConnector
                 val fwUpdateAvailableFlow =
-                    watchValue.activeConnection?.firmwareUpdateManager?.availableUpdates ?: flowOf(null)
+                    watchValue.activeConnection?.firmwareUpdateManager?.availableUpdates ?: flowOf(
+                        FirmwareUpdateCheckState(checkingForUpdates = false, result = null))
                 val fwUpdateStatusFlow = watchValue.activeConnection?.firmwareUpdater?.firmwareUpdateState ?: flowOf(FirmwareUpdateStatus.NotInProgress.Idle())
                 val batteryLevelFlow = watchValue.activeConnection?.batteryWatcher?.batteryLevel ?: flowOf(null)
                 val languagePackFlow = watchValue.activeConnection?.languagePackInstaller?.state ?: flowOf(LanguagePackInstallState.Idle())

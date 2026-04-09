@@ -15,11 +15,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.request.RequestInterceptor
@@ -35,6 +35,8 @@ import com.multiplatform.webview.web.rememberWebViewState
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.rememberLibPebble
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +51,16 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.Uuid
 
 private const val URL_DATA_PREFIX = "data:text/html;charset=utf-8,"
+
+// The settings URL can be a large data: URI (hundreds of KB of HTML) which would cause
+// TransactionTooLargeException if passed as a navigation route argument. Store it here
+// in memory instead, keyed by watchIdentifier.
+internal object WatchappSettingsUrlCache {
+    private val urls = mutableMapOf<String, String>()
+    fun put(watchIdentifier: String, url: String) { urls[watchIdentifier] = url }
+    fun get(watchIdentifier: String): String? = urls[watchIdentifier]
+    fun remove(watchIdentifier: String) { urls.remove(watchIdentifier) }
+}
 internal expect fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid
@@ -63,8 +75,13 @@ fun WatchappSettingsScreen(
     coreNav: CoreNav,
     watchIdentifier: String,
     title: String,
-    url: String,
 ) {
+    val url = remember(watchIdentifier) {
+        normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(watchIdentifier) ?: "")
+    }
+    DisposableEffect(watchIdentifier) {
+        onDispose { WatchappSettingsUrlCache.remove(watchIdentifier) }
+    }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()
         val pkjsSessionFlow = remember(watchIdentifier) {
@@ -83,7 +100,7 @@ fun WatchappSettingsScreen(
         val interceptor = remember {
             SettingsRequestInterceptor(
                 onSuccess = { data ->
-                    persistLocalStorage(state.nativeWebView)
+                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     pkjsSession?.triggerOnWebviewClosed(data) ?: run {
                         Logger.w { "No PKJS session found for $watchIdentifier, cannot handle webview close" }
                     }
@@ -92,7 +109,7 @@ fun WatchappSettingsScreen(
                     }
                 },
                 onError = {
-                    persistLocalStorage(state.nativeWebView)
+                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
                     }
@@ -103,7 +120,8 @@ fun WatchappSettingsScreen(
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Loading) {
                 Logger.d("WatchappSettingsScreen") { "Page load finished, applying shims" }
-                restoreLocalStorage(state.nativeWebView)
+                val nativeWebView = runCatching { state.nativeWebView }.getOrNull() ?: return@LaunchedEffect
+                restoreLocalStorage(nativeWebView)
             }
         }
 
@@ -139,6 +157,18 @@ fun WatchappSettingsScreen(
             }
         }
     }
+}
+
+internal fun normalizeWatchappSettingsUrl(url: String): String {
+    val parsed = runCatching { Url(url) }.getOrNull() ?: return url
+    val host = parsed.host.lowercase()
+
+    val isLegacyRawGitHost = host == "cdn.rawgit.com" || host == "rawgit.com"
+    if (!isLegacyRawGitHost) return url
+
+    return URLBuilder(parsed).apply {
+        this.host = "raw.githack.com"
+    }.buildString()
 }
 
 private class SettingsRequestInterceptor(

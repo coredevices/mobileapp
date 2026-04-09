@@ -93,7 +93,6 @@ class HealthDataProcessor(
         // Process and store the health data in the database
         scope.launch {
             try {
-                logger.d { "HEALTH_DATA: Inside coroutine, about to process health data for session $sessionId" }
                 val summary = processHealthData(session, payload)
 
                 logger.d {
@@ -184,7 +183,6 @@ class HealthDataProcessor(
     }
 
     private suspend fun processStepsData(payload: ByteArray, itemSize: UShort): String? {
-        logger.d { "HEALTH_DATA: processStepsData called with ${payload.size} byte payload, itemSize=$itemSize" }
         val records = parseStepsData(payload, itemSize)
         logger.d { "HEALTH_DATA: Parsed ${records.size} step records from payload" }
         if (records.isEmpty()) {
@@ -212,7 +210,6 @@ class HealthDataProcessor(
         }
 
         healthDao.insertHealthDataWithPriority(records)
-        logger.d { "HEALTH_DATA: Database insertion complete, emitting health update event" }
         _healthDataUpdated.emit(Unit)
         logger.d { "HEALTH_DATA: Health update event emitted successfully" }
 

@@ -6,3 +6,7 @@ import kotlinx.io.files.Path
 actual fun getLockerPBWCacheDirectory(context: AppContext): Path {
     TODO("Not yet implemented")
 }
+
+actual fun getLockerPBWCacheLegacyDirectory(context: AppContext): Path? {
+    TODO("Not yet implemented")
+}

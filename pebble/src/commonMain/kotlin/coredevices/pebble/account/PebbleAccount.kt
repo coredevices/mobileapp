@@ -2,11 +2,14 @@ package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.firestore.UsersDao
 import coredevices.pebble.services.PebbleWebServices
 import io.rebble.libpebblecommon.connection.TokenProvider
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 interface PebbleAccount {
@@ -21,6 +24,7 @@ class RealPebbleAccount(
     private val settings: Settings,
     private val pebbleWebServices: PebbleWebServices,
     private val bootConfigProvider: BootConfigProvider,
+    private val usersDao: UsersDao,
 ) : PebbleAccount {
     private val logger = Logger.withTag("PebbleAccount")
     private val _loggedIn = MutableStateFlow(getToken())
@@ -41,12 +45,13 @@ class RealPebbleAccount(
     }
 
     override suspend fun setDevPortalId() {
-        val devPortalId = pebbleWebServices.fetchUsersMe()?.users?.firstOrNull()?.id
+        val devPortalId = pebbleWebServices.fetchUsersMePebble()?.users?.firstOrNull()?.id
         if (devPortalId == null) {
             logger.e { "couldn't fetch dev portal id" }
             return
         }
         settings.putString(DEV_KEY, devPortalId)
+        usersDao.initUserDevToken(devPortalId)
         _devToken.value = devPortalId
     }
 
@@ -60,10 +65,12 @@ class RealPebbleAccount(
 }
 
 class PebbleTokenProvider(
+    private val usersDao: UsersDao,
     private val pebbleAccount: PebbleAccount,
 ) : TokenProvider {
     override suspend fun getDevToken(): String? {
-        return pebbleAccount.devToken.value
+        val userConfig = usersDao.user.firstOrNull()
+        return userConfig?.user?.rebbleUserToken ?: userConfig?.user?.pebbleUserToken ?: pebbleAccount.devToken.value
     }
 }
 
@@ -75,4 +82,6 @@ data class UsersMeResponse(
 @Serializable
 data class UsersMeUser(
     val id: String,
+    @SerialName("voted_ids")
+    val votedIds: List<String>,
 )

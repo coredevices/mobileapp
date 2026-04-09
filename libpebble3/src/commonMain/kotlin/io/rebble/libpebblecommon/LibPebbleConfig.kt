@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,7 +59,7 @@ class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
 @Serializable
 data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
-    val lockerSyncLimit: Int = 25,
+    val lockerSyncLimitV2: Int = 50,
     val calendarPins: Boolean = true,
     val calendarReminders: Boolean = true,
     val calendarShowDeclinedEvents: Boolean = false,
@@ -78,6 +79,8 @@ data class WatchConfig(
      * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
      */
     val appMessageToMultipleCompanions: Boolean = true,
+    val orderWatchfacesByLastUsed: Boolean = false,
+    val unknownWatchTypePlatform: WatchType = WatchType.EMERY
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -131,6 +134,11 @@ data class NotificationConfig(
     val sendNotifications: Boolean = true,
     val useAndroidVibePatterns: Boolean = false,
     val overrideDefaultVibePattern: String? = null,
+    /**
+     * User-defined canned responses appended to every reply action sent to the watch.
+     * Shown under "Canned messages" in the watch action menu.
+     */
+    val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

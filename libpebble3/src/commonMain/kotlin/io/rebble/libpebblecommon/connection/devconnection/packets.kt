@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.connection.devconnection
 
 import io.rebble.libpebblecommon.structmapper.SByte
 import io.rebble.libpebblecommon.structmapper.SFixedString
+import io.rebble.libpebblecommon.structmapper.SLongString
 import io.rebble.libpebblecommon.structmapper.SString
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUInt
@@ -33,4 +34,11 @@ class ProxyAuthenticationMessage(
 ): StructMappable() {
     val type = SByte(m, ServerMessageType.ProxyAuthentication.value)
     val token = SString(m, token)
+}
+
+class ProxyAuthenticationMessageV2(
+    token: String
+): StructMappable() {
+    val type = SByte(m, ServerMessageType.ProxyAuthenticationV2.value)
+    val token = SLongString(m, token)
 }

@@ -111,6 +111,12 @@ sealed class LanguagePackInstallState {
         LanguagePackInstallState()
 }
 
+fun LanguagePackInstallState.installing(): String? = when (this) {
+    is LanguagePackInstallState.Downloading -> language
+    is LanguagePackInstallState.Installing -> language
+    else -> null
+}
+
 fun WatchInfo.installedLanguagePack(): InstalledLanguagePack? =
     if (language.isNotEmpty() && languageVersion > 0) {
         InstalledLanguagePack(

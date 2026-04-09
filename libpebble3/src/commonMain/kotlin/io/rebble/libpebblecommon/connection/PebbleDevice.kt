@@ -19,7 +19,6 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.files.Path
 import kotlin.time.Instant
@@ -168,7 +167,7 @@ object ConnectedPebble {
 
     interface FirmwareStatus {
         val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus
-        val firmwareUpdateAvailable: FirmwareUpdateCheckResult?
+        val firmwareUpdateAvailable: FirmwareUpdateCheckState
     }
 
     interface Firmware : FirmwareUpdate, FirmwareStatus
@@ -255,4 +254,10 @@ object ConnectedPebble {
         val coreDump: CoreDump,
         val devConnection: DevConnection
     )
+}
+
+fun PebbleDevice.color() = when (this) {
+    is KnownPebbleDevice -> color
+    is BleDiscoveredPebbleDevice -> pebbleScanRecord.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }
+    else -> null
 }

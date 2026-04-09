@@ -40,9 +40,9 @@ data class ExtendedPebbleScanRecord(
             }
             val hardwarePlatform = buffer.byte.toInt()
             val color = buffer.byte
-            val major = buffer.byte.toInt()
-            val minor = buffer.byte.toInt()
-            val patch = buffer.byte.toInt()
+            val major = buffer.byte.toUByte().toInt()
+            val minor = buffer.byte.toUByte().toInt()
+            val patch = buffer.byte.toUByte().toInt()
             val flags = BitSet(buffer.getBytes(1))
             val runningPrf = flags[0]
             val firstUse = flags[1]

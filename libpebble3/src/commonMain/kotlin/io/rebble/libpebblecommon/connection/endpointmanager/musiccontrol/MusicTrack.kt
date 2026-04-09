@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol
 import io.rebble.libpebblecommon.packets.MusicControl
 import kotlin.time.Duration
 
-private val MAX_LENGTH = 29
+private val MAX_LENGTH = 64
 
 data class MusicTrack(
     val title: String?,

@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import CoreNav
 import CoreRoute
 import NoOpCoreNav
@@ -13,11 +14,13 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Notes
@@ -42,6 +45,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TooltipState
@@ -52,11 +56,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
@@ -66,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -75,6 +82,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coreapp.pebble.generated.resources.Res
 import coreapp.pebble.generated.resources.apps
 import coreapp.pebble.generated.resources.devices
@@ -85,14 +94,27 @@ import coreapp.util.generated.resources.back
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.ui.M3Dialog
 import coredevices.util.CoreConfigFlow
+import coredevices.util.CoreConfigHolder
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import coredevices.util.description
+import coredevices.util.name
+import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -105,8 +127,23 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class WatchHomeViewModel(coreConfig: CoreConfigFlow) : ViewModel() {
-    val selectedTab = mutableStateOf(WatchHomeNavTab.Watches)
+fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
+    it is KnownPebbleDevice
+}
+
+class WatchOnboardingFinished {
+    val finished: Channel<Unit> = Channel<Unit>(capacity = 1)
+}
+
+class WatchHomeViewModel(
+    coreConfig: CoreConfigFlow,
+    libPebble: LibPebble,
+) : ViewModel() {
+    val selectedTab = mutableStateOf(if (libPebble.haveSeenFullyConnectedWatch()) {
+        WatchHomeNavTab.WatchFaces
+    } else {
+        WatchHomeNavTab.Watches
+    })
     private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
     private val searchStateFlow = MutableStateFlow<SearchState?>(null)
     private val titleFlow = MutableStateFlow("")
@@ -149,6 +186,7 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
         val indexEnabled = viewModel.indexEnabled.collectAsState()
+        val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
 
         // Create a SaveableStateHolder to preserve state for each tab
         val saveableStateHolder = rememberSaveableStateHolder()
@@ -178,6 +216,13 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
 
         val currentTab = viewModel.selectedTab.value
         val pebbleNavHostController = navControllers[currentTab]!!
+
+        LaunchedEffect(Unit) {
+            watchOnboardingFinished.finished.receiveAsFlow().collect {
+                logger.d { "Onboarding finished - switching to apps tab" }
+                viewModel.selectedTab.value = WatchHomeNavTab.WatchFaces
+            }
+        }
 
         DisposableEffect(pebbleNavHostController) {
             val listener =
@@ -236,7 +281,6 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     logger.v { "navigateToPebbleDeepLink: $it" }
                     val tab = when (it.route) {
                         is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchFaces
-                        is PebbleNavBarRoutes.AppStoreRoute -> WatchHomeNavTab.WatchFaces
                         is PebbleNavBarRoutes.IndexRoute -> WatchHomeNavTab.Index
                         else -> null
                     }
@@ -252,6 +296,79 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
             }
         }
         val params by viewModel.paramsFlow.collectAsState(Params())
+        val settings: Settings = koinInject()
+
+        val coreConfigHolder: CoreConfigHolder = koinInject()
+        val coreConfig by coreConfigHolder.config.collectAsState()
+        val permissionRequester: PermissionRequester = koinInject()
+        val missingPermissions = permissionRequester.missingPermissions.collectAsState()
+        val missingRequiredPermissions by remember {
+            derivedStateOf {
+                missingPermissions.value.filter {
+                    it in listOf(
+                        Permission.SetAlarms,
+                        Permission.Reminders
+                    )
+                }
+            }
+        }
+        if (
+            coreConfig.enableIndex &&
+            !coreConfig.indexPermissionsConfirmed &&
+            missingRequiredPermissions.isNotEmpty()
+        ) {
+            val uiContext = rememberUiContext()
+            M3Dialog(
+                onDismissRequest = {
+                    coreConfigHolder.update(coreConfig.copy(enableIndex = false))
+                },
+                title = { Text("Index Permissions") },
+                buttons = {
+                    TextButton(onClick = {
+                        coreConfigHolder.update(coreConfig.copy(enableIndex = false))
+                    }) {
+                        Text("Cancel")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        coreConfigHolder.update(coreConfig.copy(indexPermissionsConfirmed = true))
+                        if (uiContext != null) {
+                            scope.launch {
+                                for (permission in missingRequiredPermissions) {
+                                    permissionRequester.requestPermission(permission, uiContext)
+                                }
+                            }
+                        }
+                    }) {
+                        Text("Continue")
+                    }
+                },
+            ) {
+                Text("Index requires additional permissions to function.\n" +
+                        "Please grant the following permissions:")
+                Spacer(Modifier.height(8.dp))
+                for (permission in missingRequiredPermissions) {
+                    Text(permission.name(), fontWeight = FontWeight.Bold)
+                    Text(permission.description())
+                }
+            }
+        }
+
+        val watchesFlow = remember {
+            libPebble.watches
+                .map { it.sortedWith(PebbleDeviceComparator) }
+        }
+        val watches by watchesFlow.collectAsState(
+            initial = libPebble.watches.value.sortedWith(
+                PebbleDeviceComparator
+            )
+        )
+        var hasSeenWatchOnboarding by remember { mutableStateOf(settings.hasSeenWatchOnboarding())}
+        if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
+            hasSeenWatchOnboarding = true
+            settings.setHasSeenWatchOnboarding(true)
+            coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+        }
 
         Scaffold(
             topBar = {
@@ -455,6 +572,10 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         }
     }
 }
+
+private const val HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY = "hasSeenWatchOnboarding"
+private fun Settings.hasSeenWatchOnboarding() = getBoolean(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, false)
+private fun Settings.setHasSeenWatchOnboarding(seen: Boolean) = set(HAS_SEEN_WATCH_ONBOARDING_SETTINGS_KEY, seen)
 
 /**
  * NavController crashes if we navigate before it is ready

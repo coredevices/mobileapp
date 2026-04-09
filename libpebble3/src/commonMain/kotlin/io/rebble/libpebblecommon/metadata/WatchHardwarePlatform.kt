@@ -1,6 +1,11 @@
 package io.rebble.libpebblecommon.metadata
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -9,7 +14,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: WatchType, val revision: String) {
+enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchType: WatchType, val revision: String) {
     UNKNOWN(0u, WatchType.BASALT, "unknown"),
     PEBBLE_ONE_EV_1(1u, WatchType.APLITE, "ev1"),
     PEBBLE_ONE_EV_2(2u, WatchType.APLITE, "ev2"),
@@ -44,7 +49,15 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
     CORE_OBELIX_BIGBOARD_2(243u, WatchType.EMERY, "obelix_bb2"),
     ;
 
+    val watchType: WatchType
+        get() = when (this) {
+            UNKNOWN -> unknownWatchTypePlatform
+            else -> _watchType
+        }
+
     companion object {
+        private var unknownWatchTypePlatform: WatchType = WatchType.EMERY
+
         fun fromProtocolNumber(number: UByte): WatchHardwarePlatform {
             return entries.firstOrNull { it.protocolNumber == number } ?: UNKNOWN.also {
                 Logger.d { "unknown hardware revision: $number" }
@@ -55,6 +68,17 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, val watchType: Watch
             if (revision == "unk") return UNKNOWN
             return entries.firstOrNull() { it.revision == revision } ?: UNKNOWN.also {
                 Logger.d { "unknown hardware revision: $revision" }
+            }
+        }
+
+        fun init(
+            libPebbleCoroutineScope: LibPebbleCoroutineScope,
+            libPebbleConfigFlow: StateFlow<LibPebbleConfig>,
+        ) {
+            libPebbleCoroutineScope.launch {
+                libPebbleConfigFlow.collect {
+                    unknownWatchTypePlatform = it.watchConfig.unknownWatchTypePlatform
+                }
             }
         }
     }

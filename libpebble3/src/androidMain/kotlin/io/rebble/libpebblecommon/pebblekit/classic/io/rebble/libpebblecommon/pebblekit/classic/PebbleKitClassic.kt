@@ -6,6 +6,7 @@ import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
@@ -18,6 +19,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -32,6 +34,7 @@ import kotlin.uuid.toKotlinUuid
 class PebbleKitClassic(
     private val device: CompanionAppDevice,
     val appInfo: PbwAppInfo,
+    private val connectionScope: ConnectionCoroutineScope,
 ) :
     LibPebbleKoinComponent, CompanionApp {
     companion object {
@@ -55,8 +58,8 @@ class PebbleKitClassic(
         }
     }
 
-    private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        device.inboundAppMessages(uuid).onEach { appMessageData ->
+    private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
+        messages.onEach { appMessageData ->
             logger.d { "Got inbound message" }
 
             val pebbleDictionary = appMessageData.data.toPebbleDictionary()
@@ -97,13 +100,15 @@ class PebbleKitClassic(
         scope.launch {
             IntentFilter(INTENT_APP_SEND).asFlow(context, exported = true).collect { intent ->
                 logger.d { "Got outbound message" }
-                val uuid = intent.getSerializableExtra(APP_UUID) as UUID? ?: return@collect
+                val uuid = (intent.getSerializableExtra(APP_UUID) as? UUID?)?.toKotlinUuid() ?:
+                    // Fallback to string
+                    intent.getStringExtra(APP_UUID)?.let { Uuid.parseOrNull(it) } ?: return@collect
                 val dictionary: PebbleClassicDictionary = PebbleClassicDictionary.fromJson(
                     intent.getStringExtra(MSG_DATA)
                 )
                 val transactionId: Int = intent.getIntExtra(TRANSACTION_ID, 0)
 
-                val msg = AppMessageData(transactionId.toUByte(), uuid.toKotlinUuid(), dictionary.toAppMessageDict())
+                val msg = AppMessageData(transactionId.toUByte(), uuid, dictionary.toAppMessageDict())
                 val result = device.sendAppMessage(msg)
                 logger.d { "Result from the app: $result" }
                 val intentAction = when (result) {
@@ -122,13 +127,13 @@ class PebbleKitClassic(
         }
     }
 
-    override suspend fun start(connectionScope: CoroutineScope) {
+    override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PebbleKitClassic: ${throwable.message}" }
         }
         val scope = connectionScope + Job() + CoroutineName("PebbleKitClassic-$uuid") + exceptionHandler
         runningScope = scope
-        launchIncomingAppMessageHandler(device, scope)
+        launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandlers(device, scope)
     }
 

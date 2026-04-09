@@ -121,7 +121,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
                 onCallEnd = { call.disconnect() },
                 cookie = cookie,
             )
-            Call.STATE_ACTIVE, Call.STATE_DISCONNECTING -> io.rebble.libpebblecommon.calls.Call.ActiveCall(
+            Call.STATE_ACTIVE -> io.rebble.libpebblecommon.calls.Call.ActiveCall(
                 contactName = call.resolveContactName(),
                 contactNumber = call.resolveContactNumber(),
                 onCallEnd = { call.disconnect() },

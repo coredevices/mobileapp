@@ -197,6 +197,7 @@ actual class GattServer(
     val cbTimeout: Long = 8000,
 ) : BluetoothGattServerCallback() {
     private val logger = Logger.withTag("GattServer")
+    private var consecutiveSendTimeouts = 0
 
     actual val characteristicReadRequest = callback.characteristicReadRequest.filterNotNull().map {
         ServerCharacteristicReadRequest(
@@ -311,21 +312,24 @@ actual class GattServer(
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray,
-    ): Boolean {
+    ): SendResult {
         val registeredDevice = callback.registeredDevices[identifier.macAddress]
         if (registeredDevice == null) {
             logger.e("sendData: couldn't find registered device: $identifier")
-            return false
+            consecutiveSendTimeouts = 0
+            return SendResult.Failed
         }
         val service = server.getService(serviceUuid.toJavaUuid())
         if (service == null) {
             logger.e("sendData: couldn't find service")
-            return false
+            consecutiveSendTimeouts = 0
+            return SendResult.Failed
         }
         val characteristic = service.getCharacteristic(characteristicUuid.toJavaUuid())
         if (characteristic == null) {
             logger.e("sendData: couldn't find characteristic")
-            return false
+            consecutiveSendTimeouts = 0
+            return SendResult.Failed
         }
         return withTimeoutOr(
             timeout = cbTimeout.milliseconds,
@@ -341,7 +345,8 @@ actual class GattServer(
                         )
                         if (writeRes != BluetoothStatusCodes.SUCCESS) {
                             logger.e("couldn't notify data characteristic: $writeRes")
-                            return@withLock false
+                            consecutiveSendTimeouts = 0
+                            return@withLock SendResult.Failed
                         }
                     } else {
                         @Suppress("DEPRECATION")
@@ -354,16 +359,26 @@ actual class GattServer(
                             )
                         ) {
                             logger.e("couldn't notify data characteristic")
-                            return@withLock false
+                            consecutiveSendTimeouts = 0
+                            return@withLock SendResult.Failed
                         }
                     }
                     registeredDevice.writing.first { writing -> !writing }
-                    true
+                    consecutiveSendTimeouts = 0
+                    SendResult.Success
                 }
             },
             onTimeout = {
                 logger.w { "Timeout sending data to $identifier" }
-                false
+                consecutiveSendTimeouts++
+                if (consecutiveSendTimeouts > MAX_NUM_SEND_TIMEOUTS) {
+                    // Technically we should be nuked now so this doesn't matter
+                    consecutiveSendTimeouts = 0
+                    // Seems like when this happens a few times, something is busted. Restart.
+                    SendResult.RestartRequired
+                } else {
+                    SendResult.Failed
+                }
             })
     }
 
@@ -372,6 +387,10 @@ actual class GattServer(
     }
 
     actual fun initServer() {
+    }
+
+    companion object {
+        private const val MAX_NUM_SEND_TIMEOUTS = 3
     }
 }
 

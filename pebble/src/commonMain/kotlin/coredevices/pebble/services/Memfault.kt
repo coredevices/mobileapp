@@ -12,7 +12,9 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.encodeURLParameter
 import io.ktor.http.isSuccess
 import io.ktor.http.userAgent
@@ -23,6 +25,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.io.IOException
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 class Memfault(
     private val httpClient: HttpClient,
@@ -105,32 +108,64 @@ class Memfault(
         }
     }
 
-    suspend fun uploadChunk(chunk: ByteArray, watchInfo: WatchInfo) {
+    suspend fun uploadChunkBatch(chunks: List<ByteArray>, serial: String): Boolean {
         if (!settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) {
-            logger.d { "Not uploading Memfault chunk (disabled in settings)" }
-            return
+            logger.d { "Not uploading Memfault chunks (disabled in settings)" }
+            return true
         }
-        val token = CommonBuildKonfig.MEMFAULT_TOKEN
-        if (token == null) {
-            logger.i { "uploadChunk: no memfault token" }
-            return
+        val token = CommonBuildKonfig.MEMFAULT_TOKEN ?: run {
+            logger.i { "uploadChunkBatch: no memfault token" }
+            return true
         }
-        logger.d { "Sending chunk to Memfault" }
-        val serial = watchInfo.serialForMemfault()
+        logger.d { "Sending ${chunks.size} chunk(s) to Memfault for serial=$serial" }
         val url = "https://chunks.memfault.com/api/v0/chunks/$serial"
         val response = try {
-            httpClient.post(url) {
-                header("Memfault-Project-Key", token)
-                setBody(chunk)
-                userAgent(platform.name)
+            if (chunks.size == 1) {
+                httpClient.post(url) {
+                    header("Memfault-Project-Key", token)
+                    userAgent(platform.name)
+                    setBody(chunks.first())
+                }
+            } else {
+                val boundary = Uuid.random().toString()
+                httpClient.post(url) {
+                    header("Memfault-Project-Key", token)
+                    userAgent(platform.name)
+                    setBody(ByteArrayContent(
+                        bytes = buildMultipartMixedBody(chunks, boundary),
+                        contentType = ContentType.MultiPart.Mixed.withParameter("boundary", boundary),
+                    ))
+                }
             }
         } catch (e: IOException) {
-            logger.w(e) { "Error sending chunk to memfault: ${e.message}" }
-            return
+            logger.w(e) { "Error sending chunks to Memfault: ${e.message}" }
+            return false
         }
-        if (!response.status.isSuccess()) {
-            logger.w { "uploadChunk response = ${response.status}" }
+        return if (!response.status.isSuccess()) {
+            logger.w { "uploadChunkBatch response = ${response.status}" }
+            false
+        } else true
+    }
+
+    /**
+     * Build a multipart/mixed body matching the format the Memfault chunks API expects.
+     * Each part has only a Content-Length header and the raw chunk bytes.
+     */
+    private fun buildMultipartMixedBody(chunks: List<ByteArray>, boundary: String): ByteArray {
+        val parts = mutableListOf<ByteArray>()
+        for (chunk in chunks) {
+            parts.add("--$boundary\r\nContent-Length: ${chunk.size}\r\n\r\n".encodeToByteArray())
+            parts.add(chunk)
+            parts.add("\r\n".encodeToByteArray())
         }
+        parts.add("--$boundary--\r\n".encodeToByteArray())
+        val result = ByteArray(parts.sumOf { it.size })
+        var offset = 0
+        for (part in parts) {
+            part.copyInto(result, offset)
+            offset += part.size
+        }
+        return result
     }
 
     private fun ensureVersionPrefix(version: String): String {

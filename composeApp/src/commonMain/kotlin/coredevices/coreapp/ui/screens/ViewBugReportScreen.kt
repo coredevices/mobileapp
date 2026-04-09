@@ -64,13 +64,6 @@ fun ViewBugReportScreen(
         val bugReports: BugReports = koinInject()
         val tickets = bugReports.ticketDetails.value
         val ticket = tickets?.ticketDetails?.firstOrNull { it.ticketId == conversationId }
-        val userEmail = Firebase.auth.currentUser?.emailOrNull
-
-        val url = if (ticket != null && tickets != null && userEmail != null) {
-            "https://embed.atlas.so/index.html?appId=${tickets.appId}&userId=$userEmail&userEmail=$userEmail&query=open:ticket;ticketId:${ticket.ticketId};noHeader:1&userHash=${tickets.userHash}"
-        } else {
-            ""
-        }
         var requestedMoreLogs by remember { mutableStateOf(false) }
         val bugReportProcessor = koinInject<BugReportProcessor>()
 
@@ -168,7 +161,7 @@ fun ViewBugReportScreen(
                     )
                 }
                 PebbleWebview(
-                    url = url,
+                    url = ticket?.webviewUrl ?: "",
                     interceptor = interceptor,
                     modifier = Modifier.fillMaxSize().padding(bottom = webviewPadding),
                     onPageFinishedJavaScript = """

@@ -33,6 +33,8 @@ data class LibPebbleNotification(
     val people: List<ContactEntity>,
     val vibrationPattern: List<UInt>?,
     val color: Int? = null, // ARGB
+    /** Previous timeline notification UUIDs for which we should also handle actions */
+    val previousUuids: List<Uuid>,
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
@@ -87,7 +89,9 @@ data class LibPebbleNotification(
         }
     }
 
-    fun toTimelineNotification(): TimelineNotification = buildTimelineNotification(
+    fun toTimelineNotification(
+        userCannedResponses: List<String> = emptyList(),
+    ): TimelineNotification = buildTimelineNotification(
         timestamp = timestamp,
         parentId = ANDROID_NOTIFICATIONS_UUID,
     ) {
@@ -114,14 +118,33 @@ data class LibPebbleNotification(
                 action(action.type.toProtocolType()) {
                     attributes {
                         title { action.title }
-                        action.remoteInput?.suggestedResponses?.let {
-                            cannedResponse { it.take(8) }
+                        if (action.type == ActionType.Reply) {
+                            val combined =
+                                userCannedResponses +
+                                        action.remoteInput?.suggestedResponses.orEmpty()
+                            cannedResponse { trimCannedResponses(combined) }
                         }
                     }
                 }
             }
         }
     }
+}
+
+private const val MAX_CANNED_RESPONSE_BYTES = 512
+
+/**
+ * Trim the list to fit within the firmware's 512-byte serialized limit
+ * (strings joined by NUL, encoded as UTF-8). Drops items from the end first.
+ */
+private fun trimCannedResponses(responses: List<String>): List<String> {
+    var result = responses
+    while (result.isNotEmpty()) {
+        val serializedSize = result.joinToString("\u0000").encodeToByteArray().size
+        if (serializedSize <= MAX_CANNED_RESPONSE_BYTES) break
+        result = result.dropLast(1)
+    }
+    return result
 }
 
 fun LibPebbleNotification.toEntity(

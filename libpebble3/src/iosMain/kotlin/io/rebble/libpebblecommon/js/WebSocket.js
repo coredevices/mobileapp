@@ -42,7 +42,13 @@ class WebSocket {
         if (this.readyState !== WebSocket.OPEN) {
             return;
         }
-        _WebSocketManager.send(this._instanceID, String(data));
+        if (data instanceof ArrayBuffer) {
+            _WebSocketManager.send(this._instanceID, new Uint8Array(data).toBase64(), true);
+        } else if (ArrayBuffer.isView(data)) {
+            _WebSocketManager.send(this._instanceID, new Uint8Array(data.buffer, data.byteOffset, data.byteLength).toBase64(), true);
+        } else {
+            _WebSocketManager.send(this._instanceID, String(data), false);
+        }
     }
 
     close(code, reason) {

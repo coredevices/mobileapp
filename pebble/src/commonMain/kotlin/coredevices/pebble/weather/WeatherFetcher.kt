@@ -20,6 +20,10 @@ import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
@@ -54,10 +58,10 @@ class WeatherFetcher(
             return
         }
         settings.putBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, true)
-        fetchWeather()
+        fetchWeather(GlobalScope)
     }
 
-    suspend fun fetchWeather() {
+    suspend fun fetchWeather(scope: CoroutineScope) {
         val weatherEnabled = coreConfigFlow.value.fetchWeather
         val pinsEnabled = coreConfigFlow.value.weatherPinsV2
         val units = coreConfigFlow.value.weatherUnits
@@ -74,15 +78,17 @@ class WeatherFetcher(
         val locations = getLocationsAndUpdateCurrentLocation()
         val locale = Locale.current.toLanguageTag()
         val fetchedData = locations.map { location ->
-            val lat = location.latitude
-            val lon = location.longitude
-            val response = if (lat == null || lon == null) {
-                null
-            } else {
-                pebbleWebServices.getWeather(lat, lon, units, locale)
+            scope.async {
+                val lat = location.latitude
+                val lon = location.longitude
+                val response = if (lat == null || lon == null) {
+                    null
+                } else {
+                    pebbleWebServices.getWeather(lat, lon, units, locale)
+                }
+                LocationWithData(location, response)
             }
-            LocationWithData(location, response)
-        }
+        }.awaitAll()
         val weatherAppData = fetchedData.map { location ->
             weatherAppData(location, units)
                 ?: WeatherLocationData.WeatherLocationDataFailed(location.location.key)
@@ -146,7 +152,7 @@ class WeatherFetcher(
             logger.w { "Couldn't find temps for units: $units" }
             return null
         }
-        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(0)
+        val tomorrow = weather.fcstdaily7.data.forecasts.getOrNull(1)
         if (tomorrow == null || tomorrow.day == null) {
             logger.w { "Couldn't find forcast for tomorrow" }
             return null

@@ -1,0 +1,4 @@
+-dontwarn java.net.http.*
+-dontwarn java.lang.System$Logger
+-dontwarn java.lang.System$Logger$Level
+-dontwarn java.lang.invoke.MethodHandleProxies

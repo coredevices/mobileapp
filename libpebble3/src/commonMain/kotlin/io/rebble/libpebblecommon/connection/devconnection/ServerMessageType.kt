@@ -12,4 +12,5 @@ enum class ServerMessageType(val value: Byte) {
     ProxyAuthentication(0x09),
     PhonesimAppConfigResponse(0x0A),
     TimelinePinResponse(0x0C),
+    ProxyAuthenticationV2(0x19),
 }

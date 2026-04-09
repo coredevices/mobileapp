@@ -1,49 +1,20 @@
 package coredevices.util.models
 
-import com.cactus.CactusLM
-import com.cactus.CactusModelManager
-import com.cactus.CactusSTT
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.Platform
-import kotlin.time.Instant
+import coredevices.util.transcription.CactusModelPathProvider
 
 class ModelManager(
     private val platform: Platform,
     private val modelDownloadManager: ModelDownloadManager,
+    private val modelPathProvider: CactusModelPathProvider? = null,
 ) {
-    companion object {
-        private val SUPPORTED_STT_PREFIXES = setOf(
-            "whisper"
-        )
-        private val SUPPORTED_LM_PREFIXES = setOf(
-            "qwen"
-        )
-        private const val MAX_MODEL_SIZE_MB = 1024
-    }
     val modelDownloadStatus = modelDownloadManager.downloadStatus
-    fun deleteModel(modelName: String) {
-        CactusModelManager.deleteModel(modelName)
-    }
 
-    fun getDownloadedModelSlugs(): List<String> {
-        return CactusModelManager.getDownloadedModels()
-    }
-
-    /**
-     * Downloads the specified STT model.
-     * @param modelInfo Information about the model to download.
-     * @param allowMetered Whether to allow downloading over metered connections.
-     * @return True if the download was initiated successfully, false otherwise.
-     */
     fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
         return modelDownloadManager.downloadSTTModel(modelInfo, allowMetered)
     }
 
-    /**
-     * Downloads the specified language model.
-     * @param modelInfo Information about the model to download.
-     * @param allowMetered Whether to allow downloading over metered connections.
-     * @return True if the download was initiated successfully, false otherwise.
-     */
     fun downloadLanguageModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
         return modelDownloadManager.downloadLanguageModel(modelInfo, allowMetered)
     }
@@ -52,59 +23,90 @@ class ModelManager(
         modelDownloadManager.cancelDownload()
     }
 
+    fun getDownloadedModelSlugs(): List<String> {
+        return modelPathProvider?.getDownloadedModels()
+            ?: listOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+    }
+
+    fun deleteModel(modelName: String) {
+        modelPathProvider?.deleteModel(modelName)
+    }
+
     suspend fun getAvailableSTTModels(): List<ModelInfo> {
-        return CactusSTT().getVoiceModels().map {
-            ModelInfo(
-                createdAt = Instant.parse(it.created_at),
-                slug = it.slug,
-                sizeInMB = it.size_mb,
-                url = it.download_url
-            )
-        }.filter {
-            SUPPORTED_STT_PREFIXES.any { prefix -> it.slug.startsWith(prefix, ignoreCase = true) }
-                    && it.sizeInMB <= MAX_MODEL_SIZE_MB
-        }
+        val sttModel = CommonBuildKonfig.CACTUS_STT_MODEL
+        val sttVersion = CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION
+        val sttSizeMB = modelPathProvider?.let {
+            val onDisk = (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
+            if (onDisk > 0) onDisk else KNOWN_STT_SIZE_MB
+        } ?: KNOWN_STT_SIZE_MB
+
+        val currentModel = ModelInfo(
+            slug = sttModel,
+            sizeInMB = sttSizeMB,
+            url = "$HF_BASE/$sttModel/resolve/$sttVersion/weights/${sttModel.lowercase()}-$QUANTIZATION.zip"
+        )
+
+        // Include old downloaded models (e.g. whisper) so they can be deleted
+        val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val oldModels = modelPathProvider?.getDownloadedModels()
+            ?.filter { it != sttModel && it != lmModel }
+            ?.map { slug ->
+                val sizeMB = (modelPathProvider.getModelSizeBytes(slug) / (1024 * 1024)).toInt()
+                ModelInfo(slug = slug, sizeInMB = sizeMB)
+            } ?: emptyList()
+
+        return listOf(currentModel) + oldModels
     }
 
     suspend fun getAvailableLanguageModels(): List<ModelInfo> {
-        return CactusLM().getModels().map {
-            ModelInfo(
-                createdAt = Instant.parse(it.created_at),
-                slug = it.slug,
-                sizeInMB = it.size_mb,
-                url = it.download_url
-            )
-        }.filter {
-            SUPPORTED_LM_PREFIXES.any { prefix -> it.slug.startsWith(prefix, ignoreCase = true) }
-        }
+        val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val lmVersion = CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION
+        val lmSizeMB = modelPathProvider?.let {
+            val onDisk = (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
+            if (onDisk > 0) onDisk else KNOWN_LM_SIZE_MB
+        } ?: KNOWN_LM_SIZE_MB
+
+        return listOf(ModelInfo(
+            slug = lmModel,
+            sizeInMB = lmSizeMB,
+            url = "$HF_BASE/$lmModel/resolve/$lmVersion/weights/${lmModel.lowercase()}-$QUANTIZATION.zip"
+        ))
+    }
+
+    companion object {
+        private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
+        private const val QUANTIZATION = "int8"
+        private const val KNOWN_STT_SIZE_MB = 670
+        private const val KNOWN_LM_SIZE_MB = 530
     }
 
     fun getRecommendedSTTMode(): CactusSTTMode {
-        // Implementation for determining the recommended STT mode
         return when {
             platform.supportsNPU() || platform.supportsHeavyCPU() -> CactusSTTMode.RemoteFirst
             else -> CactusSTTMode.RemoteOnly
         }
     }
 
-    fun getRecommendedSTTModel(): String {
-        return when {
-            platform.supportsNPU() -> "whisper-medium-pro"
-            platform.supportsHeavyCPU() -> "whisper-small"
-            else -> "whisper-base"
-        }
+    fun getRecommendedSTTModel(): RecommendedModel {
+        return RecommendedModel.Standard(CommonBuildKonfig.CACTUS_STT_MODEL)
     }
 
     fun getRecommendedLanguageModel(): String {
-        return "qwen3-0.6"
+        return CommonBuildKonfig.CACTUS_LM_MODEL_NAME
     }
 }
 
+sealed class RecommendedModel {
+    abstract val modelSlug: String
+    data class Lite(override val modelSlug: String) : RecommendedModel()
+    data class Standard(override val modelSlug: String) : RecommendedModel()
+}
+
 data class ModelInfo(
-    val createdAt: Instant,
+    val createdAt: kotlin.time.Instant = kotlin.time.Clock.System.now(),
     val slug: String,
-    val sizeInMB: Int,
-    val url: String
+    val sizeInMB: Int = 0,
+    val url: String = ""
 )
 
 expect fun Platform.supportsNPU(): Boolean

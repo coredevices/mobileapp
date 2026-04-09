@@ -14,6 +14,7 @@ plugins {
     alias(libs.plugins.firebaseCrashlytics)
     alias(libs.plugins.androidVersion)
     alias(libs.plugins.nativeCocoaPods)
+    alias(libs.plugins.kotlinx.atomicfu)
 }
 
 val properties = Properties().apply {
@@ -117,7 +118,7 @@ kotlin {
                 }.standardOutput.asText.get().trim()
                 linkerOpts(
                     "-framework", "LibPebbleSwift", "-F"+dir.absolutePath,
-                    "-framework", "CoreML",
+                    "-weak_framework", "CoreML",
                     "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
                 )
             }
@@ -151,6 +152,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)
@@ -187,7 +189,7 @@ kotlin {
             implementation(libs.koin.compose.viewmodel)
             implementation(compose.runtime)
             implementation(compose.foundation)
-            implementation(compose.material3)
+            implementation(libs.compose.material3)
             implementation(compose.ui)
             implementation(compose.materialIconsExtended)
             implementation(compose.components.resources)
@@ -216,8 +218,13 @@ kotlin {
             implementation(libs.kmpnotifier)
             implementation(libs.kmpio)
             implementation(project(":libpebble3"))
+            implementation(libs.health.kmp)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "coreapp.composeapp.generated.resources"
 }
 
 android {

@@ -53,6 +53,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.Mtu
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PPoGReset
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebblePairing
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogClient
@@ -66,6 +67,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.bleScanner
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.KableGattConnector
 import io.rebble.libpebblecommon.connection.bt.classic.pebble.PebbleBtClassic
+import io.rebble.libpebblecommon.connection.devconnection.CloudpebbleProxyProtocolVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
@@ -414,7 +416,8 @@ fun initKoin(
                 single {
                     DevConnectionCloudpebbleProxy(
                         libPebble = get(),
-                        url = "wss://cloudpebble-proxy.repebble.com/device",
+                        url = "wss://cloudpebble-proxy.repebble.com/device-v2",
+                        protocolVersion = CloudpebbleProxyProtocolVersion.V2,
                         scope = get(),
                         token = proxyTokenProvider
                     )
@@ -515,6 +518,7 @@ fun initKoin(
                     scopedOf(::PebblePairing)
                     scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
                     scopedOf(::PreConnectScanner)
+                    scopedOf(::PPoGReset)
 
                     // Services
                     scopedOf(::SystemService)

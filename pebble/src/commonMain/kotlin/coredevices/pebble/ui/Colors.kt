@@ -29,11 +29,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.TooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -159,36 +163,27 @@ private fun ColumnScope.ColorGrid(
     ) {
         items(sortedColors) { color ->
             val borderColor = MaterialTheme.colorScheme.onSurface
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(color.color)
-                    .border(
-                        2.dp,
-                        if (color == selectedColor) borderColor else Color.Transparent,
-                        RoundedCornerShape(4.dp)
-                    )
-                    .clickable { selectedColor = color }
-            )
-        }
-    }
-    selectedColor?.let { color ->
-        Spacer(modifier = Modifier.size(2.dp))
-        Box(modifier = Modifier.padding(8.dp)) {
-            Box(
-                modifier = Modifier.fillMaxWidth()
-                    .background(color.color, shape = RoundedCornerShape(8.dp))
-                    .clickable {
-                        onColorSelected(color.timelineColor)
-                    },
-                contentAlignment = Alignment.Center,
+            val tooltipState = remember { TooltipState(isPersistent = false) }
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = {
+                    PlainTooltip {
+                        Text(color.timelineColor.displayName)
+                    }
+                },
+                state = tooltipState
             ) {
-                Text(
-                    text = color.timelineColor.displayName,
-                    modifier = Modifier.padding(16.dp),
-                    color = color.textColor,
-                    fontSize = 22.sp,
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(color.color)
+                        .border(
+                            2.dp,
+                            if (color == selectedColor) borderColor else Color.Transparent,
+                            RoundedCornerShape(4.dp)
+                        )
+                        .clickable { onColorSelected(color.timelineColor) }
                 )
             }
         }

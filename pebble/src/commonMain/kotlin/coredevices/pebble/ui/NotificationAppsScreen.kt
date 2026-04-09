@@ -1,6 +1,7 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -51,8 +54,10 @@ import org.koin.compose.viewmodel.koinViewModel
 
 class NotificationAppsScreenViewModel : ViewModel() {
     val onlyNotified = mutableStateOf(false)
+    val enabledFilter = mutableStateOf(EnabledFilter.All)
     val sortBy = mutableStateOf(NotificationAppSort.Recent)
     val searchState = SearchState()
+    val sortAscending = mutableStateOf(false)
 }
 
 @Composable
@@ -84,7 +89,9 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
             apps,
             viewModel.searchState,
             viewModel.onlyNotified.value,
-            viewModel.sortBy.value
+            viewModel.enabledFilter.value,
+            viewModel.sortBy.value,
+            viewModel.sortAscending.value
         ) {
             derivedStateOf {
                 val filtered = apps.asSequence().filter { app ->
@@ -94,34 +101,38 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         app.app.everNotified() || !viewModel.onlyNotified.value
                     }
                 }
+                val filteredByEnabled = when (viewModel.enabledFilter.value) {
+                    EnabledFilter.All -> filtered
+                    EnabledFilter.EnabledOnly -> filtered.filter { it.app.muteState == MuteState.Never }
+                    EnabledFilter.DisabledOnly -> filtered.filter { it.app.muteState != MuteState.Never }
+                }
 
-                when (viewModel.sortBy.value) {
-                    NotificationAppSort.Name -> {
-                        filtered.toList()
-                    }
+                val list = when (viewModel.sortBy.value) {
+                    NotificationAppSort.Name -> filteredByEnabled.sortedByDescending { it.app.name }
+                    NotificationAppSort.Count -> filteredByEnabled.sortedBy { it.count }
+                    NotificationAppSort.Recent -> filteredByEnabled.sortedBy { it.app.lastNotified.instant }
+                }
 
-                    NotificationAppSort.Count -> {
-                        filtered.sortedByDescending { it.count }.toList()
-                    }
-
-                    NotificationAppSort.Recent -> filtered.sortedByDescending { it.app.lastNotified.instant }
-                        .toList()
+                if (viewModel.sortAscending.value) {
+                    list.toList()
+                } else {
+                    list.toList().reversed()
                 }
             }
         }
 
         Column {
             if (pebbleFeatures.supportsNotificationAppSorting()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = SpaceEvenly,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                val filterScrollState = rememberScrollState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp, horizontal = 12.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        modifier = Modifier.horizontalScroll(filterScrollState),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = SpaceEvenly,
                     ) {
                         val notifiedOnlyEnabled = pebbleFeatures.supportsNotifiedOnlyFilter()
                         ElevatedFilterChip(
@@ -151,15 +162,48 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                             colors = FilterChipDefaults.elevatedFilterChipColors(
                                 containerColor = MaterialTheme.colorScheme.background,
                             ),
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center,
-                    ) {
+                        val filterExpanded = remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.padding(horizontal = 4.dp)) {
+                        ElevatedFilterChip(
+                            onClick = { filterExpanded.value = !filterExpanded.value },
+                            label = { Text(viewModel.enabledFilter.value.label) },
+                            selected = viewModel.enabledFilter.value != EnabledFilter.All,
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = if (filterExpanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = if (filterExpanded.value) "Collapse" else "Expand",
+                                )
+                            },
+                            elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                            colors = FilterChipDefaults.elevatedFilterChipColors(
+                                containerColor = MaterialTheme.colorScheme.background,
+                            ),
+                        )
+                        DropdownMenu(
+                            expanded = filterExpanded.value,
+                            onDismissRequest = { filterExpanded.value = false }
+                        ) {
+                            EnabledFilter.entries.forEach { filterOption ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    onClick = {
+                                        viewModel.enabledFilter.value = filterOption
+                                        filterExpanded.value = false
+                                    },
+                                    text = { Text(filterOption.label) },
+                                    leadingIcon = {
+                                        if (viewModel.enabledFilter.value == filterOption) Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = "Done"
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        }
                         val expanded = remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.padding(horizontal = 4.dp)) {
                         ElevatedFilterChip(
                             onClick = {
                                 expanded.value = !expanded.value
@@ -172,7 +216,11 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
                                     contentDescription = "Sort Options",
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    modifier = Modifier
+                                        .size(FilterChipDefaults.IconSize)
+                                        .graphicsLayer {
+                                            scaleY = if (viewModel.sortAscending.value) 1f else -1f
+                                        }
                                 )
                             },
                             trailingIcon = {
@@ -195,7 +243,12 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                             }.forEach { sortOption ->
                                 androidx.compose.material3.DropdownMenuItem(
                                     onClick = {
-                                        viewModel.sortBy.value = sortOption
+                                        if (viewModel.sortBy.value == sortOption) {
+                                            viewModel.sortAscending.value = !viewModel.sortAscending.value
+                                        } else {
+                                            viewModel.sortBy.value = sortOption
+                                            viewModel.sortAscending.value = false
+                                        }
                                         expanded.value = false
                                     },
                                     text = { Text(sortOption.name) },
@@ -207,6 +260,7 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                                     }
                                 )
                             }
+                        }
                         }
                     }
                 }

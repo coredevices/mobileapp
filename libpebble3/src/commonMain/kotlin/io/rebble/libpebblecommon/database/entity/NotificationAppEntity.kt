@@ -46,6 +46,12 @@ data class NotificationAppItem(
      */
     val stateUpdated: MillisecondInstant,
     val lastNotified: MillisecondInstant,
+    /**
+     * Timestamp when the mute should expire (for temporary mutes like "mute for 1 hour" or "mute for 1 day").
+     * If null, the mute is permanent or based on schedule (Weekdays/Weekends).
+     */
+    @ColumnInfo(defaultValue = "null")
+    val muteExpiration: MillisecondInstant? = null,
     @ColumnInfo(defaultValue = "null")
     val vibePatternName: String?,
     @ColumnInfo(defaultValue = "null")
@@ -171,6 +177,17 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             return null
         }
         val lastUpdated = timestamp.let { Instant.fromEpochSeconds(it.toLong()) }
+        // Read MuteExpiration if present
+        val muteExpiration = item.attributes.get(TimelineAttribute.MuteExpiration)?.let { expirationBytes ->
+            if (expirationBytes.size >= 4) {
+                val expirationSeconds = SUInt(StructMapper(), endianness = Endian.Little).apply {
+                    fromBytes(DataBuffer(expirationBytes))
+                }.get().toLong()
+                Instant.fromEpochSeconds(expirationSeconds).asMillisecond()
+            } else {
+                null
+            }
+        }
 //        val lastUpdated = item.attributes.get(TimelineAttribute.LastUpdated)
 //            ?.getUIntAt(0, littleEndian = true)?.let { Instant.fromEpochSeconds(it.toLong()) }
 //        if (lastUpdated == null) {
@@ -184,6 +201,7 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             name = appName,
             channelGroups = emptyList(),
             lastNotified = lastUpdated.asMillisecond(),
+            muteExpiration = muteExpiration,
             vibePatternName = null,
             colorName = null,
             iconCode = null,

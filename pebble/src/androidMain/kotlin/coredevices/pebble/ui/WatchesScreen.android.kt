@@ -1,8 +1,17 @@
 package coredevices.pebble.ui
 
 import android.os.Build
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import coredevices.util.Permission
+import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
+
+actual fun ImageBitmap.toPngBytes(): ByteArray {
+    val out = ByteArrayOutputStream()
+    asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+    return out.toByteArray()
+}
 
 actual fun scanPermission(): Permission? {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

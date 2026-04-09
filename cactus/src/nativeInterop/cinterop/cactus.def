@@ -1,0 +1,5 @@
+package = cactus
+headers = cactus_ffi.h
+headerFilter = cactus_ffi.h
+staticLibraries = libcactus.a libcurl.a
+linkerOpts = -framework Foundation -framework Accelerate -framework CoreML -framework Security -framework SystemConfiguration -framework CFNetwork

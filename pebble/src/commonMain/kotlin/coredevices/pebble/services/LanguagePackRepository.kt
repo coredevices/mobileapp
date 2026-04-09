@@ -32,7 +32,7 @@ class LanguagePackRepository(
     }
 
     suspend fun languagePacksForWatch(watch: ConnectedPebbleDevice): List<LanguagePack> = withContext(Dispatchers.IO) {
-        val locale = Locale.current.platformLocale.toString()
+        val locale = Locale.current.toLanguageTag()
         val hardwarePlatform = watch.watchInfo.platform
         languagePacks
             .filter { it.hardware == null || it.hardware == hardwarePlatform.languagePackPlatform().revision }
@@ -138,12 +138,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "snowy_s3",
       "id": "56df1ea1afea831600b3a5bb",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -180,12 +180,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "v1_5",
       "id": "56df1ee96aecc31600bcbab5",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -208,12 +208,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "ev2_4",
       "id": "56df1d799de9101b0028020c",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -222,12 +222,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "ev2_4",
       "id": "56df1e62279cc21b005eb785",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -264,12 +264,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "v1_5",
       "id": "56df1e1303f9d616009889dc",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -390,12 +390,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "snowy_s3",
       "id": "56df1dc903f9d616009889db",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -474,12 +474,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "bb2",
       "id": "56b28b47fbf86216008a0c3e",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -488,12 +488,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "ev2_4",
       "id": "56b28b6ce21e461b00734c16",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -502,12 +502,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "spalding",
       "id": "56df1ec4279cc21b005eb786",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -544,12 +544,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "snowy_dvt",
       "id": "56b28b9bd3921f1b00ab6834",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -558,12 +558,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "snowy_s3",
       "id": "56b28bbdd3921f1b00ab6835",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -628,12 +628,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "v2_0",
       "id": "56df1f0603f9d616009889de",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -684,12 +684,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "v1_5",
       "id": "56b28c11e21e461b00734c17",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -726,12 +726,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "snowy_dvt",
       "id": "56df1da59de9101b0028020d",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -824,12 +824,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "spalding",
       "id": "56df1df2279cc21b005eb784",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -838,12 +838,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "v2_0",
       "id": "56df1e336aecc31600bcbab4",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -978,12 +978,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "v2_0",
       "id": "56b28c36d3921f1b00ab6836",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1034,12 +1034,12 @@ private val LanguagePacksJson = """
       "firmware": "3.8.0",
       "hardware": "spalding",
       "id": "56b28be26325961600cbe236",
-      "localName": "English + Кириллица (для уведомлений)",
+      "localName": "Кириллица (для уведомлений)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1048,12 +1048,12 @@ private val LanguagePacksJson = """
       "firmware": "3.10.0",
       "hardware": "snowy_dvt",
       "id": "56df1e8203f9d616009889dd",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1552,12 +1552,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_dvt",
       "id": "57c4b92e852fe4001b3b5b20",
-      "localName": "English + Кириллица",
+      "localName": "Кириллица",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1566,12 +1566,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_s3",
       "id": "57c4b930852fe4001b3b5b21",
-      "localName": "English + Кириллица",
+      "localName": "Кириллица",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1580,12 +1580,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "spalding",
       "id": "57c4b9327071d3001aaa19d9",
-      "localName": "English + Кириллица",
+      "localName": "Кириллица",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1594,12 +1594,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk",
       "id": "57c4b9347071d3001aaa19da",
-      "localName": "English + Кириллица",
+      "localName": "Кириллица",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1608,12 +1608,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk_evt",
       "id": "57c4b9367071d3001aaa19db",
-      "localName": "English + Кириллица",
+      "localName": "Кириллица",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Russian",
+      "name": "Russian",
       "version": 3
     },
     {
@@ -1622,12 +1622,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_dvt",
       "id": "57c4b943774b7d001b4717b4",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1636,12 +1636,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_s3",
       "id": "57c4b948774b7d001b4717b5",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1650,12 +1650,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "spalding",
       "id": "57c4b94c14f887001cb3e8c3",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1664,12 +1664,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk",
       "id": "57c4b95414f887001cb3e8c4",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1678,12 +1678,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk_evt",
       "id": "57c4b9587071d3001aaa19dc",
-      "localName": "English + 繁體通知",
+      "localName": "繁體通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+TraditionalChinese",
+      "name": "TraditionalChinese",
       "version": 1
     },
     {
@@ -1692,12 +1692,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_dvt",
       "id": "57c4b96c852fe4001b3b5b22",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -1706,12 +1706,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_s3",
       "id": "57c4b9707071d3001aaa19dd",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -1720,12 +1720,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "spalding",
       "id": "57c4b974852fe4001b3b5b23",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -1734,12 +1734,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk",
       "id": "57c4b9797071d3001aaa19de",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -1748,12 +1748,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk_evt",
       "id": "57c4b97d852fe4001b3b5b24",
-      "localName": "English + 简体通知",
+      "localName": "简体通知",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+SimplifiedChinese",
+      "name": "SimplifiedChinese",
       "version": 2
     },
     {
@@ -1762,12 +1762,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk_evt",
       "id": "57c4b97d852ff00000000000",
-      "localName": "English + မြန်မာစာ (contrib by LCP)",
+      "localName": "မြန်မာစာ (contrib by LCP)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Burmese(contrib)",
+      "name": "Burmese(contrib)",
       "version": 1
     },
     {
@@ -1776,12 +1776,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "silk",
       "id": "57c4b97d852ff00000000001",
-      "localName": "English + မြန်မာစာ (contrib by LCP)",
+      "localName": "မြန်မာစာ (contrib by LCP)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Burmese(contrib)",
+      "name": "Burmese(contrib)",
       "version": 1
     },
     {
@@ -1790,12 +1790,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "spalding",
       "id": "57c4b97d852ff00000000002",
-      "localName": "English + မြန်မာစာ (contrib by LCP)",
+      "localName": "မြန်မာစာ (contrib by LCP)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Burmese(contrib)",
+      "name": "Burmese(contrib)",
       "version": 1
     },
     {
@@ -1804,12 +1804,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_dvt",
       "id": "57c4b97d852ff00000000003",
-      "localName": "English + မြန်မာစာ (contrib by LCP)",
+      "localName": "မြန်မာစာ (contrib by LCP)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Burmese(contrib)",
+      "name": "Burmese(contrib)",
       "version": 1
     },
     {
@@ -1818,12 +1818,12 @@ private val LanguagePacksJson = """
       "firmware": "4.0.0",
       "hardware": "snowy_s3",
       "id": "57c4b97d852ff00000000004",
-      "localName": "English + မြန်မာစာ (contrib by LCP)",
+      "localName": "မြန်မာစာ (contrib by LCP)",
       "mobile": {
         "name": "ios",
         "version": "2.6.0"
       },
-      "name": "English+Burmese(contrib)",
+      "name": "Burmese(contrib)",
       "version": 1
     },
     {
@@ -1873,6 +1873,16 @@ private val LanguagePacksJson = """
       },
       "name": "Japanese Light (by Kuro)",
       "version": 5
+    },
+    {
+      "ISOLocal": "he_IL",
+      "file": "https://github.com/alonmln/PebbleOS/releases/download/he_IL-v1/he_IL.pbl",
+      "firmware": "4.0.0",
+      "hardware": null,
+      "id": "he_IL_v1",
+      "localName": "עברית",
+      "name": "Hebrew",
+      "version": 1
     }
   ]
 }

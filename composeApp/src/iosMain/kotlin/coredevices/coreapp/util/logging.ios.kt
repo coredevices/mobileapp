@@ -8,10 +8,12 @@ import platform.Foundation.NSBundle
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSLocale
+import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSTimeZone
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.currentLocale
 import platform.Foundation.defaultTimeZone
+import platform.Foundation.isLowPowerModeEnabled
 import platform.Foundation.localeIdentifier
 import platform.UIKit.UIDevice
 import platform.posix.uname
@@ -57,6 +59,11 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
     val name = device.name
     val locale = NSLocale.currentLocale().localeIdentifier
     val timezone = NSTimeZone.defaultTimeZone.name
+    val isLowPowerMode = try {
+        NSProcessInfo.processInfo.isLowPowerModeEnabled()
+    } catch (e: Exception) {
+        null
+    }
 
     return buildString {
         appendLine("Version: $appVersion")
@@ -68,5 +75,6 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
         appendLine("System Version: $systemVersion")
         appendLine("Locale: $locale")
         appendLine("Timezone: $timezone")
+        appendLine("Low Power Mode: ${isLowPowerMode ?: "Unknown"}")
     }
 }

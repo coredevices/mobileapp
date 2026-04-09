@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
@@ -18,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -56,6 +58,7 @@ class PKJSApp(
     private val jsPath: Path,
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
+    private val connectionScope: ConnectionCoroutineScope,
 ): LibPebbleKoinComponent, CompanionApp {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
@@ -85,8 +88,8 @@ class PKJSApp(
         jsRunner?.debugForceGC() ?: error("JsRunner not initialized")
     }
 
-    private fun launchIncomingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
-        device.inboundAppMessages(uuid).onEach { appMessageData ->
+    private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
+        messages.onEach { appMessageData ->
             jsRunner?.let { runner ->
                 if (!runner.readyState.value) {
                     logger.w { "JsRunner not ready, waiting" }
@@ -140,7 +143,20 @@ class PKJSApp(
             return null
         }
         val url = runningScope!!.async { urlOpenRequests.receive() }
-        jsRunner?.signalShowConfiguration() ?: logger.e { "JsRunner not initialized, cannot show configuration" }
+        try {
+            val jsRunner = jsRunner
+            if (jsRunner != null) {
+               jsRunner.signalShowConfiguration()
+            } else {
+               logger.e { "JsRunner not initialized, cannot show configuration" }
+               url.cancel()
+               return null
+            }
+        } catch (e: Exception) {
+            url.cancel()
+            logger.e(e) { "Error signalling show configuration" }
+            return null
+        }
         return url.await()
     }
 
@@ -157,14 +173,14 @@ class PKJSApp(
             )
         }
 
-    override suspend fun start(connectionScope: CoroutineScope) {
+    override suspend fun start(incomingAppMessages: Flow<AppMessageData>) {
         val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
             logger.e(throwable) { "Unhandled exception in PKJSApp: ${throwable.message}" }
         }
         val scope = connectionScope + Job() + CoroutineName("PKJSApp-$uuid") + exceptionHandler
         runningScope = scope
         jsRunner = injectJsRunner(scope)
-        launchIncomingAppMessageHandler(device, scope)
+        launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandler(device, scope)
         jsRunner?.start() ?: error("JsRunner not initialized")
     }

@@ -3,19 +3,24 @@ package io.rebble.libpebblecommon.health
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthApi
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
+import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.calculateHealthAverages
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
@@ -33,13 +38,16 @@ class Health(
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
     private val watchManager: WatchManager,
-) : HealthApi {
+    private val healthDataProcessor: HealthDataProcessor,
+) : HealthApi, HealthDataApi {
     private val logger = Logger.withTag("Health")
 
     companion object {
         private val HEALTH_STATS_AVERAGE_DAYS = 30
         private val MORNING_WAKE_HOUR = 7 // 7 AM for daily stats update
     }
+
+    override val healthDataUpdated: SharedFlow<Unit> = healthDataProcessor.healthDataUpdated
 
     override val healthSettings: Flow<HealthSettings> = healthSettingsDao.getWatchSettings()
 
@@ -152,6 +160,16 @@ class Health(
             logger.d { "Health stats updated (latestTimestamp=$latestTimestamp)" }
         }
     }
+
+    override suspend fun getLatestTimestamp(): Long? = healthDao.getLatestTimestamp()
+
+    override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> =
+        healthDao.getHealthDataAfter(afterTimestamp)
+
+    override suspend fun getOverlayEntriesAfter(
+        afterTimestamp: Long,
+        types: List<Int>
+    ): List<OverlayDataEntity> = healthDao.getOverlayEntriesAfter(afterTimestamp, types)
 }
 
 data class HealthSettings(

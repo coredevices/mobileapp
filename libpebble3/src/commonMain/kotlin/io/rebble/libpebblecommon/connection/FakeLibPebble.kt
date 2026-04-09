@@ -21,10 +21,12 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
@@ -58,6 +60,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -185,6 +188,9 @@ class FakeLibPebble : LibPebble {
 
     override suspend fun removeApp(id: Uuid): Boolean = true
     override suspend fun addAppToLocker(app: LockerEntry) {
+    }
+
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
     }
 
     override fun restoreSystemAppOrder() {
@@ -355,6 +361,8 @@ class FakeLibPebble : LibPebble {
         // No-op for fake implementation
     }
 
+    override val healthDataUpdated: SharedFlow<Unit> = MutableStateFlow(Unit)
+
     override suspend fun getCurrentPosition(): GeolocationPositionResult {
         TODO("Not yet implemented")
     }
@@ -411,6 +419,15 @@ class FakeLibPebble : LibPebble {
 
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
     }
+
+    override suspend fun getLatestTimestamp(): Long? = 0
+
+    override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> = emptyList()
+
+    override suspend fun getOverlayEntriesAfter(
+        afterTimestamp: Long,
+        types: List<Int>
+    ): List<OverlayDataEntity> = emptyList()
 }
 
 fun fakeWatches(): List<PebbleDevice> {
@@ -466,7 +483,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
         }
         FakeConnectedDevice(
             identifier = fakeIdentifier,
-            firmwareUpdateAvailable = fwupAvailable,
+            firmwareUpdateAvailable = FirmwareUpdateCheckState(false, fwupAvailable),
             firmwareUpdateState = fwupState,
             name = name,
             nickname = null,
@@ -487,7 +504,7 @@ fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
 
 class FakeConnectedDevice(
     override val identifier: PebbleIdentifier,
-    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
     override val name: String,
     override val nickname: String?,
@@ -640,7 +657,7 @@ class FakeConnectedDevice(
 
 class FakeConnectedDeviceInRecovery(
     override val identifier: PebbleIdentifier,
-    override val firmwareUpdateAvailable: FirmwareUpdateCheckResult?,
+    override val firmwareUpdateAvailable: FirmwareUpdateCheckState,
     override val firmwareUpdateState: FirmwareUpdater.FirmwareUpdateStatus,
     override val name: String,
     override val nickname: String?,

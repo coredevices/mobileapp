@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.LoadState
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
@@ -40,6 +41,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -53,8 +55,6 @@ class AppStoreCollectionScreenViewModel(
     val path: String,
     val appType: AppType?,
 ): ViewModel(), KoinComponent {
-    val showIncompatible = mutableStateOf(false)
-    val showScaled = mutableStateOf(true)
     val logger = Logger.withTag("AppStoreCollectionScreenVM")
     var loadedApps by mutableStateOf<Flow<PagingData<CommonApp>>?>(null)
     private var loadedAppsWatchType: WatchType? = null
@@ -107,17 +107,23 @@ fun AppStoreCollectionScreen(
             appType
         )
     }
-    val lastConnectedWatch = lastConnectedWatch()
-    val watchType = lastConnectedWatch?.watchType?.watchType ?: WatchType.DIORITE
-    LaunchedEffect(watchType) {
-        viewModel.maybeLoad(watchType)
+    val sharedViewModel: SharedLockerViewModel = koinInject()
+    sharedViewModel.Init()
+    LaunchedEffect(sharedViewModel.watchType.value) {
+        viewModel.maybeLoad(sharedViewModel.watchType.value)
     }
-    val apps = remember(viewModel.loadedApps, viewModel.showScaled.value, viewModel.showIncompatible.value) {
-        viewModel.loadedApps?.map {
-            it.filter { app ->
-                if (!viewModel.showScaled.value && !app.isNativelyCompatible) {
+    val currentHearts = currentHearts()
+    val apps = remember(viewModel.loadedApps, sharedViewModel.showScaled.value, sharedViewModel.showIncompatible.value, sharedViewModel.hearted.value) {
+        viewModel.loadedApps?.map { pagingData ->
+            val seenIds = mutableSetOf<String>()
+            pagingData.filter { app ->
+                if (!seenIds.add("${app.storeId}-${app.uuid}")) {
                     false
-                } else if (!viewModel.showIncompatible.value && !app.isCompatible) {
+                } else if (!sharedViewModel.showScaled.value && !app.isNativelyCompatible) {
+                    false
+                } else if (!sharedViewModel.showIncompatible.value && !app.isCompatible) {
+                    false
+                } else if (sharedViewModel.hearted.value && !currentHearts.hasHeart(sourceId = app.appstoreSource?.id, appId = app.storeId)) {
                     false
                 } else {
                     true
@@ -133,12 +139,11 @@ fun AppStoreCollectionScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
         Column {
             AppsFilterRow(
-                watchType = watchType,
                 selectedType = null,
-                showIncompatible = viewModel.showIncompatible,
-                showScaled = viewModel.showScaled,
+                sharedLockerViewModel = sharedViewModel,
+                showWatchfaceOrderSetting = false,
             )
-            if (apps == null || apps.itemCount == 0) {
+            if (apps == null || apps.loadState.refresh is LoadState.Loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
@@ -153,7 +158,7 @@ fun AppStoreCollectionScreen(
                         ) {
                             items(
                                 count = apps.itemCount,
-                                key = apps.itemKey { it.storeId ?: it.uuid }
+                                key = apps.itemKey { "${it.storeId}-${it.uuid}" }
                             ) { index ->
                                 val entry = apps[index]!!
                                 NativeWatchfaceCard(
@@ -173,7 +178,7 @@ fun AppStoreCollectionScreen(
                         ) {
                             items(
                                 count = apps.itemCount,
-                                key = apps.itemKey { it.storeId ?: it.uuid }
+                                key = apps.itemKey { "${it.storeId}-${it.uuid}" }
                             ) { index ->
                                 val entry = apps[index]!!
                                 NativeWatchfaceListItem(

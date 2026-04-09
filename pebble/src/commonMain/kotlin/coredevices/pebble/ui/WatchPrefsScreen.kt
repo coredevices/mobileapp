@@ -5,9 +5,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.rememberLibPebble
+import coredevices.ui.ConfirmDialog
 import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.BACKLIGHT_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.HEALTH_APP_UUID
@@ -46,29 +48,54 @@ fun watchPrefs(): List<SettingsItem> {
             }
         }
     }
-    return mapped
+    val showConfirmReset = remember { mutableStateOf(false) }
+    ConfirmDialog(
+        show = showConfirmReset,
+        title = "Reset To Defaults?",
+        text = "Reset all settings to defaults",
+        onConfirm = {
+            settings.forEach { setting ->
+                if (setting.value != setting.pref.defaultValue) {
+                    @Suppress("UNCHECKED_CAST")
+                    val pref = setting.pref as WatchPref<Any?>
+                    libPebble.setWatchPref(WatchPreference(pref, pref.defaultValue))
+                }
+            }
+        },
+        confirmText = "Reset",
+    )
+    val reset = basicSettingsActionItem(
+        title = "Reset To Defaults",
+        topLevelType = TopLevelType.Watch,
+        section = Section.Defaults,
+        action = {
+            showConfirmReset.value = true
+        },
+        description = "Reset all watch settings to defaults",
+    )
+    return listOf(reset) + mapped
 }
 
 fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.TimezoneSourceIsManual -> Section.Time
     BoolWatchPref.Clock24h -> Section.Time
-    BoolWatchPref.StandbyMode -> Section.Default
+    BoolWatchPref.StandbyMode -> Section.Other
     BoolWatchPref.LeftHandedMode -> Section.Display
     BoolWatchPref.Backlight -> Section.Display
     BoolWatchPref.AmbientLightSensor -> Section.Display
     BoolWatchPref.BacklightMotion -> Section.Display
     BoolWatchPref.DynamicBacklightIntensity -> Section.Display
-    BoolWatchPref.LanguageEnglish -> Section.Default
+    BoolWatchPref.LanguageEnglish -> Section.Other
     ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
     ColorWatchPref.AppMenuHighlightColor -> Section.Display
     EnumWatchPref.TextSize -> Section.Notifications
-    NumberWatchPref.MotionSensitivity -> Section.Display
+    EnumWatchPref.MotionSensitivity -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
     NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
-    NumberWatchPref.DynamicBacklightMaxThreshold -> Section.Display
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSelect -> Section.QuickLaunch
     QuicklaunchWatchPref.QlBack -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSingleClickUp -> Section.QuickLaunch
@@ -88,11 +115,15 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
+    BoolWatchPref.MenuScrollWrapAround -> Section.Display
+    EnumWatchPref.MenuScrollVibe -> Section.Display
+    BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref
     return basicSettingsNumberItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -103,6 +134,8 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
             libPebble.setWatchPref(item.copy(value = it))
         },
         isDebugSetting = pref.isDebugSetting,
+        defaultValue = pref.defaultValue,
+        unit = pref.unit,
     )
 }
 
@@ -110,6 +143,7 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
     val pref = item.pref as ColorWatchPref
     val default = item.valueOrDefault()
     return SettingsItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -137,6 +171,7 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
 
 private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): SettingsItem {
     return basicSettingsToggleItem(
+        id = item.pref.id,
         title = item.pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),
@@ -151,6 +186,7 @@ private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): S
 private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as EnumWatchPref
     return basicSettingsDropdownItem(
+        id = pref.id,
         title = pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = pref.section(),
@@ -174,7 +210,7 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
     val installedApps by libPebble.getLocker(
         type = AppType.Watchapp,
         searchQuery = null,
-        limit = LOCKER_UI_LOAD_LIMIT,
+        limit = 100,
     ).map { apps ->
         apps.filter { app -> app.isSynced() }
     }.collectAsState(emptyList())
@@ -198,6 +234,7 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
     val default = item.valueOrDefault()
     val defaultQl = options.firstOrNull { it.uuid == default.uuid } ?: options[0]
     return basicSettingsDropdownItem(
+        id = item.pref.id,
         title = item.pref.displayName,
         topLevelType = TopLevelType.Watch,
         section = item.pref.section(),

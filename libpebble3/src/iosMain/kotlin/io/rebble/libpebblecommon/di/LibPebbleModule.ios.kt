@@ -62,5 +62,6 @@ actual val platformModule: Module = module {
         fallbackToResetRequest = true,
         closeGattServerWhenBtDisabled = false,
         delayBleConnectionsAfterAppStart = true,
+        supportsPpogResetCharacteristic = true,
     ) }
 }

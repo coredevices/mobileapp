@@ -29,8 +29,8 @@ class PebbleAndroidDelegate(
         private val BASE_PERMISSIONS = setOf(
             Permission.Location,
             Permission.BackgroundLocation,
-            Permission.PostNotifications,
             Permission.Bluetooth,
+            Permission.PostNotifications,
         )
         private val AFTER_FIRST_CONNECTION_PERMISSIONS = setOf(
             Permission.ReadNotifications,

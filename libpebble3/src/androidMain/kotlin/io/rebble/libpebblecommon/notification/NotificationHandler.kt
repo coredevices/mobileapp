@@ -28,6 +28,7 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMut
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
@@ -79,7 +80,11 @@ class NotificationHandler(
     }
 
     fun getNotification(itemId: Uuid): LibPebbleNotification? {
-        return inflightNotifications.values.firstOrNull { it.uuid == itemId }
+        return inflightNotifications.values.firstOrNull {
+            it.uuid == itemId
+        } ?: inflightNotifications.values.firstOrNull {
+            itemId in it.previousUuids
+        }
     }
 
     private val _channelChanged = MutableSharedFlow<Unit>()
@@ -149,9 +154,10 @@ class NotificationHandler(
         }
         val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
         val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
+        val appProperties = NotificationProperties.lookup(sbn.packageName)
+        val showLocalOnlyNotifications = notificationConfig.value.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
         val decision = when {
-            sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
-                NotSentLocalOnly
+            sbn.notification.isLocalOnly() && !showLocalOnlyNotifications -> NotSentLocalOnly
             anyContactMuted -> NotSendContactMuted
             !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
             !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
@@ -190,9 +196,10 @@ class NotificationHandler(
         app: NotificationAppItem,
         channel: ChannelItem?,
     ): NotificationResult {
+        val previousUuids = findPreviousUuids(sbn)
         for (processor in notificationProcessors) {
             try {
-                when (val result = processor.extractNotification(sbn, app, channel)) {
+                when (val result = processor.extractNotification(sbn, app, channel, previousUuids)) {
                     is NotificationResult.Extracted -> {
                         verboseLog { "Notification from ${sbn.packageName.obfuscate(privateLogger)} extracted by ${processor::class.simpleName}" }
                         return result
@@ -207,6 +214,14 @@ class NotificationHandler(
             }
         }
         return NotificationResult.NotProcessed
+    }
+
+    private fun findPreviousUuids(sbn: StatusBarNotification): List<Uuid> {
+        val match = inflightNotifications[sbn.key]
+        if (match == null) {
+            return emptyList()
+        }
+        return listOf(match.uuid) + match.previousUuids
     }
 
 //    fun setActiveNotifications(notifications: List<StatusBarNotification>) =
@@ -317,17 +332,21 @@ Processed as:
     private fun Bundle.dump(indent: Int): String {
         val newlineIndent = "\n${" ".repeat(indent)}"
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
-            try {
-                val value = get(it)
-                when {
-                    value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
-                        value.toString().obfuscate(privateLogger)
-                    }"
+            if (it in EXTRA_KEYS_SKIP_VALUE) {
+                "$it = <skipped>"
+            } else {
+                try {
+                    val value = get(it)
+                    when {
+                        value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                            value.toString().obfuscate(privateLogger)
+                        }"
 
-                    else -> "$it = ${get(it)}"
+                        else -> "$it = ${get(it)}"
+                    }
+                } catch (_: Exception) {
+                    "$it = unknown (crashed)"
                 }
-            } catch (_: Exception) {
-                "$it = unknown (crashed)"
             }
         }
     }
@@ -362,7 +381,11 @@ private fun LibPebbleNotification.isPebbleTestNotification(): Boolean = packageN
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 private val EXTRA_KEYS_NON_STRING_SENSITIVE =
-    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list", "android.largeIcon")
+    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
+
+// Keys whose values are large binary objects (bitmaps, icons) — skip get() entirely to avoid OOM
+private val EXTRA_KEYS_SKIP_VALUE =
+    setOf("android.largeIcon", "android.picture", "android.backgroundImage", "android.icon", "android.smallIcon")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

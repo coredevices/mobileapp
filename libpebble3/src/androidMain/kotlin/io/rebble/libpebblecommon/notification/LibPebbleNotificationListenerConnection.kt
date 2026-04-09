@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -14,6 +15,7 @@ import kotlin.uuid.Uuid
 class AndroidPebbleNotificationListenerConnection(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val notificationHandler: NotificationHandler,
+    private val notificationConfig: NotificationConfigFlow,
 ) : NotificationListenerConnection {
     private val logger = Logger.withTag("AndroidPebbleNotificationListenerConnection")
 
@@ -53,7 +55,9 @@ class AndroidPebbleNotificationListenerConnection(
     override fun init(libPebble: LibPebble) {
         notificationHandler.init()
         notificationSendQueue.onEach {
-            libPebble.sendNotification(it.toTimelineNotification())
+            libPebble.sendNotification(
+                it.toTimelineNotification(notificationConfig.value.cannedResponses)
+            )
         }.launchIn(libPebbleCoroutineScope)
         notificationDeleteQueue.onEach {
             libPebble.markNotificationRead(it)

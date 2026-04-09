@@ -43,6 +43,7 @@ class AndroidAnalyticsBackend(
         if (enabled) {
             mixpanel?.optInTracking()
         } else {
+            mixpanel?.flush()
             mixpanel?.optOutTracking()
         }
     }

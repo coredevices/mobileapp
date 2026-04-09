@@ -67,6 +67,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
         insertOrReplace(existing.copy(
             muteState = muteState,
             stateUpdated = Clock.System.now().asMillisecond(),
+            muteExpiration = null,
         ))
     }
 

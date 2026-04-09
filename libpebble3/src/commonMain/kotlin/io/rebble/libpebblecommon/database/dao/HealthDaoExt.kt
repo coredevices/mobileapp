@@ -20,9 +20,6 @@ suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>)
         if (existing == null) {
             insertHealthData(listOf(newData))
             inserted++
-            logger.d {
-                "Inserted new data at timestamp ${newData.timestamp}: ${newData.steps} steps"
-            }
         } else if (newData.steps > existing.steps) {
             logger.d {
                 "Replacing data at timestamp ${newData.timestamp}: ${existing.steps} steps -> ${newData.steps} steps (gained ${newData.steps - existing.steps} steps)"

@@ -54,12 +54,6 @@ kotlin {
 // https://developer.android.com/kotlin/multiplatform/migrate
     val xcfName = "pebbleKit"
 
-    iosX64 {
-        binaries.framework {
-            baseName = xcfName
-        }
-    }
-
     iosArm64 {
         binaries.framework {
             baseName = xcfName
@@ -84,14 +78,16 @@ kotlin {
                 optIn("androidx.compose.material3.ExperimentalMaterial3Api")
                 optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
             }
         }
         commonMain {
             dependencies {
                 implementation(project(":libpebble3"))
+                implementation(libs.health.kmp)
                 implementation(compose.runtime)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
@@ -106,6 +102,7 @@ kotlin {
                 implementation(libs.serialization)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.settings)
+                implementation(libs.settings.test)
                 implementation(libs.settings.serialization)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
@@ -119,7 +116,7 @@ kotlin {
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
                 implementation(libs.coredevices.speex)
-                api(libs.cactus)
+                api(project(":cactus"))
                 api(libs.algolia)
                 implementation(libs.reorderable)
                 implementation(libs.compass.geocoder)

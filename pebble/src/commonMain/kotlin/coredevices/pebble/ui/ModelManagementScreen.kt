@@ -48,11 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.ui.M3Dialog
 import coredevices.util.CoreConfigHolder
 import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
+import coredevices.util.models.RecommendedModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,7 +74,8 @@ import kotlin.time.Duration.Companion.seconds
 
 class ModelManagementScreenViewModel(
     private val modelManager: ModelManager,
-    private val coreConfigHolder: CoreConfigHolder
+    private val coreConfigHolder: CoreConfigHolder,
+    private val settings: Settings
 ) : ViewModel() {
     private val _downloadedModels = MutableStateFlow(modelManager.getDownloadedModelSlugs())
     val downloadedModels = _downloadedModels.asStateFlow()
@@ -156,7 +159,17 @@ class ModelManagementScreenViewModel(
     fun refreshAvailableModels() {
         viewModelScope.launch {
             _availableSTTModels.value = try {
-                AvailableModelsState.Success(modelManager.getAvailableSTTModels())
+                val models = modelManager.getAvailableSTTModels()
+                val recommendedSTTModelSlug = modelManager.getRecommendedSTTModel()
+                AvailableModelsState.Success(
+                    if (!settings.showDebugOptions()) {
+                        models.filter {
+                            it.slug == recommendedSTTModelSlug.modelSlug || it.slug in downloadedModels.value
+                        }
+                    } else {
+                        models
+                    }
+                )
             } catch (e: Exception) {
                 AvailableModelsState.Error(e.message ?: "Unknown error")
             }
@@ -170,7 +183,7 @@ class ModelManagementScreenViewModel(
         }
     }
 
-    fun getRecommendedSTTModel(): String {
+    fun getRecommendedSTTModel(): RecommendedModel {
         return modelManager.getRecommendedSTTModel()
     }
 
@@ -180,7 +193,9 @@ class ModelManagementScreenViewModel(
 }
 
 @Composable
-private fun ModelDownloadPromptDialog(
+fun ModelDownloadPromptDialog(
+    isLite: Boolean,
+    downloadSizeInMb: Int,
     onGetRecommended: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -199,12 +214,16 @@ private fun ModelDownloadPromptDialog(
             TextButton(
                 onClick = onGetRecommended,
             ) {
-                Text("Download recommended model")
+                if (isLite) {
+                    Text("Download lite model: ${downloadSizeInMb}MB")
+                } else {
+                    Text("Download offline model: ${downloadSizeInMb}MB")
+                }
             }
             TextButton(
                 onClick = onDismiss,
             ) {
-                Text("Pick a model myself")
+                Text("Cancel")
             }
         }
     ) {
@@ -214,6 +233,10 @@ private fun ModelDownloadPromptDialog(
                 Data charges may apply, Wi-Fi is recommended.
             """.trimIndent(),
         )
+        if (isLite) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Your device may struggle with larger models, a reduced accuracy model will be used.")
+        }
     }
 }
 
@@ -221,7 +244,6 @@ private fun ModelDownloadPromptDialog(
 fun ModelManagementScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
-    openSttDialog: Boolean = false,
     downloadStatus: State<ModelDownloadStatus>,
     downloadedModels: State<List<String>>,
     availableSTTModels: State<ModelManagementScreenViewModel.AvailableModelsState>,
@@ -244,28 +266,6 @@ fun ModelManagementScreen(
                 else -> null
             }
         }
-    }
-    var showSttDialog by remember { mutableStateOf(openSttDialog) }
-    if (showSttDialog) {
-        ModelDownloadPromptDialog(
-            onGetRecommended = {
-                showSttDialog = false
-                onSetCurrentSTTModel(recommendedSTTModelSlug)
-                onDownloadSTTModel(
-                    availableSTTModels.value.let {
-                        when (it) {
-                            is ModelManagementScreenViewModel.AvailableModelsState.Success -> {
-                                it.models.find { model -> model.slug == recommendedSTTModelSlug }
-                            }
-                            else -> null
-                        }
-                    } ?: return@ModelDownloadPromptDialog
-                )
-            },
-            onDismiss = {
-                showSttDialog = false
-            }
-        )
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Scaffold { paddingValues ->
@@ -430,7 +430,6 @@ private fun ModelListItem(
 fun ModelManagementScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
-    openSttDialog: Boolean = false
 ) {
     val viewModel = koinViewModel<ModelManagementScreenViewModel>()
     val downloadedModels = viewModel.downloadedModels.collectAsState()
@@ -443,11 +442,10 @@ fun ModelManagementScreen(
         navBarNav = navBarNav,
         topBarParams = topBarParams,
         downloadStatus = downloadStatus,
-        openSttDialog = openSttDialog,
         downloadedModels = downloadedModels,
         availableSTTModels = availableSTTModels,
         currentSTTModel = currentSTTModel,
-        recommendedSTTModelSlug = recommendedSTTModel,
+        recommendedSTTModelSlug = recommendedSTTModel.modelSlug,
         onDownloadSTTModel = viewModel::downloadSTTModel,
         onCancelDownload = viewModel::cancelDownload,
         onDeleteModel = viewModel::deleteModel,
@@ -463,7 +461,6 @@ fun ModelManagementScreenPreview() {
             navBarNav = NoOpNavBarNav,
             topBarParams = WrapperTopBarParams,
             downloadStatus = mutableStateOf(ModelDownloadStatus.Downloading(modelSlug = "whisper-base")),
-            openSttDialog = false,
             downloadedModels = mutableStateOf(listOf("whisper-small")),
             availableSTTModels = mutableStateOf(
                 ModelManagementScreenViewModel.AvailableModelsState.Success(
@@ -489,8 +486,23 @@ fun ModelManagementScreenPreview() {
 fun ModelManagementScreenPromptDialogPreview() {
     PreviewWrapper {
         ModelDownloadPromptDialog(
+            isLite = false,
             onGetRecommended = {},
-            onDismiss = {}
+            onDismiss = {},
+            downloadSizeInMb = 100,
+        )
+    }
+}
+
+@Preview
+@Composable
+fun ModelManagementScreenPromptDialogLitePreview() {
+    PreviewWrapper {
+        ModelDownloadPromptDialog(
+            isLite = true,
+            onGetRecommended = {},
+            onDismiss = {},
+            downloadSizeInMb = 100,
         )
     }
 }

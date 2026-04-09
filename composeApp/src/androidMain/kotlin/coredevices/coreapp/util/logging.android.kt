@@ -23,6 +23,16 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
     } catch (e: Exception) {
         null
     }
+    val powerManager = try {
+        context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+    } catch (e: Exception) {
+        null
+    }
+    val isLowPowerMode = try {
+        powerManager?.isPowerSaveMode ?: false
+    } catch (e: Exception) {
+        null
+    }
     return buildString {
         appendLine("Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${BuildConfig.BUILD_TYPE}")
         appendLine("Device Summary")
@@ -52,5 +62,6 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
             appendLine("Low Memory: ${memoryInfo.lowMemory}")
             appendLine("Threshold: ${memoryInfo.threshold}")
         } ?: appendLine("Memory Info: <Failed>")
+        appendLine("Low Power Mode: ${isLowPowerMode ?: "<Failed>"}")
     }
 }

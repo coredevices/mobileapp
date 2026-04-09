@@ -435,9 +435,9 @@ abstract class PlatformFatFramework : DefaultTask() {
         }
         val out = outputDir.get().asFile.toPath()
             .resolve(inputFrameworks.files.first().name + "/libpebble3").toString()
-        project.exec {
+        project.providers.exec {
             commandLine("lipo", "-create", *inputs.toTypedArray(), "-output", out)
-        }
+        }.result.get()
     }
 
     private fun lipoMergeFrameworkDSYMs() {
@@ -447,9 +447,9 @@ abstract class PlatformFatFramework : DefaultTask() {
         }
         val out = outputDir.get().asFile.toPath()
             .resolve(inputFrameworkDSYMs.files.first().name + "/Contents/Resources/DWARF/libpebble3").toString()
-        project.exec {
+        project.providers.exec {
             commandLine("lipo", "-create", *inputs.toTypedArray(), "-output", out)
-        }
+        }.result.get()
     }
 
     @TaskAction

@@ -11,6 +11,7 @@ object CommonRoutes {
     class BugReport(
         val pebble: Boolean,
         val recordingPath: String? = null,
+        val screenshotPath: String? = null,
     ) : CoreRoute
 
     @Serializable
@@ -38,6 +39,9 @@ object CommonRoutes {
 
     @Serializable
     data object OnboardingRoute : CoreRoute
+
+    @Serializable
+    data object WatchOnboardingRoute : CoreRoute
 }
 
 @Stable

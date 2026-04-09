@@ -21,9 +21,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
+enum class CloudpebbleProxyProtocolVersion {
+    V1,
+    V2
+}
+
 class DevConnectionCloudpebbleProxy(
     libPebble: LibPebble,
     private val url: String,
+    private val protocolVersion: CloudpebbleProxyProtocolVersion,
     private val scope: LibPebbleCoroutineScope,
     private val token: StateFlow<String?>
 ): DevConnectionTransport(libPebble) {
@@ -50,7 +56,10 @@ class DevConnectionCloudpebbleProxy(
                         urlString = url
                     )
                     session?.apply {
-                        send(ProxyAuthenticationMessage(currentToken))
+                        when (protocolVersion) {
+                            CloudpebbleProxyProtocolVersion.V1 -> send(ProxyAuthenticationMessage(currentToken))
+                            CloudpebbleProxyProtocolVersion.V2 -> send(ProxyAuthenticationMessageV2(currentToken))
+                        }
                         val authResultPacket = withTimeout(5.seconds) {
                             incoming.receive() as? Frame.Binary
                         }

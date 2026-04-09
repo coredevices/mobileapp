@@ -44,6 +44,16 @@ compose.resources {
     packageOfResClass = "coreapp.util.generated.resources"
 }
 
+val properties = Properties().apply {
+    try {
+        load(rootDir.resolve("local.properties").reader())
+    } catch (e: Exception) {
+        println("local.properties file not found")
+    }
+}
+
+val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+
 kotlin {
 
 // Target declarations - add or remove as needed below. These define
@@ -65,12 +75,6 @@ kotlin {
 // project can be found here:
 // https://developer.android.com/kotlin/multiplatform/migrate
     val xcfName = "coreapp-util"
-
-    iosX64 {
-        binaries.framework {
-            baseName = xcfName
-        }
-    }
 
     iosArm64 {
         binaries.framework {
@@ -105,7 +109,7 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.ui)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(compose.components.resources)
                 implementation(libs.ktor.client.core)
@@ -121,13 +125,19 @@ kotlin {
                 implementation(libs.ktor.client.serialization.json)
                 implementation(libs.ktor.client.logging)
                 implementation(libs.webview)
+                implementation(libs.uri)
                 implementation(compose.components.uiToolingPreview)
-                implementation(libs.cactus)
+                implementation(project(":cactus"))
                 implementation(project(":libpebble3"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
+                if (enableKrisp) {
+                    implementation(libs.coredevices.krispPrivate)
+                } else {
+                    implementation(project(":krisp-stubs"))
+                }
             }
         }
 
@@ -168,14 +178,6 @@ val headSha by lazy {
         commandLine("git", "describe", "--always", "--dirty")
     }.standardOutput.asText.get().trim()
 }
-
-val properties = Properties().apply {
-    try {
-        load(rootDir.resolve("local.properties").reader())
-    } catch (e: Exception) {
-        println("local.properties file not found")
-    }
-}
 val enableQa = System.getenv("QA")?.toBoolean() ?: properties.getProperty("QA")?.toBoolean() ?: true
 
 fun gradleStringPropOrNull(name: String): String? {
@@ -195,13 +197,15 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "USER_AGENT_VERSION", headSha)
         buildConfigField(FieldSpec.Type.STRING, "BUG_URL", gradleStringPropOrNull("bugUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "TOKEN_URL", gradleStringPropOrNull("tokenUrl"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "GITHUB_CLIENT_ID", gradleStringPropOrNull("githubClientId"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "GITHUB_CLIENT_SECRET", gradleStringPropOrNull("githubClientSecret"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MIXPANEL_TOKEN", gradleStringPropOrNull("mixpanelToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "WISPR_KEY", gradleStringPropOrNull("wisprKey"), nullable = true)
+        buildConfigField(FieldSpec.Type.STRING, "WISPR_AUTH_URL", gradleStringPropOrNull("wisprAuthUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "qwen3-0.6")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "Qwen3-0.6B")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v1.10")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v1.9")
     }
 }

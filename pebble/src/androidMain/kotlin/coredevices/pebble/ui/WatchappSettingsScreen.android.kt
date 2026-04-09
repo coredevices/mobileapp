@@ -15,6 +15,8 @@ internal actual fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid
 ): NativeWebView = defaultWebViewFactory(params).apply {
+    // Don't store the webview state (which includes localstorage) in bundle - can be too large
+    isSaveEnabled = false
     val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) {
         runBlocking(Dispatchers.Main) {
             evaluateJavascript(

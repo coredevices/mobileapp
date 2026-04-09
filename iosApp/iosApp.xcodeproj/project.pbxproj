@@ -13,12 +13,13 @@
 		670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */ = {isa = PBXBuildFile; fileRef = 670755B32DC121B600DA5904 /* XMLHTTPRequest.js */; };
 		6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */; };
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
-		67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */ = {isa = PBXBuildFile; fileRef = 67A3BC012F0A123400ABCDEF /* WebSocket.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
+		67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */ = {isa = PBXBuildFile; fileRef = 67A3BC012F0A123400ABCDEF /* WebSocket.js */; };
 		67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */; };
 		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
+		7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */; };
 		AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */; };
 /* End PBXBuildFile section */
 
@@ -30,10 +31,11 @@
 		670755B32DC121B600DA5904 /* XMLHTTPRequest.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = XMLHTTPRequest.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/XMLHTTPRequest.js; sourceTree = SOURCE_ROOT; };
 		6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		67555A952E0212D1006BB488 /* JSTimeout.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = JSTimeout.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/JSTimeout.js; sourceTree = SOURCE_ROOT; };
-		67A3BC012F0A123400ABCDEF /* WebSocket.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = WebSocket.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/WebSocket.js; sourceTree = SOURCE_ROOT; };
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		677B8EF52DBFE88C0060DBD6 /* startup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = startup.js; path = ../libpebble3/src/androidMain/assets/startup.js; sourceTree = SOURCE_ROOT; };
+		67A3BC012F0A123400ABCDEF /* WebSocket.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = WebSocket.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/WebSocket.js; sourceTree = SOURCE_ROOT; };
+		67B4A0002F12345600ABCDE0 /* krisp-bvc-o-pro-v3.kef */ = {isa = PBXFileReference; lastKnownFileType = file; path = "krisp-bvc-o-pro-v3.kef"; sourceTree = "<group>"; };
 		67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		67EA51BF2EF988F7003958BE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		67F184432D7F650200F47423 /* HaversineSatelliteLibrary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = HaversineSatelliteLibrary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -42,6 +44,7 @@
 		7555FF7B242A565900829871 /* Pebble.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pebble.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7555FF82242A565900829871 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleShortcuts.swift; sourceTree = "<group>"; };
 		8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		D4856F81B1A7C6FB5B8CEFA0 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
@@ -122,8 +125,10 @@
 				058557BA273AAA24004C7B11 /* Assets.xcassets */,
 				7555FF82242A565900829871 /* ContentView.swift */,
 				7555FF8C242A565B00829871 /* Info.plist */,
+				7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */,
 				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */,
+				67B4A0002F12345600ABCDE0 /* krisp-bvc-o-pro-v3.kef */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
 			);
 			path = iosApp;
@@ -149,6 +154,7 @@
 				7555FF77242A565900829871 /* Sources */,
 				B92378962B6B1156000C7307 /* Frameworks */,
 				7555FF79242A565900829871 /* Resources */,
+				67B4A0022F12345600ABCDE0 /* Copy Krisp Model */,
 				6065B47E070ACE50C8BFC442 /* [CP] Embed Pods Frameworks */,
 				3D40017A2DFF974800DBCD17 /* Upload firebase desym */,
 				3D6A68E62E60BEF300FD27DF /* Set versions */,
@@ -311,6 +317,24 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		67B4A0022F12345600ABCDE0 /* Copy Krisp Model */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy Krisp Model";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ -f \"${PROJECT_DIR}/iosApp/krisp-bvc-o-pro-v3.kef\" ]; then\n  cp \"${PROJECT_DIR}/iosApp/krisp-bvc-o-pro-v3.kef\" \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/krisp-bvc-o-pro-v3.kef\"\nfi\n";
+		};
 		F36B1CEB2AD83DDC00CB74D5 /* Compile Kotlin Framework */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -338,6 +362,7 @@
 			files = (
 				67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */,
 				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
+				7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */,
 				7555FF83242A565900829871 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

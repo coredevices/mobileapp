@@ -1,7 +1,6 @@
 package coredevices.util.models
 
 import co.touchlab.kermit.Logger
-import com.cactus.CactusModelManager
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -119,7 +118,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
         manager.updateDownloadStatus(ModelDownloadStatus.Downloading(slug, null))
 
         val fileManager = NSFileManager.defaultManager
-        val modelsPath = CactusModelManager.getModelsDirectory()
+        val modelsPath = platform.Foundation.NSSearchPathForDirectoriesInDomains(platform.Foundation.NSCachesDirectory, platform.Foundation.NSUserDomainMask, true).first().toString() + "/models"
         val outputDir = modelsPath.toPath() / slug.toPath()
 
         fileManager.removeItemAtPath(outputDir.toString(), null)
@@ -135,14 +134,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
                 zipFs.source(zipEntryPath).buffer().use { source ->
                     val fullPath = zipEntryPath.toString().trimStart('/')
 
-                    // Preserve .mlpackage directory structure, otherwise strip first directory level
-                    val relativeFilePath = if (fullPath.contains(".mlpackage/") || fullPath.endsWith(".mlpackage")) {
-                        fullPath
-                    } else if (fullPath.contains('/')) {
-                        fullPath.substringAfter('/')
-                    } else {
-                        fullPath
-                    }
+                    val relativeFilePath = fullPath
 
                     val fileToWrite = outputDir.resolve(relativeFilePath)
                     fileToWrite.createParentDirectories()
@@ -185,7 +177,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
             logger.e {"Download failed for model $slug: ${didCompleteWithError.localizedDescription}"}
 
             // Clean up any partially extracted data
-            val modelsPath = CactusModelManager.getModelsDirectory()
+            val modelsPath = platform.Foundation.NSSearchPathForDirectoriesInDomains(platform.Foundation.NSCachesDirectory, platform.Foundation.NSUserDomainMask, true).first().toString() + "/models"
             val fileManager = NSFileManager.defaultManager
             val outputDir = modelsPath.toPath() / slug.toPath()
             if (fileManager.fileExistsAtPath(outputDir.toString())) {

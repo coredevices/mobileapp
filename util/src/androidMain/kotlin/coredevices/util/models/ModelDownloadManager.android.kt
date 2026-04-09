@@ -16,8 +16,7 @@ import android.os.Build
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import co.touchlab.kermit.Logger
-import com.cactus.CactusLM
-import com.cactus.CactusSTT
+import coredevices.util.transcription.CactusModelPathProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,8 +91,12 @@ actual class ModelDownloadManager(
 
     actual fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
         if (jobScheduler.allPendingJobs.any { it.service == serviceComponentName }) {
-            Logger.withTag("ModelDownloadManager").i { "A model download job is already scheduled, not scheduling another." }
-            return false
+            Logger.withTag("ModelDownloadManager").w { "A model download job is already scheduled, cancelling it." }
+            jobScheduler.allPendingJobs.forEach {
+                if (it.service == serviceComponentName) {
+                    jobScheduler.cancel(it.id)
+                }
+            }
         }
         val info = buildJobInfo(
             modelSlug = modelInfo.slug,
@@ -196,10 +199,11 @@ class ModelDownloadService : JobService(), KoinComponent {
     }
 
     private suspend fun downloadModel(modelSlug: String, stt: Boolean) {
+        val modelProvider: CactusModelPathProvider by inject()
         if (stt) {
-            CactusSTT().downloadModel(modelSlug)
+            modelProvider.getSTTModelPath()
         } else {
-            CactusLM().downloadModel(modelSlug)
+            modelProvider.getLMModelPath()
         }
     }
 

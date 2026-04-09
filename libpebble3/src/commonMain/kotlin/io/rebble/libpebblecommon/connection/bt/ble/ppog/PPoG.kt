@@ -38,12 +38,12 @@ class PPoG(
     private var mtu: Int = blePlatformConfig.initialMtu
     private var closed = false
 
-    fun run() {
+    fun run(requestedPpogResetViaCharacteristic: Boolean) {
         scope.launch {
             val params = withTimeoutOrNull(12.seconds) {
                 initWaitingForResetRequest()
             } ?: withTimeoutOrNull(5.seconds) {
-                if (blePlatformConfig.fallbackToResetRequest) {
+                if (blePlatformConfig.fallbackToResetRequest && !requestedPpogResetViaCharacteristic) {
                     initWithResetRequest()
                 } else {
                     null

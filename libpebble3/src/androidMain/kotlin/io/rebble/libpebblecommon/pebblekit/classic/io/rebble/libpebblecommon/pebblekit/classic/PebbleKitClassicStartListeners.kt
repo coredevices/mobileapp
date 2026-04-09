@@ -12,15 +12,13 @@ import java.util.UUID
 import kotlin.uuid.Uuid
 import kotlin.uuid.toKotlinUuid
 
+private val logger = Logger.withTag("PebbleKitClassicStartListeners")
+
 class PebbleKitClassicStartListeners(
     private val context: Context,
     private val libPebble: LibPebble,
     private val coroutineScope: LibPebbleCoroutineScope
 ) {
-    companion object {
-        private val logger = Logger.withTag(PebbleKitClassicStartListeners::class.simpleName!!)
-    }
-
     fun init() {
         coroutineScope.launch {
             IntentFilter(INTENT_APP_START).asFlow(context, exported = true).collect { intent ->
@@ -41,7 +39,14 @@ class PebbleKitClassicStartListeners(
     }
 }
 
-fun Serializable.asUuid(): Uuid? = (this as? UUID)?.toKotlinUuid() ?: (this as? String)?.let { Uuid.parse(it) }
+fun Serializable.asUuid(): Uuid? = (this as? UUID)?.toKotlinUuid() ?: (this as? String)?.let {
+    try {
+        Uuid.parse(it)
+    } catch (e: IllegalArgumentException) {
+        logger.w { "Failed to parse UUID: $it" }
+        null
+    }
+}
 
 /**
  * Intent broadcast to pebble.apk responsible for launching a watch-app on the connected watch. This intent is

@@ -34,7 +34,12 @@ class AndroidCompanionDevice(
 
     private fun CompanionDeviceManager.hasApproved(identifier: PebbleBleIdentifier): Boolean {
         @Suppress("DEPRECATION")
-        val existingBoundDevices = associations
+        val existingBoundDevices = try {
+            associations
+        } catch (e: SecurityException) {
+            logger.w(e) { "SecurityException getting associations, treating as no association" }
+            return false
+        }
         val macAddress = identifier.macAddress
         return existingBoundDevices.contains(macAddress)
     }
@@ -154,7 +159,12 @@ class AndroidCompanionDevice(
         }
 
         @Suppress("DEPRECATION")
-        val companionBoundDevices = service.associations
+        val companionBoundDevices = try {
+            service.associations
+        } catch (e: SecurityException) {
+            logger.w(e) { "SecurityException getting associations" }
+            emptyList()
+        }
         if (companionBoundDevices.isNotEmpty()) {
             val component =
                 LibPebbleNotificationListener.componentName(activity.applicationContext)

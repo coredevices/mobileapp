@@ -6,7 +6,8 @@ import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.header
-import io.ktor.util.encodeBase64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
@@ -41,7 +42,7 @@ class WebSocketManager(
 
     override fun dispatch(method: String, args: List<Any?>) = when (method) {
         "createInstance" -> createInstance(args[0].toString(), args.getOrNull(1)?.toString())
-        "send" -> { send((args[0] as Number).toInt(), args[1].toString()); null }
+        "send" -> { send((args[0] as Number).toInt(), args[1].toString(), args.getOrNull(2) as? Boolean ?: false); null }
         "close" -> {
             closeInstance(
                 (args[0] as Number).toInt(),
@@ -61,13 +62,13 @@ class WebSocketManager(
         return id
     }
 
-    private fun send(instanceId: Int, data: String) {
+    private fun send(instanceId: Int, data: String, isBinary: Boolean = false) {
         val instance = instances[instanceId]
         if (instance == null) {
             logger.w { "send called on unknown instance $instanceId" }
             return
         }
-        instance.send(data)
+        instance.send(data, isBinary)
     }
 
     private fun closeInstance(instanceId: Int, code: Int, reason: String) {
@@ -108,7 +109,8 @@ class WebSocketManager(
                                 }
                             }
                             is Frame.Binary -> {
-                                val base64 = frame.data.encodeBase64()
+                                @OptIn(ExperimentalEncodingApi::class)
+                                val base64 = Base64.encode(frame.data)
                                 scope.launch {
                                     eval("$jsInstance._onMessage(${Json.encodeToString(base64)}, true)")
                                 }
@@ -138,10 +140,15 @@ class WebSocketManager(
             }
         }
 
-        fun send(data: String) {
+        fun send(data: String, isBinary: Boolean = false) {
             scope.launch(Dispatchers.IO) {
                 try {
-                    session?.send(Frame.Text(data))
+                    if (isBinary) {
+                        @OptIn(ExperimentalEncodingApi::class)
+                        session?.send(Frame.Binary(true, Base64.decode(data)))
+                    } else {
+                        session?.send(Frame.Text(data))
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

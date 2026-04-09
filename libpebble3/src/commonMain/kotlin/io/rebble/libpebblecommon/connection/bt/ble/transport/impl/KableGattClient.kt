@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
@@ -70,20 +70,29 @@ class KableGattConnector(
             logger.i { "Disconnection: status=${disconnected.status}" }
             _disconnected.complete(disconnected.status.asFailureReason())
         }
+        var timedOut = false
+        val connectTimeoutJob = scope.launch {
+            delay(CONNECT_TIMEOUT)
+            timedOut = true
+            logger.w { "Connect timeout — force-disconnecting peripheral" }
+            peripheral.disconnect()
+        }
         return try {
-            withTimeout(CONNECT_TIMEOUT) {
-                attemptedConnection.value = true
-                val kableScope = peripheral.connect()
-                GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral))
-            }
+            attemptedConnection.value = true
+            peripheral.connect()
+            GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logger.e("error connecting.. waiting for disconnection to to reason", e)
-            val disconnectReason = withTimeoutOrNull(2.seconds) {
-                _disconnected.await()
-            } ?: ConnectionFailureReason.FailedToConnect
-            GattConnectionResult.Failure(disconnectReason)
+            val disconnectReason = withTimeoutOrNull(2.seconds) { _disconnected.await() }
+            if (timedOut) {
+                GattConnectionResult.Failure(ConnectionFailureReason.ConnectTimeout)
+            } else {
+                logger.e("error connecting.. waiting for disconnection to reason", e)
+                GattConnectionResult.Failure(disconnectReason ?: ConnectionFailureReason.FailedToConnect)
+            }
+        } finally {
+            connectTimeoutJob.cancel()
         }
     }
 

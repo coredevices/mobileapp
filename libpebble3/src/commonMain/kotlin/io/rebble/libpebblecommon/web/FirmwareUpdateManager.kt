@@ -1,7 +1,7 @@
 package io.rebble.libpebblecommon.web
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckState
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -17,14 +17,16 @@ import kotlin.time.Duration.Companion.seconds
 interface FirmwareUpdateManager {
     fun init(watchInfo: WatchInfo)
     fun checkForUpdates()
-    val availableUpdates: Flow<FirmwareUpdateCheckResult?>
+    val availableUpdates: Flow<FirmwareUpdateCheckState>
 }
 
 class RealFirmwareUpdateManager(
     private val webServices: WebServices,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
 ) : FirmwareUpdateManager {
-    private val _availableUpdates = MutableStateFlow<FirmwareUpdateCheckResult?>(null)
+    private val _availableUpdates = MutableStateFlow<FirmwareUpdateCheckState>(
+        FirmwareUpdateCheckState(checkingForUpdates = false, result = null)
+    )
     private val checkTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 5)
     private var watchInfo: WatchInfo? = null
     private val logger = Logger.withTag("FirmwareUpdateManager")
@@ -58,10 +60,11 @@ class RealFirmwareUpdateManager(
             return
         }
         logger.d { "doUpdateCheck" }
+        _availableUpdates.value = _availableUpdates.value.copy(checkingForUpdates = true)
         val firmwareUpdateAvailable = webServices.checkForFirmwareUpdate(watch)
         logger.d { "firmwareUpdateAvailable = $firmwareUpdateAvailable" }
-        _availableUpdates.value = firmwareUpdateAvailable
+        _availableUpdates.value = FirmwareUpdateCheckState(checkingForUpdates = false, result = firmwareUpdateAvailable)
     }
 
-    override val availableUpdates: Flow<FirmwareUpdateCheckResult?> = _availableUpdates.asStateFlow()
+    override val availableUpdates: Flow<FirmwareUpdateCheckState> = _availableUpdates.asStateFlow()
 }

@@ -12,18 +12,19 @@ import io.rebble.libpebblecommon.services.ProtocolService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-private const val APPMESSAGE_BUFFER_SIZE = 32
-private const val MAX_SUBSCRIBERS_PER_APP = 2
+private const val APPMESSAGE_BUFFER_SIZE = 16
 private val APPMESSAGE_TIMEOUT = 10.seconds
 
 class AppMessageService(
@@ -31,48 +32,18 @@ class AppMessageService(
     private val scope: ConnectionCoroutineScope
 ) : ProtocolService, ConnectedPebble.AppMessages {
     private val logger = Logger.withTag("AppMessageService")
-    private val channelGroups = HashMap<Uuid, ChannelGroup>()
+    private val receivedMessages = HashMap<Uuid, Channel<AppMessageData>>()
     override val transactionSequence: Iterator<UByte> = AppMessageTransactionSequence().iterator()
     private val mapAccessMutex = Mutex()
-
-    private class ChannelGroup {
-        val all = mutableListOf<Channel<AppMessageData>>()
-        val unclaimed = ArrayDeque<Channel<AppMessageData>>()
-
-        init {
-            repeat(MAX_SUBSCRIBERS_PER_APP) {
-                val ch = Channel<AppMessageData>(APPMESSAGE_BUFFER_SIZE)
-                all.add(ch)
-                unclaimed.addLast(ch)
-            }
-        }
-
-        fun claim(): Channel<AppMessageData> {
-            return unclaimed.removeFirstOrNull()
-                ?: error("All $MAX_SUBSCRIBERS_PER_APP AppMessage channels already claimed")
-        }
-
-        fun release(channel: Channel<AppMessageData>) {
-            unclaimed.addLast(channel)
-        }
-    }
 
     fun init() {
         protocolHandler.inboundMessages.onEach {
             when (it) {
                 is AppMessage.AppMessagePush -> {
-                    val data = it.appMessageData()
-                    val channels = mapAccessMutex.withLock {
-                        getOrCreateGroup(it.uuid.get()).all.toList()
-                    }
-                    channels.forEach { channel -> channel.trySend(data) }
+                    getReceivedMessagesChannel(it.uuid.get()).trySend(it.appMessageData())
                 }
             }
         }.launchIn(scope)
-    }
-
-    private fun getOrCreateGroup(appUuid: Uuid): ChannelGroup {
-        return channelGroups.getOrPut(appUuid) { ChannelGroup() }
     }
 
     /**
@@ -92,7 +63,7 @@ class AppMessageService(
                 }
             } ?: run {
                 logger.w { "Timed out sending AppMessage ${appMessageData.transactionId}" }
-                AppMessageResult.NACK(appMessageData.transactionId)
+                AppMessage.AppMessageNACK(appMessageData.transactionId)
             }
         }
         protocolHandler.send(appMessage)
@@ -119,18 +90,15 @@ class AppMessageService(
         protocolHandler.send(packet)
     }
 
-    override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> = channelFlow {
-        val channel = mapAccessMutex.withLock {
-            getOrCreateGroup(appUuid).claim()
-        }
-        try {
-            for (msg in channel) {
-                send(msg)
-            }
-        } finally {
-            mapAccessMutex.withLock {
-                channelGroups[appUuid]?.release(channel)
-            }
+    override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> {
+        return suspend { getReceivedMessagesChannel(appUuid) }.asFlow().flatMapConcat { it.receiveAsFlow() }
+    }
+
+    private suspend fun getReceivedMessagesChannel(appUuid: Uuid): Channel<AppMessageData> {
+        receivedMessages[appUuid]?.let { return it }
+
+        return mapAccessMutex.withLock {
+            receivedMessages.getOrPut(appUuid) { Channel(APPMESSAGE_BUFFER_SIZE) }
         }
     }
 }

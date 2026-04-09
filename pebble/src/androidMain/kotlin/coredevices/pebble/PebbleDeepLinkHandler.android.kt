@@ -10,6 +10,7 @@ import kotlinx.io.asSource
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import okio.FileNotFoundException
 import kotlin.use
 
 private val logger = Logger.withTag("PebbleDeepLinkHandler")
@@ -42,7 +43,12 @@ actual fun writeFile(
     appContext: AppContext,
     uri: Uri
 ): Path? {
-    val stream = appContext.context.contentResolver.openInputStream(uri.toAndroidUri())
+    val stream = try {
+        appContext.context.contentResolver.openInputStream(uri.toAndroidUri())
+    } catch (e: Exception) {
+        logger.e(e) { "writeFile" }
+        return null
+    }
     if (stream == null) {
         logger.e { "writeFile: stream is null" }
         return null

@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.packets
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.packets.PhoneAppVersion.AppVersionRequest
 import io.rebble.libpebblecommon.packets.PhoneAppVersion.AppVersionResponse
+import io.rebble.libpebblecommon.packets.TimeMessage.Message
 import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionRequest
 import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
@@ -31,7 +32,8 @@ open class TimeMessage(message: Message) : SystemPacket(
         GetTimeRequest(0x00u),
         GetTimeResponse(0x01u),
         SetLocalTime(0x02u),
-        SetUTC(0x03u)
+        SetUTC(0x03u),
+        GetUTC(0x04u),
     }
 
     val command = SUByte(m, message.value)
@@ -41,6 +43,7 @@ open class TimeMessage(message: Message) : SystemPacket(
     }
 
     class GetTimeRequest : TimeMessage(Message.GetTimeRequest)
+    class GetTimeUtcRequest : TimeMessage(Message.GetUTC)
     class GetTimeResponse(time: UInt = 0u) : TimeMessage(Message.GetTimeResponse) {
         val time = SUInt(m, time)
     }
@@ -569,4 +572,9 @@ fun systemPacketsRegister() {
         SystemMessage.endpoint,
         SystemMessage.Message.FirmwareUpdateStartResponse.value
     ) { SystemMessage.FirmwareUpdateStartResponse() }
+
+    PacketRegistry.register(
+        ProtocolEndpoint.TIME,
+        Message.GetUTC.value,
+    ) { TimeMessage.GetTimeUtcRequest() }
 }

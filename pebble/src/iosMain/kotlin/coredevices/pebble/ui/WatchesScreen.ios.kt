@@ -1,6 +1,10 @@
 package coredevices.pebble.ui
 
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
 import coredevices.util.Permission
+import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Image
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
@@ -22,6 +26,12 @@ import platform.posix.IFF_UP
 import platform.posix.NI_MAXHOST
 import platform.posix.NI_NUMERICHOST
 import platform.posix.getnameinfo
+
+actual fun ImageBitmap.toPngBytes(): ByteArray {
+    val skiaBitmap = asSkiaBitmap()
+    skiaBitmap.setAlphaType(org.jetbrains.skia.ColorAlphaType.OPAQUE)
+    return Image.makeFromBitmap(skiaBitmap).encodeToData(EncodedImageFormat.PNG)!!.bytes
+}
 
 actual fun scanPermission(): Permission? {
     return null

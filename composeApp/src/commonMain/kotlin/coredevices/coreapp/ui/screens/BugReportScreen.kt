@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.InsertPhoto
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.BottomAppBar
@@ -45,12 +44,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
@@ -60,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -71,31 +74,28 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
-import coredevices.analytics.AnalyticsBackend
-import coredevices.analytics.setUser
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
-import coredevices.ui.SignInButton
-import coredevices.util.GoogleAuthUtil
+import coredevices.ui.SignInDialog
+import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.util.emailOrNull
-import coredevices.util.getAndroidActivity
-import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 import rememberOpenDocumentLauncher
 import rememberOpenPhotoLauncher
+import size
 
 expect fun isThirdPartyTest(): Boolean
 expect fun getExperimentalDebugInfoDirectory(): String
@@ -118,9 +118,13 @@ fun BugReportScreen(
     coreNav: CoreNav,
     pebble: Boolean,
     recordingPath: String?,
+    screenshotPath: String?,
 ) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
+        var isWatch by remember { mutableStateOf(pebble) }
+        val coreConfigFlow: CoreConfigFlow = koinInject()
+        val coreConfig by coreConfigFlow.flow.collectAsState()
         val bugReportProcessor = koinInject<BugReportProcessor>()
         val nextBugReportContext = koinInject<NextBugReportContext>()
         val (userMessage, setUserMessage) = remember { mutableStateOf("") }
@@ -159,13 +163,15 @@ fun BugReportScreen(
         val keyboardController = LocalSoftwareKeyboardController.current
         val canSendReports = bugReportProcessor.canSendReports()
         val platformShareLauncher: PlatformShareLauncher = koinInject()
+        val snackbarHostState = remember { SnackbarHostState() }
+        var showSignInDialog by remember { mutableStateOf(false) }
 
         fun sendLogs(shareLocally: Boolean) {
             if (isThirdPartyTest()) return
 
             // Check if user is signed in before proceeding
             if (user == null && !shareLocally) {
-                setStatus("Please sign in with Google before submitting a bug report")
+                setStatus("Please sign in before submitting a bug report")
                 return
             }
 
@@ -176,7 +182,7 @@ fun BugReportScreen(
                 // Extract Google ID token from current user
                 val currentUser = user
                 if (currentUser == null && !shareLocally) {
-                    setStatus("Please sign in with Google before submitting a bug report")
+                    setStatus("Please sign in before submitting a bug report")
                     setSending(false)
                     return@launch
                 }
@@ -189,10 +195,28 @@ fun BugReportScreen(
                     attachments = attachments ?: emptyList(),
                     sendRecording = sendRecording,
                     expOutputPath = recordingPath,
-                    imageAttachments = imageAttachments ?: emptyList(),
-                    fetchPebbleLogs = pebble,
-                    fetchPebbleCoreDump = pebble,
-                    includeExperimentalDebugInfo = !pebble,
+                    imageAttachments = (imageAttachments ?: emptyList()) +
+                            if (screenshotPath != null) {
+                                try {
+                                    val screenshotFile = Path(screenshotPath)
+                                    listOf(
+                                        DocumentAttachment(
+                                            fileName = "watch-screenshot.png",
+                                            mimeType = "image/png",
+                                            source = SystemFileSystem.source(screenshotFile)
+                                                .buffered(),
+                                            size = screenshotFile.size(),
+                                        )
+                                    )
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                            } else {
+                                emptyList()
+                            },
+                    fetchPebbleLogs = isWatch,
+                    fetchPebbleCoreDump = isWatch,
+                    includeExperimentalDebugInfo = !isWatch,
                     shareLocally = shareLocally,
                 )
 
@@ -239,7 +263,14 @@ fun BugReportScreen(
             imageAttachmentScreenLauncher?.invoke()
         }
 
+        if (showSignInDialog) {
+            SignInDialog(
+                onDismiss = { showSignInDialog = false }
+            )
+        }
+
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = { Text("Bug Report") },
@@ -342,15 +373,37 @@ fun BugReportScreen(
                         capitalization = KeyboardCapitalization.Sentences
                     )
                 )
+                if (coreConfig.enableIndex) {
+                    Text("This is a:", modifier = Modifier.padding(top = 8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        FilterChip(
+                            selected = !isWatch,
+                            onClick = { isWatch = false },
+                            label = { Text("Index bug") }
+                        )
+                        FilterChip(
+                            selected = isWatch,
+                            onClick = { isWatch = true },
+                            label = { Text("Watch bug") }
+                        )
+                    }
+                }
                 if (user == null) {
                     Text(
-                        "You must sign in with Google to submit a bug report",
+                        "You must sign in to submit a bug report",
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(4.dp),
                         color = MaterialTheme.colorScheme.error
                     )
-                    SignInButton(onError = setStatus, enabled = !sending)
+                    Button(
+                        onClick = { showSignInDialog = true },
+                    ) {
+                        Text("Sign In")
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
                 if (recordingPath != null) {

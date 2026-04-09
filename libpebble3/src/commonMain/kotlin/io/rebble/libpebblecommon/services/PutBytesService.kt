@@ -61,61 +61,51 @@ class PutBytesService(
         type: ObjectType,
         bank: UByte,
         filename: String
-    ): PutBytesResponse {
-        send(PutBytesInit(size, type, bank, filename))
-        return awaitAck()
-    }
+    ): PutBytesResponse = sendAndAwaitAck(PutBytesInit(size, type, bank, filename))
 
     /**
      * Initializes a PutBytes session on the device for transferring 3.x+ app data
      */
-    suspend fun initAppSession(appId: UInt, size: UInt, type: ObjectType): PutBytesResponse {
-        send(PutBytesAppInit(size, type, appId))
-        return awaitAck()
-    }
+    suspend fun initAppSession(appId: UInt, size: UInt, type: ObjectType): PutBytesResponse =
+        sendAndAwaitAck(PutBytesAppInit(size, type, appId))
 
     /**
      * Sends a chunk of data to the watch
      */
-    suspend fun sendPut(cookie: UInt, data: UByteArray): PutBytesResponse {
-        send(PutBytesPut(cookie, data))
-        return awaitAck()
-    }
+    suspend fun sendPut(cookie: UInt, data: UByteArray): PutBytesResponse =
+        sendAndAwaitAck(PutBytesPut(cookie, data))
 
     /**
      * Finalizes transfer, crc will be checked by watch and must be STM compatible e.g. [Crc32Calculator]
      */
-    suspend fun sendCommit(cookie: UInt, crc: UInt): PutBytesResponse {
-        send(PutBytesCommit(cookie, crc))
-        return awaitAck()
-    }
+    suspend fun sendCommit(cookie: UInt, crc: UInt): PutBytesResponse =
+        sendAndAwaitAck(PutBytesCommit(cookie, crc))
 
-    suspend fun sendInstall(cookie: UInt): PutBytesResponse {
-        send(PutBytesInstall(cookie))
-        return awaitAck()
-    }
+    suspend fun sendInstall(cookie: UInt): PutBytesResponse =
+        sendAndAwaitAck(PutBytesInstall(cookie))
+
+    private suspend fun sendAndAwaitAck(packet: PutBytesOutgoingPacket): PutBytesResponse =
+        withTimeout(20_000) {
+            send(packet)
+            awaitAck()
+        }
 
     private suspend fun getResponse(): PutBytesResponse {
-        return withTimeout(20_000) {
-            val iterator = receivedMessages.iterator()
-            if (!iterator.hasNext()) {
-                throw IllegalStateException("Received messages channel is closed")
-            }
-
-            iterator.next()
+        val iterator = receivedMessages.iterator()
+        if (!iterator.hasNext()) {
+            throw IllegalStateException("Received messages channel is closed")
         }
+        return iterator.next()
     }
 
     private suspend fun awaitAck(): PutBytesResponse {
         val response = getResponse()
-
         if (!response.isAck) {
             throw PutBytesException(
                 lastCookie,
                 "Watch responded with NACK (${response.result.get()}). Aborting transfer"
             )
         }
-
         return response
     }
 

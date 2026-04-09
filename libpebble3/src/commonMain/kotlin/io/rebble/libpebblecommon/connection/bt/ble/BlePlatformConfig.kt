@@ -18,4 +18,5 @@ data class BlePlatformConfig(
     val fallbackToResetRequest: Boolean = false,
     val closeGattServerWhenBtDisabled: Boolean = true,
     val supportsBtClassic: Boolean = false,
+    val supportsPpogResetCharacteristic: Boolean = false,
 )

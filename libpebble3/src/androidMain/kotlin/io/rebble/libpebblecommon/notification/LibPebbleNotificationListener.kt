@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.notification
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
 import android.content.ComponentName
@@ -18,6 +19,7 @@ import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.calls.NotificationCallDetector
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
@@ -29,7 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import org.koin.core.component.get
+import org.koin.core.component.inject
 import kotlin.uuid.Uuid
 
 class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKoinComponent {
@@ -47,14 +49,15 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         logger.v { "onCreate: ($this)" }
     }
 
-    private val notificationHandler: NotificationHandler = get()
-    private val connection: AndroidPebbleNotificationListenerConnection = get()
+    private val notificationHandler: NotificationHandler by inject()
+    private val notificationCallDetector: NotificationCallDetector by inject()
+    private val connection: AndroidPebbleNotificationListenerConnection by inject()
 
-    private val configHolder: NotificationConfigFlow = get()
+    private val configHolder: NotificationConfigFlow by inject()
 
-    private val watches: Watches = get<LibPebble>()
+    private val watches: Watches by inject<LibPebble>()
 
-    private val privateLogger: PrivateLogger = get()
+    private val privateLogger: PrivateLogger by inject()
 
     fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return
@@ -162,6 +165,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
     // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            notificationCallDetector.handleCallNotificationPosted(sbn)
+            return
+        }
+
         if (!configHolder.value.sendNotifications) {
             logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - sendNotifications is off" }
             return
@@ -180,6 +188,10 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         rankingMap: RankingMap,
         reason: Int
     ) {
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            notificationCallDetector.handleCallNotificationRemoved(sbn)
+            return
+        }
         notificationHandler.handleNotificationRemoved(sbn)
     }
 

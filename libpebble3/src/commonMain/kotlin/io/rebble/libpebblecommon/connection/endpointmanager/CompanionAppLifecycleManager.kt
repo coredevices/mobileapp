@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -16,9 +17,15 @@ import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.services.app.AppRunStateService
+import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageService
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +34,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlin.coroutines.cancellation.CancellationException
 
 class CompanionAppLifecycleManager(
@@ -35,8 +45,9 @@ class CompanionAppLifecycleManager(
     private val appRunStateService: AppRunStateService,
     private val appMessagesService: AppMessageService,
     private val locker: Locker,
-    private val scope: ConnectionCoroutineScope,
+    private val connectionScope: ConnectionCoroutineScope,
     private val libPebbleConfigFlow: LibPebbleConfigFlow,
+    private val libpebbleCoroutineScope: LibPebbleCoroutineScope
 ): ConnectedPebble.PKJS, ConnectedPebble.CompanionAppControl {
     companion object {
         private val logger = Logger.withTag(CompanionAppLifecycleManager::class.simpleName!!)
@@ -44,6 +55,7 @@ class CompanionAppLifecycleManager(
 
     private lateinit var device: CompanionAppDevice
 
+    private var activeAppScope: CoroutineScope = CoroutineScope(Job().also { it.cancel() })
 
     private val runningApps: MutableStateFlow<List<CompanionApp>> = MutableStateFlow(emptyList())
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
@@ -53,21 +65,41 @@ class CompanionAppLifecycleManager(
         get() = runningApps.asStateFlow()
 
     private suspend fun handleAppStop() {
+        activeAppScope.cancel()
         runningApps.value.forEach { it.stop() }
         runningApps.value = emptyList()
     }
 
-    private suspend fun handleNewRunningApp(lockerEntry: LockerEntry, scope: CoroutineScope) {
+    private suspend fun handleNewRunningApp(lockerEntry: LockerEntry) {
         try {
+            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+                logger.e(throwable) { "Unhandled exception in CompanionAppLifecycleManager-${lockerEntry.id}: ${throwable.message}" }
+            }
+            activeAppScope = connectionScope +
+                    Job() +
+                    CoroutineName("CompanionAppLifecycleManager-${lockerEntry.id}") +
+                    exceptionHandler
+
             val pbw = PbwApp(lockerPBWCache.getPBWFileForApp(lockerEntry.id, lockerEntry.version, locker))
             if (runningApps.value.isNotEmpty()) {
                 logger.w { "App ${lockerEntry.id} is already running, stopping it before starting a new one" }
                 runningApps.value.forEach { it.stop() }
             }
 
-            runningApps.value = createCompanionApps(pbw, lockerEntry).also { apps ->
-                apps.forEach {
-                    it.start(scope)
+            val newApps = createCompanionApps(pbw, lockerEntry)
+            runningApps.value = newApps
+
+            val appIncomingChannels = newApps.map { Channel<AppMessageData>(Channel.BUFFERED) }
+
+            newApps.zip(appIncomingChannels).forEach { (app, channel) ->
+                app.start(channel.receiveAsFlow())
+            }
+
+            activeAppScope.launch {
+                device.inboundAppMessages(lockerEntry.id).collect { message ->
+                    for (channel in appIncomingChannels) {
+                        channel.trySend(message)
+                    }
                 }
             }
         } catch (e: CancellationException) {
@@ -91,11 +123,18 @@ class CompanionAppLifecycleManager(
                     jsPath,
                     pbw.info,
                     lockerEntry,
+                    connectionScope,
                 )
             } else null
             pkjsApp?.let { add(it) }
             if (libPebbleConfigFlow.value.watchConfig.appMessageToMultipleCompanions || pkjsApp == null) {
-                createPlatformSpecificCompanionAppControl(device, pbw.info)?.let {
+                createPlatformSpecificCompanionAppControl(
+                    device = device,
+                    appInfo = pbw.info,
+                    pkjsRunning = pkjsApp != null,
+                    connectionCoroutineScope = connectionScope,
+                    libPebbleCoroutineScope = libpebbleCoroutineScope,
+                )?.let {
                     add(it)
                 }
             }
@@ -114,14 +153,14 @@ class CompanionAppLifecycleManager(
                 val lockerEntry = lockerEntryDao.getEntry(it)
                 lockerEntry?.let {
                     if (!it.systemApp) {
-                        handleNewRunningApp(lockerEntry, scope)
+                        handleNewRunningApp(lockerEntry)
                     }
                 }
             }
         }.onCompletion {
             // Unsure if this is needed
             handleAppStop()
-        }.launchIn(scope)
+        }.launchIn(connectionScope)
     }
 }
 
@@ -142,4 +181,10 @@ class PKJSStateFlow(private val runningAppStateFlow: StateFlow<List<CompanionApp
     }
 }
 
-expect fun createPlatformSpecificCompanionAppControl(device: CompanionAppDevice, appInfo: PbwAppInfo): CompanionApp?
+expect fun createPlatformSpecificCompanionAppControl(
+    device: CompanionAppDevice,
+    appInfo: PbwAppInfo,
+    pkjsRunning: Boolean,
+    libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    connectionCoroutineScope: ConnectionCoroutineScope,
+): CompanionApp?

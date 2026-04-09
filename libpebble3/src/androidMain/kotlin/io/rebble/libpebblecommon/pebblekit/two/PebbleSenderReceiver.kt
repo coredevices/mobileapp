@@ -44,11 +44,7 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
                 return@runOnConnectedWatches TransmissionResult.FailedNoPermissions
             }
 
-            val res = companionApp.sendMessage(data)
-            when (res) {
-                is AppMessageResult.ACK -> TransmissionResult.Success
-                is AppMessageResult.NACK -> TransmissionResult.FailedWatchNacked
-            }
+            companionApp.sendMessage(data)
         }
     }
 

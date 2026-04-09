@@ -76,14 +76,14 @@ enum class WeatherUnit(val code: String, val displayName: String) {
 
 @Serializable
 data class CoreConfig(
-    val useNativeAppStore: Boolean = false,
     val ignoreOtherPebbleApps: Boolean = false,
     val disableCompanionDeviceManager: Boolean = false,
     val weatherPinsV2: Boolean = true,
     val fetchWeather: Boolean = true,
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
-    val weatherUnits: WeatherUnit = WeatherUnit.Metric,
+    val indexPermissionsConfirmed: Boolean = false,
+    val weatherUnits: WeatherUnit = deviceDefaultWeatherUnit(),
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
     val interceptPKJSWeather: Boolean = true,
@@ -93,6 +93,6 @@ data class CoreConfig(
 
 @Serializable
 data class STTConfig(
-    val mode: CactusSTTMode = CactusSTTMode.RemoteFirst,
+    val mode: CactusSTTMode = CactusSTTMode.RemoteOnly,
     val modelName: String? = null,
 )

@@ -36,7 +36,7 @@ actual class GattServer {
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
         data: ByteArray
-    ): Boolean {
+    ): SendResult {
         TODO("Not yet implemented")
     }
 

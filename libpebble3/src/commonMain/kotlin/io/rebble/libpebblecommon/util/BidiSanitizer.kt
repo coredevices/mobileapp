@@ -6,7 +6,7 @@ package io.rebble.libpebblecommon.util
  * These characters are invisible control codes in Unicode, but some downstream renderers
  * (e.g. Pebble firmware fonts) may display them as tofu/squares.
  *
- * Removed range: U+2066..U+2069 (LRI, RLI, FSI, PDI).
+ * Removed range: U+2066..U+2069 (LRI, RLI, FSI, PDI). 200A (hair space), 200B (zero width space)
  */
 fun stripBidiIsolates(text: CharSequence?): String? {
     if (text == null) return null
@@ -16,7 +16,7 @@ fun stripBidiIsolates(text: CharSequence?): String? {
     var out: StringBuilder? = null
     for (i in 0 until text.length) {
         val ch = text[i]
-        if (ch >= '\u2066' && ch <= '\u2069') {
+        if (ch in '\u2066'..'\u2069' || ch == '\u200A' || ch == '\u200B') {
             if (out == null) {
                 out = StringBuilder(text.length)
                 out.append(text, 0, i)

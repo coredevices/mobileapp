@@ -1,8 +1,9 @@
 package io.rebble.libpebblecommon.connection
 
-import kotlinx.coroutines.CoroutineScope
+import io.rebble.libpebblecommon.services.appmessage.AppMessageData
+import kotlinx.coroutines.flow.Flow
 
 interface CompanionApp {
-    suspend fun start(connectionScope: CoroutineScope)
+    suspend fun start(incomingAppMessages: Flow<AppMessageData>)
     suspend fun stop()
 }

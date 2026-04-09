@@ -86,7 +86,7 @@ class PebblePairing(
                     device.readCharacteristic(PAIRING_SERVICE_UUID, PAIRING_TRIGGER_CHARACTERISTIC)
                 if (readRes == null) {
                     Logger.e("Failed to read pairing trigger")
-                    analytics.logEvent("pairing.failure", mapOf("reason" to "read_failed"))
+//                    analytics.logEvent("pairing.failure", mapOf("reason" to "read_failed"))
                     return ConnectionFailureReason.ReadPairingTrigger
                 }
             }
@@ -96,7 +96,7 @@ class PebblePairing(
             Logger.d("Explicit bond required")
             if (!createBond(identifier)) {
                 Logger.e("Failed to request create bond")
-                analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
+//                analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
                 return ConnectionFailureReason.CreateBondFailed
             }
         }
@@ -109,7 +109,7 @@ class PebblePairing(
             Logger.d("got bond state!")
         } catch (e: TimeoutCancellationException) {
             Logger.e("Failed to bond in time")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
+//            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
             return ConnectionFailureReason.PairingTimedOut
         }
         return null
@@ -121,7 +121,7 @@ class PebblePairing(
         val bondState = getBluetoothDevicePairEvents(context, identifier, flow {  })
         if (!createBond(identifier)) {
             Logger.e("Failed to request create bond")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
+//            analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
             return ConnectionFailureReason.CreateBondFailed
         }
         try {
@@ -133,7 +133,7 @@ class PebblePairing(
             Logger.d("got bond state!")
         } catch (e: TimeoutCancellationException) {
             Logger.e("Failed to bond in time")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
+//            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
             return ConnectionFailureReason.PairingTimedOut
         }
         return null

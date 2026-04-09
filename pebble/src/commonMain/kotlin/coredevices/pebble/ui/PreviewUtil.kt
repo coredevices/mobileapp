@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import AppUpdateTracker
 import CoreAppVersion
 import NextBugReportContext
 import PlatformUiContext
@@ -11,6 +12,7 @@ import coil3.ColorImage
 import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import com.eygraber.uri.Uri
+import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdatePlatformContent
@@ -19,6 +21,10 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.HeartEntity
+import coredevices.database.HeartsDao
+import coredevices.firestore.PebbleUser
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
@@ -33,6 +39,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.CoreUsersMe
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreAppResponse
 import coredevices.pebble.services.StoreCategory
@@ -42,6 +49,8 @@ import coredevices.util.AppResumed
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
+import coredevices.util.CoreConfigHolder
+import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -63,8 +72,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
@@ -129,9 +142,10 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     }
     single { themeProvider } bind ThemeProvider::class
     single { NotificationScreenViewModel() }
-    single { WatchHomeViewModel(get()) }
+    singleOf(::WatchHomeViewModel)
     single { NotificationAppScreenViewModel() }
     single { NotificationAppsScreenViewModel() }
+    single { DoneInitialOnboarding() }
     val storeSourceDao = object : AppstoreSourceDao {
         override suspend fun insertSource(source: AppstoreSource): Long = 0
 
@@ -171,8 +185,32 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override suspend fun getAllCollections(): List<AppstoreCollection> = emptyList()
     }
     single { storeCollectionDao } bind AppstoreCollectionDao::class
+    val usersDao = object : UsersDao {
+        override val user: Flow<PebbleUser?> = flow { emit(null) }
+        override suspend fun updateNotionToken(notionToken: String?) {}
+        override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
+        override suspend fun updateTodoBlockId(todoBlockId: String) {}
+        override suspend fun initUserDevToken(rebbleUserToken: String?) {}
+        override suspend fun updateLastConnectedWatch(serial: String) {}
+        override fun init() {}
+    }
+    single { usersDao } bind UsersDao::class
+    val heartsDao = object : HeartsDao {
+        override suspend fun addHeart(heart: HeartEntity) {}
+        override suspend fun addHearts(hearts: List<HeartEntity>) {}
+        override suspend fun removeHeart(heart: HeartEntity) {}
+        override suspend fun removeHearts(hearts: List<HeartEntity>) {}
+        override fun isHeartedFlow(
+            sourceId: Int,
+            appId: String
+        ): Flow<Boolean>  = flow { emit(false) }
+        override fun getAllHeartsFlow(): Flow<List<HeartEntity>>  = flow {  }
+        override suspend fun getAllHeartsForSource(sourceId: Int): List<String> = emptyList()
+    }
+    single { heartsDao } bind HeartsDao::class
     val webServices = object : PebbleWebServices {
-        override suspend fun fetchUsersMe(): UsersMeResponse? = null
+        override suspend fun fetchUsersMePebble(): UsersMeResponse? = null
+        override suspend fun fetchUsersMeCore(): CoreUsersMe? = null
 
         override suspend fun fetchPebbleLocker(): LockerModel? = null
 
@@ -185,10 +223,17 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             useCache: Boolean
         ): List<AppStoreHomeResult> = emptyList()
 
+        override suspend fun fetchPebbleAppStoreHomes(
+            hardwarePlatform: WatchType?,
+            useCache: Boolean
+        ): Map<AppType, AppStoreHomeResult?> = emptyMap()
+
         override suspend fun searchAppStore(
             search: String,
             appType: AppType,
-            watchType: WatchType
+            watchType: WatchType,
+            page: Int,
+            pageSize: Int
         ): List<Pair<AppstoreSource, StoreSearchResult>> = emptyList()
 
         override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? = null
@@ -209,6 +254,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 
     }
     single { LockerViewModel(webServices, storeSourceDao) }
+    single { SharedLockerViewModel() }
     single { storeSourceDao } bind AppstoreSourceDao::class
     single { configProvider } bind BootConfigProvider::class
     single { FakeLibPebble() } binds arrayOf(LibPebble::class, NotificationApps::class)
@@ -259,15 +305,14 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { appstoreCache } bind AppstoreCache::class
     single { NextBugReportContext() }
     val firestoreLocker = object : FirestoreLocker {
-        override suspend fun readLocker(): List<FirestoreLockerEntry>? = null
+        override val locker: StateFlow<List<FirestoreLockerEntry>?> = MutableStateFlow(null)
         override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? = null
         override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean = true
         override suspend fun removeApp(uuid: Uuid): Boolean = true
+        override fun init() {}
     }
     single { firestoreLocker } bind FirestoreLocker::class
-    val coreConfig = CoreConfig(
-        useNativeAppStore = true
-    )
+    val coreConfig = CoreConfig()
     single { CoreConfigFlow(MutableStateFlow(coreConfig)) }
     val requiredPermissions = RequiredPermissions(
         MutableStateFlow(
@@ -302,6 +347,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         }
     } } bind PermissionRequester::class
     single { PebbleFeatures(get()) }
+    single { AppResumed() }
     single { object : AppUpdate {
         override val updateAvailable: StateFlow<AppUpdateState> = MutableStateFlow(AppUpdateState.NoUpdateAvailable)
 
@@ -327,7 +373,9 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             return false
         }
     } } bind CompanionDevice::class
-    single { Settings() }
+    single<Settings> { MapSettings() }
+    single { CoreConfigHolder(coreConfig, get(), Json) }
+    single { AppUpdateTracker(get(), get()) }
 }
 
 @Composable
@@ -343,13 +391,17 @@ val WrapperTopBarParams = TopBarParams(
 )
 
 @Composable
-fun PreviewWrapper(content: @Composable () -> Unit) {
+fun PreviewWrapper(extraModule: Module? = null, content: @Composable () -> Unit) {
     val previewHandler = AsyncImagePreviewHandler {
         ColorImage(Color.Red.toArgb())
     }
     val module = fakePebbleModule()
     KoinApplication(application = {
-        modules(module)
+        if (extraModule != null) {
+            modules(module, extraModule)
+        } else {
+            modules(module)
+        }
     }) {
         CompositionLocalProvider(LocalAsyncImagePreviewHandler provides previewHandler) {
             AppTheme {

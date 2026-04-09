@@ -90,7 +90,7 @@ class PPoGTest {
     fun initNormal() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init()
         testScheduler.advanceTimeBy(30.seconds)
     }
@@ -101,7 +101,7 @@ class PPoGTest {
             runTest {
                 val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
                 ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-                ppog.run()
+                ppog.run(false)
                 init(sendResetComplete = false)
                 testScheduler.advanceTimeBy(30.seconds)
             }
@@ -112,7 +112,7 @@ class PPoGTest {
     fun runNormalV0() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init(version = PPoGVersion.ZERO)
         setMtu(50)
 
@@ -168,7 +168,7 @@ class PPoGTest {
     fun inboundOutOfSequenceResendAck() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init()
         val inbound0 = ppogDataPacket(0)
         receivePacket(inbound0)
@@ -186,7 +186,7 @@ class PPoGTest {
     fun windowSize() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init(rxWindow = 2)
         val outboundBytes0 = randomBytes()
         val outboundBytes1 = randomBytes()
@@ -211,7 +211,7 @@ class PPoGTest {
         val scope =
             ConnectionCoroutineScope(backgroundScope.coroutineContext + SupervisorJob() + exceptionHandler)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init()
 
         val outboundBytes0 = randomBytes()
@@ -237,7 +237,7 @@ class PPoGTest {
     fun retrySendOnDuplicateAck() = runTest {
         val scope = ConnectionCoroutineScope(backgroundScope.coroutineContext)
         ppog = PPoG(ppStreams, ppogStreams, sender, bleConfigFlow, blePlatformConfig, scope)
-        ppog.run()
+        ppog.run(false)
         init()
 
         val outboundBytes0 = randomBytes()

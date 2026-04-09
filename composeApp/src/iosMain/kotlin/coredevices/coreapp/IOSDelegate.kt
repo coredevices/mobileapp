@@ -16,6 +16,7 @@ import com.eygraber.uri.toUri
 import com.mmk.kmpnotifier.extensions.onApplicationDidReceiveRemoteNotification
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import coredevices.ExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.iosDefaultModule
@@ -32,10 +33,11 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -49,11 +51,14 @@ import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSData
-import platform.Foundation.NSDate
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
 import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.isLowPowerModeEnabled
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundFetchResult
 import platform.UIKit.UIUserNotificationSettings
@@ -62,8 +67,8 @@ import platform.UIKit.UIUserNotificationTypeBadge
 import platform.UIKit.UIUserNotificationTypeSound
 import platform.UIKit.registerForRemoteNotifications
 import platform.UIKit.registerUserNotificationSettings
+import platform.UserNotifications.UNNotificationResponse
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 private val logger = Logger.withTag("IOSDelegate")
 
@@ -73,6 +78,8 @@ object IOSDelegate : KoinComponent {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val doneInitialOnboarding: DoneInitialOnboarding by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
+    private val experimentalDevices: ExperimentalDevices by inject()
+    private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun handleOpenUrl(url: NSURL): Boolean {
         logger.d("IOSDelegate handleOpenUrl $url")
@@ -81,7 +88,7 @@ object IOSDelegate : KoinComponent {
         val uri = url.toUri()
         return GIDSignIn.sharedInstance.handleURL(url) ||
                 uri?.let {
-                    pebbleDeepLinkHandler.handle(uri) || coreDeepLinkHandler.handle(uri)
+                    pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
                 } ?: false
     }
 
@@ -135,30 +142,56 @@ object IOSDelegate : KoinComponent {
                         .build()
                 }
                 .components {
+                    add(AnimatedSkiaImageDecoder.Factory())
                     add(SvgDecoder.Factory())
                 }
                 .build()
         }
         setupCrashlytics()
         initLogging()
+        NSNotificationCenter.defaultCenter.addObserverForName(
+            name = NSProcessInfoPowerStateDidChangeNotification,
+            `object` = null,
+            queue = null,
+        ) { _ ->
+            val isLowPowerMode = NSProcessInfo.processInfo.isLowPowerModeEnabled()
+            logger.i { "Power state changed: isLowPowerMode=$isLowPowerMode" }
+        }
         val crashedPreviously = Firebase.crashlytics.didCrashOnPreviousExecution()
         if (crashedPreviously) {
             logger.e { "Previous app crash detected!" }
         }
+
         BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
             identifier = REFRESH_TASK_IDENTIFIER,
             usingQueue = null,
         ) { task ->
-            if (task == null) {
-                logger.e { "task is null!" }
-                return@registerForTaskWithIdentifier
+            if (task == null) return@registerForTaskWithIdentifier
+
+            // Create a job for this specific execution
+            val job = bgTaskScope.launch {
+                try {
+                    logger.d { "Background refresh task started" }
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                    logger.d { "Background refresh task completed successfully" }
+                    task.setTaskCompletedWithSuccess(true)
+                } catch (e: Exception) {
+                    logger.e(e) { "Background refresh task failed" }
+                    task.setTaskCompletedWithSuccess(false)
+                } finally {
+                    // Use NonCancellable to ensure the reschedule happens
+                    // even if the job was just cancelled by the expirationHandler
+                    requestBgRefresh(force = false, coreConfigHolder.config.value)
+                }
             }
-            runBlocking {
-                commonAppDelegate.doBackgroundSync(force = false)
+
+            task.expirationHandler = {
+                logger.w { "Background refresh task expired!" }
+                job.cancel()
+                task.setTaskCompletedWithSuccess(false)
             }
-            task.setTaskCompletedWithSuccess(true)
-            requestBgRefresh(force = false, coreConfigHolder.config.value)
         }
+
         requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
@@ -191,6 +224,23 @@ object IOSDelegate : KoinComponent {
         return true
     }
 
+    fun userNotificationCenterDidReceiveResponse(
+        response: UNNotificationResponse,
+        completionHandler: () -> Unit
+    ) {
+        logger.d { "userNotificationCenterDidReceive" }
+        val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
+        val action = response.actionIdentifier
+        val deepLink = userInfo["notification-deepLink"] as? String
+        val actionDeepLink = userInfo["$action-deepLink"] as? String
+        val deepLinkToHandle = actionDeepLink ?: deepLink
+        if (deepLinkToHandle != null) {
+            logger.d { "Handling deep link from notification: $deepLinkToHandle" }
+            handleOpenUrl(NSURL.URLWithString(deepLinkToHandle)!!)
+        }
+        completionHandler()
+    }
+
     private fun setupCrashlytics() {
         enableCrashlytics()
         setCrashlyticsUnhandledExceptionHook()
@@ -215,6 +265,10 @@ object IOSDelegate : KoinComponent {
 
     fun sceneDidEnterBackground() {
         logger.v { "sceneDidEnterBackground" }
+    }
+
+    fun applicationDidReceiveMemoryWarning() {
+        logger.w { "applicationDidReceiveMemoryWarning" }
     }
 
     fun applicationDidEnterBackground() {
@@ -280,7 +334,7 @@ fun requestBgRefresh(force: Boolean, coreConfig: CoreConfig) {
                 logger.d { "Existing scheduled task is too far in the future" }
                 false
             } else {
-                logger.d { "Existing valid task" }
+                logger.d { "Existing valid task: $alreadyScheduledNext" }
                 true
             }
         }

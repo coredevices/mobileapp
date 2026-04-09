@@ -30,9 +30,10 @@ enum class VoiceCommand(val value: UByte) {
 }
 
 class Word(confidence: UByte = 0u, data: String = "") : StructMappable() {
+    private val utf8Size = data.encodeToByteArray().size.coerceAtMost(UShort.MAX_VALUE.toInt())
     val confidence = SUByte(m, confidence)
-    val length = SUShort(m, data.length.toUShort(), endianness = Endian.Little)
-    val data = SFixedString(m, data.length, data)
+    val length = SUShort(m, utf8Size.toUShort(), endianness = Endian.Little)
+    val data = SFixedString(m, utf8Size, data)
     init {
         this.data.linkWithSize(length)
     }

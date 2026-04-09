@@ -92,7 +92,11 @@ class AndroidNotificationAppsSync(
         val notificationConfig = notificationConfigFlow.value
         osApps.onEach { osApp ->
             // null = this is a system app
-            pm.getLaunchIntentForPackage(osApp.packageName) ?: return@onEach
+            try {
+                pm.getLaunchIntentForPackage(osApp.packageName)
+            } catch (e: Exception) {
+                logger.w(e) { "Error loading app launch intent" }
+            } ?: return@onEach
             val existing = existingApps.remove(osApp.packageName)
             val channels = notificationListenerConnection.getChannelsForApp(osApp.packageName)
             val name = pm.getApplicationLabel(osApp).toString()

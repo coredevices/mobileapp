@@ -8,6 +8,7 @@ enum class NotificationProperties(
     val color: TimelineColor?,
     val icon: TimelineIcon?,
     val addShowsUserInterfaceActions: Boolean = false,
+    val showLocalOnlyNotifications: Boolean = false,
 ) {
     Gmail(pkgName = "com.google.android.gm", color = TimelineColor.Red, icon = TimelineIcon.NotificationGmail),
     GoogleQuickSearchBox(pkgName = "com.google.android.googlequicksearchbox", color = TimelineColor.BlueMoon, icon = null),
@@ -19,7 +20,7 @@ enum class NotificationProperties(
     GoogleCalendar(pkgName = "com.google.android.calendar", color = TimelineColor.BlueMoon, icon = null),
     Telegram(pkgName = "org.telegram.messenger", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTelegram),
     Facebook(pkgName = "com.facebook.katana", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationFacebook),
-    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger),
+    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger, showLocalOnlyNotifications = true),
     Hipchat(pkgName = "com.hipchat", color = TimelineColor.CobaltBlue, icon = null),
     Skype(pkgName = "com.skype.raider", color = TimelineColor.VividCerulean, icon = null),
     Twitter(pkgName = "com.twitter.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTwitter),
@@ -50,7 +51,7 @@ enum class NotificationProperties(
     ElementX(pkgName = "io.element.android.x", color = TimelineColor.MediumAquamarine, icon = TimelineIcon.NotificationElement),
     GoogleChat(pkgName = "com.google.android.apps.dynamite", color = TimelineColor.IslamicGreen, icon = TimelineIcon.NotificationGoogleChat),
     GoogleTasks(pkgName = "com.google.android.apps.tasks", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationGoogleTasks, addShowsUserInterfaceActions = true),
-    HomeAssistant(pkgName = "io.homeassistant.companion.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationHomeAssistant),
+    HomeAssistant(pkgName = "io.homeassistant.companion.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationHomeAssistant, addShowsUserInterfaceActions = true),
     Steam(pkgName = "com.valvesoftware.android.steam.community", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationSteam),
     MicrosoftTeams(pkgName = "com.microsoft.teams", color = TimelineColor.Indigo, icon = TimelineIcon.NotificationTeams),
     Threads(pkgName = "com.instagram.barcelona", color = TimelineColor.DarkGray, icon = TimelineIcon.NotificationThreads),
@@ -75,6 +76,7 @@ enum class NotificationProperties(
     Signal(pkgName = "org.thoughtcrime.securesms", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationSignal),
     Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
     WSJ(pkgName = "wsj.reader_sp", color = TimelineColor.DarkGray, icon = TimelineIcon.NewsEvent),
+    GooglePhoneDialer(pkgName = "com.google.android.dialer", color = TimelineColor.BlueMoon, icon = TimelineIcon.IncomingPhoneCall),
     ;
 
     companion object {
