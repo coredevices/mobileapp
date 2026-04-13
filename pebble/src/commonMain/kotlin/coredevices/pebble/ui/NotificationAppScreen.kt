@@ -342,7 +342,7 @@ private fun NotificationRulesSection(
                             MatchField.Body -> "Body"
                             MatchField.Both -> "Title+Body"
                         }
-                        val caseLabel = if (rule.caseSensitive) "Case-sensitive" else "Case-insensitive"
+                        val caseLabel = if (rule.caseSensitive) "case-sensitive" else "case-insensitive"
                         Text(
                             "$matchTypeLabel on $fieldLabel, $caseLabel",
                             style = MaterialTheme.typography.bodyMedium,
