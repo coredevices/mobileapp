@@ -257,44 +257,42 @@ fun NotificationAppScreen(
                     }
                 }
 
-                if (platform == Platform.IOS) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+                item {
+                    val expiration = app.muteExpiration
+                    val now = Clock.System.now()
+                    val isTemporaryMuted = expiration != null && expiration.isAfter(now)
 
-                val expiration = app.muteExpiration
-                val now = Clock.System.now()
-                val isTemporaryMuted = expiration != null && expiration.isAfter(now)
-
-                val muteReasonText = when {
-                    isTemporaryMuted -> {
-                        val duration = expiration!!.instant - now
-                        val timeString = duration.toComponents { hours, minutes, _, _ ->
-                            if (hours > 0) {
-                                "${hours}h ${minutes}m"
+                    val muteReasonText = when {
+                        isTemporaryMuted -> {
+                            val duration = expiration!!.instant - now
+                            val timeString = duration.toComponents { hours, minutes, _, _ ->
+                                if (hours > 0) {
+                                    "${hours}h ${minutes}m"
+                                } else {
+                                    "${minutes}m"
+                                }
+                            }
+                            if (duration.inWholeHours >= 2) {
+                                "Status: Muted for the day ($timeString left)"
                             } else {
-                                "${minutes}m"
+                                "Status: Muted for 1 hour ($timeString left)"
                             }
                         }
-                        if (duration.inWholeHours >= 2) {
-                            "Status: Muted for the day ($timeString left)"
-                        } else {
-                            "Status: Muted for 1 hour ($timeString left)"
-                        }
+                        app.muteState == MuteState.Always -> "Status: Muted (Always)"
+                        app.muteState == MuteState.Weekdays -> "Status: Muted (Weekdays)"
+                        app.muteState == MuteState.Weekends -> "Status: Muted (Weekends)"
+                        else -> null
                     }
-                    app.muteState == MuteState.Always -> "Status: Muted (Always)"
-                    app.muteState == MuteState.Weekdays -> "Status: Muted (Weekdays)"
-                    app.muteState == MuteState.Weekends -> "Status: Muted (Weekends)"
-                    else -> null
-                }
 
-                if (muteReasonText != null) {
-                    Text(
-                        text = muteReasonText,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    if (muteReasonText != null) {
+                        Text(
+                            text = muteReasonText,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
         }
