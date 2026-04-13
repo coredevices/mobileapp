@@ -134,7 +134,6 @@ class AndroidNotificationAppsSync(
                     vibePatternName = existing.vibePatternName,
                     colorName = existing.colorName,
                     iconCode = existing.iconCode,
-                    filterIsAllowlist = existing.filterIsAllowlist,
                 )
                 if (existing != newEntryWithExistingStates) {
                     logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")

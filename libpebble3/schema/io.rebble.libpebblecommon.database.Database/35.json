@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 35,
-    "identityHash": "d4947667644257e733d82e785ff4eb9b",
+    "identityHash": "8d6520c10e00162ab6d2e7b283b498c6",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -685,7 +685,7 @@
       },
       {
         "tableName": "NotificationAppItemEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `muteExpiration` INTEGER DEFAULT null, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, `filterIsAllowlist` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`packageName`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `packageName` TEXT NOT NULL, `name` TEXT NOT NULL, `muteState` TEXT NOT NULL, `channelGroups` TEXT NOT NULL, `stateUpdated` INTEGER NOT NULL, `lastNotified` INTEGER NOT NULL, `muteExpiration` INTEGER DEFAULT null, `vibePatternName` TEXT DEFAULT null, `colorName` TEXT DEFAULT null, `iconCode` TEXT DEFAULT null, PRIMARY KEY(`packageName`))",
         "fields": [
           {
             "fieldPath": "recordHashcode",
@@ -765,13 +765,6 @@
             "columnName": "iconCode",
             "affinity": "TEXT",
             "defaultValue": "null"
-          },
-          {
-            "fieldPath": "record.filterIsAllowlist",
-            "columnName": "filterIsAllowlist",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -1794,7 +1787,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd4947667644257e733d82e785ff4eb9b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8d6520c10e00162ab6d2e7b283b498c6')"
     ]
   }
 }

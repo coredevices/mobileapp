@@ -222,8 +222,7 @@ class NotificationHandler(
             }
         }
 
-        val anyMatches = rules.any { it.matches() }
-        return if (appEntry.filterIsAllowlist) !anyMatches else anyMatches
+        return rules.any { it.matches() }
     }
 
     private fun screenIsOnAndUnlocked(): Boolean {

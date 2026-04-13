@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import kotlin.time.Clock
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -315,36 +314,13 @@ private fun NotificationRulesSection(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text("Notification filter rules", fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
-            if (rules.isEmpty()) {
-                Text(
-                    "No notification rules",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
-                )
-            } else {
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    SegmentedButton(
-                        selected = !app.filterIsAllowlist,
-                        onClick = {
-                            if (app.filterIsAllowlist) {
-                                notificationApps.updateFilterIsAllowlist(app.packageName, false)
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    ) { Text("Block if matching") }
-                    SegmentedButton(
-                        selected = app.filterIsAllowlist,
-                        onClick = {
-                            if (!app.filterIsAllowlist) {
-                                notificationApps.updateFilterIsAllowlist(app.packageName, true)
-                            }
-                        },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    ) { Text("Allow if matching") }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
+            Text(
+                if (rules.isEmpty()) "No notification rules"
+                else "Matching notifications will be blocked:",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
+            )
             rules.forEach { rule ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

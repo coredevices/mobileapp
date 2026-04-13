@@ -270,10 +270,6 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
-    override fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean) {
-        // No-op
-    }
-
     override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
         emptyFlow()
 

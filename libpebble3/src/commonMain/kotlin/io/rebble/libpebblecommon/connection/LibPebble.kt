@@ -276,7 +276,6 @@ interface NotificationApps {
         muteState: MuteState,
     )
 
-    fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean)
     fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
     fun upsertNotificationRule(rule: NotificationRuleEntity)
     fun deleteNotificationRule(rule: NotificationRuleEntity)

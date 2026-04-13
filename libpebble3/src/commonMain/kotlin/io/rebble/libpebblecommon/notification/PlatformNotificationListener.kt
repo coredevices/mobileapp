@@ -121,12 +121,6 @@ class NotificationApi(
         }
     }
 
-    override fun updateFilterIsAllowlist(packageName: String, isAllowlist: Boolean) {
-        libPebbleCoroutineScope.launch {
-            notificationAppDao.updateFilterIsAllowlist(packageName, isAllowlist)
-        }
-    }
-
     override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
         notificationRuleDao.getRulesForApp(packageName = packageName)
 
