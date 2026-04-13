@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import kotlin.coroutines.cancellation.CancellationException
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -193,6 +194,8 @@ class NotificationHandler(
     private suspend fun checkRuleFiltered(appEntry: NotificationAppItem, notification: LibPebbleNotification): Boolean {
         val rules = try {
             notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Error loading notification rules, allowing notification" }
             return false
