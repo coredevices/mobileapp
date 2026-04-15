@@ -98,8 +98,14 @@ private val logger = Logger.withTag("PebbleHttpClient")
 
 enum class HttpClientAuthType {
     Pebble,
+    PebbleOptional,
     Core,
     None,
+}
+
+private fun HttpClientAuthType.requiresToken(): Boolean = when (this) {
+    HttpClientAuthType.Pebble, HttpClientAuthType.Core -> true
+    HttpClientAuthType.PebbleOptional, HttpClientAuthType.None -> false
 }
 
 class PebbleHttpClient(
@@ -111,7 +117,7 @@ class PebbleHttpClient(
     }
     companion object {
         suspend fun PebbleHttpClient.authFor(type: HttpClientAuthType): String? = when (type) {
-            HttpClientAuthType.Pebble -> pebbleAccount.get().loggedIn.value
+            HttpClientAuthType.Pebble, HttpClientAuthType.PebbleOptional -> pebbleAccount.get().loggedIn.value
             HttpClientAuthType.Core -> try {
                 Firebase.auth.currentUser?.getIdToken(false)
             } catch (e: Exception) {
@@ -126,7 +132,7 @@ class PebbleHttpClient(
             auth: HttpClientAuthType,
         ): HttpResponse? {
             val token = authFor(auth)
-            if (auth != HttpClientAuthType.None && token == null) {
+            if (auth.requiresToken() && token == null) {
                 logger.i("not logged in")
                 return null
             }
@@ -149,7 +155,7 @@ class PebbleHttpClient(
             auth: HttpClientAuthType,
         ): HttpResponse? {
             val token = authFor(auth)
-            if (auth != HttpClientAuthType.None && token == null) {
+            if (auth.requiresToken() && token == null) {
                 logger.i("not logged in")
                 return null
             }
@@ -172,7 +178,7 @@ class PebbleHttpClient(
             auth: HttpClientAuthType,
         ): Boolean {
             val token = authFor(auth)
-            if (auth != HttpClientAuthType.None && token == null) {
+            if (auth.requiresToken() && token == null) {
                 logger.i("not logged in")
                 return false
             }
@@ -197,7 +203,7 @@ class PebbleHttpClient(
         ): T? {
             logger.v("get: ${url.sanitizeUrl()} auth=$auth")
             val token = authFor(auth)
-            if (auth != HttpClientAuthType.None && token == null) {
+            if (auth.requiresToken() && token == null) {
                 logger.i("not logged in")
                 return null
             }
