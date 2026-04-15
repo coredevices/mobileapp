@@ -1,6 +1,8 @@
 package coredevices.pebble.firmware
 
+import CoreAppVersion
 import co.touchlab.kermit.Logger
+import coredevices.pebble.account.bootConfigPlatform
 import coredevices.pebble.services.HttpClientAuthType
 import coredevices.pebble.services.PebbleHttpClient
 import coredevices.pebble.services.PebbleHttpClient.Companion.get
@@ -14,36 +16,41 @@ import kotlin.time.Instant
 
 class Cohorts(
     private val httpClient: PebbleHttpClient,
+    private val appVersion: CoreAppVersion,
 ) {
     private val logger = Logger.withTag("Cohorts")
 
     suspend fun getLatestFirmware(watch: WatchInfo): FirmwareUpdateCheckResult {
         logger.v { "getLatestFirmware" }
-        // GitHub raw returns text/plain, so fetch as String and deserialize manually
-        val responseText: String? = httpClient.get(LOGGED_OUT_URL, auth = HttpClientAuthType.None)
-        if (responseText == null) {
+        val hardware = watch.platform.revision
+        val platform = bootConfigPlatform()
+        val parameters = mapOf(
+            "select" to "fw",
+            "hardware" to hardware,
+            "mobilePlatform" to platform,
+            "mobileVersion" to appVersion.version,
+            "mobileHardware" to platform,
+            "pebbleAppVersion" to appVersion.version,
+        )
+        val response: CohortsResponse? = httpClient.get(
+            "$COHORTS_URL/cohort",
+            auth = HttpClientAuthType.PebbleOptional,
+            parameters = parameters,
+        )
+        if (response == null) {
             logger.i { "No response from cohorts" }
             return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
-        val response = try {
-            json.decodeFromString<CohortsResponse>(responseText)
-        } catch (e: Exception) {
-            logger.e(e) { "Failed to parse cohorts response" }
-            return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
-        }
-//        logger.v { "response: $response" } // TODO remove
-        // (differently from memfault) cohorts always returns the latest (we didn't pass the current
-        // version to it), so we need to check whether it needs an update
-        val normalFw = response.hardware[watch.platform.revision]?.normal
+        val normalFw = response.fw?.normal
         if (normalFw == null) {
-            logger.i { "No firmware found for ${watch.platform.revision}" }
+            logger.i { "No firmware found for $hardware" }
             return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         val latestFwVersion = FirmwareVersion.from(
-            tag = normalFw.version,
+            tag = normalFw.friendlyVersion.removePrefix("v"),
             isRecovery = false,
             gitHash = "", // TODO
-            timestamp = Instant.DISTANT_PAST, // TODO
+            timestamp = Instant.fromEpochSeconds(normalFw.timestamp),
             isDualSlot = false, // not used from here
             isSlot0 = false, // not used from here
         )
@@ -54,8 +61,8 @@ class Cohorts(
         if (watch.runningFwVersion.isRecovery || latestFwVersion > watch.runningFwVersion) {
             return FirmwareUpdateCheckResult.FoundUpdate(
                 version = latestFwVersion,
-                url = "https://binaries.rebble.io/fw/${watch.platform.revision}/Pebble-${normalFw.version}-${watch.platform.revision}.pbz",
-                notes = response.notes[normalFw.version] ?: "",
+                url = normalFw.url,
+                notes = normalFw.notes.orEmpty(),
             )
         } else {
             return FirmwareUpdateCheckResult.FoundNoUpdate
@@ -63,26 +70,27 @@ class Cohorts(
     }
 
     companion object {
-        private const val LOGGED_OUT_URL = "https://raw.githubusercontent.com/pebble-dev/rebble-cohorts/refs/heads/master/config.json"
-        private val json = Json { ignoreUnknownKeys = true }
+        private const val COHORTS_URL = "https://cohorts.rebble.io"
     }
 }
 
 @Serializable
 data class CohortsResponse(
-    val notes: Map<String, String>,
-    val timestamps: Map<String, Long>,
-    val hardware: Map<String, CohortsFirmwareType>
+    val fw: CohortsFirmwareType? = null,
 )
 
 @Serializable
 data class CohortsFirmwareType(
-    val normal: CohortsFirmware,
+    val normal: CohortsFirmware? = null,
+    val recovery: CohortsFirmware? = null,
 )
 
 @Serializable
 data class CohortsFirmware(
-    val version: String,
+    val url: String,
     @SerialName("sha-256")
     val sha256: String,
+    val friendlyVersion: String,
+    val timestamp: Long,
+    val notes: String? = null,
 )
