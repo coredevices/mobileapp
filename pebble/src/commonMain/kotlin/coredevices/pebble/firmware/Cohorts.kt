@@ -11,7 +11,6 @@ import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.time.Instant
 
 class Cohorts(
@@ -47,7 +46,7 @@ class Cohorts(
             return FirmwareUpdateCheckResult.UpdateCheckFailed("Failed to check for PebbleOS update")
         }
         val latestFwVersion = FirmwareVersion.from(
-            tag = normalFw.friendlyVersion.removePrefix("v"),
+            tag = normalFw.friendlyVersion,
             isRecovery = false,
             gitHash = "", // TODO
             timestamp = Instant.fromEpochSeconds(normalFw.timestamp),
