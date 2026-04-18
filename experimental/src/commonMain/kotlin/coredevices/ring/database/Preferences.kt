@@ -25,6 +25,8 @@ interface Preferences {
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
+    val primaryMode: StateFlow<PrimaryMode>
+    val shareWithIndexAgent: StateFlow<Boolean>
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
     val noteShortcut: StateFlow<NoteShortcutType>
@@ -41,6 +43,8 @@ interface Preferences {
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)
+    fun setPrimaryMode(mode: PrimaryMode)
+    fun setShareWithIndexAgent(value: Boolean)
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
     fun setNoteShortcut(shortcut: NoteShortcutType)
@@ -98,6 +102,17 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
     override val secondaryMode = _secondaryMode.asStateFlow()
+
+    private val _primaryMode = MutableStateFlow(
+        PrimaryMode.fromId(settings.getInt("ring_primary_mode", PrimaryMode.IndexAgent.id))
+    )
+    override val primaryMode = _primaryMode.asStateFlow()
+
+    private val _shareWithIndexAgent = MutableStateFlow(
+        settings.getBoolean("ring_share_with_index_agent", false)
+    )
+    override val shareWithIndexAgent = _shareWithIndexAgent.asStateFlow()
+
     private val _reminderProvider = MutableStateFlow(
         settings.getInt("reminder_provider", ReminderProvider.Native.id)
             .let { ReminderProvider.fromId(it)!! }
@@ -181,6 +196,16 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _secondaryMode.value = mode
     }
 
+    override fun setPrimaryMode(mode: PrimaryMode) {
+        settings.putInt("ring_primary_mode", mode.id)
+        _primaryMode.value = mode
+    }
+
+    override fun setShareWithIndexAgent(value: Boolean) {
+        settings.putBoolean("ring_share_with_index_agent", value)
+        _shareWithIndexAgent.value = value
+    }
+
     override fun setReminderProvider(provider: ReminderProvider) {
         settings.putInt("reminder_provider", provider.id)
         _reminderProvider.value = provider
@@ -237,6 +262,17 @@ enum class SecondaryMode(val id: Int) {
     companion object {
         fun fromId(id: Int): SecondaryMode {
             return entries.firstOrNull { it.id == id } ?: Search
+        }
+    }
+}
+
+enum class PrimaryMode(val id: Int) {
+    IndexAgent(0),
+    Webhook(1);
+
+    companion object {
+        fun fromId(id: Int): PrimaryMode {
+            return entries.firstOrNull { it.id == id } ?: IndexAgent
         }
     }
 }
