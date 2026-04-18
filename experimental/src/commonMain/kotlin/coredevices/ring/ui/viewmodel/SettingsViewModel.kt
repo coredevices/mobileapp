@@ -13,6 +13,7 @@ import coredevices.ring.api.NotionApi
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
+import coredevices.ring.database.PrimaryMode
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -108,6 +109,10 @@ class SettingsViewModel(
     private val _showSecondaryModeDialog = MutableStateFlow(false)
     val showSecondaryModeDialog = _showSecondaryModeDialog.asStateFlow()
     val secondaryMode = preferences.secondaryMode
+    private val _showPrimaryModeDialog = MutableStateFlow(false)
+    val showPrimaryModeDialog = _showPrimaryModeDialog.asStateFlow()
+    val primaryMode = preferences.primaryMode
+    val shareWithIndexAgent = preferences.shareWithIndexAgent
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
@@ -180,6 +185,22 @@ class SettingsViewModel(
 
     fun setSecondaryMode(mode: SecondaryMode) {
         preferences.setSecondaryMode(mode)
+    }
+
+    fun showPrimaryModeDialog() {
+        _showPrimaryModeDialog.value = true
+    }
+
+    fun closePrimaryModeDialog() {
+        _showPrimaryModeDialog.value = false
+    }
+
+    fun setPrimaryMode(mode: PrimaryMode) {
+        preferences.setPrimaryMode(mode)
+    }
+
+    fun setShareWithIndexAgent(value: Boolean) {
+        preferences.setShareWithIndexAgent(value)
     }
 
     fun toggleDebugDetailsEnabled() {
