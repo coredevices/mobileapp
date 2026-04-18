@@ -40,6 +40,10 @@ class IndexWebhookPreferences(private val settings: Settings) {
     )
     val payloadMode = _payloadMode.asStateFlow()
 
+    /** True when both URL and auth token are configured (non-null, non-blank). */
+    val isLinked: Boolean
+        get() = !_webhookUrl.value.isNullOrBlank() && !_authToken.value.isNullOrBlank()
+
     fun setWebhookUrl(url: String?) {
         if (url != null) {
             settings.putString(URL_KEY, url)
