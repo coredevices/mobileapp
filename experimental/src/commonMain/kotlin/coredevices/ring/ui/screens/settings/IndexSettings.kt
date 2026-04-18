@@ -24,9 +24,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -67,6 +70,7 @@ import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
+import coredevices.ring.database.PrimaryMode
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
@@ -119,6 +123,9 @@ fun IndexSettings(coreNav: CoreNav) {
     val preferences = koinInject<Preferences>()
     val musicControlMode by viewModel.musicControlMode.collectAsState()
     val secondaryMode by viewModel.secondaryMode.collectAsState()
+    val showPrimaryModeDialog by viewModel.showPrimaryModeDialog.collectAsState()
+    val primaryMode by viewModel.primaryMode.collectAsState()
+    val shareWithIndexAgent by viewModel.shareWithIndexAgent.collectAsState()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
@@ -165,6 +172,27 @@ fun IndexSettings(coreNav: CoreNav) {
             },
             webhookEnabled = webhookIsLinked,
             webhookShown = experimentalDevicesEnabled
+        )
+    }
+    if (showPrimaryModeDialog) {
+        PrimaryModeDialog(
+            currentMode = primaryMode,
+            webhookLinked = webhookIsLinked,
+            shareWithIndexAgent = shareWithIndexAgent,
+            onModeSelected = { newMode ->
+                viewModel.setPrimaryMode(newMode)
+                viewModel.closePrimaryModeDialog()
+            },
+            onShareToggle = { newValue ->
+                viewModel.setShareWithIndexAgent(newValue)
+            },
+            onConfigureWebhook = {
+                viewModel.closePrimaryModeDialog()
+                webhookViewModel.openDialog()
+            },
+            onDismissRequest = {
+                viewModel.closePrimaryModeDialog()
+            },
         )
     }
     if (showNoteShortcutDialog) {
@@ -296,6 +324,25 @@ fun IndexSettings(coreNav: CoreNav) {
                         )
                     }
                 )
+            }
+            if (platform.isIOS && experimentalDevicesEnabled) {
+                item {
+                    ListItem(
+                        modifier = Modifier.clickable {
+                            viewModel.showPrimaryModeDialog()
+                        },
+                        headlineContent = { Text("Single click and hold") },
+                        supportingContent = {
+                            Text(
+                                when (primaryMode) {
+                                    PrimaryMode.IndexAgent -> "Index Agent"
+                                    PrimaryMode.Webhook -> if (webhookIsLinked) "Webhook"
+                                                          else "Webhook (not configured)"
+                                }
+                            )
+                        }
+                    )
+                }
             }
             item {
                 ListItem(
@@ -698,6 +745,130 @@ fun SecondaryModeDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun PrimaryModeDialog(
+    currentMode: PrimaryMode,
+    webhookLinked: Boolean,
+    shareWithIndexAgent: Boolean,
+    onModeSelected: (PrimaryMode) -> Unit,
+    onShareToggle: (Boolean) -> Unit,
+    onConfigureWebhook: () -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    var targetMode by remember { mutableStateOf(currentMode) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+        title = { Text("Single Click and Hold") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+            TextButton(onClick = { onModeSelected(targetMode) }) { Text("OK") }
+        }
+    ) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item(PrimaryMode.IndexAgent) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            targetMode = PrimaryMode.IndexAgent
+                        }
+                ) {
+                    RadioButton(
+                        selected = targetMode == PrimaryMode.IndexAgent,
+                        onClick = { targetMode = PrimaryMode.IndexAgent },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Index Agent")
+                        Text(
+                            "Transcribe and send to the Index agent. This is the original behavior.",
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+            }
+            item(PrimaryMode.Webhook) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = webhookLinked) {
+                            targetMode = PrimaryMode.Webhook
+                        }
+                ) {
+                    RadioButton(
+                        selected = targetMode == PrimaryMode.Webhook,
+                        onClick = { targetMode = PrimaryMode.Webhook },
+                        enabled = webhookLinked,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Webhook")
+                        Text(
+                            "Transcribe and send to your webhook.",
+                            fontSize = 12.sp,
+                        )
+                        if (!webhookLinked) {
+                            TextButton(onClick = onConfigureWebhook) {
+                                Text("Configure Webhook")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (targetMode != PrimaryMode.IndexAgent) {
+                item("share_toggle") {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onShareToggle(!shareWithIndexAgent) }
+                    ) {
+                        Checkbox(
+                            checked = shareWithIndexAgent,
+                            onCheckedChange = onShareToggle,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Share with Index agent")
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(onClick = { showInfoDialog = true }) {
+                                    Icon(Icons.Default.Info, contentDescription = "What does this do?")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) { Text("Got it") }
+            },
+            title = { Text("Share with Index agent") },
+            text = {
+                Text(
+                    "When on, your transcription also appears in the Index feed and the " +
+                    "on-device agent processes it (creates notes, runs tools, and so on). " +
+                    "When off, the transcription is sent only to your destination — it still " +
+                    "shows in the feed as a raw transcript, but the agent does not run on it."
+                )
+            }
+        )
     }
 }
 
