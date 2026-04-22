@@ -65,6 +65,7 @@ import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
@@ -78,6 +79,50 @@ import kotlin.uuid.Uuid
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
 data class PlatformFlags(val flags: UInt)
 
+data class CustomDataLoggingEvent(
+    val sessionId: UByte,
+    val appUuid: Uuid,
+    val tag: UInt,
+    val data: ByteArray,
+    val itemSize: UShort,
+    val itemsLeft: UInt,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is CustomDataLoggingEvent) return false
+        return sessionId == other.sessionId &&
+                appUuid == other.appUuid &&
+                tag == other.tag &&
+                data.contentEquals(other.data) &&
+                itemSize == other.itemSize &&
+                itemsLeft == other.itemsLeft
+    }
+
+    override fun hashCode(): Int {
+        var result = sessionId.hashCode()
+        result = 31 * result + appUuid.hashCode()
+        result = 31 * result + tag.hashCode()
+        result = 31 * result + data.contentHashCode()
+        result = 31 * result + itemSize.hashCode()
+        result = 31 * result + itemsLeft.hashCode()
+        return result
+    }
+}
+
+interface CustomDataLogging {
+    /*
+     * Emits every CustomDataLoggingEvent from any watch app whose DataLogging tag is
+     * not taken by health or Memfault. 
+     * Filter by CustomDataLoggingEvent.appUuid or .tag to isolate specific data streams.
+     */
+    val customData: SharedFlow<CustomDataLoggingEvent>
+        get() = _noopCustomData
+
+    companion object {
+        private val _noopCustomData: SharedFlow<CustomDataLoggingEvent> = MutableSharedFlow()
+    }
+}
+
 typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
 sealed class PebbleConnectionEvent {
@@ -88,7 +133,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, CustomDataLogging {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -385,13 +430,14 @@ class LibPebble3(
     private val vibePatternDao: VibePatternDao,
     private val watchPreferences: WatchPrefs,
     private val weatherManager: WeatherManager,
+    private val datalogging: CustomDataLogging,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
-    HealthDataApi by health {
+    HealthDataApi by health, CustomDataLogging by datalogging {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

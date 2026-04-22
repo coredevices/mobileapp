@@ -22,6 +22,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
+import io.rebble.libpebblecommon.connection.CustomDataLogging
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Negotiator
@@ -406,6 +407,7 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
+                        get(), // customDataLogging
                     )
                 } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
@@ -435,7 +437,7 @@ fun initKoin(
                 singleOf(::MissedCallSyncer)
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
-                singleOf(::Datalogging)
+                singleOf(::Datalogging) bind CustomDataLogging::class
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
