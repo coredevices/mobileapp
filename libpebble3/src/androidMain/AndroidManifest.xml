@@ -61,6 +61,9 @@
             android:name="io.rebble.libpebblecommon.calls.LibPebbleInCallService"
             android:exported="true"
             android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.INCLUDE_SELF_MANAGED_CALLS"
+                android:value="true" />
             <intent-filter>
                 <action android:name="android.telecom.InCallService" />
             </intent-filter>
