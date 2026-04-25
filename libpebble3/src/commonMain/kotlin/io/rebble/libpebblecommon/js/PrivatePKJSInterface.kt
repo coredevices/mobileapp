@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ abstract class PrivatePKJSInterface(
     private val jsTokenUtil: JsTokenUtil,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val httpInterceptorManager: HttpInterceptorManager,
+    private val notificationConfigFlow: NotificationConfigFlow,
 ) {
     companion object {
         private val logger = Logger.withTag("PrivatePKJSInterface")
@@ -46,12 +48,11 @@ abstract class PrivatePKJSInterface(
 
     open fun onConsoleLog(level: String, message: String, source: String?) {
         logger.i {
-            val containsSensitiveInfo = sensitiveTerms.any { term ->
-                message.contains(term, ignoreCase = true)
-            }
+            val redact = notificationConfigFlow.value.obfuscateContent &&
+                sensitiveTerms.any { term -> message.contains(term, ignoreCase = true) }
             buildString {
                 append("[PKJS:${level.uppercase()}] \"")
-                if (containsSensitiveInfo) {
+                if (redact) {
                     append("<REDACTED>")
                 } else {
                     append(message)

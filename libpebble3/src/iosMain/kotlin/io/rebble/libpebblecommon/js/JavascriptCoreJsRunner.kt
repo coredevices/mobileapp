@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
@@ -48,6 +49,7 @@ class JavascriptCoreJsRunner(
     private val logMessages: Channel<String>,
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val httpInterceptorManager: HttpInterceptorManager,
+    private val notificationConfigFlow: NotificationConfigFlow,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -76,7 +78,7 @@ class JavascriptCoreJsRunner(
             JSTimeout(interfacesScope, evalRawFn),
             WebSocketManager(interfacesScope, evalFn),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
