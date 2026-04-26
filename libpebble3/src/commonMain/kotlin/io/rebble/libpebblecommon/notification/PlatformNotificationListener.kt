@@ -127,12 +127,18 @@ class NotificationApi(
     override fun upsertNotificationRule(rule: NotificationRuleEntity) {
         libPebbleCoroutineScope.launch {
             notificationRuleDao.upsert(rule)
+            if (rule.target != null) {
+                notificationAppDao.markDirty(rule.target)
+            }
         }
     }
 
     override fun deleteNotificationRule(rule: NotificationRuleEntity) {
         libPebbleCoroutineScope.launch {
             notificationRuleDao.deleteById(rule.id)
+            if (rule.target != null) {
+                notificationAppDao.markDirty(rule.target)
+            }
         }
     }
 

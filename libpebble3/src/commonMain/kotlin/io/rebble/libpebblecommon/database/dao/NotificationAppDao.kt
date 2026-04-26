@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Query
@@ -19,6 +20,7 @@ import kotlin.time.Clock
 data class AppWithCount(
     @Embedded val app: NotificationAppItem,
     val count: Int,
+    @ColumnInfo(name = "rulesCount") val rulesCount: Int = 0,
 )
 
 @Dao
@@ -29,7 +31,8 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     @Query("SELECT * FROM NotificationAppItemEntity WHERE deleted = 0 ORDER BY name ASC")
     fun allAppsFlow(): Flow<List<NotificationAppItem>>
 
-    @Query("SELECT a.*, COUNT(ne.id) as count " +
+    @Query("SELECT a.*, COUNT(ne.id) as count, " +
+            "(SELECT COUNT(*) FROM NotificationRuleEntity r WHERE r.targetType = 'App' AND r.target = a.packageName) as rulesCount " +
             "FROM NotificationAppItemEntity a " +
             "LEFT JOIN NotificationEntity ne ON a.packageName = ne.pkg " +
             "WHERE a.deleted = 0 " +
@@ -54,6 +57,17 @@ interface NotificationAppRealDao : NotificationAppItemDao {
             colorName = colorName,
             iconCode = iconCode,
 //            stateUpdated = Clock.System.now().asMillisecond(),
+        ))
+    }
+
+    @Transaction
+    suspend fun markDirty(packageName: String) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            return
+        }
+        insertOrReplace(existing.copy(
+            stateUpdated = Clock.System.now().asMillisecond(),
         ))
     }
 

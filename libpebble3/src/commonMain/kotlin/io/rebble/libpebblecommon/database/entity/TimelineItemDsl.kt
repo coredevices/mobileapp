@@ -142,6 +142,10 @@ class AttributesListBuilder internal constructor() {
         uIntList(TimelineAttribute.VibrationPattern, block)
     }
 
+    fun notificationFilteringRules(block: () -> UByteArray) {
+        attributes.add(BaseAttribute.UByteArrayAttribute(TimelineAttribute.NotificationFilteringRules, block()))
+    }
+
     internal fun build(): List<BaseAttribute> {
         return attributes
     }

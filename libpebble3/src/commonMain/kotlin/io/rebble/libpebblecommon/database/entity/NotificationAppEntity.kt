@@ -90,6 +90,34 @@ data class NotificationAppItem(
                     icon { icon }
                 }
             }
+            
+            val rules = params.notificationRuleDao?.let { dao ->
+                runBlocking {
+                    dao.getRulesForAppOnce(packageName = packageName)
+                }
+            }
+            if (!rules.isNullOrEmpty()) {
+                val bytesList = mutableListOf<UByte>()
+                bytesList.add(rules.size.toUByte())
+                for (rule in rules) {
+                    val type = if (rule.matchType == io.rebble.libpebblecommon.database.entity.MatchType.Regex) 1u.toUByte() else 0u.toUByte()
+                    val field = when (rule.matchField) {
+                        io.rebble.libpebblecommon.database.entity.MatchField.Title -> 1u.toUByte()
+                        io.rebble.libpebblecommon.database.entity.MatchField.Body -> 2u.toUByte()
+                        else -> 0u.toUByte()
+                    }
+                    val case = if (rule.caseSensitive) 1u.toUByte() else 0u.toUByte()
+                    bytesList.add(type)
+                    bytesList.add(field)
+                    bytesList.add(case)
+                    val strBytes = rule.pattern.encodeToByteArray()
+                    for (b in strBytes) {
+                        bytesList.add(b.toUByte())
+                    }
+                    bytesList.add(0u.toUByte())
+                }
+                notificationFilteringRules { bytesList.toUByteArray() }
+            }
         }.map { it.asAttribute() }
         
         val entity = NotificationAppBlobItem(attributes = attributesList)
