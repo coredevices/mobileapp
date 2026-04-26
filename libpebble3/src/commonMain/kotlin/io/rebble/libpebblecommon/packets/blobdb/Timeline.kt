@@ -305,6 +305,7 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     SubtitleTemplateString(0x2Fu, 150),
     Icon(0x30u),
     VibrationPattern(0x31u),
+    NotificationFilteringRules(0x33u, 1024),
     ;
 
     companion object {

@@ -124,6 +124,9 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         }
                         isMuted
                     }
+                    EnabledFilter.WithRules -> filtered.filter {
+                        it.rulesCount > 0
+                    }
                 }
 
                 val list = when (viewModel.sortBy.value) {

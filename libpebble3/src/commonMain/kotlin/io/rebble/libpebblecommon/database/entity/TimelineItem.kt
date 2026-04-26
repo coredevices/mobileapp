@@ -141,6 +141,15 @@ sealed class BaseAttribute {
         override fun asAttribute(): TimelineItem.Attribute =
             createUByteAttribute(attribute, value)
     }
+
+    @Serializable
+    data class UByteArrayAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UByteArray,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            TimelineItem.Attribute(attribute.id, value)
+    }
 }
 
 @Serializable

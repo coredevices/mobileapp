@@ -71,6 +71,7 @@ enum class EnabledFilter(val label: String) {
     All("All"),
     EnabledOnly("Enabled"),
     DisabledOnly("Disabled"),
+    WithRules("With Rules"),
 }
 
 @Composable
