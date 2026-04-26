@@ -43,7 +43,8 @@ open class DefaultRecordingOperation(
     private val transferId: Long?,
     private val fileId: String,
     private val trace: RingTraceSession,
-    private val forcedTool: (suspend (messageText: String) -> ToolCallResult)?
+    private val forcedTool: (suspend (messageText: String) -> ToolCallResult)?,
+    private val runAgent: Boolean = true,
 ) : RecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -117,10 +118,6 @@ open class DefaultRecordingOperation(
             }
         }
         coroutineScope {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                mcpSandboxRepository.getDefaultGroupId(),
-                this
-            )
             val transcription = try {
                 trace.markEvent("transcription_start", TraceEventData.TranscriptionStart(
                     recordingId = recordingId,
@@ -189,47 +186,64 @@ open class DefaultRecordingOperation(
                 transcription.modelUsed
             )
 
-            try {
-                trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(
+            if (runAgent) {
+                val mcpSession = mcpSessionFactory.createForSandboxGroup(
+                    mcpSandboxRepository.getDefaultGroupId(),
+                    this
+                )
+                try {
+                    trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(
+                        entryId,
+                        recordingId,
+                        transferId ?: -1
+                    ))
+                    mcpSession.openSession()
+                    trace.markEvent("mcp_session_open_end", TraceEventData.RecordingEntryInfo(
+                        entryId,
+                        recordingId,
+                        transferId ?: -1
+                    ))
+                    logger.d { "Agent running..." }
+                    recordingEntryDao.updateRecordingEntryStatus(
+                        entryId,
+                        status = RecordingEntryStatus.agent_processing
+                    )
+                    recordingProcessor.processText(
+                        recordingId = recordingId,
+                        recordingEntryId = entryId,
+                        mcpSession = mcpSession,
+                        agent = chatAgent,
+                        forcedTool = forcedTool?.let { { it(transcription.text) } },
+                        text = transcription.text
+                    )
+                    logger.d { "Processing complete." }
+                    recordingEntryDao.updateRecordingEntryStatus(
+                        entryId,
+                        status = RecordingEntryStatus.completed
+                    )
+                } catch (e: Exception) {
+                    recordingEntryDao.updateRecordingEntryStatus(
+                        entryId,
+                        status = RecordingEntryStatus.agent_error,
+                        error = e.message
+                    )
+                    throw e
+                } finally {
+                    withTimeout(3.seconds) {
+                        mcpSession.closeSession()
+                    }
+                }
+            } else {
+                logger.d { "Skipping agent (runAgent=false); marking entry completed." }
+                trace.markEvent("agent_skipped", TraceEventData.RecordingEntryInfo(
                     entryId,
                     recordingId,
                     transferId ?: -1
                 ))
-                mcpSession.openSession()
-                trace.markEvent("mcp_session_open_end", TraceEventData.RecordingEntryInfo(
-                    entryId,
-                    recordingId,
-                    transferId ?: -1
-                ))
-                logger.d { "Agent running..." }
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.agent_processing
-                )
-                recordingProcessor.processText(
-                    recordingId = recordingId,
-                    recordingEntryId = entryId,
-                    mcpSession = mcpSession,
-                    agent = chatAgent,
-                    forcedTool = forcedTool?.let { { it(transcription.text) } },
-                    text = transcription.text
-                )
-                logger.d { "Processing complete." }
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.completed
                 )
-            } catch (e: Exception) {
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.agent_error,
-                    error = e.message
-                )
-                throw e
-            } finally {
-                withTimeout(3.seconds) {
-                    mcpSession.closeSession()
-                }
             }
         }
     }
