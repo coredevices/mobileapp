@@ -81,14 +81,16 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
 
 4. **Configure Entitlements**
 
-   Set `iosApp/iosApp/iosApp.entitlements` to an empty dictionary:
+   Set `iosApp/iosApp/iosApp.entitlements` to:
 
    ```xml
    <?xml version="1.0" encoding="UTF-8"?>
    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
    <plist version="1.0">
-   <dict>
-   </dict>
+      <dict>
+         <key>com.apple.developer.healthkit</key>
+         <true/>
+      </dict>
    </plist>
    ```
 
