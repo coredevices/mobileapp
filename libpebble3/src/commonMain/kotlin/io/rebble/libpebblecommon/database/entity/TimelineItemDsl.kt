@@ -138,8 +138,16 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UByteAttribute(TimelineAttribute.MuteDayOfWeek, block()))
     }
 
+    fun muteExpiration(block: () -> Instant) {
+        attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.MuteExpiration, block().epochSeconds.toUInt()))
+    }
+
     fun vibrationPattern(block: () -> List<UInt>) {
         uIntList(TimelineAttribute.VibrationPattern, block)
+    }
+
+    fun notificationFilteringRules(block: () -> UByteArray) {
+        attributes.add(BaseAttribute.UByteArrayAttribute(TimelineAttribute.NotificationFilteringRules, block()))
     }
 
     internal fun build(): List<BaseAttribute> {

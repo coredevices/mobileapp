@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -65,6 +66,7 @@ data class BlobDbDaos(
     private val watchPrefDao: WatchPrefRealDao,
     private val weatherAppDao: WeatherAppRealDao,
     private val appPrefsEntryDao: AppPrefsEntryDao,
+    private val notificationRuleDao: NotificationRuleDao,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
         add(lockerEntryDao)
@@ -83,6 +85,7 @@ data class BlobDbDaos(
     } as Set<BlobDbDao<BlobDbRecord>>
     
     fun getVibePatternDao(): VibePatternDao = vibePatternDao
+    fun getNotificationRuleDao(): io.rebble.libpebblecommon.database.dao.NotificationRuleDao = notificationRuleDao
 }
 
 interface TimeProvider {
@@ -172,6 +175,7 @@ class BlobDB(
             platform = watchType,
             capabilities = capabilities,
             vibePatternDao = blobDatabases.getVibePatternDao(),
+            notificationRuleDao = blobDatabases.getNotificationRuleDao(),
         )
         val deviceHasPreviouslySyncedSettings =
             loadDevicePreviousSettingsSyncState().identifiers.contains(identifier.asString)

@@ -47,6 +47,7 @@ data class ValueParams(
     val platform: WatchType,
     val capabilities: Set<ProtocolCapsFlag>,
     val vibePatternDao: VibePatternDao? = null,
+    val notificationRuleDao: NotificationRuleDao? = null,
 )
 
 interface BlobDbItem {

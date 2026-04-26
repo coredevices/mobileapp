@@ -181,7 +181,6 @@ fun NotificationAppScreen(
                 }
                 // Rules and channels sections - only available on Android
                 // (iOS doesn't have notification channels)
-                // (Notification filtering pending on-device support on iOS)
                 if (platform == Platform.Android) {
                     item {
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -243,12 +242,15 @@ fun NotificationAppScreen(
                             }
                         }
                     }
-                    item {
-                        NotificationRulesSection(
-                            app = appWrapper.app,
-                            notificationApps = notificationApps,
-                        )
-                    }
+                }
+                
+                // Notification filtering rules - synced to watch via BlobDB
+                item {
+                    NotificationRulesSection(
+                        app = appWrapper.app,
+                        notificationApps = notificationApps,
+                        platform = platform,
+                    )
                 }
 
                 item {
@@ -297,6 +299,7 @@ fun NotificationAppScreen(
 private fun NotificationRulesSection(
     app: NotificationAppItem,
     notificationApps: NotificationApps,
+    platform: Platform,
 ) {
     val query = remember(app) { notificationApps.notificationRulesForApp(app.packageName) }
     val rules by query.collectAsState(emptyList())
@@ -375,6 +378,7 @@ private fun NotificationRulesSection(
     if (showDialog) {
         NotificationRuleDialog(
             existing = editingRule,
+            platform = platform,
             onDismiss = { showDialog = false },
             onSave = { rule ->
                 val entity = rule.copy(
@@ -391,6 +395,7 @@ private fun NotificationRulesSection(
 @Composable
 private fun NotificationRuleDialog(
     existing: NotificationRuleEntity?,
+    platform: Platform,
     onDismiss: () -> Unit,
     onSave: (NotificationRuleEntity) -> Unit,
 ) {
@@ -421,6 +426,7 @@ private fun NotificationRuleDialog(
                         selected = matchType == MatchType.Regex,
                         onClick = { matchType = MatchType.Regex },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        enabled = platform != Platform.IOS
                     ) { Text("Regex") }
                 }
                 Spacer(Modifier.height(12.dp))
