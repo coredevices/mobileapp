@@ -199,9 +199,9 @@ private fun AppMessageDictionary.toPebbleDictionary(): PebbleDictionary {
     return map {
         val key = it.key.toUInt()
         val value = when (val rawValue = it.value) {
-            is String -> PebbleDictionaryItem.String(rawValue)
-            is UByteArray -> PebbleDictionaryItem.ByteArray(rawValue.toByteArray())
-            is ByteArray -> PebbleDictionaryItem.ByteArray(rawValue)
+            is String -> PebbleDictionaryItem.Text(rawValue)
+            is UByteArray -> PebbleDictionaryItem.Bytes(rawValue.toByteArray())
+            is ByteArray -> PebbleDictionaryItem.Bytes(rawValue)
             is Int -> PebbleDictionaryItem.Int32(rawValue)
             is Long -> PebbleDictionaryItem.Int32(rawValue.toInt())
             is ULong -> PebbleDictionaryItem.UInt32(rawValue.toUInt())
