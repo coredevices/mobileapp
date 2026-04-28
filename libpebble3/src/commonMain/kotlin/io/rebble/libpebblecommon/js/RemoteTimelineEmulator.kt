@@ -82,10 +82,14 @@ class RemoteTimelineEmulator(
             return
         }
 //        logger.v { "insertPin: pin=$pin" }
+        insertPin(appUuid, pin)
+    }
+
+    suspend fun insertPin(appUuid: Uuid, pin: TimelinePinJson) {
         val existingPin = timelinePinRealDao.getPinsForWatchapp(appUuid).find { it.backingId == pin.id }
         val pinUuid = existingPin?.itemId ?: Uuid.random()
         val timelinePin = asPin(jsonPin = pin, appUuid = appUuid, pinUuid = pinUuid)
-//        logger.v { "insertPin: timelinePin=$timelinePin" }
+        //        logger.v { "insertPin: timelinePin=$timelinePin" }
         if (timelinePin == null) {
             logger.w { "insert pin == null" }
             return
@@ -100,14 +104,15 @@ class RemoteTimelineEmulator(
         }
     }
 
-    suspend fun deletePin(appUuid: Uuid, pinIdentifier: String) {
+    suspend fun deletePin(appUuid: Uuid, pinIdentifier: String): Boolean {
         logger.v { "deletePin: pinIdentifier=$pinIdentifier" }
         val existingPin = timelinePinRealDao.getPinsForWatchapp(appUuid).find { it.backingId == pinIdentifier }
         if (existingPin == null) {
             logger.i { "deletePin: Unknown pin identifier: $pinIdentifier" }
-            return
+            return false
         }
         timelinePinRealDao.markForDeletionWithReminders(existingPin.itemId, timelineReminderRealDao)
+        return true
     }
 
     companion object {
