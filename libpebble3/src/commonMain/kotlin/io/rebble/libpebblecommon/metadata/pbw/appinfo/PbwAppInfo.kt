@@ -25,6 +25,18 @@ data class PbwAppInfo(
      * watchapp's PKJS via a `'shareintent'` event.
      */
     val shareTarget: ShareTarget? = null,
+    /**
+     * Android package names this watchapp wishes to receive notifications
+     * from. Notifications posted by any of these packages are dispatched to
+     * the watchapp's PKJS via an `'appnotification'` event whenever the
+     * watchapp is the active foreground app on the watch (i.e. PKJS is
+     * running). The user must have already granted notification access to
+     * the Pebble app itself; no per-watchapp consent is required because the
+     * declaration in `package.json` is treated as the consent moment.
+     *
+     * Empty / absent means this watchapp does not receive notifications.
+     */
+    val notificationFilter: List<String> = emptyList(),
 )
 
 /**

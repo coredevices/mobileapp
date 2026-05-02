@@ -280,6 +280,17 @@ class JavascriptCoreJsRunner(
         }
     }
 
+    override suspend fun signalAppNotification(notificationJson: String) {
+        // iOS notification source-of-truth (UNUserNotificationCenter / a Share
+        // Extension) is not yet wired up — the JS-side signal hook lives here
+        // for symmetry with Android so PKJS code that subscribes to
+        // 'appnotification' on iOS won't fail when the iOS receiving side
+        // lands later. For now this is a passthrough to JSCore.
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalAppNotification(${Json.encodeToString(notificationJson)})")
+        }
+    }
+
     override suspend fun eval(js: String) {
         withContext(threadContext) {
             jsContext?.evalCatching(js)

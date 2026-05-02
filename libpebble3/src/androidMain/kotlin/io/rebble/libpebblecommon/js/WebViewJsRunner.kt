@@ -439,6 +439,18 @@ class WebViewJsRunner(
         }
     }
 
+    override suspend fun signalAppNotification(notificationJson: String) {
+        readyState.first { it }
+        withContext(Dispatchers.Main) {
+            // Pass as a JSON-encoded string (matches signalNewAppMessageData).
+            // startup.js will parse it on receipt.
+            webView?.evaluateJavascript(
+                "window.signalAppNotification(${Json.encodeToString(notificationJson)})",
+                null
+            )
+        }
+    }
+
     override suspend fun eval(js: String) {
         withContext(Dispatchers.Main) {
             webView?.evaluateJavascript(js, null) ?: run {

@@ -341,6 +341,7 @@ fun initKoin(
             module {
                 includes(platformModule, pkjsPlatformModule)
                 includes(shareIntentModule)
+                includes(watchappNotificationModule)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }

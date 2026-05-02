@@ -71,4 +71,21 @@ abstract class PKJSInterface(
         }
         return url
     }
+
+    /**
+     * Returns currently-posted notifications matching the watchapp's
+     * declared [io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo.notificationFilter],
+     * narrowed by [packageFilter] if non-blank. Used by watchapps to catch
+     * up on existing notification state when their PKJS spins up — otherwise
+     * the watchapp only sees notifications that arrive *after* it starts.
+     *
+     * Returns a JSON-encoded array string with the same per-notification
+     * shape as the `'appnotification'` event payload (without the `posted`
+     * field, which is implicitly true for currently-active notifications).
+     * Returns "[]" if the platform has no live-notification source (iOS today).
+     *
+     * @param packageFilter Optional comma-separated list of package names.
+     *   Empty / blank = use the watchapp's full declared filter.
+     */
+    abstract fun getActiveNotifications(packageFilter: String): String
 }

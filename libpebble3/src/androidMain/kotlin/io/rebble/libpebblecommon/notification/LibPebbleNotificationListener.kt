@@ -52,6 +52,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     private val notificationHandler: NotificationHandler by inject()
     private val notificationCallDetector: NotificationCallDetector by inject()
     private val connection: AndroidPebbleNotificationListenerConnection by inject()
+    // PR 2: fan out notifications to subscribed PKJS watchapps. Singleton.
+    private val watchappDispatcher: WatchappNotificationDispatcher by inject()
 
     private val configHolder: NotificationConfigFlow by inject()
 
@@ -181,6 +183,18 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         }
 
         notificationHandler.handleNotificationPosted(sbn)
+
+        // PR 2: also fan out to any running PKJS watchapp that subscribes to
+        // this package. Independent of the watch-UI relay above — failure
+        // here doesn't affect the existing notification pipeline. Pass `this`
+        // (the listener service) as the Context for resolving icon drawables
+        // out of the source app's resources.
+        try {
+            val json = WatchappNotificationSerializer.serialize(sbn, posted = true, context = this)
+            watchappDispatcher.dispatch(sbn.packageName, json)
+        } catch (e: Exception) {
+            logger.w(e) { "watchapp notification dispatch failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+        }
     }
 
     override fun onNotificationRemoved(
@@ -193,6 +207,17 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
             return
         }
         notificationHandler.handleNotificationRemoved(sbn)
+
+        // PR 2: notify subscribed watchapps that the notification was cleared.
+        // For nav use cases this is the "trip ended" signal — Maps removes
+        // its persistent navigation notification when the user ends the trip.
+        // Icons are skipped on removal events (the icon adds no signal there).
+        try {
+            val json = WatchappNotificationSerializer.serialize(sbn, posted = false, context = null)
+            watchappDispatcher.dispatch(sbn.packageName, json)
+        } catch (e: Exception) {
+            logger.w(e) { "watchapp removed-notification dispatch failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+        }
     }
 
     private fun controlListenerHints() = notificationListenerScope.launch {

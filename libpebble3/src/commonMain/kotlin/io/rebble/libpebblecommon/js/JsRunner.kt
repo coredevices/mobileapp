@@ -37,6 +37,18 @@ abstract class JsRunner(
      * @param subject Optional subject (e.g. Android `EXTRA_SUBJECT`).
      */
     abstract suspend fun signalShareIntent(text: String, url: String?, subject: String?)
+    /**
+     * Fired when the OS surfaces a notification from a package that this
+     * watchapp's [PbwAppInfo.notificationFilter] subscribes to, while this
+     * watchapp's PKJS is running. The payload is a JSON string the bootstrap
+     * `startup.js` parses and dispatches via `'appnotification'` events.
+     *
+     * @param notificationJson Pre-serialized notification payload. Layout:
+     *   `{ "package": String, "posted": Boolean, "key": String, "postTime": Long,
+     *      "category": String?, "title": String?, "text": String?,
+     *      "subText": String?, "extras": { ... raw extras keys ... } }`
+     */
+    abstract suspend fun signalAppNotification(notificationJson: String)
     abstract suspend fun eval(js: String)
     abstract suspend fun evalWithResult(js: String): Any?
     abstract fun debugForceGC()

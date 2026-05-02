@@ -301,6 +301,19 @@ class PKJSApp(
             jsRunner?.signalShareIntent(text, url, subject)
         }
     }
+
+    /**
+     * Deliver a notification payload to this watchapp's PKJS. Caller has
+     * already verified that the source package is in [PbwAppInfo.notificationFilter].
+     * No-op if the runner isn't initialized; the dispatch will simply be
+     * dropped (acceptable — the watchapp will pull current state via
+     * `Pebble.getActiveNotifications` on next ready).
+     */
+    fun triggerOnAppNotification(notificationJson: String) {
+        runningScope?.launch {
+            jsRunner?.signalAppNotification(notificationJson)
+        }
+    }
 }
 
 fun AppMessageDictionary.toJSData(appKeys: Map<String, Int>): String {
