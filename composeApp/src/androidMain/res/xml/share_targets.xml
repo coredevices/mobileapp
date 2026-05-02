@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static share-target metadata referenced by ShareTargetActivity in the
+    manifest. The actual per-watchapp shortcuts that surface in the share
+    sheet are pushed at runtime by ShareTargetSync (libpebble3) via
+    ShortcutManagerCompat.pushDynamicShortcut. This static descriptor exists
+    only so Android knows the activity is a valid Direct Share target — it
+    declares the supported intent-shape (ACTION_SEND text/plain) and binds
+    the dynamic shortcut category that ShareTargetSync uses.
+
+    See https://developer.android.com/training/sharing/receive#sharing-shortcuts
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="coredevices.coreapp.sharing.ShareTargetActivity">
+        <data android:mimeType="text/plain" />
+        <category android:name="io.rebble.libpebblecommon.WATCHAPP_SHARE" />
+    </share-target>
+</shortcuts>

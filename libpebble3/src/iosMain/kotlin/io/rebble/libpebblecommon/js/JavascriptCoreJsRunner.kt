@@ -267,6 +267,19 @@ class JavascriptCoreJsRunner(
         }
     }
 
+    override suspend fun signalShareIntent(text: String, url: String?, subject: String?) {
+        val payload = Json.encodeToString(
+            mapOf(
+                "text" to text,
+                "url" to url,
+                "subject" to subject,
+            )
+        )
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalShareIntent($payload)")
+        }
+    }
+
     override suspend fun eval(js: String) {
         withContext(threadContext) {
             jsContext?.evalCatching(js)

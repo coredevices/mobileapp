@@ -57,6 +57,8 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
     private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
+    // PR 1: share-intent target.
+    private val shareTargetSync: io.rebble.libpebblecommon.shareintent.ShareTargetSync by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -88,6 +90,9 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()
+        // PR 1: kick off Sharing Shortcuts maintenance. Idempotent at the
+        // shortcut-id level; safe to call once at app start.
+        shareTargetSync.start()
         configureStrictMode()
         NotifierManager.initialize(
             configuration = NotificationPlatformConfiguration.Android(

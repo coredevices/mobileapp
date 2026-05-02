@@ -138,6 +138,7 @@ navigator.geolocation.clearWatch = (id) => {
         APP_MESSAGE_NACK: 'appmessage_nack',
         GET_TIMELINE_TOKEN_SUCCESS: 'getTimelineTokenSuccess',
         GET_TIMELINE_TOKEN_FAILURE: 'getTimelineTokenFailure',
+        SHARE_INTENT: 'shareintent',
     };
     Object.freeze(PebbleEventTypes);
     const DEFAULT_TIMEOUT = 5000; // 5 seconds
@@ -291,6 +292,23 @@ navigator.geolocation.clearWatch = (id) => {
             payload = data
         }
         dispatchPebbleEvent(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, { payload });
+    };
+    /**
+     * Dispatched when the OS routes a share intent (Android ACTION_SEND, etc.)
+     * to this watchapp. The payload object is `{ text, url, subject }` —
+     * `text` is always present; `url` is a best-effort URL extraction; both
+     * `url` and `subject` may be null.
+     */
+    global.signalShareIntent = (data) => {
+        var payload;
+        if (typeof data === 'string') {
+            // Android: payload arrives as a JSON string from evaluateJavascript
+            payload = data ? JSON.parse(data) : {};
+        } else {
+            // iOS: payload is already an object
+            payload = data || {};
+        }
+        dispatchPebbleEvent(PebbleEventTypes.SHARE_INTENT, payload);
     };
 
     const PebbleAPI = {
