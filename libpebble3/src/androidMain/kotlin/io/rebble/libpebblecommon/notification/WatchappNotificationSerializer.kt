@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.notification
 
 import android.app.Notification
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
@@ -124,6 +125,49 @@ internal object WatchappNotificationSerializer {
                 if (wantsLarge) put("largeIconBase64", null as String?)
             }
 
+            // --- BigPicture / MediaMetadata / Messaging / Inbox -------
+            // These are heavyweight (Bitmap decoding, MediaSession lookup,
+            // structured array assembly) — extracted only when requested.
+            if (Field.BIG_PICTURE_BASE64 in fields) {
+                // Extracted only on posted events with a valid Context;
+                // a removal event has nothing useful to encode and a
+                // null Context can't resolve Icon-typed pictures.
+                val bigPicture: String? = if (posted && context != null) {
+                    try {
+                        BigPictureExtractor.extract(context, n)
+                    } catch (e: Exception) {
+                        logger.v(e) { "BigPicture extract threw, continuing" }
+                        null
+                    }
+                } else null
+                put("bigPictureBase64", bigPicture)
+            }
+            if (Field.MEDIA_METADATA in fields) {
+                val mediaJson: JsonElement = if (posted && context != null) {
+                    try {
+                        MediaSessionExtractor.extract(context, n) ?: JsonNull
+                    } catch (e: Exception) {
+                        logger.v(e) { "MediaSession extract threw, continuing" }
+                        JsonNull
+                    }
+                } else JsonNull
+                put("mediaMetadata", mediaJson)
+            }
+            if (Field.MESSAGING_MESSAGES in fields) {
+                putJsonArray("messagingMessages") {
+                    extractMessagingMessages(n).forEach { msgObj ->
+                        add(msgObj)
+                    }
+                }
+            }
+            if (Field.INBOX_LINES in fields) {
+                putJsonArray("inboxLines") {
+                    extractInboxLines(extras).forEach { line ->
+                        add(JsonPrimitive(line))
+                    }
+                }
+            }
+
             // --- Actions ----------------------------------------------
             if (Field.ACTIONS in fields) {
                 putJsonArray("actions") {
@@ -149,7 +193,6 @@ internal object WatchappNotificationSerializer {
                     encodeExtras(extras)
                 }
             }
-
         }.toString()
     }
 
@@ -194,5 +237,105 @@ internal object WatchappNotificationSerializer {
                 null
             }
         }
+    }
+
+    /**
+     * Extract messages from a [Notification.MessagingStyle]-styled
+     * notification by parsing `Notification.EXTRA_MESSAGES` directly.
+     * We avoid `Notification.MessagingStyle.extractMessagingStyleFromNotification`
+     * because it doesn't reliably resolve against every Android compileSdk
+     * level even where it's documented to exist; reading the underlying
+     * extras bundles uses only stable Bundle APIs and works on every
+     * platform version that produces MessagingStyle notifications (API 24+).
+     *
+     * Per-message JSON shape: `{ sender, timestamp, text }`. `sender` is
+     * read from the `sender_person` Person on API 28+ (matching what
+     * `Notification.MessagingStyle.Message.senderPerson` would return),
+     * falling back to the legacy CharSequence `sender` key on older
+     * platforms. May be null in either case (MessagingStyle convention:
+     * null sender = "you").
+     */
+    @Suppress("DEPRECATION")
+    private fun extractMessagingMessages(n: Notification): List<JsonElement> {
+        val extras: Bundle = n.extras ?: return emptyList()
+        val rawMessages = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                extras.getParcelableArray(
+                    Notification.EXTRA_MESSAGES,
+                    android.os.Parcelable::class.java
+                )
+            } else {
+                extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            }
+        } catch (e: Exception) {
+            logger.v(e) { "EXTRA_MESSAGES read failed" }
+            null
+        } ?: return emptyList()
+
+        if (rawMessages.isEmpty()) return emptyList()
+
+        val out = mutableListOf<JsonElement>()
+        for (raw in rawMessages) {
+            if (raw !is Bundle) continue
+            val text = try {
+                raw.getCharSequence("text")?.toString()
+            } catch (e: Exception) { null }
+            val timestamp = try {
+                raw.getLong("time")
+            } catch (e: Exception) { 0L }
+            out += buildJsonObject {
+                put("sender", senderNameFromMessageBundle(raw))
+                put("timestamp", timestamp)
+                put("text", text)
+            }
+        }
+        return out
+    }
+
+    /**
+     * Derive the message's sender display name from a per-message
+     * Bundle. Tries `sender_person` (a Person Parcelable on API 28+,
+     * matching what MessagingStyle.Message.senderPerson would expose)
+     * first, falling back to the legacy CharSequence `sender` key.
+     * Both can legitimately be null — MessagingStyle convention treats
+     * a null sender as "this message is from the user themselves."
+     */
+    @Suppress("DEPRECATION")
+    private fun senderNameFromMessageBundle(bundle: Bundle): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val person: android.app.Person? =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        bundle.getParcelable("sender_person", android.app.Person::class.java)
+                    } else {
+                        bundle.getParcelable("sender_person")
+                    }
+                val name = person?.name
+                if (name != null) return name.toString()
+            } catch (e: Throwable) {
+                // Fall through to the legacy `sender` CharSequence key.
+            }
+        }
+        return try {
+            bundle.getCharSequence("sender")?.toString()
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Extract inbox-style notification lines. `Notification.EXTRA_TEXT_LINES`
+     * is a `CharSequence[]` array populated by `Notification.InboxStyle`.
+     * Returns an empty list if the notification isn't InboxStyle or the
+     * extras key isn't populated.
+     */
+    private fun extractInboxLines(extras: Bundle): List<String> {
+        val raw = try {
+            extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        } catch (e: Exception) {
+            logger.v(e) { "EXTRA_TEXT_LINES read failed" }
+            null
+        } ?: return emptyList()
+        return raw.mapNotNull { it?.toString() }
     }
 }

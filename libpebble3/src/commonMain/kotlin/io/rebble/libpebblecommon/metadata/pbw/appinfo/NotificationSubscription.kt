@@ -124,9 +124,9 @@ data class NotificationSubscription(
         /**
          * Notification's `smallIcon` rasterized to a 32×32 ARGB PNG and
          * base64-encoded. On many apps (Google Maps included) this is
-         * the brand glyph rather than turn-specific iconography — see
-         * [ICON_EXTRAS] for apps that publish dynamic per-state icons
-         * via the Android 14+ Ongoing Activity API.
+         * the brand glyph rather than turn-specific iconography; apps
+         * that need per-state dynamic icons typically aren't accessible
+         * via this slot.
          */
         const val SMALL_ICON_BASE64 = "smallIconBase64"
 
@@ -136,6 +136,42 @@ data class NotificationSubscription(
          * by chat apps for sender avatars.
          */
         const val LARGE_ICON_BASE64 = "largeIconBase64"
+
+        // --- BigPictureStyle / MediaStyle / MessagingStyle / InboxStyle ---
+
+        /**
+         * The full-resolution photo from a `BigPictureStyle` notification,
+         * downsampled to fit a configured byte cap (default 8KB) and
+         * base64-encoded. This is where photo apps (Photos, gallery,
+         * Instagram-style notifications) and some music apps put album
+         * art at higher resolution than [LARGE_ICON_BASE64].
+         */
+        const val BIG_PICTURE_BASE64 = "bigPictureBase64"
+
+        /**
+         * Structured media metadata from the `MediaSession` associated
+         * with a `MediaStyle` notification: `{ title, artist, album,
+         * durationMs, positionMs, playbackState, albumArtBase64 }`.
+         * `albumArtBase64` is omitted if larger than the cap (default
+         * 8KB after downsampling). All fields nullable individually.
+         */
+        const val MEDIA_METADATA = "mediaMetadata"
+
+        /**
+         * Array of messages from a `MessagingStyle` notification, each
+         * `{ sender, timestamp, text }`. Messaging apps (Signal, WhatsApp,
+         * SMS, etc.) deliver conversation context this way; the
+         * notification's [TEXT] field typically carries only the most
+         * recent message.
+         */
+        const val MESSAGING_MESSAGES = "messagingMessages"
+
+        /**
+         * Array of strings from an `InboxStyle` notification — used by
+         * email/news apps showing N unread items. Each entry is a
+         * single line as the source app intends it.
+         */
+        const val INBOX_LINES = "inboxLines"
 
         // --- Interaction surface ---
 
@@ -167,6 +203,8 @@ data class NotificationSubscription(
             TITLE, TEXT, SUB_TEXT, INFO_TEXT,
             CATEGORY,
             SMALL_ICON_BASE64, LARGE_ICON_BASE64,
+            BIG_PICTURE_BASE64, MEDIA_METADATA,
+            MESSAGING_MESSAGES, INBOX_LINES,
             ACTIONS,
             EXTRAS,
         )
