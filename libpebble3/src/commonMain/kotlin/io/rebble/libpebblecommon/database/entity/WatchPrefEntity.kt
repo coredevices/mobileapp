@@ -226,6 +226,7 @@ enum class QuicklaunchWatchPref(
     QlSelect("qlSelect", "Quick Launch: Hold Select", QuickLaunchSetting(false, null)),
     QlBack("qlBack", "Quick Launch: Hold Back", QuickLaunchSetting(true, QUIET_TIME_TOGGLE_UUID)),
     QlComboBackUp("qlComboBackUp", "Quick Launch: Hold Combo Back+Up", QuickLaunchSetting(false, null)),
+    QlComboUpDown("qlComboUpDown", "Quick Launch: Hold Combo Up+Down", QuickLaunchSetting(false, null)),
     QlSingleClickUp(
         "qlSingleClickUp",
         "Quick Launch: Tap Up",

@@ -96,6 +96,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlComboUpDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSelect -> Section.QuickLaunch
     QuicklaunchWatchPref.QlBack -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSingleClickUp -> Section.QuickLaunch
