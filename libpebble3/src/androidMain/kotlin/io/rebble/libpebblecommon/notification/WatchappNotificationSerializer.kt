@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.NotificationSubscription
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.NotificationSubscription.Field
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
@@ -192,6 +193,26 @@ internal object WatchappNotificationSerializer {
                 putJsonObject("extras") {
                     encodeExtras(extras)
                 }
+            }
+
+            // --- Icon-typed extras (Android 14+ Ongoing Activity glyphs) ---
+            // Maps' turn arrows, lane guidance, arrival flag etc. live here
+            // under android.ongoingActivityNoti.* keys — NOT in the
+            // standard smallIcon / largeIcon slots, and not in
+            // contentView / bigContentView RemoteViews (which Maps'
+            // ongoing-activity notifications don't populate at all).
+            if (Field.ICON_EXTRAS in fields) {
+                val iconExtras: JsonObject = if (posted && context != null) {
+                    try {
+                        IconExtrasExtractor.extract(context, n)
+                    } catch (e: Exception) {
+                        logger.v(e) { "IconExtrasExtractor threw, continuing" }
+                        JsonObject(emptyMap())
+                    }
+                } else {
+                    JsonObject(emptyMap())
+                }
+                put("iconExtras", iconExtras)
             }
         }.toString()
     }

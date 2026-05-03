@@ -124,9 +124,9 @@ data class NotificationSubscription(
         /**
          * Notification's `smallIcon` rasterized to a 32×32 ARGB PNG and
          * base64-encoded. On many apps (Google Maps included) this is
-         * the brand glyph rather than turn-specific iconography; apps
-         * that need per-state dynamic icons typically aren't accessible
-         * via this slot.
+         * the brand glyph rather than turn-specific iconography — see
+         * [ICON_EXTRAS] for apps that publish dynamic per-state icons
+         * via the Android 14+ Ongoing Activity API.
          */
         const val SMALL_ICON_BASE64 = "smallIconBase64"
 
@@ -198,6 +198,25 @@ data class NotificationSubscription(
          */
         const val EXTRAS = "extras"
 
+        /**
+         * Icon-typed entries from [android.app.Notification.extras],
+         * rasterized to 32×32 base64 PNGs and emitted as an object map
+         * keyed by extras key. This is where Android 14+ Ongoing
+         * Activity notifications stash their dynamic glyphs — Google
+         * Maps' turn-direction arrow lives at
+         * `android.ongoingActivityNoti.chipIcon` /
+         * `android.ongoingActivityNoti.nowbarIcon` /
+         * `android.ongoingActivityNoti.secondIcon`, none of which
+         * surface via the standard [SMALL_ICON_BASE64] / [LARGE_ICON_BASE64]
+         * slots.
+         *
+         * Per-icon shape: `{ base64, hash, intrinsicW, intrinsicH }`.
+         * Hash is djb2 over the rasterized 32×32 pixel ints; useful
+         * for cheap state-change detection across notifications without
+         * comparing the full base64 payload.
+         */
+        const val ICON_EXTRAS = "iconExtras"
+
         /** All recognized field names. Used for forward-compat filtering. */
         val ALL_NAMES: Set<String> = setOf(
             TITLE, TEXT, SUB_TEXT, INFO_TEXT,
@@ -206,7 +225,7 @@ data class NotificationSubscription(
             BIG_PICTURE_BASE64, MEDIA_METADATA,
             MESSAGING_MESSAGES, INBOX_LINES,
             ACTIONS,
-            EXTRAS,
+            EXTRAS, ICON_EXTRAS,
         )
     }
 
