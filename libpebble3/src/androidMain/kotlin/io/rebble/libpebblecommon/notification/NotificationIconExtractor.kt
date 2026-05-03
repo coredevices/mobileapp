@@ -75,16 +75,27 @@ internal object NotificationIconExtractor {
     }
 
     /**
-     * Extract both icons. Either or both may be null in the result.
+     * Extract the requested icons. Either or both may be null in the
+     * result — extraction is best-effort and returns null on any failure.
      *
      * @param context Used to resolve Icon drawables (icons reference
      *   resources in the source app's package; loadDrawable needs a Context
      *   to dereference). The notification listener service IS a Context;
      *   pass `this` from the listener.
      * @param notification The notification to extract icons from.
+     * @param wantSmall Whether to attempt smallIcon extraction. When
+     *   false, the corresponding field in the returned [Icons] is null
+     *   without any extraction work performed. Defaults to true for
+     *   backward compatibility with callers that don't gate.
+     * @param wantLarge Same as [wantSmall], for largeIcon.
      */
-    fun extract(context: Context, notification: Notification): Icons {
-        val small = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    fun extract(
+        context: Context,
+        notification: Notification,
+        wantSmall: Boolean = true,
+        wantLarge: Boolean = true,
+    ): Icons {
+        val small = if (wantSmall && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Notification.smallIcon is an Icon (added API 23). loadDrawable
             // crosses the package boundary into the source app's resources,
             // which is what we want — Maps' arrow-icon resource is in Maps'
@@ -97,7 +108,7 @@ internal object NotificationIconExtractor {
             }
         } else null
 
-        val large = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val large = if (wantLarge && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
                 notification.getLargeIcon()?.loadDrawable(context)?.let(::drawableToPngBase64)
             } catch (e: Exception) {

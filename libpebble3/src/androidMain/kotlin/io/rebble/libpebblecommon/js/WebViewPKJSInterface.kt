@@ -7,6 +7,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.NotificationSubscription
 import io.rebble.libpebblecommon.notification.WatchappNotificationSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
@@ -64,6 +65,14 @@ class WebViewPKJSInterface(
             return "[]"
         }
 
+        // Map of packageName → its NotificationSubscription, so that for
+        // each notification we can apply the matching subscription's
+        // `fields` opt-in. A watchapp can in principle declare the same
+        // package twice with different field sets; we keep the first
+        // declaration deterministically (Map.put semantics on first wins).
+        val subscriptions: Map<String, NotificationSubscription> =
+            watchappFilter.associateBy { it.packageName }
+
         val effectiveFilter: Set<String> = run {
             val requested = packageFilter
                 .split(',')
@@ -73,8 +82,8 @@ class WebViewPKJSInterface(
             // Intersect with declared filter so a watchapp can never read
             // notifications from a package it didn't declare interest in,
             // even if it asks. Empty requested set = use full declared set.
-            if (requested.isEmpty()) watchappFilter.toSet()
-            else requested.intersect(watchappFilter.toSet())
+            if (requested.isEmpty()) subscriptions.keys
+            else requested.intersect(subscriptions.keys)
         }
         if (effectiveFilter.isEmpty()) return "[]"
 
@@ -89,13 +98,20 @@ class WebViewPKJSInterface(
             val json = buildJsonArray {
                 for (sbn in active) {
                     if (sbn.packageName !in effectiveFilter) continue
+                    val subscription = subscriptions[sbn.packageName] ?: continue
                     // serialize() returns a JSON object string; reparse as
                     // JsonElement so we add it as a structured array entry,
                     // not as an embedded string. The notification listener
-                    // service IS a Context — pass it through for icon
-                    // extraction (smallIcon / largeIcon as base64 PNGs).
+                    // service IS a Context — pass it through for icon and
+                    // RemoteViews extraction. Each entry is gated by the
+                    // subscription's `fields` opt-in for that package.
                     val element = Json.parseToJsonElement(
-                        WatchappNotificationSerializer.serialize(sbn, posted = true, context = service)
+                        WatchappNotificationSerializer.serialize(
+                            sbn = sbn,
+                            posted = true,
+                            context = service,
+                            subscription = subscription,
+                        )
                     )
                     add(element)
                 }
