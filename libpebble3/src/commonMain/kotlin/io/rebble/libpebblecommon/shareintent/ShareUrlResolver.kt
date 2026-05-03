@@ -78,9 +78,43 @@ class ShareUrlResolver internal constructor(
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-        private val RESOLVE_TIMEOUT = 6.seconds
-        private const val MAX_ATTEMPTS = 2
-        private const val RETRY_DELAY_MS = 300L
+        private val RESOLVE_TIMEOUT = 16.seconds
+        private const val MAX_ATTEMPTS = 4
+
+        /**
+         * Backoff delays BEFORE each attempt, in milliseconds. Index 0 is
+         * before attempt 1 (initial fire), index N is before attempt N+1.
+         *
+         *   attempt 1: 0ms baseline (immediate, but with jitter)
+         *   attempt 2: 2000ms after failure of 1
+         *   attempt 3: 4000ms after failure of 2
+         *   attempt 4: 6000ms after failure of 3
+         *
+         * Each value gets ±[JITTER_MS] of symmetric noise added. The reason
+         * we don't fire at exactly 0/2/4/6s: Google's anti-bot heuristics
+         * appear to fingerprint request timing patterns, so perfectly
+         * regular intervals are themselves a signal. Jitter adds 200ms of
+         * naturalness — small enough to not hurt UX, large enough to
+         * scramble the period.
+         *
+         * Even attempt 1 gets jittered (0..200ms) to avoid the "fire
+         * immediately on share intent" pattern that's distinctive in
+         * server logs.
+         */
+        private val BACKOFF_MS = longArrayOf(0L, 2_000L, 4_000L, 6_000L)
+        private const val JITTER_MS = 200L
+    }
+
+    /**
+     * Symmetric jitter around a base delay. Returns base + uniform[-J, +J].
+     * For BACKOFF_MS[0] = 0L this returns 0..JITTER_MS (clamped non-negative).
+     */
+    private fun jittered(baseMs: Long): Long {
+        // kotlin.random.Random is fine here — we don't need crypto-grade
+        // randomness, just unpredictable-enough timing.
+        val noise = kotlin.random.Random.nextLong(-JITTER_MS, JITTER_MS + 1)
+        val v = baseMs + noise
+        return if (v < 0L) 0L else v
     }
 
     /**
@@ -91,16 +125,26 @@ class ShareUrlResolver internal constructor(
      * Never throws — wraps failures into a fall-open return.
      *
      * Retry strategy: Google's Firebase Dynamic Links anti-bot heuristic is
-     * stochastic — the same headers can yield 200 once and 403 the next
-     * second. A single retry roughly doubles our success rate at minimal
-     * cost. Total worst-case latency is bounded by RESOLVE_TIMEOUT and
-     * runs concurrently with PKJS spinup so usually invisible.
+     * stochastic — the same headers can yield 200 once and 404/403 the next
+     * second. We use four attempts with exponentially-increasing backoff
+     * (0, 2s, 4s, 6s) plus per-attempt jitter (±200ms) to spread requests
+     * across the suspect rate-limit window without looking like a robotic
+     * polling loop. Total worst-case latency is bounded by RESOLVE_TIMEOUT
+     * and runs concurrently with PKJS spinup so partial latency is hidden.
      */
     suspend fun resolveIfShortened(url: String): String {
         if (!isShortenedMapsUrl(url)) return url
 
         val resolved = withTimeoutOrNull(RESOLVE_TIMEOUT) {
             for (attempt in 1..MAX_ATTEMPTS) {
+                // Pre-attempt wait with jitter. Even the first attempt gets
+                // 0..JITTER_MS of jitter so back-to-back shares don't all
+                // fire at exactly the same offset from the share intent.
+                val waitMs = jittered(BACKOFF_MS[attempt - 1])
+                if (waitMs > 0L) {
+                    logger.v { "resolve attempt $attempt waiting ${waitMs}ms before fire" }
+                    kotlinx.coroutines.delay(waitMs)
+                }
                 val r = try {
                     doResolve(url)
                 } catch (e: Exception) {
@@ -111,13 +155,7 @@ class ShareUrlResolver internal constructor(
                     if (attempt > 1) logger.i { "resolve succeeded on attempt $attempt" }
                     return@withTimeoutOrNull r
                 }
-                if (attempt < MAX_ATTEMPTS) {
-                    // Brief backoff before retry. Doesn't need to be long —
-                    // Google's anti-bot decision seems request-local rather
-                    // than IP-rate-based, so even ~300ms is enough to land
-                    // a different decision tree.
-                    kotlinx.coroutines.delay(RETRY_DELAY_MS)
-                }
+                // Loop continues; next iteration's pre-attempt wait kicks in.
             }
             null
         }
