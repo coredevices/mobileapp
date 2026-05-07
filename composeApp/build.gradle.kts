@@ -164,6 +164,12 @@ kotlin {
             implementation(libs.play.update)
             implementation(libs.play.update.ktx)
             implementation(libs.coil.gif)
+            // androidx.sharetarget provides ChooserTargetServiceCompat,
+            // referenced from AndroidManifest.xml on ShareTargetActivity.
+            // Provides backward-compat surfacing of dynamic Sharing
+            // Shortcuts as Direct Share targets through the legacy
+            // ChooserTargetService API used by some launchers.
+            implementation(libs.androidx.sharetarget)
         }
         androidInstrumentedTest.dependencies {
             implementation(libs.androidx.test.runner)

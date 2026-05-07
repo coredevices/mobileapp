@@ -30,10 +30,13 @@
             android:name=".MainActivity"
             android:launchMode="singleTask">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter android:label="@string/intent_filter_notion_login">
+				<action android:name="android.intent.action.MAIN" />
+				<category android:name="android.intent.category.LAUNCHER" />
+				</intent-filter>
+				<meta-data
+					android:name="android.app.shortcuts"
+					android:resource="@xml/share_targets" />
+				<intent-filter android:label="@string/intent_filter_notion_login">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -110,6 +113,44 @@
             android:name="com.viktormykhailiv.kmp.health.HealthConnectPermissionActivity"
             android:noHistory="true"
             android:excludeFromRecents="true" />
+        <!--
+            ShareTargetActivity receives ACTION_SEND when the user picks a
+            watchapp from the system share sheet. Each share-sheet entry is a
+            dynamic Sharing Shortcut pushed at runtime by ShareTargetSync
+            (libpebble3) for any installed watchapp that declared `shareTarget`
+            in its package.json. The static share_targets.xml metadata only
+            tells Android this activity is a valid Direct Share target.
+
+            The activity has no UI and finishes immediately — exported=true is
+            required for it to be reachable from the share sheet, but
+            taskAffinity="" and excludeFromRecents prevent it from appearing
+            as its own task in the recents list.
+        -->
+			<activity
+				android:name="coredevices.coreapp.sharing.ShareTargetActivity"
+				android:exported="true"
+				android:excludeFromRecents="true"
+				android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            
+            <!-- Hooks the AndroidX `sharetarget` library's compat shim so
+                 dynamic Sharing Shortcuts surface as Direct Share targets
+                 on Android versions that route through the legacy
+                 ChooserTargetService API. Without this, some launchers
+                 (notably older Samsung One UI versions) won't include
+                 our shortcuts in the share-sheet's direct share row even
+                 though the shortcuts themselves are correctly published.
+                 The androidx.sharetarget dependency must be present in
+                 the host app's build.gradle for the referenced class to
+                 resolve. -->
+            <meta-data
+                android:name="android.service.chooser.chooser_target_service"
+                android:value="androidx.sharetarget.ChooserTargetServiceCompat" />
+        </activity>
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

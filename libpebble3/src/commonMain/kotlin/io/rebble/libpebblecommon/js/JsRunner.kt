@@ -27,6 +27,16 @@ abstract class JsRunner(
     abstract suspend fun signalReady()
     abstract suspend fun signalShowConfiguration()
     abstract suspend fun signalWebviewClosed(data: String?)
+    /**
+     * Fired when the OS routes a shared payload (e.g. an Android `ACTION_SEND`)
+     * to this watchapp. The watchapp must declare itself as a share target via
+     * `shareTarget` in `package.json` to receive these events.
+     *
+     * @param text The shared text or URL string. Always present.
+     * @param url Best-effort extraction of a URL from [text], or null if none.
+     * @param subject Optional subject (e.g. Android `EXTRA_SUBJECT`).
+     */
+    abstract suspend fun signalShareIntent(text: String, url: String?, subject: String?)
     abstract suspend fun eval(js: String)
     abstract suspend fun evalWithResult(js: String): Any?
     abstract fun debugForceGC()

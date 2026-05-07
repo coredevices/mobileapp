@@ -9,6 +9,7 @@ import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.okio.asKotlinxIoRawSource
+import kotlinx.io.readByteArray
 import kotlinx.io.readString
 import kotlinx.serialization.json.Json
 import okio.FileSystem
@@ -19,6 +20,7 @@ import okio.openZip
 object DiskUtil {
     private const val MANIFEST_FILENAME = "manifest.json"
     private const val APPINFO_FILENAME = "appinfo.json"
+    private const val RESOURCE_PACK_FILENAME = "app_resources.pbpack"
     private val pbwJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -83,5 +85,49 @@ object DiskUtil {
             throw IllegalStateException("Pbw does not contain JS file")
         }.buffered()
         return source
+    }
+
+    /**
+     * Read an arbitrary file from the .pbw zip at the given root-relative
+     * path. Returns null if the file isn't present in the zip — common for
+     * resources that are compiled into `app_resources.pbpack` rather than
+     * included as raw source files.
+     *
+     * Used by share-target icon extraction: some toolchains include the
+     * original menu-icon PNG at the zip root in addition to the compiled
+     * resource pack; if so, we can use it directly without having to parse
+     * the resource pack.
+     */
+    fun readPbwResourceFileOrNull(pbwPath: Path, resourceFilePath: String): ByteArray? {
+        return try {
+            val zip = openZip(pbwPath)
+            val path = resourceFilePath.toPath()
+            if (!zip.exists(path)) return null
+            zip.source(path).asKotlinxIoRawSource().buffered().use { src ->
+                src.readByteArray()
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Read the entire `app_resources.pbpack` for a given watch type, or
+     * null if absent. The bytes returned are the raw `.pbpack` binary,
+     * suitable for parsing with [PbwResourcePack.extractResource].
+     *
+     * Used by share-target icon extraction when the source PNG isn't
+     * present at its declared path inside the .pbw (the typical case for
+     * PBWs built by the standard SDK / CloudPebble — those compile all
+     * media into the resource pack and don't ship raw sources).
+     */
+    fun readPbwResourcePackBytesOrNull(pbwPath: Path, watchType: WatchType): ByteArray? {
+        return try {
+            requirePbwBinaryBlob(pbwPath, watchType, RESOURCE_PACK_FILENAME).use { src ->
+                src.readByteArray()
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 }
