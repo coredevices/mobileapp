@@ -320,6 +320,7 @@ enum class VibeScore(override val code: UByte, override val displayName: String)
     Reveille(11u, "Reveille"),
     Mario(12u, "Mario"),
     AlarmsLPM(13u, "ALARMS LPM"),
+    Gentle(14u, "Gentle"),
 }
 
 enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -425,6 +426,7 @@ enum class EnumWatchPref(
             VibeScore.Jackhammer,
             VibeScore.Reveille,
             VibeScore.Mario,
+            VibeScore.Gentle,
         ),
     ),
     MenuScrollVibe(
