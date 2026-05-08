@@ -424,6 +424,33 @@ class WebViewJsRunner(
         }
     }
 
+    override suspend fun signalShareIntent(text: String, url: String?, subject: String?) {
+        readyState.first { it }
+        val payload = buildJsonObject {
+            put("text", text)
+            put("url", url)
+            put("subject", subject)
+        }.toString()
+        withContext(Dispatchers.Main) {
+            // Send as a JSON-encoded string (matches signalNewAppMessageData /
+            // signalTimelineTokenSuccess). startup.js handles both string and
+            // object payloads.
+            webView?.evaluateJavascript("window.signalShareIntent(${Json.encodeToString(payload)})", null)
+        }
+    }
+
+    override suspend fun signalAppNotification(notificationJson: String) {
+        readyState.first { it }
+        withContext(Dispatchers.Main) {
+            // Pass as a JSON-encoded string (matches signalNewAppMessageData).
+            // startup.js will parse it on receipt.
+            webView?.evaluateJavascript(
+                "window.signalAppNotification(${Json.encodeToString(notificationJson)})",
+                null
+            )
+        }
+    }
+
     override suspend fun eval(js: String) {
         withContext(Dispatchers.Main) {
             webView?.evaluateJavascript(js, null) ?: run {

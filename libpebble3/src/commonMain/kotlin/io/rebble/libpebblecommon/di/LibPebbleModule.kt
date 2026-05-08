@@ -304,7 +304,24 @@ private object LibPebbleKoinContext {
     val koin = koinApp.koin
 }
 
-internal interface LibPebbleKoinComponent : KoinComponent {
+/**
+ * Implement this on classes that need to inject from libpebble3's isolated
+ * Koin context. Required for any class that lives outside the libpebble3
+ * module (e.g. activities, services in the host app) but needs to resolve
+ * libpebble3-internal types like [io.rebble.libpebblecommon.shareintent.ShareIntentDispatcher]
+ * or [io.rebble.libpebblecommon.connection.LibPebble].
+ *
+ * libpebble3 uses an isolated Koin context (see [LibPebbleKoinContext]) to
+ * avoid colliding with host app modules. The default `org.koin.android.ext.android.inject`
+ * extensions on [android.app.Activity] / [android.app.Service] resolve from
+ * the GLOBAL Koin context and won't find libpebble3 types — those classes
+ * should implement this interface and use Koin's `KoinComponent.inject()`
+ * instead.
+ *
+ * Internal libpebble3 classes can also implement this; for them it's just a
+ * convenience that ensures the right context.
+ */
+interface LibPebbleKoinComponent : KoinComponent {
     override fun getKoin(): Koin = LibPebbleKoinContext.koin
 }
 
@@ -323,6 +340,8 @@ fun initKoin(
         listOf(
             module {
                 includes(platformModule, pkjsPlatformModule)
+                includes(shareIntentModule)
+                includes(watchappNotificationModule)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }

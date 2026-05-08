@@ -9,6 +9,7 @@ import coredevices.coreapp.BuildConfig
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
+import coredevices.coreapp.sharing.ShareTargetActivity
 import coredevices.coreapp.util.AndroidAppUpdate
 import coredevices.coreapp.util.AppUpdate
 import coredevices.pebble.PebbleAndroidDelegate
@@ -27,11 +28,14 @@ import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import io.rebble.libpebblecommon.shareintent.ShareTargetSync
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import android.content.ComponentName
+import coredevices.util.R as UtilR
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
@@ -66,4 +70,20 @@ val androidDefaultModule = module {
     }
     single { createAndroidAnalytics(get()) }
     singleOf(::ModelDownloadManager)
+    // PR 1: share-intent target. ShareTargetSync runs at app start (kicked
+    // off in MainApplication.onCreate) and keeps Android Sharing Shortcuts
+    // in sync with watchapps that declared `shareTarget` in their
+    // package.json. We supply the activity ComponentName and a fallback icon
+    // here because libpebble3 has no business knowing about composeApp's
+    // activities or resources.
+    single {
+        val context: android.content.Context = get<io.rebble.libpebblecommon.connection.AppContext>().context
+        ShareTargetSync(
+            activityClass = ComponentName(context, ShareTargetActivity::class.java),
+            // TODO: thread per-watchapp icons through from the locker so
+            // each shortcut shows its real watchapp icon. For now everyone
+            // gets the Pebble launcher icon.
+            fallbackIconResId = UtilR.mipmap.ic_launcher,
+        )
+    }
 }

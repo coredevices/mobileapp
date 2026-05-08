@@ -52,6 +52,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     private val notificationHandler: NotificationHandler by inject()
     private val notificationCallDetector: NotificationCallDetector by inject()
     private val connection: AndroidPebbleNotificationListenerConnection by inject()
+    // PR 2: fan out notifications to subscribed PKJS watchapps. Singleton.
+    private val watchappDispatcher: WatchappNotificationDispatcher by inject()
 
     private val configHolder: NotificationConfigFlow by inject()
 
@@ -181,6 +183,35 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         }
 
         notificationHandler.handleNotificationPosted(sbn)
+
+        // Fan out to any running PKJS watchapp that subscribes to this
+        // package. Independent of the watch-UI relay above — failure here
+        // doesn't affect the existing notification pipeline.
+        //
+        // Per-watchapp serialization: each subscribing watchapp may have
+        // declared a different `fields` set in its notificationFilter, so
+        // the dispatcher invokes the SerializerCallback once per
+        // subscriber, passing the matching subscription. This keeps
+        // heavyweight extraction (BigPicture decoding, MediaSession
+        // lookup, RemoteViews traversal) gated to watchapps that asked.
+        try {
+            val listenerCtx: Context = this
+            watchappDispatcher.dispatch(sbn.packageName) { subscription ->
+                try {
+                    WatchappNotificationSerializer.serialize(
+                        sbn = sbn,
+                        posted = true,
+                        context = listenerCtx,
+                        subscription = subscription,
+                    )
+                } catch (e: Exception) {
+                    logger.w(e) { "serialize failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "watchapp notification dispatch failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+        }
     }
 
     override fun onNotificationRemoved(
@@ -193,6 +224,29 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
             return
         }
         notificationHandler.handleNotificationRemoved(sbn)
+
+        // Notify subscribed watchapps that the notification was cleared.
+        // For nav use cases this is the "trip ended" signal — Maps removes
+        // its persistent navigation notification when the user ends the trip.
+        // Icons (and other heavyweight fields) are skipped on removal
+        // events; the per-watchapp serialize() honors that for any caller.
+        try {
+            watchappDispatcher.dispatch(sbn.packageName) { subscription ->
+                try {
+                    WatchappNotificationSerializer.serialize(
+                        sbn = sbn,
+                        posted = false,
+                        context = null,
+                        subscription = subscription,
+                    )
+                } catch (e: Exception) {
+                    logger.w(e) { "serialize-removed failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "watchapp removed-notification dispatch failed for ${sbn.packageName.obfuscate(privateLogger)}" }
+        }
     }
 
     private fun controlListenerHints() = notificationListenerScope.launch {

@@ -138,6 +138,8 @@ navigator.geolocation.clearWatch = (id) => {
         APP_MESSAGE_NACK: 'appmessage_nack',
         GET_TIMELINE_TOKEN_SUCCESS: 'getTimelineTokenSuccess',
         GET_TIMELINE_TOKEN_FAILURE: 'getTimelineTokenFailure',
+        SHARE_INTENT: 'shareintent',
+        APP_NOTIFICATION: 'appnotification',
     };
     Object.freeze(PebbleEventTypes);
     const DEFAULT_TIMEOUT = 5000; // 5 seconds
@@ -292,6 +294,46 @@ navigator.geolocation.clearWatch = (id) => {
         }
         dispatchPebbleEvent(PebbleEventTypes.GET_TIMELINE_TOKEN_FAILURE, { payload });
     };
+    /**
+     * Dispatched when the OS routes a share intent (Android ACTION_SEND, etc.)
+     * to this watchapp. The payload object is `{ text, url, subject }` —
+     * `text` is always present; `url` is a best-effort URL extraction; both
+     * `url` and `subject` may be null.
+     */
+    global.signalShareIntent = (data) => {
+        var payload;
+        if (typeof data === 'string') {
+            // Android: payload arrives as a JSON string from evaluateJavascript
+            payload = data ? JSON.parse(data) : {};
+        } else {
+            // iOS: payload is already an object
+            payload = data || {};
+        }
+        dispatchPebbleEvent(PebbleEventTypes.SHARE_INTENT, payload);
+    };
+    /**
+     * Dispatched when the OS surfaces a notification from a package this
+     * watchapp's package.json `notificationFilter` declares interest in,
+     * while this watchapp's PKJS is running. The payload object contains:
+     *   { package: String, posted: Boolean, key: String, postTime: Number,
+     *     category: String|null, title: String|null, text: String|null,
+     *     subText: String|null, infoText: String|null, groupKey: String|null,
+     *     extras: { ... raw extras keys ... } }
+     * `posted: false` means the notification was just removed (e.g. user
+     * dismissed it, or the source app cleared a persistent ongoing-activity
+     * notification — useful for "trip ended" detection).
+     */
+    global.signalAppNotification = (data) => {
+        var payload;
+        if (typeof data === 'string') {
+            // Android: payload arrives as a JSON string from evaluateJavascript
+            payload = data ? JSON.parse(data) : {};
+        } else {
+            // iOS: payload is already an object
+            payload = data || {};
+        }
+        dispatchPebbleEvent(PebbleEventTypes.APP_NOTIFICATION, payload);
+    };
 
     const PebbleAPI = {
         addEventListener: (type, callback, useCapture) => {
@@ -383,6 +425,26 @@ navigator.geolocation.clearWatch = (id) => {
         deleteTimelinePin: (id) => {
             _Pebble.deleteTimelinePin(id);
         },
+        /**
+         * Returns currently-posted notifications matching the watchapp's
+         * declared notificationFilter, optionally narrowed further by
+         * `packages`. Synchronous — useful for catch-up when PKJS spins up
+         * mid-event-stream (e.g. user opens MirrorMap while Maps is already
+         * navigating). Returns an array of notification payload objects.
+         *
+         * @param {string[]|undefined} packages Optional package-name list.
+         *   Empty/undefined = use the full declared notificationFilter.
+         */
+        getActiveNotifications: (packages) => {
+            const filter = Array.isArray(packages) ? packages.join(',') : '';
+            const raw = _Pebble.getActiveNotifications(filter);
+            try {
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                console.error('PKJS Error parsing getActiveNotifications response', e);
+                return [];
+            }
+        },
     }
     global.Pebble.addEventListener = PebbleAPI.addEventListener;
     global.Pebble.removeEventListener = PebbleAPI.removeEventListener;
@@ -395,6 +457,7 @@ navigator.geolocation.clearWatch = (id) => {
     global.Pebble.appGlanceReload = PebbleAPI.appGlanceReload;
     global.Pebble.insertTimelinePin = PebbleAPI.insertTimelinePin;
     global.Pebble.deleteTimelinePin = PebbleAPI.deleteTimelinePin;
+    global.Pebble.getActiveNotifications = PebbleAPI.getActiveNotifications;
 
     // Enable intercepting XHR calls (on Android - this doesn't work on iOS so we don't add
     // shouldIntercept to the PKJS interface there).
