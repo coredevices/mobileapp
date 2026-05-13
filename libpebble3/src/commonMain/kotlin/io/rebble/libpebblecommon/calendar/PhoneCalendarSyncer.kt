@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.calendar
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.CALENDAR_APP_UUID
 import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.Calendar
@@ -8,6 +9,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
@@ -16,6 +18,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,6 +38,8 @@ class PhoneCalendarSyncer(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val watchConfig: WatchConfigFlow,
+    private val notificationConfigFlow: NotificationConfigFlow,
+    private val vibePatternDao: VibePatternDao,
 ) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
     private val syncTrigger = MutableSharedFlow<Unit>()
@@ -66,6 +73,13 @@ class PhoneCalendarSyncer(
                         previousShowDeclinedEvents = it.watchConfig.calendarShowDeclinedEvents
                     }
                 }
+            }
+            libPebbleCoroutineScope.launch {
+                notificationConfigFlow.flow
+                    .map { it.notificationConfig.overrideCalendarVibePattern }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { requestSync() }
             }
         }
     }
@@ -129,6 +143,8 @@ class PhoneCalendarSyncer(
         val existingPins = timelinePinDao.getPinsForWatchapp(CALENDAR_APP_UUID)
         val startDate = timeProvider.now() - 1.days
         val endDate = (startDate + 7.days)
+        val calendarVibePattern = notificationConfigFlow.value.overrideCalendarVibePattern
+            ?.let { vibePatternDao.getVibePattern(it)?.pattern }
         val newPins = allCalendars.flatMap { calendar ->
             if (!calendar.enabled || !pinsEnabled) {
                 return@flatMap emptyList()
@@ -141,7 +157,7 @@ class PhoneCalendarSyncer(
                 }
             val supportsRsvp = systemCalendar.supportsPinActions()
             events.map { event ->
-                EventAndPin(event, event.toTimelinePin(calendar, supportsRsvp))
+                EventAndPin(event, event.toTimelinePin(calendar, supportsRsvp, calendarVibePattern))
             }
         }
         val remindersToInsert = mutableListOf<TimelineReminder>()
@@ -153,6 +169,7 @@ class PhoneCalendarSyncer(
                 remindersEnabled = remindersEnabled,
                 event = new.event,
                 pinId = existingPin?.itemId ?: newPin.itemId,
+                vibePattern = calendarVibePattern,
                 remindersToInsert = remindersToInsert,
                 remindersToDelete = remindersToDelete,
             )
@@ -197,6 +214,7 @@ class PhoneCalendarSyncer(
         remindersEnabled: Boolean,
         event: CalendarEvent,
         pinId: Uuid,
+        vibePattern: List<UInt>?,
         remindersToInsert: MutableList<TimelineReminder>,
         remindersToDelete: MutableList<Uuid>,
     ) {
@@ -211,12 +229,15 @@ class PhoneCalendarSyncer(
             }
         }.map { it.itemId }
 
-        remindersToInsert += eventReminderTimestamps.filter { t ->
-            if (!remindersEnabled) return@filter false
-            existingReminders.none { er ->
-                er.content.timestamp.instant == t
+        remindersToInsert += eventReminderTimestamps.mapNotNull { t ->
+            if (!remindersEnabled) return@mapNotNull null
+            val newReminder = event.toTimelineReminder(t, pinId, vibePattern)
+            val existing = existingReminders.find { er -> er.content.timestamp.instant == t }
+            if (existing != null && existing.recordHashCode() == newReminder.recordHashCode()) {
+                return@mapNotNull null
             }
-        }.map { event.toTimelineReminder(it, pinId) }
+            newReminder.copy(itemId = existing?.itemId ?: newReminder.itemId)
+        }
     }
 
     override fun calendars(): Flow<List<CalendarEntity>> = calendarDao.getFlow()

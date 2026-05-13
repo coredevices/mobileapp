@@ -54,7 +54,7 @@ private fun transformDescription(rawDescription: String): String {
     return rawDescription.replace(regex, "").trimWithEllipsis(300)
 }
 
-fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid): TimelineReminder =
+fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePattern: List<UInt>? = null): TimelineReminder =
     buildTimelineReminder(
         parentId = pinUuid,
         timestamp = timestamp,
@@ -65,6 +65,7 @@ fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid): Timelin
                 location { location }
             }
             tinyIcon { TimelineIcon.NotificationReminder }
+            vibePattern?.let { vibrationPattern { it } }
             // TODO attendees
         }
         flags {
@@ -100,6 +101,7 @@ private object DefaultTitles {
 fun CalendarEvent.toTimelinePin(
     calendar: CalendarEntity,
     supportsRsvpActions: Boolean,
+    vibePattern: List<UInt>? = null,
 ): TimelinePin = buildTimelinePin(
     parentId = CALENDAR_APP_UUID,
     timestamp = startTime,
@@ -161,6 +163,7 @@ fun CalendarEvent.toTimelinePin(
 //        }
         stringList(TimelineAttribute.Headings) { headings }
         stringList(TimelineAttribute.Paragraphs) { paragraphs }
+        vibePattern?.let { vibrationPattern { it } }
     }
     actions {
         if (supportsRsvpActions) {
