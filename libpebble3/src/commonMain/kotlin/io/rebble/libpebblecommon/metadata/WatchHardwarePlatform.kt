@@ -40,6 +40,7 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchTy
     CORE_OBELIX_PVT(18u, WatchType.EMERY, "obelix_pvt"),
     CORE_GETAFIX_EVT(19u, WatchType.GABBRO, "getafix_evt"),
     CORE_GETAFIX_DVT(20u, WatchType.GABBRO, "getafix_dvt"),
+    CORE_GETAFIX_DVT2(21u, WatchType.GABBRO, "getafix_dvt2"),
     PEBBLE_SILK_BIGBOARD(250u, WatchType.DIORITE, "silk_bb"),
     PEBBLE_SILK_BIGBOARD_2_PLUS(248u, WatchType.DIORITE, "silk_bb2"),
     PEBBLE_ROBERT_EVT(13u, WatchType.EMERY, "robert_evt"),
