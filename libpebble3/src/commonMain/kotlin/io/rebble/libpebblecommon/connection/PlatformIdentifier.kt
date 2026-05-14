@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.peripheralFrom
 sealed class PlatformIdentifier {
     class BlePlatformIdentifier(val peripheral: Peripheral) : PlatformIdentifier()
     class SocketPlatformIdentifier(val addr: String) : PlatformIdentifier()
+    class BtClassicPlatformIdentifier(val identifier: PebbleBtClassicIdentifier) : PlatformIdentifier()
 }
 
 
@@ -21,6 +22,8 @@ class RealCreatePlatformIdentifier : CreatePlatformIdentifier {
             )
         }
 
-        else -> TODO()
+        is PebbleBtClassicIdentifier -> PlatformIdentifier.BtClassicPlatformIdentifier(identifier)
+
+        else -> error("unknown identifier type: $identifier")
     }
 }

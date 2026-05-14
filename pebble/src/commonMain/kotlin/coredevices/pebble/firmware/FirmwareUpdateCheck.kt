@@ -1,6 +1,7 @@
 package coredevices.pebble.firmware
 
 import coredevices.pebble.services.Memfault
+import coredevices.util.CommonBuildKonfig
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.*
@@ -12,7 +13,7 @@ class FirmwareUpdateCheck(
 ) {
     suspend fun checkForUpdates(watch: WatchInfo): FirmwareUpdateCheckResult = when {
         watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed("Unknown platform")
-        watch.platform.isCoreDevice() -> memfault.getLatestFirmware(watch)
+        watch.platform.isCoreDevice() && CommonBuildKonfig.MEMFAULT_TOKEN != null -> memfault.getLatestFirmware(watch)
         else -> cohorts.getLatestFirmware(watch)
     }
 }

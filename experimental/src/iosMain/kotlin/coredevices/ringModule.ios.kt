@@ -7,12 +7,12 @@ import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.RingDelegate
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.ring.database.IntegrationTokenStorageImpl
+import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.BackgroundRingService
 import coredevices.ring.service.PlatformIndexNotificationManager
 import coredevices.ring.service.RingSync
-import coredevices.ring.ui.viewmodel.IosRingPairingViewModel
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
 import dev.gitlive.firebase.Firebase
@@ -50,9 +50,9 @@ actual val platformRingModule = module {
     single {
         val prefs = get<Preferences>()
         KMPHaversineSatelliteManager(
-            userIdProvider = { Firebase.auth.currentUser?.uid },
-            targetSatelliteIdProvider = { prefs.ringPaired.value },
+            pairedSatelliteIdProvider = { prefs.ringPaired.value },
             debugDelegate = get(),
+            hacksDelegate = get(),
             collectionIndexStorage = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,
             scope = CoroutineScope(Dispatchers.Default)
@@ -61,5 +61,5 @@ actual val platformRingModule = module {
     singleOf(::PlatformIndexNotificationManager)
     singleOf(::BackgroundRingService)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
-    viewModelOf(::IosRingPairingViewModel)
+    single { EncryptionKeyManager() }
 }

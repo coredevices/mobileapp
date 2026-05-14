@@ -20,8 +20,12 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlinx.coroutines.currentCoroutineContext
 import kotlin.time.Clock
 
 class ReminderTool: BuiltInMcpTool(
@@ -34,7 +38,13 @@ class ReminderTool: BuiltInMcpTool(
                     "date_time_human" to JsonObject(
                         mapOf(
                             "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
+                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format, use English keywords e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
+                        ).toJson()
+                    ),
+                    "duration_human" to JsonObject(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "If provided by the user, the duration from now to remind the user in human readable format, use English keywords e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
                         ).toJson()
                     ),
                     "message" to JsonObject(
@@ -52,6 +62,8 @@ class ReminderTool: BuiltInMcpTool(
     )
 ), KoinComponent {
     val reminderFactory: ReminderFactory by inject()
+    private val itemRepo: ItemRepository by inject()
+    private val itemFactory: ItemFactory by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
@@ -62,6 +74,7 @@ class ReminderTool: BuiltInMcpTool(
     @Serializable
     private data class RemindArgs(
         val date_time_human: String? = null,
+        val duration_human: String? = null,
         val message: String
     )
 
@@ -74,10 +87,10 @@ class ReminderTool: BuiltInMcpTool(
 
     override suspend fun call(jsonInput: String): ToolCallResult {
         val remindArgs = JsonSnake.decodeFromString<RemindArgs>(jsonInput)
-        val instant = remindArgs.date_time_human?.let {
+        val instant = (remindArgs.date_time_human ?: remindArgs.duration_human)?.let { dateTimeHuman ->
             val tz = TimeZone.currentSystemDefault()
             val parser = HumanDateTimeParser(timeZone = tz)
-            val parsed = parser.parse(remindArgs.date_time_human)
+            val parsed = parser.parse(dateTimeHuman)
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
                     logger.d { "Parsed absolute date: $parsed will assume 9am" }
@@ -169,6 +182,14 @@ class ReminderTool: BuiltInMcpTool(
         )
         return try {
             val reminderId = reminder.schedule()
+            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                runCatching {
+                    itemRepo.setItem(
+                        itemFactory.simpleUid(),
+                        itemFactory.reminderItem(ctx.sourceRecordingId, ctx.createdAt, reminder.message, reminder.time)
+                    )
+                }
+            }
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(

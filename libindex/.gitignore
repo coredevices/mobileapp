@@ -1,0 +1,6 @@
+/local.properties
+/build
+/.idea
+/.gradle
+**.DS_Store
+/.kotlin

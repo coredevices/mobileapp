@@ -25,8 +25,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -35,7 +38,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
+private val logger = Logger.withTag("FirestoreLocker")
+
+class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore) {
+    private val firestore get() = firestoreProvider()
     suspend fun addLockerEntryForUser(
         uid: String,
         entry: FirestoreLockerEntry
@@ -70,10 +76,20 @@ class FirestoreLockerDao(private val firestore: FirebaseFirestore) {
         }
     }
 
+    // Only emit server-confirmed snapshots. Firestore's snapshot listener will fire an
+    // initial cached emission after auth re-init (often empty if the cache was invalidated)
+    // before the server response arrives — acting on that would mass-delete the user's
+    // pebble-store apps. includeMetadataChanges=true is required so we still get an event
+    // when the server confirms identical-to-cache content (otherwise the listener would
+    // never re-emit and we'd be stuck on the cached emission we filtered out).
     fun observeLockerEntriesForUser(uid: String): Flow<QuerySnapshot> = firestore.collection("lockers")
         .document(uid)
         .collection("entries")
-        .snapshots
+        .snapshots(includeMetadataChanges = true)
+        .filter {
+            logger.v { "observeLockerEntriesForUser: ${it.documents.size} isFromCache=${it.metadata.isFromCache}" }
+            !it.metadata.isFromCache
+        }
 }
 
 interface FirestoreLocker {
@@ -88,23 +104,24 @@ class RealFirestoreLocker(
     private val dao: FirestoreLockerDao,
     private val libPebbleLockerProxy: LibPebbleLockerProxy,
 ): KoinComponent, FirestoreLocker {
-    companion object {
-        private val logger = Logger.withTag("FirestoreLocker")
-    }
-
     private val _locker = MutableStateFlow<List<FirestoreLockerEntry>?>(null)
     override val locker: StateFlow<List<FirestoreLockerEntry>?> = _locker.asStateFlow()
+    private var fullSyncInProgress = false
 
     override fun init() {
         GlobalScope.launch {
-            Firebase.auth.authStateChanged.collect { user ->
+            Firebase.auth.authStateChanged.collectLatest { user ->
                 logger.v { "User changed: $user" }
                 if (user == null) {
-                    return@collect
+                    return@collectLatest
                 }
                 dao.observeLockerEntriesForUser(user.uid)
                     .catch { e -> logger.w(e) { "catching error in observe" } }
                     .collect {
+                        if (fullSyncInProgress) {
+                            logger.v { "Skipping firestore change during full sync (${it.documentChanges.size} changes)" }
+                            return@collect
+                        }
                         logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
                         val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
                         handleFirestoreChanges(lockerData)
@@ -136,7 +153,7 @@ class RealFirestoreLocker(
                 return@flatMap emptyList()
             }
             val appstore: AppstoreService = get { parametersOf(source) }
-            appstore.fetchAppStoreApps(lockerForSource, useCache = false)
+            appstore.fetchAppStoreApps(lockerForSource, useCache = false) ?: emptyList()
         }
         logger.d { "Adding ${appsToAdd.size} apps to locker from firestore update" }
         libPebbleLockerProxy.addAppsToLocker(appsToAdd)
@@ -156,18 +173,30 @@ class RealFirestoreLocker(
 
     override suspend fun fetchLocker(forceRefresh: Boolean): LockerModelWrapper? {
         val user = Firebase.auth.currentUser ?: return null
-        val fsLocker = locker.value
+        // Short grace period for the server-confirmed snapshot during app boot. Returns
+        // immediately if locker.value is already populated.
+        val fsLocker = withTimeoutOrNull(2.seconds) {
+            locker.first { it != null }
+        }
         if (fsLocker == null) {
-            logger.w { "fetchLocker: locker is null" }
+            logger.w { "fetchLocker: server-confirmed locker snapshot not yet received" }
             return null
         }
+        fullSyncInProgress = true
+        try {
         logger.d { "Fetched ${fsLocker.size} locker UUIDs from Firestore" }
         val designatedSourceByUuid = fsLocker.associate { it.uuid.toString() to it.appstoreSource }
         val allSources = get<AppstoreSourceDao>().getAllEnabledSources()
         logger.v { "sources: $allSources" }
+        val failedSources = mutableSetOf<String>()
         val apps = allSources.flatMap { source ->
             val appstore: AppstoreService = get { parametersOf(source) }
             val appsForSource = appstore.fetchAppStoreApps(fsLocker, useCache = !forceRefresh)
+            if (appsForSource == null) {
+                logger.w { "Failed to fetch apps from source ${source.url}" }
+                failedSources.add(source.url)
+                return@flatMap emptyList()
+            }
             if (source.url == REBBLE_FEED_URL) {
                 appsForSource.filter { f -> fsLocker.none { e -> Uuid.parse(f.uuid) == e.uuid } }.forEach { entry ->
                     // Add to firestore locker
@@ -207,12 +236,33 @@ class RealFirestoreLocker(
         }
 
         val dedupedApps = dedupedSourcedApps.map { it.entry }
+        val fetchedUuids = dedupedApps.map { Uuid.parse(it.uuid) }.toSet()
+        val uuidsFromFailedSources = fsLocker
+            .filter { it.appstoreSource in failedSources }
+            .map { it.uuid }
+            .toSet()
         return LockerModelWrapper(
             locker = LockerModel(
                 applications = dedupedApps
             ),
-            failedToFetchUuids = fsLocker.map { it.uuid }.toSet().minus(dedupedApps.map { Uuid.parse(it.uuid) }.toSet()),
+            failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
         )
+        } finally {
+            // Re-read locker from Firestore since we skipped listener updates during sync.
+            try {
+                val snapshot = withTimeoutOrNull(30.seconds) {
+                    dao.observeLockerEntriesForUser(user.uid).first()
+                }
+                if (snapshot != null) {
+                    _locker.value = snapshot.documents.map { doc -> doc.data() }
+                } else {
+                    logger.w { "Timed out waiting for server-confirmed snapshot after sync" }
+                }
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to refresh locker after sync" }
+            }
+            fullSyncInProgress = false
+        }
     }
 
     override suspend fun addApp(entry: CommonAppType.Store, timelineToken: String?): Boolean {

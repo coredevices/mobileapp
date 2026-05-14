@@ -68,6 +68,9 @@ object PebbleNavBarRoutes {
     data object IndexRoute : NavBarRoute
 
     @Serializable
+    data object HealthRoute : NavBarRoute
+
+    @Serializable
     data object AppstoreSettingsRoute : NavBarRoute
 
     @Serializable
@@ -86,6 +89,9 @@ object PebbleNavBarRoutes {
     data object WeatherRoute : NavBarRoute
 
     @Serializable
+    data object CannedRepliesRoute : NavBarRoute
+
+    @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
         NavBarRoute
 
@@ -100,6 +106,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data object OfflineModelsRoute : NavBarRoute
+
+    @Serializable
+    data class WatchSettingsCategoryRoute(val section: String, val topLevelType: String) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -168,6 +177,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
     }
+    composableWithAnimations<PebbleNavBarRoutes.HealthRoute>(viewModel) {
+        HealthScreen(topBarParams, nav)
+    }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav)
     }
@@ -223,11 +235,23 @@ fun NavGraphBuilder.addNavBarRoutes(
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
     }
+    composable<PebbleNavBarRoutes.CannedRepliesRoute> {
+        CannedRepliesScreen(nav, topBarParams)
+    }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
         AppstoreSettingsScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.OfflineModelsRoute> {
         ModelManagementScreen(nav, topBarParams)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.WatchSettingsCategoryRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.WatchSettingsCategoryRoute = it.toRoute()
+        WatchSettingsCategoryScreen(
+            nav,
+            topBarParams,
+            Section.valueOf(route.section),
+            TopLevelType.valueOf(route.topLevelType),
+        )
     }
 }
 

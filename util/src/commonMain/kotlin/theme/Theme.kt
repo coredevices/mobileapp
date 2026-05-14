@@ -86,6 +86,38 @@ val lightScheme = lightColorScheme(
     scrim = Color.White,
     surfaceContainer = Color.White,
     surfaceContainerHighest = Color(0xFFF0F0F0),
+    surfaceContainerHigh = Color(0xFFF5F5F5),
+    surfaceContainerLow = Color(0xFFFAFAFA),
+    surfaceDim = Color(0xFFE0E0E0),
+    surfaceBright = Color(0xFFFFFBFF),
+)
+
+val onboardingScheme = lightColorScheme(
+    primary = Color.White,
+    onPrimary = Color.Black,
+    primaryContainer = Color.White,
+    onPrimaryContainer = coreOrange,
+    secondary = Color.White,
+    onSecondary = coreOrange,
+    secondaryContainer = Color.White,
+    onSecondaryContainer = coreOrange,
+    tertiary = Color.White,
+    onTertiary = coreOrange,
+    background = coreOrange,
+    onBackground = Color.White,
+    surface = coreOrange,
+    onSurface = Color.White,
+    surfaceVariant = coreOrange,
+    onSurfaceVariant = Color.White.copy(alpha = 0.8f),
+    outline = Color.White.copy(alpha = 0.5f),
+    outlineVariant = Color.White.copy(alpha = 0.3f),
+    scrim = coreOrange,
+    surfaceContainer = coreOrange,
+    surfaceContainerHighest = Color.White.copy(alpha = 0.15f),
+    error = error,
+    onError = Color.White,
+    errorContainer = error,
+    onErrorContainer = Color.White,
 )
 
 val lightExtendedColors = ExtendedColors(

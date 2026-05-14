@@ -66,7 +66,6 @@ data class WatchConfig(
     val ignoreMissingPrf: Boolean = false,
     val lanDevConnection: Boolean = false,
     val verboseWatchManagerLogging: Boolean = false,
-    val preferBtClassicV2: Boolean = false,
     val pkjsInspectable: Boolean = false,
     val emulateRemoteTimeline: Boolean = true,
     /**
@@ -80,7 +79,13 @@ data class WatchConfig(
      */
     val appMessageToMultipleCompanions: Boolean = true,
     val orderWatchfacesByLastUsed: Boolean = false,
-    val unknownWatchTypePlatform: WatchType = WatchType.EMERY
+    val unknownWatchTypePlatform: WatchType = WatchType.EMERY,
+    /**
+     * When true, BLE scan results include legacy classic-supporting Pebbles
+     * (Aplite/Basalt/Chalk). By default these are hidden so users go through the dedicated
+     * Bluetooth Classic scan instead.
+     */
+    val allowLegacyWatchesInBleScan: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -134,6 +139,11 @@ data class NotificationConfig(
     val sendNotifications: Boolean = true,
     val useAndroidVibePatterns: Boolean = false,
     val overrideDefaultVibePattern: String? = null,
+    /**
+     * User-defined canned responses appended to every reply action sent to the watch.
+     * Shown under "Canned messages" in the watch action menu.
+     */
+    val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

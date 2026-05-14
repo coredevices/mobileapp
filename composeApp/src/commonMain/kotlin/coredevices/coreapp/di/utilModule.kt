@@ -9,6 +9,8 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.coreapp.push.PushMessaging
 import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler
 import coredevices.coreapp.ui.screens.BugReportProcessor
@@ -74,7 +76,9 @@ val utilModule = module {
     single { get<CoreDatabase>().appstoreCollectionDao() }
     single { get<CoreDatabase>().weatherLocationDao() }
     single { get<CoreDatabase>().heartsDao() }
-    singleOf(::UserConfigDao)
+    single { get<CoreDatabase>().memfaultChunkDao() }
+    single { get<CoreDatabase>().analyticsHeartbeatDao() }
+    single { UserConfigDao { get() } }
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     single { ModelManager(get(), get(), getOrNull()) }
@@ -98,5 +102,7 @@ val utilModule = module {
         )
     } bind TranscriptionService::class
     singleOf(::WisprFlowTranscriptionService)
-    singleOf(::UsersDaoImpl) bind UsersDao::class
+    single<UsersDao> { UsersDaoImpl({ get() }, get()) }
+    singleOf(::HealthSyncTracker)
+    singleOf(::PlatformHealthSync)
 }

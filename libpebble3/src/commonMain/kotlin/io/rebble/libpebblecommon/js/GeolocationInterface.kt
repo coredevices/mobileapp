@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
@@ -77,27 +78,36 @@ abstract class GeolocationInterface(
     open fun getRequestCallbackID() = getNextRequestID()
     open fun getWatchCallbackID() = getNextWatchID()
 
-    open fun getCurrentPosition(id: Double): Int {
-        logger.d { "getCurrentPosition()" }
+    open fun getCurrentPosition(
+        id: Double,
+        maximumAgeMs: Double,
+        timeoutMs: Double,
+        highAccuracy: Double,
+    ): Int {
+        logger.d { "getCurrentPosition(maximumAgeMs=$maximumAgeMs, timeoutMs=$timeoutMs, highAccuracy=$highAccuracy)" }
+        val maxAge: Duration? = if (maximumAgeMs >= 0) maximumAgeMs.toLong().milliseconds else null
+        val timeout: Duration? = if (timeoutMs >= 0) timeoutMs.toLong().milliseconds else null
+        val highAccuracyBool = highAccuracy > 0
         scope.launch {
             if (!geolocationPermissionGranted()) {
                 Logger.w { "Watchapp location permission not granted for getCurrentPosition" }
                 triggerPositionResultGet(id.toInt(), GeolocationPositionResult.Error("Location permission not granted"))
                 return@launch
             }
-            triggerPositionResultGet(id.toInt(), systemGeolocation.getCurrentPosition())
+            triggerPositionResultGet(id.toInt(), systemGeolocation.getCurrentPosition(maxAge, timeout, highAccuracyBool))
         }
         return id.toInt()
     }
 
-    open fun watchPosition(id: Double, interval: Double): Int {
-        logger.d { "watchPosition()" }
+    open fun watchPosition(id: Double, interval: Double, highAccuracy: Double): Int {
+        logger.d { "watchPosition(highAccuracy=$highAccuracy)" }
+        val highAccuracyBool = highAccuracy > 0
         val job = scope.launch {
             if (!geolocationPermissionGranted()) {
                 triggerPositionResultWatch(id.toInt(), GeolocationPositionResult.Error("Location permission not granted"))
                 return@launch
             }
-            systemGeolocation.watchPosition(interval.coerceAtLeast(200.0).milliseconds).collect { result ->
+            systemGeolocation.watchPosition(interval.coerceAtLeast(200.0).milliseconds, highAccuracyBool).collect { result ->
                 triggerPositionResultWatch(id.toInt(), result)
             }
         }

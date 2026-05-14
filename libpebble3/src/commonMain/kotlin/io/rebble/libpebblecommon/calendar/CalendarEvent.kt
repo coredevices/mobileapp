@@ -47,7 +47,7 @@ data class CalendarEvent(
     }
 }
 
-private fun CalendarEvent.generateCompositeBackingId() = "${calendarId}T${id}T${startTime}"
+private fun CalendarEvent.generateCompositeBackingId() = "${calendarId}T${baseEventId}T${startTime}"
 
 private fun transformDescription(rawDescription: String): String {
     val regex = Regex("<[^>]*>", setOf(RegexOption.MULTILINE))
@@ -77,7 +77,30 @@ fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid): Timelin
         }
     }
 
-fun CalendarEvent.toTimelinePin(calendar: CalendarEntity): TimelinePin = buildTimelinePin(
+/**
+ * Phone-only dispatch tags written to [io.rebble.libpebblecommon.database.entity.BaseAction.internalType].
+ * Used on action-invocation replay to route to the right handler without depending on
+ * the user-visible (and localizable) action title. Never sent to the watch.
+ */
+object CalendarPinInternalType {
+    const val ACCEPT = "calendar_accept"
+    const val MAYBE = "calendar_maybe"
+    const val DECLINE = "calendar_decline"
+    const val CANCEL = "calendar_cancel"
+}
+
+/** Default English titles shown on the watch. Safe to localize without affecting dispatch. */
+private object DefaultTitles {
+    const val ACCEPT = "Accept"
+    const val MAYBE = "Maybe"
+    const val DECLINE = "Decline"
+    const val CANCEL = "Cancel"
+}
+
+fun CalendarEvent.toTimelinePin(
+    calendar: CalendarEntity,
+    supportsRsvpActions: Boolean,
+): TimelinePin = buildTimelinePin(
     parentId = CALENDAR_APP_UUID,
     timestamp = startTime,
 ) {
@@ -140,7 +163,49 @@ fun CalendarEvent.toTimelinePin(calendar: CalendarEntity): TimelinePin = buildTi
         stringList(TimelineAttribute.Paragraphs) { paragraphs }
     }
     actions {
-        // TODO actions
+        if (supportsRsvpActions) {
+            val self = attendees.find { it.isCurrentUser }
+            val isOrganizer = self?.isOrganizer == true
+            if (isOrganizer) {
+                action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.CANCEL) {
+                    attributes { title { DefaultTitles.CANCEL } }
+                }
+            } else {
+                when (self?.attendanceStatus) {
+                    EventAttendee.AttendanceStatus.Invited -> {
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.ACCEPT) {
+                            attributes { title { DefaultTitles.ACCEPT } }
+                        }
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.MAYBE) {
+                            attributes { title { DefaultTitles.MAYBE } }
+                        }
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                            attributes { title { DefaultTitles.DECLINE } }
+                        }
+                    }
+                    EventAttendee.AttendanceStatus.Tentative -> {
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.ACCEPT) {
+                            attributes { title { DefaultTitles.ACCEPT } }
+                        }
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                            attributes { title { DefaultTitles.DECLINE } }
+                        }
+                    }
+                    EventAttendee.AttendanceStatus.Accepted -> {
+                        action(TimelineItem.Action.Type.Generic, CalendarPinInternalType.DECLINE) {
+                            attributes { title { DefaultTitles.DECLINE } }
+                        }
+                    }
+                    // No attendee metadata for this event (e.g. single-owner calendar)
+                    // or status is Declined/None — don't add RSVP actions.
+                    else -> Unit
+                }
+            }
+        }
+        // No Remove action: a calendar pin marked deleted locally is re-created by the
+        // next PhoneCalendarSyncer pass because the event still exists on the phone. Until
+        // we have a dismissal-record that survives across syncs, a Remove button here
+        // would be a no-op from the user's perspective.
     }
 }
 

@@ -1,9 +1,7 @@
 package coredevices.coreapp
 
 import co.touchlab.kermit.Logger
-import com.mmk.kmpnotifier.notification.Notifier
 import com.mmk.kmpnotifier.notification.NotifierManager
-import coredevices.util.transcription.CactusModelPathProvider
 import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
@@ -16,15 +14,17 @@ import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.coreapp.util.AppUpdate
 import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleAppDelegate
+import coredevices.pebble.account.FirestoreKnownWatchesSync
 import coredevices.pebble.account.FirestoreLocker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.weather.WeatherFetcher
-import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.transcription.CactusModelPathProvider
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -56,7 +56,9 @@ class CommonAppDelegate(
     private val usersDao: UsersDao,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val firestoreLocker: FirestoreLocker,
+    private val firestoreKnownWatchesSync: FirestoreKnownWatchesSync,
     private val libPebble: LibPebble,
+    private val platformHealthSync: PlatformHealthSync,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -124,8 +126,10 @@ class CommonAppDelegate(
         GlobalScope.launch(Dispatchers.Default) {
             usersDao.initUserDevToken(pebbleAccountProvider.get().devToken.value)
         }
-        Firebase.auth.currentUser?.emailOrNull?.let {
-            analyticsBackend.setUser(email = it)
+        GlobalScope.launch(Dispatchers.Default) {
+            Firebase.auth.currentUser?.emailOrNull?.let {
+                analyticsBackend.setUser(email = it)
+            }
         }
         initCactus()
         pushMessaging.init()
@@ -137,7 +141,9 @@ class CommonAppDelegate(
             }
         }
         firestoreLocker.init()
+        firestoreKnownWatchesSync.init()
         oneTimeSetLockerOrderMode()
+        platformHealthSync.startAutoSync(GlobalScope)
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }
@@ -149,36 +155,49 @@ class CommonAppDelegate(
             return
         }
         val now = Clock.System.now()
+        val config = coreConfigHolder.config.value
         val lastFullSync =
             Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_FULL_SYNC_MS, 0L))
+        val lastPartialSync =
+            Instant.fromEpochMilliseconds(settings.getLong(KEY_LAST_PARTIAL_SYNC_MS, 0L))
+        // 0.9× slack absorbs scheduler/timer jitter
         val doFullSync =
-            force || (now - lastFullSync) >= coreConfigHolder.config.value.regularSyncInterval
-        logger.d { "doBackgroundSync: doFullSync=$doFullSync" }
+            force || (now - lastFullSync) >= config.regularSyncInterval * 0.9
+        val doPartialSync =
+            doFullSync || (now - lastPartialSync) >= config.weatherSyncInterval * 0.9
+        logger.d { "doBackgroundSync: doFullSync=$doFullSync doPartialSync=$doPartialSync" }
+        if (!doPartialSync) {
+            syncInProgress.value = false
+            return
+        }
         try {
             if (doFullSync) {
                 settings.putLong(KEY_LAST_FULL_SYNC_MS, now.toEpochMilliseconds())
             }
-            val jobs = if (doFullSync) {
-                listOf(
+            settings.putLong(KEY_LAST_PARTIAL_SYNC_MS, now.toEpochMilliseconds())
+            val jobs = buildList {
+                add(
                     scope.launch {
+                        weatherFetcher.fetchWeather(scope)
+                    }
+                )
+                add(
+                    scope.launch {
+                        platformHealthSync.sync()
+                        libPebble.requestHealthData()
+                    }
+                )
+                if (doFullSync) {
+                    add(scope.launch {
                         coreAnalytics.processHeartbeat()
-                    },
-                    scope.launch {
+                    })
+                    add(scope.launch {
                         pebbleAppDelegate.performBackgroundWork(scope)
-                    },
-                    scope.launch {
+                    })
+                    add(scope.launch {
                         appUpdate.updateAvailable.value
-                    },
-                    scope.launch {
-                        weatherFetcher.fetchWeather(scope)
-                    },
-                )
-            } else {
-                listOf(
-                    scope.launch {
-                        weatherFetcher.fetchWeather(scope)
-                    },
-                )
+                    })
+                }
             }
             jobs.joinAll()
         } finally {
@@ -214,3 +233,4 @@ class CommonAppDelegate(
 expect fun rescheduleBgRefreshTask(appContext: AppContext, coreConfig: CoreConfig)
 
 private const val KEY_LAST_FULL_SYNC_MS = "last_full_sync_time_ms"
+private const val KEY_LAST_PARTIAL_SYNC_MS = "last_partial_sync_time_ms"

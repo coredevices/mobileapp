@@ -3,19 +3,24 @@ package coredevices.ring.ui.components.recording
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -34,7 +39,13 @@ import coredevices.ring.ui.components.chat.ToolExecutionBubble
 import coredevices.ring.ui.components.chat.hasExpandedDetails
 import coredevices.ring.ui.viewmodel.MessagePlaybackState
 
-fun LazyListScope.recordingConversation(recordingEntries: List<RecordingEntryEntity>, messages: List<ConversationMessageEntity>, onPlayPause: (RecordingEntryEntity) -> Unit, playbackState: MessagePlaybackState) {
+fun LazyListScope.recordingConversation(
+    recordingEntries: List<RecordingEntryEntity>,
+    messages: List<ConversationMessageEntity>,
+    onPlayPause: (RecordingEntryEntity) -> Unit,
+    playbackState: MessagePlaybackState,
+    onRetry: (() -> Unit)? = null
+) {
     if (messages.isEmpty()) {
         item {
             val recording = remember(recordingEntries) {
@@ -45,22 +56,33 @@ fun LazyListScope.recordingConversation(recordingEntries: List<RecordingEntryEnt
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    RecordingChatBubble(
-                        enabled = recording.fileName != null,
-                        onPlayPause = {
-                            onPlayPause(recording)
-                        },
-                        playing = playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1),
-                        buffering = playbackState is MessagePlaybackState.Buffering && playbackState.id == (recording.userMessageId ?: -1),
-                        playbackPercentage = if (playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1)) playbackState.percentageComplete else 0.0,
-                        content = {
-                            Text(
-                                text = "<No transcription available>",
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                    Row(verticalAlignment = CenterVertically) {
+                        if (recording.status.isError() && onRetry != null) {
+                            IconButton(onClick = onRetry) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Retry",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
-                    )
+                        RecordingChatBubble(
+                            enabled = recording.fileName != null,
+                            onPlayPause = {
+                                onPlayPause(recording)
+                            },
+                            playing = playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1L),
+                            buffering = playbackState is MessagePlaybackState.Buffering && playbackState.id == (recording.userMessageId ?: -1L),
+                            playbackPercentage = if (playbackState is MessagePlaybackState.Playing && playbackState.id == (recording.userMessageId ?: -1L)) playbackState.percentageComplete else 0.0,
+                            content = {
+                                Text(
+                                    text = "<No transcription available>",
+                                    maxLines = 4,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }

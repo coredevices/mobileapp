@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import org.koin.core.component.get
+import org.koin.core.component.inject
 import kotlin.uuid.Uuid
 
 class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKoinComponent {
@@ -49,15 +49,15 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         logger.v { "onCreate: ($this)" }
     }
 
-    private val notificationHandler: NotificationHandler = get()
-    private val notificationCallDetector: NotificationCallDetector = get()
-    private val connection: AndroidPebbleNotificationListenerConnection = get()
+    private val notificationHandler: NotificationHandler by inject()
+    private val notificationCallDetector: NotificationCallDetector by inject()
+    private val connection: AndroidPebbleNotificationListenerConnection by inject()
 
-    private val configHolder: NotificationConfigFlow = get()
+    private val configHolder: NotificationConfigFlow by inject()
 
-    private val watches: Watches = get<LibPebble>()
+    private val watches: Watches by inject<LibPebble>()
 
-    private val privateLogger: PrivateLogger = get()
+    private val privateLogger: PrivateLogger by inject()
 
     fun cancelNotification(itemId: Uuid) {
         val sbn = notificationHandler.getNotification(itemId) ?: return

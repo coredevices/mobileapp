@@ -16,6 +16,7 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.set
+import coredevices.libindex.device.IndexIdentifier
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
@@ -32,11 +33,27 @@ class AndroidCompanionDevice(
 ) : CompanionDevice {
     private val logger = Logger.withTag("AndroidCompanionDevice")
 
-    private fun CompanionDeviceManager.hasApproved(identifier: PebbleBleIdentifier): Boolean {
+    private fun CompanionDeviceManager.hasApprovedMac(macAddress: String): Boolean {
         @Suppress("DEPRECATION")
-        val existingBoundDevices = associations
-        val macAddress = identifier.macAddress
+        val existingBoundDevices = try {
+            associations
+        } catch (e: SecurityException) {
+            logger.w(e) { "SecurityException getting associations, treating as no association" }
+            return false
+        }
         return existingBoundDevices.contains(macAddress)
+    }
+
+    override suspend fun registerDevice(
+        identifier: IndexIdentifier,
+        uiContext: PlatformUiContext
+    ) {
+        registerDeviceInternal(
+            macAddress = identifier.asPlatformAddress,
+            uiContext = uiContext,
+            deviceProfile = null,
+            onSuccess = {},
+        )
     }
 
     override suspend fun registerDevice(
@@ -46,6 +63,24 @@ class AndroidCompanionDevice(
         if (identifier !is PebbleBleIdentifier) {
             return
         }
+        registerDeviceInternal(
+            macAddress = identifier.macAddress,
+            uiContext = uiContext,
+            deviceProfile = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                AssociationRequest.DEVICE_PROFILE_WATCH
+            } else {
+                null
+            },
+            onSuccess = { activity -> requestNotificationAccess(activity) },
+        )
+    }
+
+    private suspend fun registerDeviceInternal(
+        macAddress: String,
+        uiContext: PlatformUiContext,
+        deviceProfile: String?,
+        onSuccess: suspend (Activity) -> Unit,
+    ) {
         if (coreConfigFlow.value.disableCompanionDeviceManager) {
             logger.i { "Not using companion device manager because user disabled it" }
             settings[PENDING_CDM_POSSIBLE_CRASH] = false
@@ -53,28 +88,53 @@ class AndroidCompanionDevice(
         }
         val activity = uiContext.activity
         val service = activity.getSystemService(CompanionDeviceManager::class.java)
-        val macAddress = identifier.macAddress
 
-        if (service.hasApproved(identifier)) {
-            requestNotificationAccess(activity)
+        if (service.hasApprovedMac(macAddress)) {
+            onSuccess(activity)
             settings[PENDING_CDM_POSSIBLE_CRASH] = false
             return
         }
         settings[PENDING_CDM_POSSIBLE_CRASH] = true
 
         val filter = BluetoothLeDeviceFilter.Builder()
-                .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
-                .build()
+            .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
+            .build()
         val associationRequest = AssociationRequest.Builder().apply {
             addDeviceFilter(filter)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setDeviceProfile(AssociationRequest.DEVICE_PROFILE_WATCH)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && deviceProfile != null) {
+                setDeviceProfile(deviceProfile)
             }
             setSingleDevice(true)
         }.build()
 
         val result = CompletableDeferred<Boolean>()
-        val callback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val callback = buildAssociationCallback(activity, result)
+        logger.d("requesting association")
+
+        try {
+            service.associate(associationRequest, callback, null)
+            val succeeded = withTimeoutOrNull(30.seconds) {
+                if (!result.await()) {
+                    false
+                } else {
+                    onSuccess(activity)
+                    true
+                }
+            } ?: false
+            logger.d { "CompanionDeviceManager succeeded=$succeeded" }
+            settings[PENDING_CDM_POSSIBLE_CRASH] = false
+        } catch (e: ClassCastException) {
+            // CompanionDeviceManager isn't working; don't use it
+            logger.w { "Not using CompanionDeviceManager because it crashed!" }
+            settings[PENDING_CDM_POSSIBLE_CRASH] = false
+        }
+    }
+
+    private fun buildAssociationCallback(
+        activity: Activity,
+        result: CompletableDeferred<Boolean>,
+    ): CompanionDeviceManager.Callback {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             object : CompanionDeviceManager.Callback() {
                 override fun onAssociationPending(intentSender: IntentSender) {
                     logger.d("onAssociationPending (API >= 33)")
@@ -110,26 +170,6 @@ class AndroidCompanionDevice(
                 }
             }
         }
-        logger.d("requesting association")
-
-        try {
-            service.associate(associationRequest, callback, null)
-            val succeeded = withTimeoutOrNull(30.seconds) {
-                if (!result.await()) {
-                    false
-                } else {
-                    requestNotificationAccess(activity)
-                    true
-                }
-            } ?: false
-            logger.d { "CompanionDeviceManager succeeded=$succeeded" }
-            settings[PENDING_CDM_POSSIBLE_CRASH] = false
-            return
-        } catch (e: ClassCastException) {
-            // CompanionDeviceManager isn't working; don't use it
-            logger.w { "Not using CompanionDeviceManager because it crashed!" }
-            settings[PENDING_CDM_POSSIBLE_CRASH] = false
-        }
     }
 
     override fun hasApprovedDevice(identifier: PebbleIdentifier): Boolean {
@@ -137,7 +177,7 @@ class AndroidCompanionDevice(
             return true
         }
         val service = context.getSystemService(CompanionDeviceManager::class.java)
-        return service.hasApproved(identifier)
+        return service.hasApprovedMac(identifier.macAddress)
     }
 
     override fun cdmPreviouslyCrashed(): Boolean {
@@ -154,7 +194,12 @@ class AndroidCompanionDevice(
         }
 
         @Suppress("DEPRECATION")
-        val companionBoundDevices = service.associations
+        val companionBoundDevices = try {
+            service.associations
+        } catch (e: SecurityException) {
+            logger.w(e) { "SecurityException getting associations" }
+            emptyList()
+        }
         if (companionBoundDevices.isNotEmpty()) {
             val component =
                 LibPebbleNotificationListener.componentName(activity.applicationContext)

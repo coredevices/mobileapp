@@ -11,6 +11,7 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.firestoreModule
@@ -79,6 +80,13 @@ object TestUtil {
                             override suspend fun openUrl(url: String) {
 
                             }
+
+                            override suspend fun runWithBgTask(
+                                name: String,
+                                task: suspend () -> Unit
+                            ) {
+                                task()
+                            }
                         }
                     } bind Platform::class
                     single { UsersDaoTestImpl } bind UsersDao::class
@@ -112,6 +120,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val ringPaired: StateFlow<String?>
         get() = TODO("Not yet implemented")
+    override val ringPairedName: StateFlow<String?>
+        get() = TODO("Not yet implemented")
     override val ringPairedOld: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
     override val musicControlMode: StateFlow<MusicControlMode>
@@ -120,7 +130,7 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val debugDetailsEnabled: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
-    override val approvedBeeperContacts: StateFlow<List<String>>
+    override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
         get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
@@ -130,6 +140,16 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val noteShortcut: StateFlow<NoteShortcutType>
         get() = TODO("Not yet implemented")
+    override val backupEnabled: StateFlow<Boolean>
+        get() = MutableStateFlow(true)
+    override val useEncryption: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
+    override val encryptionKeyFingerprint: StateFlow<String?>
+        get() = MutableStateFlow(null)
+    override val lastWipedRing: StateFlow<String?>
+        get() = MutableStateFlow(null)
+    override val lastBackupCount: StateFlow<Int?>
+        get() = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         TODO("Not yet implemented")
@@ -147,6 +167,10 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
+    override fun setRingPairedName(name: String?) {
+        TODO("Not yet implemented")
+    }
+
     override fun setMusicControlMode(mode: MusicControlMode) {
         TODO("Not yet implemented")
     }
@@ -159,7 +183,7 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
         TODO("Not yet implemented")
     }
 
@@ -179,10 +203,17 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
+    override fun setBackupEnabled(enabled: Boolean) {}
+    override fun setUseEncryption(enabled: Boolean) {}
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
+    override fun setLastWipedRing(id: String?) {}
+    override fun setLastBackupCount(count: Int?) {}
 }
 
 private object UsersDaoTestImpl: UsersDao {
     override val user: Flow<PebbleUser?> = MutableStateFlow(PebbleUser(false, User()))
+    override val loginEvents: Flow<PebbleUser>
+        get() = TODO("Not yet implemented")
 
     override suspend fun updateNotionToken(notionToken: String?) {
     }
@@ -194,6 +225,15 @@ private object UsersDaoTestImpl: UsersDao {
     }
 
     override suspend fun initUserDevToken(rebbleUserToken: String?) {
+    }
+
+    override suspend fun updateLastConnectedWatch(serial: String) {
+    }
+
+    override suspend fun updateRingLifetimeCollectionCount(
+        serial: String,
+        count: Int
+    ) {
     }
 
     override fun init() {

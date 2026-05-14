@@ -27,3 +27,25 @@ actual fun onPlayPause() {
     audioManager.dispatchMediaKeyEvent(downEvent)
     audioManager.dispatchMediaKeyEvent(upEvent)
 }
+
+actual fun onNextTrack() {
+    val context: Context = KoinPlatform.getKoin().get()
+    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+    val eventTime = System.currentTimeMillis()
+    val downEvent = KeyEvent(
+        eventTime,
+        eventTime,
+        KeyEvent.ACTION_DOWN,
+        KeyEvent.KEYCODE_MEDIA_NEXT,
+        0
+    )
+    val upEvent = KeyEvent(
+        eventTime,
+        eventTime,
+        KeyEvent.ACTION_UP,
+        KeyEvent.KEYCODE_MEDIA_NEXT,
+        0
+    )
+    audioManager.dispatchMediaKeyEvent(downEvent)
+    audioManager.dispatchMediaKeyEvent(upEvent)
+}

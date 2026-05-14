@@ -152,6 +152,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)
@@ -163,11 +164,17 @@ kotlin {
             implementation(libs.play.update)
             implementation(libs.play.update.ktx)
             implementation(libs.coil.gif)
+            implementation(libs.coredevices.haversine)
         }
         androidInstrumentedTest.dependencies {
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.rules)
             implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.ktor.client.okhttp)
+            implementation(project(":experimental"))
+            implementation(project(":util"))
+            implementation(project(":index-ai"))
+            implementation(project(":mcp"))
         }
         androidUnitTest.dependencies {
             implementation(libs.ktor.client.okhttp)
@@ -188,7 +195,7 @@ kotlin {
             implementation(libs.koin.compose.viewmodel)
             implementation(compose.runtime)
             implementation(compose.foundation)
-            implementation(compose.material3)
+            implementation(libs.compose.material3)
             implementation(compose.ui)
             implementation(compose.materialIconsExtended)
             implementation(compose.components.resources)
@@ -217,8 +224,16 @@ kotlin {
             implementation(libs.kmpnotifier)
             implementation(libs.kmpio)
             implementation(project(":libpebble3"))
+            implementation(project(":libindex"))
+            implementation(project(":index-ai"))
+            api(project(":mcp"))
+            implementation(libs.health.kmp)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "coreapp.composeapp.generated.resources"
 }
 
 android {

@@ -1,7 +1,8 @@
 package coredevices.util.integrations
 
-import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.refTo
+import kotlinx.cinterop.usePinned
 import platform.CoreCrypto.CC_SHA256
 import platform.CoreCrypto.CC_SHA256_DIGEST_LENGTH
 import platform.posix.arc4random_uniform
@@ -18,6 +19,9 @@ internal actual fun generateSecureRandomString(length: Int, charset: List<Char>)
 
 internal actual fun sha256(input: String): String {
     val data = input.encodeToByteArray()
-    val hash = CC_SHA256(data.refTo(0), data.size.toUInt(), null)
-    return hash?.readBytes(CC_SHA256_DIGEST_LENGTH)?.let { Base64.UrlSafe.encode(it) } ?: throw IllegalStateException("SHA-256 hashing failed")
+    val digest = UByteArray(CC_SHA256_DIGEST_LENGTH)
+    digest.usePinned { pinned ->
+        CC_SHA256(data.refTo(0), data.size.toUInt(), pinned.addressOf(0))
+    }
+    return Base64.UrlSafe.encode(digest.asByteArray())
 }

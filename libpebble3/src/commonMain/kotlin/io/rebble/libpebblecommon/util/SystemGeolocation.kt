@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.util
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration
 import kotlin.time.Instant
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 sealed class GeolocationPositionResult {
@@ -21,15 +22,24 @@ sealed class GeolocationPositionResult {
 interface SystemGeolocation {
     companion object {
         /**
-         * Maximum time to cache geolocation data before falling back to a new request.
+         * Default cache freshness window when the caller doesn't specify a `maximumAge`.
          */
-        val MAX_CACHED_TIME = 30.seconds
+        val DEFAULT_MAX_AGE = 30.minutes
 
         /**
-         * Oldest allowed cached fallback time to return in the case that a fix cannot be obtained.
+         * Default upper bound on how long to wait for an active fix when the caller doesn't
+         * specify a `timeout`. Spec default is `Infinity`; we cap to keep JS callers from
+         * hanging indefinitely.
          */
-        val MAX_FALLBACK_TIME = 60.seconds
+        val DEFAULT_TIMEOUT = 15.seconds
     }
-    suspend fun getCurrentPosition(): GeolocationPositionResult
-    suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult>
+    suspend fun getCurrentPosition(
+        maximumAge: Duration? = null,
+        timeout: Duration? = null,
+        highAccuracy: Boolean = false,
+    ): GeolocationPositionResult
+    suspend fun watchPosition(
+        interval: Duration,
+        highAccuracy: Boolean = false,
+    ): Flow<GeolocationPositionResult>
 }

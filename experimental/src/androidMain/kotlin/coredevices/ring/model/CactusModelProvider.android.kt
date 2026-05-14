@@ -4,14 +4,14 @@ import android.content.Context
 import co.touchlab.kermit.Logger
 import com.cactus.Cactus
 import coredevices.util.CommonBuildKonfig
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 actual class CactusModelProvider actual constructor() : coredevices.util.transcription.CactusModelPathProvider {
@@ -87,34 +87,43 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
         val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
         try {
-            // Download
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 300_000
-            connection.instanceFollowRedirects = true
-            connection.connect()
+            // Download using OkHttp which handles redirects and HTTP/2 properly
+            val client = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.MINUTES)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
 
-            val responseCode = connection.responseCode
-            if (responseCode !in 200..299) {
-                throw Exception("Download failed: HTTP $responseCode for $url")
-            }
+            val request = Request.Builder()
+                .url(url)
+                .build()
 
-            val totalBytes = connection.contentLengthLong
-            var downloadedBytes = 0L
-            var lastLoggedPct = -1
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string()?.take(500) ?: "no body"
+                    throw Exception("Download failed: HTTP ${response.code} for $url — $errorBody")
+                }
 
-            BufferedInputStream(connection.inputStream).use { input ->
-                FileOutputStream(tempZip).use { output ->
-                    val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-                        if (totalBytes > 0) {
-                            val pct = (downloadedBytes * 100 / totalBytes).toInt()
-                            if (pct / 10 > lastLoggedPct / 10) {
-                                lastLoggedPct = pct
-                                logger.d { "Download progress: $pct% ($downloadedBytes / $totalBytes)" }
+                val body = response.body
+                    ?: throw Exception("Download failed: empty response body for $url")
+                val totalBytes = body.contentLength()
+                var downloadedBytes = 0L
+                var lastLoggedPct = -1
+
+                body.byteStream().use { input ->
+                    FileOutputStream(tempZip).use { output ->
+                        val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+                            if (totalBytes > 0) {
+                                val pct = (downloadedBytes * 100 / totalBytes).toInt()
+                                if (pct / 10 > lastLoggedPct / 10) {
+                                    lastLoggedPct = pct
+                                    logger.d { "Download progress: $pct% ($downloadedBytes / $totalBytes)" }
+                                }
                             }
                         }
                     }
@@ -168,8 +177,12 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
-        Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
-        logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
+        try {
+            Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
+            logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
+        } catch (e: Throwable) {
+            logger.e(e) { "Failed to initialize telemetry environment" }
+        }
     }
 
     private fun getCactusCacheDir(): File {

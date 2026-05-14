@@ -24,6 +24,8 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
+import com.russhwolf.settings.PropertiesSettings
+import java.util.Properties
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.CompletableDeferred
@@ -168,6 +170,8 @@ class WatchManagerTest {
             get() = TODO("Not yet implemented")
         override val isScanningBle: StateFlow<Boolean>
             get() = TODO("Not yet implemented")
+        override val isScanningClassic: StateFlow<Boolean>
+            get() = TODO("Not yet implemented")
 
         override fun startBleScan() {
         }
@@ -195,7 +199,11 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
 
-        override suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
+        override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
+            TODO("Not yet implemented")
+        }
+
+        override fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo) {
             TODO("Not yet implemented")
         }
     }
@@ -250,6 +258,7 @@ class WatchManagerTest {
             override suspend fun deleteSyncRecordsForStaleDevices() {
             }
         }
+        val testSettings = PropertiesSettings(Properties())
         return WatchManager(
             knownWatchDao = knownWatchDao,
             pebbleDeviceFactory = pebbleDeviceFactory,
@@ -264,6 +273,13 @@ class WatchManagerTest {
             connectionFailureHandler = connectionFailureHandler,
             analytics = analytics,
             blobDbDatabaseManager = blobDbManager,
+            settings = testSettings,
+            appContext = AppContext(),
+            legacyBtClassicMigrator = LegacyBtClassicMigrator(
+                knownWatchDao = knownWatchDao,
+                settings = testSettings,
+                blePlatformConfig = blePlatformConfig,
+            ),
         )
     }
 

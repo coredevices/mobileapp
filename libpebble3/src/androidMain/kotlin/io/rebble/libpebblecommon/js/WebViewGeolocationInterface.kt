@@ -11,13 +11,18 @@ class WebViewGeolocationInterface(
 ): GeolocationInterface(scope, jsRunner) {
 
     @JavascriptInterface
-    override fun getCurrentPosition(id: Double): Int {
-        return super.getCurrentPosition(id)
+    override fun getCurrentPosition(
+        id: Double,
+        maximumAgeMs: Double,
+        timeoutMs: Double,
+        highAccuracy: Double,
+    ): Int {
+        return super.getCurrentPosition(id, maximumAgeMs, timeoutMs, highAccuracy)
     }
 
     @JavascriptInterface
-    override fun watchPosition(id: Double, interval: Double): Int {
-        return super.watchPosition(id, interval)
+    override fun watchPosition(id: Double, interval: Double, highAccuracy: Double): Int {
+        return super.watchPosition(id, interval, highAccuracy)
     }
 
     @JavascriptInterface

@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import PlatformUiContext
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.ClipEntry
 import platform.Foundation.NSCachesDirectory
@@ -12,6 +13,11 @@ import platform.Speech.SFSpeechRecognizer
 
 @OptIn(ExperimentalComposeUiApi::class)
 actual fun makeTokenClipEntry(token: String): ClipEntry = ClipEntry.withPlainText(token)
+
+actual fun openGoogleFitApp(uiContext: PlatformUiContext?) {
+    // Not applicable on iOS - the menu item is only shown on Android
+}
+
 actual fun getPlatformSTTLanguages(): List<Pair<String, String>> {
     @Suppress("UNCHECKED_CAST")
     val locales = SFSpeechRecognizer.supportedLocales() as Set<NSLocale>

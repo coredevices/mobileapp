@@ -22,6 +22,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.LockerEntry
@@ -59,6 +60,7 @@ class WebViewJsRunner(
     logMessages: Channel<String>,
     remoteTimelineEmulator: RemoteTimelineEmulator,
     httpInterceptorManager: HttpInterceptorManager,
+    notificationConfigFlow: NotificationConfigFlow,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -69,9 +71,10 @@ class WebViewJsRunner(
     }
 
     private var webView: WebView? = null
+    private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(
@@ -253,6 +256,7 @@ class WebViewJsRunner(
                 window.__localStorageShimmed = true;
             """.trimIndent()
             ) {
+                restoreCompleted = true
                 logger.d { "localStorage shimmed" }
             }
         }
@@ -263,6 +267,7 @@ class WebViewJsRunner(
         synchronized(initializedLock) {
             check(webView == null) { "WebviewJsRunner already started" }
         }
+        restoreCompleted = false
         try {
             init()
         } catch (e: CancellationException) {
@@ -303,8 +308,15 @@ class WebViewJsRunner(
         _readyState.value = false
         withContext(Dispatchers.Main) {
             // Save final state of localStorage to our scoped storage, to catch any
-            // property-accessor changes (not caught by our shim)
-            persistLocalStorage()
+            // property-accessor changes (not caught by our shim).
+            // Skip if restoreLocalStorage() never completed: window.localStorage is
+            // still empty and persisting it would clear the user's stored settings
+            // (saveState() does a clear() first). MOB-6881.
+            if (restoreCompleted) {
+                persistLocalStorage()
+            } else {
+                logger.d { "Skipping persistLocalStorage: restore did not complete" }
+            }
             interfaces.forEach { (namespace, _) ->
                 webView?.removeJavascriptInterface(namespace)
             }

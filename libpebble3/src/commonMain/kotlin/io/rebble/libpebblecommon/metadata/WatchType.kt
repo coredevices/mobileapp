@@ -55,3 +55,13 @@ fun WatchType.isColor(): Boolean = when (this) {
     WatchType.FLINT -> false
     WatchType.GABBRO -> true
 }
+
+fun WatchType.supportsBtClassic(): Boolean = when (this) {
+    WatchType.APLITE -> true
+    WatchType.BASALT -> true
+    WatchType.CHALK -> true
+    WatchType.DIORITE -> false
+    WatchType.EMERY -> false
+    WatchType.FLINT -> false
+    WatchType.GABBRO -> false
+}

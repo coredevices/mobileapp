@@ -11,15 +11,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.ColorLens
@@ -29,10 +37,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
@@ -47,11 +58,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coredevices.ui.PebbleElevatedButton
+import io.rebble.libpebblecommon.database.entity.RgbColorPreset
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -290,6 +305,253 @@ fun SelectColorOrNone(
 @Composable
 fun ColorPickerPreview() {
     ColorPickerDialog(onColorSelected = {}, onDismissWithoutResult = {}, null)
+}
+
+private const val PRESETS_PER_ROW = 4
+
+@Composable
+fun RgbColorPickerDialog(
+    initialRgb: UInt,
+    defaultRgb: UInt,
+    presets: List<RgbColorPreset>,
+    onColorSelected: (UInt) -> Unit,
+    onDismissWithoutResult: () -> Unit,
+) {
+    var red by remember { mutableStateOf(((initialRgb shr 16) and 0xFFu).toInt()) }
+    var green by remember { mutableStateOf(((initialRgb shr 8) and 0xFFu).toInt()) }
+    var blue by remember { mutableStateOf((initialRgb and 0xFFu).toInt()) }
+    var hexInput by remember {
+        mutableStateOf(initialRgb.and(0x00FFFFFFu).toString(16).padStart(6, '0').uppercase())
+    }
+    val rgb = ((red shl 16) or (green shl 8) or blue).toUInt() and 0x00FFFFFFu
+    val previewColor = Color(0xFF000000u.toInt() or rgb.toInt())
+
+    fun setRgb(value: UInt) {
+        red = ((value shr 16) and 0xFFu).toInt()
+        green = ((value shr 8) and 0xFFu).toInt()
+        blue = (value and 0xFFu).toInt()
+        hexInput = value.and(0x00FFFFFFu).toString(16).padStart(6, '0').uppercase()
+    }
+
+    fun applyHex(text: String) {
+        val sanitized = text.removePrefix("#").trim()
+        sanitized.toUIntOrNull(16)?.takeIf { it <= 0xFFFFFFu }?.let { parsed ->
+            red = ((parsed shr 16) and 0xFFu).toInt()
+            green = ((parsed shr 8) and 0xFFu).toInt()
+            blue = (parsed and 0xFFu).toInt()
+        }
+    }
+
+    val focusManager = LocalFocusManager.current
+    Dialog(
+        onDismissRequest = onDismissWithoutResult,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().imePadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Card(modifier = Modifier.padding(15.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(previewColor)
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "#" + rgb.toString(16).padStart(6, '0').uppercase(),
+                            color = if (previewColor.luminance() > 0.55f) Color.Black else Color.White,
+                        )
+                    }
+                    if (presets.isNotEmpty()) {
+                        Text("Presets", modifier = Modifier.padding(bottom = 4.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            presets.chunked(PRESETS_PER_ROW).forEach { rowPresets ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    rowPresets.forEach { preset ->
+                                        PresetChip(
+                                            preset = preset,
+                                            isSelected = preset.rgb == rgb,
+                                            onClick = { setRgb(preset.rgb) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    // Pad the last row so chips stay aligned with rows above.
+                                    repeat(PRESETS_PER_ROW - rowPresets.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ChannelSlider("R", red, Color.Red) {
+                        red = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    ChannelSlider("G", green, Color.Green) {
+                        green = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    ChannelSlider("B", blue, Color.Blue) {
+                        blue = it
+                        hexInput = rgb.toString(16).padStart(6, '0').uppercase()
+                    }
+                    OutlinedTextField(
+                        value = hexInput,
+                        onValueChange = {
+                            hexInput = it.uppercase().take(6)
+                            applyHex(hexInput)
+                        },
+                        label = { Text("Hex") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        TextButton(
+                            onClick = onDismissWithoutResult,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Cancel") }
+                        TextButton(
+                            onClick = { setRgb(defaultRgb) },
+                            modifier = Modifier.weight(1f),
+                            enabled = rgb != (defaultRgb and 0x00FFFFFFu),
+                        ) { Text("Reset") }
+                        TextButton(
+                            onClick = { onColorSelected(rgb) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("OK") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PresetChip(
+    preset: RgbColorPreset,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val color = Color(0xFF000000u.toInt() or preset.rgb.toInt())
+    val tooltipState = remember { TooltipState(isPersistent = false) }
+    Box(modifier = modifier) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            tooltip = { PlainTooltip { Text(preset.displayName) } },
+            state = tooltipState,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(color)
+                    .border(
+                        2.dp,
+                        if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                        RoundedCornerShape(6.dp),
+                    )
+                    .clickable(onClick = onClick),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelSlider(
+    label: String,
+    value: Int,
+    accent: Color,
+    onValueChange: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.padding(end = 8.dp))
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.toInt().coerceIn(0, 255)) },
+            valueRange = 0f..255f,
+            colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value.toString(),
+            modifier = Modifier.padding(start = 8.dp).width(32.dp),
+        )
+    }
+}
+
+@Composable
+fun SelectRgbColor(
+    currentRgb: UInt,
+    defaultRgb: UInt,
+    presets: List<RgbColorPreset>,
+    onChangeColor: (UInt) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    if (showPicker) {
+        RgbColorPickerDialog(
+            initialRgb = currentRgb,
+            defaultRgb = defaultRgb,
+            presets = presets,
+            onColorSelected = {
+                onChangeColor(it)
+                showPicker = false
+            },
+            onDismissWithoutResult = { showPicker = false },
+        )
+    }
+    val swatchColor = Color(0xFF000000u.toInt() or (currentRgb and 0x00FFFFFFu).toInt())
+    val matchedPreset = presets.firstOrNull { it.rgb == currentRgb }
+    ListItem(
+        headlineContent = { Text("Color") },
+        supportingContent = {
+            Box(modifier = Modifier.padding(4.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(swatchColor, shape = RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = matchedPreset?.displayName ?: ("#" + currentRgb.toString(16).padStart(6, '0').uppercase()),
+                        color = if (swatchColor.luminance() > 0.55f) Color.Black else Color.White,
+                        modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
+                    )
+                }
+            }
+        },
+        trailingContent = {
+            PebbleElevatedButton(
+                text = "Select",
+                onClick = { showPicker = true },
+                icon = Icons.Default.ColorLens,
+                contentDescription = "Select color",
+                primaryColor = true,
+                modifier = Modifier.padding(8.dp),
+            )
+        },
+    )
 }
 
 data class HsvColor(

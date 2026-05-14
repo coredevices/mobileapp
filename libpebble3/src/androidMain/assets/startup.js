@@ -41,12 +41,17 @@ _global._PebbleGeoCB = {
 navigator.geolocation.getCurrentPosition = (success, error, options) => {
     const id = _PebbleGeo.getRequestCallbackID();
     _PebbleGeoCB._requestCallbacks.set(id, { success, error });
-    _PebbleGeo.getCurrentPosition(id);
+    const maxAge = (options && typeof options.maximumAge === 'number') ? options.maximumAge : -1;
+    const timeout = (options && typeof options.timeout === 'number') ? options.timeout : -1;
+    const highAccuracy = (options && options.enableHighAccuracy) ? 1 : 0;
+    _PebbleGeo.getCurrentPosition(id, maxAge, timeout, highAccuracy);
 };
 navigator.geolocation.watchPosition = (success, error, options) => {
     const id = _PebbleGeo.getWatchCallbackID();
     _PebbleGeoCB._watchCallbacks.set(id, { success, error });
-    _PebbleGeo.watchPosition(id, options && options.frequency ? options.frequency : 500);
+    const interval = options && options.frequency ? options.frequency : 500;
+    const highAccuracy = (options && options.enableHighAccuracy) ? 1 : 0;
+    _PebbleGeo.watchPosition(id, interval, highAccuracy);
     return id;
 };
 navigator.geolocation.clearWatch = (id) => {

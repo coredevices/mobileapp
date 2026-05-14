@@ -12,12 +12,21 @@ globalThis._LibPebbleTriggerInterval = function (intervalId) {
         callback(...args);
     }
 }
+// Match browser behavior: a string callback is compiled with `new Function`,
+// and any other non-function value is coerced to a string and compiled the
+// same way (so `setTimeout(undefined, 0)` is a no-op rather than a TypeError).
+globalThis._LibPebbleCoerceTimerCallback = function (callback) {
+    if (typeof callback === 'function') return callback;
+    return new Function(String(callback));
+}
+// Match browser behavior: missing/NaN/negative/non-numeric delays clamp to 0.
+globalThis._LibPebbleCoerceTimerDelay = function (delay) {
+    const n = Number(delay);
+    return (Number.isFinite(n) && n > 0) ? n : 0;
+}
 globalThis.setTimeout = function (callback, delay, ...args) {
-    if (typeof callback !== 'function') {
-        throw new TypeError('First argument must be a function');
-    }
-
-    const timeoutId = _Timeout.setTimeout(delay);
+    callback = globalThis._LibPebbleCoerceTimerCallback(callback);
+    const timeoutId = _Timeout.setTimeout(globalThis._LibPebbleCoerceTimerDelay(delay));
     globalThis._LibPebbleTimeoutCallbacks.set(timeoutId, { callback, args });
     return timeoutId;
 }
@@ -35,11 +44,8 @@ globalThis.clearTimeout = function (timeoutId) {
     }
 }
 globalThis.setInterval = function (callback, delay, ...args) {
-    if (typeof callback !== 'function') {
-        throw new TypeError('First argument must be a function');
-    }
-
-    const intervalId = _Timeout.setInterval(delay);
+    callback = globalThis._LibPebbleCoerceTimerCallback(callback);
+    const intervalId = _Timeout.setInterval(globalThis._LibPebbleCoerceTimerDelay(delay));
     globalThis._LibPebbleTimeoutCallbacks.set(intervalId, { callback, args });
     return intervalId;
 }

@@ -3,8 +3,9 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import coredevices.analytics.CoreAnalytics
 import coredevices.haversine.KMPHaversineSatelliteManager
+import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.util.Platform
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
@@ -26,6 +27,7 @@ class RingPairing(
 
     companion object {
         private val logger = Logger.withTag("RingPairing")
+        private const val SATELLITE_FW_NO_USER_ID = "3.62.0"
     }
 
     suspend fun pairRing(satelliteId: String) {
@@ -39,14 +41,23 @@ class RingPairing(
             indexStorage.setLastSuccessfulCollectionIndex(null)
             transferRepo.markTransfersAsPreviousIndexIteration()
         }
-        val result = satelliteManager.programSatelliteWithUserID(satelliteId, uid)
-        suspendCancellableCoroutine { c ->
-            result.onSuccess {
-                logger.d { "Successfully programmed satellite $satelliteId with user ID" }
-                c.resume(Unit)
-            }.onFailure { exception ->
-                logger.e(exception) { "Failed to program satellite $satelliteId with user ID" }
-                c.resumeWithException(RingPairingException.ProgrammingFailed(exception))
+        val lastRing = satelliteManager.lastRing.value
+        val lastVersion = lastRing?.state?.value?.firmwareVersion ?: "0"
+        // Firmware < 3.62.0 requires a user ID to be programmed before recordings will be transferred
+        if (lastRing?.id.equals(satelliteId, ignoreCase = true) && lastVersion >= SATELLITE_FW_NO_USER_ID) {
+            logger.i { "Satellite firmware $lastVersion - skipping application data" }
+            return
+        } else {
+            logger.i { "Satellite firmware $lastVersion - programming application data" }
+            val result = satelliteManager.programSatelliteWithUserID(satelliteId, uid)
+            return suspendCancellableCoroutine { c ->
+                result.onSuccess {
+                    logger.d { "Successfully programmed satellite $satelliteId with user ID" }
+                    c.resume(Unit)
+                }.onFailure { exception ->
+                    logger.e(exception) { "Failed to program satellite $satelliteId with user ID" }
+                    c.resumeWithException(RingPairingException.ProgrammingFailed(exception))
+                }
             }
         }
     }

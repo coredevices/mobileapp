@@ -21,10 +21,18 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
+import io.rebble.libpebblecommon.services.DailySleep
+import io.rebble.libpebblecommon.connection.LatestHeartRate
+import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
@@ -58,6 +66,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -118,11 +127,15 @@ class FakeLibPebble : LibPebble {
     override fun checkForFirmwareUpdates() {
     }
 
+    override suspend fun updateTimeIfNeeded() {
+    }
+
     // Scanning interface
     override val bluetoothEnabled: StateFlow<BluetoothState> =
         MutableStateFlow(BluetoothState.Enabled)
 
     override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(false)
+    override val isScanningClassic: StateFlow<Boolean> = MutableStateFlow(false)
 
     override fun startBleScan() {
         // No-op
@@ -263,6 +276,17 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
+    override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
+        emptyFlow()
+
+    override fun upsertNotificationRule(rule: NotificationRuleEntity) {
+        // No-op
+    }
+
+    override fun deleteNotificationRule(rule: NotificationRuleEntity) {
+        // No-op
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
@@ -333,6 +357,15 @@ class FakeLibPebble : LibPebble {
             ageYears = 35,
             gender = HealthGender.Female,
             imperialUnits = false,
+            hrmEnabled = true,
+            hrmMeasurementInterval = HRMonitoringInterval.TenMin,
+            hrmActivityTrackingEnabled = false,
+            restingHr = 70,
+            elevatedHr = 100,
+            maxHr = 190,
+            hrZone1Threshold = 130,
+            hrZone2Threshold = 154,
+            hrZone3Threshold = 172,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
@@ -358,11 +391,20 @@ class FakeLibPebble : LibPebble {
         // No-op for fake implementation
     }
 
-    override suspend fun getCurrentPosition(): GeolocationPositionResult {
+    override val healthDataUpdated: SharedFlow<Unit> = MutableStateFlow(Unit)
+
+    override suspend fun getCurrentPosition(
+        maximumAge: Duration?,
+        timeout: Duration?,
+        highAccuracy: Boolean,
+    ): GeolocationPositionResult {
         TODO("Not yet implemented")
     }
 
-    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> {
+    override suspend fun watchPosition(
+        interval: Duration,
+        highAccuracy: Boolean,
+    ): Flow<GeolocationPositionResult> {
         TODO("Not yet implemented")
     }
 
@@ -414,6 +456,29 @@ class FakeLibPebble : LibPebble {
 
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
     }
+
+    override suspend fun getLatestTimestamp(): Long? = 0
+
+    override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> = emptyList()
+
+    override suspend fun getOverlayEntriesAfter(
+        afterTimestamp: Long,
+        types: List<Int>
+    ): List<OverlayDataEntity> = emptyList()
+
+    override suspend fun getHealthDataForRange(start: Long, end: Long) = emptyList<HealthDataEntity>()
+    override suspend fun getDailyAggregates(start: Long, end: Long) = emptyList<DailyMovementAggregate>()
+    override suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates? = null
+    override suspend fun getAverageHeartRate(start: Long, end: Long): Double? = null
+    override suspend fun getSleepEntries(start: Long, end: Long) = emptyList<OverlayDataEntity>()
+    override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? = null
+    override suspend fun getLatestHeartRateReading(): LatestHeartRate? = null
+    override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? = null
+    override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
+    override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()
+    override suspend fun getTypicalSteps(dayOfWeek: Int) = emptyList<Long>()
+    override suspend fun getTypicalSleepSeconds() = 0L
+    override suspend fun populateDebugHealthData() {}
 }
 
 fun fakeWatches(): List<PebbleDevice> {
@@ -578,6 +643,7 @@ class FakeConnectedDevice(
     )
 
     override suspend fun updateTime() {}
+    override suspend fun updateTimeIfNeeded() {}
 
     override fun inboundAppMessages(appUuid: Uuid): Flow<AppMessageData> {
         return MutableSharedFlow()

@@ -54,12 +54,6 @@ kotlin {
 // https://developer.android.com/kotlin/multiplatform/migrate
     val xcfName = "pebbleKit"
 
-    iosX64 {
-        binaries.framework {
-            baseName = xcfName
-        }
-    }
-
     iosArm64 {
         binaries.framework {
             baseName = xcfName
@@ -84,14 +78,16 @@ kotlin {
                 optIn("androidx.compose.material3.ExperimentalMaterial3Api")
                 optIn("androidx.compose.foundation.layout.ExperimentalLayoutApi")
                 optIn("kotlin.time.ExperimentalTime")
+                optIn("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
             }
         }
         commonMain {
             dependencies {
                 implementation(project(":libpebble3"))
+                implementation(libs.health.kmp)
                 implementation(compose.runtime)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
@@ -127,6 +123,7 @@ kotlin {
                 implementation(libs.compass.geocoder.mobile)
                 implementation(libs.compass.autocomplete)
                 implementation(libs.compass.autocomplete.mobile)
+                implementation(project(":libindex"))
             }
         }
 

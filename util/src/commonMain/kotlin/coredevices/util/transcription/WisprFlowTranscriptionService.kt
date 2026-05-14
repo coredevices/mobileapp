@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class WisprFlowTranscriptionService(
@@ -59,6 +60,8 @@ class WisprFlowTranscriptionService(
     private data class PreconnectedSession(val clientKey: String, val session: WebSocketSession)
 
     private var pendingConnection: Deferred<PreconnectedSession>? = null
+
+    override val onInitialized: Channel<Boolean> = Channel()
 
     private suspend fun resolveAccessToken(): String? {
         return withTimeout(10.seconds) {
@@ -124,7 +127,8 @@ class WisprFlowTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        encoding: AudioEncoding
+        encoding: AudioEncoding,
+        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow

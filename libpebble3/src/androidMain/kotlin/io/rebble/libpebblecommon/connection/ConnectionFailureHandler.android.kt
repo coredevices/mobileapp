@@ -29,11 +29,15 @@ actual fun AppContext.handleCreateBondFailed(identifier: PebbleIdentifier, color
 }
 
 private fun AppContext.unpairDevice(identifier: PebbleIdentifier) {
-    if (identifier !is PebbleBleIdentifier) return
+    val macAddress = when (identifier) {
+        is PebbleBleIdentifier -> identifier.macAddress
+        is PebbleBtClassicIdentifier -> identifier.macAddress
+        else -> return
+    }
     val service = context.getSystemService(CompanionDeviceManager::class.java)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
         val association = service.myAssociations.firstOrNull {
-            it.deviceMacAddress?.toString().equals(identifier.macAddress, ignoreCase = true)
+            it.deviceMacAddress?.toString().equals(macAddress, ignoreCase = true)
         }
         val associationId = association?.id
         logger.v { "CompanionDeviceManager unpairDevice: associationId=$associationId" }
@@ -53,7 +57,7 @@ private fun AppContext.unpairDevice(identifier: PebbleIdentifier) {
     // Resort to reflection hack
     logger.i { "Using reflection to remove bond" }
     try {
-        val device = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(identifier.macAddress)
+        val device = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(macAddress)
         if (device == null) {
             return
         }

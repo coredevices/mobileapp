@@ -30,9 +30,19 @@ import CoreLocation
     @objc public func start() {
         locationManager.requestWhenInUseAuthorization()
     }
-    
+
     @objc public func stop() {
         locationManager.stopUpdatingLocation()
+    }
+
+    @objc public func lastLocation() -> CLLocation? {
+        return locationManager.location
+    }
+
+    @objc public func setHighAccuracy(_ highAccuracy: Bool) {
+        locationManager.desiredAccuracy = highAccuracy
+            ? kCLLocationAccuracyBestForNavigation
+            : kCLLocationAccuracyHundredMeters
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

@@ -67,6 +67,7 @@ data class NotificationAppItem(
             appName { name }
             muteDayOfWeek { muteState.value }
             lastUpdated { stateUpdated.instant }
+            muteExpiration { muteExpiration?.instant ?: Instant.fromEpochSeconds(0) }
             
             vibePatternName?.let { name ->
                 val pattern = params.vibePatternDao?.let { dao ->
@@ -89,6 +90,34 @@ data class NotificationAppItem(
                 io.rebble.libpebblecommon.packets.blobdb.TimelineIcon.fromCode(code)?.let { icon ->
                     icon { icon }
                 }
+            }
+            
+            val rules = params.notificationRuleDao?.let { dao ->
+                runBlocking {
+                    dao.getRulesForAppOnce(packageName = packageName)
+                }
+            }
+            if (!rules.isNullOrEmpty()) {
+                val bytesList = mutableListOf<UByte>()
+                bytesList.add(rules.size.toUByte())
+                for (rule in rules) {
+                    val type = if (rule.matchType == io.rebble.libpebblecommon.database.entity.MatchType.Regex) 1u.toUByte() else 0u.toUByte()
+                    val field = when (rule.matchField) {
+                        io.rebble.libpebblecommon.database.entity.MatchField.Title -> 1u.toUByte()
+                        io.rebble.libpebblecommon.database.entity.MatchField.Body -> 2u.toUByte()
+                        else -> 0u.toUByte()
+                    }
+                    val case = if (rule.caseSensitive) 1u.toUByte() else 0u.toUByte()
+                    bytesList.add(type)
+                    bytesList.add(field)
+                    bytesList.add(case)
+                    val strBytes = rule.pattern.encodeToByteArray()
+                    for (b in strBytes) {
+                        bytesList.add(b.toUByte())
+                    }
+                    bytesList.add(0u.toUByte())
+                }
+                notificationFilteringRules { bytesList.toUByteArray() }
             }
         }.map { it.asAttribute() }
         
@@ -177,13 +206,12 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             return null
         }
         val lastUpdated = timestamp.let { Instant.fromEpochSeconds(it.toLong()) }
-        // Read MuteExpiration if present
         val muteExpiration = item.attributes.get(TimelineAttribute.MuteExpiration)?.let { expirationBytes ->
             if (expirationBytes.size >= 4) {
                 val expirationSeconds = SUInt(StructMapper(), endianness = Endian.Little).apply {
                     fromBytes(DataBuffer(expirationBytes))
                 }.get().toLong()
-                Instant.fromEpochSeconds(expirationSeconds).asMillisecond()
+                if (expirationSeconds == 0L) null else Instant.fromEpochSeconds(expirationSeconds).asMillisecond()
             } else {
                 null
             }

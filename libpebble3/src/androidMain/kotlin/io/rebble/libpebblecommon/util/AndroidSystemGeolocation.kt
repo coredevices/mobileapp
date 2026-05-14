@@ -14,8 +14,9 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
-import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.MAX_CACHED_TIME
-import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.MAX_FALLBACK_TIME
+import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.DEFAULT_MAX_AGE
+import io.rebble.libpebblecommon.util.SystemGeolocation.Companion.DEFAULT_TIMEOUT
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.awaitClose
@@ -39,8 +40,9 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
     private val locationManager by lazy {
         context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
     }
+
     @SuppressLint("MissingPermission")
-    private fun locationFlow(intervalMillis: Long) = callbackFlow {
+    private fun locationFlow(intervalMillis: Long, highAccuracy: Boolean) = callbackFlow {
         if (!checkPermission()) {
             trySend(GeolocationPositionResult.Error("Location permission not granted"))
             close()
@@ -53,7 +55,7 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                 awaitClose()
                 return@callbackFlow
             }
-            logger.d { "Flow using location provider: $bestProvider" }
+            logger.d { "Flow using location provider: $bestProvider (highAccuracy=$highAccuracy)" }
             val locationListener = object : LocationListenerCompat {
                 override fun onStatusChanged(provider: String, status: Int, extras: Bundle?) {
                     logger.d { "Location provider $provider status changed: $status" }
@@ -63,12 +65,18 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
                     trySend(location.toResult())
                 }
             }
+            val quality = if (highAccuracy) {
+                LocationRequestCompat.QUALITY_HIGH_ACCURACY
+            } else {
+                LocationRequestCompat.QUALITY_BALANCED_POWER_ACCURACY
+            }
             withContext(Dispatchers.Main) {
                 // This can crash if done away from main thread
                 LocationManagerCompat.requestLocationUpdates(
                     locationManager,
                     bestProvider,
                     LocationRequestCompat.Builder(intervalMillis)
+                        .setQuality(quality)
                         .setMinUpdateDistanceMeters(0f)
                         .build(),
                     locationListener,
@@ -112,58 +120,73 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         return result
     }
 
-    override suspend fun getCurrentPosition(): GeolocationPositionResult {
-        logger.d { "getCurrentPosition called" }
-        return if (checkPermission()) {
-            val location = suspendCancellableCoroutine { cont ->
-                val lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) < MAX_CACHED_TIME) {
-                    logger.d { "Returning last known location" }
-                    cont.resume(lastKnownLocation)
-                    return@suspendCancellableCoroutine
-                }
-                val bestProvider = getBestProvider()
-                if (bestProvider == null) {
-                    cont.resume(null)
-                    return@suspendCancellableCoroutine
-                }
-                
-                logger.d { "Requesting current location from provider: $bestProvider" }
+    @SuppressLint("MissingPermission")
+    private fun freshestLastKnownLocation(): Location? {
+        return locationManager.getProviders(true)
+            .mapNotNull { runCatching { locationManager.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+    }
+
+    override suspend fun getCurrentPosition(
+        maximumAge: Duration?,
+        timeout: Duration?,
+        highAccuracy: Boolean,
+    ): GeolocationPositionResult {
+        logger.d { "getCurrentPosition called (maximumAge=$maximumAge, timeout=$timeout, highAccuracy=$highAccuracy)" }
+        if (!checkPermission()) {
+            return GeolocationPositionResult.Error("Location permission not granted")
+        }
+        val effectiveMaxAge = maximumAge ?: DEFAULT_MAX_AGE
+        val effectiveTimeout = timeout ?: DEFAULT_TIMEOUT
+        val now = Clock.System.now()
+        val freshest = freshestLastKnownLocation()
+        val freshestAge = freshest?.let { now - Instant.fromEpochMilliseconds(it.time) }
+        if (freshest != null && freshestAge != null && freshestAge < effectiveMaxAge) {
+            logger.d { "Returning last known location (provider=${freshest.provider}, age=$freshestAge)" }
+            return freshest.toResult()
+        }
+
+        val bestProvider = getBestProvider()
+        if (bestProvider == null) {
+            return if (freshest != null) {
+                logger.w { "No active provider; returning stale last known (age=$freshestAge)" }
+                freshest.toResult()
+            } else {
+                GeolocationPositionResult.Error("Location not available")
+            }
+        }
+
+        logger.d { "Requesting current location from provider: $bestProvider (timeout=$effectiveTimeout)" }
+        val active = withTimeoutOrNull(effectiveTimeout) {
+            suspendCancellableCoroutine { cont ->
                 val cancellationSignal = androidx.core.os.CancellationSignal()
-                cont.invokeOnCancellation {
-                    cancellationSignal.cancel()
-                }
-                
+                cont.invokeOnCancellation { cancellationSignal.cancel() }
                 val executor: Executor = ContextCompat.getMainExecutor(context)
                 LocationManagerCompat.getCurrentLocation(
                     locationManager,
                     bestProvider,
                     cancellationSignal,
                     executor
-                ) { location ->
-                    cont.resume(
-                        location ?: if (Clock.System.now() - Instant.fromEpochMilliseconds(lastKnownLocation?.time ?: 0) > MAX_FALLBACK_TIME) {
-                            logger.w { "No current location available, last location too old" }
-                            null
-                        } else {
-                            logger.w { "No current location available, returning last known location" }
-                            lastKnownLocation
-                        }
-                    )
-                }
+                ) { location -> cont.resume(location) }
             }
-            if (location != null) {
-                Logger.d { "Got location successfully" }
-                location.toResult()
-            } else {
+        }
+        return when {
+            active != null -> active.toResult()
+            freshest != null -> {
+                logger.w { "No current location available, returning stale last known (age=$freshestAge)" }
+                freshest.toResult()
+            }
+            else -> {
+                logger.w { "No current location available and no last known location" }
                 GeolocationPositionResult.Error("Location not available")
             }
-        } else {
-            GeolocationPositionResult.Error("Location permission not granted")
         }
     }
 
-    override suspend fun watchPosition(interval: Duration): Flow<GeolocationPositionResult> = locationFlow(interval.inWholeMilliseconds)
+    override suspend fun watchPosition(
+        interval: Duration,
+        highAccuracy: Boolean,
+    ): Flow<GeolocationPositionResult> = locationFlow(interval.inWholeMilliseconds, highAccuracy)
 }
 
 private fun Location.toResult(): GeolocationPositionResult {

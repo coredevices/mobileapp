@@ -141,6 +141,15 @@ sealed class BaseAttribute {
         override fun asAttribute(): TimelineItem.Attribute =
             createUByteAttribute(attribute, value)
     }
+
+    @Serializable
+    data class UByteArrayAttribute(
+        override val attribute: TimelineAttribute,
+        val value: UByteArray,
+    ) : BaseAttribute() {
+        override fun asAttribute(): TimelineItem.Attribute =
+            TimelineItem.Attribute(attribute.id, value)
+    }
 }
 
 @Serializable
@@ -148,6 +157,7 @@ data class BaseAction(
     val actionID: UByte,
     val type: Type,
     val attributes: List<BaseAttribute>,
+    val internalType: String? = null,
 ) {
     fun asAction(): TimelineItem.Action =
         TimelineItem.Action(actionID, type, attributes.map { it.asAttribute() })

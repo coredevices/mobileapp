@@ -473,4 +473,6 @@ class AndroidSystemCalendar(
         return appContext.context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
                     appContext.context.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
     }
+
+    override fun supportsPinActions(): Boolean = true
 }

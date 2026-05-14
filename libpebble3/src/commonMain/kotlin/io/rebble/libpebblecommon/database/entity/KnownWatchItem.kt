@@ -3,9 +3,11 @@ package io.rebble.libpebblecommon.database.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.PebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleSocketIdentifier
 import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.asPebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothClassic
 import io.rebble.libpebblecommon.database.entity.TransportType.BluetoothLe
@@ -37,14 +39,14 @@ enum class TransportType {
 
 fun KnownWatchItem.identifier(): PebbleIdentifier = when (transportType) {
     BluetoothLe -> transportIdentifier.asPebbleBleIdentifier()
-    BluetoothClassic -> TODO("classic not suupported")
+    BluetoothClassic -> transportIdentifier.asPebbleBtClassicIdentifier()
     Socket -> PebbleSocketIdentifier(transportIdentifier)
 }
 
 fun PebbleIdentifier.type(): TransportType = when (this) {
     is PebbleBleIdentifier -> BluetoothLe
-//    is BtClassicTransport -> BluetoothClassic
+    is PebbleBtClassicIdentifier -> BluetoothClassic
     is PebbleSocketIdentifier -> Socket
-    // Can't used a sealed interface because expect/actual
-    else -> TODO("unknown identifier type")
+    // Can't use a sealed interface because expect/actual
+    else -> error("unknown identifier type: $this")
 }

@@ -1,6 +1,5 @@
 package coredevices.coreapp.ui.navigation
 
-import BugReportButton
 import CommonRoutes
 import CoreNav
 import CoreRoute
@@ -24,7 +23,9 @@ import coredevices.ExperimentalDevices
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
+import coredevices.coreapp.ui.screens.RingOnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
+import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
@@ -61,6 +62,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                         } catch (e: IllegalArgumentException) {
                             logger.w(e) { "Failed to navigate to $route" }
                         }
+                        deepLinks.clearPendingDeepLink()
                     }
                 }
                 scope.launch {
@@ -89,7 +91,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
 
             override fun goBack() {
-                navController.popBackStack()
+                if (navController.previousBackStackEntry != null) {
+                    navController.popBackStack()
+                }
             }
 
             override fun goBackToPebble() {
@@ -114,6 +118,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                     coreNav = coreNav,
                     pebble = route.pebble,
                     recordingPath = route.recordingPath,
+                    screenshotPath = route.screenshotPath,
                 )
             }
             composable<CommonRoutes.AlphaTestInstructionsRoute> {
@@ -157,11 +162,21 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 GenericWebViewScreen(
                     coreNav = coreNav,
                     title = "Getting Started & Troubleshooting",
-                    url = "https://ndocs.repebble.com/getting-started",
+                    url = "https://pbl.zip/in-app-getting-started-and-troubleshooting",
                 )
             }
             composable<CommonRoutes.OnboardingRoute> {
                 OnboardingScreen(
+                    coreNav = coreNav,
+                )
+            }
+            composable<CommonRoutes.WatchOnboardingRoute> {
+                WatchOnboardingScreen(
+                    coreNav = coreNav,
+                )
+            }
+            composable<CommonRoutes.RingOnboardingRoute> {
+                RingOnboardingScreen(
                     coreNav = coreNav,
                 )
             }

@@ -1,6 +1,8 @@
 package coredevices.ring.database
 
 import com.russhwolf.settings.Settings
+import coredevices.libindex.database.BasePreferences
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
@@ -13,33 +15,45 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-interface Preferences {
+interface Preferences: BasePreferences {
     val useCactusAgent: StateFlow<Boolean>
     val useCactusTranscription: StateFlow<Boolean>
     val cactusMode: CactusSTTMode
-    val ringPaired: StateFlow<String?>
     val ringPairedOld: StateFlow<Boolean>
     val musicControlMode: StateFlow<MusicControlMode>
-    val lastSyncIndex: StateFlow<Int?>
     val debugDetailsEnabled: StateFlow<Boolean>
-    val approvedBeeperContacts: StateFlow<List<String>>
+    val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
     val noteShortcut: StateFlow<NoteShortcutType>
+    val backupEnabled: StateFlow<Boolean>
+    val useEncryption: StateFlow<Boolean>
+    val encryptionKeyFingerprint: StateFlow<String?>
+    val lastWipedRing: StateFlow<String?>
+    /** Cached count of recordings in cloud, captured at the end of every
+     *  manual sync. The Settings → Backup dialog reads this instead of
+     *  paginating the whole `recordings/{uid}/recordings` collection on
+     *  open — that approach was downloading every full document body
+     *  just to count them, which on a 1300+ recording user took a
+     *  minute+ over mobile data. `null` = never synced on this device. */
+    val lastBackupCount: StateFlow<Int?>
 
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
     fun setCactusMode(mode: CactusSTTMode)
-    fun setRingPaired(id: String?)
     fun setMusicControlMode(mode: MusicControlMode)
-    suspend fun setLastSyncIndex(index: Int?)
     fun setDebugDetailsEnabled(enabled: Boolean)
-    suspend fun setApprovedBeeperContacts(contacts: List<String>?)
+    suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
     fun setNoteShortcut(shortcut: NoteShortcutType)
+    fun setBackupEnabled(enabled: Boolean)
+    fun setUseEncryption(enabled: Boolean)
+    fun setEncryptionKeyFingerprint(fingerprint: String?)
+    fun setLastWipedRing(id: String?)
+    fun setLastBackupCount(count: Int?)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -57,6 +71,14 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
     )
     override val ringPaired = _ringPaired.asStateFlow()
+    private val _ringPairedName = MutableStateFlow(
+        try {
+            settings.getStringOrNull("ring_paired_name")
+        } catch (e: Exception) {
+            null
+        }
+    )
+    override val ringPairedName = _ringPairedName.asStateFlow()
     override val ringPairedOld = MutableStateFlow(
         try {
             settings.getBoolean("ring_paired", false)
@@ -73,9 +95,18 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     private val _debugDetailsEnabled = MutableStateFlow(settings.getBoolean("debug_details_enabled", false))
     override val debugDetailsEnabled = _debugDetailsEnabled.asStateFlow()
     private val _approvedBeeperContacts = MutableStateFlow(
-        settings.getStringOrNull("approved_beeper_contacts")
-            ?.let { Json.decodeFromString<List<String>>(it) }
-            ?: emptyList()
+        settings.getStringOrNull("approved_beeper_contacts")?.let { raw ->
+            try {
+                Json.decodeFromString<List<ApprovedBeeperContact>>(raw)
+            } catch (_: Exception) {
+                // Migrate from old format (plain list of roomId strings)
+                try {
+                    Json.decodeFromString<List<String>>(raw).map {
+                        ApprovedBeeperContact(roomId = it, name = "")
+                    }
+                } catch (_: Exception) { emptyList() }
+            }
+        } ?: emptyList()
     )
     override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
     private val _secondaryMode = MutableStateFlow(
@@ -95,6 +126,18 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     private val _noteShortcut = MutableStateFlow<NoteShortcutType>(settings.getStringOrNull("note_shortcut")
         ?.let { Json.decodeFromString(it) } ?: NoteShortcutType.SendToMe)
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
+    private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
+    override val backupEnabled = _backupEnabled.asStateFlow()
+    private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
+    override val useEncryption = _useEncryption.asStateFlow()
+    private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
+    override val encryptionKeyFingerprint = _encryptionKeyFingerprint.asStateFlow()
+    private val _lastWipedRing = MutableStateFlow(settings.getStringOrNull("last_wiped_ring"))
+    override val lastWipedRing = _lastWipedRing.asStateFlow()
+    private val _lastBackupCount = MutableStateFlow(
+        if (settings.hasKey("last_backup_count")) settings.getInt("last_backup_count", 0) else null
+    )
+    override val lastBackupCount = _lastBackupCount.asStateFlow()
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -121,6 +164,13 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _ringPaired.value = id
     }
 
+    override fun setRingPairedName(name: String?) {
+        name?.let {
+            settings.putString("ring_paired_name", it)
+        } ?: settings.remove("ring_paired_name")
+        _ringPairedName.value = name
+    }
+
     override fun setMusicControlMode(mode: MusicControlMode) {
         settings.putInt("music_control_mode", mode.id)
         _musicControlMode.value = mode
@@ -142,7 +192,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _debugDetailsEnabled.value = enabled
     }
 
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
         withContext(Dispatchers.IO) {
             if (contacts != null) {
                 val json = Json.encodeToString(contacts)
@@ -174,6 +224,43 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         settings.putString("note_shortcut", json)
         _noteShortcut.value = shortcut
     }
+
+    override fun setBackupEnabled(enabled: Boolean) {
+        settings.putBoolean("backup_enabled", enabled)
+        _backupEnabled.value = enabled
+    }
+
+    override fun setUseEncryption(enabled: Boolean) {
+        settings.putBoolean("use_encryption", enabled)
+        _useEncryption.value = enabled
+    }
+
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {
+        if (fingerprint != null) {
+            settings.putString("encryption_key_fingerprint", fingerprint)
+        } else {
+            settings.remove("encryption_key_fingerprint")
+        }
+        _encryptionKeyFingerprint.value = fingerprint
+    }
+
+    override fun setLastWipedRing(id: String?) {
+        if (id != null) {
+            settings.putString("last_wiped_ring", id)
+        } else {
+            settings.remove("last_wiped_ring")
+        }
+        _lastWipedRing.value = id
+    }
+
+    override fun setLastBackupCount(count: Int?) {
+        if (count != null) {
+            settings.putInt("last_backup_count", count)
+        } else {
+            settings.remove("last_backup_count")
+        }
+        _lastBackupCount.value = count
+    }
 }
 
 enum class MusicControlMode(val id: Int) {
@@ -191,7 +278,7 @@ enum class MusicControlMode(val id: Int) {
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
     Search(1),
-    Vermillion(2);
+    IndexWebhook(2);
 
     companion object {
         fun fromId(id: Int): SecondaryMode {

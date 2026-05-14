@@ -10,18 +10,24 @@ class IndexButtonActionHandler(prefs: Preferences, sequenceRecorder: IndexButton
     }
     private val sequenceEvents = sequenceRecorder.sequenceEvents()
 
-    //TODO: expand configurability
     private val actions = mapOf<List<ButtonPress>, suspend () -> Unit>(
-        listOf(ButtonPress.Short, ButtonPress.Short) to {
-            if (prefs.musicControlMode.value == MusicControlMode.DoubleClick) {
-                onPlayPause()
-            }
-        },
         listOf(ButtonPress.Short) to {
             if (prefs.musicControlMode.value == MusicControlMode.SingleClick) {
                 onPlayPause()
             }
-        }
+        },
+        listOf(ButtonPress.Short, ButtonPress.Short) to {
+            when (prefs.musicControlMode.value) {
+                MusicControlMode.DoubleClick -> onPlayPause()
+                MusicControlMode.SingleClick -> onNextTrack()
+                else -> {}
+            }
+        },
+        listOf(ButtonPress.Short, ButtonPress.Short, ButtonPress.Short) to {
+            if (prefs.musicControlMode.value == MusicControlMode.DoubleClick) {
+                onNextTrack()
+            }
+        },
     )
 
     suspend fun handleButtonActions() {

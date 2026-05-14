@@ -20,4 +20,4 @@ internal actual fun getRecordingsDataDirectory(): Path {
     return Path(path.path!!)
 }
 
-internal actual fun getFirebaseStorageFile(path: Path): File = File(NSURL.fileURLWithPath(path.toString()))
+actual fun getFirebaseStorageFile(path: Path): File = File(NSURL.fileURLWithPath(path.toString()))

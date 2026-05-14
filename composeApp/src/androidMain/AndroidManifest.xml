@@ -4,6 +4,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Health Connect -->
+    <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.WRITE_SLEEP"/>
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE"/>
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" tools:node="remove" />
     <!-- Mixpanel -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
@@ -85,9 +92,50 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+        <service
+            android:name=".PebbleService"
+            android:foregroundServiceType="connectedDevice"
+            android:exported="false" />
         <service android:name="coredevices.util.models.ModelDownloadService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false">
         </service>
+        <!--
+            Workaround for a bug in com.viktormykhailiv:health-kmp 1.0.1:
+            HealthConnectPermissionActivity stores its permission set in intent extras and
+            calls requestPermissions.launch(permissions) in onCreate. If Android recreates
+            the activity (process death, resume from recents) the extras are lost, the set
+            is empty, and HealthPermissionsRequestContract throws
+            "At least one permission is required!" — crashing the app. noHistory +
+            excludeFromRecents prevent the activity from being resumed/recreated without
+            its original launching intent.
+        -->
+        <activity
+            android:name="com.viktormykhailiv.kmp.health.HealthConnectPermissionActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true" />
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+        <!--
+            Required by the standalone Health Connect APK on Android 13. Without an activity
+            handling this intent, Health Connect silently denies permission grants
+            (MOB-6628, MOB-6731). Android 14+ uses VIEW_PERMISSION_USAGE above instead.
+        -->
+        <activity-alias
+            android:name="HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

@@ -22,3 +22,23 @@ actual data class PebbleBleIdentifier private constructor(
 actual fun String.asPebbleBleIdentifier(): PebbleBleIdentifier {
     return PebbleBleIdentifier(this)
 }
+
+actual data class PebbleBtClassicIdentifier private constructor(
+    val macAddress: String,
+) : PebbleIdentifier {
+    actual override val asString: String = macAddress
+
+    init {
+        check(macAddress == macAddress.uppercase(Locale.US))
+    }
+
+    companion object {
+        operator fun invoke(macAddress: String): PebbleBtClassicIdentifier {
+            return PebbleBtClassicIdentifier(macAddress.uppercase(Locale.US))
+        }
+    }
+}
+
+actual fun String.asPebbleBtClassicIdentifier(): PebbleBtClassicIdentifier {
+    return PebbleBtClassicIdentifier(this)
+}

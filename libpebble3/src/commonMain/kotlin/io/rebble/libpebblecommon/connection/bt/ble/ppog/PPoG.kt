@@ -66,7 +66,13 @@ class PPoG(
         if (blePlatformConfig.sendPpogResetOnDisconnection) {
             // This really for iOS, where the "connection" will stay alive when the app "disconnects",
             // but we need to get the watch's PPoG state machine into a "need to reconnect" state.
-            sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+            try {
+                sendPacketImmediately(PPoGPacket.ResetRequest(0, PPoGVersion.ONE), PPoGVersion.ONE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w("couldn't send PPoG reset on close", e)
+            }
         }
     }
 

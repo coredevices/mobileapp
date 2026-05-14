@@ -16,11 +16,14 @@ import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.util.CoreConfig
+import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.database.MusicControlMode
+import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.RingDatabase
@@ -28,13 +31,18 @@ import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
-import coredevices.ring.external.vermillion.VermillionApi
+import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.TranscriptionService
@@ -72,28 +80,38 @@ class FakePreferences : Preferences {
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
+    override val ringPairedName: StateFlow<String?> = MutableStateFlow(null)
     override val ringPairedOld: StateFlow<Boolean> = MutableStateFlow(false)
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
-    override val approvedBeeperContacts: StateFlow<List<String>> = MutableStateFlow(emptyList())
+    override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.Native)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
+    override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+    override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
+    override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
+    override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
+    override fun setRingPairedName(name: String?) {}
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
-    override suspend fun setApprovedBeeperContacts(contacts: List<String>?) {}
+    override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProvider(provider: ReminderProvider) {}
     override fun setNoteProvider(provider: NoteProvider) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
+    override fun setBackupEnabled(enabled: Boolean) {}
+    override fun setUseEncryption(enabled: Boolean) {}
+    override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
+    override fun setLastWipedRing(id: String?) {}
 }
 
 class FakeServletRepository : ServletRepository {
@@ -172,13 +190,18 @@ class RecordingProcessingQueueTest {
         single { get<RingDatabase>().httpMcpServerDao() }
         single { get<RingDatabase>().mcpSandboxGroupDao() }
         single { get<RingDatabase>().recordingProcessingTaskDao() }
+        single { get<RingDatabase>().traceSessionDao() }
+        single { get<RingDatabase>().traceEntryDao() }
 
         // Repositories
         singleOf(::RecordingProcessingTaskRepository)
         singleOf(::RecordingRepository)
         singleOf(::RingTransferRepository)
         singleOf(::McpSandboxRepository)
+        single { EncryptionKeyManager(context.applicationContext) }
+        singleOf(::DocumentEncryptor)
         singleOf(::RecordingStorage)
+        singleOf(::RingTraceSession)
 
         // Fakes
         single<NenyaClient> { fakeNenya }
@@ -189,6 +212,7 @@ class RecordingProcessingQueueTest {
             object : Platform {
                 override val name = "Android"
                 override suspend fun openUrl(url: String) {}
+                override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }
         }
         // Real BuiltinServletRepository needed by McpSessionFactory (never actually resolves tools
@@ -202,18 +226,22 @@ class RecordingProcessingQueueTest {
         singleOf(::McpSessionFactory)
 
         single {
-            object : VermillionApi {
-                override fun uploadIfEnabled(samples: ShortArray, sampleRate: Int, recordingId: String) {}
+            object : IndexWebhookApi {
+                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {}
                 override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
             }
-        } bind VermillionApi::class
+        } bind IndexWebhookApi::class
+        singleOf(::IndexWebhookPreferences)
+
+        single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
+        singleOf(::RecordingPreprocessor)
 
         // Background scope with short reschedule delay
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
     private fun createFakeAudioFile(fileId: String) {
@@ -236,8 +264,8 @@ class RecordingProcessingQueueTest {
 
     private suspend fun awaitAttempts(taskId: Long, minAttempts: Int, timeout: kotlin.time.Duration = 15.seconds) {
         withTimeout(timeout) {
-            queue.currentTaskId.first { it == taskId }
-            queue.currentTaskId.first { it == null } // Wait for task to finish processing attempt
+            queue.activeTaskIds.first { taskId in it }
+            queue.activeTaskIds.first { taskId !in it } // Wait for task to finish processing attempt
             taskDao.getTaskByIdFlow(taskId).first { it != null && it.attempts >= minAttempts }
         }
     }
@@ -255,6 +283,8 @@ class RecordingProcessingQueueTest {
             queueTaskRepository = koin.get(),
             recordingOperationFactory = koin.get(),
             scope = RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)),
+            recordingPreprocessor = koin.get(),
+            trace = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }

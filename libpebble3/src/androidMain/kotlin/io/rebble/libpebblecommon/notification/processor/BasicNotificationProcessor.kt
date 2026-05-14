@@ -21,7 +21,6 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.Notifica
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationResult
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.vibrationPattern
-import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
@@ -89,7 +88,7 @@ class BasicNotificationProcessor(
             color = color,
             previousUuids = previousUuids,
         )
-        return NotificationResult.Extracted(notification, NotificationDecision.SendToWatch)
+        return NotificationResult.Extracted(notification)
     }
 
     private fun selectColor(

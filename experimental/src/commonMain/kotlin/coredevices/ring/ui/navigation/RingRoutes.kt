@@ -12,8 +12,6 @@ import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
 import androidx.savedstate.read
 import coredevices.ring.ui.dialog.ListenDialog
-import coredevices.ring.ui.screens.RingDebug
-import coredevices.ring.ui.screens.RingPairing
 import coredevices.ring.ui.screens.notes.ReminderDetails
 import coredevices.ring.ui.screens.recording.RecordingDetails
 import coredevices.ring.ui.screens.settings.NotionOAuthResult
@@ -35,10 +33,6 @@ object RingRoutes {
     data object Settings : CoreRoute
     @Serializable
     data object ListenDialog : CoreRoute
-    @Serializable
-    data object RingDebug : CoreRoute
-    @Serializable
-    data object RingPairing : CoreRoute
     @Serializable
     data object RingSyncInspector : CoreRoute
     @Serializable
@@ -74,12 +68,6 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
         )
     ) {
         ListenDialog { coreNav.goBack() }
-    }
-    composable<RingRoutes.RingDebug> {
-        RingDebug(coreNav)
-    }
-    composable<RingRoutes.RingPairing> {
-        RingPairing(coreNav)
     }
     composable<RingRoutes.RingSyncInspector> {
         RingSyncInspectorScreen(coreNav)

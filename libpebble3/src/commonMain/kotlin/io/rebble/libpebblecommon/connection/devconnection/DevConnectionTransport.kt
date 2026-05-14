@@ -30,7 +30,7 @@ abstract class DevConnectionTransport(private val libPebble: LibPebble) {
         inboundDeviceMessages: Flow<ByteArray>,
         outboundDeviceMessages: suspend (ByteArray) -> Unit
     )
-    abstract fun stop()
+    abstract suspend fun stop()
 
     protected suspend fun installPBW(payload: ByteArray): Boolean {
         try {

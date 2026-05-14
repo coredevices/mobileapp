@@ -119,7 +119,7 @@ class PebbleBle(
             val pairingResult =
                 pairing.requestBlePairing(device, connectionStatus, connectivity.status, identifier)
             if (pairingResult != null) {
-                PebbleConnectionResult.Failed(pairingResult)
+                return PebbleConnectionResult.Failed(pairingResult)
             }
         }
 

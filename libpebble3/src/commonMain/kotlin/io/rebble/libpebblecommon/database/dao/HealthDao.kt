@@ -56,6 +56,17 @@ interface HealthDao {
     @Query("SELECT * FROM health_data WHERE timestamp = :timestamp")
     suspend fun getDataAtTimestamp(timestamp: Long): HealthDataEntity?
 
+    @Query("SELECT * FROM health_data WHERE heartRate > 0 ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestHeartRateReading(): HealthDataEntity?
+
+    @Query("""
+        SELECT heartRateZone, COUNT(*) as minutes
+        FROM health_data
+        WHERE timestamp >= :start AND timestamp < :end AND heartRate > 0
+        GROUP BY heartRateZone
+        """)
+    suspend fun getHeartRateZoneMinutes(start: Long, end: Long): List<HRZoneCount>
+
     @Query("SELECT SUM(duration) FROM overlay_data WHERE startTime >= :start AND startTime < :end AND type = :type")
     suspend fun getOverlayDuration(start: Long, end: Long, type: Int): Long?
 
@@ -74,6 +85,15 @@ interface HealthDao {
 
     @Query("SELECT * FROM overlay_data WHERE startTime = :startTime AND type = :type")
     suspend fun getOverlayAtStartTimeAndType(startTime: Long, type: Int): OverlayDataEntity?
+
+    @Query("SELECT * FROM health_data WHERE timestamp >= :start AND timestamp < :end ORDER BY timestamp ASC")
+    suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    @Query("SELECT * FROM health_data WHERE timestamp > :afterTimestamp ORDER BY timestamp ASC")
+    suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
+
+    @Query("SELECT * FROM overlay_data WHERE startTime > :afterTimestamp AND type IN (:types) ORDER BY startTime ASC")
+    suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
 
     @Query("""
         SELECT SUM(duration) / 60 FROM overlay_data
@@ -135,4 +155,9 @@ data class DailyMovementAggregate(
     val restingGramCalories: Long?,
     val activeMinutes: Long?,
     val distanceCm: Long?
+)
+
+data class HRZoneCount(
+    val heartRateZone: Int,
+    val minutes: Long,
 )

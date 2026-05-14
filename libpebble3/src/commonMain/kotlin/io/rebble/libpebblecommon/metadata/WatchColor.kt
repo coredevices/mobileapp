@@ -58,3 +58,19 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
         }
     }
 }
+
+fun WatchColor.supportsHrm(): Boolean = when (this) {
+    WatchColor.Pebble2HRBlack,
+    WatchColor.Pebble2HRLime,
+    WatchColor.Pebble2HRFlame,
+    WatchColor.Pebble2HRWhite,
+    WatchColor.Pebble2HRAqua,
+    WatchColor.Time2Gunmetal,
+    WatchColor.Time2Silver,
+    WatchColor.Time2Gold,
+    WatchColor.PebbleTime2BlackGray,
+    WatchColor.PebbleTime2BlackRed,
+    WatchColor.PebbleTime2SilverBlue,
+    WatchColor.PebbleTime2SilverGray -> true
+    else -> false
+}

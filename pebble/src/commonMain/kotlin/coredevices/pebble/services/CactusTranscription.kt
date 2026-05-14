@@ -2,6 +2,7 @@ package coredevices.pebble.services
 
 import coredevices.speex.SpeexCodec
 import coredevices.speex.SpeexDecodeResult
+import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.STTLanguage
 import coredevices.util.transcription.TranscriptionException
@@ -27,11 +28,12 @@ import kotlinx.io.readByteArray
 internal expect fun tempTranscriptionDirectory(): Path
 class CactusTranscription(
     private val service: CactusTranscriptionService,
-    private val libPebbleLazy: Lazy<LibPebble>
+    private val libPebbleLazy: Lazy<LibPebble>,
+    private val coreConfigFlow: CoreConfigFlow,
 ): TranscriptionProvider {
     override suspend fun canServeSession(): Boolean {
         service.earlyInit()
-        return true
+        return service.isAvailable()
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
@@ -79,7 +81,7 @@ class CactusTranscription(
                         bytesRead += bytesToRead
                     }
                 }.flowOn(Dispatchers.IO),
-                language = STTLanguage.Automatic, //TODO: Allow language selection based on user preference
+                language = STTLanguage.fromCodeOrAutomatic(coreConfigFlow.value.sttConfig.spokenLanguage),
                 contentContext = if (isNotificationReply) "Reply to Instant Message" else null,
                 dictionaryContext = recentContacts,
                 sampleRate = encoderInfo.sampleRate.toInt(),

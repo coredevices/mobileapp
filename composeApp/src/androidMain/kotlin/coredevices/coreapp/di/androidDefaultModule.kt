@@ -6,13 +6,14 @@ import PlatformShareLauncher
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import coredevices.analytics.createAndroidAnalytics
 import coredevices.coreapp.BuildConfig
-import coredevices.ExperimentalDevices
+import coredevices.coreapp.PebbleBackgroundManager
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
 import coredevices.coreapp.util.AndroidAppUpdate
 import coredevices.coreapp.util.AppUpdate
 import coredevices.pebble.PebbleAndroidDelegate
+import coredevices.ring.RingDelegate
 import coredevices.util.AndroidCompanionDevice
 import coredevices.util.AndroidPermissionRequester
 import coredevices.util.AndroidPlatform
@@ -57,13 +58,14 @@ val androidDefaultModule = module {
     single {
         val pebbleDelegate = get<PebbleAndroidDelegate>()
         val enabledFlow = get<CoreConfigFlow>().flow.map { it.enableIndex }
-        val experimentalDevices = get<ExperimentalDevices>()
+        val ringDelegate = get<RingDelegate>()
         RequiredPermissions(
             pebbleDelegate.requiredPermissions.combine(enabledFlow) { permissions, enabled ->
-                permissions + if (enabled) experimentalDevices.requiredRuntimePermissions() else emptySet()
+                permissions + if (enabled) ringDelegate.requiredRuntimePermissions() else emptySet()
             }
         )
     }
     single { createAndroidAnalytics(get()) }
     singleOf(::ModelDownloadManager)
+    singleOf(::PebbleBackgroundManager)
 }

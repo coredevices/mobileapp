@@ -1,6 +1,5 @@
 package coredevices.pebble.ui
 
-import PlatformUiContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,8 +11,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
 import coredevices.util.description
@@ -45,25 +47,10 @@ fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             topBarParams.title("Permissions")
         }
         val permissionRequester: PermissionRequester = koinInject()
+        val coreConfigHolder: CoreConfigHolder = koinInject()
+        val coreConfig by coreConfigHolder.config.collectAsState()
 
         val missingPermissions by permissionRequester.missingPermissions.collectAsState(emptySet())
-        if (missingPermissions.isEmpty()) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(15.dp).fillMaxWidth(),
-            ) {
-                ElevatedCard(
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 6.dp
-                    ),
-                    modifier = Modifier.padding(15.dp),
-                ) {
-                    Text("All permissions granted!", modifier = Modifier.padding(15.dp))
-                }
-                return
-            }
-        }
 
         val scope = rememberCoroutineScope()
         val missingPermissionsList = remember(missingPermissions) { missingPermissions.toList() }
@@ -74,25 +61,71 @@ fun PermissionsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         }
 
         LazyColumn {
-            items(missingPermissionsList, key = { it.name() }) { permission ->
+            item(key = "hide_badges_toggle") {
                 ListItem(
-                    headlineContent = {
-                        Text(text = permission.name())
-                    },
+                    headlineContent = { Text("Hide missing permission warnings") },
                     supportingContent = {
-                        Text(text = permission.description())
+                        Text("Don't show a badge on Settings when permissions are missing")
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = coreConfig.hidePermissionWarningBadges,
+                            onCheckedChange = { checked ->
+                                coreConfigHolder.update(
+                                    coreConfig.copy(hidePermissionWarningBadges = checked)
+                                )
+                            },
+                        )
                     },
                     modifier = Modifier.clickable {
-                        scope.launch {
-                            val granted =
-                                permissionRequester.requestPermission(permission, uiContext)
-                            logger.d { "$permission granted = $granted" }
-                            if (granted == PermissionResult.RejectedForever) {
-                                permissionRequester.openPermissionsScreen(uiContext)
-                            }
-                        }
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                hidePermissionWarningBadges = !coreConfig.hidePermissionWarningBadges
+                            )
+                        )
                     },
                 )
+                HorizontalDivider()
+            }
+
+            if (missingPermissionsList.isEmpty()) {
+                item(key = "all_granted") {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(15.dp).fillMaxWidth(),
+                    ) {
+                        ElevatedCard(
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 6.dp
+                            ),
+                            modifier = Modifier.padding(15.dp),
+                        ) {
+                            Text("All permissions granted!", modifier = Modifier.padding(15.dp))
+                        }
+                    }
+                }
+            } else {
+                items(missingPermissionsList, key = { it.name() }) { permission ->
+                    ListItem(
+                        headlineContent = {
+                            Text(text = permission.name())
+                        },
+                        supportingContent = {
+                            Text(text = permission.description())
+                        },
+                        modifier = Modifier.clickable {
+                            scope.launch {
+                                val granted =
+                                    permissionRequester.requestPermission(permission, uiContext)
+                                logger.d { "$permission granted = $granted" }
+                                if (granted == PermissionResult.RejectedForever) {
+                                    permissionRequester.openPermissionsScreen(uiContext)
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
     }

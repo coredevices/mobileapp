@@ -8,53 +8,85 @@ import io.rebble.libpebblecommon.health.calculateSleepSearchWindow
 import kotlin.math.round
 
 /**
- * Represents a grouped sleep session combining multiple sleep/deep sleep entries
+ * A single sleep overlay interval at its real timestamp.
+ * Light intervals correspond to Sleep/Nap containers; deep intervals are
+ * the DeepSleep/DeepNap sub-intervals that occur within them.
  */
-internal data class SleepSession(
-    var start: Long,
-    var end: Long,
-    var totalSleep: Long = 0,
-    var deepSleep: Long = 0
+data class SleepInterval(
+    val start: Long,
+    val end: Long,
+    val isDeep: Boolean,
 )
 
 /**
- * Groups consecutive sleep entries into sessions.
- * Sleep and DeepSleep entries that are close together (within 1 hour) are part of the same session.
- *
- * Only Sleep type entries count toward total sleep duration.
- * DeepSleep is tracked separately as it's a subset of the total sleep (portion of sleep that was deep).
+ * Represents a grouped sleep session combining multiple sleep/deep sleep entries.
+ * [intervals] holds the constituent overlay intervals at their real timestamps,
+ * which the timeline UI renders directly so that interspersed deep-sleep periods
+ * and awake gaps within the session show up correctly.
  */
-internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
+data class SleepSession(
+    var start: Long,
+    var end: Long,
+    var totalSleep: Long = 0,
+    var deepSleep: Long = 0,
+    val intervals: MutableList<SleepInterval> = mutableListOf(),
+)
+
+/**
+ * A day's sleep, comprising one or more chronologically-ordered sessions
+ * (e.g. a main sleep + a nap, or split sleep with a wake gap) plus the
+ * aggregate totals across all sessions.
+ *
+ * Splitting bedtime/wake-up into [firstStart] / [lastEnd] preserves the full
+ * span when there are multiple sessions, instead of collapsing to a single
+ * "main" session and losing the others' time ranges.
+ */
+data class DailySleep(
+    val sessions: List<SleepSession>,
+    val totalSleep: Long,
+    val deepSleep: Long,
+) {
+    val firstStart: Long get() = sessions.first().start
+    val lastEnd: Long get() = sessions.last().end
+    val intervals: List<SleepInterval> get() = sessions.flatMap { it.intervals }
+}
+
+/**
+ * Groups consecutive sleep entries into sessions.
+ * Entries within SLEEP_SESSION_GAP_HOURS of each other are part of the same session.
+ *
+ * Container overlays (Sleep, Nap) count toward totalSleep.
+ * Subset overlays (DeepSleep, DeepNap) are nested inside their containers and count
+ * toward deepSleep — they represent the same time already in totalSleep, not additional time.
+ * This matches the firmware's ActivitySession model.
+ */
+fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<SleepSession> {
     val sessions = mutableListOf<SleepSession>()
 
     sleepEntries.sortedBy { it.startTime }.forEach { entry ->
         val overlayType = OverlayType.fromValue(entry.type)
+        val isContainer = overlayType == OverlayType.Sleep || overlayType == OverlayType.Nap
+        val isDeep = overlayType == OverlayType.DeepSleep || overlayType == OverlayType.DeepNap
         val entryEnd = entry.startTime + entry.duration
+        val interval = SleepInterval(entry.startTime, entryEnd, isDeep)
 
-        // Find if this entry belongs to an existing session (within 1 hour of last entry)
         val existingSession = sessions.lastOrNull()?.takeIf {
             entry.startTime <= it.end + SLEEP_SESSION_GAP_SECONDS
         }
 
         if (existingSession != null) {
-            // Add to existing session
             existingSession.end = maxOf(existingSession.end, entryEnd)
-            // Only Sleep entries count toward total duration
-            if (overlayType == OverlayType.Sleep) {
-                existingSession.totalSleep += entry.duration
-            }
-            // DeepSleep is tracked separately (it's a subset of total sleep)
-            if (overlayType == OverlayType.DeepSleep) {
-                existingSession.deepSleep += entry.duration
-            }
+            if (isContainer) existingSession.totalSleep += entry.duration
+            if (isDeep) existingSession.deepSleep += entry.duration
+            existingSession.intervals.add(interval)
         } else {
-            // Start new session
             sessions.add(
                 SleepSession(
                     start = entry.startTime,
                     end = entryEnd,
-                    totalSleep = if (overlayType == OverlayType.Sleep) entry.duration else 0,
-                    deepSleep = if (overlayType == OverlayType.DeepSleep) entry.duration else 0
+                    totalSleep = if (isContainer) entry.duration else 0,
+                    deepSleep = if (isDeep) entry.duration else 0,
+                    intervals = mutableListOf(interval),
                 )
             )
         }
@@ -67,13 +99,13 @@ internal fun groupSleepSessions(sleepEntries: List<OverlayDataEntity>): List<Sle
  * Fetches sleep entries for a given day and groups them into sessions.
  * "Today's sleep" means you went to bed last night (6 PM yesterday) and woke up this morning/afternoon (2 PM today).
  *
- * @return The longest sleep session (main sleep, not naps) or null if no sleep data
+ * @return All sessions for the day plus aggregate totals, or null if no sleep data
  */
-internal suspend fun fetchAndGroupDailySleep(
+suspend fun fetchAndGroupDailySleep(
     healthDao: HealthDao,
     dayStartEpochSec: Long,
     timeZone: kotlinx.datetime.TimeZone
-): SleepSession? {
+): DailySleep? {
     // Sleep for "today" means you went to bed last night (6 PM yesterday) and woke up this morning/afternoon (2 PM today)
     val (searchStart, searchEnd) = calculateSleepSearchWindow(dayStartEpochSec)
 
@@ -100,8 +132,12 @@ internal suspend fun fetchAndGroupDailySleep(
         "Grouped into ${sessions.size} sessions:\n$sessionsInfo"
     }
 
-    // Find the longest sleep session (main sleep, not naps)
-    return sessions.maxByOrNull { it.totalSleep }
+    if (sessions.isEmpty()) return null
+    return DailySleep(
+        sessions = sessions,
+        totalSleep = sessions.sumOf { it.totalSleep },
+        deepSleep = sessions.sumOf { it.deepSleep },
+    )
 }
 
 private const val SLEEP_SESSION_GAP_SECONDS = HealthConstants.SLEEP_SESSION_GAP_HOURS * 3600L

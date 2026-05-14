@@ -12,6 +12,7 @@ import io.rebble.libpebblecommon.database.dao.BlobDbDao
 import io.rebble.libpebblecommon.database.dao.BlobDbRecord
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -20,7 +21,7 @@ import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
 import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
-import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
+import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
@@ -30,6 +31,7 @@ import io.rebble.libpebblecommon.packets.blobdb.BlobCommand
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.web.withTimeoutOr
@@ -58,13 +60,14 @@ data class BlobDbDaos(
     private val timelinePinDao: TimelinePinRealDao,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val notificationAppRealDao: NotificationAppRealDao,
-    private val healthSettingsDao: HealthSettingsEntryDao,
+    private val healthSettingsDao: HealthSettingsEntryRealDao,
     private val healthStatDao: HealthStatDao,
     private val vibePatternDao: VibePatternDao,
     private val platformConfig: PlatformConfig,
     private val watchPrefDao: WatchPrefRealDao,
     private val weatherAppDao: WeatherAppRealDao,
     private val appPrefsEntryDao: AppPrefsEntryDao,
+    private val notificationRuleDao: NotificationRuleDao,
 ) {
     fun get(): Set<BlobDbDao<BlobDbRecord>> = buildSet {
         add(lockerEntryDao)
@@ -83,6 +86,7 @@ data class BlobDbDaos(
     } as Set<BlobDbDao<BlobDbRecord>>
     
     fun getVibePatternDao(): VibePatternDao = vibePatternDao
+    fun getNotificationRuleDao(): io.rebble.libpebblecommon.database.dao.NotificationRuleDao = notificationRuleDao
 }
 
 interface TimeProvider {
@@ -167,11 +171,14 @@ class BlobDB(
         unfaithful: Boolean,
         previouslyConnected: Boolean,
         capabilities: Set<ProtocolCapsFlag>,
+        firmwareVersion: FirmwareVersion,
     ) {
         val params = ValueParams(
             platform = watchType,
             capabilities = capabilities,
+            firmwareVersion = firmwareVersion,
             vibePatternDao = blobDatabases.getVibePatternDao(),
+            notificationRuleDao = blobDatabases.getNotificationRuleDao(),
         )
         val deviceHasPreviouslySyncedSettings =
             loadDevicePreviousSettingsSyncState().identifiers.contains(identifier.asString)
@@ -216,7 +223,20 @@ class BlobDB(
                     if (message.database == BlobDatabase.WatchPrefs && !deviceHasPreviouslySyncedSettings) {
                         markDeviceHasSyncedSettings()
                     }
-                    val dao = blobDatabases.get().find { it.databaseId() == message.database }
+                    // The watch firmware sends health settings (activityPreferences, unitsDistance)
+                    // via the WatchPrefs BlobDB, but the phone stores them in HealthParams.
+                    // Route these keys to the health settings DAO.
+                    val effectiveDatabase = if (message.database == BlobDatabase.WatchPrefs) {
+                        val key = message.key.toByteArray().decodeToString().trimEnd('\u0000')
+                        if (key == "activityPreferences" || key == "unitsDistance") {
+                            BlobDatabase.HealthParams
+                        } else {
+                            message.database
+                        }
+                    } else {
+                        message.database
+                    }
+                    val dao = blobDatabases.get().find { it.databaseId() == effectiveDatabase }
                     val result = dao?.handleWrite(
                         write = message,
                         transport = identifier.asString,

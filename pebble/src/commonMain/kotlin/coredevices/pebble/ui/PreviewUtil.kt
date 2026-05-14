@@ -25,6 +25,7 @@ import coredevices.database.HeartEntity
 import coredevices.database.HeartsDao
 import coredevices.firestore.PebbleUser
 import coredevices.firestore.UsersDao
+import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
@@ -50,6 +51,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
+import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.PermissionResult
@@ -75,6 +77,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
@@ -136,12 +140,18 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         }
 
         override fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier) {}
+        override fun updateWatchNow(
+            libPebble: LibPebble,
+            identifier: String
+        ) {
+        }
     }
     single { themeProvider } bind ThemeProvider::class
     single { NotificationScreenViewModel() }
-    single { WatchHomeViewModel(get()) }
+    singleOf(::WatchHomeViewModel)
     single { NotificationAppScreenViewModel() }
     single { NotificationAppsScreenViewModel() }
+    single { DoneInitialOnboarding() }
     val storeSourceDao = object : AppstoreSourceDao {
         override suspend fun insertSource(source: AppstoreSource): Long = 0
 
@@ -166,6 +176,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     val storeCollectionDao = object : AppstoreCollectionDao {
         override suspend fun insertOrUpdateCollection(collection: AppstoreCollection): Long = 1
 
+        override suspend fun insertCollectionIfMissing(collection: AppstoreCollection): Long = 1
+
         override suspend fun getCollection(
             sourceId: Int,
             slug: String,
@@ -183,10 +195,14 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { storeCollectionDao } bind AppstoreCollectionDao::class
     val usersDao = object : UsersDao {
         override val user: Flow<PebbleUser?> = flow { emit(null) }
+        override val loginEvents: Flow<PebbleUser> = flow {}
         override suspend fun updateNotionToken(notionToken: String?) {}
         override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
         override suspend fun updateTodoBlockId(todoBlockId: String) {}
         override suspend fun initUserDevToken(rebbleUserToken: String?) {}
+        override suspend fun updateLastConnectedWatch(serial: String) {}
+        override suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+
         override fun init() {}
     }
     single { usersDao } bind UsersDao::class
@@ -218,6 +234,11 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             useCache: Boolean
         ): List<AppStoreHomeResult> = emptyList()
 
+        override suspend fun fetchPebbleAppStoreHomes(
+            hardwarePlatform: WatchType?,
+            useCache: Boolean
+        ): Map<AppType, AppStoreHomeResult?> = emptyMap()
+
         override suspend fun searchAppStore(
             search: String,
             appType: AppType,
@@ -234,6 +255,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         ): Boolean = true
 
         override suspend fun removeFromLegacyLocker(id: Uuid): Boolean = true
+        override suspend fun fetchUserHearts() {
+        }
 
         override suspend fun getWeather(
             latitude: Double,
@@ -349,6 +372,13 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     } } bind AppUpdate::class
     single { object : CompanionDevice {
         override suspend fun registerDevice(
+            identifier: IndexIdentifier,
+            uiContext: PlatformUiContext
+        ) {
+
+        }
+
+        override suspend fun registerDevice(
             identifier: PebbleIdentifier,
             uiContext: PlatformUiContext
         ) {
@@ -381,13 +411,17 @@ val WrapperTopBarParams = TopBarParams(
 )
 
 @Composable
-fun PreviewWrapper(content: @Composable () -> Unit) {
+fun PreviewWrapper(extraModule: Module? = null, content: @Composable () -> Unit) {
     val previewHandler = AsyncImagePreviewHandler {
         ColorImage(Color.Red.toArgb())
     }
     val module = fakePebbleModule()
     KoinApplication(application = {
-        modules(module)
+        if (extraModule != null) {
+            modules(module, extraModule)
+        } else {
+            modules(module)
+        }
     }) {
         CompositionLocalProvider(LocalAsyncImagePreviewHandler provides previewHandler) {
             AppTheme {

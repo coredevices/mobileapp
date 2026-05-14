@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.di
 
+import io.rebble.libpebblecommon.calendar.IosCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
+import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.SystemCalendar
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.SystemCallLog
@@ -8,6 +10,8 @@ import io.rebble.libpebblecommon.connection.OtherPebbleApps
 import io.rebble.libpebblecommon.connection.PhoneCapabilities
 import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
+import io.rebble.libpebblecommon.connection.bt.classic.transport.ClassicScanner
+import io.rebble.libpebblecommon.connection.bt.classic.transport.IosClassicScanner
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
@@ -47,6 +51,7 @@ actual val platformModule: Module = module {
     singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
+    singleOf(::IosCalendarActionHandler) bind PlatformCalendarActionHandler::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class
@@ -64,4 +69,5 @@ actual val platformModule: Module = module {
         delayBleConnectionsAfterAppStart = true,
         supportsPpogResetCharacteristic = true,
     ) }
+    singleOf(::IosClassicScanner) bind ClassicScanner::class
 }

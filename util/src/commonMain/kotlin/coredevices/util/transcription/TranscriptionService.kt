@@ -1,7 +1,9 @@
 package coredevices.util.transcription
 
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Duration
 
 interface TranscriptionService {
     /**
@@ -13,7 +15,9 @@ interface TranscriptionService {
     /**
      * Begin initialization of transcription service in the background.
      */
-    fun earlyInit() {}
+    fun earlyInit() {
+        onInitialized.trySend(true)
+    }
 
     /**
      * Transcribe audio stream frames to text.
@@ -27,8 +31,11 @@ interface TranscriptionService {
         conversationContext: STTConversationContext? = null,
         dictionaryContext: List<String>? = null,
         contentContext: String? = null,
-        encoding: AudioEncoding = AudioEncoding.PCM_16BIT
+        encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
+        timeout: Duration = Duration.INFINITE
     ): Flow<TranscriptionSessionStatus>
+
+    val onInitialized: Channel<Boolean>
 }
 
 sealed interface STTLanguage {
@@ -41,7 +48,21 @@ sealed interface STTLanguage {
      * ISO 639-1 language codes, e.g. "en", "es", "fr".
      */
     data class Specific(val languageCodes: Set<String>) : STTLanguage
+
+    companion object {
+        /**
+         * Resolve an ISO 639-1 language code into an [STTLanguage]. Null/blank -> [Automatic].
+         */
+        fun fromCodeOrAutomatic(code: String?): STTLanguage =
+            code?.takeIf { it.isNotBlank() }?.let { Specific(setOf(it)) } ?: Automatic
+    }
 }
+
+/**
+ * Curated list of ISO 639-1 language codes for user-selectable spoken language settings.
+ * Pairs are (code, English display name).
+ */
+expect val SpokenLanguageOptions: List<Pair<String, String>>
 
 data class STTConversationMessage(
     val role: STTConvoRole,

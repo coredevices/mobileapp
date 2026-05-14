@@ -53,7 +53,7 @@ abstract class OAuthIntegration(
         }
     }
 
-    suspend fun isAuthorized(): Boolean = tokenStorage.getToken(tokenStorageKey) != null
+    override suspend fun isAuthorized(): Boolean = tokenStorage.getToken(tokenStorageKey) != null
 
     private fun String.toChallenge(): String {
         return sha256(this)

@@ -25,7 +25,7 @@ abstract class GoogleAPIIntegration(
 
     protected suspend fun tokenForScopes(): String? = googleAuthUtil.getAccessToken(scopes)
 
-    suspend fun isAuthorized(): Boolean {
+    override suspend fun isAuthorized(): Boolean {
         val r = tokenForScopes() != null
         Logger.d { "GoogleAPIIntegration.isAuthorized: $r" }
         return r

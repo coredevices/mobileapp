@@ -32,6 +32,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -47,6 +48,7 @@ class SystemService(
 ) : ProtocolService,
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
+    private val lastSentTimezoneId: AtomicReference<String> = AtomicReference(TimeZone.currentSystemDefault().id)
 
     private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
     val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
@@ -180,7 +182,7 @@ class SystemService(
                         pongCallback = null
                     }
 
-                    is TimeMessage.GetTimeRequest-> {
+                    is TimeMessage.GetTimeUtcRequest-> {
                         updateTime()
                     }
                 }
@@ -192,6 +194,7 @@ class SystemService(
         logger.d("updateTime")
         val time = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
+        lastSentTimezoneId.store(timeZone.id)
         val timeUtcSeconds = time.epochSeconds
         val tzOffsetMinutes = timeZone.offsetAt(time).totalSeconds.seconds.inWholeMinutes
         logger.v("time=$time timeZone=$timeZone timeUtcSeconds=$timeUtcSeconds tzOffsetMinutes=$tzOffsetMinutes")
@@ -202,6 +205,15 @@ class SystemService(
                 timeZoneName = timeZone.id,
             )
         )
+    }
+
+    override suspend fun updateTimeIfNeeded() {
+        val currentTz = TimeZone.currentSystemDefault().id
+        val previousTz = lastSentTimezoneId.load()
+        if (currentTz != previousTz) {
+            logger.d("Timezone changed while backgrounded: $previousTz -> $currentTz")
+            updateTime()
+        }
     }
 
 }

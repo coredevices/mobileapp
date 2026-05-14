@@ -18,15 +18,19 @@ data class RecordingProcessingTask(
 ) : QueueTask
 
 sealed interface ProcessingTask {
+    val created: Instant
     data class AudioRecording(
         val buttonSequence: String?,
         val transferId: Long,
+        override val created: Instant = Clock.System.now()
     ) : ProcessingTask
     data class LocalAudioRecording(
         val fileId: String,
         val buttonSequence: String?,
+        override val created: Instant = Clock.System.now()
     ) : ProcessingTask
     data class TextRecording(
         val transcription: String,
+        override val created: Instant = Clock.System.now()
     ) : ProcessingTask
 }

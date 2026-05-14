@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Note
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.outlined.Alarm
@@ -56,6 +57,7 @@ fun SemanticResultIcon(
     modifier: Modifier = Modifier
 ) {
     val icon = when (result) {
+        is SemanticResult.MessageSent -> Icons.Default.Send
         is SemanticResult.GenericSuccess -> Icons.Default.Code
         is SemanticResult.GenericFailure -> Icons.Outlined.Warning
         is SemanticResult.AlarmCreation -> Icons.Outlined.Alarm
@@ -218,6 +220,7 @@ fun SemanticResultOverline(text: String, modifier: Modifier = Modifier) {
 
 suspend fun SemanticResult.actionText(): String {
     return when (this) {
+        is SemanticResult.MessageSent -> "Messaged ${this.recipientName}"
         is SemanticResult.GenericSuccess -> "Action completed"
         is SemanticResult.GenericFailure -> "Action failed"
         is SemanticResult.AlarmCreation -> getString(Res.string.alarm_set)

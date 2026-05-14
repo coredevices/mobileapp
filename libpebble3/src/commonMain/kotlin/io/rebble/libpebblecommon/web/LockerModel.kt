@@ -1,7 +1,15 @@
 package io.rebble.libpebblecommon.web
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlin.uuid.Uuid
 
 data class LockerModelWrapper(
@@ -91,11 +99,31 @@ data class LockerEntryCompatibilityPhonePlatformDetails(
     @SerialName("min_js_version") val minJsVersion: Int? = null
 )
 
+/**
+ * Deserializer for has_binary which can be a boolean or an empty object {} in the API response.
+ */
+private object LenientBooleanSerializer : KSerializer<Boolean?> {
+    override val descriptor = PrimitiveSerialDescriptor("LenientBoolean", PrimitiveKind.BOOLEAN)
+
+    override fun deserialize(decoder: Decoder): Boolean? {
+        if (decoder is JsonDecoder) {
+            val element = decoder.decodeJsonElement()
+            return (element as? JsonPrimitive)?.booleanOrNull
+        }
+        return decoder.decodeBoolean()
+    }
+
+    override fun serialize(encoder: Encoder, value: Boolean?) {
+        if (value != null) encoder.encodeBoolean(value)
+    }
+}
+
 @Serializable
 data class LockerEntryCompatibilityWatchPlatformDetails(
     val supported: Boolean,
     val firmware: LockerEntryFirmwareVersion,
     @SerialName("has_binary")
+    @Serializable(with = LenientBooleanSerializer::class)
     val hasBinary: Boolean? = null,
 )
 

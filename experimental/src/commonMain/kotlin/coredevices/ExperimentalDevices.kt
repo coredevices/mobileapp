@@ -17,6 +17,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import com.eygraber.uri.Uri
 import com.mmk.kmpnotifier.notification.NotifierManager
+import coredevices.libindex.LibIndex
+import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
@@ -30,9 +32,17 @@ import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.navigation.addRingRoutes
 import coredevices.ring.ui.screens.home.FeedTabContents
 import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
+import dev.gitlive.firebase.auth.FirebaseUser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.io.buffered
@@ -50,8 +60,47 @@ class ExperimentalDevices(
     private val sandboxRepository: McpSandboxRepository,
     private val preferences: Preferences,
     private val shortcutActionHandler: ShortcutActionHandler,
+    private val libIndex: LibIndex,
+    private val permissionRequester: PermissionRequester,
+    /** Touched here so Koin instantiates the singleton at app start;
+     *  the syncer's init block attaches its observers immediately and
+     *  runs for the rest of the process lifetime (mirrors how
+     *  RecordingProcessingQueue's recording observer kicks off). */
+    private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
+    fun appInit() {
+        libIndex.init(
+            permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
+                (Permission.Bluetooth in old && Permission.Bluetooth !in new) || (Permission.Bluetooth !in old && Permission.Bluetooth in new)
+            }.map {
+                Permission.Bluetooth !in it
+            }
+        )
+        indexFeedSyncService.hashCode()
+        // Self-healing: creates the three system seed lists in Firestore
+        // (Notes-to-self / Todos / Shopping) if any are missing. Idempotent.
+        // Runs after each auth event because [DefaultListsBootstrap] reads
+        // its own auth state internally; we kick once at app start and
+        // again whenever auth changes via the snapshot listener flow.
+        scope.launch {
+            flow {
+                emit(Firebase.auth.currentUser)
+                Firebase.auth.authStateChanged.collect { emit(it) }
+            }.distinctUntilChanged { old: FirebaseUser?, new: FirebaseUser? ->
+                old?.uid == new?.uid
+            }.collect { user ->
+                if (user != null) {
+                    try { defaultListsBootstrap.ensure() } catch (e: Exception) {
+                        co.touchlab.kermit.Logger.withTag("ExperimentalDevices")
+                            .w(e) { "DefaultListsBootstrap.ensure() failed" }
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun init() {
         withContext(Dispatchers.IO) {
             sandboxRepository.seedDatabase()
@@ -68,10 +117,6 @@ class ExperimentalDevices(
 
     fun handleDeepLink(uri: Uri): Boolean {
         return shortcutActionHandler.handleDeepLink(uri)
-    }
-
-    fun requiredRuntimePermissions(): Set<Permission> {
-        return ringDelegate.requiredRuntimePermissions()
     }
 
     fun addExperimentalRoutes(builder: NavGraphBuilder, coreNav: CoreNav) {
@@ -119,7 +164,7 @@ class ExperimentalDevices(
                 if (isDebugEnabled) {
                     IconButton(
                         onClick = {
-                            launchWavImportDialog(listOf("audio/wav"))
+                            launchWavImportDialog(listOf("audio/*"))
                         }
                     ) {
                         Icon(Icons.Default.AudioFile, contentDescription = "Debug")

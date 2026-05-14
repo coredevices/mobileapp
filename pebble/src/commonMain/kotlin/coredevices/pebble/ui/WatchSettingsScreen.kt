@@ -4,6 +4,7 @@ import AppUpdateTracker
 import CommonRoutes
 import CoreAppVersion
 import NextBugReportContext
+import PlatformUiContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -21,36 +23,52 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DoNotDisturb
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,14 +78,19 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,13 +109,23 @@ import coredevices.coreapp.util.AppUpdateState
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.account.PebbleAccount
+import coredevices.pebble.health.HealthSyncTracker
+import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.ui.SettingsIds.EnableActivityInsights
+import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
+import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
+import coredevices.pebble.ui.SettingsIds.EnableSleepInsights
+import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.ui.ConfirmDialog
+import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
+import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
@@ -100,23 +133,28 @@ import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
+import coredevices.util.transcription.SpokenLanguageOptions
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
+import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -150,46 +188,74 @@ enum class TopLevelType(val displayName: String) {
     }
 }
 
-enum class Section(val title: String /*val type: TopLevelType*/) {
-    About("About"),
-    Support("Support"),
-    Defaults("Defaults"),
-    QuickLaunch("Quick Launch"), // watch only
-    NotificationsWatch("Notifications"), // watch only
-    Settings("Settings"),
-    Apps("Apps"),
-    Calendar("Calendar"),
-    Health("Health"),
-    Speech("Speech Recognition"),
-    Display("Display"), // watch only
-    Weather("Weather"),
-    Notifications("Notifications"),
-    Time("Time"), // watch only
-    Timeline("Timeline"), // watch only
-    QuietTime("Quiet Time"),
-    Connectivity("Connectivity"),
-    Logging("Logging"),
-    Other("Other"), // watch only
-    Analytics("Analytics"),
-    Debug("Debug"),
+enum class Section(val title: String, val icon: ImageVector) {
+    About("About", Icons.Default.Info),
+    Support("Get Help", Icons.Default.SupportAgent),
+    Defaults("Defaults", Icons.Default.Tune),
+    QuickLaunch("Quick Launch", Icons.Default.RocketLaunch), // watch only
+    NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
+    General("General", Icons.Default.Settings),
+    Apps("Apps", Icons.Default.Apps),
+    Calendar("Calendar", Icons.Default.CalendarMonth),
+    Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
+    Speech("Speech Recognition", Icons.Default.Mic),
+    Display("Display", Icons.Default.DarkMode), // watch only
+    Weather("Weather", Icons.Default.Cloud),
+    Notifications("Notifications", Icons.Default.Notifications),
+    Time("Time", Icons.Default.Schedule), // watch only
+    Timeline("Timeline", Icons.Default.Timeline), // watch only
+    QuietTime("Quiet Time", Icons.Default.DoNotDisturb),
+    Connectivity("Connectivity", Icons.Default.Wifi),
+    Music("Music", Icons.Default.MusicNote), // watch only
+    Other("Other", Icons.Default.MoreHoriz), // watch only
+    Diagnostics("Diagnostics", Icons.Default.Timeline),
+    Debug("Debug", Icons.Default.BugReport),
+}
+
+object SettingsIds {
+    const val OfflineSpeechRecognition = "OfflineSpeechRecognition"
+    const val EnableHealthTracking = "EnableHealthTracking"
+    const val EnableActivityInsights = "EnableActivityInsights"
+    const val EnableSleepInsights = "EnableSleepInsights"
+    const val EnableHealthPlatformSync = "EnableHealthPlatformSync"
+    const val HealthHeight = "HealthHeight"
+    const val HealthWeight = "HealthWeight"
+    const val HealthAge = "HealthAge"
+    const val HealthGenderId = "HealthGender"
+    const val HealthImperialUnits = "HealthImperialUnits"
+    const val HrmEnabled = "HrmEnabled"
+    const val HrmMeasurementInterval = "HrmMeasurementInterval"
+    const val HrmActivityTracking = "HrmActivityTracking"
 }
 
 data class SettingsItem(
+    val id: String? = null,
     val title: String,
     val topLevelType: TopLevelType,
     val section: Section,
     val keywords: String = "",
     val show: () -> Boolean = { true },
-    val item: @Composable () -> Unit,
+    val badge: String? = null,
+    private val item: @Composable () -> Unit,
     val isDebugSetting: Boolean,
-)
+    val onDisplayed: (@Composable () -> Unit)? = null,
+) {
+    @Composable
+    fun Item() {
+        onDisplayed?.invoke()
+        item()
+    }
+}
 
-private val ELEVATION = 2.dp
+private val ELEVATION = 0.dp
 
 @Composable
 fun settingsBadgeTotal(): Int {
     val permissionRequester: PermissionRequester = koinInject()
     val missingPermissions by permissionRequester.missingPermissions.collectAsState()
+    val coreConfigHolder: CoreConfigHolder = koinInject()
+    val coreConfig by coreConfigHolder.config.collectAsState()
+    val permissionBadgeCount = if (coreConfig.hidePermissionWarningBadges) 0 else missingPermissions.size
     val appUpdate: AppUpdate = koinInject()
     val updateState by appUpdate.updateAvailable.collectAsState()
     val updatesAvailable = when (updateState) {
@@ -202,7 +268,7 @@ fun settingsBadgeTotal(): Int {
         true -> 1
         false -> 0
     }
-    return missingPermissions.size + updatesAvailable + appUpdated
+    return permissionBadgeCount + updatesAvailable + appUpdated
 }
 
 private val logger = Logger.withTag("WatchSettingsScreen")
@@ -225,215 +291,174 @@ class WatchSettingsScreenViewModel : ViewModel() {
     var selectedTopLevelType by mutableStateOf(TopLevelType.Phone)
 }
 
+data class SettingsItemsState(
+    val rawSettingsItems: List<SettingsItem>,
+    val debugOptionsEnabled: Boolean,
+    val anyWatchSupportsSettingsSync: Boolean,
+    val coreConfig: CoreConfig,
+    val healthTrackingEnabled: Boolean,
+)
+
 @Composable
-fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        val viewModel = koinViewModel<WatchSettingsScreenViewModel>()
-        val libPebble = rememberLibPebble()
-        val libPebbleConfig by libPebble.config.collectAsState()
-        val coreConfigHolder: CoreConfigHolder = koinInject()
-        val coreConfig by coreConfigHolder.config.collectAsState()
-        val themeProvider: ThemeProvider = koinInject()
-        val settings: Settings = koinInject()
-        val currentTheme by themeProvider.theme.collectAsState()
-        val pebbleFeatures = koinInject<PebbleFeatures>()
-        val pebbleAccount = koinInject<PebbleAccount>()
-        val localSnackbarHostState = remember { SnackbarHostState() }
-        val loggedIn by pebbleAccount.loggedIn.collectAsState()
-        val coreUser by Firebase.auth.authStateChanged.map {
-            it?.emailOrNull
-        }.distinctUntilChanged()
-            .collectAsState(Firebase.auth.currentUser?.emailOrNull)
-        val scope = rememberCoroutineScope()
-        val appContext = koinInject<AppContext>()
-        val appVersion = koinInject<CoreAppVersion>()
-        val platform = koinInject<Platform>()
-        val modelManager: ModelManager = koinInject()
-        val nextBugReportContext: NextBugReportContext = koinInject()
-        val appUpdate: AppUpdate = koinInject()
-        val updateState by appUpdate.updateAvailable.collectAsState()
-        val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
-        val coreBackgroundSync: CoreBackgroundSync = koinInject()
-        if (showCopyTokenDialog) {
-            PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
+fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarDisplay): SettingsItemsState? {
+    val libPebble = rememberLibPebble()
+    val libPebbleConfig by libPebble.config.collectAsState()
+    val coreConfigHolder: CoreConfigHolder = koinInject()
+    val coreConfig by coreConfigHolder.config.collectAsState()
+    val themeProvider: ThemeProvider = koinInject()
+    val settings: Settings = koinInject()
+    val currentTheme by themeProvider.theme.collectAsState()
+    val pebbleFeatures = koinInject<PebbleFeatures>()
+    val pebbleAccount = koinInject<PebbleAccount>()
+    val loggedIn by pebbleAccount.loggedIn.collectAsState()
+    val coreUser by Firebase.auth.authStateChanged.map {
+        it?.emailOrNull
+    }.distinctUntilChanged()
+        .collectAsState(Firebase.auth.currentUser?.emailOrNull)
+    val scope = rememberCoroutineScope()
+    val appContext = koinInject<AppContext>()
+    val appVersion = koinInject<CoreAppVersion>()
+    val platform = koinInject<Platform>()
+    val modelManager: ModelManager = koinInject()
+    val nextBugReportContext: NextBugReportContext = koinInject()
+    val appUpdate: AppUpdate = koinInject()
+    val updateState by appUpdate.updateAvailable.collectAsState()
+    val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
+    val coreBackgroundSync: CoreBackgroundSync = koinInject()
+    if (showCopyTokenDialog) {
+        PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
+    }
+    var showHealthStatsDialog by remember { mutableStateOf(false) }
+    val showFakeHealthDataDialog = remember { mutableStateOf(false) }
+    var showSignInDialog by remember { mutableStateOf(false) }
+    var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
+    var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
+    var showSpokenLanguageDialog by remember { mutableStateOf(false) }
+    val recommendedSTTModel = modelManager.getRecommendedSTTModel()
+    val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
+    if (showSpokenLanguageDialog) {
+        SpokenLanguagePickerDialog(
+            selectedCode = coreConfig.sttConfig.spokenLanguage,
+            onLanguageSelected = { code ->
+                coreConfigHolder.update(
+                    coreConfig.copy(
+                        sttConfig = coreConfig.sttConfig.copy(spokenLanguage = code)
+                    )
+                )
+                showSpokenLanguageDialog = false
+            },
+            onDismissRequest = { showSpokenLanguageDialog = false },
+        )
+    }
+    pendingSTTModeDialog?.let { pendingSTTMode ->
+        val recommendedModel by produceState<ModelInfo?>(null) {
+            withContext(Dispatchers.Default) {
+                val models = modelManager.getAvailableSTTModels()
+                value = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
+                    ?: run {
+                        snackbarDisplay.showSnackbar("Error occurred. Please try again later.")
+                        logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
+                        pendingSTTModeDialog = null
+                        null
+                    }
+            }
         }
-        var showBtClassicInfoDialog by remember { mutableStateOf(false) }
-        var showHealthStatsDialog by remember { mutableStateOf(false) }
-        var showSignInDialog by remember { mutableStateOf(false) }
-        var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
-        var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
-        val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
-        val recommendedSTTModel = modelManager.getRecommendedSTTModel()
-        pendingSTTModeDialog?.let { pendingSTTMode ->
-            ModelDownloadPromptDialog(
-                isLite = recommendedSTTModel is RecommendedModel.Lite,
-                onGetRecommended = {
-                    scope.launch {
-                        val models = modelManager.getAvailableSTTModels()
-                        val recommendedModel = models.firstOrNull { it.slug == recommendedSTTModel.modelSlug }
-                            ?: run {
-                                topBarParams.showSnackbar("Error occurred. Please try again later.")
-                                logger.e { "Recommended model $recommendedSTTModel not found in available models: ${models.map { it.slug }}" }
-                                pendingSTTModeDialog = null
-                                return@launch
-                            }
-                        if (!modelManager.downloadSTTModel(recommendedModel, allowMetered = true)) {
-                            topBarParams.showSnackbar("Error starting download. Please try again later.")
-                            logger.e { "Failed to start download for recommended model ${recommendedModel.slug}" }
-                        } else {
-                            coreConfigHolder.update(
-                                coreConfig.copy(
-                                    sttConfig = STTConfig(
-                                        mode = pendingSTTMode,
-                                        modelName = recommendedModel.slug
-                                    )
+        val recommendedModelFinal = recommendedModel
+        if (recommendedModelFinal == null) {
+            return@let
+        }
+        ModelDownloadPromptDialog(
+            isLite = recommendedSTTModel is RecommendedModel.Lite,
+            downloadSizeInMb = recommendedModelFinal.sizeInMB,
+            onGetRecommended = {
+                scope.launch {
+                    if (!modelManager.downloadSTTModel(recommendedModelFinal, allowMetered = true)) {
+                        snackbarDisplay.showSnackbar("Error starting download. Please try again later.")
+                        logger.e { "Failed to start download for recommended model ${recommendedModelFinal.slug}" }
+                    } else {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                sttConfig = STTConfig(
+                                    mode = pendingSTTMode,
+                                    modelName = recommendedModelFinal.slug
                                 )
                             )
-                        }
-                        pendingSTTModeDialog = null
-                    }
-                },
-                onDismiss = {
-                    pendingSTTModeDialog = null
-                }
-            )
-        }
-        var modelSnackbarJob by remember { mutableStateOf<Job?>(null) }
-        LaunchedEffect(modelDownloadStatus) {
-            when (modelDownloadStatus) {
-                is ModelDownloadStatus.Idle -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                }
-                is ModelDownloadStatus.Cancelled -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                }
-                is ModelDownloadStatus.Failed -> {
-                    modelSnackbarJob?.let {
-                        it.cancel()
-                        modelSnackbarJob = null
-                    }
-                    localSnackbarHostState.showSnackbar("Failed to download model")
-                }
-                is ModelDownloadStatus.Downloading -> {
-                    if (modelSnackbarJob?.isActive != true) {
-                        modelSnackbarJob = scope.launch {
-                            localSnackbarHostState.showSnackbar(
-                                "Downloading model...",
-                                duration = SnackbarDuration.Indefinite
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        if (showHealthStatsDialog) {
-            HealthStatsDialog(
-                libPebble = libPebble,
-                onDismissRequest = { showHealthStatsDialog = false },
-            )
-        }
-        if (showSignInDialog) {
-            SignInDialog(
-                onDismiss = { showSignInDialog = false }
-            )
-        }
-        if (showBtClassicInfoDialog) {
-            M3Dialog(
-                onDismissRequest = { showBtClassicInfoDialog = false },
-                title = { Text("Prefer BT Classic") },
-                buttons = {
-                    OutlinedButton(
-                        onClick = { showBtClassicInfoDialog = false }
-                    ) {
-                        Text("Ok")
-                    }
-                },
-            ) {
-                Box(Modifier.heightIn(max = 400.dp)) {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
-                        Text(
-                            text = """When enabled, the app will first connect (and pair) to your watch over
-BLE, then disconnect and reconnect using Bluetooth Classic - this will
-prompt your to pair your watch again (BLE and BT Classic use separate
- pairings).
-
-If you are already connected over BLE, you will need to disconnect/reconnect
-for this to take effect.
-
-The watch will show "No LE" on the bluetooth settings screen once 
-connected over BT Classic while BLE is also paired (and will show "LE only"
-if you choose to go back to BLE while classic is still paired).
-
-This should improve connection reliability, but if it does not work,
-please disable the option.""".trimIndent(),
-                            fontSize = 12.sp,
                         )
                     }
+                    pendingSTTModeDialog = null
                 }
+            },
+            onDismiss = {
+                pendingSTTModeDialog = null
             }
+        )
+    }
+    if (showHealthStatsDialog) {
+        HealthStatsDialog(
+            libPebble = libPebble,
+            onDismissRequest = { showHealthStatsDialog = false },
+        )
+    }
+    ConfirmDialog(
+        show = showFakeHealthDataDialog,
+        title = "Populate fake health data",
+        text = "This will wipe all existing health data and replace it with 30 days of fake data. This cannot be undone.",
+        confirmText = "Wipe & Populate",
+        onConfirm = {
+            scope.launch { libPebble.populateDebugHealthData() }
+        },
+    )
+    if (showSignInDialog) {
+        SignInDialog(
+            onDismiss = { showSignInDialog = false }
+        )
+    }
+    val modelDownloadStatus by modelManager.modelDownloadStatus.collectAsState()
+    LaunchedEffect(modelDownloadStatus) {
+        when (modelDownloadStatus) {
+            is ModelDownloadStatus.Failed -> {
+                snackbarDisplay.showSnackbar("Failed to download model")
+            }
+            else -> {}
         }
-        val listState = rememberLazyListState()
+    }
+    var themeDropdownExpanded by remember { mutableStateOf(false) }
+    val permissionRequester: PermissionRequester = koinInject()
+    val missingPermissions by permissionRequester.missingPermissions.collectAsState()
+    val uiContext = rememberUiContext()
+    val analyticsBackend: AnalyticsBackend = koinInject()
+    val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
+    val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
+    val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
+    val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
+    val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
+    val appUpdateTracker: AppUpdateTracker = koinInject()
+    val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
+    val hasOfflineModels by produceState(false) {
+        withContext(Dispatchers.Default) {
+            value = modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
+        }
+    }
+    val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
+    val healthSettings = healthSettingsNullable ?: return null
+    val weatherFetcher: WeatherFetcher = koinInject()
+    val watches by libPebble.watches.collectAsState(null)
+    val watchesCastable = watches ?: return null
+    val anyWatchSupportsSettingsSync = remember(watchesCastable) {
+        watchesCastable.any {
+            it is KnownPebbleDevice && it.capabilities.contains(
+                ProtocolCapsFlag.SupportsBlobDbVersion
+            )
+        }
+    }
+    val watchPrefs = watchPrefs()
+    val coreAnalytics: CoreAnalytics = koinInject()
+    val platformHealthSync: PlatformHealthSync = koinInject()
+    val healthSyncTracker: HealthSyncTracker = koinInject()
+    val healthPlatformSyncEnabled by healthSyncTracker.enabled.collectAsState()
+    val healthIsSyncing by platformHealthSync.syncing.collectAsState()
 
-        LaunchedEffect(Unit) {
-            topBarParams.searchAvailable(viewModel.searchState)
-            topBarParams.actions {}
-            topBarParams.title("Settings")
-            launch {
-                topBarParams.scrollToTop.collect {
-                    if (listState.firstVisibleItemIndex > 0) {
-                        listState.animateScrollToItem(0)
-                    } else {
-                        viewModel.selectedTopLevelType = TopLevelType.Phone
-                    }
-                }
-            }
-        }
-        var themeDropdownExpanded by remember { mutableStateOf(false) }
-        val permissionRequester: PermissionRequester = koinInject()
-        val missingPermissions by permissionRequester.missingPermissions.collectAsState()
-        val uiContext = rememberUiContext()
-        val analyticsBackend: AnalyticsBackend = koinInject()
-        val enableFirebase = mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true))
-        val enableMemfault = mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true))
-        val enableMixpanel = mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true))
-        val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
-        val experimentalDevices by enableExperimentalDevices.enabled.collectAsState()
-        val appUpdateTracker: AppUpdateTracker = koinInject()
-        val showChangelogBadge = remember { appUpdateTracker.appWasUpdated.value }
-        val hasOfflineModels = remember {
-            modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
-        }
-        LaunchedEffect(Unit) {
-            appUpdateTracker.acknowledgeCurrentVersion()
-        }
-        val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
-        val healthSettings = healthSettingsNullable
-        if (healthSettings == null) {
-            return
-        }
-        val weatherFetcher: WeatherFetcher = koinInject()
-        val watches by libPebble.watches.collectAsState(null)
-        val watchesCastable = watches
-        if (watchesCastable == null) {
-            return
-        }
-        val anyWatchSupportsSettingsSync = remember(watchesCastable) {
-            watchesCastable.any {
-                it is KnownPebbleDevice && it.capabilities.contains(
-                    ProtocolCapsFlag.SupportsBlobDbVersion
-                )
-            }
-        }
-        val watchPrefs = watchPrefs()
-        val coreAnalytics: CoreAnalytics = koinInject()
-
-        val rawSettingsItems = remember(
+    val rawSettingsItems = remember(
             libPebbleConfig,
             debugOptionsEnabled,
             missingPermissions,
@@ -446,7 +471,7 @@ please disable the option.""".trimIndent(),
             loggedIn,
             watchPrefs,
         ) {
-            listOf(
+            listOfNotNull(
                 basicSettingsActionItem(
                     title = "App Update Available",
                     description = "Please update the Pebble App!",
@@ -464,7 +489,7 @@ please disable the option.""".trimIndent(),
                     },
                     show = { updateState is AppUpdateState.UpdateAvailable },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Permissions",
                     description = if (missingPermissions.isEmpty()) {
                         "All permissions granted!"
@@ -477,11 +502,11 @@ please disable the option.""".trimIndent(),
                     section = Section.About,
                     action = if (missingPermissions.isNotEmpty()) {
                         {
-                            navBarNav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
+                            nav.navigateTo(PebbleNavBarRoutes.PermissionsRoute)
                         }
                     } else null,
-                    badge = if (missingPermissions.isEmpty()) null else "${missingPermissions.size}",
-                ),
+                    badge = if (missingPermissions.isEmpty() || coreConfig.hidePermissionWarningBadges) null else "${missingPermissions.size}",
+                ) },
                 SettingsItem(
                     title = "App Version",
                     topLevelType = TopLevelType.Phone,
@@ -496,65 +521,71 @@ please disable the option.""".trimIndent(),
                     },
                     isDebugSetting = false,
                 ),
-                basicSettingsActionItem(
-                    title = "What's new in the app",
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "What’s new in the app",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
+                        nav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                    badge = if (showChangelogBadge) "1" else null
-                ),
-                basicSettingsActionItem(
+                    badge = if (showChangelogBadge) "1" else null,
+                    onDisplayed = {
+                        LaunchedEffect(Unit) {
+                            appUpdateTracker.acknowledgeCurrentVersion()
+                        }
+                    },
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.PebbleOsChangelogRoute)
+                        nav.navigateTo(CommonRoutes.PebbleOsChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Getting Started & Troubleshooting",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.TroubleshootingRoute)
+                        nav.navigateTo(CommonRoutes.TroubleshootingRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "New Bug Report",
                     description = "Please report a bug if anything went wrong!",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        navBarNav.navigateTo(
+                        nextBugReportContext.nextContext = null
+                        nav.navigateTo(
                             CommonRoutes.BugReport(
                                 pebble = true,
                             )
                         )
                     },
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "View My Bug Reports",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Support,
                     action = {
-                        navBarNav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
+                        nav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
                     },
-                ),
-                basicSettingsActionItem(
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
-                    action = { navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
-                ),
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
+                ) },
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -578,7 +609,7 @@ please disable the option.""".trimIndent(),
                     title = "Background Refresh Interval",
                     description = "How often to check for updates, update apps from store, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     selectedItem = RegularSyncInterval.from(coreConfig.regularSyncInterval),
                     items = RegularSyncInterval.entries,
                     onItemSelected = {
@@ -591,7 +622,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Enable Index Feed",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     checked = coreConfig.enableIndex,
                     onCheckChanged = {
                         coreConfigHolder.update(
@@ -603,75 +634,30 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
-                    title = "Dump notifications to logs",
-                    description = "Detailed notification logging, to diagnose processing/deduplication issues",
+                    title = "Foreground Service",
+                    description = "Show foreground service notification to keep app alive in background",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
-                    checked = libPebbleConfig.notificationConfig.dumpNotificationContent,
+                    section = Section.General,
+                    checked = coreConfig.androidForegroundServiceForWatchConnection,
                     onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    dumpNotificationContent = it
-                                )
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                androidForegroundServiceForWatchConnection = it,
                             )
                         )
                     },
-                    show = { pebbleFeatures.supportsNotificationLogging() },
+                    show = { pebbleFeatures.supportsForegroundService() },
                 ),
-                basicSettingsToggleItem(
-                    title = "Obfuscate sensitive content in logs",
-                    description = "Remove any personal information (notification content, calendar events, app names, etc) from logs before they are written",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
-                    checked = libPebbleConfig.notificationConfig.obfuscateContent,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    obfuscateContent = it
-                                )
-                            )
-                        )
-                    },
-                ),
-                basicSettingsNumberItem(
-                    title = "Store notifications for",
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Quick replies",
+                    description = "Preset messages for notification replies on the watch (canned messages)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
-                    description = "How long notifications are stored for. This enabled better deduplicating, and powers the notification history view",
-                    value = libPebbleConfig.notificationConfig.storeNotifiationsForDays.toLong(),
-                    onValueChange = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    storeNotifiationsForDays = it.toInt()
-                                )
-                            )
-                        )
+                    action = {
+                        nav.navigateTo(PebbleNavBarRoutes.CannedRepliesRoute)
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
-                    min = 0,
-                    max = 7,
-                    unit = "Days"
-                ),
-                basicSettingsToggleItem(
-                    title = "Store disabled notifications",
-                    description = "Store notifications from disabled apps/channels, to allow viewing them in history",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    storeDisabledNotifications = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
+                ) },
                 basicSettingsToggleItem(
                     title = "Always send notifications",
                     description = "Send notifications to the watch even when the phone screen is on",
@@ -779,24 +765,59 @@ please disable the option.""".trimIndent(),
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
+                basicSettingsNumberItem(
+                    title = "Store notifications for",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    description = "How long notifications are stored for. This enabled better deduplicating, and powers the notification history view",
+                    value = libPebbleConfig.notificationConfig.storeNotifiationsForDays.toLong(),
+                    onValueChange = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeNotifiationsForDays = it.toInt()
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                    min = 0,
+                    max = 7,
+                    unit = "Days"
+                ),
                 basicSettingsToggleItem(
-                    title = "Prefer BT Classic",
-                    description = "Connect using Bluetooth Classic to watches which support it (Pebble, Pebble Steel, Pebble Time/Steel/Round). This may improve connection reliability, but is currently experimental.",
+                    title = "Store disabled notifications",
+                    description = "Store notifications from disabled apps/channels, to allow viewing them in history",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    storeDisabledNotifications = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show legacy watches in BLE scan",
+                    description = "Allow Aplite/Basalt/Chalk watches to appear in BLE scan results. By default these only show via the Bluetooth Classic scan option.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Connectivity,
-                    checked = libPebbleConfig.watchConfig.preferBtClassicV2,
+                    checked = libPebbleConfig.watchConfig.allowLegacyWatchesInBleScan,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 watchConfig = libPebbleConfig.watchConfig.copy(
-                                    preferBtClassicV2 = it
+                                    allowLegacyWatchesInBleScan = it
                                 )
                             )
                         )
-                        if (it) {
-                            showBtClassicInfoDialog = true
-                        }
                     },
+                    isDebugSetting = true,
                     show = { pebbleFeatures.supportsBtClassic() },
                 ),
                 basicSettingsToggleItem(
@@ -835,7 +856,7 @@ please disable the option.""".trimIndent(),
                 basicSettingsToggleItem(
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.Connectivity,
                     checked = libPebbleConfig.bleConfig.reversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -898,18 +919,19 @@ please disable the option.""".trimIndent(),
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Calendars",
                     description = "Configure which calendars to display",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Calendar,
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
-                ),
+                ) },
                 basicSettingsToggleItem(
-                    title = "Enable Health",
+                    id = EnableHealthTracking,
+                    title = "Enable Health Tracking",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.trackingEnabled,
@@ -922,10 +944,64 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    id = SettingsIds.HrmEnabled,
+                    title = "Heart Rate Monitor",
+                    description = "Allow the watch to measure heart rate",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.hrmEnabled,
+                    show = { healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.HrmMeasurementInterval,
+                    title = "Background Sampling",
+                    description = "How often the watch checks your heart rate when you're not in a workout. This can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.hrmMeasurementInterval,
+                    items = HRMonitoringInterval.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmMeasurementInterval = it)
+                        )
+                    },
+                    itemText = {
+                        when (it) {
+                            HRMonitoringInterval.TenMin -> "Every 10 minutes"
+                            HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
+                            HRMonitoringInterval.OneHour -> "Every hour"
+                            HRMonitoringInterval.Disabled -> "Off"
+                        }
+                    },
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HrmActivityTracking,
+                    title = "HR During Activities",
+                    description = "Continuously track heart rate during detected walks and runs. This can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.hrmActivityTrackingEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(hrmActivityTrackingEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = EnableActivityInsights,
                     title = "Activity Insights",
+                    description = "Receive notifications with insights about your activity",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.activityInsightsEnabled,
+                    show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(
@@ -935,16 +1011,163 @@ please disable the option.""".trimIndent(),
                     },
                 ),
                 basicSettingsToggleItem(
+                    id = EnableSleepInsights,
                     title = "Sleep Insights",
+                    description = "Receive notifications with insights about your sleep",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.sleepInsightsEnabled,
+                    show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(
                                 sleepInsightsEnabled = it
                             )
                         )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HealthImperialUnits,
+                    title = "Imperial Units",
+                    description = "Use miles/feet/inches/lb instead of metric units",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.imperialUnits,
+                    show = { healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(imperialUnits = it)
+                        )
+                    },
+                ),
+                basicSettingsNumberFieldItem(
+                    id = SettingsIds.HealthHeight,
+                    title = "Height",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for accurate calorie and distance estimates",
+                    value = if (healthSettings.imperialUnits) (healthSettings.heightMm / 25.4).roundToLong()
+                            else (healthSettings.heightMm / 10).toLong(),
+                    onValueChange = { v ->
+                        val mm = if (healthSettings.imperialUnits) (v * 25.4).roundToLong().toShort()
+                                 else (v * 10).toShort()
+                        libPebble.updateHealthSettings(healthSettings.copy(heightMm = mm))
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = if (healthSettings.imperialUnits) 39 else 100,
+                    max = if (healthSettings.imperialUnits) 87 else 220,
+                    unit = if (healthSettings.imperialUnits) "in" else "cm",
+                    valueFormatter = if (healthSettings.imperialUnits) {
+                        { v -> "${v / 12}' ${v % 12}\"" }
+                    } else null,
+                ),
+                basicSettingsNumberFieldItem(
+                    id = SettingsIds.HealthWeight,
+                    title = "Weight",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for accurate calorie estimates",
+                    value = if (healthSettings.imperialUnits) (healthSettings.weightDag / 45.359).roundToLong()
+                            else (healthSettings.weightDag / 100).toLong(),
+                    onValueChange = { v ->
+                        val dag = if (healthSettings.imperialUnits) (v * 45.359).roundToLong().toShort()
+                                  else (v * 100).toShort()
+                        libPebble.updateHealthSettings(healthSettings.copy(weightDag = dag))
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = if (healthSettings.imperialUnits) 66 else 30,
+                    max = if (healthSettings.imperialUnits) 441 else 200,
+                    unit = if (healthSettings.imperialUnits) "lb" else "kg",
+                ),
+                basicSettingsNumberFieldItem(
+                    id = SettingsIds.HealthAge,
+                    title = "Age",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    description = "Used for heart-rate zone calculations",
+                    value = healthSettings.ageYears.toLong(),
+                    onValueChange = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(ageYears = it.toInt())
+                        )
+                    },
+                    show = { healthSettings.trackingEnabled },
+                    min = 1,
+                    max = 120,
+                    unit = "years",
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.HealthGenderId,
+                    title = "Gender",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.gender,
+                    items = HealthGender.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(gender = it)
+                        )
+                    },
+                    itemText = { it.name },
+                    show = { healthSettings.trackingEnabled },
+                ),
+                basicSettingsToggleItem(
+                    id = EnableHealthPlatformSync,
+                    title = if (platform == Platform.IOS) "Sync to Apple Health" else "Sync to Health Connect",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthPlatformSyncEnabled,
+                    description = "Write steps, heart rate, sleep, and workouts to your phone's health platform",
+                    show = { healthSettings.trackingEnabled && platformHealthSync.isAvailable() },
+                    onCheckChanged = { enabled ->
+                        scope.launch {
+                            if (enabled) {
+                                val granted = platformHealthSync.requestPermissions()
+                                if (!granted) {
+                                    logger.w { "Health platform permissions not granted" }
+                                    return@launch
+                                }
+                            } else {
+                                healthSyncTracker.setEnabled(false)
+                            }
+                        }
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "Sync Now",
+                    description = if (healthIsSyncing) "Syncing..." else "Sync Pebble health data to phone",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    show = { healthPlatformSyncEnabled },
+                    action = if (healthIsSyncing) {
+                        null
+                    } else {
+                        {
+                            scope.launch {
+                                platformHealthSync.sync()
+                            }
+                        }
+                    },
+                ),
+                basicSettingsActionItem(
+                    title = "Open Google Fit",
+                    description = "View your synced health data in Google Fit",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    show = { healthPlatformSyncEnabled && platform == Platform.Android },
+                    action = {
+                        openGoogleFitApp(uiContext)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show Health Tab",
+                    description = "Show Health instead of Notifications in the bottom bar",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = coreConfig.preferHealthTab,
+                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
                     },
                 ),
                 basicSettingsActionItem(
@@ -955,6 +1178,17 @@ please disable the option.""".trimIndent(),
                     keywords = "health steps sleep stats debug",
                     action = {
                         showHealthStatsDialog = true
+                    },
+                    show = { debugOptionsEnabled },
+                ),
+                basicSettingsActionItem(
+                    title = "Populate fake health data",
+                    description = "Warning: this will wipe all existing health data!",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    keywords = "health debug fake data populate",
+                    action = {
+                        showFakeHealthDataDialog.value = true
                     },
                     show = { debugOptionsEnabled },
                 ),
@@ -1021,16 +1255,16 @@ please disable the option.""".trimIndent(),
                     itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Locations",
                     description = "Configure weather locations",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Weather,
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.WeatherRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.WeatherRoute)
                     },
                     show = { coreConfig.fetchWeather }
-                ),
+                ) },
                 basicSettingsToggleItem(
                     title = "Use LAN developer connection",
                     description = "Allow connecting to developer connection over LAN, this is not secure and should only be used on trusted networks",
@@ -1076,6 +1310,7 @@ please disable the option.""".trimIndent(),
                     isDebugSetting = true,
                 ),
                 basicSettingsDropdownItem(
+                    id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",
                     keywords = "cactus stt speech recognition offline",
                     topLevelType = TopLevelType.Phone,
@@ -1083,7 +1318,10 @@ please disable the option.""".trimIndent(),
                     items = CactusSTTMode.entries,
                     selectedItem = coreConfig.sttConfig.mode,
                     onItemSelected = {
-                        if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
+                        if (it != CactusSTTMode.LocalOnly && coreUser == null ) {
+                            snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
+                            showSignInDialog = true
+                        } else if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
                             pendingSTTModeDialog = it
                         } else {
                             coreConfigHolder.update(
@@ -1097,14 +1335,23 @@ please disable the option.""".trimIndent(),
                     },
                     itemText = { mode ->
                         when (mode) {
-                            CactusSTTMode.RemoteOnly -> "Disabled"
-                            CactusSTTMode.RemoteFirst -> "Fallback only"
-                            CactusSTTMode.LocalOnly -> "Forced"
-                            CactusSTTMode.LocalFirst -> "Preferred"
+                            CactusSTTMode.RemoteOnly -> "Cloud Only"
+                            CactusSTTMode.RemoteFirst -> "Cloud (with Local Fallback)"
+                            CactusSTTMode.LocalOnly -> "Local Only"
+                            CactusSTTMode.LocalFirst -> "Local (with Cloud Fallback)"
+                        }
+                    },
+                    extraSupportingContent = {
+                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.progress?.let { progress ->
+                            logger.v { "xx model download progress = $progress" }
+                            CoreLinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            )
                         }
                     },
                 ),
-                basicSettingsActionItem(
+                navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Manage Offline Models",
                     description = if (coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly) {
                         "Note: Offline speech recognition is lower accuracy, consider using" +
@@ -1117,8 +1364,18 @@ please disable the option.""".trimIndent(),
                     section = Section.Speech,
                     show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
                     action = {
-                        navBarNav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
+                        nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
+                ) },
+                basicSettingsActionItem(
+                    title = "Spoken Language",
+                    description = coreConfig.sttConfig.spokenLanguage
+                        ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
+                        ?: "Automatic",
+                    keywords = "language stt speech recognition locale iso",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    action = { showSpokenLanguageDialog = true },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -1136,10 +1393,92 @@ please disable the option.""".trimIndent(),
                     show = { pebbleFeatures.supportsDetectingOtherPebbleApps() },
                 ),
                 basicSettingsToggleItem(
+                    title = "Send app crashes",
+                    description = "This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableFirebase.value,
+                    onCheckChanged = {
+                        enableFirebase.value = it
+                        settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("crashlytics_collection_disabled")
+                        }
+                        Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Send watch analytics",
+                    description = "Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableMemfault.value,
+                    onCheckChanged = {
+                        enableMemfault.value = it
+                        if (!it) {
+                            coreAnalytics.logEvent("memfault_collection_disabled")
+                        }
+                        settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Send app analytics",
+                    description = "This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = enableMixpanel.value,
+                    onCheckChanged = {
+                        enableMixpanel.value = it
+                        settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
+                        if (!it) {
+                            coreAnalytics.logEvent("mixpanel_collection_disabled")
+                        }
+                        analyticsBackend.setEnabled(it)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show notifications in phone logs",
+                    description = "Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = libPebbleConfig.notificationConfig.dumpNotificationContent,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    dumpNotificationContent = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationLogging() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Show sensitive content in phone logs",
+                    description = "Include unredacted personal information (notification content, calendar events, app names, etc) in logs",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Diagnostics,
+                    checked = !libPebbleConfig.notificationConfig.obfuscateContent,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    obfuscateContent = !it
+                                )
+                            )
+                        )
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                obfuscateSensitiveLogs = !it
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
                     title = "Verbose connection logging",
                     description = "Detailed connectivity state machine logging (please don't enable this unless we ask you to)",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
+                    section = Section.Diagnostics,
                     checked = libPebbleConfig.watchConfig.verboseWatchManagerLogging,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1156,7 +1495,7 @@ please disable the option.""".trimIndent(),
                     title = "Verbose PPoG logging",
                     description = "Detailed Pebble Protocol over GATT logging (please don't enable this unless we ask you to)",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Logging,
+                    section = Section.Diagnostics,
                     checked = libPebbleConfig.bleConfig.verbosePpogLogging,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1168,50 +1507,6 @@ please disable the option.""".trimIndent(),
                         )
                     },
                     isDebugSetting = true,
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect app crashes",
-                    description = "This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableFirebase.value,
-                    onCheckChanged = {
-                        enableFirebase.value = it
-                        settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("crashlytics_collection_disabled")
-                        }
-                        Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect watch analytics",
-                    description = "Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableMemfault.value,
-                    onCheckChanged = {
-                        enableMemfault.value = it
-                        if (!it) {
-                            coreAnalytics.logEvent("memfault_collection_disabled")
-                        }
-                        settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Collect app analytics",
-                    description = "This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Analytics,
-                    checked = enableMixpanel.value,
-                    onCheckChanged = {
-                        enableMixpanel.value = it
-                        settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("mixpanel_collection_disabled")
-                        }
-                        analyticsBackend.setEnabled(it)
-                    },
                 ),
                 basicSettingsActionItem(
                     title = "Post test notification",
@@ -1289,9 +1584,9 @@ please disable the option.""".trimIndent(),
                 ),
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
-                    description = "Sign out of your Pebble account",
+                    description = "Sign out of your Pebble account ($coreUser)",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = {
                         scope.launch {
                             try {
@@ -1310,7 +1605,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign In - Pebble Account",
                     description = "Sign in to backup your Pebble account to backup apps, settings, etc",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = { showSignInDialog = true },
                     show = { coreUser == null },
                 ),
@@ -1318,7 +1613,7 @@ please disable the option.""".trimIndent(),
                     title = "Sign Out - Rebble",
                     description = "Sign out of your Rebble account",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Settings,
+                    section = Section.General,
                     action = {
                         scope.launch {
                             pebbleAccount.setToken(null, null)
@@ -1326,6 +1621,24 @@ please disable the option.""".trimIndent(),
                     },
                     show = { loggedIn != null },
                 ),
+                navBarNav?.let {basicSettingsActionItem(
+                    title = "Show Watch Onboarding",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    action = {
+                        navBarNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+                    },
+                    show = { debugOptionsEnabled },
+                ) },
+                navBarNav?.let {basicSettingsActionItem(
+                    title = "Show Ring Onboarding",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    action = {
+                        navBarNav.navigateTo(CommonRoutes.RingOnboardingRoute)
+                    },
+                    show = { debugOptionsEnabled },
+                ) },
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",
@@ -1355,22 +1668,55 @@ please disable the option.""".trimIndent(),
             ) + watchPrefs
         }
 
-        val availableTopLevelTypes = remember(anyWatchSupportsSettingsSync, coreConfig) {
+    return SettingsItemsState(
+        rawSettingsItems = rawSettingsItems,
+        debugOptionsEnabled = debugOptionsEnabled,
+        anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
+        coreConfig = coreConfig,
+        healthTrackingEnabled = healthSettings.trackingEnabled,
+    )
+}
+
+@Composable
+fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        val viewModel = koinViewModel<WatchSettingsScreenViewModel>()
+        val platform = koinInject<Platform>()
+        val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
+
+        val listState = rememberLazyListState()
+
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(viewModel.searchState)
+            topBarParams.actions { }
+            topBarParams.title("Settings")
+            launch {
+                topBarParams.scrollToTop.collect {
+                    if (listState.firstVisibleItemIndex > 0) {
+                        listState.animateScrollToItem(0)
+                    } else {
+                        viewModel.selectedTopLevelType = TopLevelType.Phone
+                    }
+                }
+            }
+        }
+
+        val availableTopLevelTypes = remember(state.anyWatchSupportsSettingsSync, state.coreConfig) {
             TopLevelType.entries.filter {
                 when (it) {
                     TopLevelType.Phone -> true
-                    TopLevelType.Watch -> anyWatchSupportsSettingsSync
-                    TopLevelType.All -> coreConfig.showAllSettingsTab
+                    TopLevelType.Watch -> state.anyWatchSupportsSettingsSync
+                    TopLevelType.All -> state.coreConfig.showAllSettingsTab
                     TopLevelType.Notifications -> false
                 }
             }
         }
 
         val validSettingsItems =
-            remember(rawSettingsItems, viewModel.selectedTopLevelType, debugOptionsEnabled) {
-                rawSettingsItems.filter {
+            remember(state.rawSettingsItems, viewModel.selectedTopLevelType, state.debugOptionsEnabled) {
+                state.rawSettingsItems.filter {
                     viewModel.selectedTopLevelType.show(it.topLevelType) &&
-                            (debugOptionsEnabled || !it.isDebugSetting)
+                            (state.debugOptionsEnabled || !it.isDebugSetting)
                 }
             }
 
@@ -1379,7 +1725,6 @@ please disable the option.""".trimIndent(),
         val filteredItems by remember(
             validSettingsItems,
             viewModel.searchState.query,
-            coreUser,
         ) {
             derivedStateOf {
                 if (searchQuery.isEmpty()) {
@@ -1404,53 +1749,12 @@ please disable the option.""".trimIndent(),
         val groupedItemsToDisplay = remember(filteredItems) {
             filteredItems.groupBy { it.section }.entries.sortedBy { it.key.ordinal }
         }
-        val indexForSection = remember(groupedItemsToDisplay) {
-            val map = mutableMapOf<Section, Int>()
-            var currentIndex = 0
-            groupedItemsToDisplay.forEach { (section, items) ->
-                map[section] = currentIndex
-                // +1 for stickyHeader, +items.size for the items, +1 for the Spacer at the end
-                currentIndex += 1 + items.size + 1
-            }
-            map
-        }
 
-        Scaffold(
-            floatingActionButton = {
-                if (viewModel.selectedTopLevelType == TopLevelType.Notifications) {
-                    return@Scaffold
-                }
-                var showSectionsMenu by remember { mutableStateOf(false) }
-                FloatingActionButton(
-                    onClick = { showSectionsMenu = true }
-                ) {
-                    Icon(Icons.Default.AutoStories, "Jump")
-                }
-                if (showSectionsMenu) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { showSectionsMenu = false }
-                    ) {
-                        sectionsToShowInList.forEach { section ->
-                            DropdownMenuItem(
-                                text = { Text(section.title) },
-                                onClick = {
-                                    showSectionsMenu = false
-                                    scope.launch {
-                                        listState.animateScrollToItem(
-                                            indexForSection.getValue(section)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            },
-            snackbarHost = { SnackbarHost(localSnackbarHostState) }
-        ) {
+        val isSearching = searchQuery.isNotEmpty()
+
+        Scaffold {
             Column {
-                // Only show tab buttons at top of there is more than one
+                // Only show tab buttons at top if there is more than one
                 if (availableTopLevelTypes.size > 1) {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -1494,35 +1798,144 @@ please disable the option.""".trimIndent(),
                     return@Column
                 }
 
-                LazyColumn(state = listState) {
-                    groupedItemsToDisplay.forEach { (section, items) ->
-                        stickyHeader {
-                            Box(
-                                modifier = Modifier.fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.background)
-                            ) {
-                                Text(
-                                    section.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(
-                                        horizontal = 16.dp,
-                                        vertical = 8.dp,
+                if (isSearching) {
+                    // When searching, show all matching settings grouped by section (like before)
+                    LazyColumn(state = listState) {
+                        groupedItemsToDisplay.forEach { (section, items) ->
+                            stickyHeader {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.background)
+                                ) {
+                                    Text(
+                                        section.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(
+                                            horizontal = 16.dp,
+                                            vertical = 8.dp,
+                                        )
                                     )
+                                }
+                            }
+                            items(
+                                items = items,
+                                key = { it.title },
+                            ) { item ->
+                                item.Item()
+                            }
+                            item {
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                } else {
+                    val notificationsDisplaced = state.coreConfig.enableIndex &&
+                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
+                    val healthDisplaced = state.coreConfig.enableIndex &&
+                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
+
+                    // When not searching, show category list
+                    LazyColumn(state = listState) {
+                        if (notificationsDisplaced) {
+                            item(key = "displaced_notifications") {
+                                ListItem(
+                                    leadingContent = {
+                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
+                                    },
+                                    headlineContent = { Text("Notifications") },
+                                    shadowElevation = ELEVATION,
+                                    modifier = Modifier.clickable {
+                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
+                                    },
+                                )
+                            }
+                        }
+                        if (healthDisplaced) {
+                            item(key = "displaced_health") {
+                                ListItem(
+                                    leadingContent = {
+                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
+                                    },
+                                    headlineContent = { Text("Health") },
+                                    shadowElevation = ELEVATION,
+                                    modifier = Modifier.clickable {
+                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
+                                    },
                                 )
                             }
                         }
                         items(
-                            items = items,
-                            key = { it.title },
-                        ) { item ->
-                            item.item()
-                        }
-                        item {
-                            Spacer(Modifier.height(8.dp))
+                            items = sectionsToShowInList,
+                            key = { it.name },
+                        ) { section ->
+                            val sectionBadgeCount = filteredItems
+                                .filter { it.section == section && it.badge != null && it.show() }
+                                .sumOf { it.badge?.toIntOrNull() ?: 0 }
+                            ListItem(
+                                leadingContent = {
+                                    Icon(
+                                        section.icon,
+                                        contentDescription = null,
+                                    )
+                                },
+                                headlineContent = { Text(section.title) },
+                                trailingContent = if (sectionBadgeCount > 0) {
+                                    {
+                                        Badge {
+                                            Text("$sectionBadgeCount")
+                                        }
+                                    }
+                                } else null,
+                                shadowElevation = ELEVATION,
+                                modifier = Modifier.clickable {
+                                    navBarNav.navigateTo(
+                                        PebbleNavBarRoutes.WatchSettingsCategoryRoute(
+                                            section = section.name,
+                                            topLevelType = viewModel.selectedTopLevelType.name,
+                                        )
+                                    )
+                                }
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun WatchSettingsCategoryScreen(
+    navBarNav: NavBarNav,
+    topBarParams: TopBarParams,
+    section: Section,
+    topLevelType: TopLevelType,
+) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
+        val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
+
+        LaunchedEffect(Unit) {
+            topBarParams.searchAvailable(null)
+            topBarParams.actions {}
+            topBarParams.title(section.title)
+        }
+
+        val filteredItems = remember(state.rawSettingsItems, topLevelType, state.debugOptionsEnabled) {
+            state.rawSettingsItems.filter {
+                it.section == section &&
+                        topLevelType.show(it.topLevelType) &&
+                        (state.debugOptionsEnabled || !it.isDebugSetting) &&
+                        it.show()
+            }
+        }
+
+        LazyColumn {
+            items(
+                items = filteredItems,
+                key = { it.title },
+            ) { item ->
+                item.Item()
             }
         }
     }
@@ -1540,12 +1953,14 @@ fun basicSettingsActionItem(
     show: () -> Boolean = { true },
     badge: String? = null,
     isDebugSetting: Boolean = false,
+    onDisplayed: (@Composable () -> Unit)? = null
 ) = SettingsItem(
     title = title,
     topLevelType = topLevelType,
     section = section,
     keywords = keywords,
     show = show,
+    badge = badge,
     isDebugSetting = isDebugSetting,
     item = {
         ListItem(
@@ -1585,10 +2000,12 @@ fun basicSettingsActionItem(
                 } else this
             },
         )
-    }
+    },
+    onDisplayed = onDisplayed,
 )
 
 fun basicSettingsToggleItem(
+    id: String? = null,
     title: String,
     topLevelType: TopLevelType,
     section: Section,
@@ -1599,6 +2016,7 @@ fun basicSettingsToggleItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -1627,6 +2045,7 @@ fun basicSettingsToggleItem(
 )
 
 fun basicSettingsNumberItem(
+    id: String? = null,
     title: String,
     topLevelType: TopLevelType,
     section: Section,
@@ -1640,7 +2059,9 @@ fun basicSettingsNumberItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
     defaultValue: Long? = null,
+    valueFormatter: ((Long) -> String)? = null,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -1676,7 +2097,7 @@ fun basicSettingsNumberItem(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "$sliderPosition $unit",
+                            text = valueFormatter?.invoke(sliderPosition) ?: "$sliderPosition $unit",
                             fontSize = 14.sp,
                             modifier = Modifier.padding(vertical = 6.dp),
                         )
@@ -1704,7 +2125,147 @@ fun basicSettingsNumberItem(
     },
 )
 
+fun basicSettingsNumberFieldItem(
+    id: String? = null,
+    title: String,
+    topLevelType: TopLevelType,
+    section: Section,
+    value: Long,
+    onValueChange: (Long) -> Unit,
+    min: Int,
+    max: Int,
+    unit: String,
+    description: String? = null,
+    keywords: String = "",
+    show: () -> Boolean = { true },
+    isDebugSetting: Boolean = false,
+    defaultValue: Long? = null,
+    valueFormatter: ((Long) -> String)? = null,
+) = SettingsItem(
+    id = id,
+    title = title,
+    topLevelType = topLevelType,
+    section = section,
+    keywords = keywords,
+    show = show,
+    isDebugSetting = isDebugSetting,
+    item = {
+        ListItem(
+            headlineContent = {
+                Text(title)
+            },
+            supportingContent = {
+                val minL = min.toLong()
+                val maxL = max.toLong()
+                var textFieldValue by remember(value) {
+                    val text = value.toString()
+                    mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
+                }
+                var isFocused by remember { mutableStateOf(false) }
+                LaunchedEffect(isFocused) {
+                    if (isFocused) {
+                        textFieldValue = textFieldValue.copy(
+                            selection = TextRange(0, textFieldValue.text.length),
+                        )
+                    } else if (textFieldValue.text.toLongOrNull() != value) {
+                        val text = value.toString()
+                        textFieldValue = TextFieldValue(
+                            text = text,
+                            selection = TextRange(text.length),
+                        )
+                    }
+                }
+                Column {
+                    if (description != null) {
+                        Text(description, fontSize = 11.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val newVal = (value - 1).coerceIn(minL, maxL)
+                                if (newVal != value) {
+                                    onValueChange(newVal)
+                                }
+                            },
+                            enabled = value > minL,
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease")
+                        }
+                        OutlinedTextField(
+                            value = textFieldValue,
+                            onValueChange = { input ->
+                                val filtered = input.text.filter { it.isDigit() }.take(6)
+                                val parsed = filtered.toLongOrNull()
+                                val finalText = if (parsed != null && parsed > maxL) {
+                                    maxL.toString()
+                                } else {
+                                    filtered
+                                }
+                                textFieldValue = input.copy(
+                                    text = finalText,
+                                    selection = TextRange(finalText.length),
+                                )
+                                val finalParsed = finalText.toLongOrNull()
+                                if (finalParsed != null && finalParsed in minL..maxL && finalParsed != value) {
+                                    onValueChange(finalParsed)
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            suffix = { Text(unit) },
+                            modifier = Modifier
+                                .width(110.dp)
+                                .onFocusChanged { focusState ->
+                                    isFocused = focusState.isFocused
+                                },
+                        )
+                        IconButton(
+                            onClick = {
+                                val newVal = (value + 1).coerceIn(minL, maxL)
+                                if (newVal != value) {
+                                    onValueChange(newVal)
+                                }
+                            },
+                            enabled = value < maxL,
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase")
+                        }
+                        if (valueFormatter != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = valueFormatter(value),
+                                fontSize = 14.sp,
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (defaultValue != null) {
+                            TextButton(
+                                onClick = {
+                                    onValueChange(defaultValue)
+                                },
+                                enabled = value != defaultValue,
+                            ) {
+                                Text(
+                                    text = "Default: $defaultValue",
+                                    modifier = Modifier.widthIn(max = 150.dp),
+                                    maxLines = 1,
+                                    lineHeight = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            shadowElevation = ELEVATION,
+        )
+    },
+)
+
 fun <T> basicSettingsDropdownItem(
+    id: String? = null,
     title: String,
     description: String? = null,
     topLevelType: TopLevelType,
@@ -1716,7 +2277,9 @@ fun <T> basicSettingsDropdownItem(
     keywords: String = "",
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
+    extraSupportingContent: (@Composable () -> Unit)? = null,
 ) = SettingsItem(
+    id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
@@ -1755,8 +2318,11 @@ fun <T> basicSettingsDropdownItem(
                 }
             },
             supportingContent = {
-                if (description != null) {
-                    Text(description, fontSize = 11.sp)
+                Row {
+                    if (description != null) {
+                        Text(description, fontSize = 11.sp)
+                    }
+                    extraSupportingContent?.invoke()
                 }
             },
             shadowElevation = ELEVATION,
@@ -1887,7 +2453,91 @@ fun STTLanguageDialog(
     }
 }
 
+@Composable
+fun SpokenLanguagePickerDialog(
+    selectedCode: String?,
+    onLanguageSelected: (String?) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val options = remember { SpokenLanguageOptions }
+    val filtered = remember(query, options) {
+        if (query.isBlank()) {
+            options
+        } else {
+            val q = query.trim().lowercase()
+            options.filter { (code, name) ->
+                name.lowercase().contains(q) || code.lowercase().contains(q)
+            }
+        }
+    }
+    val showAutomatic = query.isBlank() || "automatic".contains(query.trim().lowercase())
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Language, contentDescription = null) },
+        title = { Text("Spoken Language") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+        },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text("Search languages") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                if (showAutomatic) {
+                    item(key = "__automatic__") {
+                        SpokenLanguageRow(
+                            label = "Automatic",
+                            selected = selectedCode == null,
+                            onClick = { onLanguageSelected(null) },
+                        )
+                    }
+                }
+                items(filtered, key = { it.first }) { (code, name) ->
+                    SpokenLanguageRow(
+                        label = name,
+                        selected = selectedCode == code,
+                        onClick = { onLanguageSelected(code) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Note: Selecting a language may improve accuracy for that language but not all languages on this list are guaranteed to be supported.",
+                fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpokenLanguageRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
 expect fun makeTokenClipEntry(token: String): ClipEntry
+
+expect fun openGoogleFitApp(uiContext: PlatformUiContext?)
 
 object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"
@@ -1923,3 +2573,4 @@ enum class WeatherSyncInterval(
         fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
     }
 }
+

@@ -5,9 +5,11 @@ import io.rebble.libpebblecommon.timeline.TimelineColor
 
 enum class NotificationProperties(
     val pkgName: String,
-    val color: TimelineColor?,
-    val icon: TimelineIcon?,
+    val color: TimelineColor? = null,
+    val icon: TimelineIcon? = null,
     val addShowsUserInterfaceActions: Boolean = false,
+    val showLocalOnlyNotifications: Boolean = false,
+    val allowDuplicates: Boolean = false,
 ) {
     Gmail(pkgName = "com.google.android.gm", color = TimelineColor.Red, icon = TimelineIcon.NotificationGmail),
     GoogleQuickSearchBox(pkgName = "com.google.android.googlequicksearchbox", color = TimelineColor.BlueMoon, icon = null),
@@ -19,7 +21,7 @@ enum class NotificationProperties(
     GoogleCalendar(pkgName = "com.google.android.calendar", color = TimelineColor.BlueMoon, icon = null),
     Telegram(pkgName = "org.telegram.messenger", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTelegram),
     Facebook(pkgName = "com.facebook.katana", color = TimelineColor.CobaltBlue, icon = TimelineIcon.NotificationFacebook),
-    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger),
+    GoogleMessaging(pkgName = "com.google.android.apps.messaging", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationGoogleMessenger, showLocalOnlyNotifications = true),
     Hipchat(pkgName = "com.hipchat", color = TimelineColor.CobaltBlue, icon = null),
     Skype(pkgName = "com.skype.raider", color = TimelineColor.VividCerulean, icon = null),
     Twitter(pkgName = "com.twitter.android", color = TimelineColor.VividCerulean, icon = TimelineIcon.NotificationTwitter),
@@ -75,6 +77,8 @@ enum class NotificationProperties(
     Signal(pkgName = "org.thoughtcrime.securesms", color = TimelineColor.BlueMoon, icon = TimelineIcon.NotificationSignal),
     Twitch(pkgName = "tv.twitch.android.app", color = TimelineColor.VividViolet, icon = TimelineIcon.NotificationTwitch),
     WSJ(pkgName = "wsj.reader_sp", color = TimelineColor.DarkGray, icon = TimelineIcon.NewsEvent),
+    GooglePhoneDialer(pkgName = "com.google.android.dialer", color = TimelineColor.BlueMoon, icon = TimelineIcon.IncomingPhoneCall),
+    Ring(pkgName = "com.ringapp", allowDuplicates = true)
     ;
 
     companion object {

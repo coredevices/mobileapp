@@ -44,5 +44,7 @@ internal actual suspend fun signInWithCredential(credential: AuthCredential) {
                 } ?: throw IllegalStateException("Linking succeeded but no credential returned")
             }
         }
+    } else {
+        Firebase.auth.signInWithCredential(credential)
     }
 }

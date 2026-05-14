@@ -1,8 +1,10 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
+import coredevices.analytics.CoreAnalytics
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineDebugInfo
+import coredevices.haversine.KMPHaversineSatellite
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.Timestamp
@@ -16,13 +18,21 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
+import kotlin.math.absoluteValue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
-class FirestoreRingDebugDelegate: KMPHaversineDebugDelegate {
+class FirestoreRingDebugDelegate(
+    private val analytics: CoreAnalytics
+): KMPHaversineDebugDelegate {
     companion object {
         private val logger = Logger.withTag("FirestoreRingDebugDelegate")
+        private val RX_RSSI_INTERVAL = 2.hours
     }
     private val pendingUploads = mutableListOf<KMPHaversineDebugInfo>()
     private var waitForAuthJob: Job? = null
+    private var lastRxRssiReadTime: TimeMark? = null
 
     private fun waitForAuth() {
         if (Firebase.auth.currentUser != null) return
@@ -59,6 +69,32 @@ class FirestoreRingDebugDelegate: KMPHaversineDebugDelegate {
                 logger.e(e) { "Failed to upload Haversine debug info to Firestore." }
             }
         }
+    }
+
+    override fun shouldReadRxRSSI(satellite: KMPHaversineSatellite): Boolean {
+        val elapsed = lastRxRssiReadTime?.elapsedNow()
+        if (elapsed == null || elapsed >= RX_RSSI_INTERVAL) {
+            lastRxRssiReadTime = TimeSource.Monotonic.markNow()
+            return true
+        } else {
+            return false
+        }
+    }
+
+    override fun handleRxRSSI(rssi: Float, satellite: KMPHaversineSatellite) {
+        val txRssi = satellite.lastAdvertisement?.rssi
+        val diff = txRssi?.let { (it - rssi).absoluteValue }
+        logger.i { "Received Rx RSSI: $rssi for satellite ${satellite.name} (${satellite.id}), tx = $txRssi, diff = $diff" }
+        val state = satellite.state.value
+        analytics.logEvent(
+            "ring.rssi_measurement",
+            mapOf(
+                "ring_serial" to (state?.programmedSerialNumber ?: state?.serialNumber ?: "<none>"),
+                "ring_rssi" to rssi,
+                "phone_rssi" to (txRssi ?: "<none>"),
+                "rssi_diff" to (diff ?: "<none>")
+            )
+        )
     }
 
     private fun KMPHaversineDebugInfo.toJson(): FirestoreHaversineDebugInfo = FirestoreHaversineDebugInfo(

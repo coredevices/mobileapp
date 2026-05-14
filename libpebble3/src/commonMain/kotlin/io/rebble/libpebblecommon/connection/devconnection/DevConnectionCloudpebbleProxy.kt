@@ -141,11 +141,9 @@ class DevConnectionCloudpebbleProxy(
         }
     }
 
-    override fun stop() {
-        scope.launch {
-            session?.close(CloseReason(CloseReason.Codes.NORMAL, "Stopped by user"))
-            job?.cancel()
-        }
+    override suspend fun stop() {
+        session?.close(CloseReason(CloseReason.Codes.NORMAL, "Stopped by user"))
+        job?.cancel()
         job = null
     }
 }

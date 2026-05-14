@@ -10,4 +10,11 @@ interface SystemCalendar {
     suspend fun enableSyncForCalendar(calendar: CalendarEntity)
     fun registerForCalendarChanges(): Flow<Unit>?
     fun hasPermission(): Boolean
+
+    /**
+     * Whether this platform can execute write-back pin actions (RSVP, cancel event).
+     * Android: yes, via CalendarContract. iOS: no — EKParticipant is read-only and
+     * EKEvent mutation requires user-owned calendars we don't reliably identify.
+     */
+    fun supportsPinActions(): Boolean
 }

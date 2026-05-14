@@ -8,8 +8,12 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.api.NenyaClient
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
@@ -32,10 +36,12 @@ import org.koin.core.component.KoinComponent
  */
 class AgentNenya(
     private val nenyaClient: NenyaClient,
+    private val itemFactory: ItemFactory,
+    private val itemRepository: ItemRepository,
     conversation: List<ConversationMessageDocument>,
     private val useSearchMode: Boolean = false
 ): KoinComponent, Agent {
-
+    override val label = "Nenya"
     // We don't use StateFlow because we want to suspend on emit if there's backpressure
     private var _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST).apply {
         tryEmit(conversation)
@@ -48,7 +54,8 @@ class AgentNenya(
 You are an assistant primarily designed to help users create and manage notes and reminders. You can
 help with a multitude of tasks in addition to this too.
 Create a note with the user's input unless they specify a different action, do not assume an action that wasn't explicitly requested, just make a note.
-Eagerly run tools to assist the user, including running multiple tools in succession to achieve an overall goal.
+Eagerly run tools to assist the user by gathering required information and taking actions.
+Avoid additional commentary after taking a final action unless the user asked for it, e.g. when asking a question. The user can see actions without you notifying them.
 Avoid asking follow-up questions unless necessary.
 Always lean towards creating a note, for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
 """
@@ -68,7 +75,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         val tools = mcpSession.listTools()
         val toolDeclarations = tools.mapNotNull {
             val definition = it.tool.definition
-            val compositeName = "${it.integrationName}.${definition.name}"
+            val compositeName = "${it.integrationName}__${definition.name}"
             try {
                 ToolDeclaration(
                     function = FunctionDeclaration(
@@ -111,7 +118,6 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
             }
         }
         var resp = nenyaClient.run(
-            null,
             conversationHistory = conversation.first(),
             toolSpecs = toolDeclarations,
             additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty()
@@ -119,9 +125,9 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         if (!resp.statusCode.isSuccess()) {
             throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
         }
-        _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage())
+        _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
         var toolIterations = 0
-        var lastMessage = resp.response.conversation.last().toConversationMessage()
+        var lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
         while (toolIterations++ < MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
             // Tools need to be run
             val responses = lastMessage.tool_calls!!.map {
@@ -131,7 +137,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                     logger.w { "Failed to deserialize tool call arguments for tool ${it.function!!.name}" }
                     emptyMap()
                 }
-                val compositeName = it.function!!.name.split(".", limit = 2)
+                val compositeName = it.function!!.name.split("__", limit = 2)
                 if (compositeName.size != 2) {
                     throw Exception("Invalid tool name: ${it.function!!.name}")
                 }
@@ -159,8 +165,8 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
             )
             resp = try {
                 nenyaClient.run(
-                    null,
                     conversation.first(),
+                    additionalContext = AGENT_CONTEXT+"\n"+mcpSession.getExtraContext(includePromptsFromMcps).orEmpty(),
                     toolSpecs = toolDeclarations,
                 )
             } catch (e: IOException) {
@@ -173,8 +179,8 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                     throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
                 }
             }
-            _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage())
-            lastMessage = resp.response.conversation.last().toConversationMessage()
+            _conversation.emit(_conversation.first() + resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used))
+            lastMessage = resp.response.conversation.last().toConversationMessage(resp.response.language_model_used)
         }
         if (toolIterations >= MAX_TOOL_ITERATIONS && lastMessage.role == MessageRole.assistant && !lastMessage.tool_calls.isNullOrEmpty() && !skipToolExecution) {
             throw Exception("Exceeded maximum tool iterations")
@@ -188,12 +194,11 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
         ))
         val resp = try {
             nenyaClient.run(
-                null,
                 conversationHistory = conversation.first().filter {
                     it.role != MessageRole.tool || it.tool_call_id != null // filter out tool messages that are not tool call responses (e.g. fake search completion message above)
                 },
                 toolSpecs = emptyList(),
-                additionalContext = "Provide a concise summary of the search results to be shown on a small smartwatch screen, with no additional commentary and no markdown formatting.",
+                additionalContext = "Provide a concise answer to the query after searching the internet, to be shown on a small display. The answer should have no additional commentary or markdown formatting.",
                 searchMode = true
             )
         } catch (e: IOException) {
@@ -206,7 +211,7 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
             }
         }
-        val text = resp.response?.conversation?.last()!!.toConversationMessage().content
+        val text = resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used).content
             ?.replace("**", "") // remove markdown bolding
         _conversation.emit(
             _conversation.first() + ConversationMessageDocument(
@@ -215,6 +220,20 @@ Always lean towards creating a note, for example if the user doesn't ask for a t
                 semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
             )
         )
+
+        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            runCatching {
+                itemRepository.setItem(
+                    itemFactory.simpleUid(),
+                    itemFactory.answerItem(
+                        sourceRecordingId = ctx.sourceRecordingId,
+                        createdAt = ctx.createdAt,
+                        question = input,
+                        answer = text ?: "No results"
+                    )
+                )
+            }
+        }
     }
 
     override suspend fun send(

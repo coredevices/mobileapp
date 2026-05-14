@@ -14,11 +14,16 @@ import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.builtin_servlets.clock.setTimer
 import coredevices.ring.agent.integrations.UIEmailIntegration
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.service.recordings.RecordingProcessingQueue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -31,6 +36,8 @@ class FeedViewModel(
     private val clipboard: Clipboard,
     private val uiMailIntegration: UIEmailIntegration,
     private val contextualActionPredictor: ContextualActionPredictor,
+    private val ringTransferDao: RingTransferDao,
+    private val recordingProcessingQueue: RecordingProcessingQueue,
 ): ViewModel() {
     companion object {
         private val logger = Logger.withTag(FeedViewModel::class.simpleName!!)
@@ -53,9 +60,9 @@ class FeedViewModel(
         data
             .map {
                 if (it.feedItem != null) {
-                    FeedData.Item(it.feedItem)
+                    FeedData.Item(it.feedItem!!)
                 } else if (it.ringTransfer != null) {
-                    FeedData.TransferPlaceholder(it.ringTransfer)
+                    FeedData.TransferPlaceholder(it.ringTransfer!!)
                 } else {
                     error("Both feedItem and ringTransfer are null")
                 }
@@ -120,6 +127,30 @@ class FeedViewModel(
     }
 
     suspend fun getContextualActions(item: RecordingFeedItem) = contextualActionPredictor.getActions(item.id)
+
+    fun retryFeedItem(item: RecordingFeedItem) {
+        val entry = item.entry ?: return
+        viewModelScope.launch {
+            val transfers = withContext(Dispatchers.IO) { ringTransferDao.getByRecordingId(item.id) }
+            val transfer = transfers.firstOrNull()
+            if (transfer != null) {
+                recordingProcessingQueue.retryRecording(
+                    transferId = transfer.id,
+                    buttonSequence = null,
+                    recordingId = item.id,
+                    recordingEntryId = entry.id,
+                )
+            } else {
+                val fileId = entry.fileName ?: return@launch
+                recordingProcessingQueue.retryLocalRecording(
+                    fileId = fileId,
+                    buttonSequence = null,
+                    recordingId = item.id,
+                    recordingEntryId = entry.id,
+                )
+            }
+        }
+    }
 }
 
 expect suspend fun makeTextClipEntry(text: String): ClipEntry

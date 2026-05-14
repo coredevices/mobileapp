@@ -1,6 +1,7 @@
 package coredevices.pebble.firmware
 
 import co.touchlab.kermit.Logger
+import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.NOTIFICATION_INTENT_URI_SHOW_WATCHES
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import platform.UserNotifications.UNMutableNotificationContent
@@ -18,10 +19,13 @@ actual fun notifyFirmwareUpdate(
     val content = UNMutableNotificationContent()
     content.setTitle(title)
     content.setBody(body)
+    content.setUserInfo(
+        mapOf("notification-deepLink" to NOTIFICATION_INTENT_URI_SHOW_WATCHES.toString())
+    )
     val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(1.0, false)
-    val identifier = key.toString()
+    val notificationIdentifier = key.toString()
     val request = UNNotificationRequest.requestWithIdentifier(
-        identifier,
+        notificationIdentifier,
         content,
         trigger
     )

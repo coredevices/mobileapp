@@ -60,9 +60,6 @@ class ListenDialogViewModel(private val dismiss: () -> Unit): ViewModel(), KoinC
     private val mcpSessionFactory: McpSessionFactory by inject()
     private val mcpSandboxRepository: McpSandboxRepository by inject()
     private val recordingProcessingQueue: RecordingProcessingQueue by inject()
-    private val agent by lazy {
-        get<AgentFactory>().createForChatMode(ChatMode.Normal)
-    }
 
     fun beginManualRecording() {
         //TODO: Replace with recording operation pattern once we have a way to get the state updates out

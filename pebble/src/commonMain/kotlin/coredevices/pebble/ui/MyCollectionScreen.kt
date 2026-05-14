@@ -68,15 +68,12 @@ fun MyCollectionScreen(
         topBarParams.title(appType.myCollectionName())
         topBarParams.actions {}
     }
-    val currentHearts = currentHearts()
     val lockerEntries = loadLockerEntries(
-        currentHearts = currentHearts,
         type = appType,
         searchQuery = searchState.query,
         watchType = sharedViewModel.watchType.value,
         showIncompatible = sharedViewModel.showIncompatible.value,
         showScaled = sharedViewModel.showScaled.value,
-        hearted = sharedViewModel.hearted.value,
         limit = 700,
     )
     if (lockerEntries == null) {
@@ -89,11 +86,23 @@ fun MyCollectionScreen(
     val lazyListState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    // Track the UUID of the item just before the dragged item's final position.
+    // Using the neighbor's absolute DB orderIndex (prevNeighbor.order + 1) as the target for
+    // setAppOrder avoids two bugs:
+    //   1. mutableApps can be reset mid-drag by a lockerEntries update (DB write from a prior drag
+    //      completing), making an index lookup return a stale position.
+    //   2. lockerEntries is filtered (e.g. by compatibility), so the visible index ≠ absolute DB
+    //      orderIndex. Passing the visible index would place the item at the wrong position in the
+    //      full list and cause it to jump after the drag.
+    var prevNeighborUuid by remember { mutableStateOf<Uuid?>(null) }
+    var dragMoved by remember { mutableStateOf(false) }
     fun onReorder(from: Int, to: Int) {
-        logger.v { "drag: from from to $to" }
+        logger.v { "drag: from $from to $to" }
         mutableApps = mutableApps.toMutableList().apply {
             add(to, removeAt(from))
         }
+        prevNeighborUuid = if (to > 0) mutableApps[to - 1].uuid else null
+        dragMoved = true
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
@@ -111,10 +120,22 @@ fun MyCollectionScreen(
 
     fun onDragStopped(uuid: Uuid) {
         hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd)
-        val newPosition = mutableApps.indexOfFirst { it.uuid == uuid }
-        logger.v { "onDragStopped: newPosition = $newPosition" }
+        if (!dragMoved) return
+        dragMoved = false
+        val pn = prevNeighborUuid
+        prevNeighborUuid = null
+        val newOrder = if (pn == null) {
+            0
+        } else {
+            val prevOrder = (lockerEntries.firstOrNull { it.uuid == pn }?.commonAppType as? CommonAppTypeLocal)?.order ?: 0
+            val draggedOrder = (lockerEntries.firstOrNull { it.uuid == uuid }?.commonAppType as? CommonAppTypeLocal)?.order ?: 0
+            // Moving up: prevNeighbor stays put, so we insert at prevOrder+1.
+            // Moving down: decrementIndexes shifts prevNeighbor back by 1, so prevOrder is the right slot.
+            if (draggedOrder > prevOrder) prevOrder + 1 else prevOrder
+        }
+        logger.v { "onDragStopped: newOrder=$newOrder" }
         scope.launch {
-            libPebble.setAppOrder(uuid, newPosition)
+            libPebble.setAppOrder(uuid, newOrder)
         }
     }
 

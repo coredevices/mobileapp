@@ -76,17 +76,23 @@ class AndroidSystemContacts(
         return null
     }
 
-    override suspend fun getContacts(): List<SystemContact> =
-        appContext.context.contentResolver.query(
-            ContactsContract.Contacts.CONTENT_URI,
-            arrayOf(
-                ContactsContract.Contacts.LOOKUP_KEY,
-                ContactsContract.Contacts.DISPLAY_NAME,
-            ),
-            null,
-            null,
-            "${ContactsContract.Contacts.DISPLAY_NAME} ASC"
-        )?.use { cursor ->
+    override suspend fun getContacts(): List<SystemContact> {
+        val cursor = try {
+            appContext.context.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.Contacts.LOOKUP_KEY,
+                    ContactsContract.Contacts.DISPLAY_NAME,
+                ),
+                null,
+                null,
+                "${ContactsContract.Contacts.DISPLAY_NAME} ASC"
+            )
+        } catch (e: SecurityException) {
+            logger.w(e) { "Contacts query denied" }
+            return emptyList()
+        }
+        return cursor?.use { cursor ->
             val keyCol = cursor.getColumnIndex(ContactsContract.Contacts.LOOKUP_KEY)
             val nameCol = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
             if (keyCol == -1 || nameCol == -1) {
@@ -111,6 +117,7 @@ class AndroidSystemContacts(
             }
             contacts
         } ?: emptyList()
+    }
 
     override fun hasPermission(): Boolean {
         return appContext.context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED

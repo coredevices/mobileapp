@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.LocalReminderDao
-import coredevices.ring.agent.builtin_servlets.reminders.NativeReminder
+import coredevices.ring.agent.builtin_servlets.reminders.nativeReminderFromData
 import coredevices.ring.ui.UITimeUtil
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,7 +75,7 @@ class ReminderDetailsViewModel(private val localReminderDao: LocalReminderDao, p
     fun deleteReminder() {
         viewModelScope.launch {
             if (_itemState.value is ItemState.Loaded) {
-                NativeReminder.fromData((_itemState.value as ItemState.Loaded).dbItem).let {
+                nativeReminderFromData((_itemState.value as ItemState.Loaded).dbItem).let {
                     it.cancel()
                     onBack()
                 }

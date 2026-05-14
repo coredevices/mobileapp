@@ -9,13 +9,17 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.IndexTimestamp
 import coredevices.ring.data.InflightIndexNotification
 import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.data.entity.room.RingTransfer
-import coredevices.ring.data.entity.room.RingTransferStatus
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RecordingRepository
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.components.chat.actionText
+import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.Platform
+import io.ktor.utils.io.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -23,6 +27,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,17 +37,16 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
@@ -78,6 +82,8 @@ class IndexNotificationManager(
     private val conversationMessageDao: ConversationMessageDao,
     private val platformIndexNotificationManager: PlatformIndexNotificationManager,
     private val prefs: Preferences,
+    private val trace: RingTraceSession,
+    private val platform: Platform
 ) {
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
@@ -87,6 +93,16 @@ class IndexNotificationManager(
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
     private var lastBugReportPrompt: Instant? = null
+    private val transferToRecordingId = mutableMapOf<Long, Long?>()
+
+
+    private suspend fun traceNotificationSent(recordingId: Long?, transferId: Long, stage: String) {
+        trace.markEvent("notification_sent", TraceEventData.NotificationSent(
+            recordingId = recordingId,
+            transferId = transferId,
+            stage = stage
+        ))
+    }
 
     private suspend fun makeInflightNotification(notifId: Int, transfer: RingTransfer, entry: RecordingEntryEntity?): InflightIndexNotification {
         val remoteTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) }
@@ -207,198 +223,225 @@ class IndexNotificationManager(
         }
 
         val id = transfer.id
-        inflightNotificationJobs[id] = ringTransferRepo.getTransferWithFeedItemFlow(transfer.id).filterNotNull().flatMapLatest {
-            val conv = it.ringTransfer?.recordingId?.let {conversationMessageDao.getMessagesForRecording(it) } ?: emptyFlow()
-            combine(
-                flowOf(it),
-                conv
-            ) { transfer, _ ->
-                transfer
-            }
-        }.mapNotNull { (transfer, rec) ->
-            transfer ?: return@mapNotNull null
-
-            val lastEntry = rec?.entry
-            val notif = makeInflightNotification(
-                inflightNotifications[id]?.id ?: nextNotificationId(),
-                transfer,
-                lastEntry
-            )
-            if (!prefs.debugDetailsEnabled.value) {
-                // Mute non-final notifications when not in debug mode
-                when (notif) {
-                    is InflightIndexNotification.Transferring -> return@mapNotNull null
-                    is InflightIndexNotification.Transcribing -> return@mapNotNull null
-                    is InflightIndexNotification.AgentRunning -> return@mapNotNull null
-                    else -> {}
-                }
-            }
-            logger.d { "(Job ID ${currentCoroutineContext()[Job]?.hashCode()?.toHexString()}) Created notification for transfer ${transfer.id}: $notif" }
-            inflightNotifications[transfer.id] = notif
-
-            notif
-        }
-            .distinctUntilChanged()
-            .debounce(100)
-            .onEach { notification ->
-                logger.d { "(Job ID ${currentCoroutineContext()[Job]?.hashCode()?.toHexString()}) Handling notification for transfer ${transfer.id}: $notification" }
-                val notif = when (notification) {
-                    is InflightIndexNotification.Discarded -> null
-                    is InflightIndexNotification.Transferring -> {
-                        GenericNotification(
-                            id = notification.id,
-                            title = "Transferring recording",
-                            inProgress = NotificationProgress.Indeterminate,
-                            localOnly = false,
-                            deepLink = DEEP_LINK_URI
-                        )
+        inflightNotificationJobs[id] = scope.launch {
+            platform.runWithBgTask("transfer_notif_${transfer.id}") {
+                ringTransferRepo.getTransferWithFeedItemFlow(transfer.id).filterNotNull().flatMapLatest {
+                    val conv = it.ringTransfer?.recordingId?.let {conversationMessageDao.getMessagesForRecording(it) } ?: flowOf(null)
+                    combine(
+                        flowOf(it),
+                        conv
+                    ) { transfer, _ ->
+                        transfer
                     }
-                    is InflightIndexNotification.Transcribing -> {
-                        GenericNotification(
-                            id = notification.id,
-                            title = "Transcribing",
-                            inProgress = NotificationProgress.Indeterminate,
-                            localOnly = true,
-                            deepLink = DEEP_LINK_URI
-                        )
+                }.mapNotNull { (transfer, rec) ->
+                    transfer ?: return@mapNotNull null
+
+                    val lastEntry = rec?.entry
+                    rec?.id?.let {
+                        transferToRecordingId[transfer.id] = it
                     }
-                    is InflightIndexNotification.AgentRunning -> {
-                        val contextText = buildString {
-                            appendLine(notification.userText)
-                            appendLine()
-                            append(buildNotifTimestamp(notification))
+                    val notif = makeInflightNotification(
+                        inflightNotifications[id]?.id ?: nextNotificationId(),
+                        transfer,
+                        lastEntry
+                    )
+                    if (!prefs.debugDetailsEnabled.value) {
+                        // Mute non-final notifications when not in debug mode
+                        when (notif) {
+                            is InflightIndexNotification.Transferring -> return@mapNotNull null
+                            is InflightIndexNotification.Transcribing -> return@mapNotNull null
+                            is InflightIndexNotification.AgentRunning -> return@mapNotNull null
+                            else -> {}
                         }
-                        GenericNotification(
-                            id = notification.id,
-                            title = "Assistant running",
-                            contentText = contextText,
-                            inProgress = NotificationProgress.Indeterminate,
-                            localOnly = true,
-                            deepLink = DEEP_LINK_URI
-                        )
                     }
-                    is InflightIndexNotification.AgentComplete -> {
-                        val contentText = buildString {
-                            if (notification.pressToRXLatency != null && prefs.debugDetailsEnabled.value) {
-                                val latencyInSeconds = notification.pressToRXLatency
-                                    .toString(DurationUnit.SECONDS, 1)
-                                appendLine("Press->RX: $latencyInSeconds")
-                            }
-                            if (notification.actionsTaken.isNotEmpty()) {
-                                if (prefs.debugDetailsEnabled.value) {
-                                    val actionNames = notification.actionsTaken
-                                        .map { it.actionText() }
-                                        .joinToString(", ")
-                                    appendLine("Actions taken: $actionNames")
-                                    appendLine()
-                                    appendLine(buildNotifTimestamp(notification))
-                                } else {
-                                    when (val lastAction = notification.actionsTaken.lastOrNull()) {
-                                        is SemanticResult.GenericFailure -> {
-                                            if (lastAction.userErrorMessage != null) {
-                                                appendLine(lastAction.userErrorMessage)
-                                            } else {
-                                                appendLine("Error performing action")
-                                            }
-                                        }
-                                        is SemanticResult.TaskCreation if (lastAction.deadline != null) -> {
-                                            val dateTime = lastAction.deadline!!.toLocalDateTime(
-                                                TimeZone.currentSystemDefault()
-                                            )
-                                            val humanDate = UITimeUtil.humanDate(dateTime.date)
-                                            val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
+                    logger.d { "(Job ID ${currentCoroutineContext()[Job]?.hashCode()?.toHexString()}) Created notification for transfer ${transfer.id}: $notif" }
+                    inflightNotifications[transfer.id] = notif
 
-                                            appendLine("Reminder set for ${humanDate}, ${humanTime}")
-                                            appendLine()
-                                            appendLine(lastAction.title)
-                                        }
-                                        is SemanticResult.AlarmCreation -> {
-                                            val time = lastAction.fireTime
-                                            appendLine("Alarm set for ${time.format(UITimeUtil.timeFormat())}")
-                                        }
-                                        is SemanticResult.TimerCreation -> {
-                                            val requested = lastAction.requestedDuration
-                                            val time = lastAction.fireTime.toLocalDateTime(TimeZone.currentSystemDefault())
-                                            if (requested != null) {
-                                                appendLine("$requested timer set, ending at ${time.time.format(UITimeUtil.timeFormat())}")
-                                            } else {
-                                                appendLine("Timer set to end at ${time.time.format(UITimeUtil.timeFormat())}")
-                                            }
-                                        }
-                                        is SemanticResult.SupportingData -> {
-                                            if (!lastAction.summary.isNullOrBlank()) {
-                                                appendLine(lastAction.summary)
-                                            } else {
-                                                appendLine(notification.userText)
-                                            }
-                                        }
-                                        else -> {
-                                            appendLine(notification.userText)
-                                        }
-                                    }
-                                }
+                    notif
+                }
+                    .distinctUntilChanged()
+                    .debounce(100)
+                    .onEach { notification ->
+                        logger.d { "(Job ID ${currentCoroutineContext()[Job]?.hashCode()?.toHexString()}) Handling notification for transfer ${transfer.id}: $notification" }
+                        val notif = when (notification) {
+                            is InflightIndexNotification.Discarded -> null
+                            is InflightIndexNotification.Transferring -> {
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = "Transferring recording",
+                                    inProgress = NotificationProgress.Indeterminate,
+                                    localOnly = false,
+                                    deepLink = DEEP_LINK_URI
+                                )
                             }
-                        }.trim()
-                        GenericNotification(
-                            id = notification.id,
-                            title = if (prefs.debugDetailsEnabled.value) {
-                                notification.userText
-                            } else {
-                                notification.actionsTaken.lastOrNull()?.actionText()
-                                    ?: "Assistant complete"
-                            },
-                            contentText = contentText,
-                            inProgress = null,
-                            localOnly = false,
-                            deepLink = DEEP_LINK_URI,
-                            actions = listOf(
-                                notification.shortcutAction.let { action ->
-                                    when (action) {
-                                        NoteShortcutType.SendToMe -> NotificationAction(
-                                            "Email to me",
-                                            "pebblecore://index-link/send-to-me?recordingId=${notification.recordingId}"
-                                        )
-                                        is NoteShortcutType.SendToNoteProvider -> NotificationAction(
-                                            "Send to ${action.provider.title}",
-                                            "pebblecore://index-link/send-to-note-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
-                                        )
-                                        is NoteShortcutType.SendToReminderProvider -> NotificationAction(
-                                            "Send to ${action.provider.title}",
-                                            "pebblecore://index-link/send-to-reminder-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
-                                        )
+                            is InflightIndexNotification.Transcribing -> {
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = "Transcribing",
+                                    inProgress = NotificationProgress.Indeterminate,
+                                    localOnly = true,
+                                    deepLink = DEEP_LINK_URI
+                                )
+                            }
+                            is InflightIndexNotification.AgentRunning -> {
+                                val contextText = buildString {
+                                    appendLine(notification.userText)
+                                    appendLine()
+                                    append(buildNotifTimestamp(notification))
+                                }
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = "Assistant running",
+                                    contentText = contextText,
+                                    inProgress = NotificationProgress.Indeterminate,
+                                    localOnly = true,
+                                    deepLink = DEEP_LINK_URI
+                                )
+                            }
+                            is InflightIndexNotification.AgentComplete -> {
+                                val contentText = buildString {
+                                    if (notification.pressToRXLatency != null && prefs.debugDetailsEnabled.value) {
+                                        val latencyInSeconds = notification.pressToRXLatency
+                                            .toString(DurationUnit.SECONDS, 1)
+                                        appendLine("Press->RX: $latencyInSeconds")
                                     }
+                                    if (notification.actionsTaken.isNotEmpty()) {
+                                        if (prefs.debugDetailsEnabled.value) {
+                                            val actionNames = notification.actionsTaken
+                                                .map { it.actionText() }
+                                                .joinToString(", ")
+                                            appendLine("Actions taken: $actionNames")
+                                            appendLine()
+                                            appendLine(buildNotifTimestamp(notification))
+                                        } else {
+                                            when (val lastAction = notification.actionsTaken.lastOrNull()) {
+                                                is SemanticResult.GenericFailure -> {
+                                                    if (lastAction.userErrorMessage != null) {
+                                                        appendLine(lastAction.userErrorMessage)
+                                                    } else {
+                                                        appendLine("Error performing action")
+                                                    }
+                                                }
+                                                is SemanticResult.TaskCreation if (lastAction.deadline != null) -> {
+                                                    val dateTime = lastAction.deadline!!.toLocalDateTime(
+                                                        TimeZone.currentSystemDefault()
+                                                    )
+                                                    val humanDate = UITimeUtil.humanDate(dateTime.date)
+                                                    val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
+
+                                                    appendLine("Reminder set for ${humanDate}, ${humanTime}")
+                                                    appendLine()
+                                                    appendLine(lastAction.title)
+                                                }
+                                                is SemanticResult.AlarmCreation -> {
+                                                    val time = lastAction.fireTime
+                                                    appendLine("Alarm set for ${time.format(UITimeUtil.timeFormat())}")
+                                                }
+                                                is SemanticResult.TimerCreation -> {
+                                                    val requested = lastAction.requestedDuration
+                                                    val time = lastAction.fireTime.toLocalDateTime(TimeZone.currentSystemDefault())
+                                                    if (requested != null) {
+                                                        appendLine("$requested timer set, ending at ${time.time.format(UITimeUtil.timeFormat())}")
+                                                    } else {
+                                                        appendLine("Timer set to end at ${time.time.format(UITimeUtil.timeFormat())}")
+                                                    }
+                                                }
+                                                is SemanticResult.SupportingData -> {
+                                                    if (!lastAction.summary.isNullOrBlank()) {
+                                                        appendLine(lastAction.summary)
+                                                    } else {
+                                                        appendLine(notification.userText)
+                                                    }
+                                                }
+                                                else -> {
+                                                    appendLine(notification.userText)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }.trim()
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = if (prefs.debugDetailsEnabled.value) {
+                                        notification.userText
+                                    } else {
+                                        notification.actionsTaken.lastOrNull()?.actionText()
+                                            ?: "Assistant complete"
+                                    },
+                                    contentText = contentText,
+                                    inProgress = null,
+                                    localOnly = false,
+                                    deepLink = DEEP_LINK_URI,
+                                    actions = listOf(
+                                        notification.shortcutAction.let { action ->
+                                            when (action) {
+                                                NoteShortcutType.SendToMe -> NotificationAction(
+                                                    "Email to me",
+                                                    "pebblecore://index-link/send-to-me?recordingId=${notification.recordingId}"
+                                                )
+                                                is NoteShortcutType.SendToNoteProvider -> NotificationAction(
+                                                    "Send to ${action.provider.title}",
+                                                    "pebblecore://index-link/send-to-note-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
+                                                )
+                                                is NoteShortcutType.SendToReminderProvider -> NotificationAction(
+                                                    "Send to ${action.provider.title}",
+                                                    "pebblecore://index-link/send-to-reminder-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
+                                                )
+                                            }
+                                        }
+                                    )
+                                )
+                            }
+                            is InflightIndexNotification.Error -> {
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = "Error",
+                                    contentText = notification.message,
+                                    inProgress = null,
+                                    localOnly = false,
+                                    deepLink = DEEP_LINK_URI
+                                )
+                            }
+                        }
+                        if (notif != null) {
+                            platformIndexNotificationManager.notify(notif)
+                            traceNotificationSent(
+                                transfer.recordingId,
+                                transfer.id,
+                                when (notification) {
+                                    is InflightIndexNotification.Transferring -> "transferring"
+                                    is InflightIndexNotification.Transcribing -> "transcribing"
+                                    is InflightIndexNotification.AgentRunning -> "agent_running"
+                                    is InflightIndexNotification.AgentComplete -> "agent_complete"
+                                    is InflightIndexNotification.Error -> "error"
+                                    is InflightIndexNotification.Discarded -> "dismissed_discarded"
                                 }
                             )
-                        )
-                    }
-                    is InflightIndexNotification.Error -> {
-                        GenericNotification(
-                            id = notification.id,
-                            title = "Error",
-                            contentText = notification.message,
-                            inProgress = null,
-                            localOnly = false,
-                            deepLink = DEEP_LINK_URI
-                        )
-                    }
-                }
-                if (notif != null) {
-                    platformIndexNotificationManager.notify(notif)
-                } else {
-                    inflightNotifications[transfer.id]?.id?.let { platformIndexNotificationManager.cancel(it) }
-                }
+                        } else {
+                            inflightNotifications[transfer.id]?.id?.let { platformIndexNotificationManager.cancel(it) }
+                        }
 
-                if (
-                    notification is InflightIndexNotification.AgentComplete ||
-                    notification is InflightIndexNotification.Error ||
-                    notification is InflightIndexNotification.Discarded
-                ) {
-                    inflightNotificationJobs.remove(id)?.cancel("Notification complete")
-                }
-            }.onCompletion {
-                inflightNotificationJobs.remove(id)
-                logger.d { "Notification job for recording $id completed" }
-            }.launchIn(scope)
+                        if (
+                            notification is InflightIndexNotification.AgentComplete ||
+                            notification is InflightIndexNotification.Error ||
+                            notification is InflightIndexNotification.Discarded
+                        ) {
+                            inflightNotificationJobs.remove(id)?.cancel("Notification complete")
+                        }
+                    }.onCompletion {
+                        inflightNotificationJobs.remove(id)
+                        val recordingId = transferToRecordingId[transfer.id]
+                        val recordingIdTxt = recordingId?.let {
+                            "recording $it"
+                        } ?: "transfer $id"
+                        if (it is CancellationException) {
+                            logger.w { "Notification job for $recordingIdTxt cancelled: ${it.message}" }
+                        } else {
+                            logger.d { "Notification job for $recordingIdTxt completed" }
+                        }
+                    }.collect()
+            }
+        }
     }
 
     fun sendBugReportPrompt(

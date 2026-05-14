@@ -4,12 +4,14 @@ import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.util.trace.RingTraceSession
 import org.koin.core.component.KoinComponent
 
 class SearchRecordingOperation(
     agentFactory: AgentFactory,
     mcpSandboxRepository: McpSandboxRepository,
     mcpSessionFactory: McpSessionFactory,
+    trace: RingTraceSession,
     localRecordingId: Long,
     transferId: Long?,
     fileId: String,
@@ -22,5 +24,6 @@ class SearchRecordingOperation(
     recordingId = localRecordingId,
     transferId = transferId,
     fileId = fileId,
-    forcedTool = null
+    forcedTool = null,
+    trace = trace
 )

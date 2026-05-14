@@ -2,11 +2,14 @@ package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.runBlocking
+import platform.UIKit.UIApplication
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotification
 import platform.UserNotifications.UNNotificationAction
 import platform.UserNotifications.UNNotificationActionOptionForeground
 import platform.UserNotifications.UNNotificationCategory
+import platform.UserNotifications.UNNotificationInterruptionLevel
+import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -49,6 +52,7 @@ actual class PlatformIndexNotificationManager {
         if (notification.contentText != null) {
             content.setBody(notification.contentText)
         }
+        content.setSound(UNNotificationSound.defaultSound)
         if (notification.actions.isNotEmpty()) {
             val categoryId = "idxnotif-actions-${notification.id}"
             val unActions = notification.actions.mapIndexed { index, action ->

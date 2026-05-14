@@ -15,6 +15,10 @@ class AndroidPlatform(private val context: Context) : Platform {
         )
     }
 
+    override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) {
+        task()
+    }
+
     companion object {
         const val NOTIFICATION_ID_BASE_REMINDER = 10
         val audioPermResults = MutableSharedFlow<Boolean>()

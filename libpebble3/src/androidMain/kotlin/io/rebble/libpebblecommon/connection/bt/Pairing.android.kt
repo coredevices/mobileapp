@@ -7,7 +7,9 @@ import android.os.Build
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.PebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.asPebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityStatus
 import io.rebble.libpebblecommon.util.asFlow
 import kotlinx.coroutines.flow.Flow
@@ -73,4 +75,62 @@ actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
         Logger.e("failed to create bond", e)
         false
     }
+}
+
+actual fun isBondedClassic(identifier: PebbleBtClassicIdentifier): Boolean {
+    @Suppress("DEPRECATION")
+    val adapter = BluetoothAdapter.getDefaultAdapter()
+    val device = adapter.getRemoteDevice(identifier.macAddress)
+    try {
+        if (device.bondState == BluetoothDevice.BOND_BONDED) {
+            return true
+        }
+        val bondedDevices = adapter.bondedDevices.toSet().filterNotNull()
+        if (bondedDevices.any { it.address.asPebbleBtClassicIdentifier() == identifier }) {
+            return true
+        }
+    } catch (e: SecurityException) {
+        Logger.e("error checking classic bond state")
+    }
+    return false
+}
+
+actual fun createBondClassic(identifier: PebbleBtClassicIdentifier): Boolean {
+    Logger.d("createBondClassic()")
+    @Suppress("DEPRECATION")
+    val adapter = BluetoothAdapter.getDefaultAdapter()
+    val device = adapter.getRemoteDevice(identifier.macAddress)
+    return try {
+        device.createBond()
+    } catch (e: SecurityException) {
+        Logger.e("failed to create classic bond", e)
+        false
+    }
+}
+
+actual fun getBluetoothClassicDevicePairEvents(
+    context: AppContext,
+    identifier: PebbleBtClassicIdentifier,
+): Flow<BluetoothClassicDevicePairEvent> {
+    return IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).asFlow(context.context, exported = true)
+        .mapNotNull {
+            val device: BluetoothDevice = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                it.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                it.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+            } ?: return@mapNotNull null
+            BluetoothClassicDevicePairEvent(
+                device = device.address.asPebbleBtClassicIdentifier(),
+                bondState = it.getIntExtra(
+                    BluetoothDevice.EXTRA_BOND_STATE,
+                    BluetoothDevice.BOND_NONE
+                ),
+                unbondReason = it.getIntExtra("android.bluetooth.device.extra.REASON", -1)
+                    .takeIf { it != -1 }
+            )
+        }
+        .filter {
+            identifier == it.device
+        }
 }

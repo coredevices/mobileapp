@@ -12,4 +12,6 @@ class LocalNoteClient: NoteIntegration {
     override suspend fun unlink() {
         TODO("Not yet implemented")
     }
+
+    override suspend fun isAuthorized(): Boolean = true
 }

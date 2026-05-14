@@ -5,6 +5,7 @@ import coredev.BlobDatabase
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
@@ -46,7 +47,9 @@ interface BlobDbRecord {
 data class ValueParams(
     val platform: WatchType,
     val capabilities: Set<ProtocolCapsFlag>,
+    val firmwareVersion: FirmwareVersion,
     val vibePatternDao: VibePatternDao? = null,
+    val notificationRuleDao: NotificationRuleDao? = null,
 )
 
 interface BlobDbItem {

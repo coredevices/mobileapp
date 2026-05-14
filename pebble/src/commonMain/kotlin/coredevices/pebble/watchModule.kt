@@ -2,13 +2,17 @@ package coredevices.pebble
 
 import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
+import com.viktormykhailiv.kmp.health.HealthManagerFactory
 import coredevices.pebble.account.BootConfigProvider
+import coredevices.pebble.account.FirestoreKnownWatchesDao
+import coredevices.pebble.account.FirestoreKnownWatchesSync
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
 import coredevices.pebble.account.RealBootConfigProvider
+import coredevices.pebble.account.RealFirestoreKnownWatchesSync
 import coredevices.pebble.account.RealFirestoreLocker
 import coredevices.pebble.account.RealPebbleAccount
 import coredevices.pebble.firmware.Cohorts
@@ -21,6 +25,10 @@ import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.CactusTranscription
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
+import coredevices.pebble.services.AnalyticsHeartbeatQueue
+import coredevices.pebble.services.AnalyticsIngest
+import coredevices.pebble.services.ContactDeveloperApi
+import coredevices.pebble.services.MemfaultChunkQueue
 import coredevices.pebble.services.NullTranscriptionProvider
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleBootConfigService
@@ -39,7 +47,9 @@ import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.SharedLockerViewModel
+import coredevices.pebble.ui.HealthViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
+import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
@@ -56,6 +66,7 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
@@ -68,6 +79,8 @@ import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
@@ -91,8 +104,8 @@ val watchModule = module {
             get(),
             get(),
             get(),
-            Firebase.auth.authStateChanged
-                .map { it?.getIdToken(false) }
+            flow { emitAll(Firebase.auth.idTokenChanged) }
+                .map { try { it?.getIdToken(false) } catch (e: Exception) { Logger.w(e) { "Failed to get ID token" }; null } }
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),
             get(),
@@ -110,10 +123,14 @@ val watchModule = module {
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     factory<Clock> { Clock.System }
     singleOf(::RealPebbleAccount) bind PebbleAccount::class
-    singleOf(::FirestoreLockerDao)
+    single { FirestoreLockerDao { get() } }
+    single { FirestoreKnownWatchesDao { get() } }
+    single { HealthManagerFactory().createManager() }
     singleOf(::RealFirestoreLocker) bind FirestoreLocker::class
+    singleOf(::RealFirestoreKnownWatchesSync) bind FirestoreKnownWatchesSync::class
     singleOf(::RealAppstoreCache) bind AppstoreCache::class
     single { MobileGeocoder() } bind Geocoder::class
+    single<HealthDataApi> { get<LibPebble>() }
     single { InjectedPKJSHttpInterceptors(
         listOf(
             get<OpenWeather25Interceptor>(),
@@ -157,13 +174,18 @@ val watchModule = module {
     singleOf(::RealPebbleDeepLinkHandler) bind PebbleDeepLinkHandler::class
     factoryOf(::PebbleHttpClient) bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
-    factoryOf(::Memfault)
+    singleOf(::Memfault)
+    singleOf(::MemfaultChunkQueue)
+    singleOf(::AnalyticsIngest)
+    singleOf(::AnalyticsHeartbeatQueue)
+    singleOf(::ContactDeveloperApi)
     factoryOf(::Cohorts)
     factoryOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
     factoryOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
+    singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)
     factoryOf(::YahooWeatherInterceptor)
@@ -192,7 +214,8 @@ val watchModule = module {
     single {
         CactusTranscription(
             get(),
-            lazy { get<LibPebble3>() }
+            lazy { get<LibPebble3>() },
+            get(),
         )
     } bind TranscriptionProvider::class
 
@@ -217,6 +240,7 @@ val watchModule = module {
         )
     }
     viewModelOf(::ModelManagementScreenViewModel)
+    viewModelOf(::HealthViewModel)
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

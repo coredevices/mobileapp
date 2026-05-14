@@ -37,6 +37,8 @@ class NotionNoteClientIntegrationTest {
             todoBlockId = todoBlockId,
         )))
         override val user: Flow<PebbleUser?> = _user.asStateFlow()
+        override val loginEvents: Flow<PebbleUser>
+            get() = TODO("Not yet implemented")
 
         override suspend fun updateNotionToken(notionToken: String?) {
             TODO("Not yet implemented")
@@ -52,6 +54,17 @@ class NotionNoteClientIntegrationTest {
         }
 
         override suspend fun initUserDevToken(rebbleUserToken: String?) {
+            TODO("Not yet implemented")
+        }
+
+        override suspend fun updateLastConnectedWatch(serial: String) {
+            TODO("Not yet implemented")
+        }
+
+        override suspend fun updateRingLifetimeCollectionCount(
+            serial: String,
+            count: Int
+        ) {
             TODO("Not yet implemented")
         }
 

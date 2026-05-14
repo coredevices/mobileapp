@@ -69,6 +69,11 @@ class PhoneContactsSyncer(
 
     private suspend fun syncDeviceContactsToDb() {
         logger.d { "syncDeviceContactsToDb" }
+        if (!systemContacts.hasPermission()) {
+            // Permission was revoked after init().
+            logger.w { "Contacts permission revoked; skipping sync" }
+            return
+        }
         val newContacts = systemContacts.getContacts()
         logger.d { "Got ${newContacts.size} contacts from device, syncing... " }
         val existingContacts = contactDao.getContacts()

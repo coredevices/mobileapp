@@ -18,8 +18,12 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlinx.coroutines.currentCoroutineContext
 import kotlin.getValue
 import kotlin.time.Clock
 
@@ -59,6 +63,8 @@ class ListTool: BuiltInMcpTool(
     )
 ), KoinComponent {
     val reminderFactory: ReminderFactory by inject()
+    private val itemRepo: ItemRepository by inject()
+    private val itemFactory: ItemFactory by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_list_item"
@@ -148,6 +154,14 @@ class ListTool: BuiltInMcpTool(
                 reminder.scheduleToList(listItemArgs.list_name)
             } else {
                 reminder.schedule()
+            }
+            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                runCatching {
+                    itemRepo.setItem(
+                        itemFactory.simpleUid(),
+                        itemFactory.noteItem(ctx.sourceRecordingId, ctx.createdAt, reminder.message, listItemArgs.list_name)
+                    )
+                }
             }
             ToolCallResult(
                 JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),

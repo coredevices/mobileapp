@@ -207,6 +207,12 @@ kotlin {
             implementation(libs.androidx.test.rules)
             implementation(libs.androidx.monitor)
         }
+
+        getByName("androidUnitTest").dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlin.test.junit)
+            implementation(libs.coroutines.test)
+        }
     }
 }
 

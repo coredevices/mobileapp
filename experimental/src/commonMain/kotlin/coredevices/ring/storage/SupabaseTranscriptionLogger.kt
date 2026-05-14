@@ -1,6 +1,7 @@
 package coredevices.ring.storage
 
 import co.touchlab.kermit.Logger
+import coredevices.util.CoreConfigFlow
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -14,6 +15,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 
 @Serializable
 data class TranscriptionLogEntry(
@@ -27,7 +30,7 @@ class SupabaseTranscriptionLogger(
     private val httpClient: HttpClient,
     private val supabaseUrl: String,
     private val supabaseKey: String
-) {
+) : KoinComponent {
     companion object {
         private val logger = Logger.withTag(SupabaseTranscriptionLogger::class.simpleName!!)
         private val json = Json {
@@ -132,7 +135,7 @@ class SupabaseTranscriptionLogger(
             val apiUrl = supabaseUrl.replace("storage.supabase.co", "supabase.co") + "/rest/v1/transcriptions"
 
             logger.d { "API URL: $apiUrl" }
-            logger.d { "JSON data: $jsonObject" }
+            logger.d { "JSON data: ${if (get<CoreConfigFlow>().value.obfuscateSensitiveLogs) "[redacted]" else jsonObject}" }
 
             val response = httpClient.post(apiUrl) {
                 header("apikey", supabaseKey)

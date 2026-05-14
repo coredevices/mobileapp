@@ -11,7 +11,7 @@ class ReminderFactory(private val preferences: Preferences) {
     fun create(time: Instant?, message: String, integration: ReminderProvider = preferences.reminderProvider.value): Reminder {
         logger.i { "Creating reminder integration for provider: $integration" }
         return when (integration) {
-            ReminderProvider.Native -> NativeReminder(time, message)
+            ReminderProvider.Native -> createNativeReminder(time, message)
             ReminderProvider.GoogleTasks -> GTasksReminder(time, message)
         }
     }

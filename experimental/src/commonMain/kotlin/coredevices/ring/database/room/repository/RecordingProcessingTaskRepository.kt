@@ -78,6 +78,7 @@ class RecordingProcessingTaskRepository(
                     task = ProcessingTask.AudioRecording(
                         buttonSequence = buttonSequence,
                         transferId = transferId ?: error("transferId is null for AudioRecording task"),
+                        created = created,
                     ),
                 )
             }
@@ -92,6 +93,7 @@ class RecordingProcessingTaskRepository(
                     task = ProcessingTask.LocalAudioRecording(
                         fileId = fileId ?: error("fileId is null for LocalAudioRecording task"),
                         buttonSequence = buttonSequence,
+                        created = created,
                     ),
                 )
             }
@@ -105,6 +107,7 @@ class RecordingProcessingTaskRepository(
                     lastSuccessfulStage = lastSuccessfulStage,
                     task = ProcessingTask.TextRecording(
                         transcription = transcription ?: error("transcription is null for TextRecording task"),
+                        created = created,
                     ),
                 )
             }

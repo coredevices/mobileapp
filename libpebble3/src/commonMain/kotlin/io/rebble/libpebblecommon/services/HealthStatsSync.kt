@@ -101,13 +101,13 @@ internal suspend fun updateHealthStatsInDatabase(
         ))
 
         // Add sleep stat
-        val mainSleep = fetchAndGroupDailySleep(healthDao, dayStart, timeZone)
+        val dailySleep = fetchAndGroupDailySleep(healthDao, dayStart, timeZone)
         val sleepPayloadData = sleepPayload(
             dayStart,
-            mainSleep?.totalSleep?.toInt() ?: 0,
-            mainSleep?.deepSleep?.toInt() ?: 0,
-            mainSleep?.start?.toInt() ?: 0,
-            mainSleep?.end?.toInt() ?: 0
+            dailySleep?.totalSleep?.toInt() ?: 0,
+            dailySleep?.deepSleep?.toInt() ?: 0,
+            dailySleep?.firstStart?.toInt() ?: 0,
+            dailySleep?.lastEnd?.toInt() ?: 0
         )
         stats.add(HealthStat(
             key = sleepKey,

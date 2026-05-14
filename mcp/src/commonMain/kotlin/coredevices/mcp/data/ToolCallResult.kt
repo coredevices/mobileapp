@@ -56,6 +56,13 @@ sealed class SemanticResult {
     @SerialName("SupportingData")
     data class SupportingData(val summary: String?, val assistiveOnly: Boolean = false): SemanticResult()
     /**
+     * Tool call resulted in a message being sent to a contact
+     * @param recipientName The display name of the message recipient
+     */
+    @Serializable
+    @SerialName("MessageSent")
+    data class MessageSent(val recipientName: String): SemanticResult()
+    /**
      * Generic success or failure without additional context
      */
     @Serializable

@@ -8,7 +8,6 @@ sealed class NotificationResult {
      */
     data class Extracted(
         val notification: LibPebbleNotification,
-        val decision: NotificationDecision,
     ) : NotificationResult()
 
     /**

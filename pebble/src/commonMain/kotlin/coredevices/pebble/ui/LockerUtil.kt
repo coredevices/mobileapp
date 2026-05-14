@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -60,6 +59,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.SettingsPageState
 import coredevices.pebble.services.StoreApplication
 import coredevices.pebble.services.StoreCategory
 import coredevices.pebble.services.StoreChangelogEntry
@@ -70,6 +70,7 @@ import coredevices.pebble.services.toLockerEntry
 import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
@@ -85,6 +86,8 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -156,13 +159,11 @@ fun Map<Int, Set<String>>?.hasHeart(sourceId: Int?, appId: String?): Boolean {
 
 @Composable
 fun loadLockerEntries(
-    currentHearts: Map<Int, Set<String>>?,
     type: AppType,
     searchQuery: String,
     watchType: WatchType,
     showIncompatible: Boolean,
     showScaled: Boolean,
-    hearted: Boolean,
     limit: Int,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
@@ -180,7 +181,7 @@ fun loadLockerEntries(
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(type, appstoreSources)
-    if (entries == null || appstoreSources == null || categories == null || currentHearts == null) {
+    if (entries == null || appstoreSources == null || categories == null) {
         return null
     }
     return remember(
@@ -190,7 +191,6 @@ fun loadLockerEntries(
         firestoreLockerContents,
         showIncompatible,
         showScaled,
-        hearted
     ) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
@@ -199,13 +199,6 @@ fun loadLockerEntries(
                 return@mapNotNull null
             }
             if (!showScaled && !app.isNativelyCompatible) {
-                return@mapNotNull null
-            }
-            if (hearted && !currentHearts.hasHeart(
-                    sourceId = appstoreSource?.id,
-                    appId = app.storeId
-                )
-            ) {
                 return@mapNotNull null
             }
             app
@@ -243,9 +236,9 @@ fun loadLockerEntry(uuid: Uuid?, watchType: WatchType): CommonApp? {
 }
 
 @Composable
-fun allCollectionUuids(): List<Uuid> {
+fun allCollectionUuids(): List<Uuid>? {
     val libPebble = rememberLibPebble()
-    val allCollectionUuids by libPebble.getAllLockerUuids().collectAsState(emptyList())
+    val allCollectionUuids by libPebble.getAllLockerUuids().collectAsState(null)
     return allCollectionUuids
 }
 
@@ -257,7 +250,7 @@ fun CommonApp.inMyCollection(): Boolean {
             is CommonAppType.Locker -> true
             is CommonAppType.System -> true
             is CommonAppType.Store -> {
-                uuid in collectionUuids
+                uuid in collectionUuids.orEmpty()
             }
         }
     }
@@ -329,12 +322,12 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
         IconButton(
             modifier = Modifier.size(16.dp).padding(top = 1.dp, end = 6.dp, bottom = 5.dp),
             onClick = {
-                topBarParams.showSnackbar("Not natively compatible, but can be scaled")
+                topBarParams.showSnackbar("Not natively compatible with this watch, but can be scaled")
             },
         ) {
             Icon(
                 Icons.Filled.AspectRatio,
-                contentDescription = "Not natively compatible, but can be scaled",
+                contentDescription = "Not natively compatible with this watch, but can be scaled",
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -354,13 +347,23 @@ fun WatchType.modelDescription() = when (this) {
 @Composable
 fun lastConnectedWatch(): KnownPebbleDevice? {
     val libPebble = rememberLibPebble()
-    val watchesFiltered = remember {
-        libPebble.watches
-    }
-    val watches by watchesFiltered.collectAsState()
+    val watches by libPebble.watches.collectAsState()
     val lastConnectedWatch = remember(watches) {
         watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
             .firstOrNull()
+    }
+    return lastConnectedWatch
+}
+
+@Composable
+fun connectedWatch(): CommonConnectedDevice? {
+    val libPebble = rememberLibPebble()
+    val watchesFiltered = remember {
+        libPebble.watches.map { it.filterIsInstance<CommonConnectedDevice>() }
+    }
+    val watches by watchesFiltered.collectAsState(null)
+    val lastConnectedWatch = remember(watches) {
+        watches?.firstOrNull()
     }
     return lastConnectedWatch
 }
@@ -434,6 +437,8 @@ sealed class CommonAppType {
         val publishedDate: Instant?,
         val developerLink: String?,
         val changelog: List<StoreChangelogEntry>,
+        val settingsPageState: SettingsPageState?,
+        val contactable: Boolean,
     ) : CommonAppType()
 
     data class System(
@@ -504,6 +509,16 @@ fun WatchType.performsScaling(): Boolean = when (this) {
     else -> false
 }
 
+fun WatchType.shortName(): String = when (this) {
+    WatchType.APLITE -> "OG"
+    WatchType.BASALT -> "PT"
+    WatchType.CHALK -> "PTR"
+    WatchType.DIORITE -> "P2"
+    WatchType.FLINT -> "P2D"
+    WatchType.EMERY -> "PT2"
+    WatchType.GABBRO -> "PR2"
+}
+
 fun StoreApplication.asCommonApp(
     watchType: WatchType,
     platform: Platform,
@@ -534,6 +549,8 @@ fun StoreApplication.asCommonApp(
             publishedDate = latestRelease.publishedDate ?: publishedDate,
             developerLink = website,
             changelog = changelog,
+            settingsPageState = latestRelease.settingsPageState,
+            contactable = contactable,
         ),
         type = appType,
         category = category,
@@ -592,7 +609,9 @@ fun StoreSearchResult.asCommonApp(
             removeHeartUrl = null,
             developerLink = null,
             publishedDate = null,
-            changelog = emptyList()
+            changelog = emptyList(),
+            settingsPageState = null,
+            contactable = false,
         ),
         type = appType,
         category = category,
@@ -671,14 +690,16 @@ class NativeLockerAddUtil(
     suspend fun removeFromLocker(
         source: AppstoreSource?,
         uuid: Uuid,
-    ) {
+    ): Boolean {
+        val removed = libPebble.removeApp(uuid)
         if (source == null) {
-            return
+            return removed
         }
         val useLockerApiToRemove = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
         if (useLockerApiToRemove) {
             webServices.removeFromLegacyLocker(uuid)
         }
+        return removed
     }
 }
 
@@ -798,19 +819,20 @@ fun AppsFilterRow(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             if (sharedLockerViewModel.watchType.value.performsScaling()) {
+                val shortName = sharedLockerViewModel.watchType.value.shortName()
                 FilterChip(
-                    selected = sharedLockerViewModel.showScaled.value,
+                    selected = !sharedLockerViewModel.showScaled.value,
                     onClick = {
                         sharedLockerViewModel.showScaled.value =
                             !sharedLockerViewModel.showScaled.value
                     },
-                    label = { Text("Show Scaled") },
+                    label = { Text("Made for $shortName") },
                     modifier = Modifier.padding(horizontal = 4.dp),
-                    leadingIcon = if (sharedLockerViewModel.showScaled.value) {
+                    leadingIcon = if (!sharedLockerViewModel.showScaled.value) {
                         {
                             Icon(
                                 imageVector = Icons.Filled.Done,
-                                contentDescription = "Show Scaled",
+                                contentDescription = "Made for $shortName",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize)
                             )
                         }
@@ -819,25 +841,6 @@ fun AppsFilterRow(
                     },
                 )
             }
-            FilterChip(
-                selected = sharedLockerViewModel.hearted.value,
-                onClick = {
-                    sharedLockerViewModel.hearted.value = !sharedLockerViewModel.hearted.value
-                },
-                label = { Text("Hearted") },
-                modifier = Modifier.padding(horizontal = 4.dp),
-                leadingIcon = if (sharedLockerViewModel.hearted.value) {
-                    {
-                        Icon(
-                            imageVector = Icons.Filled.Favorite,
-                            contentDescription = "Hearted",
-                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                        )
-                    }
-                } else {
-                    null
-                },
-            )
             if (showWatchfaceOrderSetting) {
                 val orderExpanded = remember { mutableStateOf(false) }
                 val selectedOrderMode = remember(sharedLockerViewModel.orderWatchfacesByLastUsed.value) {

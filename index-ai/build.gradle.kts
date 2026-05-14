@@ -80,6 +80,7 @@ kotlin {
                 implementation(libs.room.runtime)
                 implementation(libs.room.paging)
                 implementation(libs.kotlinx.datetime)
+                implementation(libs.firebase.firestore)
 
                 implementation(project(":mcp"))
             }
@@ -93,9 +94,15 @@ kotlin {
 
         androidMain {
             dependencies {
-                // Add Android-specific dependencies here. Note that this source set depends on
-                // commonMain by default and will correctly pull the Android artifacts of any KMP
-                // dependencies declared in commonMain.
+                // The Firebase BOM resolves the native Android Firebase
+                // SDK versions that gitlive's `firebase-firestore-android`
+                // pulls in transitively. Without it, gradle can't pick a
+                // version for `com.google.firebase:firebase-firestore`
+                // and the Android compile fails. composeApp configures
+                // the BOM for app-level deps but Gradle doesn't propagate
+                // it back up to library modules that consume gitlive
+                // directly, so we re-declare it here.
+                implementation(project.dependencies.platform(libs.firebase.bom))
             }
         }
 

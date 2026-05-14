@@ -37,6 +37,8 @@ import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +81,8 @@ import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
+import coredevices.pebble.services.SettingsPageState
+import coredevices.pebble.services.isPebbleFeed
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -200,6 +204,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val sharedViewModel: SharedLockerViewModel = koinInject()
         sharedViewModel.Init()
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
+        val showContactDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
@@ -242,8 +247,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             GlobalScope.launch {
                                 logger.d { "removing app ${entry.uuid}" }
                                 topBarParams.showSnackbar("Removing ${entry.title}")
-                                val removed = libPebble.removeApp(entry.uuid)
-                                nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
+                                val removed = nativeLockerAddUtil.removeFromLocker(storeSource, entry.uuid)
                                 logger.d { "removed = $removed" }
                                 topBarParams.showSnackbar("Removed ${entry.title}")
                             }
@@ -262,6 +266,13 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
             }
             topBarParams.title(entry?.type?.name ?: "")
+        }
+        if (showContactDialog.value && entry?.storeId != null) {
+            ContactDeveloperDialog(
+                appId = entry.storeId,
+                appTitle = entry.title,
+                onDismiss = { showContactDialog.value = false },
+            )
         }
         PullToRefreshBox(
             isRefreshing = viewModel.loadingFromStore,
@@ -437,15 +448,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         entry.isCompatible && entry.commonAppType.canStartApp() && !appIsRunning
                                 && !viewModel.addedToLocker
                     if (showStartApp) {
-                        val loadToWatchText = if (entry.isSynced()) {
-                            ""
-                        } else {
-                            "Load To Watch & "
-                        }
                         val text = if (entry.type == AppType.Watchapp) {
-                            "${loadToWatchText}Start App"
+                            "Start App"
                         } else {
-                            "${loadToWatchText}Start Watchface"
+                            "Start Watchface"
                         }
                         PebbleElevatedButton(
                             text = text,
@@ -507,7 +513,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                         if (watch != null) {
                                             libPebble.launchApp(
                                                 entry = entry,
-                                                topBarParams = topBarParams,
+                                                snackbarDisplay = topBarParams,
                                                 connectedIdentifier = watch.identifier,
                                             )
                                         }
@@ -588,6 +594,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 primaryColor = false,
                                 modifier = Modifier.padding(5.dp),
                             )
+                        }
+                    }
+                    if (commonAppStore?.settingsPageState == SettingsPageState.PageDoesntLoad) {
+                        Row {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "This app's settings page may not work any more",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(15.dp)
+                                )
+                            }
                         }
                     }
                     val screenshotsToDisplay = remember(storeEntry) {
@@ -708,6 +733,19 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             nameModifier = propertyNameModifier,
                             value = "External Link",
                             onClick = { urlLauncher.open(developerLink) }
+                        )
+                    }
+                    if (
+                        commonAppStore?.contactable == true &&
+                        commonAppStore.storeSource.isPebbleFeed() &&
+                        entry.storeId != null
+                    ) {
+                        PropertyRow(
+                            name = "CONTACT DEVELOPER",
+                            nameModifier = propertyNameModifier,
+                            value = "Send Message",
+                            onClick = { showContactDialog.value = true },
+                            onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                         )
                     }
                     commonAppStore?.changelog?.let { changelog ->
@@ -868,7 +906,7 @@ fun AppCapability.description(): String = when (this) {
 
 suspend fun LibPebble.launchApp(
     entry: CommonApp,
-    topBarParams: TopBarParams,
+    snackbarDisplay: SnackbarDisplay,
     connectedIdentifier: PebbleIdentifier
 ): Boolean {
     logger.d { "launchApp: ${entry.uuid} - ${entry.title}" }
@@ -879,30 +917,30 @@ suspend fun LibPebble.launchApp(
     if (!entry.isSynced()) {
         try {
             withTimeout(15.seconds) {
-                topBarParams.showSnackbar("Waiting to sync $typeText to watch...")
+                snackbarDisplay.showSnackbar("Waiting to sync $typeText to watch...")
                 setAppOrder(entry.uuid, orderIndexForInsert(entry.type))
             }
         } catch (_: TimeoutCancellationException) {
             logger.w { "timed out waiting for order change to sync to watch" }
-            topBarParams.showSnackbar("$typeText failed to sync to watch")
+            snackbarDisplay.showSnackbar("$typeText failed to sync to watch")
             return false
         }
     }
     if (!waitUntilAppSyncedToWatch(entry.uuid, connectedIdentifier, 15.seconds)) {
         logger.w { "timed out waiting for blobdb item to sync to watch" }
-        topBarParams.showSnackbar("$typeText failed to sync to watch")
+        snackbarDisplay.showSnackbar("$typeText failed to sync to watch")
         return false
     }
     // Give it a small bit of time to settle
     delay(0.5.seconds)
-    topBarParams.showSnackbar("Loading $typeText")
+    snackbarDisplay.showSnackbar("Loading $typeText")
     val launched = withTimeoutOrNull(30.seconds) {
         launchApp(entry.uuid)
         true
     }
     logger.d { "launched = $launched" }
     if (launched == null) {
-        topBarParams.showSnackbar("$typeText failed to load")
+        snackbarDisplay.showSnackbar("$typeText failed to load")
         return false
     }
     return true

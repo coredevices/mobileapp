@@ -61,6 +61,11 @@ interface LockerEntryRealDao : LockerEntryDao {
     @RewriteQueriesToDropUnusedColumns
     suspend fun getAllBasicInfo(): List<DbAppBasicProperties>
 
+    @Query("""
+        SELECT * FROM LockerEntryEntity WHERE deleted = 0
+    """)
+    suspend fun getAll(): List<LockerEntry>
+
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
         insertOrReplace(entry)

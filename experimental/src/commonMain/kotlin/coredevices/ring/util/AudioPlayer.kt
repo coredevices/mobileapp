@@ -9,6 +9,7 @@ internal const val AUDIO_PLAYER_VOLUME = 1.7f
 expect class AudioPlayer(): AutoCloseable {
     val playbackState: MutableStateFlow<PlaybackState>
     fun playRaw(samples: Source, sampleRate: Long, encoding: AudioEncoding, sizeHint: Long = 1)
+    fun playAAC(samples: Source, sampleRate: Long)
     fun stop()
     override fun close()
 }

@@ -30,4 +30,6 @@ class UIEmailIntegration: NoteIntegration, KoinComponent {
 
     }
 
+    override suspend fun isAuthorized(): Boolean = true
+
 }

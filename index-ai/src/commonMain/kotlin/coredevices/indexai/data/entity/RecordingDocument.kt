@@ -10,7 +10,9 @@ import androidx.room.PrimaryKey
 import coredevices.indexai.data.NoteMetadata
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.InstantComponentSerializer
+// Tolerant Instant serializer (see file): write side is identical to
+// `InstantComponentSerializer`; read side defaults missing/null fields to 0
+// so legacy Firestore docs with drifted shapes don't fail the whole decode.
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -82,7 +84,7 @@ data class RecordingEntryEntity(
 
 @Serializable
 data class RecordingDocument(
-    @Serializable(with = InstantComponentSerializer::class)
+    @Serializable(with = TolerantInstantSerializer::class)
     val timestamp: Instant = Clock.System.now(),
     val updated: Long = Clock.System.now().toEpochMilliseconds(),
     /**
@@ -95,7 +97,8 @@ data class RecordingDocument(
      */
     @SerialName("assistant_session")
     val assistantSession: AssistantSessionDocument? = null,
-    val metadata: NoteMetadata? = null
+    val metadata: NoteMetadata? = null,
+    val encrypted: EncryptedEnvelope? = null,
 ) {
     fun firstUserMessage(): String {
         return assistantSession?.messages?.firstOrNull { it.role == MessageRole.user }?.content
@@ -119,7 +122,7 @@ data class RecordingDocument(
 
 @Serializable
 data class RecordingEntry(
-    @Serializable(with = InstantComponentSerializer::class)
+    @Serializable(with = TolerantInstantSerializer::class)
     val timestamp: Instant,
     /**
      * The file name of the recording in Firebase Storage (under the user's recordings directory).
@@ -148,5 +151,7 @@ enum class RecordingEntryStatus {
      */
     completed,
     transcription_error,
-    agent_error
+    agent_error;
+
+    fun isError(): Boolean = this == transcription_error || this == agent_error
 }

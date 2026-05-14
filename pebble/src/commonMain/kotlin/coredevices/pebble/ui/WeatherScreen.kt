@@ -191,6 +191,7 @@ private fun AddWeatherLocationDialog(
     var addressQuery by remember { mutableStateOf("") }
     val autoComplete = remember { Autocomplete.mobile() }
     var suggestions by remember { mutableStateOf<List<Place>>(emptyList()) }
+    var searchFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(addressQuery) {
         if (addressQuery.length >= 3) {
@@ -198,9 +199,14 @@ private fun AddWeatherLocationDialog(
             val result = autoComplete.search(addressQuery)
             if (result.isError) {
                 logger.e { "Error searching for places: ${result.errorOrNull()}" }
+                searchFailed = true
+                suggestions = emptyList()
+            } else {
+                searchFailed = false
+                suggestions = result.getOrNull() ?: emptyList()
             }
-            suggestions = result.getOrNull() ?: emptyList()
         } else {
+            searchFailed = false
             suggestions = emptyList()
         }
     }
@@ -329,6 +335,13 @@ private fun AddWeatherLocationDialog(
                             }
                         }
                     }
+                } else if (searchFailed) {
+                    Text(
+                        "Couldn't search for locations. Check your connection and try again.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
                 } else if (addressQuery.length >= 3) {
                     Text(
                         "Type to search for locations...",

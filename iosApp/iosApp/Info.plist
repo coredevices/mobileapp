@@ -129,6 +129,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>$(PRODUCT_NAME) writes health data recorded by your Pebble watch, such as steps and sleep.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>$(PRODUCT_NAME) writes health data recorded by your Pebble watch, such as steps and sleep.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>This app needs bluetooth access to connect to your Pebble Watch.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

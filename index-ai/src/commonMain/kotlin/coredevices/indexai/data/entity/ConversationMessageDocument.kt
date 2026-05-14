@@ -2,6 +2,7 @@
 
 package coredevices.indexai.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -30,7 +31,12 @@ data class ConversationMessageDocument(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val tool_call_id: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val semantic_result: SemanticResult? = null
+    val semantic_result: SemanticResult? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val language_model_used: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @ColumnInfo(defaultValue = "0")
+    val is_forced_tool: Boolean = false
 )
 
 @Entity(

@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="s"/>
@@ -41,9 +42,6 @@
         <package android:name="com.beeper.android"/>
     </queries>
     <application>
-        <service android:name="coredevices.ring.service.RingService"
-            android:foregroundServiceType="connectedDevice"
-            android:exported="false"/>
         <receiver android:name=".glance.VoiceWidgetReceiver"
                   android:exported="true"
                   android:enabled="false">
@@ -56,6 +54,14 @@
         </receiver>
         <receiver android:name="coredevices.ring.reminders.ReminderReceiver"
                     android:exported="true">
+        </receiver>
+        <receiver android:name="coredevices.ring.reminders.ReminderBootReceiver"
+                    android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
         </receiver>
         <service android:name="coredevices.ring.service.InferenceForegroundService"
             android:foregroundServiceType="shortService"

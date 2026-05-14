@@ -17,6 +17,7 @@ import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
+import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
@@ -123,7 +124,7 @@ class BugReportProcessor(
     private val coreConfigFlow: CoreConfigFlow,
     private val permissionRequester: PermissionRequester,
     private val companionDevice: CompanionDevice,
-    ) {
+) {
     private val logger = Logger.withTag("BugReportProcessor")
 
     private fun getPKJSSummary(): String {
@@ -528,6 +529,26 @@ class BugReportProcessor(
                 }
             } catch (e: Exception) {
                 logger.e(e) { "Failed to collect experimental debug info files" }
+            }
+
+            try {
+                val exporter = KoinPlatform.getKoin().getOrNull<TraceSessionExporter>()
+                if (exporter != null) {
+                    val sessions = exporter.exportLastNSessions(20)
+                    if (sessions.isNotEmpty()) {
+                        val traceBytes = Json.encodeToString(sessions).encodeToByteArray()
+                        attachments.add(
+                            DocumentAttachment(
+                                fileName = "ring_trace_sessions.json",
+                                mimeType = "application/json",
+                                source = sourceFromByteArray(traceBytes),
+                                size = traceBytes.size.toLong(),
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to collect ring trace sessions" }
             }
         }
 

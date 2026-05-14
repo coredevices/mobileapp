@@ -48,7 +48,10 @@ interface HeartsDao {
     @Query("SELECT * FROM HeartEntity")
     fun getAllHeartsFlow(): Flow<List<HeartEntity>>
 
-    @Query("SELECT appId FROM HeartEntity WHERE sourceId = :sourceId")
+    // ORDER BY rowid DESC gives best-effort "most recently hearted first" without a
+    // dedicated timestamp column — SQLite assigns rowid in insertion order, and
+    // updateHeartsForSource only inserts new hearts (existing rows keep their rowid).
+    @Query("SELECT appId FROM HeartEntity WHERE sourceId = :sourceId ORDER BY rowid DESC")
     suspend fun getAllHeartsForSource(sourceId: Int): List<String>
 
     @Transaction

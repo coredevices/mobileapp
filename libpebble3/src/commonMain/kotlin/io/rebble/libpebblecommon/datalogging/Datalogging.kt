@@ -3,18 +3,15 @@ package io.rebble.libpebblecommon.datalogging
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.connection.WebServices
-import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
-import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
 class Datalogging(
-    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val webServices: WebServices,
     private val healthDataProcessor: HealthDataProcessor,
 ) {
@@ -35,15 +32,34 @@ class Datalogging(
             return
         }
 
-        // Handle Memfault chunks (system app only)
+        // Handle system-app datalogging tags
         if (uuid == SYSTEM_APP_UUID) {
             when (tag) {
                 MEMFAULT_CHUNKS_TAG -> {
-                    libPebbleCoroutineScope.launch {
+                    // A single SendDataItems payload can contain multiple items,
+                    // each itemSize bytes. Parse each one as a MemfaultChunk.
+                    val size = itemSize.toInt()
+                    var offset = 0
+                    while (offset + size <= data.size) {
+                        val itemData = data.copyOfRange(offset, offset + size)
                         val chunk = MemfaultChunk()
-                        chunk.fromBytes(DataBuffer(data.toUByteArray()))
-                        val chunkBytes = chunk.bytes.get()
-                        webServices.uploadMemfaultChunk(chunkBytes.toByteArray(), watchInfo)
+                        chunk.fromBytes(DataBuffer(itemData.toUByteArray()))
+                        webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
+                        offset += size
+                    }
+                }
+                ANALYTICS_HEARTBEAT_TAG -> {
+                    // Fixed-size native_heartbeat_record items (no inner length prefix).
+                    val size = itemSize.toInt()
+                    if (size <= 0) {
+                        logger.w { "Analytics heartbeat with itemSize=$size; ignoring" }
+                        return
+                    }
+                    var offset = 0
+                    while (offset + size <= data.size) {
+                        val itemData = data.copyOfRange(offset, offset + size)
+                        webServices.uploadAnalyticsHeartbeat(itemData, watchInfo)
+                        offset += size
                     }
                 }
             }
@@ -64,6 +80,7 @@ class Datalogging(
 
     companion object {
         private val MEMFAULT_CHUNKS_TAG: UInt = 86u
+        private val ANALYTICS_HEARTBEAT_TAG: UInt = 87u
     }
 }
 

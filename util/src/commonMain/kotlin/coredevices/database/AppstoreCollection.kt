@@ -1,5 +1,6 @@
 package coredevices.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Entity
@@ -33,19 +34,27 @@ data class AppstoreCollection(
     val type: AppType,
     val slug: String,
     val enabled: Boolean,
+    @ColumnInfo(defaultValue = "0") val synthetic: Boolean = false,
 )
+
+const val HEARTED_COLLECTION_SLUG = "__hearted__"
 
 @Dao
 interface AppstoreCollectionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateCollection(collection: AppstoreCollection): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCollectionIfMissing(collection: AppstoreCollection): Long
+
     @Transaction
     suspend fun updateListOfCollections(appType: AppType, collections: List<AppstoreCollection>, sourceId: Int) {
-        val existing = getAllCollections().filter { it.sourceId == sourceId && it.type == appType }
+        // Synthetic rows (e.g. the Hearted collection) are not driven by API responses;
+        // exclude them from the diff so they're never inserted/updated/deleted here.
+        val existing = getAllCollections().filter { it.sourceId == sourceId && it.type == appType && !it.synthetic }
         val new = collections.filter { it.sourceId == sourceId && it.type == appType }
-        new.filter { it.sourceId == sourceId && it.type == appType }.forEach { collection ->
-            val existingEntry = existing.firstOrNull {  it.slug == collection.slug }
+        new.forEach { collection ->
+            val existingEntry = existing.firstOrNull { it.slug == collection.slug }
             val toInsert = when {
                 existingEntry == null -> collection
                 else -> collection.copy(id = existingEntry.id, enabled = existingEntry.enabled)

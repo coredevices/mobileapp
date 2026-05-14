@@ -9,12 +9,16 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 
 import coredevices.util.CoreConfigFlow
+import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlin.time.Duration.Companion.seconds
 
 interface FirmwareUpdateUiTracker {
     fun didFirmwareUpdateCheckFromUi()
     fun shouldUiUpdateCheck(): Boolean
     fun maybeNotifyFirmwareUpdate(update: FirmwareUpdateCheckResult, identifier: PebbleIdentifier, watchName: String)
     fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier)
+    fun updateWatchNow(libPebble: LibPebble, identifier: String)
 }
 
 class RealFirmwareUpdateUiTracker(
@@ -65,12 +69,38 @@ class RealFirmwareUpdateUiTracker(
     }
 
     override fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier) {
-        val notificationKey = identifier.asString.hashCode()
+        logger.d { "Firmware update in progress; removing notification" }
+        removeNotification(identifier.asString)
+    }
+
+    private fun removeNotification(identifier: String) {
+        val notificationKey = identifier.hashCode()
         if (activeNotificationKeys.contains(notificationKey)) {
-            logger.d { "Firmware update in progress; removing notification" }
             removeFirmwareUpdateNotification(appContext, notificationKey)
             activeNotificationKeys.remove(notificationKey)
         }
+    }
+
+    override fun updateWatchNow(libPebble: LibPebble, identifier: String) {
+        removeNotification(identifier)
+        val watch =
+            libPebble.watches.value.firstOrNull { it.identifier.asString == identifier }
+        if (watch == null) {
+            logger.w { "No matching connected watch found for $identifier" }
+            return
+        }
+        val update = (watch as? ConnectedPebble.Firmware)?.firmwareUpdateAvailable?.result
+        if (update !is FirmwareUpdateCheckResult.FoundUpdate) {
+            logger.w { "No update available for $watch" }
+            return
+        }
+        val updater = watch as? ConnectedPebble.Firmware
+        if (updater == null) {
+            logger.w { "Can't update firmware for $watch" }
+            return
+        }
+        logger.d { "Starting update for $identifier to $update" }
+        updater.updateFirmware(update)
     }
 
     companion object {

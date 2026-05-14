@@ -150,7 +150,7 @@ kotlin {
             dependencies {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(compose.components.uiToolingPreview)
                 implementation(libs.paging.compose)
@@ -184,6 +184,7 @@ kotlin {
                 implementation(project(":resampler"))
                 implementation(libs.coredevices.haversine)
                 implementation(project(":cactus"))
+                implementation(project(":libindex"))
                 implementation(libs.settings)
                 implementation(libs.kable)
                 implementation(libs.uri)
@@ -203,6 +204,9 @@ kotlin {
                 implementation(libs.androidx.glance.material3)
                 implementation(compose.uiTooling)
                 implementation(libs.identity.google)
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.androidx.credentials)
+                implementation(libs.zxing.core)
             }
         }
 
@@ -235,9 +239,8 @@ val properties = Properties().apply {
 buildkonfig {
     packageName = "coredevices.ring"
     defaultConfigs {
-        buildConfigField(FieldSpec.Type.STRING, "NENYA_URL", "https://nenya-staging-460977838956.us-west1.run.app")
-        buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth-460977838956.us-west1.run.app")
-        buildConfigField(FieldSpec.Type.STRING, "GCLOUD_DICTATION_URL", "https://gcloud-dictation-460977838956.us-central1.run.app/recognize")
+        buildConfigField(FieldSpec.Type.STRING, "NENYA_URL", "https://nenya.repebble.com")
+        buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth.repebble.com")
 
         buildConfigField(FieldSpec.Type.STRING, "TESTS_NOTION_TOKEN", System.getenv("TESTS_NOTION_TOKEN") ?: properties.getProperty("TESTS_NOTION_TOKEN") ?: "")
     }

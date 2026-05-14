@@ -165,6 +165,7 @@ class QLMappable(
 sealed interface WatchPref<T> {
     val id: String
     val displayName: String
+    val description: String?
     val type: WatchPrefType
     val defaultValue: T
     fun decodeValue(value: String): T
@@ -176,8 +177,9 @@ sealed interface WatchPref<T> {
         fun enumeratePrefs(): List<WatchPref<*>> = BoolWatchPref.entries
             .plus(QuicklaunchWatchPref.entries)
             .plus(EnumWatchPref.entries)
-            .plus(NumberWatchPref.entries)
             .plus(ColorWatchPref.entries)
+            .plus(RgbColorWatchPref.entries)
+            .plus(NumberWatchPref.entries)
 
         fun from(id: String): WatchPref<*>? = enumeratePrefs().find { it.id == id }
     }
@@ -188,23 +190,27 @@ enum class BoolWatchPref(
     override val displayName: String,
     override val defaultValue: Boolean,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<Boolean> {
-    TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false),
+    TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
     Clock24h("clock24h", "24h clock", false),
-    StandbyMode("stationaryMode", "Standby Mode", true),
-    LeftHandedMode("displayOrientationLeftHanded", "Left-handed Mode", false),
+    StandbyMode("stationaryMode", "Standby Mode", true, description = "Watch will disable bluetooth when not in use (i.e. no movement is detected), to save power"),
+    LeftHandedMode("displayOrientationLeftHanded", "Left-handed Mode", false, description = "Button functions are reversed"),
     Backlight("lightEnabled", "Backlight", true),
-    AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true),
-    BacklightMotion("lightMotion", "Backlight Motion", true),
-    DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true),
+    AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
+    BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
+    DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true, description = "Adjust backlight intensity automatically to match environment (using light sensor)"),
     LanguageEnglish("langEnglish", "Language: English", false),
-    TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true),
-    QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false),
-    CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false),
+    TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
+    QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
+    CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
-    NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true),
-    NotificationBacklight("notifBacklight", "Notifications - Backlight", true),
-    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false),
+    NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
+    NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
+    QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
+    MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
+    MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     ;
 
     override val type = WatchPrefType.TypeBoolean
@@ -217,12 +223,14 @@ enum class QuicklaunchWatchPref(
     override val displayName: String,
     override val defaultValue: QuickLaunchSetting,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<QuickLaunchSetting> {
     QlUp("qlUp", "Quick Launch: Hold Up", QuickLaunchSetting(false, null)),
     QlDown("qlDown", "Quick Launch: Hold Down", QuickLaunchSetting(false, null)),
     QlSelect("qlSelect", "Quick Launch: Hold Select", QuickLaunchSetting(false, null)),
     QlBack("qlBack", "Quick Launch: Hold Back", QuickLaunchSetting(true, QUIET_TIME_TOGGLE_UUID)),
     QlComboBackUp("qlComboBackUp", "Quick Launch: Hold Combo Back+Up", QuickLaunchSetting(false, null)),
+    QlComboUpDown("qlComboUpDown", "Quick Launch: Hold Combo Up+Down", QuickLaunchSetting(false, null)),
     QlSingleClickUp(
         "qlSingleClickUp",
         "Quick Launch: Tap Up",
@@ -312,6 +320,7 @@ enum class VibeScore(override val code: UByte, override val displayName: String)
     Reveille(11u, "Reveille"),
     Mario(12u, "Mario"),
     AlarmsLPM(13u, "ALARMS LPM"),
+    Gentle(14u, "Gentle"),
 }
 
 enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -330,12 +339,29 @@ enum class MotionSensitivityLevel(override val code: UByte, override val display
     VeryHigh(100u, "Very High"),
 }
 
+// Codes are the percent intensity values the firmware UI exposes; see
+// pebble-firmware:src/fw/apps/system/settings/display.c (s_intensity_values/s_intensity_labels).
+enum class BacklightIntensityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Low(10u, "Low"),
+    Medium(25u, "Medium"),
+    High(50u, "High"),
+    Blinding(100u, "Blinding"),
+}
+
+// Matches BacklightTouchWake in pebble-firmware:src/fw/shell/prefs.h.
+enum class BacklightTouchWakeMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    DoubleTap(0u, "Double Tap"),
+    Tap(1u, "Tap"),
+    Off(2u, "Off"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
     override val defaultValue: WatchPrefEnum,
     val options: List<WatchPrefEnum>,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<WatchPrefEnum> {
     TextSize("textStyle", "Text Size", ContentSize.Default, ContentSize.entries),
     NotificationFilter(
@@ -400,6 +426,7 @@ enum class EnumWatchPref(
             VibeScore.Jackhammer,
             VibeScore.Reveille,
             VibeScore.Mario,
+            VibeScore.Gentle,
         ),
     ),
     MenuScrollVibe(
@@ -409,9 +436,23 @@ enum class EnumWatchPref(
     MotionSensitivity(
         id = "motionSensitivity",
         displayName = "Motion Sensitivity",
-        defaultValue = MotionSensitivityLevel.High,
+        defaultValue = MotionSensitivityLevel.Medium,
         options = MotionSensitivityLevel.entries,
         isDebugSetting = true,
+    ),
+    BacklightIntensity(
+        id = "lightIntensity",
+        displayName = "Backlight Intensity",
+        defaultValue = BacklightIntensityLevel.Medium,
+        options = BacklightIntensityLevel.entries,
+        description = "Maximum backlight brightness when on",
+    ),
+    BacklightTouch(
+        id = "lightTouch",
+        displayName = "Backlight on Tap",
+        description = "Turn on backlight when tapping the screen",
+        defaultValue = BacklightTouchWakeMode.DoubleTap,
+        options = BacklightTouchWakeMode.entries,
     ),
     ;
 
@@ -431,6 +472,7 @@ enum class NumberWatchPref(
     val max: Int,
     val unit: String,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<Long> {
     BacklightTimeoutMs(
         id = "lightTimeoutMs",
@@ -444,6 +486,7 @@ enum class NumberWatchPref(
     AmbientLightThreshold(
         id = "lightAmbientThreshold",
         displayName = "Ambient Light Threshold",
+        description = "Controls how low ambient light needs to be to enable backlight (if using Ambient Light Sensor)",
         defaultValue = 150,
         type = WatchPrefType.TypeUInt32,
         min = 1,
@@ -454,6 +497,7 @@ enum class NumberWatchPref(
     DynamicBacklightMinThreshold(
         id = "dynBacklightMinThreshold",
         displayName = "Dynamic Backlight Min Threshold",
+        description = "Controls how ambient light sensor controls backlight intensity (if using Dynamic Backlight Intensity)",
         defaultValue = 5,
         type = WatchPrefType.TypeUInt32,
         min = 0,
@@ -473,6 +517,7 @@ enum class NumberWatchPref(
     NotificationTimeoutMs(
         id = "notifWindowTimeout",
         displayName = "Notification Timeout",
+        description = "Notifications time out (disappear) after this period (unless Quiet Time is enabled)",
         defaultValue = 3.minutes.inWholeMilliseconds,
         type = WatchPrefType.TypeUInt32,
         min = 0,
@@ -485,48 +530,94 @@ enum class NumberWatchPref(
     override fun encodeValue(value: Long): String = value.toString()
 }
 
+data class RgbColorPreset(val rgb: UInt, val displayName: String)
+
+// LED_WARM_WHITE in pebble-firmware:src/fw/drivers/led_controller.h — also the firmware
+// backlight default on color-backlight boards.
+private val LED_WARM_WHITE_RGB: UInt = 0x00F0D0B0u
+
+// Quick-pick presets shown above the RGB color picker. The wire value is a free-form 24-bit
+// RGB UInt — the user can also dial in any custom color via the sliders or hex field.
+private val BACKLIGHT_COLOR_PRESETS = listOf(
+    RgbColorPreset(0x00FF0000u, "Red"),
+    RgbColorPreset(0x00FF7F00u, "Orange"),
+    RgbColorPreset(0x00FFFF00u, "Yellow"),
+    RgbColorPreset(0x007FFF00u, "Lime"),
+    RgbColorPreset(0x0000FF00u, "Green"),
+    RgbColorPreset(0x0000FFFFu, "Cyan"),
+    RgbColorPreset(0x000000FFu, "Blue"),
+    RgbColorPreset(0x007F00FFu, "Purple"),
+    RgbColorPreset(0x00FF00FFu, "Magenta"),
+    RgbColorPreset(0x00FF66CCu, "Pink"),
+    RgbColorPreset(LED_WARM_WHITE_RGB, "Warm White"),
+    RgbColorPreset(0x00FFFFFFu, "Cool White"),
+)
+
+enum class RgbColorWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: UInt,
+    val presets: List<RgbColorPreset>,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<UInt> {
+    BacklightColor(
+        id = "lightColor",
+        displayName = "Backlight Color",
+        defaultValue = LED_WARM_WHITE_RGB,
+        presets = BACKLIGHT_COLOR_PRESETS,
+        description = "LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)",
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeUInt32
+    override fun decodeValue(value: String): UInt = value.toUIntOrNull() ?: defaultValue
+    override fun encodeValue(value: UInt): String = value.toString()
+}
+
 enum class ColorWatchPref(
     override val id: String,
     override val displayName: String,
     override val defaultValue: TimelineColor,
     val availableColors: List<TimelineColor>?,
     override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
 ) : WatchPref<TimelineColor> {
     // Choosing a color not in the seelction list crashes the watch - don't sync yet
-    SettingsMenuHighlightColor(
-        "settingsMenuHighlightColor",
-        "Settings Menu Highlight Color",
-        TimelineColor.CobaltBlue,
-        availableColors = listOf(
-            TimelineColor.DarkCandyAppleRed,
-            TimelineColor.WindsorTan,
-            TimelineColor.ArmyGreen,
-            TimelineColor.DarkGreen,
-            TimelineColor.MidnightGreen,
-            TimelineColor.CobaltBlue,
-            TimelineColor.DukeBlue,
-            TimelineColor.Indigo,
-            TimelineColor.Purple,
-            TimelineColor.JazzberryJam,
-        ),
-    ),
-    AppMenuHighlightColor(
-        "appsMenuHighlightColor",
-        "App Menu Highlight Color",
-        TimelineColor.VividCerulean,
-        availableColors = listOf(
-            TimelineColor.SunsetOrange,
-            TimelineColor.ChromeYellow,
-            TimelineColor.Yellow,
-            TimelineColor.Green,
-            TimelineColor.Cyan,
-            TimelineColor.VividCerulean,
-            TimelineColor.VeryLightBlue,
-            TimelineColor.LavenderIndigo,
-            TimelineColor.Magenta,
-            TimelineColor.BrilliantRose,
-        ),
-    ),
+//    SettingsMenuHighlightColor(
+//        "settingsMenuHighlightColor",
+//        "Settings Menu Highlight Color",
+//        TimelineColor.CobaltBlue,
+//        availableColors = listOf(
+//            TimelineColor.DarkCandyAppleRed,
+//            TimelineColor.WindsorTan,
+//            TimelineColor.ArmyGreen,
+//            TimelineColor.DarkGreen,
+//            TimelineColor.MidnightGreen,
+//            TimelineColor.CobaltBlue,
+//            TimelineColor.DukeBlue,
+//            TimelineColor.Indigo,
+//            TimelineColor.Purple,
+//            TimelineColor.JazzberryJam,
+//        ),
+//    ),
+//    AppMenuHighlightColor(
+//        "appsMenuHighlightColor",
+//        "App Menu Highlight Color",
+//        TimelineColor.VividCerulean,
+//        availableColors = listOf(
+//            TimelineColor.SunsetOrange,
+//            TimelineColor.ChromeYellow,
+//            TimelineColor.Yellow,
+//            TimelineColor.Green,
+//            TimelineColor.Cyan,
+//            TimelineColor.VividCerulean,
+//            TimelineColor.VeryLightBlue,
+//            TimelineColor.LavenderIndigo,
+//            TimelineColor.Magenta,
+//            TimelineColor.BrilliantRose,
+//        ),
+//    ),
     ;
 
     override val type = WatchPrefType.TypeColor

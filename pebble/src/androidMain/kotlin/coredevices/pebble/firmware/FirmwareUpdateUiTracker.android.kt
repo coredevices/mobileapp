@@ -10,10 +10,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import co.touchlab.kermit.Logger
+import com.eygraber.uri.toAndroidUri
+import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.NOTIFICATION_INTENT_URI_SHOW_WATCHES
+import coredevices.pebble.RealPebbleDeepLinkHandler.Companion.updateNowUri
 import coredevices.util.R
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import org.koin.core.component.KoinComponent
@@ -29,16 +30,26 @@ actual fun notifyFirmwareUpdate(
     val context = appContext.context
     context.createFwupNotificationChannel()
 
-    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-    val activityIntent = PendingIntent.getActivity(
+    val viewIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    viewIntent?.setData(NOTIFICATION_INTENT_URI_SHOW_WATCHES.toAndroidUri())
+    val viewPendingIntent = PendingIntent.getActivity(
         context,
         0,
-        intent,
+        viewIntent,
+        PendingIntent.FLAG_IMMUTABLE
+    )
+    val updatePhoneIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    updatePhoneIntent?.setData(updateNowUri(identifier).toAndroidUri())
+    updatePhoneIntent?.putExtra(EXTRA_WATCH_IDENTIFIER, identifier.asString)
+    val updatePhonePendingIntent = PendingIntent.getActivity(
+        context,
+        0,
+        updatePhoneIntent,
         PendingIntent.FLAG_IMMUTABLE
     )
     val broadcastIntent = Intent(appContext.context, UpdateActionReceiver::class.java)
     broadcastIntent.putExtra(EXTRA_WATCH_IDENTIFIER, identifier.asString)
-    val updateIntent: PendingIntent =
+    val updateIntentWatch: PendingIntent =
         PendingIntent.getBroadcast(
             appContext.context,
             0,
@@ -53,12 +64,17 @@ actual fun notifyFirmwareUpdate(
         .setContentTitle(title)
         .setContentText(body)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-        .setContentIntent(activityIntent)
+        .setContentIntent(viewPendingIntent)
         .setAutoCancel(true)
+        .addAction(
+            NotificationCompat.Action.Builder(null, "Update Now", updatePhonePendingIntent)
+                .setShowsUserInterface(true)
+                .build()
+        )
         .extend(
             NotificationCompat.WearableExtender()
                 .addAction(
-                    NotificationCompat.Action.Builder(null, "Update Now", updateIntent).build()
+                    NotificationCompat.Action.Builder(null, "Update Now", updateIntentWatch).build()
                 )
         )
     val notificationManager =
@@ -92,24 +108,8 @@ class UpdateActionReceiver : BroadcastReceiver(), KoinComponent {
             return
         }
         val libPebble = get<LibPebble>()
-        val watch =
-            libPebble.watches.value.firstOrNull { it.identifier.asString == identifier }
-        if (watch == null) {
-            logger.w { "No matching connected watch found for $identifier" }
-            return
-        }
-        val update = (watch as? ConnectedPebble.Firmware)?.firmwareUpdateAvailable
-        if (update !is FirmwareUpdateCheckResult.FoundUpdate) {
-            logger.w { "No update available for $watch" }
-            return
-        }
-        val updater = watch as? ConnectedPebble.Firmware
-        if (updater == null) {
-            logger.w { "Can't update firmware for $watch" }
-            return
-        }
-        logger.d { "Starting update for $identifier to $update" }
-        updater.updateFirmware(update)
+        val firmwareUpdateUiTracker: FirmwareUpdateUiTracker = get()
+        firmwareUpdateUiTracker.updateWatchNow(libPebble, identifier)
     }
 }
 

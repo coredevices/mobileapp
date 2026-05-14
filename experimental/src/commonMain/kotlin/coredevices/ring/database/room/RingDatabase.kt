@@ -11,6 +11,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.ConversationMessageEntity
+import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -33,14 +34,22 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
-import coredevices.ring.data.entity.room.RingTransfer
+import coredevices.ring.data.entity.room.indexfeed.CachedItem
+import coredevices.ring.data.entity.room.indexfeed.CachedList
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.ring.data.entity.room.TraceEntryEntity
+import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
+import coredevices.ring.database.room.dao.CachedItemDao
+import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
-import coredevices.ring.database.room.dao.RingTransferDao
-import coredevices.ring.database.room.dao.RingTransferFeedItem
+import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.dao.RingTransferFeedItem
+import coredevices.ring.database.room.dao.TraceEntryDao
+import coredevices.ring.database.room.dao.TraceSessionDao
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -63,13 +72,17 @@ import kotlin.uuid.Uuid
         HttpMcpGroupAssociation::class,
         HttpMcpServerEntity::class,
         McpSandboxGroupEntity::class,
-        RecordingProcessingTaskEntity::class
+        RecordingProcessingTaskEntity::class,
+        TraceSessionEntity::class,
+        TraceEntryEntity::class,
+        CachedItem::class,
+        CachedList::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 23,
+    version = 27,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -93,6 +106,10 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22),
         AutoMigration(from = 22, to = 23),
+        AutoMigration(from = 23, to = 24),
+        AutoMigration(from = 24, to = 25),
+        AutoMigration(from = 25, to = 26),
+        AutoMigration(from = 26, to = 27),
     ]
 )
 @TypeConverters(Converters::class)
@@ -110,6 +127,10 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun httpMcpServerDao(): HttpMcpServerDao
     abstract fun mcpSandboxGroupDao(): McpSandboxGroupDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
+    abstract fun traceSessionDao(): TraceSessionDao
+    abstract fun traceEntryDao(): TraceEntryDao
+    abstract fun cachedItemDao(): CachedItemDao
+    abstract fun cachedListDao(): CachedListDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -213,5 +234,14 @@ class Converters {
     @TypeConverter
     fun StringToStringList(string: String?) = string?.let {
         JsonSnake.decodeFromString<List<String>>(it)
+    }
+
+    @TypeConverter
+    fun ItemMetadataToString(metadata: ItemDocument.ItemMetadata?) =
+        metadata?.let { JsonSnake.encodeToString(ItemDocument.ItemMetadata.serializer(), it) }
+
+    @TypeConverter
+    fun StringToItemMetadata(string: String?) = string?.let {
+        JsonSnake.decodeFromString(ItemDocument.ItemMetadata.serializer(), it)
     }
 }

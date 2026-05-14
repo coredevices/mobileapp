@@ -40,4 +40,7 @@ object LEConstants {
 
     const val BOND_NONE = 10
     const val BOND_BONDED = 12 // TODO ios compatible?
+    const val UNBOND_REASON_AUTH_FAILED = 1
+    const val UNBOND_REASON_AUTH_REJECTED = 2
+    const val UNBOND_REASON_AUTH_CANCELLED = 3
 }

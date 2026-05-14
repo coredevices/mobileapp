@@ -139,8 +139,9 @@ class PhoneCalendarSyncer(
                     val currentUserAttendee = event.attendees.find { it.isCurrentUser }
                     currentUserAttendee?.attendanceStatus != EventAttendee.AttendanceStatus.Declined
                 }
+            val supportsRsvp = systemCalendar.supportsPinActions()
             events.map { event ->
-                EventAndPin(event, event.toTimelinePin(calendar))
+                EventAndPin(event, event.toTimelinePin(calendar, supportsRsvp))
             }
         }
         val remindersToInsert = mutableListOf<TimelineReminder>()

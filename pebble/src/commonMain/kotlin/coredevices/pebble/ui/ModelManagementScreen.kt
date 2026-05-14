@@ -195,6 +195,7 @@ class ModelManagementScreenViewModel(
 @Composable
 fun ModelDownloadPromptDialog(
     isLite: Boolean,
+    downloadSizeInMb: Int,
     onGetRecommended: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -214,9 +215,9 @@ fun ModelDownloadPromptDialog(
                 onClick = onGetRecommended,
             ) {
                 if (isLite) {
-                    Text("Download lite model")
+                    Text("Download lite model: ${downloadSizeInMb}MB")
                 } else {
-                    Text("Download offline model")
+                    Text("Download offline model: ${downloadSizeInMb}MB")
                 }
             }
             TextButton(
@@ -487,7 +488,8 @@ fun ModelManagementScreenPromptDialogPreview() {
         ModelDownloadPromptDialog(
             isLite = false,
             onGetRecommended = {},
-            onDismiss = {}
+            onDismiss = {},
+            downloadSizeInMb = 100,
         )
     }
 }
@@ -499,7 +501,8 @@ fun ModelManagementScreenPromptDialogLitePreview() {
         ModelDownloadPromptDialog(
             isLite = true,
             onGetRecommended = {},
-            onDismiss = {}
+            onDismiss = {},
+            downloadSizeInMb = 100,
         )
     }
 }

@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.PebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.BOND_BONDED
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.PROPERTY_WRITE
@@ -14,6 +15,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIR
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
 import io.rebble.libpebblecommon.connection.bt.createBond
+import io.rebble.libpebblecommon.connection.bt.createBondClassic
+import io.rebble.libpebblecommon.connection.bt.getBluetoothClassicDevicePairEvents
 import io.rebble.libpebblecommon.connection.bt.getBluetoothDevicePairEvents
 import io.rebble.libpebblecommon.di.ConnectionAnalyticsLogger
 import io.rebble.libpebblecommon.di.ConnectionScopeProperties
@@ -86,7 +89,7 @@ class PebblePairing(
                     device.readCharacteristic(PAIRING_SERVICE_UUID, PAIRING_TRIGGER_CHARACTERISTIC)
                 if (readRes == null) {
                     Logger.e("Failed to read pairing trigger")
-                    analytics.logEvent("pairing.failure", mapOf("reason" to "read_failed"))
+//                    analytics.logEvent("pairing.failure", mapOf("reason" to "read_failed"))
                     return ConnectionFailureReason.ReadPairingTrigger
                 }
             }
@@ -96,7 +99,7 @@ class PebblePairing(
             Logger.d("Explicit bond required")
             if (!createBond(identifier)) {
                 Logger.e("Failed to request create bond")
-                analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
+//                analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
                 return ConnectionFailureReason.CreateBondFailed
             }
         }
@@ -109,19 +112,18 @@ class PebblePairing(
             Logger.d("got bond state!")
         } catch (e: TimeoutCancellationException) {
             Logger.e("Failed to bond in time")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
+//            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
             return ConnectionFailureReason.PairingTimedOut
         }
         return null
     }
 
     suspend fun requestClassicPairing(
-        identifier: PebbleBleIdentifier,
+        identifier: PebbleBtClassicIdentifier,
     ): ConnectionFailureReason? {
-        val bondState = getBluetoothDevicePairEvents(context, identifier, flow {  })
-        if (!createBond(identifier)) {
+        val bondState = getBluetoothClassicDevicePairEvents(context, identifier)
+        if (!createBondClassic(identifier)) {
             Logger.e("Failed to request create bond")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "create_bond_failed"))
             return ConnectionFailureReason.CreateBondFailed
         }
         try {
@@ -133,7 +135,6 @@ class PebblePairing(
             Logger.d("got bond state!")
         } catch (e: TimeoutCancellationException) {
             Logger.e("Failed to bond in time")
-            analytics.logEvent("pairing.failure", mapOf("reason" to "timeout"))
             return ConnectionFailureReason.PairingTimedOut
         }
         return null

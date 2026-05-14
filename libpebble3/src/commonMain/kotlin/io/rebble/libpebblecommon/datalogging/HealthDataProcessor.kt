@@ -46,6 +46,10 @@ class HealthDataProcessor(
 
     val healthDataUpdated: SharedFlow<Unit> = _healthDataUpdated
 
+    suspend fun emitHealthDataUpdated() {
+        _healthDataUpdated.emit(Unit)
+    }
+
     companion object {
         private const val HEALTH_STEPS_TAG: UInt = 81u
         private const val HEALTH_SLEEP_TAG: UInt = 83u

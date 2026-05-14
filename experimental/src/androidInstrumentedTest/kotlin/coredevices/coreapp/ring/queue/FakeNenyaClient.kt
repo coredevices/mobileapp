@@ -34,7 +34,6 @@ class FakeNenyaClient : NenyaClient {
     }
 
     override suspend fun run(
-        input: String?,
         conversationHistory: List<ConversationMessageDocument>,
         toolSpecs: List<ToolDeclaration>,
         additionalContext: String,

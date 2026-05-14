@@ -16,7 +16,7 @@ object MessagingServlet: BuiltInMcpIntegration(
     private val logger by lazy { Logger.withTag("MessagingServlet") }
     private val prefs: Preferences by inject()
     override suspend fun getDisabledTools(): List<String> {
-        val approvedContacts = prefs.approvedBeeperContacts.value.toSet()
+        val approvedContacts = prefs.approvedBeeperContacts.value
         return if (approvedContacts.isEmpty()) {
             logger.d { "No approved contacts for messaging tools, disabling them." }
             listOf(SearchBeeperForContactToolConstants.TOOL_NAME, SendBeeperMessageToolConstants.TOOL_NAME)

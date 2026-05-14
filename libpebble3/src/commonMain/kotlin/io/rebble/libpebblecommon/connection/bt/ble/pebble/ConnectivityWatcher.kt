@@ -26,54 +26,58 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
     val status = _status.asStateFlow().filterNotNull()
 
     suspend fun subscribe(gattClient: ConnectedGattClient): Boolean = withTimeoutOrNull(10.seconds) {
-        val connectivitySub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
-        if (connectivitySub == null) {
-            logger.e("connectivitySub is null")
-            return@withTimeoutOrNull false
-        }
         scope.launch {
-            // There is some weird timing thing where this throws a GATT error "Authorization is
-            // insufficient", if done too early.
-            delay(2.seconds)
-            if (!connectivitySub.collectConnectivityChanges()) {
-                delay(5.seconds)
-                logger.i { "retrying connectivitySub.collectConnectivityChanges()" }
-                if (!connectivitySub.collectConnectivityChanges()) {
-                    delay(10.seconds)
-                    logger.i { "retrying connectivitySub.collectConnectivityChanges() (last attempt)" }
-                    if (!connectivitySub.collectConnectivityChanges()) {
-                        logger.w { "failed to subscribe to connectivity changes after retries" }
+            // collect{} below can throw "Authorization is insufficient" if started too early,
+            // and can also fire mid-flow during pairing renegotiation on iOS (MOB-6632). On
+            // either, the underlying iOS subscription is dead and re-collecting on the same
+            // Flow does nothing. Loop indefinitely: each iteration (re-)subscribes for a fresh
+            // Flow and re-reads (Asterix doesn't notify on subscribe, so the read is also how
+            // we capture state changes that landed between subscribes). The loop exits when
+            // the connection scope is cancelled.
+            var attempt = 0
+            while (true) {
+                val sub = gattClient.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
+                if (sub == null) {
+                    logger.w { "sub is null" }
+                }
+                val connectivity = gattClient.readCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
+                if (connectivity != null) {
+                    _status.value = ConnectivityStatus(connectivity).also {
+                        logger.d("connectivity (read): $it")
                     }
                 }
+                if (attempt == 0) delay(INITIAL_SUBSCRIBE_DELAY)
+                sub?.collectConnectivityChanges()
+                attempt++
+                val backoff = if (attempt == 1) FIRST_RETRY_DELAY else SUBSEQUENT_RETRY_DELAY
+                delay(backoff)
+                logger.i { "retrying connectivity subscribe + read (attempt $attempt)" }
             }
         }
-        // Asterix doesn't notify on subscription right now - so we need to do an explicit read
-        val connectivity =
-            gattClient.readCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
-        if (connectivity == null) {
-            logger.d("connectivity == null")
-            return@withTimeoutOrNull true
-        }
-        _status.value = ConnectivityStatus(connectivity)
         true
     } ?: false
 
-    private suspend fun Flow<ByteArray>.collectConnectivityChanges(): Boolean {
+    companion object {
+        private val INITIAL_SUBSCRIBE_DELAY = 2.seconds
+        private val FIRST_RETRY_DELAY = 5.seconds
+        private val SUBSEQUENT_RETRY_DELAY = 10.seconds
+    }
+
+    private suspend fun Flow<ByteArray>.collectConnectivityChanges() {
+        // Returns when the subscription throws (caught) or via cancellation (propagates).
+        // collect { } never completes normally for a hot GATT notification subscription.
         try {
             collect {
                 _status.value = ConnectivityStatus(it).also {
                     logger.d("connectivity: $it")
                 }
             }
-            return true
         } catch (e: GattStatusException) {
             // Android
             logger.e(e) { "connectivitySub.collect ${e.message}" }
-            return false
         } catch (e: IOException) {
             // iOS
             logger.e(e) { "connectivitySub.collect ${e.message}" }
-            return false
         }
     }
 }

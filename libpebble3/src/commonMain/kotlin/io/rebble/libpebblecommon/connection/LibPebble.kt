@@ -20,14 +20,21 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimel
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
+import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -58,6 +65,7 @@ import io.rebble.libpebblecommon.web.LockerModelWrapper
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
@@ -80,7 +88,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -97,6 +105,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
 
     fun doStuffAfterPermissionsGranted()
     fun checkForFirmwareUpdates()
+    suspend fun updateTimeIfNeeded()
 }
 
 sealed class UserFacingError {
@@ -125,6 +134,67 @@ interface HealthApi {
     suspend fun getHealthDebugStats(): HealthDebugStats
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()
+    val healthDataUpdated: SharedFlow<Unit>
+}
+
+/**
+ * Represents the most recent heart rate reading from the watch.
+ */
+data class LatestHeartRate(
+    val bpm: Int,
+    val timestampEpochSec: Long,
+)
+
+interface HealthDataApi {
+    suspend fun getLatestTimestamp(): Long?
+    suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
+    suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
+
+    /** Returns minute-level health data for the given epoch-second range. */
+    suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
+    suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
+
+    /** Returns a single aggregate (total steps, calories, distance, active minutes) for the entire range. */
+    suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates?
+
+    /** Returns the average heart rate (BPM) for non-zero readings in the range, or null if no data. */
+    suspend fun getAverageHeartRate(start: Long, end: Long): Double?
+
+    /** Returns sleep overlay entries (Sleep + DeepSleep types) in the range. */
+    suspend fun getSleepEntries(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns all sleep sessions for a given day plus aggregate totals, using the 6PM-2PM search window.
+     *  @param dayStartEpochSec start-of-day in epoch seconds (midnight local time) */
+    suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep?
+
+    /** Returns the most recent non-zero heart rate reading, or null if none exists. */
+    suspend fun getLatestHeartRateReading(): LatestHeartRate?
+
+    /**
+     * Computes the resting heart rate (BPM) for the given day from sleep + HR samples. Returns
+     * null when there's no sleep session or not enough HR samples within it.
+     *
+     * @param dayStartEpochSec start-of-day in epoch seconds (midnight local time)
+     */
+    suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int?
+
+    /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
+    suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
+
+    /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
+    suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
+
+    /** Returns hourly typical (historical average) step counts for the given weekday.
+     *  @param dayOfWeek kotlinx.datetime.DayOfWeek ordinal (0=Monday, 6=Sunday) */
+    suspend fun getTypicalSteps(dayOfWeek: Int): List<Long>
+
+    /** Returns the 30-day average sleep duration in seconds. */
+    suspend fun getTypicalSleepSeconds(): Long
+
+    /** Wipes all health data and populates 30 days of fake data for testing. */
+    suspend fun populateDebugHealthData()
 }
 
 interface Weather {
@@ -167,7 +237,8 @@ interface WebServices {
     suspend fun fetchLocker(): LockerModelWrapper?
     suspend fun removeFromLocker(id: Uuid): Boolean
     suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult
-    suspend fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
+    fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
+    fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo)
 }
 
 interface TokenProvider {
@@ -205,6 +276,7 @@ fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
 interface Scanning {
     val bluetoothEnabled: StateFlow<BluetoothState>
     val isScanningBle: StateFlow<Boolean>
+    val isScanningClassic: StateFlow<Boolean>
     fun startBleScan()
     fun stopBleScan()
     fun startClassicScan()
@@ -262,6 +334,10 @@ interface NotificationApps {
         channelId: String,
         muteState: MuteState,
     )
+
+    fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
+    fun upsertNotificationRule(rule: NotificationRuleEntity)
+    fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */
     suspend fun getAppIcon(packageName: String): ImageBitmap?
@@ -323,7 +399,8 @@ class LibPebble3(
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
-    Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager {
+    Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
+    HealthDataApi by health {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -392,10 +469,15 @@ class LibPebble3(
         phoneCalendarSyncer.handlePermissionsGranted()
         missedCallSyncer.init()
         phoneContactsSyncer.init()
+        watchManager.seedBondedWatchesIfNeeded()
     }
 
     override fun checkForFirmwareUpdates() {
         forEachConnectedWatchInAnyState { checkforFirmwareUpdate() }
+    }
+
+    override suspend fun updateTimeIfNeeded() {
+        forEachConnectedWatch { updateTimeIfNeeded() }
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {

@@ -44,6 +44,26 @@ compose.resources {
     packageOfResClass = "coreapp.util.generated.resources"
 }
 
+val properties = Properties().apply {
+    try {
+        load(rootDir.resolve("local.properties").reader())
+    } catch (e: Exception) {
+        println("local.properties file not found")
+    }
+}
+
+val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
+val useKrispStubsForTests =
+    (properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: project.properties["USE_KRISP_STUBS_FOR_TESTS"]
+        ?: System.getenv("USE_KRISP_STUBS_FOR_TESTS")
+        ?: "true") == "true"
+val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':').lowercase() }
+val isTestLikeInvocation = requestedTaskNames.any { taskName ->
+    taskName.contains("test") || taskName == "check"
+}
+val useKrispArtifact = enableKrisp && !(useKrispStubsForTests && isTestLikeInvocation)
+
 kotlin {
 
 // Target declarations - add or remove as needed below. These define
@@ -65,12 +85,6 @@ kotlin {
 // project can be found here:
 // https://developer.android.com/kotlin/multiplatform/migrate
     val xcfName = "coreapp-util"
-
-    iosX64 {
-        binaries.framework {
-            baseName = xcfName
-        }
-    }
 
     iosArm64 {
         binaries.framework {
@@ -105,7 +119,7 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.ui)
                 implementation(compose.foundation)
-                implementation(compose.material3)
+                implementation(libs.compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(compose.components.resources)
                 implementation(libs.ktor.client.core)
@@ -125,10 +139,16 @@ kotlin {
                 implementation(compose.components.uiToolingPreview)
                 implementation(project(":cactus"))
                 implementation(project(":libpebble3"))
+                implementation(project(":libindex"))
                 implementation(libs.kmpio)
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
+                if (useKrispArtifact) {
+                    implementation(libs.coredevices.krispPrivate)
+                } else {
+                    implementation(project(":krisp-stubs"))
+                }
             }
         }
 
@@ -169,14 +189,6 @@ val headSha by lazy {
         commandLine("git", "describe", "--always", "--dirty")
     }.standardOutput.asText.get().trim()
 }
-
-val properties = Properties().apply {
-    try {
-        load(rootDir.resolve("local.properties").reader())
-    } catch (e: Exception) {
-        println("local.properties file not found")
-    }
-}
 val enableQa = System.getenv("QA")?.toBoolean() ?: properties.getProperty("QA")?.toBoolean() ?: true
 
 fun gradleStringPropOrNull(name: String): String? {
@@ -197,7 +209,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "BUG_URL", gradleStringPropOrNull("bugUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "TOKEN_URL", gradleStringPropOrNull("tokenUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MIXPANEL_TOKEN", gradleStringPropOrNull("mixpanelToken"), nullable = true)
-        buildConfigField(FieldSpec.Type.STRING, "WISPR_KEY", gradleStringPropOrNull("wisprKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "WISPR_AUTH_URL", gradleStringPropOrNull("wisprAuthUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)

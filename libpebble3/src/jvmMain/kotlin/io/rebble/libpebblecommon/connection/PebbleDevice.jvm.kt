@@ -8,3 +8,12 @@ actual class PebbleBleIdentifier(id: String) : PebbleIdentifier {
 actual fun String.asPebbleBleIdentifier(): PebbleBleIdentifier {
     return PebbleBleIdentifier(this)
 }
+
+actual class PebbleBtClassicIdentifier internal constructor() : PebbleIdentifier {
+    actual override val asString: String
+        get() = throw UnsupportedOperationException("BT Classic not supported on JVM")
+}
+
+actual fun String.asPebbleBtClassicIdentifier(): PebbleBtClassicIdentifier {
+    throw UnsupportedOperationException("BT Classic not supported on JVM")
+}

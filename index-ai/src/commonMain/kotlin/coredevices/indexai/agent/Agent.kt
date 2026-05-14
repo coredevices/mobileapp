@@ -33,4 +33,5 @@ interface Agent {
      */
     suspend fun addMessage(message: ConversationMessageDocument)
     val conversation: SharedFlow<List<ConversationMessageDocument>>
+    val label: String
 }

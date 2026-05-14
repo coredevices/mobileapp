@@ -4,11 +4,17 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import co.touchlab.kermit.Logger
+import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.database.Preferences
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -22,6 +28,9 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             "tools."
 ), KoinComponent {
     private val context: Context by inject()
+    private val prefs: Preferences by inject()
+    private val itemRepo: ItemRepository by inject()
+    private val itemFactory: ItemFactory by inject()
 
     companion object {
         private val logger = Logger.withTag("SendBeeperMessageTool")
@@ -38,11 +47,30 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             val resultUri = context.contentResolver.insert(uri, ContentValues())
 
             if (resultUri?.getQueryParameter("messageId") != null) {
+                val contact = prefs.approvedBeeperContacts.value.find { it.roomId == contactId }
+                val displayName = contact?.nickname ?: contact?.name ?: "contact"
+                currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                    runCatching {
+                        itemRepo.setItem(
+                            itemFactory.simpleUid(),
+                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, displayName, text, contactId, ItemDocument.ItemMetadata.Message.Status.Sent)
+                        )
+                    }
+                }
                 ToolCallResult(
                     "{}",
-                    SemanticResult.GenericSuccess
+                    SemanticResult.MessageSent(displayName)
                 )
             } else {
+                currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                    runCatching {
+                        itemRepo.setItem(
+                            itemFactory.simpleUid(),
+                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, null, text, contactId, ItemDocument.ItemMetadata.Message.Status.Failed,
+                                "Failed to send message. Check permissions and if Beeper is installed.")
+                        )
+                    }
+                }
                 ToolCallResult(
                     "{}",
                     SemanticResult.GenericFailure("Failed to send message. Check permissions and if Beeper is installed.")

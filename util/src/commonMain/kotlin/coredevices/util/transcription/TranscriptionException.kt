@@ -2,7 +2,8 @@ package coredevices.util.transcription
 
 sealed class TranscriptionException(message: String?, cause: Throwable?, val modelUsed: String?): Exception(message, cause) {
     class TranscriptionNetworkError(cause: Throwable, modelUsed: String? = null): TranscriptionException("Network error, model = $modelUsed", cause, modelUsed)
-    class TranscriptionServiceUnavailable(modelUsed: String? = null): TranscriptionException("Service unavailable, model = $modelUsed", null, modelUsed)
+    open class TranscriptionServiceUnavailable(modelUsed: String? = null): TranscriptionException("Service unavailable, model = $modelUsed", null, modelUsed)
+    class NotEnoughMemory(modelUsed: String? = null): TranscriptionServiceUnavailable(modelUsed)
     class TranscriptionServiceError(message: String, cause: Throwable? = null, modelUsed: String? = null): TranscriptionException(message, cause, modelUsed)
     class TranscriptionRequiresDownload(message: String, modelUsed: String? = null): TranscriptionException(message, null, modelUsed)
     class NoSupportedLanguage(modelUsed: String? = null): TranscriptionException("No supported language, model = $modelUsed", null, modelUsed)

@@ -28,7 +28,8 @@ data class AtlasTicketDetails(
     val simpleId: Int,
     val lastMessageText: String? = null,
     val lastMessageSide: String? = null,
-    val displayTime: String
+    val displayTime: String,
+    val webviewUrl: String,
 )
 
 class BugReportsService(

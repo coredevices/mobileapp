@@ -6,6 +6,14 @@ interface Platform {
     val name: String
 
     suspend fun openUrl(url: String)
+
+    /**
+     * On platforms with a BG task assertion api, holds an assertion for the duration of the task
+     * and cancels the block if the assertion expires.
+     *
+     * Runs on default dispatcher.
+     */
+    suspend fun runWithBgTask(name: String, task: suspend () -> Unit)
     companion object {
         /**
          * Channel for URI intents

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 enum class PermissionResult {
@@ -65,6 +66,8 @@ abstract class PermissionRequester(
     protected val logger = Logger.withTag("PermissionRequester")
     private val _missingPermissions = MutableStateFlow<Set<Permission>>(emptySet())
     val missingPermissions: StateFlow<Set<Permission>> = _missingPermissions.asStateFlow()
+    private val _grantedPermissions = MutableStateFlow<Set<Permission>>(emptySet())
+    val grantedPermissions: StateFlow<Set<Permission>> = _grantedPermissions
     private val permissionRefreshRequests = MutableSharedFlow<Unit>(replay = 1)
 
     fun init() {
@@ -75,11 +78,13 @@ abstract class PermissionRequester(
                 .distinctUntilChanged()
                 .combine(permissionRefreshRequests) { requiredPermissions, _ ->
                     logger.d { "refreshing permissions..." }
-                    requiredPermissions.filter { permission -> !hasPermission(permission) }
-                }.collect {
-                    logger.d { "missingPermissions: $it" }
-                    _missingPermissions.value = it.toSet()
-                }
+                    val allGrantedPermissions = Permission.entries.filter {
+                        try { hasPermission(it) } catch (_: Exception) { false }
+                    }
+                    _grantedPermissions.value = allGrantedPermissions.toSet()
+                    _missingPermissions.value = requiredPermissions.filter { permission -> !allGrantedPermissions.contains(permission) }.toSet()
+                    logger.d { "missingPermissions: ${_missingPermissions.value}" }
+                }.collect { }
         }
         GlobalScope.launch {
             appResumed.appResumed.collect {
@@ -113,6 +118,8 @@ abstract class PermissionRequester(
         permissionRefreshRequests.tryEmit(Unit)
     }
 }
+
+fun PermissionRequester.granted(permission: Permission): Flow<Boolean> = grantedPermissions.map { it.contains(permission) }
 
 expect fun Permission.requestIsFullScreen(): Boolean
 

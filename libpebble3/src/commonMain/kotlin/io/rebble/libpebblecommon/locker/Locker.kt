@@ -202,7 +202,7 @@ class Locker(
 
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
-        val existingApps = lockerEntryDao.getAllBasicInfo().associateBy { it.id }.toMutableMap()
+        val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
             val existing = existingApps.remove(newEntity.id)
@@ -309,9 +309,9 @@ class Locker(
     }
 
     private suspend fun insertSystemApps(force: Boolean) {
-        val lockerApps = getLocker(AppType.Watchapp, null, Int.MAX_VALUE)
+        val lockerApps = getAllLockerBasicInfo()
             .first()
-            .map { it.properties.id }
+            .map { it.id }
         val systemAppsToInsert =
             SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
                 .map { systemApp ->

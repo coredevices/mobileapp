@@ -31,12 +31,14 @@ import coredevices.pebble.watchModule
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.OAuthRedirectHandler
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
@@ -51,10 +53,14 @@ import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSData
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
 import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.isLowPowerModeEnabled
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundFetchResult
 import platform.UIKit.UIUserNotificationSettings
@@ -75,17 +81,22 @@ object IOSDelegate : KoinComponent {
     private val doneInitialOnboarding: DoneInitialOnboarding by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
+    private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
     private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun handleOpenUrl(url: NSURL): Boolean {
-        logger.d("IOSDelegate handleOpenUrl $url")
-        val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
-        val coreDeepLinkHandler: CoreDeepLinkHandler = get()
         val uri = url.toUri()
-        return GIDSignIn.sharedInstance.handleURL(url) ||
-                uri?.let {
-                    pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
-                } ?: false
+        if (!oAuthRedirectHandler.handleOAuthRedirect(uri)) {
+            logger.d("IOSDelegate handleOpenUrl $url")
+            val pebbleDeepLinkHandler: PebbleDeepLinkHandler = get()
+            val coreDeepLinkHandler: CoreDeepLinkHandler = get()
+            return GIDSignIn.sharedInstance.handleURL(url) ||
+                    uri?.let {
+                        pebbleDeepLinkHandler.handle(uri) || experimentalDevices.handleDeepLink(uri) || coreDeepLinkHandler.handle(uri)
+                    } ?: false
+        } else {
+            return true
+        }
     }
 
     private fun initPebble() {
@@ -145,6 +156,14 @@ object IOSDelegate : KoinComponent {
         }
         setupCrashlytics()
         initLogging()
+        NSNotificationCenter.defaultCenter.addObserverForName(
+            name = NSProcessInfoPowerStateDidChangeNotification,
+            `object` = null,
+            queue = null,
+        ) { _ ->
+            val isLowPowerMode = NSProcessInfo.processInfo.isLowPowerModeEnabled()
+            logger.i { "Power state changed: isLowPowerMode=$isLowPowerMode" }
+        }
         val crashedPreviously = Firebase.crashlytics.didCrashOnPreviousExecution()
         if (crashedPreviously) {
             logger.e { "Previous app crash detected!" }
@@ -156,7 +175,10 @@ object IOSDelegate : KoinComponent {
         ) { task ->
             if (task == null) return@registerForTaskWithIdentifier
 
-            // Create a job for this specific execution
+            // Schedule the next task immediately, before doing work.
+            // If scheduled in finally, a SIGKILL mid-task breaks the chain.
+            requestBgRefresh(force = false, coreConfigHolder.config.value)
+
             val job = bgTaskScope.launch {
                 try {
                     logger.d { "Background refresh task started" }
@@ -166,10 +188,6 @@ object IOSDelegate : KoinComponent {
                 } catch (e: Exception) {
                     logger.e(e) { "Background refresh task failed" }
                     task.setTaskCompletedWithSuccess(false)
-                } finally {
-                    // Use NonCancellable to ensure the reschedule happens
-                    // even if the job was just cancelled by the expirationHandler
-                    requestBgRefresh(force = false, coreConfigHolder.config.value)
                 }
             }
 
@@ -192,7 +210,7 @@ object IOSDelegate : KoinComponent {
                 showPushNotification = false
             )
         )
-
+        experimentalDevices.appInit()
         initPebble()
         GlobalScope.launch(Dispatchers.Main) {
             // Don't do this before we request permissions (it requests permissions - we want to
@@ -209,6 +227,17 @@ object IOSDelegate : KoinComponent {
             application.registerForRemoteNotifications()
         }
         commonAppDelegate.init()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            while (true) {
+                try {
+                    commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+                } catch (e: Exception) {
+                    logger.e(e) { "Periodic background sync failed" }
+                }
+                delay(coreConfigHolder.config.value.weatherSyncInterval)
+            }
+        }
         return true
     }
 
@@ -241,6 +270,14 @@ object IOSDelegate : KoinComponent {
     fun sceneDidBecomeActive() {
         logger.v { "sceneDidBecomeActive" }
         pebbleAppDelegate.onAppResumed()
+        // Backup for when BgRefresh isn't firing for whatever reason
+        bgTaskScope.launch {
+            try {
+                commonAppDelegate.doBackgroundSync(bgTaskScope, force = false)
+            } catch (e: Exception) {
+                logger.e(e) { "Foreground sync failed" }
+            }
+        }
     }
 
     fun sceneWillResignActive() {

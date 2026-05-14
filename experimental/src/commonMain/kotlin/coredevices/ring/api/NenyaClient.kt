@@ -31,7 +31,8 @@ import kotlin.time.Duration.Companion.seconds
 data class RunResponse(
     val success: Boolean,
     val message: String? = null,
-    val conversation: List<OpenAIConversationMessage> = emptyList()
+    val conversation: List<OpenAIConversationMessage> = emptyList(),
+    val language_model_used: String? = null
 )
 
 @Serializable
@@ -47,28 +48,24 @@ data class OpenAIConversationMessage(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val tool_call_id: String? = null
 ) {
-    fun toConversationMessage() = ConversationMessageDocument(
+    fun toConversationMessage(model: String? = null) = ConversationMessageDocument(
         role = role,
         content = content
             ?.filter { it.type == ContentPartType.text }
             ?.ifEmpty { null }
             ?.joinToString("\n") { it.text ?: "" },
         tool_calls = tool_calls,
-        tool_call_id = tool_call_id
+        tool_call_id = tool_call_id,
+        language_model_used = model,
     )
 }
-
-fun List<OpenAIConversationMessage>.toConversationMessages() =
-    this.map { it.toConversationMessage() }
 
 data class RunResult(val statusCode: HttpStatusCode, val response: RunResponse?)
 
 @Serializable
 private data class RunRequestData(
     val device_tool_specifications: List<ToolDeclaration>,
-    val input: String?,
     val conversation_history: List<ConversationMessageDocument>,
-    val timezone: String,
     val additional_context: String,
     val search_mode: Boolean = false,
 )
@@ -86,7 +83,6 @@ interface NenyaClient {
      * @return The result of the run.
      */
     suspend fun run(
-        input: String?,
         conversationHistory: List<ConversationMessageDocument> = emptyList(),
         toolSpecs: List<ToolDeclaration> = emptyList(),
         additionalContext: String = "",
@@ -100,7 +96,6 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
     private val logger = Logger.withTag("NenyaClientImpl")
 
     override suspend fun run(
-        input: String?,
         conversationHistory: List<ConversationMessageDocument>,
         toolSpecs: List<ToolDeclaration>,
         additionalContext: String,
@@ -111,16 +106,14 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
         var resp: HttpResponse? = null
         while (retries < NenyaClient.RETRY_COUNT) {
             resp = try {
-                client.post("$baseUrl/run") {
+                client.post("$baseUrl/v2/run") {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     firebaseAuth()
                     setBody(
                         RunRequestData(
                             device_tool_specifications = toolSpecs,
-                            input = input,
                             conversation_history = conversationHistory,
-                            timezone = timezone.id,
                             additional_context = additionalContext,
                             search_mode = searchMode
                         )

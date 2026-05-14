@@ -9,12 +9,12 @@ import coredevices.ring.agent.builtin_servlets.js.AndroidWebviewJsEngine
 import coredevices.ring.agent.builtin_servlets.js.JsEngine
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.ring.database.IntegrationTokenStorageImpl
+import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.PlatformIndexNotificationManager
 import coredevices.ring.service.RingSync
 import coredevices.ring.ui.screens.settings.SettingsBeeperContactsDialogViewModel
-import coredevices.ring.ui.viewmodel.RingPairingViewModel
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
 import dev.gitlive.firebase.Firebase
@@ -39,9 +39,9 @@ actual val platformRingModule = module {
     single {
         val prefs = get<Preferences>()
         KMPHaversineSatelliteManager(
-            userIdProvider = { Firebase.auth.currentUser?.uid },
-            targetSatelliteIdProvider = { prefs.ringPaired.value },
+            pairedSatelliteIdProvider = { prefs.ringPaired.value?.replace(":", "") },
             debugDelegate = get(),
+            hacksDelegate = get(),
             collectionIndexStorage = get(),
             context = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,
@@ -50,6 +50,7 @@ actual val platformRingModule = module {
     }
     singleOf(::PlatformIndexNotificationManager)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
+    singleOf(::EncryptionKeyManager)
     factoryOf(::AndroidWebviewJsEngine) bind JsEngine::class
     factoryOf(::AudioRecorder)
     factoryOf(::AudioPlayer)
@@ -58,6 +59,5 @@ actual val platformRingModule = module {
         val dbFile = context.applicationContext.getDatabasePath("coreapp_room.db")
         Room.databaseBuilder<RingDatabase>(context = context.applicationContext, name = dbFile.absolutePath)
     } bind RoomDatabase.Builder::class
-    viewModelOf(::RingPairingViewModel)
     viewModelOf(::SettingsBeeperContactsDialogViewModel)
 }

@@ -2,7 +2,8 @@ package coredevices.database
 
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 
-class UserConfigDao(private val firestore: FirebaseFirestore) {
+class UserConfigDao(firestoreProvider: () -> FirebaseFirestore) {
+    private val firestore: FirebaseFirestore by lazy(firestoreProvider)
     companion object {
         val DEFAULT = UserConfig()
     }

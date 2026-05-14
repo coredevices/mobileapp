@@ -31,6 +31,7 @@ val INITIAL_APPSTORE_SOURCES = listOf(
 )
 
 fun AppstoreSource.isRebbleFeed(): Boolean = url == REBBLE_FEED_URL
+fun AppstoreSource.isPebbleFeed(): Boolean = url == PEBBLE_FEED_URL
 
 class AppstoreSourceInitializer(
     private val appstoreSourceDao: AppstoreSourceDao,

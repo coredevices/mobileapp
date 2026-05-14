@@ -17,7 +17,7 @@ import org.koin.mp.KoinPlatform
 import java.io.File
 import kotlin.coroutines.resume
 
-actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path) {
+actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mimeType: String) {
     val registry = uiContext.activity as? ActivityResultRegistryOwner ?: error("Activity is not an ActivityResultRegistryOwner")
     suspendCancellableCoroutine { continuation ->
         val launcher = registry.activityResultRegistry.register(
@@ -39,7 +39,7 @@ actual suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path) {
         }
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "audio/wav"
+            type = mimeType
             putExtra(Intent.EXTRA_TITLE, path.name)
             val downloads = "content://com.android.providers.downloads.documents/document/downloads".toUri()
             putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloads)

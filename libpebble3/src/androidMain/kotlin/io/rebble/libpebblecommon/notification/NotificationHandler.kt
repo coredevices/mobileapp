@@ -12,11 +12,17 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
+import kotlin.coroutines.cancellation.CancellationException
+import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
+import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.entity.MatchField
+import io.rebble.libpebblecommon.database.entity.MatchType
+import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -27,7 +33,9 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContac
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
@@ -49,6 +57,7 @@ class NotificationHandler(
     private val privateLogger: PrivateLogger,
     private val notificationDao: NotificationDao,
     private val context: Context,
+    private val notificationRuleDao: NotificationRuleDao,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -151,18 +160,18 @@ class NotificationHandler(
                 return null
             }
         }
-        val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
-        val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
-        val decision = when {
-            sbn.notification.isLocalOnly() && !notificationConfig.value.sendLocalOnlyNotifications ->
-                NotSentLocalOnly
-            anyContactMuted -> NotSendContactMuted
-            !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
-            !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
-            inflightNotifications.values.any { it.displayDataEquals(notification) } -> NotSentDuplicate
-            !notificationConfig.value.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
-            else -> result.decision
-        }
+        val appProperties = NotificationProperties.lookup(sbn.packageName)
+        val decision = decideNotification(
+            notification = notification,
+            appEntry = appEntry,
+            channel = channel,
+            appProperties = appProperties,
+            inflightNotifications = inflightNotifications.values,
+            notificationConfig = notificationConfig.value,
+            isLocalOnly = sbn.notification.isLocalOnly(),
+            isRuleFiltered = { checkRuleFiltered(appEntry, notification) },
+            screenIsOnAndUnlocked = ::screenIsOnAndUnlocked,
+        )
         val storeNotification = when {
             notificationConfig.value.storeNotifiationsForDays == 0 -> false
             notificationConfig.value.storeDisabledNotifications -> true
@@ -179,6 +188,43 @@ class NotificationHandler(
             return null
         }
         return notification
+    }
+
+    private suspend fun checkRuleFiltered(appEntry: NotificationAppItem, notification: LibPebbleNotification): Boolean {
+        val rules = try {
+            notificationRuleDao.getRulesForAppOnce(packageName = appEntry.packageName)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Error loading notification rules, allowing notification" }
+            return false
+        }
+        if (rules.isEmpty()) return false
+
+        fun NotificationRuleEntity.matches(): Boolean {
+            val titleText = notification.title ?: ""
+            val bodyText = notification.body ?: ""
+            val textsToCheck = when (matchField) {
+                MatchField.Title -> listOf(titleText)
+                MatchField.Body -> listOf(bodyText)
+                MatchField.Both -> listOf(titleText, bodyText)
+            }
+            return when (matchType) {
+                MatchType.Text -> textsToCheck.any { it.contains(pattern, ignoreCase = !caseSensitive) }
+                MatchType.Regex -> {
+                    val options = if (!caseSensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
+                    val regex = try {
+                        Regex(pattern, options)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Invalid regex pattern in notification rule: $pattern" }
+                        return false
+                    }
+                    textsToCheck.any { regex.containsMatchIn(it) }
+                }
+            }
+        }
+
+        return rules.any { it.matches() }
     }
 
     private fun screenIsOnAndUnlocked(): Boolean {
@@ -330,17 +376,21 @@ Processed as:
     private fun Bundle.dump(indent: Int): String {
         val newlineIndent = "\n${" ".repeat(indent)}"
         return keySet().joinToString(prefix = newlineIndent, separator = newlineIndent) {
-            try {
-                val value = get(it)
-                when {
-                    value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
-                        value.toString().obfuscate(privateLogger)
-                    }"
+            if (it in EXTRA_KEYS_SKIP_VALUE) {
+                "$it = <skipped>"
+            } else {
+                try {
+                    val value = get(it)
+                    when {
+                        value is CharSequence || it in EXTRA_KEYS_NON_STRING_SENSITIVE -> "$it = ${
+                            value.toString().obfuscate(privateLogger)
+                        }"
 
-                    else -> "$it = ${get(it)}"
+                        else -> "$it = ${get(it)}"
+                    }
+                } catch (_: Exception) {
+                    "$it = unknown (crashed)"
                 }
-            } catch (_: Exception) {
-                "$it = unknown (crashed)"
             }
         }
     }
@@ -372,10 +422,41 @@ Processed as:
 private fun LibPebbleNotification.isPebbleTestNotification(): Boolean = packageName == "coredevices.coreapp" &&
         title == "Test Notification"
 
+internal suspend fun decideNotification(
+    notification: LibPebbleNotification,
+    appEntry: NotificationAppItem,
+    channel: ChannelItem?,
+    appProperties: NotificationProperties?,
+    inflightNotifications: Collection<LibPebbleNotification>,
+    notificationConfig: NotificationConfig,
+    isLocalOnly: Boolean,
+    isRuleFiltered: suspend () -> Boolean,
+    screenIsOnAndUnlocked: () -> Boolean,
+): NotificationDecision {
+    val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
+    val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
+    val showLocalOnlyNotifications = notificationConfig.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
+    val allowDuplicates = appProperties?.allowDuplicates ?: false
+    return when {
+        isLocalOnly && !showLocalOnlyNotifications -> NotSentLocalOnly
+        anyContactMuted -> NotSendContactMuted
+        !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
+        !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+        isRuleFiltered() -> NotSentRuleFiltered
+        !allowDuplicates && inflightNotifications.any { it.displayDataEquals(notification) } -> NotSentDuplicate
+        !notificationConfig.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
+        else -> SendToWatch
+    }
+}
+
 private const val ACTION_KEY_SHOWS_USER_INTERFACE = "android.support.action.showsUserInterface"
 private const val EXTRA_WEARABLE_BUNDLE = "android.wearable.EXTENSIONS"
 private val EXTRA_KEYS_NON_STRING_SENSITIVE =
-    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list", "android.largeIcon")
+    setOf("argAndroidAccount", "android.appInfo", "gif_uri_list")
+
+// Keys whose values are large binary objects (bitmaps, icons) — skip get() entirely to avoid OOM
+private val EXTRA_KEYS_SKIP_VALUE =
+    setOf("android.largeIcon", "android.picture", "android.backgroundImage", "android.icon", "android.smallIcon")
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

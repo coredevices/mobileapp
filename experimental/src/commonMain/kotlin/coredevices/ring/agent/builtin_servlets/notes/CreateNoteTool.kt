@@ -12,9 +12,14 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.service.indexfeed.RecordingSessionContext
+import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
-class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory): BuiltInMcpTool(
+class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory) : BuiltInMcpTool(
     definition = Tool(
         name = TOOL_NAME,
         description = TOOL_DESCRIPTION,
@@ -46,6 +51,9 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         )
     ),
 ), KoinComponent {
+    private val itemRepo: ItemRepository by inject()
+    private val itemFactory: ItemFactory by inject()
+
     companion object {
         const val TOOL_NAME = "create_note"
         const val TOOL_DESCRIPTION = "Create a new note with the given user text"
@@ -66,6 +74,14 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
             val noteId = noteClient.createNote(createNoteArgs.text)
+            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                runCatching {
+                    itemRepo.setItem(
+                        itemFactory.simpleUid(),
+                        itemFactory.noteItem(ctx.sourceRecordingId, ctx.createdAt, createNoteArgs.text, null)
+                    )
+                }
+            }
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
                 SemanticResult.ListItemCreation(createNoteArgs.text)

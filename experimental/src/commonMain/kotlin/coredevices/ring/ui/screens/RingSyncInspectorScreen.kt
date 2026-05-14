@@ -19,15 +19,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coredevices.indexai.database.dao.LocalRecordingDao
-import coredevices.ring.data.entity.room.RingTransferStatus
-import coredevices.ring.database.room.repository.RingTransferRepository
+import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.libindex.database.repository.RingTransferRepository
 import org.koin.compose.koinInject
 
 @Composable

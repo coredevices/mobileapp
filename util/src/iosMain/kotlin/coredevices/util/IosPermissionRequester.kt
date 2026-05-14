@@ -50,9 +50,9 @@ class IosPermissionRequester(
             Permission.ReadNotifications -> throw IllegalStateException("ReadNotifications permission not needed on iOS")
             Permission.RecordAudio -> requestAudioRecordPermission()
             Permission.SpeechRecognizer -> requestSpeechRecognitionPermission()
-            Permission.ExternalStorage -> TODO()
-            Permission.SetAlarms -> TODO()
-            Permission.BatteryOptimization -> TODO()
+            Permission.ExternalStorage -> throw IllegalStateException("ExternalStorage permission not needed on iOS")
+            Permission.SetAlarms -> throw IllegalStateException("SetAlarms permission not needed on iOS")
+            Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
             Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
             Permission.Reminders -> requestRemindersPermission()
         }
@@ -70,9 +70,9 @@ class IosPermissionRequester(
         Permission.ReadNotifications -> throw IllegalStateException("ReadNotifications permission not needed on iOS")
         Permission.RecordAudio -> hasAudioRecordPermission()
         Permission.SpeechRecognizer -> hasSpeechRecognitionPermission()
-        Permission.ExternalStorage -> TODO()
-        Permission.SetAlarms -> TODO()
-        Permission.BatteryOptimization -> TODO()
+        Permission.ExternalStorage -> throw IllegalStateException("ExternalStorage permission not needed on iOS")
+        Permission.SetAlarms -> throw IllegalStateException("SetAlarms permission not needed on iOS")
+        Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
         Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
         Permission.Reminders -> hasRemindersPermission()
     }
@@ -81,9 +81,17 @@ class IosPermissionRequester(
         // no-op
     }
 
-    private fun hasRemindersPermission(): Boolean = EKEventStore.authorizationStatusForEntityType(
-        EKEntityType.EKEntityTypeReminder
-    ) == EKAuthorizationStatusAuthorized
+    // iOS 17+ has a propagation lag where authorizationStatusForEntityType() keeps
+    // returning the old status for many seconds after requestFullAccessTo* fires its
+    // completion with granted=true. Cache the grant in-process so refreshPermissions()
+    // doesn't flip the permission back to "missing" mid-session.
+    private var remindersGrantedThisSession = false
+    private var calendarGrantedThisSession = false
+
+    private fun hasRemindersPermission(): Boolean = remindersGrantedThisSession ||
+        EKEventStore.authorizationStatusForEntityType(
+            EKEntityType.EKEntityTypeReminder
+        ) == EKAuthorizationStatusAuthorized
 
     private suspend fun requestRemindersPermission(): PermissionResult {
         if (hasRemindersPermission()) return PermissionResult.Granted
@@ -94,6 +102,7 @@ class IosPermissionRequester(
                 UIDevice.currentDevice.systemVersion.split(".").firstOrNull()?.toIntOrNull() ?: 0
             val completionHandler = { granted: Boolean, error: NSError? ->
                 val result = if (granted) {
+                    remindersGrantedThisSession = true
                     PermissionResult.Granted
                 } else {
                     logger.e { "Error getting iOS reminders access: $error" }
@@ -109,9 +118,10 @@ class IosPermissionRequester(
         }
     }
 
-    private fun hasCalendarPermission(): Boolean = EKEventStore.authorizationStatusForEntityType(
-        EKEntityType.EKEntityTypeEvent
-    ) == EKAuthorizationStatusAuthorized
+    private fun hasCalendarPermission(): Boolean = calendarGrantedThisSession ||
+        EKEventStore.authorizationStatusForEntityType(
+            EKEntityType.EKEntityTypeEvent
+        ) == EKAuthorizationStatusAuthorized
 
     private suspend fun requestCalendarPermission(): PermissionResult {
         if (hasCalendarPermission()) return PermissionResult.Granted
@@ -122,6 +132,7 @@ class IosPermissionRequester(
 
             val completionHandler = { granted: Boolean, error: NSError? ->
                 val result = if (granted) {
+                    calendarGrantedThisSession = true
                     PermissionResult.Granted
                 } else {
                     logger.e { "Error getting iOS calendar access: $error" }

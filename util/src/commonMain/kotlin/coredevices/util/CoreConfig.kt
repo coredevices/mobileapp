@@ -83,16 +83,22 @@ data class CoreConfig(
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val indexPermissionsConfirmed: Boolean = false,
-    val weatherUnits: WeatherUnit = WeatherUnit.Metric,
+    val weatherUnits: WeatherUnit = deviceDefaultWeatherUnit(),
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
     val interceptPKJSWeather: Boolean = true,
     val regularSyncInterval: Duration = 6.hours,
     val weatherSyncInterval: Duration = 1.hours,
+    val preferHealthTab: Boolean = true,
+    val obfuscateSensitiveLogs: Boolean = true,
+    val hidePermissionWarningBadges: Boolean = false,
+    val androidForegroundServiceForWatchConnection: Boolean = false,
 )
 
 @Serializable
 data class STTConfig(
-    val mode: CactusSTTMode = CactusSTTMode.LocalFirst,
+    val mode: CactusSTTMode = CactusSTTMode.RemoteOnly,
     val modelName: String? = null,
+    /** ISO 639-1 language code. Null means auto-detect. */
+    val spokenLanguage: String? = null,
 )

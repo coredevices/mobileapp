@@ -48,6 +48,8 @@ import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.everNotified
+import io.rebble.libpebblecommon.database.isAfter
+import kotlin.time.Clock
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -101,10 +103,27 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         app.app.everNotified() || !viewModel.onlyNotified.value
                     }
                 }
+                val now = Clock.System.now()
                 val filteredByEnabled = when (viewModel.enabledFilter.value) {
                     EnabledFilter.All -> filtered
-                    EnabledFilter.EnabledOnly -> filtered.filter { it.app.muteState == MuteState.Never }
-                    EnabledFilter.DisabledOnly -> filtered.filter { it.app.muteState != MuteState.Never }
+                    EnabledFilter.EnabledOnly -> filtered.filter {
+                        val expr = it.app.muteExpiration
+                        val isMuted = when {
+                            expr != null && expr.isAfter(now) -> true
+                            it.app.muteState == MuteState.Never -> false
+                            else -> true
+                        }
+                        !isMuted
+                    }
+                    EnabledFilter.DisabledOnly -> filtered.filter {
+                        val expr = it.app.muteExpiration
+                        val isMuted = when {
+                            expr != null && expr.isAfter(now) -> true
+                            it.app.muteState == MuteState.Never -> false
+                            else -> true
+                        }
+                        isMuted
+                    }
                 }
 
                 val list = when (viewModel.sortBy.value) {

@@ -1,6 +1,18 @@
 package coredevices.pebble.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
+import coredevices.libindex.device.KnownIndexDevice
 import coredevices.util.Permission
+import io.rebble.libpebblecommon.connection.AppContext
+import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Image
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
@@ -22,6 +34,12 @@ import platform.posix.IFF_UP
 import platform.posix.NI_MAXHOST
 import platform.posix.NI_NUMERICHOST
 import platform.posix.getnameinfo
+
+actual fun ImageBitmap.toPngBytes(): ByteArray {
+    val skiaBitmap = asSkiaBitmap()
+    skiaBitmap.setAlphaType(org.jetbrains.skia.ColorAlphaType.OPAQUE)
+    return Image.makeFromBitmap(skiaBitmap).encodeToData(EncodedImageFormat.PNG)!!.bytes
+}
 
 actual fun scanPermission(): Permission? {
     return null
@@ -96,4 +114,22 @@ actual fun getIPAddress(): Pair<String?, String?> {
             freeifaddrs(ifap.value)
         }
     }
+}
+
+actual fun openSystemBluetoothSettings(appContext: AppContext) {
+}
+
+@Composable
+actual fun RemovePairingMenuItem(
+    ring: KnownIndexDevice,
+    onShowRemoveDialog: () -> Unit,
+    onHideMenu: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text("Remove") },
+        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+        onClick = {
+            onShowRemoveDialog()
+        },
+    )
 }

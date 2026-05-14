@@ -193,6 +193,7 @@ object ConnectedPebble {
 
     interface Time {
         suspend fun updateTime()
+        suspend fun updateTimeIfNeeded()
     }
 
     interface CoreDump {

@@ -12,6 +12,8 @@ import kotlin.uuid.Uuid
 
 class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     private var attributes = listOf<BaseAttribute>()
+    var internalType: String? = null
+
     fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
         builder.block()
@@ -19,7 +21,7 @@ class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     }
 
     fun build(): BaseAction {
-        return BaseAction(actionId, type, attributes)
+        return BaseAction(actionId, type, attributes, internalType)
     }
 }
 
@@ -31,8 +33,12 @@ class ActionsListBuilder internal constructor() {
     private val actions = mutableListOf<BaseAction>()
     private var actionId: UByte = 0u
 
-    fun action(type: TimelineItem.Action.Type, block: ActionBuilder.() -> Unit) {
-        val builder = ActionBuilder(actionId++, type)
+    fun action(
+        type: TimelineItem.Action.Type,
+        internalType: String? = null,
+        block: ActionBuilder.() -> Unit,
+    ) {
+        val builder = ActionBuilder(actionId++, type).apply { this.internalType = internalType }
         builder.block()
         actions.add(builder.build())
     }
@@ -138,8 +144,16 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UByteAttribute(TimelineAttribute.MuteDayOfWeek, block()))
     }
 
+    fun muteExpiration(block: () -> Instant) {
+        attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.MuteExpiration, block().epochSeconds.toUInt()))
+    }
+
     fun vibrationPattern(block: () -> List<UInt>) {
         uIntList(TimelineAttribute.VibrationPattern, block)
+    }
+
+    fun notificationFilteringRules(block: () -> UByteArray) {
+        attributes.add(BaseAttribute.UByteArrayAttribute(TimelineAttribute.NotificationFilteringRules, block()))
     }
 
     internal fun build(): List<BaseAttribute> {

@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.database.entity.asNotificationAppItem
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Command
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket.Companion.deserialize
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.structmapper.SFixedString
@@ -17,6 +18,19 @@ import kotlin.time.Instant
 import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+
+private val FW_TEST = FirmwareVersion(
+    stringVersion = "v0.0.0",
+    timestamp = Instant.DISTANT_PAST,
+    major = 0,
+    minor = 0,
+    patch = 0,
+    suffix = null,
+    gitHash = "",
+    isRecovery = false,
+    isDualSlot = false,
+    isSlot0 = false,
+)
 
 class NotificationAppsDbTest {
     private val PP_BYTES = byteArrayOf(
@@ -143,7 +157,7 @@ class NotificationAppsDbTest {
             colorName = null,
             iconCode = null,
         )
-        val params = ValueParams(WatchType.APLITE, emptySet())
+        val params = ValueParams(WatchType.APLITE, emptySet(), FW_TEST)
         val encoded = item.value(params)!!
         val write = DbWrite(
             token = 1.toUShort(),

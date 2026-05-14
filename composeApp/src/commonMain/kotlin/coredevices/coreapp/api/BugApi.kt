@@ -236,7 +236,7 @@ class BugApi(
                     append(HttpHeaders.ContentLength, size.toString())
                 }
                 timeout {
-                    requestTimeoutMillis = 40.seconds.inWholeMilliseconds
+                    requestTimeoutMillis = 60.seconds.inWholeMilliseconds
                 }
                 setBody(object : OutgoingContent.ReadChannelContent() {
                     override val contentType: ContentType = ContentType.parse(contentType)

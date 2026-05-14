@@ -5,8 +5,8 @@ import CoreNav
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -17,17 +17,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -36,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -44,6 +51,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,26 +61,31 @@ import coreapp.ring.generated.resources.Res
 import coreapp.ring.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
-import coredevices.EnableExperimentalDevices
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
-import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
-import coredevices.ring.external.vermillion.VermillionSettingsDialog
-import coredevices.ring.external.vermillion.VermillionSettingsViewModel
+import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
+import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
+import coredevices.ring.ui.components.QrCodeImage
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.viewmodel.SettingsViewModel
+import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
+import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.isIOS
+import coredevices.util.rememberUiContext
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -81,7 +96,7 @@ import coreapp.util.generated.resources.Res as UtilRes
 @Composable
 fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
-    val vermillionViewModel = koinViewModel<VermillionSettingsViewModel>()
+    val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val useCactusAgent by viewModel.useCactusAgent.collectAsState()
     val showModelDialog by viewModel.showModelDownloadDialog.collectAsState()
     val showMusicControlDialog by viewModel.showMusicControlDialog.collectAsState()
@@ -90,19 +105,28 @@ fun IndexSettings(coreNav: CoreNav) {
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val platform = koinInject<Platform>()
-    val vermillionToken by vermillionViewModel.token.collectAsState()
-    val vermillionDialogOpen by vermillionViewModel.dialogOpen.collectAsState()
-    val experimentalDevicesEnabled by koinInject<EnableExperimentalDevices>().enabled.collectAsState()
+    val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
+    val webhookToken by webhookViewModel.authToken.collectAsState()
+    val webhookIsLinked = !webhookUrl.isNullOrBlank() && !webhookToken.isNullOrBlank()
+    val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
+    val panicPending by viewModel.panicPending.collectAsStateWithLifecycle()
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val preferences = koinInject<Preferences>()
     val musicControlMode by viewModel.musicControlMode.collectAsState()
     val secondaryMode by viewModel.secondaryMode.collectAsState()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
+    var showSignInDialog by remember { mutableStateOf(false) }
+    var showBackupDialog by remember { mutableStateOf(false) }
+    val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
+    val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
 
+    if (showSignInDialog) {
+        SignInDialog(onDismiss = { showSignInDialog = false })
+    }
     if (showModelDialog != null) {
         ModelDownloadDialog(
             onDismissRequest = { success ->
@@ -140,13 +164,14 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeSecondaryModeDialog()
             },
-            vermillionEnabled = vermillionToken != null,
-            vermillionShown = experimentalDevicesEnabled
+            webhookEnabled = webhookIsLinked,
         )
     }
     if (showNoteShortcutDialog) {
         val shortcut = viewModel.noteShortcut.collectAsState()
         NoteShortcutDialog(
+            availableNoteProviders = availableNoteProviders,
+            availableReminderProviders = availableReminderProviders,
             currentShortcut = shortcut.value,
             onShortcutSelected = {
                 viewModel.setNoteShortcut(it)
@@ -157,8 +182,14 @@ fun IndexSettings(coreNav: CoreNav) {
             }
         )
     }
-    if (vermillionDialogOpen) {
-        VermillionSettingsDialog(vermillionViewModel)
+    if (webhookDialogOpen) {
+        IndexWebhookSettingsDialog(webhookViewModel)
+    }
+    if (showBackupDialog) {
+        BackupDialog(
+            viewModel = viewModel,
+            onDismiss = { showBackupDialog = false }
+        )
     }
 
     Scaffold(
@@ -204,20 +235,7 @@ fun IndexSettings(coreNav: CoreNav) {
                         else -> "No Ring Paired"
                     },
                     buttons = {
-                        val text = when {
-                            accountUsername == null -> "Log in before pairing"
-                            ringPaired -> "Pair different device"
-                            else -> "Pair"
-                        }
-                        Button(
-                            enabled = accountUsername != null,
-                            onClick = {
-                                coreNav.navigateTo(RingRoutes.RingPairing)
-                            },
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(text)
-                        }
+
                     },
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -237,18 +255,30 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             item {
+                val isAndroid = platform.isAndroid
                 ListItem(
-                    modifier = Modifier.clickable {
+                    modifier = Modifier.clickable(enabled = isAndroid) {
                         viewModel.showMusicControlDialog()
                     },
-                    headlineContent = { Text("Music Play/Pause") },
+                    headlineContent = {
+                        Text(
+                            if (isAndroid) "Music Play/Pause" else "Music Play/Pause (Only on Android)",
+                            color = if (isAndroid) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    },
                     supportingContent = {
                         Text(
-                            when (musicControlMode) {
-                                MusicControlMode.Disabled -> "Disabled"
-                                MusicControlMode.SingleClick -> "Single Click"
-                                MusicControlMode.DoubleClick -> "Double Click"
-                            }
+                            when {
+                                !isAndroid -> "Not available on this platform"
+                                else -> when (musicControlMode) {
+                                    MusicControlMode.Disabled -> "Disabled"
+                                    MusicControlMode.SingleClick -> "Single click: Play/Pause · Double click: Next track"
+                                    MusicControlMode.DoubleClick -> "Double click: Play/Pause · Triple click: Next track"
+                                }
+                            },
+                            color = if (isAndroid) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                         )
                     }
                 )
@@ -264,7 +294,7 @@ fun IndexSettings(coreNav: CoreNav) {
                             when (secondaryMode) {
                                 SecondaryMode.Disabled -> "Disabled"
                                 SecondaryMode.Search -> "Search"
-                                SecondaryMode.Vermillion -> "Vermillion"
+                                SecondaryMode.IndexWebhook -> "Webhook"
                             }
                         )
                     }
@@ -326,6 +356,13 @@ fun IndexSettings(coreNav: CoreNav) {
             }
             item {
                 ListItem(
+                    modifier = Modifier.clickable { showBackupDialog = true },
+                    headlineContent = { Text("Backup") },
+                    supportingContent = { Text("Sync, manage, or delete cloud backup") }
+                )
+            }
+            item {
+                ListItem(
                     modifier = Modifier.clickable {
                         coreNav.navigateTo(RingRoutes.McpSandboxSettings)
                     },
@@ -363,19 +400,17 @@ fun IndexSettings(coreNav: CoreNav) {
                     }
                 )
             }
-            if (experimentalDevicesEnabled) {
-                item {
-                    ListItem(
-                        modifier = Modifier.clickable(onClick = vermillionViewModel::openDialog),
-                        headlineContent = { Text("Vermillion") },
-                        supportingContent = {
-                            Text(
-                                if (vermillionToken != null) "Linked, tap to modify"
-                                else "Not Linked"
-                            )
-                        }
-                    )
-                }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
+                    headlineContent = { Text("Webhook") },
+                    supportingContent = {
+                        Text(
+                            if (webhookIsLinked) "Configured, tap to modify"
+                            else "Not Linked"
+                        )
+                    }
+                )
             }
             item {
                 ListItem(
@@ -406,18 +441,18 @@ fun IndexSettings(coreNav: CoreNav) {
             if (debugDetailsEnabled) {
                 item {
                     ListItem(
-                        modifier = Modifier.clickable {
-                            coreNav.navigateTo(RingRoutes.RingSyncInspector)
+                        modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
+                            viewModel.panicRing()
                         },
-                        headlineContent = { Text("Ring Sync Inspector") }
+                        headlineContent = { Text("Panic Ring", color = Color.Red) }
                     )
                 }
                 item {
                     ListItem(
                         modifier = Modifier.clickable {
-                            coreNav.navigateTo(RingRoutes.RingDebug)
+                            coreNav.navigateTo(RingRoutes.RingSyncInspector)
                         },
-                        headlineContent = { Text("Ring Debug") }
+                        headlineContent = { Text("Ring Sync Inspector") }
                     )
                 }
             }
@@ -495,7 +530,7 @@ fun MusicControlDialog(
                     Column {
                         Text("Single click")
                         Text(
-                            "Play/Pause music with a single click on the ring button.",
+                            "Single click: Play/Pause. Double click: Next track.",
                             fontSize = 12.sp,
                         )
                     }
@@ -520,7 +555,7 @@ fun MusicControlDialog(
                     Column {
                         Text("Double click")
                         Text(
-                            "Play/Pause music with a double click on the ring button.",
+                            "Double click: Play/Pause. Triple click: Next track.",
                             fontSize = 12.sp,
                         )
                     }
@@ -535,8 +570,7 @@ fun SecondaryModeDialog(
     currentMode: SecondaryMode,
     onModeSelected: (SecondaryMode) -> Unit,
     onDismissRequest: () -> Unit,
-    vermillionEnabled: Boolean,
-    vermillionShown: Boolean,
+    webhookEnabled: Boolean,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
@@ -611,37 +645,35 @@ fun SecondaryModeDialog(
                     }
                 }
             }
-            if (vermillionShown) {
-                item(SecondaryMode.Vermillion) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = vermillionEnabled) {
-                                targetMode = SecondaryMode.Vermillion
-                            }
-                    ) {
-                        RadioButton(
-                            selected = targetMode == SecondaryMode.Vermillion,
-                            onClick = {
-                                targetMode = SecondaryMode.Vermillion
-                            },
-                            enabled = vermillionEnabled
+            item(SecondaryMode.IndexWebhook) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = webhookEnabled) {
+                            targetMode = SecondaryMode.IndexWebhook
+                        }
+                ) {
+                    RadioButton(
+                        selected = targetMode == SecondaryMode.IndexWebhook,
+                        onClick = {
+                            targetMode = SecondaryMode.IndexWebhook
+                        },
+                        enabled = webhookEnabled
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Webhook")
+                        Text(
+                            "Send recording data to your webhook on a double click & hold.",
+                            fontSize = 12.sp,
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text("Vermillion")
+                        if (!webhookEnabled) {
                             Text(
-                                "Additionally send recorded audio to Vermillion on a double click & hold.",
+                                "Configure webhook first.",
                                 fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
                             )
-                            if (!vermillionEnabled) {
-                                Text(
-                                    "Link Vermillion account first.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
                         }
                     }
                 }
@@ -652,15 +684,23 @@ fun SecondaryModeDialog(
 
 @Composable
 fun NoteShortcutDialog(
+    availableNoteProviders: List<NoteProvider>,
+    availableReminderProviders: List<ReminderProvider>,
     currentShortcut: NoteShortcutType,
     onShortcutSelected: (NoteShortcutType) -> Unit,
     onDismissRequest: () -> Unit
 ) {
     var targetShortcut by remember { mutableStateOf(currentShortcut) }
-    val options = buildList {
-        add(NoteShortcutType.SendToMe)
-        NoteProvider.entries.forEach { add(NoteShortcutType.SendToNoteProvider(it)) }
-        ReminderProvider.entries.forEach { add(NoteShortcutType.SendToReminderProvider(it)) }
+    val options = remember {
+        buildList {
+            add(NoteShortcutType.SendToMe)
+            availableNoteProviders.forEach {
+                add(NoteShortcutType.SendToNoteProvider(it))
+            }
+            availableReminderProviders.forEach {
+                add(NoteShortcutType.SendToReminderProvider(it))
+            }
+        }
     }
     M3Dialog(
         onDismissRequest = onDismissRequest,
@@ -703,6 +743,410 @@ fun NoteShortcutDialog(
 }
 
 @Composable
+fun BackupDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    val userId by viewModel.userId.collectAsState()
+    val syncing by viewModel.syncingFeedHistory.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
+    val backupDownloading by viewModel.backupDownloading.collectAsState()
+    val backupDownloadStatus by viewModel.backupDownloadStatus.collectAsState()
+    val importing by viewModel.importing.collectAsState()
+    val importStatus by viewModel.importStatus.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val backupCount by viewModel.backupCount.collectAsState()
+    val backupLoading by viewModel.backupLoading.collectAsState()
+    val backupStatus by viewModel.backupStatus.collectAsState()
+    val backupEnabled by viewModel.backupEnabled.collectAsState()
+    val hasLocalKey by viewModel.hasLocalKey.collectAsState()
+    val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
+    val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
+    val generatedKey by viewModel.generatedKey.collectAsState()
+    val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
+    val uiContext = rememberUiContext()
+    val clipboardManager = LocalClipboardManager.current
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteInput by remember { mutableStateOf("") }
+    var showDeleteLocalConfirm by remember { mutableStateOf(false) }
+    var deleteLocalInput by remember { mutableStateOf("") }
+    var showOverwriteKeyConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadBackupCount()
+        viewModel.checkLocalKey()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearBackupStatus()
+            viewModel.clearEncryptionKeyStatus()
+        }
+    }
+
+    if (showOverwriteKeyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showOverwriteKeyConfirm = false },
+            title = { Text("Overwrite Encryption Key?") },
+            text = {
+                Text("An encryption key already exists. Generating a new one will overwrite it. Previously encrypted backups will not be decryptable with the new key.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOverwriteKeyConfirm = false
+                    uiContext?.let { viewModel.generateAndStoreKey(it) }
+                }) {
+                    Text("Overwrite", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverwriteKeyConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (generatedKey != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearGeneratedKey() },
+            title = { Text("Encryption Key Backup") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Save this key securely. You will need it to decrypt your backups.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        QrCodeImage(
+                            data = generatedKey!!,
+                            size = 220.dp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(generatedKey!!))
+                }) {
+                    Text("Copy Key")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.clearGeneratedKey() }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
+            title = { Text("Delete Backup") },
+            text = {
+                Column {
+                    Text(
+                        "This will permanently delete all your cloud backup data. This cannot be undone.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Type \"delete\" to confirm:")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = deleteInput,
+                        onValueChange = { deleteInput = it },
+                        singleLine = true,
+                        placeholder = { Text("delete") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteInput.equals("delete", ignoreCase = true) && !backupLoading,
+                    onClick = {
+                        viewModel.deleteBackup()
+                        showDeleteConfirm = false
+                        deleteInput = ""
+                    }
+                ) {
+                    Text("Delete", color = if (deleteInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false; deleteInput = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showDeleteLocalConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteLocalConfirm = false; deleteLocalInput = "" },
+            title = { Text("Delete Local Feed") },
+            text = {
+                Column {
+                    Text(
+                        "This will delete all recordings from the local feed on this device. Cloud backup is not affected. You can restore from cloud with Sync or from a backup zip with Import.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Type \"delete\" to confirm:")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = deleteLocalInput,
+                        onValueChange = { deleteLocalInput = it },
+                        singleLine = true,
+                        placeholder = { Text("delete") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteLocalInput.equals("delete", ignoreCase = true) && !backupLoading,
+                    onClick = {
+                        viewModel.deleteLocalFeed()
+                        showDeleteLocalConfirm = false
+                        deleteLocalInput = ""
+                    }
+                ) {
+                    Text("Delete", color = if (deleteLocalInput.equals("delete", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteLocalConfirm = false; deleteLocalInput = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup") },
+        buttons = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        }
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.verticalScroll(rememberScrollState())
+        ) {
+            // Backup count
+            ListItem(
+                headlineContent = { Text("Items in backup") },
+                supportingContent = {
+                    if (backupLoading && backupCount == null) {
+                        Text("Loading...")
+                    } else {
+                        Column {
+                            Text("${backupCount ?: "—"} recordings across all devices")
+                            if (userId != null) {
+                                Text("ID: $userId", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                },
+                trailingContent = {
+                    if (backupLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Backup enabled toggle
+            ListItem(
+                modifier = Modifier.clickable { viewModel.setBackupEnabled(!backupEnabled) },
+                headlineContent = { Text("Backup enabled") },
+                supportingContent = { Text("Automatically sync recordings to cloud") },
+                trailingContent = {
+                    Switch(
+                        checked = backupEnabled,
+                        onCheckedChange = { viewModel.setBackupEnabled(it) }
+                    )
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Sync now
+            ListItem(
+                modifier = Modifier.clickable(enabled = !syncing) {
+                    viewModel.downloadFeedHistory()
+                },
+                headlineContent = { Text("Sync now") },
+                supportingContent = {
+                    Text(syncStatus ?: "Upload local & download cloud recordings")
+                },
+                trailingContent = {
+                    if (syncing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Download full backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupDownloading && !syncing && uiContext != null) {
+                    uiContext?.let { viewModel.downloadFullBackup(it) }
+                },
+                headlineContent = { Text("Download Full Backup") },
+                supportingContent = {
+                    Text(backupDownloadStatus ?: "Download all recordings and data as a zip file")
+                },
+                trailingContent = {
+                    if (backupDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+
+            // Import backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
+                    scope.launch {
+                        val path = uiContext?.let { pickZipFile(it) }
+                        if (path != null) {
+                            viewModel.importBackup(path)
+                        }
+                    }
+                },
+                headlineContent = { Text("Import Backup") },
+                supportingContent = {
+                    Text(importStatus ?: "Restore recordings from a backup zip file")
+                },
+                trailingContent = {
+                    if (importing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // Delete backup
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupLoading) {
+                    showDeleteConfirm = true
+                },
+                headlineContent = {
+                    Text("Delete my backup", color = MaterialTheme.colorScheme.error)
+                },
+                supportingContent = {
+                    Text(backupStatus ?: "Permanently delete all cloud data")
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // --- Encryption section ---
+            Text(
+                "Encryption",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // Generate encryption key
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!hasLocalKey || debugDetailsEnabled)) {
+                    if (hasLocalKey) {
+                        showOverwriteKeyConfirm = true
+                    } else {
+                        uiContext?.let { viewModel.generateAndStoreKey(it) }
+                    }
+                },
+                headlineContent = { Text("Generate Encryption Key") },
+                supportingContent = {
+                    Text(
+                        encryptionKeyStatus
+                            ?: if (hasLocalKey) buildString {
+                                append("Key exists")
+                                if (debugDetailsEnabled) {
+                                    append(" — tap to regenerate")
+                                }
+                            }
+                            else "Create AES-256 encryption key"
+                    )
+                },
+                trailingContent = {
+                    if (encryptionKeyLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            )
+
+            // Read key from password manager
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null) {
+                    uiContext?.let { viewModel.readKeyFromCloudKeychain(it) }
+                },
+                headlineContent = { Text("Restore Key from Password Manager") },
+                supportingContent = {
+                    Text("Read key from Google Password Manager or iCloud Keychain")
+                }
+            )
+
+            // Enable/disable encryption
+            val useEncryption by viewModel.useEncryption.collectAsState()
+            val migrationStatus by viewModel.migrationStatus.collectAsState()
+            val migrating by viewModel.migrating.collectAsState()
+
+            if (hasLocalKey) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !migrating) {
+                        if (!useEncryption) {
+                            viewModel.enableEncryption()
+                        } else {
+                            viewModel.disableEncryption()
+                        }
+                    },
+                    headlineContent = {
+                        Text(if (useEncryption) "Disable Encryption" else "Enable Encryption")
+                    },
+                    supportingContent = {
+                        Text(
+                            migrationStatus
+                                ?: if (useEncryption) "All new uploads are encrypted"
+                                else "Encrypt all recordings before uploading to cloud"
+                        )
+                    },
+                    trailingContent = {
+                        if (migrating) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            // --- Danger zone ---
+            Text(
+                "Danger Zone",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            ListItem(
+                modifier = Modifier.clickable(enabled = !backupLoading) {
+                    showDeleteLocalConfirm = true
+                },
+                headlineContent = {
+                    Text("Delete local feed", color = MaterialTheme.colorScheme.error)
+                },
+                supportingContent = {
+                    Text("Remove all recordings from this device (cloud unaffected)")
+                }
+            )
+        }
+    }
+}
+
+@Composable
 fun AuthorizedIntegrations(preferences: Preferences) {
     val gTasks = koinInject<GTasksIntegration>()
     val notion = koinInject<NotionIntegration>()
@@ -711,16 +1155,39 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
+    val platform = koinInject<Platform>()
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        IntegrationItem(
-            title = "Built-in",
-            hasReminder = true,
-            hasNotes = true,
-            selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
-            selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-            onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
-            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
-        )
+        if (platform.isIOS) {
+            IntegrationItem(
+                title = "Built-in",
+                hasReminder = false,
+                hasNotes = true,
+                selectedReminderProvider = false,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+                onSelectReminderProvider = {},
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            )
+            IntegrationItem(
+                title = "iOS",
+                hasReminder = true,
+                hasNotes = false,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedNoteProvider = false,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectNoteProvider = {}
+            )
+        } else {
+            IntegrationItem(
+                title = "Built-in",
+                hasReminder = true,
+                hasNotes = true,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            )
+        }
         if (gTasksAuth) {
             IntegrationItem(
                 title = GTasksIntegration.DEFINITION.title,

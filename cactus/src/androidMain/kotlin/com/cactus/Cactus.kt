@@ -2,15 +2,25 @@ package com.cactus
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.logging.Logger
 
 actual class Cactus private constructor(private var handle: Long) : AutoCloseable {
 
     actual companion object {
+        private var loadFailed = false
         init {
-            System.loadLibrary("cactus")
+            try {
+                System.loadLibrary("cactus")
+            } catch (e: UnsatisfiedLinkError) {
+                loadFailed = true
+                throw CactusException("Failed to load native library: ${e.message}")
+            }
         }
 
         actual fun create(modelPath: String, corpusDir: String?): Cactus {
+            if (loadFailed) {
+                throw CactusException("Native library failed to load")
+            }
             val handle = nativeInit(modelPath, corpusDir)
             if (handle == 0L) {
                 throw CactusException(nativeGetLastError().ifEmpty { "Failed to initialize model" })
@@ -19,6 +29,9 @@ actual class Cactus private constructor(private var handle: Long) : AutoCloseabl
         }
 
         actual fun setTelemetryEnvironment(cacheDir: String) {
+            if (loadFailed) {
+                throw CactusException("Native library failed to load")
+            }
             nativeSetCacheDir(cacheDir)
         }
 
@@ -271,11 +284,20 @@ actual class StreamTranscriber internal constructor(private var handle: Long) : 
 actual class CactusIndex private constructor(private var handle: Long) : AutoCloseable {
 
     actual companion object {
+        private var loadFailed = false
         init {
-            System.loadLibrary("cactus")
+            try {
+                System.loadLibrary("cactus")
+            } catch (e: UnsatisfiedLinkError) {
+                loadFailed = true
+                throw CactusException("Failed to load native library: ${e.message}")
+            }
         }
 
         actual fun create(indexDir: String, embeddingDim: Int): CactusIndex {
+            if (loadFailed) {
+                throw CactusException("Native library failed to load")
+            }
             val handle = nativeIndexInit(indexDir, embeddingDim)
             if (handle == 0L) {
                 throw CactusException("Failed to initialize index")

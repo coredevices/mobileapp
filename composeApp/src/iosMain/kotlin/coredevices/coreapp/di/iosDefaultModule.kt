@@ -3,13 +3,13 @@ package coredevices.coreapp.di
 import CoreAppVersion
 import PlatformContext
 import PlatformShareLauncher
-import coredevices.ExperimentalDevices
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.IosAppUpdate
 import coredevices.pebble.PebbleIosDelegate
+import coredevices.ring.RingDelegate
 import coredevices.util.auth.AppleAuthUtil
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -61,10 +61,10 @@ val iosDefaultModule = module {
     single {
         val pebbleDelegate = get<PebbleIosDelegate>()
         val enabledFlow = get<CoreConfigFlow>().flow.map { it.enableIndex }
-        val experimentalDevices = get<ExperimentalDevices>()
+        val ringDelegate = get<RingDelegate>()
         RequiredPermissions(
             flow { emit(pebbleDelegate.requiredPermissions()) }.combine(enabledFlow) { permissions, enabled ->
-                permissions + if (enabled) experimentalDevices.requiredRuntimePermissions() else emptySet()
+                permissions + if (enabled) ringDelegate.requiredRuntimePermissions() else emptySet()
             }
         )
     }

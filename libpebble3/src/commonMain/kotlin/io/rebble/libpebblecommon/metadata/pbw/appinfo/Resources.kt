@@ -4,5 +4,5 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Resources(
-    val media: List<Media>
+    val media: List<Media> = emptyList()
 )

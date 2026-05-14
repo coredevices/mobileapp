@@ -13,6 +13,14 @@ class IosTimeChangedReceiver() : TimeChanged {
             ) {
                 onChanged()
             }
+        NSNotificationCenter.defaultCenter()
+            .addObserverForName(
+                name = "NSSystemTimeZoneDidChangeNotification",
+                `object` = null,
+                queue = null
+            ) {
+                onChanged()
+            }
     }
 }
 

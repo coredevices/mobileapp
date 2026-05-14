@@ -178,6 +178,8 @@ class IosSystemCalendar(
     override fun hasPermission(): Boolean {
         return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == EKAuthorizationStatusAuthorized
     }
+
+    override fun supportsPinActions(): Boolean = false
 }
 
 fun EKAlarm.asReminder(): EventReminder = EventReminder(

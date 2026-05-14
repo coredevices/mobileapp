@@ -16,6 +16,8 @@ import io.rebble.libpebblecommon.util.Crc32Calculator
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class PutBytesService(
     private val protocolHandler: PebbleProtocolHandler,
@@ -61,7 +63,7 @@ class PutBytesService(
         type: ObjectType,
         bank: UByte,
         filename: String
-    ): PutBytesResponse = sendAndAwaitAck(PutBytesInit(size, type, bank, filename))
+    ): PutBytesResponse = sendAndAwaitAck(PutBytesInit(size, type, bank, filename), timeout = 35.seconds)
 
     /**
      * Initializes a PutBytes session on the device for transferring 3.x+ app data
@@ -84,8 +86,8 @@ class PutBytesService(
     suspend fun sendInstall(cookie: UInt): PutBytesResponse =
         sendAndAwaitAck(PutBytesInstall(cookie))
 
-    private suspend fun sendAndAwaitAck(packet: PutBytesOutgoingPacket): PutBytesResponse =
-        withTimeout(20_000) {
+    private suspend fun sendAndAwaitAck(packet: PutBytesOutgoingPacket, timeout: Duration = 20.seconds): PutBytesResponse =
+        withTimeout(timeout) {
             send(packet)
             awaitAck()
         }

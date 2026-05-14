@@ -4,8 +4,8 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import androidx.room.Relation
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.util.queue.TaskStatus
 import kotlin.time.Clock
 import kotlin.time.Instant

@@ -63,6 +63,7 @@ enum class ConnectionFailureReason {
     NotAnError_NeverAttmpedConnection,
     TimeoutInitializingPpog,
     ClassicConnectionFailed,
+    ClassicDisconnected,
 }
 
 sealed class PebbleConnectionResult {
@@ -248,6 +249,7 @@ class RealPebbleConnector(
             unfaithful = watchInfo.isUnfaithful,
             previouslyConnected = previouslyConnected,
             capabilities = watchInfo.capabilities,
+            firmwareVersion = watchInfo.runningFwVersion,
         )
         appFetchService.init()
         timelineActionManager.init()

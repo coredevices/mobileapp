@@ -64,13 +64,6 @@ fun ViewBugReportScreen(
         val bugReports: BugReports = koinInject()
         val tickets = bugReports.ticketDetails.value
         val ticket = tickets?.ticketDetails?.firstOrNull { it.ticketId == conversationId }
-        val userEmail = Firebase.auth.currentUser?.emailOrNull
-
-        val url = if (ticket != null && tickets != null && userEmail != null) {
-            "https://embed.atlas.so/index.html?appId=${tickets.appId}&userId=$userEmail&userEmail=$userEmail&query=open:ticket;ticketId:${ticket.ticketId};noHeader:1&userHash=${tickets.userHash}"
-        } else {
-            ""
-        }
         var requestedMoreLogs by remember { mutableStateOf(false) }
         val bugReportProcessor = koinInject<BugReportProcessor>()
 
@@ -167,22 +160,18 @@ fun ViewBugReportScreen(
                         elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),
                     )
                 }
-                PebbleWebview(
-                    url = url,
-                    interceptor = interceptor,
-                    modifier = Modifier.fillMaxSize().padding(bottom = webviewPadding),
-                    onPageFinishedJavaScript = """
+                val attachmentHidingJs = """
                     (function() {
                         function hideAttachmentIcon() {
                             let hidden = false;
-                            
+
                             // Primary selector: by title attribute
                             const buttonByTitle = document.querySelector('button[title*="Attach files"]');
                             if (buttonByTitle) {
                                 buttonByTitle.style.display = 'none';
                                 hidden = true;
                             }
-                            
+
                             // Backup selector: find button containing SVG with paperclip path
                             const buttons = document.querySelectorAll('button');
                             buttons.forEach(button => {
@@ -192,7 +181,7 @@ fun ViewBugReportScreen(
                                     hidden = true;
                                 }
                             });
-                            
+
                             // Also inject CSS for future elements
                             if (!document.getElementById('hide-attachment-style')) {
                                 const style = document.createElement('style');
@@ -200,29 +189,86 @@ fun ViewBugReportScreen(
                                 style.textContent = 'button[title*="Attach files"] { display: none !important; }';
                                 document.head.appendChild(style);
                             }
-                            
+
                             return hidden;
                         }
-                        
+
                         // Try immediately
                         hideAttachmentIcon();
-                        
+
                         // Retry with delays
                         setTimeout(hideAttachmentIcon, 500);
                         setTimeout(hideAttachmentIcon, 1000);
                         setTimeout(hideAttachmentIcon, 2000);
-                        
+
                         // Watch for dynamic content
                         const observer = new MutationObserver(() => {
                             hideAttachmentIcon();
                         });
-                        
+
                         observer.observe(document.body, {
                             childList: true,
                             subtree: true
                         });
                     })();
                 """.trimIndent()
+
+                // Fix for MOB-6192 (Enter sends instead of newline) and
+                // MOB-6260 (autocorrect/autocapitalize disabled in Atlas chat input).
+                val chatInputFixJs = """
+                    (function() {
+                        // Reapplied idempotently — Atlas's React tree may rehydrate
+                        // these attributes back to their defaults at any time. The
+                        // value-equality check prevents the MutationObserver from
+                        // looping on our own setAttribute calls.
+                        function applyChatInputFixes() {
+                            const inputs = document.querySelectorAll('textarea, input[type="text"]');
+                            inputs.forEach(input => {
+                                if (input.getAttribute('autocorrect') !== 'on') {
+                                    input.setAttribute('autocorrect', 'on');
+                                }
+                                if (input.getAttribute('autocapitalize') !== 'sentences') {
+                                    input.setAttribute('autocapitalize', 'sentences');
+                                }
+                                if (input.getAttribute('spellcheck') !== 'true') {
+                                    input.setAttribute('spellcheck', 'true');
+                                }
+                            });
+                        }
+
+                        applyChatInputFixes();
+                        setTimeout(applyChatInputFixes, 500);
+                        setTimeout(applyChatInputFixes, 1000);
+                        setTimeout(applyChatInputFixes, 2000);
+
+                        const observer = new MutationObserver(() => applyChatInputFixes());
+                        observer.observe(document.body, {
+                            childList: true,
+                            subtree: true,
+                            attributes: true,
+                            attributeFilter: ['autocorrect', 'autocapitalize', 'spellcheck'],
+                        });
+
+                        // Stop Atlas's send-on-Enter handler before it runs; the
+                        // default action (newline insertion) still fires. Shift+Enter
+                        // is left alone — Atlas's own handler doesn't send on it, so
+                        // letting it through still produces a newline.
+                        document.addEventListener('keydown', function(e) {
+                            if (e.target instanceof HTMLTextAreaElement
+                                && e.key === 'Enter' && !e.shiftKey) {
+                                e.stopPropagation();
+                            }
+                        }, true);
+                    })();
+                """.trimIndent()
+
+                val onPageFinishedJs = attachmentHidingJs + "\n" + chatInputFixJs
+
+                PebbleWebview(
+                    url = ticket?.webviewUrl ?: "",
+                    interceptor = interceptor,
+                    modifier = Modifier.fillMaxSize().padding(bottom = webviewPadding),
+                    onPageFinishedJavaScript = onPageFinishedJs,
                 )
             }
         }

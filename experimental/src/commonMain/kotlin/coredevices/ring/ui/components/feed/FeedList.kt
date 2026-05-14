@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,10 +48,15 @@ fun FeedList(topBarParams: TopBarParams?, modifier: Modifier = Modifier, onItemS
         }
     }
 
+    // Track the previously seen newest item key so we only auto-scroll when a
+    // genuinely new item arrives, not when returning from navigation.
+    var previousNewestItemKey by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(newestItemKey) {
-        if (newestItemKey != null) {
+        if (newestItemKey != null && previousNewestItemKey != null && newestItemKey != previousNewestItemKey) {
             listState.animateScrollToItem(0)
         }
+        previousNewestItemKey = newestItemKey
     }
     LaunchedEffect(Unit) {
         launch {
@@ -84,10 +88,10 @@ fun FeedList(topBarParams: TopBarParams?, modifier: Modifier = Modifier, onItemS
                     var contextualActions by remember { mutableStateOf<Set<ContextualActionType>?>(null) }
                     ExposedDropdownMenuBox(
                         expanded = showContextMenu,
-                        onExpandedChange = { showContextMenu = it }
+                        onExpandedChange = { if (!it) showContextMenu = false }
                     ) {
                         FeedListItem(
-                            chatBubbleModifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            chatBubbleModifier = Modifier,
                             item.data,
                             onSelected = {
                                 onItemSelected(item.data.id)
@@ -97,6 +101,9 @@ fun FeedList(topBarParams: TopBarParams?, modifier: Modifier = Modifier, onItemS
                                     contextualActions = viewModel.getContextualActions(item.data)
                                 }
                                 showContextMenu = true
+                            },
+                            onRetry = {
+                                viewModel.retryFeedItem(item.data)
                             }
                         )
                         Box(Modifier.fillMaxWidth()) {
