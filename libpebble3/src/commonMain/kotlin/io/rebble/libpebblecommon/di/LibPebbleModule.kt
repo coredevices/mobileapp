@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
-import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
-import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
@@ -22,6 +20,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
 import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
+import io.rebble.libpebblecommon.connection.CustomDataLogging
 import io.rebble.libpebblecommon.connection.LegacyBtClassicMigrator
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
@@ -97,10 +96,12 @@ import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.RealBlobDbDatabaseManager
+import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.RealWatchPrefs
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
@@ -175,7 +176,10 @@ data class ConnectionScopeProperties(
 )
 
 interface ConnectionAnalyticsLogger {
-    fun logEvent(name: String, props: Map<String, String>? = null)
+    fun logEvent(
+        name: String,
+        props: Map<String, String>? = null,
+    )
 }
 
 class RealConnectionAnalyticsLogger(
@@ -196,18 +200,21 @@ fun LibPebbleAnalytics.logWatchEvent(
     props: Map<String, String>? = null,
 ) {
     logEvent(
-        "watch.$name", (props ?: emptyMap()) +
-                mapOf(
-                    "color" to color.jsName,
-                    "platform" to color.platform.name,
-                )
+        "watch.$name",
+        (props ?: emptyMap()) +
+            mapOf(
+                "color" to color.jsName,
+                "platform" to color.platform.name,
+            ),
     )
 }
 
 interface ConnectionScope {
     val identifier: PebbleIdentifier
     val pebbleConnector: PebbleConnector
+
     fun close()
+
     val closed: AtomicBoolean
     val firmwareUpdateManager: FirmwareUpdateManager
     val firmwareUpdater: FirmwareUpdater
@@ -247,7 +254,9 @@ interface ConnectionScopeFactory {
     fun createScope(props: ConnectionScopeProperties): ConnectionScope
 }
 
-class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactory {
+class RealConnectionScopeFactory(
+    private val koin: Koin,
+) : ConnectionScopeFactory {
     override fun createScope(props: ConnectionScopeProperties): ConnectionScope {
         val uuid = Uuid.random()
         val scope =
@@ -266,37 +275,44 @@ class RealConnectionScopeFactory(private val koin: Koin) : ConnectionScopeFactor
 /**
  * Essentially, GlobalScope for libpebble. Use this everywhere that would otherwise use GlobalScope.
  */
-class LibPebbleCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+class LibPebbleCoroutineScope(
+    override val coroutineContext: CoroutineContext,
+) : CoroutineScope
 
 /**
  * Per-connection coroutine scope, torn down when the connection ends.
  */
-class ConnectionCoroutineScope(override val coroutineContext: CoroutineContext) : CoroutineScope
+class ConnectionCoroutineScope(
+    override val coroutineContext: CoroutineContext,
+) : CoroutineScope
 
 /**
  * Lazy/provider for when we need to get out of a circular dependency.
  */
-class HackyProvider<T>(val getter: () -> T) {
+class HackyProvider<T>(
+    val getter: () -> T,
+) {
     fun get(): T = getter()
 }
 
 expect val platformModule: Module
 
-val CommonPhoneCapabilities = setOf(
-    ProtocolCapsFlag.SupportsAppRunStateProtocol,
-    ProtocolCapsFlag.SupportsInfiniteLogDump,
+val CommonPhoneCapabilities =
+    setOf(
+        ProtocolCapsFlag.SupportsAppRunStateProtocol,
+        ProtocolCapsFlag.SupportsInfiniteLogDump,
 //    ProtocolCapsFlag.SupportsLocalization,
-    ProtocolCapsFlag.SupportsAppDictation,
-    ProtocolCapsFlag.Supports8kAppMessage,
-    ProtocolCapsFlag.SupportsSettingsSync,
+        ProtocolCapsFlag.SupportsAppDictation,
+        ProtocolCapsFlag.Supports8kAppMessage,
+        ProtocolCapsFlag.SupportsSettingsSync,
 //    ProtocolCapsFlag.SupportsHealthInsights,
 //    ProtocolCapsFlag.SupportsUnreadCoreDump,
-    ProtocolCapsFlag.SupportsWeatherApp,
+        ProtocolCapsFlag.SupportsWeatherApp,
 //    ProtocolCapsFlag.SupportsRemindersApp,
 //    ProtocolCapsFlag.SupportsWorkoutApp,
 //    ProtocolCapsFlag.SupportsSmoothFwInstallProgress,
 //    ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection,
-)
+    )
 
 // https://insert-koin.io/docs/reference/koin-core/context-isolation/
 private object LibPebbleKoinContext {
@@ -342,11 +358,13 @@ fun initKoin(
                 single { get<Database>().knownWatchDao() }
                 single { get<Database>().lockerEntryDao() } binds arrayOf(LockerEntryDao::class, LockerEntryRealDao::class)
                 single { get<Database>().notificationAppDao() } binds arrayOf(NotificationAppItemDao::class, NotificationAppRealDao::class)
-                single { get<Database>().timelineNotificationDao() } binds arrayOf(TimelineNotificationDao::class, TimelineNotificationRealDao::class)
+                single { get<Database>().timelineNotificationDao() } binds
+                    arrayOf(TimelineNotificationDao::class, TimelineNotificationRealDao::class)
                 single { get<Database>().timelinePinDao() }
                 single { get<Database>().timelineReminderDao() }
                 single { get<Database>().calendarDao() }
-                single { get<Database>().healthSettingsDao() } binds arrayOf(HealthSettingsEntryDao::class, HealthSettingsEntryRealDao::class)
+                single { get<Database>().healthSettingsDao() } binds
+                    arrayOf(HealthSettingsEntryDao::class, HealthSettingsEntryRealDao::class)
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
@@ -405,6 +423,7 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
+                        get(),
                     )
                 } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
@@ -421,7 +440,7 @@ fun initKoin(
                         url = "wss://cloudpebble-proxy.repebble.com/device-v2",
                         protocolVersion = CloudpebbleProxyProtocolVersion.V2,
                         scope = get(),
-                        token = proxyTokenProvider
+                        token = proxyTokenProvider,
                     )
                 }
                 single { HttpClient() }
@@ -434,16 +453,17 @@ fun initKoin(
                 singleOf(::MissedCallSyncer)
                 singleOf(::FirmwareDownloader)
                 singleOf(::JsTokenUtil)
-                singleOf(::Datalogging)
+                singleOf(::Datalogging) bind CustomDataLogging::class
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
                 singleOf(::PhoneContactsSyncer)
                 singleOf(::ContactsApi) bind Contacts::class
-                singleOf(::RealLibPebbleAnalytics) binds arrayOf(
-                    LibPebbleAnalytics::class,
-                    AnalyticsEvents::class
-                )
+                singleOf(::RealLibPebbleAnalytics) binds
+                    arrayOf(
+                        LibPebbleAnalytics::class,
+                        AnalyticsEvents::class,
+                    )
                 factory {
                     Json {
                         // Important that everything uses this - otherwise future additions to web apis will
@@ -483,16 +503,37 @@ fun initKoin(
                     scoped {
                         // We ran out of helper function overloads with enough params...
                         RealPebbleConnector(
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(), get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
+                            get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -552,13 +593,14 @@ fun initKoin(
                     scopedOf(::RealFirmwareUpdateManager) bind FirmwareUpdateManager::class
                     scoped {
                         DevConnectionManager(
-                            transport = get<WatchConfigFlow>().flow.map {
-                                if (it.watchConfig.lanDevConnection) {
-                                    get<DevConnectionServer>()
-                                } else {
-                                    get<DevConnectionCloudpebbleProxy>()
-                                }
-                            },
+                            transport =
+                                get<WatchConfigFlow>().flow.map {
+                                    if (it.watchConfig.lanDevConnection) {
+                                        get<DevConnectionServer>()
+                                    } else {
+                                        get<DevConnectionCloudpebbleProxy>()
+                                    }
+                                },
                             identifier = get(),
                             protocolHandler = get(),
                             companionAppLifecycleManager = get(),
@@ -567,14 +609,13 @@ fun initKoin(
                     }
                     scopedOf(::VoiceSessionManager)
 
-
                     // TODO we ccoouulllddd scope this further to inject more things that we still
                     //  pass in as args
                     //  - transport connected = has connected gatt client
                     //  - fully connected = has WatchInfo (more useful)
                 }
-            }
-        )
+            },
+        ),
     )
     return koin
 }

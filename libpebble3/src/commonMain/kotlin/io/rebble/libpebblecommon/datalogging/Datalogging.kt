@@ -9,13 +9,26 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
 class Datalogging(
     private val webServices: WebServices,
     private val healthDataProcessor: HealthDataProcessor,
-) {
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+) : CustomDataLogging {
     private val logger = Logger.withTag("Datalogging")
+
+    private val _customData =
+        MutableSharedFlow<CustomDataLoggingEvent>(
+            extraBufferCapacity = 1024,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+    override val customData: SharedFlow<CustomDataLoggingEvent> = _customData.asSharedFlow()
 
     fun logData(
         sessionId: UByte,
@@ -48,6 +61,7 @@ class Datalogging(
                         offset += size
                     }
                 }
+
                 ANALYTICS_HEARTBEAT_TAG -> {
                     // Fixed-size native_heartbeat_record items (no inner length prefix).
                     val size = itemSize.toInt()
@@ -64,15 +78,37 @@ class Datalogging(
                 }
             }
         }
+        if (uuid != SYSTEM_APP_UUID && tag == CUSTOM_DATA_TAG) {
+            libPebbleCoroutineScope.launch {
+                _customData.tryEmit(
+                    CustomDataLoggingEvent(
+                        sessionId = sessionId,
+                        appUuid = uuid,
+                        tag = tag,
+                        data = data,
+                        itemSize = itemSize,
+                        itemsLeft = itemsLeft,
+                    ),
+                )
+            }
+        }
     }
 
-    fun openSession(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
+    fun openSession(
+        sessionId: UByte,
+        tag: UInt,
+        applicationUuid: Uuid,
+        itemSize: UShort,
+    ) {
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSessionOpen(sessionId, tag, applicationUuid, itemSize)
         }
     }
 
-    fun closeSession(sessionId: UByte, tag: UInt) {
+    fun closeSession(
+        sessionId: UByte,
+        tag: UInt,
+    ) {
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSessionClose(sessionId)
         }
@@ -81,6 +117,7 @@ class Datalogging(
     companion object {
         private val MEMFAULT_CHUNKS_TAG: UInt = 86u
         private val ANALYTICS_HEARTBEAT_TAG: UInt = 87u
+        private val CUSTOM_DATA_TAG: UInt = 0x0091u
     }
 }
 
