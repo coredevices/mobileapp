@@ -18,11 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.setUser
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.auth.AppleAuthUtil
 import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.auth.GoogleAuthUtil
@@ -203,6 +205,19 @@ fun SignInDialog(
 // installed). It bypasses the "Sign in to existing account?" dialog that would otherwise
 // appear when linking the anonymous account fails because the destination account exists.
 @Composable
+private fun SignInUnavailable(provider: String) {
+    Text(
+        text = "$provider login disabled within this build",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+    )
+}
+
+@Composable
 fun SignInButtons(
     onDismiss: () -> Unit,
     primaryColor: Boolean,
@@ -218,42 +233,54 @@ fun SignInButtons(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(modifier = Modifier.width(IntrinsicSize.Max)) {
-            SignInButton(
-                onError = { error = it },
-                onSuccess = onDismiss,
-                text = "Sign in with Google",
-                credentialProvider = { context ->
-                    val googleAuthUtil = koin.get<GoogleAuthUtil>()
-                    googleAuthUtil.signInGoogle(context)
-                },
-                primaryColor = primaryColor,
-                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            SignInButton(
-                onError = { error = it },
-                onSuccess = onDismiss,
-                text = "Sign in with Apple",
-                credentialProvider = { context ->
-                    val appleAuthUtil = koin.get<AppleAuthUtil>()
-                    appleAuthUtil.signInApple(context)
-                },
-                primaryColor = primaryColor,
-                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            SignInButton(
-                onError = { error = it },
-                onSuccess = onDismiss,
-                text = "Sign in with GitHub",
-                credentialProvider = { context ->
-                    val githubAuthUtil = koin.get<GitHubAuthUtil>()
-                    githubAuthUtil.signInGithub(context)
-                },
-                primaryColor = primaryColor,
-                skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (CommonBuildKonfig.GOOGLE_AUTH_ENABLED) {
+                SignInButton(
+                    onError = { error = it },
+                    onSuccess = onDismiss,
+                    text = "Sign in with Google",
+                    credentialProvider = { context ->
+                        val googleAuthUtil = koin.get<GoogleAuthUtil>()
+                        googleAuthUtil.signInGoogle(context)
+                    },
+                    primaryColor = primaryColor,
+                    skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                SignInUnavailable("Google")
+            }
+            if (CommonBuildKonfig.APPLE_AUTH_ENABLED) {
+                SignInButton(
+                    onError = { error = it },
+                    onSuccess = onDismiss,
+                    text = "Sign in with Apple",
+                    credentialProvider = { context ->
+                        val appleAuthUtil = koin.get<AppleAuthUtil>()
+                        appleAuthUtil.signInApple(context)
+                    },
+                    primaryColor = primaryColor,
+                    skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                SignInUnavailable("Apple")
+            }
+            if (CommonBuildKonfig.GITHUB_AUTH_ENABLED) {
+                SignInButton(
+                    onError = { error = it },
+                    onSuccess = onDismiss,
+                    text = "Sign in with GitHub",
+                    credentialProvider = { context ->
+                        val githubAuthUtil = koin.get<GitHubAuthUtil>()
+                        githubAuthUtil.signInGithub(context)
+                    },
+                    primaryColor = primaryColor,
+                    skipAccountSwitchConfirmation = skipAccountSwitchConfirmation,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                SignInUnavailable("GitHub")
+            }
         }
         if (error != null) {
             Text(
