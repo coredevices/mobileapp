@@ -5,4 +5,6 @@
     <string name="light">Light</string>
     <string name="dark">Dark</string>
     <string name="system">System</string>
+    <string name="english">English</string>
+    <string name="spanish">Spanish</string>
 </resources>

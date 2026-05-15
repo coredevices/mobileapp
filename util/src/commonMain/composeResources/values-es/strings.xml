@@ -5,4 +5,6 @@
     <string name="light">Claro</string>
     <string name="dark">Oscuro</string>
     <string name="system">Sistema</string>
+    <string name="english">Inglés</string>
+    <string name="spanish">Español</string>
 </resources>

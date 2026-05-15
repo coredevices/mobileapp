@@ -158,6 +158,8 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import locale.AppLocale
+import locale.LocaleProvider
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import kotlin.math.roundToLong
@@ -306,8 +308,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
     val themeProvider: ThemeProvider = koinInject()
+    val localeProvider: LocaleProvider = koinInject()
     val settings: Settings = koinInject()
     val currentTheme by themeProvider.theme.collectAsState()
+    val currentLocale by localeProvider.locale.collectAsState()
     val pebbleFeatures = koinInject<PebbleFeatures>()
     val pebbleAccount = koinInject<PebbleAccount>()
     val loggedIn by pebbleAccount.loggedIn.collectAsState()
@@ -591,6 +595,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     items = CoreAppTheme.entries,
                     onItemSelected = {
                         themeProvider.setTheme(it)
+                    },
+                    itemText = {
+                        stringResource(it.resource)
+                    },
+                ),
+                basicSettingsDropdownItem(
+                    title = "App Language",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    keywords = "language locale english spanish system",
+                    selectedItem = currentLocale,
+                    items = AppLocale.entries,
+                    onItemSelected = {
+                        localeProvider.setLocale(it)
                     },
                     itemText = {
                         stringResource(it.resource)
