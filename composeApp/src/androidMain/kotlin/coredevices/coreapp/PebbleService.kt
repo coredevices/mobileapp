@@ -135,7 +135,7 @@ class PebbleService: Service(), KoinComponent {
 
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Pebble")
-            .setContentText("Keeping Pebble connection alive")
+            .setContentText(getString(R.string.foreground_notification_text))
             .setOngoing(true)
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
