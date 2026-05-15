@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="bug_report">Informe de error</string>
+    <string name="report_sent">¡Informe enviado!</string>
+    <string name="send_report">Enviar informe</string>
+    <string name="please_describe_bug">Describe el error</string>
+    <string name="this_is_a">Es un:</string>
+    <string name="index_bug">Error de Index</string>
+    <string name="watch_bug">Error del reloj</string>
+    <string name="must_sign_in_submit_report">Debes iniciar sesión para enviar un informe de error</string>
+    <string name="sign_in">Iniciar sesión</string>
+    <string name="take_watch_screenshot">Hacer captura del reloj</string>
+    <string name="capturing_screenshot">Capturando pantalla...</string>
+    <string name="remove_n_files">Eliminar %1$d archivo(s)</string>
+    <string name="add_images">Añadir imágenes</string>
+    <string name="my_bug_reports">Mis informes de error</string>
+    <string name="sign_in_with_google">Iniciar sesión con Google</string>
+    <string name="report_with_subject">Informe: %1$s</string>
+    <string name="attach_files">Adjuntar archivos</string>
+    <string name="attach_more_logs">Adjuntar más registros</string>
+    <string name="onboarding_signin_backup">Inicia sesión para hacer una copia de seguridad de tu cuenta Pebble: aplicaciones, ajustes, etc.</string>
+    <string name="default_notes_reminders">Notas y recordatorios predeterminados</string>
+    <string name="notification_shortcut">Atajo de notificación</string>
+    <string name="music_play_pause">Reproducir/Pausar música</string>
+    <string name="secondary_action">Acción secundaria</string>
+    <string name="not_working_report_bug">¿No funciona? Informa de un error</string>
+    <string name="no_action_taken">Sin acción</string>
+    <string name="thinking_ellipsis">Pensando...</string>
+    <string name="waiting_pebble_restart">Esperando a que tu Pebble se reinicie..</string>
+    <string name="waiting_pebble_connect">Esperando a que tu Pebble se conecte..</string>
+    <string name="checking_pebbleos_updates">Buscando actualizaciones de PebbleOS..</string>
+    <string name="updating_pebbleos">Actualizando tu reloj a la última versión de PebbleOS...</string>
+    <string name="once_pebble_connected">Cuando tu Pebble esté conectado, lo configuraremos</string>
+    <string name="install_language_pack">Instalar un paquete de idioma</string>
+    <string name="installing_language_pack">Instalando %1$s</string>
+    <string name="currently_installed_lang">Instalado actualmente: %1$s</string>
+    <string name="configure_your_watch">Configura tu reloj</string>
+    <string name="speech_recognition">Reconocimiento de voz</string>
+    <string name="configure_more_in_settings">Configura más en Ajustes</string>
+</resources>

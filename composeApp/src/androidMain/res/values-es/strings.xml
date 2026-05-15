@@ -1,0 +1,4 @@
+<resources>
+    <string name="intent_filter_notion_login">Vinculación de Notion</string>
+    <string name="foreground_notification_text">Manteniendo la conexión con Pebble</string>
+</resources>
