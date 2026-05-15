@@ -147,6 +147,7 @@ class BugReportProcessor(
             val lastSuccessfulMode = when (transcriptionService.lastSuccessfulMode) {
                 CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> "Local"
                 CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
+                CactusSTTMode.RebbleOnly, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback -> "Rebble"
                 null -> "None"
             }
             "\nSTT Summary\n" +

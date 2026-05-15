@@ -36,6 +36,9 @@ import coredevices.pebble.services.PebbleHttpClient
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.RealAppstoreCache
 import coredevices.pebble.services.RealPebbleWebServices
+import coredevices.pebble.services.RebbleAsrService
+import coredevices.pebble.services.RebbleAsrTranscription
+import coredevices.pebble.services.STTRouter
 import coredevices.pebble.ui.AppStoreCollectionScreenViewModel
 import coredevices.pebble.ui.AppstoreSettingsScreenViewModel
 import coredevices.pebble.ui.ContactsViewModel
@@ -211,11 +214,21 @@ val watchModule = module {
             }
         }
     }
+    singleOf(::RebbleAsrService)
     single {
         CactusTranscription(
             get(),
             lazy { get<LibPebble3>() },
             get(),
+        )
+    }
+    singleOf(::RebbleAsrTranscription)
+    single {
+        STTRouter(
+            cactus = get(),
+            rebble = get(),
+            cactusService = get(),
+            coreConfigFlow = get(),
         )
     } bind TranscriptionProvider::class
 

@@ -24,6 +24,7 @@ data class BootConfig(
         val notifications: Notifications,
         val links: Links,
         val cohorts: Cohorts,
+        val voice: Voice? = null,
     ) {
         @Serializable
         data class Locker(
@@ -63,6 +64,22 @@ data class BootConfig(
         data class Cohorts(
             val endpoint: String
         )
+
+        @Serializable
+        data class Voice(
+            @SerialName("first_party_uuids")
+            val firstPartyUuids: List<String> = emptyList(),
+            val languages: List<Language> = emptyList(),
+        ) {
+            @Serializable
+            data class Language(
+                val endpoint: String,
+                @SerialName("four_char_locale")
+                val fourCharLocale: String,
+                @SerialName("six_char_locale")
+                val sixCharLocale: String,
+            )
+        }
     }
 }
 

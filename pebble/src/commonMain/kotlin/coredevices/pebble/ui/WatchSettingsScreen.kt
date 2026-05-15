@@ -108,6 +108,7 @@ import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
+import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
@@ -439,6 +440,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             value = modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
         }
     }
+    val bootConfigProvider: BootConfigProvider = koinInject()
+    val rebbleVoiceAvailable by produceState(false, loggedIn) {
+        value = withContext(Dispatchers.Default) {
+            loggedIn != null && (bootConfigProvider.getBootConfig()?.config?.voice?.languages?.isNotEmpty() == true)
+        }
+    }
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
     val weatherFetcher: WeatherFetcher = koinInject()
@@ -470,6 +477,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             experimentalDevices,
             loggedIn,
             watchPrefs,
+            rebbleVoiceAvailable,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -1312,16 +1320,33 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsDropdownItem(
                     id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",
-                    keywords = "cactus stt speech recognition offline",
+                    keywords = "cactus stt speech recognition offline rebble",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
-                    items = CactusSTTMode.entries,
+                    items = CactusSTTMode.entries.filter { mode ->
+                        when (mode) {
+                            CactusSTTMode.RebbleOnly,
+                            CactusSTTMode.RebbleFirst,
+                            CactusSTTMode.RebbleFallback -> rebbleVoiceAvailable
+                            else -> true
+                        }
+                    },
                     selectedItem = coreConfig.sttConfig.mode,
                     onItemSelected = {
-                        if (it != CactusSTTMode.LocalOnly && coreUser == null ) {
+                        val isRebble = it == CactusSTTMode.RebbleOnly ||
+                                it == CactusSTTMode.RebbleFirst ||
+                                it == CactusSTTMode.RebbleFallback
+                        val needsLocal = it == CactusSTTMode.LocalOnly ||
+                                it == CactusSTTMode.LocalFirst ||
+                                it == CactusSTTMode.RebbleFirst ||
+                                it == CactusSTTMode.RebbleFallback
+                        if (isRebble && !rebbleVoiceAvailable) {
+                            snackbarDisplay.showSnackbar("Rebble speech recognition requires a Rebble subscription")
+                            showSignInDialog = true
+                        } else if (it != CactusSTTMode.LocalOnly && !isRebble && coreUser == null) {
                             snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
                             showSignInDialog = true
-                        } else if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {
+                        } else if (needsLocal && !hasOfflineModels) {
                             pendingSTTModeDialog = it
                         } else {
                             coreConfigHolder.update(
@@ -1339,6 +1364,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             CactusSTTMode.RemoteFirst -> "Cloud (with Local Fallback)"
                             CactusSTTMode.LocalOnly -> "Local Only"
                             CactusSTTMode.LocalFirst -> "Local (with Cloud Fallback)"
+                            CactusSTTMode.RebbleOnly -> "Rebble Only"
+                            CactusSTTMode.RebbleFirst -> "Rebble (with Local Fallback)"
+                            CactusSTTMode.RebbleFallback -> "Local (with Rebble Fallback)"
                         }
                     },
                     extraSupportingContent = {
@@ -1353,7 +1381,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Manage Offline Models",
-                    description = if (coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly) {
+                    description = if (coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly ||
+                        coreConfig.sttConfig.mode == CactusSTTMode.RebbleFallback) {
                         "Note: Offline speech recognition is lower accuracy, consider using" +
                                 "'Fallback only' mode to improve results when online"
                     } else {
@@ -1362,7 +1391,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     keywords = "cactus stt speech recognition offline",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
-                    show = { coreConfig.sttConfig.mode != CactusSTTMode.RemoteOnly || hasOfflineModels },
+                    show = {
+                        coreConfig.sttConfig.mode !in setOf(
+                            CactusSTTMode.RemoteOnly,
+                            CactusSTTMode.RebbleOnly,
+                        ) || hasOfflineModels
+                    },
                     action = {
                         nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
