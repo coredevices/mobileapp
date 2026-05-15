@@ -70,6 +70,14 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.default_notes_reminders
+import coreapp.composeapp.generated.resources.music_play_pause
+import coreapp.composeapp.generated.resources.no_action_taken
+import coreapp.composeapp.generated.resources.not_working_report_bug
+import coreapp.composeapp.generated.resources.notification_shortcut
+import coreapp.composeapp.generated.resources.secondary_action
+import coreapp.composeapp.generated.resources.thinking_ellipsis
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.LibIndex
 import coredevices.libindex.database.dao.RingTransferDao
@@ -100,6 +108,7 @@ import coredevices.ui.PebbleElevatedButton
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import theme.onboardingScheme
@@ -204,7 +213,7 @@ fun RingOnboardingScreen(
                     Spacer(modifier = Modifier.height(15.dp))
 
                     // --- Notification integration section ---
-                    SectionText("Default Notes & Reminders")
+                    SectionText(stringResource(Res.string.default_notes_reminders))
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         "Choose where your notes and reminders are saved by default.",
@@ -226,7 +235,7 @@ fun RingOnboardingScreen(
 
                     ListItem(
                         modifier = Modifier.clickable { viewModel.showNoteShortcutDialog() },
-                        headlineContent = { Text("Notification Shortcut") },
+                        headlineContent = { Text(stringResource(Res.string.notification_shortcut)) },
                         supportingContent = {
                             Text(
                                 when (val shortcut = noteShortcut) {
@@ -241,7 +250,7 @@ fun RingOnboardingScreen(
                     SectionDivider()
 
                     // --- Button Actions section ---
-                    SectionText("Music Play/Pause")
+                    SectionText(stringResource(Res.string.music_play_pause))
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         "Single or double click without holding to play/pause music on your phone.",
@@ -282,7 +291,7 @@ fun RingOnboardingScreen(
 
                     SectionDivider()
 
-                    SectionText("Secondary action")
+                    SectionText(stringResource(Res.string.secondary_action))
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         "You can click before holding to perform a secondary action with your voice.",
@@ -356,7 +365,7 @@ private fun RingDemo(
             },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Not working? Report a bug", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
+            Text(stringResource(Res.string.not_working_report_bug), fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f))
             Spacer(Modifier.width(4.dp))
             Icon(
                 Icons.AutoMirrored.Filled.OpenInNew,
@@ -494,9 +503,9 @@ private fun RingDemo(
                                 feedItem?.semanticResult != null ->
                                     SemanticResultActionTaken(feedItem.semanticResult!!)
                                 entryStatus == RecordingEntryStatus.transcription_error ->
-                                    Text("No action taken")
+                                    Text(stringResource(Res.string.no_action_taken))
                                 else ->
-                                    Text("Thinking...")
+                                    Text(stringResource(Res.string.thinking_ellipsis))
                             }
                         }
                     }

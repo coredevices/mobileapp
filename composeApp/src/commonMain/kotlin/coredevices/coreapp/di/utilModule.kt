@@ -42,6 +42,8 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import locale.LocaleProvider
+import locale.RealLocaleProvider
 import theme.RealThemeProvider
 import theme.ThemeProvider
 
@@ -63,6 +65,7 @@ val utilModule = module {
     singleOf(::PushMessaging)
     singleOf(::CoreDeepLinkHandler)
     singleOf(::RealThemeProvider) bind ThemeProvider::class
+    singleOf(::RealLocaleProvider) bind LocaleProvider::class
     single { Settings() }
     viewModelOf(::OnboardingViewModel)
     singleOf(::EnableExperimentalDevices)

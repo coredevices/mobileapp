@@ -39,6 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.my_bug_reports
+import coreapp.composeapp.generated.resources.sign_in_with_google
 import coredevices.coreapp.api.AtlasTicketDetails
 import coredevices.coreapp.api.BugReports
 import coredevices.util.auth.GoogleAuthUtil
@@ -48,6 +51,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -107,7 +111,7 @@ fun BugReportsListScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("My Bug Reports") },
+                    title = { Text(stringResource(Res.string.my_bug_reports)) },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
@@ -158,7 +162,7 @@ fun BugReportsListScreen(
                                 // Show sign in button if user is not authenticated
                                 if (user == null) {
                                     Button(onClick = { signIn() }) {
-                                        Text("Sign in with Google")
+                                        Text(stringResource(Res.string.sign_in_with_google))
                                     }
                                 } else {
                                     // Show refresh button if user is authenticated but there was an error

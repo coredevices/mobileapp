@@ -51,6 +51,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.checking_pebbleos_updates
+import coreapp.composeapp.generated.resources.configure_more_in_settings
+import coreapp.composeapp.generated.resources.configure_your_watch
+import coreapp.composeapp.generated.resources.currently_installed_lang
+import coreapp.composeapp.generated.resources.install_language_pack
+import coreapp.composeapp.generated.resources.installing_language_pack
+import coreapp.composeapp.generated.resources.once_pebble_connected
+import coreapp.composeapp.generated.resources.speech_recognition
+import coreapp.composeapp.generated.resources.updating_pebbleos
+import coreapp.composeapp.generated.resources.waiting_pebble_connect
+import coreapp.composeapp.generated.resources.waiting_pebble_restart
 import coredevices.pebble.Platform
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.PebbleWebServices
@@ -97,6 +109,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import theme.AppTheme
 import theme.onboardingScheme
@@ -165,9 +178,9 @@ fun WatchOnboardingScreen(
                     if (connectedWatch == null) {
                         haveStartedFwupSinceLastConnection = false
                         if (haveUpdatedFirmware) {
-                            SectionText("Waiting for your Pebble to restart..")
+                            SectionText(stringResource(Res.string.waiting_pebble_restart))
                         } else {
-                            SectionText("Waiting for your Pebble to connect..")
+                            SectionText(stringResource(Res.string.waiting_pebble_connect))
                         }
 
                         Spacer(modifier = Modifier.height(15.dp))
@@ -176,7 +189,7 @@ fun WatchOnboardingScreen(
                     if (connectedWatch is ConnectedPebbleDeviceInRecovery) {
                         val firmwareUpdateAvailable = connectedWatch.firmwareUpdateAvailable.result
                         if (firmwareUpdateAvailable !is FirmwareUpdateCheckResult.FoundUpdate) {
-                            SectionText("Checking for PebbleOS updates..")
+                            SectionText(stringResource(Res.string.checking_pebbleos_updates))
 
                             Spacer(modifier = Modifier.height(15.dp))
 
@@ -197,7 +210,7 @@ fun WatchOnboardingScreen(
                             }
                         }
 
-                        SectionText("Updating your watch to the latest version of PebbleOS...")
+                        SectionText(stringResource(Res.string.updating_pebbleos))
                         Spacer(modifier = Modifier.height(15.dp))
                         val progress = (connectedWatch.firmwareUpdateState as? FirmwareUpdater.FirmwareUpdateStatus.InProgress)?.progress?.collectAsState()
                         if (progress != null) {
@@ -210,7 +223,7 @@ fun WatchOnboardingScreen(
                     }
 
                     if (connectedWatch !is ConnectedPebbleDevice) {
-                        SectionText("Once your Pebble is connected, we'll get it set up")
+                        SectionText(stringResource(Res.string.once_pebble_connected))
 
                         Spacer(modifier = Modifier.height(15.dp))
 
@@ -246,13 +259,13 @@ fun WatchOnboardingScreen(
                         val languagePackInstalled = connectedWatch.languagePackInstalled()
                         val installingLanguagePack =
                             connectedWatch.languagePackInstallState.installing()
-                        SectionText("Install a language pack")
+                        SectionText(stringResource(Res.string.install_language_pack))
                         Spacer(modifier = Modifier.height(15.dp))
                         if (installingLanguagePack != null) {
-                            Text("Installing $installingLanguagePack")
+                            Text(stringResource(Res.string.installing_language_pack, installingLanguagePack))
                             Spacer(modifier = Modifier.height(15.dp))
                         } else if (languagePackInstalled != null) {
-                            Text("Currently installed: $languagePackInstalled")
+                            Text(stringResource(Res.string.currently_installed_lang, languagePackInstalled))
                             Spacer(modifier = Modifier.height(15.dp))
                         }
                         val languagePackInstallState = connectedWatch.languagePackInstallState as? LanguagePackInstallState.Installing
@@ -282,7 +295,7 @@ fun WatchOnboardingScreen(
 
                         // Support settings sync
                         if (connectedWatch.capabilities.contains(ProtocolCapsFlag.SupportsBlobDbVersion)) {
-                            SectionText("Configure your watch")
+                            SectionText(stringResource(Res.string.configure_your_watch))
                             Spacer(modifier = Modifier.height(15.dp))
 
                             settings.Show(BoolWatchPref.Clock24h.id)
@@ -302,13 +315,13 @@ fun WatchOnboardingScreen(
                         }
 
                         if (connectedWatch.capabilities.contains(ProtocolCapsFlag.SupportsAppDictation)) {
-                            SectionText("Speech Recognition")
+                            SectionText(stringResource(Res.string.speech_recognition))
                             Spacer(modifier = Modifier.height(15.dp))
                             settings.Show(OfflineSpeechRecognition)
                             SectionDivider()
                         }
 
-                        Text("Configure more in Settings", textAlign = TextAlign.Center)
+                        Text(stringResource(Res.string.configure_more_in_settings), textAlign = TextAlign.Center)
                         SectionDivider()
 
                         PebbleElevatedButton(

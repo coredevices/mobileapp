@@ -1,4 +1,40 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <resources>
-
+    <string name="bug_report">Bug Report</string>
+    <string name="report_sent">Report Sent!</string>
+    <string name="send_report">Send Report</string>
+    <string name="please_describe_bug">Please describe the bug</string>
+    <string name="this_is_a">This is a:</string>
+    <string name="index_bug">Index bug</string>
+    <string name="watch_bug">Watch bug</string>
+    <string name="must_sign_in_submit_report">You must sign in to submit a bug report</string>
+    <string name="sign_in">Sign In</string>
+    <string name="take_watch_screenshot">Take Watch Screenshot</string>
+    <string name="capturing_screenshot">Capturing screenshot...</string>
+    <string name="remove_n_files">Remove %1$d file(s)</string>
+    <string name="add_images">Add Images</string>
+    <string name="my_bug_reports">My Bug Reports</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="report_with_subject">Report: %1$s</string>
+    <string name="attach_files">Attach Files</string>
+    <string name="attach_more_logs">Attach More Logs</string>
+    <string name="onboarding_signin_backup">Sign in to backup your Pebble account to backup apps, settings, etc</string>
+    <string name="default_notes_reminders">Default Notes &amp; Reminders</string>
+    <string name="notification_shortcut">Notification Shortcut</string>
+    <string name="music_play_pause">Music Play/Pause</string>
+    <string name="secondary_action">Secondary action</string>
+    <string name="not_working_report_bug">Not working? Report a bug</string>
+    <string name="no_action_taken">No action taken</string>
+    <string name="thinking_ellipsis">Thinking...</string>
+    <string name="waiting_pebble_restart">Waiting for your Pebble to restart..</string>
+    <string name="waiting_pebble_connect">Waiting for your Pebble to connect..</string>
+    <string name="checking_pebbleos_updates">Checking for PebbleOS updates..</string>
+    <string name="updating_pebbleos">Updating your watch to the latest version of PebbleOS...</string>
+    <string name="once_pebble_connected">Once your Pebble is connected, we\'ll get it set up</string>
+    <string name="install_language_pack">Install a language pack</string>
+    <string name="installing_language_pack">Installing %1$s</string>
+    <string name="currently_installed_lang">Currently installed: %1$s</string>
+    <string name="configure_your_watch">Configure your watch</string>
+    <string name="speech_recognition">Speech Recognition</string>
+    <string name="configure_more_in_settings">Configure more in Settings</string>
 </resources>

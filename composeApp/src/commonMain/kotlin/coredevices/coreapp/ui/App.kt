@@ -10,6 +10,7 @@ import com.russhwolf.settings.Settings
 import coredevices.coreapp.ui.navigation.AppNavHost
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.pebble.ui.PebbleRoutes
+import locale.LocalizedApp
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import theme.AppTheme
@@ -28,13 +29,15 @@ fun App() {
             navHostController.removeOnDestinationChangedListener(listener)
         }
     }
-    AppTheme {
-        val settings: Settings = koinInject()
-        val startDestination = if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
-            PebbleRoutes.WatchHomeRoute
-        } else {
-            CommonRoutes.OnboardingRoute
+    LocalizedApp {
+        AppTheme {
+            val settings: Settings = koinInject()
+            val startDestination = if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
+                PebbleRoutes.WatchHomeRoute
+            } else {
+                CommonRoutes.OnboardingRoute
+            }
+            AppNavHost(navHostController, startDestination)
         }
-        AppNavHost(navHostController, startDestination)
     }
 }

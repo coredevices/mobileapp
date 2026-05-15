@@ -38,7 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
-import coreapp.util.generated.resources.Res
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.attach_files
+import coreapp.composeapp.generated.resources.attach_more_logs
+import coreapp.composeapp.generated.resources.report_with_subject
+import coreapp.util.generated.resources.Res as UtilRes
 import coreapp.util.generated.resources.back
 import coredevices.coreapp.api.BugReports
 import coredevices.pebble.Platform
@@ -104,12 +108,12 @@ fun ViewBugReportScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Report: $subject", maxLines = 1, fontSize = 17.sp) },
+                    title = { Text(stringResource(Res.string.report_with_subject, subject), maxLines = 1, fontSize = 17.sp) },
                     navigationIcon = {
                         IconButton(onClick = coreNav::goBack) {
                             Icon(
                                 Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = stringResource(Res.string.back),
+                                contentDescription = stringResource(UtilRes.string.back),
                             )
                         }
                     },
@@ -124,7 +128,7 @@ fun ViewBugReportScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     ElevatedAssistChip(
-                        label = { Text("Attach Files") },
+                        label = { Text(stringResource(Res.string.attach_files)) },
                         onClick = {
                             ticket?.let {
                                 launchAttachmentDialog(listOf("*/*"))
@@ -140,7 +144,7 @@ fun ViewBugReportScreen(
                         elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),
                     )
                     ElevatedAssistChip(
-                        label = { Text("Attach More Logs") },
+                        label = { Text(stringResource(Res.string.attach_more_logs)) },
                         onClick = {
                             ticket?.let {
                                 requestedMoreLogs = true

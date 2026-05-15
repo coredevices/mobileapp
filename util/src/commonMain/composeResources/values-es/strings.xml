@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="back">Atrás</string>
+    <string name="settings">Ajustes</string>
+    <string name="light">Claro</string>
+    <string name="dark">Oscuro</string>
+    <string name="system">Sistema</string>
+    <string name="english">Inglés</string>
+    <string name="spanish">Español</string>
+</resources>
