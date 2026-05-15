@@ -197,6 +197,10 @@ fun gradleStringPropOrNull(name: String): String? {
     return prop
 }
 
+val googleAuthEnabled = (properties["googleAuthEnabled"] ?: project.properties["googleAuthEnabled"] ?: System.getenv("googleAuthEnabled")) == "true"
+val appleAuthEnabled = (properties["appleAuthEnabled"] ?: project.properties["appleAuthEnabled"] ?: System.getenv("appleAuthEnabled")) == "true"
+val githubAuthEnabled = (properties["githubAuthEnabled"] ?: project.properties["githubAuthEnabled"] ?: System.getenv("githubAuthEnabled")) == "true"
+
 buildkonfig {
     packageName = "coredevices.util"
     objectName = "CommonBuildKonfig"
@@ -212,6 +216,9 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "WISPR_AUTH_URL", gradleStringPropOrNull("wisprAuthUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GOOGLE_AUTH_ENABLED", googleAuthEnabled.toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "APPLE_AUTH_ENABLED", appleAuthEnabled.toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", githubAuthEnabled.toString())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "Qwen3-0.6B")
