@@ -247,6 +247,29 @@ internal fun buildWeekdayTypicalsFromData(
  * Returns one entry per weekday that has at least [MIN_DAYS_FOR_TYPICAL] distinct matching days
  * in the queried window. Empty map when there's no data or no weekday clears the threshold.
  */
+/**
+ * Sums the 96 little-endian UShort step counts in a typical-step payload, skipping the
+ * UNKNOWN sentinel — i.e., "total typical steps for the day represented by this payload."
+ *
+ * Used by the debug stats dialog to surface the per-weekday typical totals; mirrors the
+ * watch firmware's [`prv_cur_step_avg`](activity_insights.c:1143) which sums the same
+ * array.
+ */
+internal fun decodeTypicalStepTotal(payload: ByteArray): Int {
+    require(payload.size == TYPICAL_STEP_BINS * UShort.SIZE_BYTES) {
+        "typical-step payload must be ${TYPICAL_STEP_BINS * UShort.SIZE_BYTES} bytes, got ${payload.size}"
+    }
+    var total = 0
+    for (slot in 0 until TYPICAL_STEP_BINS) {
+        val byteOffset = slot * 2
+        val lo = payload[byteOffset].toInt() and 0xFF
+        val hi = payload[byteOffset + 1].toInt() and 0xFF
+        val v = (hi shl 8) or lo
+        if (v != UNKNOWN_TYPICAL_STEPS.toInt()) total += v
+    }
+    return total
+}
+
 internal suspend fun computeAllWeekdayTypicalSteps(
     healthDao: HealthDao,
     today: LocalDate,
