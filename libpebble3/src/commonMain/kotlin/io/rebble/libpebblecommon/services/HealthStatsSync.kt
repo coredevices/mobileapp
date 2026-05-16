@@ -34,6 +34,11 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToLong
+import kotlin.math.sin
 
 private val logger = Logger.withTag("HealthStatsSync")
 
@@ -299,7 +304,59 @@ internal fun buildWeekdaySleepTypicalsFromData(
     timeZone: TimeZone,
 ): Map<DayOfWeek, WeekdaySleepTypicals> {
     if (dailySleepByDate.isEmpty()) return emptyMap()
-    return emptyMap()
+
+    data class NightStats(
+        val totalSec: Int,
+        val deepSec: Int,
+        val startSecOfDay: Int,
+        val endSecOfDay: Int,
+    )
+
+    val perWeekday = mutableMapOf<DayOfWeek, MutableList<NightStats>>()
+    for ((date, dailySleep) in dailySleepByDate) {
+        if (dailySleep == null) continue
+        val qualifying = dailySleep.sessions.filter { it.totalSleep >= MIN_SLEEP_SESSION_SECONDS }
+        if (qualifying.isEmpty()) continue
+        val totalSec = qualifying.sumOf { it.totalSleep }.toInt()
+        val deepSec = qualifying.sumOf { it.deepSleep }.toInt()
+        val startSecOfDay = secondsOfDay(qualifying.first().start, timeZone)
+        val endSecOfDay = secondsOfDay(qualifying.last().end, timeZone)
+        perWeekday
+            .getOrPut(date.dayOfWeek) { mutableListOf() }
+            .add(NightStats(totalSec, deepSec, startSecOfDay, endSecOfDay))
+    }
+
+    val result = mutableMapOf<DayOfWeek, WeekdaySleepTypicals>()
+    for ((wd, nights) in perWeekday) {
+        if (nights.size < MIN_DAYS_FOR_TYPICAL_SLEEP) continue
+        val sleepMean = (nights.sumOf { it.totalSec.toLong() } / nights.size).toInt()
+        val deepMean = (nights.sumOf { it.deepSec.toLong() } / nights.size).toInt()
+        val fallAsleepMean = circularMeanSecondsOfDay(nights.map { it.startSecOfDay })
+        val wakeupMean = circularMeanSecondsOfDay(nights.map { it.endSecOfDay })
+        result[wd] = WeekdaySleepTypicals(sleepMean, deepMean, fallAsleepMean, wakeupMean)
+    }
+    return result
+}
+
+private fun secondsOfDay(epochSec: Long, timeZone: TimeZone): Int {
+    val ldt = kotlinx.datetime.Instant.fromEpochSeconds(epochSec).toLocalDateTime(timeZone)
+    return ldt.hour * 3600 + ldt.minute * 60 + ldt.second
+}
+
+private fun circularMeanSecondsOfDay(values: List<Int>): Int {
+    if (values.isEmpty()) return 0
+    val twoPi = 2 * PI
+    val secondsPerDay = SECONDS_PER_DAY.toDouble()
+    var sumX = 0.0
+    var sumY = 0.0
+    for (v in values) {
+        val angle = v / secondsPerDay * twoPi
+        sumX += cos(angle)
+        sumY += sin(angle)
+    }
+    val meanAngle = atan2(sumY, sumX)  // returns [-π, π]
+    val secs = (meanAngle / twoPi * secondsPerDay).roundToLong()
+    return (((secs % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY).toInt()
 }
 
 // Extension functions
