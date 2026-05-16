@@ -10,5 +10,8 @@ fun healthDebugStatsToJson(stats: HealthDebugStats): String {
     val latestTs = stats.latestDataTimestamp?.toString() ?: "null"
     val typicalSteps = stats.weekdayTypicalSteps.entries
         .joinToString(prefix = "{", postfix = "}") { (wd, total) -> "\"$wd\":$total" }
-    return """{"totalSteps30Days":${stats.totalSteps30Days},"averageStepsPerDay":${stats.averageStepsPerDay},"totalSleepSeconds30Days":${stats.totalSleepSeconds30Days},"averageSleepSecondsPerDay":${stats.averageSleepSecondsPerDay},"todaySteps":${stats.todaySteps},"lastNightSleepHours":$lastNight,"latestDataTimestamp":$latestTs,"daysOfData":${stats.daysOfData},"weekdayTypicalSteps":$typicalSteps}"""
+    val typicalSleep = stats.weekdayTypicalSleep.entries.joinToString(prefix = "{", postfix = "}") { (wd, v) ->
+        "\"$wd\":{\"sleepDurationSeconds\":${v.sleepDurationSeconds},\"deepSleepDurationSeconds\":${v.deepSleepDurationSeconds},\"fallAsleepSecondsOfDay\":${v.fallAsleepSecondsOfDay},\"wakeupSecondsOfDay\":${v.wakeupSecondsOfDay}}"
+    }
+    return """{"totalSteps30Days":${stats.totalSteps30Days},"averageStepsPerDay":${stats.averageStepsPerDay},"totalSleepSeconds30Days":${stats.totalSleepSeconds30Days},"averageSleepSecondsPerDay":${stats.averageSleepSecondsPerDay},"todaySteps":${stats.todaySteps},"lastNightSleepHours":$lastNight,"latestDataTimestamp":$latestTs,"daysOfData":${stats.daysOfData},"weekdayTypicalSteps":$typicalSteps,"weekdayTypicalSleep":$typicalSleep}"""
 }
