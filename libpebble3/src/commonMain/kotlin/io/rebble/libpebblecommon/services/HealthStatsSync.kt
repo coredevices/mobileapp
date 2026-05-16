@@ -354,3 +354,15 @@ private val STEP_TYPICAL_KEYS = mapOf(
     DayOfWeek.SATURDAY to "saturday_steps",
     DayOfWeek.SUNDAY to "sunday_steps",
 )
+
+internal data class WeekdaySleepTypicals(
+    val sleepDurationSeconds: Int,
+    val deepSleepDurationSeconds: Int,
+    val fallAsleepSecondsOfDay: Int,
+    val wakeupSecondsOfDay: Int,
+)
+
+private const val MIN_DAYS_FOR_TYPICAL_SLEEP = 2
+private const val TYPICAL_SLEEP_HISTORY_WEEKS = 7
+private const val MIN_SLEEP_SESSION_SECONDS = 1800L
+private const val SECONDS_PER_DAY = 86_400
