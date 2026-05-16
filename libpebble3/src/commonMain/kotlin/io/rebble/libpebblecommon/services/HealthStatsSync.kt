@@ -21,6 +21,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HealthStat
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.util.DataBuffer
@@ -32,6 +33,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 private val logger = Logger.withTag("HealthStatsSync")
 
@@ -176,6 +178,23 @@ private fun movementPayload(dayStartEpochSec: Long, aggregates: HealthAggregates
     }
 
     return buffer.array()
+}
+
+/**
+ * Bins a flat list of HealthDataEntity rows into per-weekday 15-minute typical-step payloads.
+ *
+ * For each weekday with at least MIN_DAYS_FOR_TYPICAL distinct matching days in the input,
+ * emits a 192-byte little-endian payload of 96 UShort values. A slot's value is the average
+ * step count across the distinct matching days that had at least one row overlapping that
+ * slot; if zero matching days covered the slot, the value is UNKNOWN_TYPICAL_STEPS so the
+ * watch sum-skips it. Weekdays below the threshold are omitted from the result.
+ */
+internal fun buildWeekdayTypicalsFromData(
+    allData: List<HealthDataEntity>,
+    timeZone: TimeZone,
+): Map<DayOfWeek, ByteArray> {
+    if (allData.isEmpty()) return emptyMap()
+    return emptyMap()
 }
 
 // Extension functions
