@@ -78,6 +78,12 @@ class HealthStatsSyncTest {
     }
 
     @Test
+    fun buildWeekdaySleepTypicalsFromData_emptyInput_returnsEmptyMap() {
+        val result = buildWeekdaySleepTypicalsFromData(emptyMap(), TimeZone.UTC)
+        assertTrue(result.isEmpty(), "empty input should produce empty map, got keys=${result.keys}")
+    }
+
+    @Test
     fun buildWeekdayTypicalsFromData_partialSlotCoverage_avgIsPerSlotNotPerDay() {
         // Five Mondays: each contributes 100 steps in slot 60. Two more Mondays exist
         // (with rows in OTHER slots) so they count toward matchingDays but NOT toward
@@ -121,3 +127,30 @@ private fun row(timestamp: Long, steps: Int) = HealthDataEntity(
     activeGramCalories = 0,
     distanceCm = 0,
 )
+
+private fun session(
+    startEpochSec: Long,
+    endEpochSec: Long,
+    totalSec: Long = endEpochSec - startEpochSec,
+    deepSec: Long = 0L,
+): SleepSession = SleepSession(
+    start = startEpochSec,
+    end = endEpochSec,
+    totalSleep = totalSec,
+    deepSleep = deepSec,
+    intervals = mutableListOf(),
+)
+
+private fun nightSleepMulti(sessions: List<SleepSession>): DailySleep =
+    DailySleep(
+        sessions = sessions,
+        totalSleep = sessions.sumOf { it.totalSleep },
+        deepSleep = sessions.sumOf { it.deepSleep },
+    )
+
+private fun nightSleep(
+    startEpochSec: Long,
+    endEpochSec: Long,
+    totalSec: Long = endEpochSec - startEpochSec,
+    deepSec: Long = 0L,
+): DailySleep = nightSleepMulti(listOf(session(startEpochSec, endEpochSec, totalSec, deepSec)))
