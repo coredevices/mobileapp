@@ -194,7 +194,41 @@ internal fun buildWeekdayTypicalsFromData(
     timeZone: TimeZone,
 ): Map<DayOfWeek, ByteArray> {
     if (allData.isEmpty()) return emptyMap()
-    return emptyMap()
+
+    val slotSteps = Array(7) { LongArray(TYPICAL_STEP_BINS) }
+    val slotDays = Array(7) { Array(TYPICAL_STEP_BINS) { mutableSetOf<Long>() } }
+    val matchingDays = Array(7) { mutableSetOf<Long>() }
+
+    for (entry in allData) {
+        val entryDate = kotlinx.datetime.Instant.fromEpochSeconds(entry.timestamp)
+            .toLocalDateTime(timeZone).date
+        val wd = entryDate.dayOfWeek.ordinal
+        val dayStart = entryDate.atStartOfDayIn(timeZone).epochSeconds
+        val slot = ((entry.timestamp - dayStart) / TYPICAL_STEP_BIN_SECONDS)
+            .toInt()
+            .coerceIn(0, TYPICAL_STEP_BINS - 1)
+        slotSteps[wd][slot] += entry.steps.toLong()
+        slotDays[wd][slot].add(dayStart)
+        matchingDays[wd].add(dayStart)
+    }
+
+    val result = mutableMapOf<DayOfWeek, ByteArray>()
+    for (wd in 0..6) {
+        if (matchingDays[wd].size < MIN_DAYS_FOR_TYPICAL) continue
+        val buffer = DataBuffer(TYPICAL_STEP_BINS * UShort.SIZE_BYTES)
+            .apply { setEndian(Endian.Little) }
+        for (slot in 0 until TYPICAL_STEP_BINS) {
+            val count = slotDays[wd][slot].size
+            val value: UShort = if (count == 0) {
+                UNKNOWN_TYPICAL_STEPS
+            } else {
+                (slotSteps[wd][slot] / count).coerceIn(0L, 0xFFFEL).toInt().toUShort()
+            }
+            buffer.putUShort(value)
+        }
+        result[DayOfWeek.entries[wd]] = buffer.array().toByteArray()
+    }
+    return result
 }
 
 // Extension functions
