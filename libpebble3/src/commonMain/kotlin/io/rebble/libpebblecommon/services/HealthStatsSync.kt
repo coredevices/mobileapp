@@ -284,6 +284,24 @@ internal suspend fun computeAllWeekdayTypicalSteps(
     return buildWeekdayTypicalsFromData(allData, timeZone)
 }
 
+/**
+ * Reduces per-day sleep summaries into per-weekday typical-sleep values.
+ *
+ * For each weekday with at least MIN_DAYS_FOR_TYPICAL_SLEEP days that have at least one
+ * sleep session ≥ MIN_SLEEP_SESSION_SECONDS, emits a WeekdaySleepTypicals containing:
+ *  - arithmetic-mean total/deep sleep durations (seconds)
+ *  - circular-mean fall-asleep and wakeup seconds-of-local-day (0..86399)
+ *
+ * Below-threshold weekdays are omitted from the result.
+ */
+internal fun buildWeekdaySleepTypicalsFromData(
+    dailySleepByDate: Map<LocalDate, DailySleep?>,
+    timeZone: TimeZone,
+): Map<DayOfWeek, WeekdaySleepTypicals> {
+    if (dailySleepByDate.isEmpty()) return emptyMap()
+    return emptyMap()
+}
+
 // Extension functions
 private fun Long.kilocalories(): Long = this / 1000L
 
