@@ -232,3 +232,19 @@ private val SLEEP_KEYS =
         DayOfWeek.SATURDAY to "saturday_sleepData",
         DayOfWeek.SUNDAY to "sunday_sleepData",
     )
+
+private const val TYPICAL_STEP_BINS = 96
+private const val TYPICAL_STEP_BIN_SECONDS = 900L
+private const val TYPICAL_STEP_HISTORY_WEEKS = 7
+private const val MIN_DAYS_FOR_TYPICAL = 2
+private const val UNKNOWN_TYPICAL_STEPS: UShort = 0xFFFFu
+
+private val STEP_TYPICAL_KEYS = mapOf(
+    DayOfWeek.MONDAY to "monday_steps",
+    DayOfWeek.TUESDAY to "tuesday_steps",
+    DayOfWeek.WEDNESDAY to "wednesday_steps",
+    DayOfWeek.THURSDAY to "thursday_steps",
+    DayOfWeek.FRIDAY to "friday_steps",
+    DayOfWeek.SATURDAY to "saturday_steps",
+    DayOfWeek.SUNDAY to "sunday_steps",
+)
