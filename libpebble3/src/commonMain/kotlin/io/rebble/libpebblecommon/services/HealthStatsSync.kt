@@ -129,6 +129,29 @@ internal suspend fun updateHealthStatsInDatabase(
         ))
     }
 
+    // The loop above skips today's weekday by design (incomplete current-day daily fields
+    // shouldn't overwrite the watch's accelerometer-tracked values). But today's weekday's
+    // _sleepData blob is exactly what the firmware reads for "today's typical sleep" on the
+    // sleep summary card, so without this extra write its typicals stay stale for a day.
+    // Send a typicals-only blob with last_processed_timestamp=0; firmware's
+    // prv_notify_health_listeners gates the in-memory daily-metric update on a valid
+    // timestamp and bails out, so the daily fields=0 don't corrupt today's tracked values.
+    // health_db_insert still stores the blob, so the typicals are readable.
+    SLEEP_KEYS[today.dayOfWeek]?.let { todaySleepKey ->
+        val todaySleepPayloadData = sleepPayload(
+            dayStartEpochSec = 0L,
+            sleepDuration = 0,
+            deepSleepDuration = 0,
+            fallAsleepTime = 0,
+            wakeupTime = 0,
+            typicals = sleepTypicals[today.dayOfWeek],
+        )
+        stats.add(HealthStat(
+            key = todaySleepKey,
+            payload = todaySleepPayloadData.toByteArray()
+        ))
+    }
+
     // Per-weekday typical-step blobs (consumed by firmware activity_insights for the
     // "X% above/below typical" comparison in the end-of-day activity summary notification).
     val typicalsByWeekday = computeAllWeekdayTypicalSteps(healthDao, today, timeZone)
