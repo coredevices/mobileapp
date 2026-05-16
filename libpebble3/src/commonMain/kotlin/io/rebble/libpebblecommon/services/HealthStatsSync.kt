@@ -117,6 +117,15 @@ internal suspend fun updateHealthStatsInDatabase(
         ))
     }
 
+    // Per-weekday typical-step blobs (consumed by firmware activity_insights for the
+    // "X% above/below typical" comparison in the end-of-day activity summary notification).
+    val typicalsByWeekday = computeAllWeekdayTypicalSteps(healthDao, today, timeZone)
+    for ((dayOfWeek, payload) in typicalsByWeekday) {
+        val key = STEP_TYPICAL_KEYS.getValue(dayOfWeek)
+        stats.add(HealthStat(key = key, payload = payload))
+    }
+    logger.d { "HEALTH_STATS: Wrote ${typicalsByWeekday.size} weekday typical-step rows" }
+
     // Batch insert all stats
     healthStatDao.insertOrReplace(stats)
     logger.d { "HEALTH_STATS: Updated ${stats.size} stats in database for automatic syncing" }
@@ -229,6 +238,27 @@ internal fun buildWeekdayTypicalsFromData(
         result[DayOfWeek.entries[wd]] = buffer.array().toByteArray()
     }
     return result
+}
+
+/**
+ * Queries the last [TYPICAL_STEP_HISTORY_WEEKS] weeks of HealthDataEntity rows (excluding today)
+ * and bins them into per-weekday 15-min typical-step payloads via [buildWeekdayTypicalsFromData].
+ *
+ * Returns one entry per weekday that has at least [MIN_DAYS_FOR_TYPICAL] distinct matching days
+ * in the queried window. Empty map when there's no data or no weekday clears the threshold.
+ */
+internal suspend fun computeAllWeekdayTypicalSteps(
+    healthDao: HealthDao,
+    today: LocalDate,
+    timeZone: TimeZone,
+): Map<DayOfWeek, ByteArray> {
+    val rangeEnd = today.atStartOfDayIn(timeZone).epochSeconds
+    val rangeStart = today
+        .minus(DatePeriod(days = TYPICAL_STEP_HISTORY_WEEKS * 7))
+        .atStartOfDayIn(timeZone)
+        .epochSeconds
+    val allData = healthDao.getHealthDataForRange(rangeStart, rangeEnd)
+    return buildWeekdayTypicalsFromData(allData, timeZone)
 }
 
 // Extension functions
