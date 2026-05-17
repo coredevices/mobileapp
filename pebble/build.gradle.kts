@@ -139,6 +139,7 @@ kotlin {
                 // commonMain by default and will correctly pull the Android artifacts of any KMP
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
+                implementation(libs.androidx.activity.compose)
             }
         }
 

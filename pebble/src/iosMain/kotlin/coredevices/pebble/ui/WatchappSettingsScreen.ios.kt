@@ -1,7 +1,9 @@
 package coredevices.pebble.ui
 
+import androidx.compose.runtime.Composable
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.web.NativeWebView
+import com.multiplatform.webview.web.PlatformWebViewParams
 import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.defaultWebViewFactory
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -32,3 +34,6 @@ internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
 internal actual fun persistLocalStorage(webView: NativeWebView) {
     // no-op
 }
+
+@Composable
+internal actual fun rememberWebViewFileChooserParams(): PlatformWebViewParams? = null
