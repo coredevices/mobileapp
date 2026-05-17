@@ -144,6 +144,7 @@ data class NotificationConfig(
      * Shown under "Canned messages" in the watch action menu.
      */
     val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
+    val overrideCalendarVibePattern: String? = null,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
