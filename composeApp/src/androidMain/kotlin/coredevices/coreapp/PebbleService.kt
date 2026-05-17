@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -19,7 +21,10 @@ import coredevices.ring.service.PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingSync
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.util.AudioRecorder
 import coredevices.util.R
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -30,14 +35,24 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.io.buffered
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 import org.koin.core.component.inject
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 class PebbleService: Service(), KoinComponent {
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "pebble"
         const val NOTIFICATION_CHANNEL_NAME = "Pebble Service"
         const val ACTION_STOP = "STOP"
+        const val ACTION_START_RECORDING = "coredevices.coreapp.ACTION_START_RECORDING"
+        const val ACTION_STOP_RECORDING = "coredevices.coreapp.ACTION_STOP_RECORDING"
+
+        private val VIBRATE_START = longArrayOf(0, 100)
+        private val VIBRATE_STOP = longArrayOf(0, 80, 60, 80)
 
         private val logger = Logger.withTag("PebbleService")
     }
@@ -51,17 +66,74 @@ class PebbleService: Service(), KoinComponent {
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
     private val indexNotificationManager: IndexNotificationManager by inject()
     private val recordingProcessingQueue: RecordingProcessingQueue by inject()
+    private val recordingStorage: RecordingStorage by inject()
     private val commonPrefs: Preferences by inject()
     private var ringObserverJob: Job? = null
     private var firstRingRun: Boolean = true
+    private var phoneRecordingJob: Job? = null
+    private var currentPhoneRecorder: AudioRecorder? = null
+    private var currentPhoneFileId: String? = null
 
+    @OptIn(ExperimentalUuidApi::class)
     private fun handleIntent(intent: Intent) {
         when (intent.action) {
             ACTION_STOP -> {
                 logger.i { "Stopping service due to intent request" }
                 stopSelf()
             }
+            ACTION_START_RECORDING -> {
+                if (phoneRecordingJob?.isActive == true) {
+                    logger.w { "Phone recording already in progress, ignoring start" }
+                    return
+                }
+                val fileId = "manual_recording-${Uuid.random()}"
+                currentPhoneFileId = fileId
+                logger.i { "Starting phone recording: $fileId" }
+                vibrate(VIBRATE_START)
+                phoneRecordingJob = scope.launch {
+                    val recorder = get<AudioRecorder>()
+                    currentPhoneRecorder = recorder
+                    try {
+                        recorder.use { rec ->
+                            val source = rec.startRecording()
+                            val sink = recordingStorage.openRecordingSink(fileId, rec.sampleRate, "audio/raw")
+                            withContext(Dispatchers.IO) {
+                                source.use { sink.use { source.buffered().transferTo(sink) } }
+                            }
+                        }
+                    } finally {
+                        currentPhoneRecorder = null
+                    }
+                }
+            }
+            ACTION_STOP_RECORDING -> {
+                val fileId = currentPhoneFileId ?: run {
+                    logger.w { "No phone recording in progress, ignoring stop" }
+                    return
+                }
+                logger.i { "Stopping phone recording: $fileId" }
+                scope.launch {
+                    currentPhoneRecorder?.stopRecording()
+                    phoneRecordingJob?.join()
+                    withContext(Dispatchers.IO) {
+                        val (source, info) = recordingStorage.openRecordingSource(fileId)
+                        val cleanSink = recordingStorage.openCleanRecordingSink(
+                            fileId, info.cachedMetadata.sampleRate, info.cachedMetadata.mimeType
+                        )
+                        source.use { src -> cleanSink.buffered().use { dst -> src.transferTo(dst) } }
+                    }
+                    recordingProcessingQueue.queueLocalAudioProcessing(fileId = fileId)
+                    currentPhoneFileId = null
+                    vibrate(VIBRATE_STOP)
+                }
+            }
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun vibrate(pattern: LongArray) {
+        getSystemService(Vibrator::class.java)
+            ?.vibrate(VibrationEffect.createWaveform(pattern, -1))
     }
 
     private fun startRecordingDebugNotificationJob() {
@@ -144,7 +216,7 @@ class PebbleService: Service(), KoinComponent {
             1,
             notification,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             } else {
                 0
             }
