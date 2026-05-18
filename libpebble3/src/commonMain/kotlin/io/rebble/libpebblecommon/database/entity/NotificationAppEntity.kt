@@ -58,6 +58,14 @@ data class NotificationAppItem(
     val colorName: String?,
     @ColumnInfo(defaultValue = "null")
     val iconCode: String?,
+    /**
+     * When true, the deduplication check in NotificationHandler.decideNotification is bypassed
+     * for this app — repeated identical notifications (e.g. recurring task reminders) will all
+     * be sent to the watch instead of suppressed as duplicates. User-toggled per-app via the
+     * notification settings; defaults to false to preserve historical behavior.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val allowDuplicates: Boolean = false,
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()

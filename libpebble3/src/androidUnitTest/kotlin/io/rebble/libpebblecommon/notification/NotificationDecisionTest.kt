@@ -31,6 +31,7 @@ class NotificationDecisionTest {
     private fun appEntry(
         packageName: String = DEFAULT_PKG,
         muteState: MuteState = MuteState.Never,
+        allowDuplicates: Boolean = false,
     ) = NotificationAppItem(
         packageName = packageName,
         name = packageName,
@@ -41,6 +42,7 @@ class NotificationDecisionTest {
         vibePatternName = null,
         colorName = null,
         iconCode = null,
+        allowDuplicates = allowDuplicates,
     )
 
     private fun channel(muteState: MuteState) = ChannelItem(
@@ -103,6 +105,20 @@ class NotificationDecisionTest {
         val first = notification()
         val second = notification()
         assertEquals(NotSentDuplicate, decide(second, inflight = listOf(first)))
+    }
+
+    @Test
+    fun `duplicate is sent when appEntry has allowDuplicates true`() = runTest {
+        val first = notification()
+        val second = notification()
+        assertEquals(
+            SendToWatch,
+            decide(
+                second,
+                inflight = listOf(first),
+                appEntry = appEntry(allowDuplicates = true),
+            ),
+        )
     }
 
     @Test

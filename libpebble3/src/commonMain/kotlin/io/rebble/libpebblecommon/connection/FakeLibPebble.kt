@@ -276,6 +276,10 @@ class FakeLibPebble : LibPebble {
         TODO("Not yet implemented")
     }
 
+    override fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        // No-op
+    }
+
     override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> =
         emptyFlow()
 

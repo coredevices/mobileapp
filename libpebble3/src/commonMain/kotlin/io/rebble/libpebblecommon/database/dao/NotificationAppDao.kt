@@ -72,6 +72,16 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
+    suspend fun updateAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppAllowDuplicates: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(allowDuplicates = allowDuplicates))
+    }
+
+    @Transaction
     suspend fun updateAllAppMuteStates(muteState: MuteState) {
         insertOrReplace(allApps().map {
             it.copy(

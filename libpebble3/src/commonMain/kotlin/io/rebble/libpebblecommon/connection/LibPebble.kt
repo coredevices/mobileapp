@@ -329,6 +329,14 @@ interface NotificationApps {
         colorName: String?,
         iconCode: String?,
     )
+
+    /**
+     * Toggle whether identical-content notifications from this app are sent to the watch
+     * (rather than suppressed as duplicates by NotificationHandler). Useful for apps that
+     * re-fire the same reminder until acknowledged.
+     */
+    fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean)
+
     fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,
