@@ -19,9 +19,12 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.util.R
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
@@ -42,11 +45,26 @@ class AndroidAppUpdate(
 ) : AppUpdate {
     private val logger = Logger.withTag("AndroidAppUpdate")
 
-    override val updateAvailable: StateFlow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
-        .onStart {
-            logger.d { "Checking for app update - installed via ${resolveInstaller()}" }
-            emit(AppUpdateResult.NotAvailable) // Emit a loading state initially
+    override val updateAvailable: StateFlow<AppUpdateState> = flow {
+        val installer = resolveInstaller()
+        logger.d { "Checking for app update - installed via $installer" }
+        if (installer == PLAY_STORE_PACKAGE) {
+            emitAll(playUpdateFlow())
+        } else {
+            logger.d { "Not installed via Play Store (installer: $installer) - skipping Play update check" }
+            emit(AppUpdateState.NoUpdateAvailable)
         }
+    }.stateIn(
+        scope = GlobalScope,
+        started = SharingStarted.WhileSubscribed(
+            stopTimeoutMillis = 30.minutes.inWholeMilliseconds,
+            replayExpirationMillis = 12.hours.inWholeMilliseconds,
+        ),
+        initialValue = AppUpdateState.NoUpdateAvailable,
+    )
+
+    private fun playUpdateFlow(): Flow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
+        .onStart { emit(AppUpdateResult.NotAvailable) } // Emit a loading state initially
         .catch { exception ->
             Logger.w(exception) { "Failed to check for CoreApp updates" }
             emit(AppUpdateResult.NotAvailable)
@@ -76,14 +94,6 @@ class AndroidAppUpdate(
                 }
             }
         }
-        .stateIn(
-            scope = GlobalScope,
-            started = SharingStarted.WhileSubscribed(
-                stopTimeoutMillis = 30.minutes.inWholeMilliseconds,
-                replayExpirationMillis = 12.hours.inWholeMilliseconds,
-            ),
-            initialValue = AppUpdateState.NoUpdateAvailable,
-        )
 
     override fun startUpdateFlow(uiContext: PlatformUiContext, update: AppUpdatePlatformContent) {
         if (update.androidUpdate.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
