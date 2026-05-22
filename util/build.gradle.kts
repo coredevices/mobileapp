@@ -197,6 +197,9 @@ fun gradleStringPropOrNull(name: String): String? {
     return local ?: gradle
 }
 
+fun gradleBooleanProp(name: String, default: Boolean): Boolean =
+    gradleStringPropOrNull(name)?.let { it == "true" } ?: default
+
 buildkonfig {
     packageName = "coredevices.util"
     objectName = "CommonBuildKonfig"
@@ -212,9 +215,9 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "WISPR_AUTH_URL", gradleStringPropOrNull("wisprAuthUrl"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "MEMFAULT_TOKEN", gradleStringPropOrNull("memfaultToken"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "GOOGLE_CLIENT_ID", gradleStringPropOrNull("googleClientId"), nullable = true)
-        buildConfigField(FieldSpec.Type.BOOLEAN, "GOOGLE_AUTH_ENABLED", (gradleStringPropOrNull("googleAuthEnabled") == "true").toString())
-        buildConfigField(FieldSpec.Type.BOOLEAN, "APPLE_AUTH_ENABLED", (gradleStringPropOrNull("appleAuthEnabled") == "true").toString())
-        buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", (gradleStringPropOrNull("githubAuthEnabled") == "true").toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GOOGLE_AUTH_ENABLED", gradleBooleanProp("googleAuthEnabled", default = true).toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "APPLE_AUTH_ENABLED", gradleBooleanProp("appleAuthEnabled", default = true).toString())
+        buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", gradleBooleanProp("githubAuthEnabled", default = true).toString())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "Qwen3-0.6B")
