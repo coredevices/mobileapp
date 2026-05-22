@@ -43,7 +43,10 @@ class AndroidAppUpdate(
     private val logger = Logger.withTag("AndroidAppUpdate")
 
     override val updateAvailable: StateFlow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
-        .onStart { emit(AppUpdateResult.NotAvailable) } // Emit a loading state initially
+        .onStart {
+            logger.d { "Checking for app update - installed via ${resolveInstaller()}" }
+            emit(AppUpdateResult.NotAvailable) // Emit a loading state initially
+        }
         .catch { exception ->
             Logger.w(exception) { "Failed to check for CoreApp updates" }
             emit(AppUpdateResult.NotAvailable)
@@ -96,6 +99,18 @@ class AndroidAppUpdate(
         }
     }
 
+    private fun resolveInstaller(): String? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.getInstallerPackageName(context.packageName)
+        }
+    } catch (e: Exception) {
+        logger.w(e) { "Failed to resolve install source" }
+        null
+    }
+
     private fun createNotification(context: Context) {
         val playStoreIntent = getPlayStoreMarketIntent(context, context.packageName)
         if (playStoreIntent == null) {
@@ -132,7 +147,7 @@ class AndroidAppUpdate(
     private fun getPlayStoreMarketIntent(context: Context, packageName: String): Intent? {
         val marketIntent =
             Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).apply {
-                setPackage("com.android.vending")
+                setPackage(PLAY_STORE_PACKAGE)
             }
         return if (marketIntent.resolveActivity(context.packageManager) != null) {
             marketIntent
@@ -155,6 +170,7 @@ class AndroidAppUpdate(
 
     companion object {
         const val REQUEST_CODE_APP_UPDATE = 12346
+        private const val PLAY_STORE_PACKAGE = "com.android.vending"
         private const val LAST_PROMPTED_KEY = "last_prompted_app_update"
         private val NOTIFICATION_ALLOWED_PERIOD = 1.days
         private const val CHANNEL_ID = "app_update_channel"
