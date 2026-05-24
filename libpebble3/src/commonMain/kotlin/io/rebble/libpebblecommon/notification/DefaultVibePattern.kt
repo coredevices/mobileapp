@@ -4,6 +4,7 @@ enum class DefaultVibePattern(
     val displayName: String,
     val pattern: List<Long>,
 ) {
+    None("No vibration", listOf(0)),
     Standard("Standard", listOf(500)),
     Pulses("Pulses", listOf(50, 50, 50, 50, 50, 50, 50)),
     Double("Double", listOf(200, 75, 200)),
