@@ -40,14 +40,6 @@ class NotionNoteClientIntegrationTest {
         override val loginEvents: Flow<PebbleUser>
             get() = TODO("Not yet implemented")
 
-        override suspend fun updateNotionToken(notionToken: String?) {
-            TODO("Not yet implemented")
-        }
-
-        override suspend fun updateMcpRunToken(mcpRunToken: String?) {
-            TODO("Not yet implemented")
-        }
-
         override suspend fun updateTodoBlockId(todoBlockId: String) {
             this.todoBlockId = todoBlockId
 

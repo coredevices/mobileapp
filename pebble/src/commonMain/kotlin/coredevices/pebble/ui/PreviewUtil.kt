@@ -196,8 +196,6 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     val usersDao = object : UsersDao {
         override val user: Flow<PebbleUser?> = flow { emit(null) }
         override val loginEvents: Flow<PebbleUser> = flow {}
-        override suspend fun updateNotionToken(notionToken: String?) {}
-        override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
         override suspend fun updateTodoBlockId(todoBlockId: String) {}
         override suspend fun initUserDevToken(rebbleUserToken: String?) {}
         override suspend fun updateLastConnectedWatch(serial: String) {}

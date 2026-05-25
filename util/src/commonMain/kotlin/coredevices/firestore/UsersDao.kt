@@ -29,12 +29,6 @@ import kotlin.time.Duration.Companion.minutes
 interface UsersDao {
     val user: Flow<PebbleUser?>
     val loginEvents: Flow<PebbleUser>
-    suspend fun updateNotionToken(
-        notionToken: String?
-    )
-    suspend fun updateMcpRunToken(
-        mcpRunToken: String?
-    )
     suspend fun updateTodoBlockId(
         todoBlockId: String
     )
@@ -172,18 +166,6 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     }
                 }
         }
-    }
-
-    override suspend fun updateNotionToken(
-        notionToken: String?
-    ) {
-        userDoc?.update(mapOf("notion_token" to notionToken))
-    }
-
-    override suspend fun updateMcpRunToken(
-        mcpRunToken: String?
-    ) {
-        userDoc?.update(mapOf("mcp_run_token" to mcpRunToken))
     }
 
     override suspend fun updateTodoBlockId(
