@@ -131,6 +131,8 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
+    BoolWatchPref.MusicPrioritizeWhenPlaying -> Section.Music
+    EnumWatchPref.MusicVibeIntensity -> Section.Music
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
