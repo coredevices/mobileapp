@@ -24,6 +24,8 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.music.IosSystemMusicC
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.IosSystemGeolocation
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
 import io.rebble.libpebblecommon.music.SystemMusicControl
+import io.rebble.libpebblecommon.services.IosPhoneSoundService
+import io.rebble.libpebblecommon.services.PhoneSoundService
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
@@ -70,4 +72,5 @@ actual val platformModule: Module = module {
         supportsPpogResetCharacteristic = true,
     ) }
     singleOf(::IosClassicScanner) bind ClassicScanner::class
+    singleOf(::IosPhoneSoundService) bind PhoneSoundService::class
 }
