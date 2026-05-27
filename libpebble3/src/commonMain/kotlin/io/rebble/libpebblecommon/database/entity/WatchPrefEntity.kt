@@ -215,6 +215,7 @@ enum class BoolWatchPref(
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
+    MusicPrioritizeWhenPlaying("musicPrioritizeWhenPlaying", "Prioritize when playing", true, description = "Prioritize the Music app in the Launcher when media is playing"),
     ;
 
     override val type = WatchPrefType.TypeBoolean
@@ -359,6 +360,17 @@ enum class BacklightTouchWakeMode(override val code: UByte, override val display
     Off(2u, "Off"),
 }
 
+// pebble-firmware:src/fw/shell/normal/prefs.c - s_music_long_press_vibe_intensity
+enum class MusicLongPressVibeIntensity(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    VeryLow(10u, "Very Low"),
+    Low(25u, "Low"),
+    MediumLow(40u, "Medium-Low"),
+    Medium(55u, "Medium"),
+    MediumHigh(70u, "Medium-High"),
+    High(85u, "High"),
+    VeryHigh(100u, "Very High"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -457,6 +469,13 @@ enum class EnumWatchPref(
         description = "Turn on backlight when tapping the screen",
         defaultValue = BacklightTouchWakeMode.DoubleTap,
         options = BacklightTouchWakeMode.entries,
+    ),
+    MusicVibeIntensity(
+        id = "musicLongPressVibeIntensity",
+        displayName = "Long Press Vibe Intensity",
+        description = "Intensity of long press haptic feedback. Only applicable when Show Volume Controls is enabled",
+        defaultValue = MusicLongPressVibeIntensity.VeryHigh,
+        options = MusicLongPressVibeIntensity.entries,
     ),
     ;
 
