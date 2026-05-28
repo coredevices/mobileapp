@@ -383,7 +383,8 @@ class FakeLibPebble : LibPebble {
             todaySteps = 0L,
             lastNightSleepHours = null,
             latestDataTimestamp = null,
-            daysOfData = 0
+            daysOfData = 0,
+            weekdayTypicalSteps = emptyMap(),
         )
     }
 
