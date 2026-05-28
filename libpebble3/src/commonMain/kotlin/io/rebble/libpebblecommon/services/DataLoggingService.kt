@@ -43,55 +43,56 @@ class DataLoggingService(
     }
 
     fun initialInit() {
-        protocolHandler.inboundMessages.onEach {
-            when (it) {
-                is DataLoggingIncomingPacket.OpenSession -> {
-                    val id = it.sessionId.get()
-                    val tag = it.tag.get()
-                    val applicationUuid = it.applicationUUID.get()
-                    val itemSize = it.dataItemSize.get()
-                    logger.d { "Session opened: $id tag: $tag (accepted: $acceptSessions)" }
-                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize)
-                    datalogging.openSession(id, tag, applicationUuid, itemSize)
-                    sendAckNack(id)
-                }
+        protocolHandler.inboundMessages
+            .onEach {
+                when (it) {
+                    is DataLoggingIncomingPacket.OpenSession -> {
+                        val id = it.sessionId.get()
+                        val tag = it.tag.get()
+                        val applicationUuid = it.applicationUUID.get()
+                        val itemSize = it.dataItemSize.get()
+                        logger.d { "Session opened: $id tag: $tag (accepted: $acceptSessions)" }
+                        sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize)
+                        datalogging.openSession(id, tag, applicationUuid, itemSize)
+                        sendAckNack(id)
+                    }
 
-                is DataLoggingIncomingPacket.SendDataItems -> {
-                    val id = it.sessionId.get()
-                    val session = sessions[id]
-                    if (session == null) {
-                        logger.e { "Session not found: $id" }
-                        return@onEach
+                    is DataLoggingIncomingPacket.SendDataItems -> {
+                        val id = it.sessionId.get()
+                        val session = sessions[id]
+                        if (session == null) {
+                            logger.e { "Session not found: $id" }
+                            return@onEach
+                        }
+                        val info = watchInfo
+                        if (info == null) {
+                            logger.e { "watch info is null" }
+                            return@onEach
+                        }
+                        datalogging.logData(
+                            sessionId = id,
+                            uuid = session.uuid,
+                            tag = session.tag,
+                            data = it.payload.get().toByteArray(),
+                            watchInfo = info,
+                            itemSize = session.itemSize,
+                            itemsLeft = it.itemsLeftAfterThis.get(),
+                        )
+                        sendAckNack(id)
                     }
-                    sendAckNack(id)
-                    val info = watchInfo
-                    if (info == null) {
-                        logger.e { "watch info is null" }
-                        return@onEach
-                    }
-                    datalogging.logData(
-                        sessionId = id,
-                        uuid = session.uuid,
-                        tag = session.tag,
-                        data = it.payload.get().toByteArray(),
-                        watchInfo = info,
-                        itemSize = session.itemSize,
-                        itemsLeft = it.itemsLeftAfterThis.get(),
-                    )
-                }
 
-                is DataLoggingIncomingPacket.CloseSession -> {
-                    val id = it.sessionId.get()
-                    val session = sessions[id]
-                    logger.d { "Session closed: $id" }
-                    if (session != null) {
-                        datalogging.closeSession(id, session.tag)
+                    is DataLoggingIncomingPacket.CloseSession -> {
+                        val id = it.sessionId.get()
+                        val session = sessions[id]
+                        logger.d { "Session closed: $id" }
+                        if (session != null) {
+                            datalogging.closeSession(id, session.tag)
+                        }
+                        sessions.remove(id)
+                        sendAckNack(id)
                     }
-                    sessions.remove(id)
-                    sendAckNack(id)
                 }
-            }
-        }.launchIn(scope)
+            }.launchIn(scope)
     }
 }
 
@@ -101,3 +102,4 @@ data class DataLoggingSession(
     val uuid: Uuid,
     val itemSize: UShort,
 )
+
