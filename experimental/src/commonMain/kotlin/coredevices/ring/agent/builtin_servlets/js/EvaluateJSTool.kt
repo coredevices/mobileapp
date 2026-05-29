@@ -5,6 +5,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -97,7 +98,7 @@ class EvaluateJSTool : BuiltInMcpTool(
         val consoleOutput = jsEngine.evaluate(evaluateJSArgs.js)
         val result = JsonSnake.encodeToString(EvaluateJSResult(consoleOutput))
         logger.v { "JavaScript evaluation result: ${if (obfuscate) "[redacted]" else result}" }
-        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+        currentSessionContext()?.let { ctx ->
             runCatching {
                 itemRepo.setItem(
                     itemFactory.simpleUid(),

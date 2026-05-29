@@ -4,8 +4,6 @@ import PlatformUiContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
-import coredevices.firestore.EncryptionInfo
-import coredevices.firestore.UsersDao
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -25,7 +23,10 @@ import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.encryption.DocumentEncryptor
-import coredevices.ring.encryption.EncryptionKeyManager
+import coredevices.ring.encryption.EnableEncryptionResult
+import coredevices.ring.encryption.EncryptionManager
+import coredevices.ring.encryption.EncryptionSetupState
+import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.ring.service.RingSync
@@ -34,11 +35,10 @@ import coredevices.ring.storage.BackupZipWriter
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
-import coredevices.util.Platform
 import coredevices.util.emailOrNull
-import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
+import dev.gitlive.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
@@ -53,7 +53,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
@@ -65,6 +64,7 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 @Serializable
@@ -77,24 +77,21 @@ private data class BackupManifest(
 )
 
 class SettingsViewModel(
-    private val usersDao: UsersDao,
-    private val platform: Platform,
     private val ringSync: RingSync,
     private val preferences: Preferences,
     private val firestoreRecordingsDao: FirestoreRecordingsDao,
     private val recordingRepository: RecordingRepository,
     private val recordingEntryDao: RecordingEntryDao,
     private val conversationMessageDao: ConversationMessageDao,
-    private val encryptionKeyManager: EncryptionKeyManager,
     private val recordingStorage: RecordingStorage,
     private val documentEncryptor: DocumentEncryptor,
+    private val encryptionManager: EncryptionManager,
     private val noteIntegrationFactory: NoteIntegrationFactory,
     private val gTasksIntegration: GTasksIntegration,
     private val indexDeviceManager: IndexDeviceManager,
     private val itemRepository: coredevices.ring.database.room.repository.ItemRepository,
     private val listRepository: coredevices.ring.database.room.repository.ListRepository,
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
-    private val recordingProcessingQueue: coredevices.ring.service.recordings.RecordingProcessingQueue,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -254,44 +251,6 @@ class SettingsViewModel(
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
 
-    fun downloadFeedHistory() {
-        if (_syncingFeedHistory.value) return
-        // Bail before the sub-steps run — otherwise the unconditional
-        // "Sync complete" at the end of `try` overwrites the
-        // "Not signed in" status that performFeedHistoryDownload sets.
-        if (Firebase.auth.currentUser == null) {
-            _syncStatus.value = "Not signed in"
-            return
-        }
-        viewModelScope.launch {
-            _syncingFeedHistory.value = true
-            _syncStatus.value = "Starting sync..."
-            try {
-                withContext(Dispatchers.IO) {
-                    uploadPendingRecordings()
-                    performFeedHistoryDownload()
-                    // Items + lists ride the bidirectional syncher,
-                    // which is also continuously running in the
-                    // background. This is the manual "force a full
-                    // reconciliation" entry point.
-                    indexFeedSyncService.syncNow()
-                }
-                // Single final "done" status. Each sub-step sets its own
-                // in-flight label ("Uploading 22 items...", "Repairing 15
-                // item links...") and there's no easy way to know which
-                // step ran last (the early-return path of repair, the
-                // empty-set path of upload, etc.) — so a freeze on a
-                // mid-step label is too easy. One unconditional final
-                // string after the whole `try` block kills it.
-                _syncStatus.value = "Sync complete"
-            } catch (e: Exception) {
-                Logger.withTag("FeedHistorySync").e(e) { "Feed history sync failed" }
-                _syncStatus.value = "Sync failed: ${e.message}"
-            } finally {
-                _syncingFeedHistory.value = false
-            }
-        }
-    }
 
     fun panicRing() {
         _panicPending.value = true
@@ -357,82 +316,6 @@ class SettingsViewModel(
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             log.w { "Timed out waiting for ${pending.size} pending uploads — moving on" }
         }
-    }
-
-    private suspend fun performFeedHistoryDownload() {
-        val log = Logger.withTag("FeedHistorySync")
-
-        val user = Firebase.auth.currentUser
-        if (user == null) {
-            log.w { "Not signed in — cannot sync feed history" }
-            _syncStatus.value = "Not signed in"
-            return
-        }
-        log.i { "Feed history sync started for user ${user.uid} (${user.email})" }
-        log.i { "Firestore path: recordings/${user.uid}/recordings" }
-        _syncStatus.value = "Fetching from cloud..."
-
-        var cursor: dev.gitlive.firebase.firestore.DocumentSnapshot? = null
-        var totalApplied = 0
-        var totalRemote = 0
-        // Per-page docs are processed concurrently — ingestRemoteRecording
-        // is independent per doc (decrypt + Room insert + child rows).
-        // Room serialises its own writes at the SQLite layer; the
-        // ingestor is also idempotent (compares remote.updated vs
-        // local.updated and no-ops when local is at-or-newer), so a
-        // concurrent re-fire from the auto-pull snapshot listener can't
-        // produce duplicates.
-        val mutex = Mutex()
-
-        while (true) {
-            val snapshot = firestoreRecordingsDao.getPaginated(50, cursor)
-            val docs = snapshot.documents
-            if (docs.isEmpty()) break
-            totalRemote += docs.size
-
-            coroutineScope {
-                docs.map { doc ->
-                    async {
-                        try {
-                            val data = doc.data<RecordingDocument>()
-                            val before = recordingRepository.getByFirestoreId(doc.id)
-                            try {
-                                recordingProcessingQueue.ingestRemoteRecording(doc.id, data)
-                            } catch (e: KeyFingerprintMismatchException) {
-                                log.e { "Recording ${doc.id} encrypted with key ${e.expected} but local key is ${e.actual} — restore the original key" }
-                                _syncStatus.value = "Key mismatch — restore the original encryption key"
-                                return@async
-                            } catch (e: TamperedException) {
-                                log.e(e) { "Recording ${doc.id} failed integrity check" }
-                                _syncStatus.value = "Recording ${doc.id} failed integrity check"
-                                return@async
-                            }
-                            val after = recordingRepository.getByFirestoreId(doc.id)
-                            // Count an "apply" when the row was created
-                            // OR when its updated stamp moved forward.
-                            if (before == null || (after != null && after.updated != before.updated)) {
-                                val n = mutex.withLock { ++totalApplied }
-                                _syncStatus.value = "Applied $n recordings..."
-                            }
-                        } catch (e: Exception) {
-                            log.w(e) { "Skipping recording ${doc.id}: ${e.message}" }
-                        }
-                    }
-                }.awaitAll()
-            }
-
-            log.i { "Progress: fetched $totalRemote remote, applied $totalApplied" }
-            cursor = docs.lastOrNull()
-        }
-
-        log.i { "Feed history sync complete: applied $totalApplied of $totalRemote remote" }
-        // Cache the cloud-side count so the Settings → Backup dialog can
-        // display it instantly without re-paginating the entire collection
-        // (the prior implementation downloaded every full document body
-        // on every dialog open, which on a 1300+ recording user took a
-        // minute over mobile).
-        preferences.setLastBackupCount(totalRemote)
-        _syncStatus.value = "Done — applied $totalApplied of $totalRemote recordings"
     }
 
     // --- Backup ---
@@ -540,9 +423,6 @@ class SettingsViewModel(
 
     fun setBackupEnabled(enabled: Boolean) {
         preferences.setBackupEnabled(enabled)
-        if (enabled) {
-            downloadFeedHistory()
-        }
     }
 
     fun clearBackupStatus() {
@@ -582,69 +462,30 @@ class SettingsViewModel(
         }
     }
 
-    // --- Encryption key management ---
+    // --- Encryption (keying ops in [EncryptionManager], UI status owned here) ---
 
     private val _encryptionKeyStatus = MutableStateFlow<String?>(null)
     val encryptionKeyStatus = _encryptionKeyStatus.asStateFlow()
-    private val _hasLocalKey = MutableStateFlow(false)
-    val hasLocalKey = _hasLocalKey.asStateFlow()
     private val _encryptionKeyLoading = MutableStateFlow(false)
     val encryptionKeyLoading = _encryptionKeyLoading.asStateFlow()
-    private val _generatedKey = MutableStateFlow<String?>(null)
-    val generatedKey = _generatedKey.asStateFlow()
+    val keyStorageStatus = encryptionManager.keyStorageStatus
+    val generatedKey = encryptionManager.generatedKey
+    val useEncryption = encryptionManager.useEncryption
+    private val _encryptionStatus = MutableStateFlow<String?>(null)
+    val encryptionStatus = _encryptionStatus.asStateFlow()
+    private val _enablingEncryption = MutableStateFlow(false)
+    val enablingEncryption = _enablingEncryption.asStateFlow()
 
-    fun checkLocalKey() {
-        viewModelScope.launch {
-            val key = withContext(Dispatchers.IO) { encryptionKeyManager.getLocalKey() }
-            _hasLocalKey.value = key != null
-        }
-    }
+    private val _showKeyNotBackedUpDialog = MutableStateFlow(false)
+    val showKeyNotBackedUpDialog = _showKeyNotBackedUpDialog.asStateFlow()
 
     fun generateAndStoreKey(uiContext: PlatformUiContext) {
         viewModelScope.launch {
             _encryptionKeyLoading.value = true
-            _encryptionKeyStatus.value = "Generating AES-256 encryption key..."
             try {
-                val keyResult = encryptionKeyManager.generateKey()
-
-                val email = Firebase.auth.currentUser?.email ?: "unknown"
-                _encryptionKeyStatus.value = "Saving key locally..."
-                withContext(Dispatchers.IO) {
-                    encryptionKeyManager.saveKeyLocally(keyResult.keyBase64, email)
-                }
-
-                var backupLocation = "local_only"
-                _encryptionKeyStatus.value = "Saving to Password Manager..."
-                try {
-                    encryptionKeyManager.saveToCloudKeychain(uiContext, keyResult.keyBase64)
-                    backupLocation = if (platform.isAndroid) "google_password_manager" else "icloud_keychain"
-                } catch (e: Exception) {
-                    Logger.withTag("EncryptionKey").w(e) { "Cloud keychain save failed (key still saved locally)" }
-                    _encryptionKeyStatus.value = "Key generated. Password Manager: ${e.message}"
-                }
-
-                val nowMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                val now = kotlinx.datetime.Instant.fromEpochMilliseconds(nowMs)
-                val encryptionInfo = EncryptionInfo(
-                    keyFingerprint = keyResult.fingerprint,
-                    createdAt = now.toString(),
-                    keyBackupLocation = backupLocation
-                )
-
-                _encryptionKeyStatus.value = "Storing encryption info in cloud..."
-                withContext(Dispatchers.IO) {
-                    usersDao.updateEncryptionInfo(encryptionInfo)
-                    preferences.setEncryptionKeyFingerprint(keyResult.fingerprint)
-                }
-
-                _hasLocalKey.value = true
-                _generatedKey.value = keyResult.keyBase64
-                if (_encryptionKeyStatus.value?.startsWith("Key generated.") != true) {
-                    _encryptionKeyStatus.value = "Encryption key generated and saved"
-                }
-                Logger.withTag("EncryptionKey").i { "Key generated, fingerprint=${keyResult.fingerprint}, backup=$backupLocation" }
+                encryptionManager.generateAndStoreKey(uiContext)
+                _encryptionKeyStatus.value = "Encryption key generated and saved"
             } catch (e: Exception) {
-                Logger.withTag("EncryptionKey").e(e) { "Key generation failed" }
                 _encryptionKeyStatus.value = "Failed: ${e.message}"
             } finally {
                 _encryptionKeyLoading.value = false
@@ -655,20 +496,10 @@ class SettingsViewModel(
     fun readKeyFromCloudKeychain(uiContext: PlatformUiContext) {
         viewModelScope.launch {
             _encryptionKeyLoading.value = true
-            _encryptionKeyStatus.value = "Reading from Password Manager..."
             try {
-                val key = encryptionKeyManager.readFromCloudKeychain(uiContext)
-                if (key != null) {
-                    val email = Firebase.auth.currentUser?.email ?: "unknown"
-                    withContext(Dispatchers.IO) {
-                        encryptionKeyManager.saveKeyLocally(key, email)
-                    }
-                    _hasLocalKey.value = true
-                    _encryptionKeyStatus.value = "Key restored from Password Manager"
-                    Logger.withTag("EncryptionKey").i { "Key restored from cloud keychain" }
-                }
+                encryptionManager.readKeyFromCloudKeychain(uiContext)
+                _encryptionKeyStatus.value = "Key restored from Password Manager"
             } catch (e: Exception) {
-                Logger.withTag("EncryptionKey").e(e) { "Failed to read from cloud keychain" }
                 _encryptionKeyStatus.value = e.message
             } finally {
                 _encryptionKeyLoading.value = false
@@ -676,155 +507,146 @@ class SettingsViewModel(
         }
     }
 
-    fun clearEncryptionKeyStatus() {
-        _encryptionKeyStatus.value = null
-    }
+    fun clearEncryptionKeyStatus() { _encryptionKeyStatus.value = null }
+    fun clearGeneratedKey() = encryptionManager.clearGeneratedKey()
 
-    fun clearGeneratedKey() {
-        _generatedKey.value = null
-    }
-
-    // --- Encryption toggle ---
-
-    val useEncryption = preferences.useEncryption
-
-    private val _migrationStatus = MutableStateFlow<String?>(null)
-    val migrationStatus = _migrationStatus.asStateFlow()
-    private val _migrating = MutableStateFlow(false)
-    val migrating = _migrating.asStateFlow()
-
-    fun enableEncryption() {
+    /** Enable encryption, but first verify the key is backed up to the cloud
+     *  keychain; if not, raise a confirmation dialog instead. */
+    fun requestEnableEncryption(uiContext: PlatformUiContext) {
         viewModelScope.launch {
-            _migrating.value = true
-            val log = Logger.withTag("EncryptionMigration")
+            _enablingEncryption.value = true
+            _encryptionStatus.value = "Checking key backup..."
             try {
-                val key = withContext(Dispatchers.IO) { encryptionKeyManager.getLocalKey() }
-                if (key == null) {
-                    _migrationStatus.value = "No encryption key — generate one first"
-                    return@launch
+                val backedUp = encryptionManager.isLocalKeyBackedUpToCloud(uiContext)
+                if (backedUp) {
+                    enableEncryptionNow()
+                } else {
+                    _encryptionStatus.value = null
+                    _enablingEncryption.value = false
+                    _showKeyNotBackedUpDialog.value = true
                 }
-
-                // Step 1: Download all remote recordings to local DB
-                _migrationStatus.value = "Syncing from cloud..."
-                withContext(Dispatchers.IO) { performFeedHistoryDownload() }
-
-                // Step 3: Cache all audio files locally (so we have plaintext to encrypt)
-                _migrationStatus.value = "Caching audio files..."
-                val allRecordings = withContext(Dispatchers.IO) {
-                    recordingRepository.getAllRecordings().first()
-                }
-                val allAudioIds = mutableListOf<String>()
-                for (recording in allRecordings) {
-                    val entries = withContext(Dispatchers.IO) {
-                        recordingEntryDao.getEntriesForRecording(recording.id).first()
-                    }
-                    for (entry in entries) {
-                        val fileName = entry.fileName ?: continue
-                        for (variant in listOf(fileName, "$fileName-clean")) {
-                            try {
-                                val (source, _) = withContext(Dispatchers.IO) {
-                                    recordingStorage.openRecordingSource(variant)
-                                }
-                                source.close()
-                                allAudioIds.add(variant)
-                            } catch (e: Exception) {
-                                log.w { "Could not cache audio $variant: ${e.message}" }
-                            }
-                        }
-                    }
-                }
-                log.i { "Cached ${allAudioIds.size} audio files locally" }
-
-                // Step 4: Enable encryption preference
-                preferences.setUseEncryption(true)
-
-                // Step 5: Encrypt and re-upload audio files (overwrites in-place)
-                _migrationStatus.value = "Encrypting audio files..."
-                var audioEncrypted = 0
-                for (audioId in allAudioIds) {
-                    try {
-                        val success = withContext(Dispatchers.IO) {
-                            recordingStorage.encryptAndReuploadAudio(audioId, key)
-                        }
-                        if (success) audioEncrypted++
-                        _migrationStatus.value = "Encrypting audio $audioEncrypted/${allAudioIds.size}..."
-                    } catch (e: Exception) {
-                        log.w(e) { "Failed to encrypt audio $audioId" }
-                    }
-                }
-                log.i { "Encrypted $audioEncrypted/${allAudioIds.size} audio files" }
-
-                // Step 6: Re-upload all documents encrypted IN PLACE.
-                // We overwrite the existing Firestore doc via set() rather
-                // than addRecording() so the firestoreId stays stable.
-                // Reassigning firestoreIds would orphan every item that
-                // references this recording via its `sourceRecordingId`.
-                _migrationStatus.value = "Encrypting documents..."
-                var uploaded = 0
-                for (recording in allRecordings) {
-                    val firestoreId = recording.firestoreId
-                    if (firestoreId.isNullOrBlank()) {
-                        // Legacy row that was never uploaded. Skip — the
-                        // upload observer will pick it up later and
-                        // upload it pre-encrypted.
-                        log.w { "Skipping recording ${recording.id} during encryption migration: no firestoreId" }
-                        continue
-                    }
-                    try {
-                        val entries = withContext(Dispatchers.IO) {
-                            recordingEntryDao.getEntriesForRecording(recording.id).first()
-                        }
-                        val messages = withContext(Dispatchers.IO) {
-                            conversationMessageDao.getMessagesForRecording(recording.id).first()
-                        }
-                        // Preserve any metadata already on the remote doc.
-                        val preservedMetadata = try {
-                            withContext(Dispatchers.IO) {
-                                firestoreRecordingsDao.getRecording(firestoreId).get()
-                                    .data<RecordingDocument>().metadata
-                            }
-                        } catch (e: Exception) { null }
-                        var doc = recording.toDocument(
-                            entries = entries.map { entry ->
-                                coredevices.indexai.data.entity.RecordingEntry(
-                                    timestamp = entry.timestamp,
-                                    fileName = entry.fileName,
-                                    status = entry.status,
-                                    transcription = entry.transcription,
-                                    transcribedUsingModel = entry.transcribedUsingModel,
-                                    error = entry.error,
-                                    ringTransferInfo = entry.ringTransferInfo,
-                                    userMessageId = entry.userMessageId
-                                )
-                            },
-                            messages = messages.map { it.document },
-                            metadata = preservedMetadata,
-                        )
-                        doc = documentEncryptor.encryptDocument(doc, key)
-                        withContext(Dispatchers.IO) {
-                            firestoreRecordingsDao.setRecording(firestoreId, doc)
-                        }
-                        uploaded++
-                        _migrationStatus.value = "Encrypted docs $uploaded/${allRecordings.size}..."
-                    } catch (e: Exception) {
-                        log.w(e) { "Failed to re-upload recording ${recording.id}" }
-                    }
-                }
-
-                log.i { "Encryption migration complete: $uploaded docs, $audioEncrypted audio files" }
-                _migrationStatus.value = "Encryption enabled — $uploaded docs, $audioEncrypted audio files encrypted"
             } catch (e: Exception) {
-                log.e(e) { "Encryption migration failed" }
-                _migrationStatus.value = "Migration failed: ${e.message}"
-            } finally {
-                _migrating.value = false
+                _encryptionStatus.value = "Could not verify key backup: ${e.message}"
+                _enablingEncryption.value = false
             }
         }
     }
 
+    fun confirmEnableEncryption() {
+        _showKeyNotBackedUpDialog.value = false
+        viewModelScope.launch { enableEncryptionNow() }
+    }
+
+    fun dismissKeyNotBackedUpDialog() {
+        _showKeyNotBackedUpDialog.value = false
+    }
+
+    private suspend fun enableEncryptionNow() {
+        _encryptionStatus.value = try {
+            when (val result = encryptionManager.enableEncryption()) {
+                EnableEncryptionResult.Enabled ->
+                    "Encryption enabled — future uploads encrypted"
+                EnableEncryptionResult.NoLocalKey ->
+                    "Can't enable encryption: no key on this device"
+                is EnableEncryptionResult.KeyFingerprintMismatch ->
+                    "Can't enable encryption: key on this device doesn't match your account key"
+                is EnableEncryptionResult.KeyUnusable ->
+                    "Can't enable encryption: key is unusable (${result.reason})"
+            }
+        } finally {
+            _enablingEncryption.value = false
+        }
+    }
+
     fun disableEncryption() {
-        preferences.setUseEncryption(false)
-        _migrationStatus.value = "Encryption disabled — future uploads will be unencrypted"
+        encryptionManager.disableEncryption()
+        _encryptionStatus.value = "Encryption disabled — future uploads will be unencrypted"
+    }
+
+    // --- Guided encryption setup (single switch, walks the user through
+    //     generating or restoring a key before turning encryption on) ---
+
+    private val _encryptionSetup = MutableStateFlow<EncryptionSetupState>(EncryptionSetupState.Hidden)
+    val encryptionSetup = _encryptionSetup.asStateFlow()
+
+    /** User flipped the encrypt switch on: enable directly if a usable
+     *  local key is present, otherwise drive the setup dialog. */
+    fun beginEncryptionSetup(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            when (encryptionManager.keyStorageStatus.value) {
+                KeyStorageStatus.KeyLocallyAvailable -> requestEnableEncryption(uiContext)
+                KeyStorageStatus.NoKeyStored ->
+                    _encryptionSetup.value = EncryptionSetupState.PromptGenerate
+                KeyStorageStatus.KeyGeneratedBefore -> {
+                    _encryptionSetup.value = EncryptionSetupState.Restoring
+                    val restored = try {
+                        encryptionManager.readKeyFromCloudKeychain(uiContext)
+                    } catch (e: Exception) {
+                        Logger.withTag("Encryption").w(e) { "Cloud keychain restore failed" }
+                        false
+                    }
+                    if (restored) finishSetupAndEnable()
+                    else _encryptionSetup.value = EncryptionSetupState.PasteKey()
+                }
+            }
+        }
+    }
+
+    /** "Generate Key" inside the setup dialog. */
+    fun generateKeyForSetup(uiContext: PlatformUiContext) {
+        viewModelScope.launch {
+            _encryptionSetup.value = EncryptionSetupState.Generating
+            try {
+                encryptionManager.generateAndStoreKey(uiContext)
+                // We show the key in the wizard ourselves; clear the shared
+                // `generatedKey` so the standalone QR dialog doesn't double-show.
+                val key = encryptionManager.generatedKey.value
+                encryptionManager.clearGeneratedKey()
+                _encryptionSetup.value = if (key != null) {
+                    EncryptionSetupState.ShowKey(key)
+                } else {
+                    EncryptionSetupState.Failed("Key generation failed")
+                }
+            } catch (e: Exception) {
+                _encryptionSetup.value =
+                    EncryptionSetupState.Failed(e.message ?: "Key generation failed")
+            }
+        }
+    }
+
+    /** User pasted their backup key on the paste step. */
+    fun restoreFromPastedKey(keyBase64: String) {
+        viewModelScope.launch {
+            _encryptionSetup.value = EncryptionSetupState.Restoring
+            val restored = try {
+                encryptionManager.restoreKeyFromString(keyBase64)
+            } catch (e: Exception) {
+                Logger.withTag("Encryption").w(e) { "Pasted key restore failed" }
+                false
+            }
+            if (restored) {
+                finishSetupAndEnable()
+            } else {
+                _encryptionSetup.value =
+                    EncryptionSetupState.PasteKey("That key isn't valid for this account")
+            }
+        }
+    }
+
+    /** "Done" after the key was shown — enable encryption and close. */
+    fun completeEncryptionSetup() {
+        viewModelScope.launch { finishSetupAndEnable() }
+    }
+
+    private suspend fun finishSetupAndEnable() {
+        _enablingEncryption.value = true
+        enableEncryptionNow()
+        _encryptionSetup.value = EncryptionSetupState.Hidden
+    }
+
+    fun cancelEncryptionSetup() {
+        encryptionManager.clearGeneratedKey()
+        _encryptionSetup.value = EncryptionSetupState.Hidden
     }
 
     // --- Full backup download ---
@@ -853,14 +675,10 @@ class SettingsViewModel(
                         ?: throw Exception("Not signed in")
                     log.i { "Starting full backup for user ${user.uid}" }
 
-                    // 0. Sync local recordings to cloud first
-                    _backupDownloadStatus.value = "Syncing local recordings to cloud..."
-                    uploadPendingRecordings()
-
                     // 1. Fetch all recording documents from Firestore
                     _backupDownloadStatus.value = "Fetching recording list..."
                     val allDocs = mutableListOf<Pair<String, RecordingDocument>>()
-                    var cursor: dev.gitlive.firebase.firestore.DocumentSnapshot? = null
+                    var cursor: DocumentSnapshot? = null
                     while (true) {
                         val snapshot = firestoreRecordingsDao.getPaginated(50, cursor)
                         val docs = snapshot.documents
@@ -883,9 +701,8 @@ class SettingsViewModel(
                     }
 
                     // 2. Create zip file
-                    val nowMs = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                    val kdtInstant = kotlinx.datetime.Instant.fromEpochMilliseconds(nowMs)
-                    val today = kdtInstant.toLocalDateTime(TimeZone.currentSystemDefault()).date
+                    val now = Clock.System.now()
+                    val today = now.toLocalDateTime(TimeZone.currentSystemDefault()).date
                     val zipName = "$today Pebble Index backup.zip"
                     val zipPath = Path(recordingStorage.getCacheDirectory(), zipName)
                     if (SystemFileSystem.exists(zipPath)) {
@@ -899,7 +716,7 @@ class SettingsViewModel(
                             version = 1,
                             userId = user.uid,
                             email = user.email ?: "unknown",
-                            exportedAt = kdtInstant.toString(),
+                            exportedAt = now.toString(),
                             recordingCount = allDocs.size
                         )
                     )

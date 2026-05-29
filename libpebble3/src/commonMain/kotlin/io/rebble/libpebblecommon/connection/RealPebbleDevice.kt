@@ -134,7 +134,6 @@ class PebbleDeviceFactory {
                     knownDevice != null -> knownDevice
 
                     else -> {
-                        Logger.w("not sure how to create a device for $identifier")
                         pebbleDevice
                     }
                 }

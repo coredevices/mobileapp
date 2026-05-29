@@ -270,7 +270,7 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
         listOf(QuickLaunchOption(null, "None")) +
                 QuickLaunchOption(QUIET_TIME_TOGGLE_UUID, "Quiet Time") +
                 QuickLaunchOption(BACKLIGHT_UUID, "Backlight") +
-                QuickLaunchOption(MOTION_BACKLIGHT_UUID, "Backlight") +
+                QuickLaunchOption(MOTION_BACKLIGHT_UUID, "Motion Backlight") +
                 QuickLaunchOption(AIRPLANE_MODE_UUID, "Airplane Mode") +
                 QuickLaunchOption(TIMELINE_PAST_UUID, "Timeline Past") +
                 QuickLaunchOption(TIMELINE_FUTURE_UUID, "Timeline Future") +

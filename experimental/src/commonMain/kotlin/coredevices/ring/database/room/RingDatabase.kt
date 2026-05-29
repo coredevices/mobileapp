@@ -9,6 +9,8 @@ import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.ItemDocument
@@ -82,7 +84,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 27,
+    version = 28,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -110,6 +112,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26),
         AutoMigration(from = 26, to = 27),
+        AutoMigration(from = 27, to = 28, Migrate27To28::class),
     ]
 )
 @TypeConverters(Converters::class)
@@ -143,6 +146,22 @@ class Migrate9To10: AutoMigrationSpec
 @DeleteColumn("LocalRecording", "discarded")
 @DeleteColumn("LocalRecording", "ringRxIndex")
 class Migrate16To17: AutoMigrationSpec
+
+/**
+ * Backfill for the new `lastPushedUpdated` column. Existing rows with a
+ * `firestoreId` were already pushed by the old observer, so mark them
+ * already-synced (`lastPushedUpdated = updated`). Without this, every such
+ * row would look dirty on first launch after upgrade and the push observer
+ * would re-upload the entire table at once. Rows without a `firestoreId`
+ * were never uploaded — leave their watermark NULL so they still push.
+ */
+class Migrate27To28 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "UPDATE LocalRecording SET lastPushedUpdated = updated WHERE firestoreId IS NOT NULL"
+        )
+    }
+}
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
 expect object RingDatabaseConstructor : RoomDatabaseConstructor<RingDatabase> {

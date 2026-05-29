@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.database.dao
 
 import androidx.room.Upsert
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
@@ -50,6 +51,7 @@ data class ValueParams(
     val firmwareVersion: FirmwareVersion,
     val vibePatternDao: VibePatternDao? = null,
     val notificationRuleDao: NotificationRuleDao? = null,
+    val libPebbleConfigFlow: LibPebbleConfigFlow,
 )
 
 interface BlobDbItem {

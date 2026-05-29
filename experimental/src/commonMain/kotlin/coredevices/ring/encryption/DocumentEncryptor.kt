@@ -9,6 +9,7 @@ import dev.gitlive.firebase.auth.auth
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.io.encoding.Base64
 
 class KeyFingerprintMismatchException(
     val expected: String,
@@ -39,13 +40,13 @@ class DocumentEncryptor(
             assistantSession = doc.assistantSession,
         )
         val plaintext = json.encodeToString(SensitiveFields.serializer(), sensitiveData).encodeToByteArray()
-        val encrypted = AesGcmCrypto.encrypt(plaintext, keyBase64) // IV(16) || ciphertext || tag
-        val encodedBlob = kotlin.io.encoding.Base64.encode(encrypted)
+        val encrypted = AesCbcHmacCrypto.encrypt(plaintext, keyBase64) // IV(16) || HMAC(32) || ciphertext
+        val encodedBlob = Base64.encode(encrypted)
 
         val envelope = EncryptedEnvelope(
-            iv = kotlin.io.encoding.Base64.encode(encrypted.copyOfRange(0, 16)),
+            iv = Base64.encode(encrypted.copyOfRange(0, 16)),
             ciphertext = encodedBlob,
-            keyFingerprint = AesGcmCrypto.keyFingerprint(keyBase64),
+            keyFingerprint = AesCbcHmacCrypto.keyFingerprint(keyBase64),
         )
 
         // Null out sensitive fields, keep structural metadata
@@ -68,7 +69,7 @@ class DocumentEncryptor(
     fun decryptDocument(doc: RecordingDocument, keyBase64: String): RecordingDocument {
         val envelope = doc.encrypted ?: return doc
 
-        val keyFingerprint = AesGcmCrypto.keyFingerprint(keyBase64)
+        val keyFingerprint = AesCbcHmacCrypto.keyFingerprint(keyBase64)
         if (keyFingerprint != envelope.keyFingerprint) {
             throw KeyFingerprintMismatchException(
                 expected = envelope.keyFingerprint,
@@ -76,8 +77,8 @@ class DocumentEncryptor(
             )
         }
 
-        val encryptedBytes = kotlin.io.encoding.Base64.decode(envelope.ciphertext)
-        val plaintext = AesGcmCrypto.decrypt(encryptedBytes, keyBase64)
+        val encryptedBytes = Base64.decode(envelope.ciphertext)
+        val plaintext = AesCbcHmacCrypto.decrypt(encryptedBytes, keyBase64)
         val sensitiveData = json.decodeFromString(SensitiveFields.serializer(), plaintext.decodeToString())
 
         // Restore sensitive fields
@@ -97,7 +98,7 @@ class DocumentEncryptor(
      * Encrypt audio bytes. Returns IV(16) || ciphertext || tag.
      */
     fun encryptAudio(bytes: ByteArray, keyBase64: String): ByteArray {
-        return AesGcmCrypto.encrypt(bytes, keyBase64)
+        return AesCbcHmacCrypto.encrypt(bytes, keyBase64)
     }
 
     /**
@@ -105,7 +106,7 @@ class DocumentEncryptor(
      * Throws [TamperedException] if the data has been tampered with.
      */
     fun decryptAudio(encryptedBytes: ByteArray, keyBase64: String): ByteArray {
-        return AesGcmCrypto.decrypt(encryptedBytes, keyBase64)
+        return AesCbcHmacCrypto.decrypt(encryptedBytes, keyBase64)
     }
 
     /**

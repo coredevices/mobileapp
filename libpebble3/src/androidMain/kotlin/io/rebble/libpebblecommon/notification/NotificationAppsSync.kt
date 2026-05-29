@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
+import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +111,7 @@ class AndroidNotificationAppsSync(
                 vibePatternName = null,
                 colorName = null,
                 iconCode = null,
+                allowDuplicates = NotificationProperties.lookup(osApp.packageName)?.allowDuplicates ?: false,
             )
             if (existing == null) {
 //                logger.d("adding ${osApp.packageName}")
@@ -134,6 +136,7 @@ class AndroidNotificationAppsSync(
                     vibePatternName = existing.vibePatternName,
                     colorName = existing.colorName,
                     iconCode = existing.iconCode,
+                    allowDuplicates = existing.allowDuplicates,
                 )
                 if (existing != newEntryWithExistingStates) {
                     logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")

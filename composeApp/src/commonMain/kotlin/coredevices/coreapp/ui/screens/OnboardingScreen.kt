@@ -280,6 +280,9 @@ fun OnboardingScreen(
                         SignInButtons(
                             onDismiss = { viewModel.stage.value = OnboardingStage.Done },
                             primaryColor = true,
+                            // No anonymous data to preserve at this point — proceed straight
+                            // to the existing account if Firebase reports a collision.
+                            skipAccountSwitchConfirmation = true,
                         )
                         PebbleElevatedButton(
                             text = "Skip",

@@ -50,7 +50,11 @@ class PebbleBle(
         if (lastError == ConnectionFailureReason.GattErrorUnknown147) {
             // Try scanning before connecting (this seems to magically allow android to connect,
             // when otherwise it can't).
-            preConnectScanner.scanBeforeConnect(identifier)
+            try {
+                preConnectScanner.scanBeforeConnect(identifier)
+            } catch (e: IllegalStateException) {
+                logger.e(e) { "Pre-connect scan failed, proceeding with direct connect" }
+            }
         }
 
         val result = gattConnector.connect()

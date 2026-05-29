@@ -5,6 +5,7 @@ import CommonRoutes
 import CoreAppVersion
 import NextBugReportContext
 import PlatformUiContext
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
@@ -156,11 +158,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.wispr_flow_logo_black
+import coreapp.pebble.generated.resources.wispr_flow_logo_white
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import theme.CoreAppColorScheme
 import theme.CoreAppTheme
 import theme.ThemeProvider
+import theme.currentColorScheme
 import kotlin.math.roundToLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -197,6 +205,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
     Apps("Apps", Icons.Default.Apps),
+    Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
     Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
     Speech("Speech Recognition", Icons.Default.Mic),
@@ -211,6 +220,11 @@ enum class Section(val title: String, val icon: ImageVector) {
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
+}
+
+fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
+    Section.Battery -> PebbleNavBarRoutes.BatterySettingsRoute
+    else -> null
 }
 
 object SettingsIds {
@@ -1317,6 +1331,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Watch settings sync",
+                    description = "Only for debugging - disables syncing settings with watch when disabled",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = libPebbleConfig.watchConfig.enableWatchSettingsSync,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    enableWatchSettingsSync = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
                 basicSettingsDropdownItem(
                     id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",
@@ -1410,6 +1441,31 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
                     action = { showSpokenLanguageDialog = true },
+                ),
+                SettingsItem(
+                    title = "Cloud Recognition Provider",
+                    isDebugSetting = false,
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    keywords = "",
+                    item = {
+                        val logo = if (currentColorScheme() == CoreAppColorScheme.Grey) {
+                            Res.drawable.wispr_flow_logo_white
+                        } else {
+                            Res.drawable.wispr_flow_logo_black
+                        }
+                        ListItem(
+                            headlineContent = { Text("Cloud Recognition Provider") },
+                            trailingContent = {
+                                Image(
+                                    painter = painterResource(logo),
+                                    contentDescription = "Wispr Flow",
+                                    modifier = Modifier.height(20.dp),
+                                )
+                            },
+                            shadowElevation = ELEVATION,
+                        )
+                    }
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -1777,7 +1833,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
         val sectionsToShowInList = remember(filteredItems) {
             Section.entries.filter { section ->
-                filteredItems.any { it.section == section }
+                filteredItems.any { it.section == section } || section.navigatesDirectlyTo() != null
             }
         }
         val groupedItemsToDisplay = remember(filteredItems) {
@@ -1923,12 +1979,17 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                 } else null,
                                 shadowElevation = ELEVATION,
                                 modifier = Modifier.clickable {
-                                    navBarNav.navigateTo(
-                                        PebbleNavBarRoutes.WatchSettingsCategoryRoute(
-                                            section = section.name,
-                                            topLevelType = viewModel.selectedTopLevelType.name,
+                                    val navigateDirectlyTo = section.navigatesDirectlyTo()
+                                    if (navigateDirectlyTo != null) {
+                                        navBarNav.navigateTo(navigateDirectlyTo)
+                                    } else {
+                                        navBarNav.navigateTo(
+                                            PebbleNavBarRoutes.WatchSettingsCategoryRoute(
+                                                section = section.name,
+                                                topLevelType = viewModel.selectedTopLevelType.name,
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             )
                         }
@@ -2607,4 +2668,3 @@ enum class WeatherSyncInterval(
         fun from(period: Duration): WeatherSyncInterval = entries.find { it.period == period } ?: OneHour
     }
 }
-

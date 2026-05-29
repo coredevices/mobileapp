@@ -142,7 +142,7 @@ class IndexNotificationManager(
                 return InflightIndexNotification.Error(notifId, timestamp, entry.error ?: "Agent processing error")
             }
             RecordingEntryStatus.transcription_error -> {
-                return InflightIndexNotification.Error(notifId, timestamp, "Transcription error")
+                return InflightIndexNotification.Error(notifId, timestamp, "Unable to transcribe Index recording")
             }
             RecordingEntryStatus.completed -> {} // Continue to process
         }

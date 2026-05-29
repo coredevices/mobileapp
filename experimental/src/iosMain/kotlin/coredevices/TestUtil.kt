@@ -21,7 +21,6 @@ import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthException
 import dev.gitlive.firebase.auth.auth
-import dev.gitlive.firebase.firestore.DocumentSnapshot
 import dev.gitlive.firebase.initialize
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -32,7 +31,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -76,6 +74,9 @@ object TestUtil {
                         object : Platform {
                             override val name: String
                                 get() = "iOS"
+
+                            override val deviceModelName: String
+                                get() = "Test Device"
 
                             override suspend fun openUrl(url: String) {
 
@@ -214,12 +215,6 @@ private object UsersDaoTestImpl: UsersDao {
     override val user: Flow<PebbleUser?> = MutableStateFlow(PebbleUser(false, User()))
     override val loginEvents: Flow<PebbleUser>
         get() = TODO("Not yet implemented")
-
-    override suspend fun updateNotionToken(notionToken: String?) {
-    }
-
-    override suspend fun updateMcpRunToken(mcpRunToken: String?) {
-    }
 
     override suspend fun updateTodoBlockId(todoBlockId: String) {
     }

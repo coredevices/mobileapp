@@ -102,6 +102,12 @@ class NotificationApi(
         }
     }
 
+    override fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        libPebbleCoroutineScope.launch {
+            notificationAppDao.updateAppAllowDuplicates(packageName, allowDuplicates)
+        }
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,

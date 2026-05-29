@@ -1883,6 +1883,76 @@ private val LanguagePacksJson = """
       "localName": "עברית",
       "name": "Hebrew",
       "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "asterix",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "obelix_evt",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "obelix_dvt",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "obelix_pvt",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "getafix_evt",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "getafix_dvt",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
+    },
+    {
+      "ISOLocal": "ar_SA",
+      "file": "https://github.com/user-attachments/files/28068835/ar_SA.pbl.zip",
+      "firmware": "4.0.0",
+      "hardware": "getafix_dvt2",
+      "id": "ar_SA_v1",
+      "localName": "Arabic",
+      "name": "Arabic",
+      "version": 1
     }
   ]
 }

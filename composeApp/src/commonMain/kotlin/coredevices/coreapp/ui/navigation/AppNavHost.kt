@@ -20,6 +20,7 @@ import androidx.navigation.toRoute
 import co.touchlab.kermit.Logger
 import coredevices.EnableExperimentalDevices
 import coredevices.ExperimentalDevices
+import coredevices.ring.ui.navigation.RingRoute
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
@@ -104,9 +105,19 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
     val experimentalDevices: ExperimentalDevices = koinInject()
     NavHost(navController, startDestination = startDestination) {
         experimentalDevices.addExperimentalRoutes(this, coreNav)
-        addPebbleRoutes(coreNav, indexScreen = { topBarParams, navBarNav ->
-            experimentalDevices.IndexScreen(coreNav, topBarParams)
-        })
+        addPebbleRoutes(
+            coreNav,
+            indexScreen = { topBarParams, navBarNav, scopedCoreNav ->
+                // Use the inner-scoped CoreNav so detail navigations
+                // (RecordingDetails, ObjectDetails, FullFeed, ...) stay
+                // inside the bottom-nav chrome.
+                experimentalDevices.IndexScreen(scopedCoreNav, topBarParams)
+            },
+            addExperimentalRoutes = { scopedCoreNav ->
+                experimentalDevices.addExperimentalRoutes(this, scopedCoreNav)
+            },
+            isInnerScopedRoute = { it is RingRoute },
+        )
         if (CommonBuildKonfig.QA) {
             composable<CommonRoutes.BugReport>(
                 deepLinks = listOf(

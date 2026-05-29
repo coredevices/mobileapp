@@ -59,6 +59,10 @@ data class WatchPrefItem(
         SNullTerminatedString(StructMapper(), id).toBytes()
 
     override fun value(params: ValueParams): UByteArray? {
+        if (!params.libPebbleConfigFlow.value.watchConfig.enableWatchSettingsSync) {
+            logger.d("Watch settings sync disabled")
+            return null
+        }
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w { "Don't know how to encode watch pref key: $id" }

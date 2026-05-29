@@ -26,7 +26,7 @@ import platform.posix.size_tVar
  * AES-256-CBC + HMAC-SHA256 (Encrypt-then-MAC).
  * Wire format: IV(16) || HMAC(32) || ciphertext.
  */
-actual object AesGcmCrypto {
+actual object AesCbcHmacCrypto {
     private const val IV_LENGTH = 16
     private const val HMAC_LENGTH = 32
 

@@ -35,6 +35,9 @@ import dev.gitlive.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
@@ -52,6 +55,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -78,7 +82,23 @@ class RecordingProcessingQueue(
         private val logger = Logger.withTag("RecordingProcessingQueue")
     }
 
+    // Best-effort guard against two concurrent emissions uploading the same
+    // recording. Correctness no longer depends on it (the live re-read below is
+    // idempotent); the lock just keeps the set from corrupting under concurrency.
     private val uploadingIds = mutableSetOf<Long>()
+    private val uploadingIdsLock = Mutex()
+
+    private suspend fun inFlightSnapshot(): Set<Long> =
+        uploadingIdsLock.withLock { uploadingIds.toSet() }
+
+    /** Atomically claims [id]; returns false if an upload is already in flight. */
+    private suspend fun tryBeginUpload(id: Long): Boolean =
+        uploadingIdsLock.withLock { uploadingIds.add(id) }
+
+    /** Releases [id]. NonCancellable so scope teardown can't skip the release. */
+    private suspend fun finishUpload(id: Long) = withContext(NonCancellable) {
+        uploadingIdsLock.withLock { uploadingIds.remove(id) }
+    }
 
     init {
         // Observe local recordings and sync to Firestore. Mirrors the old RingService
@@ -88,57 +108,35 @@ class RecordingProcessingQueue(
         // (entries/messages added after the initial row was created), which the
         // firestoreId-only filter silently dropped.
         val preferences: Preferences = get()
-        recordingRepository.getAllRecordings().drop(1).debounce(300).onEach { recordings ->
+        recordingRepository.getAllRecordings().drop(1).debounce(2000).onEach { recordings ->
             if (!preferences.backupEnabled.value) return@onEach
             val firestoreRecordingsDao: FirestoreRecordingsDao = get()
             val recordingEntryDao: RecordingEntryDao = get()
             val conversationMessageDao: ConversationMessageDao = get()
 
             // Skip pure placeholders. A row with zero entries hasn't
-            // produced any user-visible content (transcription failed,
-            // capture aborted, or transcription is still in flight).
-            // Pushing it creates ghost "Index Recording" rows on every
-            // other device, and — worse — re-creates docs that were
-            // hard-deleted server-side while this device was offline,
-            // since the listener never fired REMOVED for them.
+            // produced any user-visible content
             val recordingsWithEntries = recordingEntryDao
                 .getRecordingIdsWithEntries()
                 .toHashSet()
 
-            // Decide which rows need a write to Firestore. Two cases:
-            //   1. Remote doc doesn't exist yet (first upload).
-            //   2. Remote.updated < local.updated (we have newer content).
-            // For each candidate we ALSO capture the remote's `metadata`
-            // (NoteMetadata) so the upload can preserve it — see comment
-            // on [LocalRecording.toDocument]. Without this every push
-            // from this device clobbers metadata written by another
-            // client (iOS, manual edits) with `null`.
-            val uploadOrUpdate = recordings.mapNotNull { localRecording ->
-                if (localRecording.id in uploadingIds) return@mapNotNull null
-                if (localRecording.id !in recordingsWithEntries) return@mapNotNull null
-                val firestoreId = localRecording.firestoreId
-                    // Legacy rows from before pre-allocation may still have
-                    // null firestoreId. Treat as "needs upload" with no
-                    // remote metadata to preserve. Should be rare/none on
-                    // any device with the new code path.
-                    ?: return@mapNotNull localRecording to null
-                try {
-                    val snapshot = firestoreRecordingsDao.getRecording(firestoreId).get()
-                    if (!snapshot.exists) return@mapNotNull localRecording to null
-                    val remoteRecording = snapshot.data<RecordingDocument>()
-                    if (remoteRecording.updated < localRecording.updated.toEpochMilliseconds()) {
-                        localRecording to remoteRecording.metadata
-                    } else null
-                } catch (e: Exception) {
-                    logger.e(e) { "Error fetching remote recording $firestoreId, will attempt to re-upload" }
-                    localRecording to null
-                }
+            val inFlight = inFlightSnapshot()
+            // Pure-local dirty check — no per-row Firestore read (that didn't
+            // scale to thousands of rows). Push when the row changed since our
+            // last successful push. The cloud→local listener pins both
+            // `updated` and `lastPushedUpdated` to remote on ingest, so rows
+            // merely behind remote aren't seen as dirty.
+            val needsPush = recordings.filter { localRecording ->
+                if (localRecording.id in inFlight) return@filter false
+                if (localRecording.id !in recordingsWithEntries) return@filter false
+                val watermark = localRecording.lastPushedUpdated
+                watermark == null || localRecording.updated.toEpochMilliseconds() > watermark
             }
-            if (uploadOrUpdate.isEmpty()) return@onEach
-            logger.i { "Found ${uploadOrUpdate.size} local recordings to upload or update" }
+            if (needsPush.isEmpty()) return@onEach
+            logger.i { "Found ${needsPush.size} local recordings to push" }
 
-            for ((localRecording, preservedMetadata) in uploadOrUpdate) {
-                if (!uploadingIds.add(localRecording.id)) continue // already in-flight
+            for (localRecording in needsPush) {
+                if (!tryBeginUpload(localRecording.id)) continue // already in-flight
                 scope.launch(Dispatchers.IO) {
                     try {
                         val entries = recordingEntryDao.getEntriesForRecording(localRecording.id).first()
@@ -157,7 +155,6 @@ class RecordingProcessingQueue(
                                 )
                             },
                             messages = messages.map { it.document },
-                            metadata = preservedMetadata,
                         )
                         if (preferences.useEncryption.value) {
                             val encryptor: DocumentEncryptor = get()
@@ -176,15 +173,22 @@ class RecordingProcessingQueue(
                         // the old create-doc path.
                         val existingFirestoreId = localRecording.firestoreId
                         val firestoreRecordingId = if (existingFirestoreId == null) {
-                            val remoteId = firestoreRecordingsDao.addRecording(doc).id
-                            recordingRepository.updateRecordingFirestoreId(localRecording.id, remoteId)
-                            logger.i { "Uploaded recording ${localRecording.id} → $remoteId (legacy null-id path)" }
-                            remoteId
+                            val newId = firestoreRecordingsDao.newDocumentId()
+                            recordingRepository.updateRecordingFirestoreId(localRecording.id, newId)
+                            firestoreRecordingsDao.setRecording(newId, doc)
+                            logger.i { "Uploaded recording ${localRecording.id} → $newId" }
+                            newId
                         } else {
                             firestoreRecordingsDao.setRecording(existingFirestoreId, doc)
                             logger.i { "Pushed recording ${localRecording.id} → $existingFirestoreId" }
                             existingFirestoreId
                         }
+                        // Watermark the version we just pushed so this row
+                        // isn't rescanned as dirty until it changes again.
+                        recordingRepository.setLastPushedUpdated(
+                            localRecording.id,
+                            localRecording.updated.toEpochMilliseconds(),
+                        )
                         val isFinal = entries.isNotEmpty() && entries.all {
                             it.status == RecordingEntryStatus.completed || it.status.isError()
                         }
@@ -204,7 +208,7 @@ class RecordingProcessingQueue(
                     } catch (e: Exception) {
                         logger.e(e) { "Error uploading recording ${localRecording.id} to Firestore" }
                     } finally {
-                        uploadingIds.remove(localRecording.id)
+                        finishUpload(localRecording.id)
                     }
                 }
             }
@@ -363,6 +367,11 @@ class RecordingProcessingQueue(
         recordingRepository.setRecordingUpdated(
             localId,
             Instant.fromEpochMilliseconds(recording.updated),
+        )
+        // Watermark to now
+        recordingRepository.setLastPushedUpdated(
+            localId,
+            Clock.System.now().toEpochMilliseconds(),
         )
     }
 

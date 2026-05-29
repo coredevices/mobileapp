@@ -10,7 +10,9 @@ import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.Timestamp
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.fromMilliseconds
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -37,7 +39,7 @@ class FirestoreRingDebugDelegate(
     private fun waitForAuth() {
         if (Firebase.auth.currentUser != null) return
         if (waitForAuthJob != null && waitForAuthJob?.isActive == true) return
-        waitForAuthJob = GlobalScope.launch {
+        waitForAuthJob = GlobalScope.launch(Dispatchers.IO) {
             val authFlow = Firebase.auth.authStateChanged.filterNotNull().first()
             logger.i { "Authenticated user detected, uploading pending debug info (${pendingUploads.size} items)." }
             val uploads = pendingUploads.toList()
@@ -60,7 +62,7 @@ class FirestoreRingDebugDelegate(
         val debugCollection = Firebase.firestore.collection("index_dumps")
             .document(userId)
             .collection("index_01")
-        GlobalScope.launch {
+        GlobalScope.launch(Dispatchers.IO) {
             try {
                 val doc = info.toJson()
                 val docRef = debugCollection.add(doc)

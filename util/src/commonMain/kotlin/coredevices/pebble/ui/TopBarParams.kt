@@ -21,6 +21,10 @@ data class TopBarParams(
     val overrideGoBack: Flow<Unit>,
     private val showSnackbar: (String) -> Unit,
     val scrollToTop: Flow<Unit>,
+    /** Hide the chrome's TopAppBar for screens that render their own
+     *  inline header (e.g. the Index home view). Defaults to no-op so
+     *  callers that don't care don't have to opt in. */
+    val setHidden: (Boolean) -> Unit = {},
 ) : SnackbarDisplay {
     override fun showSnackbar(message: String) = showSnackbar.invoke(message)
 }

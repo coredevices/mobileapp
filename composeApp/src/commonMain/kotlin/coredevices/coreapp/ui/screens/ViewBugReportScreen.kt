@@ -1,6 +1,7 @@
 package coredevices.coreapp.ui.screens
 
 import CoreNav
+import DocumentAttachment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.InsertPhoto
 import androidx.compose.material.icons.filled.Troubleshoot
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ElevatedAssistChip
@@ -52,6 +54,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
+import rememberOpenPhotoLauncher
 
 private val logger = Logger.withTag("ViewBugReportScreen")
 
@@ -88,17 +91,21 @@ fun ViewBugReportScreen(
         }
         val snackBarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
-        val launchAttachmentDialog = rememberOpenDocumentLauncher { attachments ->
-            if (attachments == null) return@rememberOpenDocumentLauncher
-            ticket?.let {
-                scope.launch {
-                    val message =
-                        if (attachments.size == 1) "Uploading attachment" else "Uploading attachments"
-                    snackBarHostState.showSnackbar(message)
+        val onAttachmentsPicked: (List<DocumentAttachment>?) -> Unit = { attachments ->
+            if (attachments != null) {
+                ticket?.let {
+                    scope.launch {
+                        val message =
+                            if (attachments.size == 1) "Uploading attachment" else "Uploading attachments"
+                        snackBarHostState.showSnackbar(message)
+                    }
+                    bugReportProcessor.updateBugReportWithNewAttachments(ticket.ticketId, attachments)
                 }
-                bugReportProcessor.updateBugReportWithNewAttachments(ticket.ticketId, attachments)
             }
         }
+        val launchAttachmentDialog = rememberOpenDocumentLauncher(onAttachmentsPicked)
+        val launchPhotoDialog = rememberOpenPhotoLauncher(onAttachmentsPicked)
+        val showPhotoChip = platform == Platform.IOS
 
         val subject = ticket?.subject ?: ""
         Scaffold(
@@ -123,6 +130,24 @@ fun ViewBugReportScreen(
                     horizontalArrangement = SpaceEvenly,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
+                    if (showPhotoChip) {
+                        ElevatedAssistChip(
+                            label = { Text("Add Image") },
+                            onClick = {
+                                ticket?.let {
+                                    launchPhotoDialog()
+                                }
+                            },
+                            enabled = ticket != null,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.InsertPhoto,
+                                    contentDescription = "Add Image",
+                                )
+                            },
+                            elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 6.dp),
+                        )
+                    }
                     ElevatedAssistChip(
                         label = { Text("Attach Files") },
                         onClick = {

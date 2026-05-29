@@ -21,13 +21,40 @@ import coredevices.util.transcription.CactusModelPathProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Persists a per-model heartbeat so a download job that is abandoned (process
+ * death, hung blocking I/O) can be detected as stale across process restarts.
+ */
+internal class DownloadHeartbeatStore(context: Context) {
+    private val prefs = context.getSharedPreferences("model_download_heartbeat", Context.MODE_PRIVATE)
+
+    fun record(slug: String) {
+        prefs.edit().putLong(key(slug), System.currentTimeMillis()).apply()
+    }
+
+    fun clear(slug: String) {
+        prefs.edit().remove(key(slug)).apply()
+    }
+
+    fun lastHeartbeat(slug: String): Long? =
+        prefs.getLong(key(slug), -1L).takeIf { it > 0L }
+
+    private fun key(slug: String) = "hb_$slug"
+}
 
 actual class ModelDownloadManager(
     private val context: Context
@@ -35,14 +62,42 @@ actual class ModelDownloadManager(
     private val serviceComponentName = ComponentName(context, ModelDownloadService::class.java)
     private val jobScheduler: JobScheduler
         get() = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+
+    internal val heartbeatStore = DownloadHeartbeatStore(context)
+
     private val _downloadStatus: MutableStateFlow<ModelDownloadStatus> = MutableStateFlow(
-        // Check if there's an existing job for our service, since jobs survive process restarts
-        jobScheduler.allPendingJobs.firstOrNull { it.service == serviceComponentName }?.let {
-            val modelSlug = it.extras.getString(ModelDownloadService.KEY_MODEL_SLUG) ?: return@let null
-            ModelDownloadStatus.Downloading(modelSlug)
+        // Jobs survive process restarts; only report Downloading if the job is
+        // still alive (recent heartbeat), otherwise it was abandoned.
+        pendingServiceJobs().firstOrNull()?.let { job ->
+            val slug = job.extras.getString(ModelDownloadService.KEY_MODEL_SLUG) ?: return@let null
+            if (isJobStale(slug)) null else ModelDownloadStatus.Downloading(slug)
         } ?: ModelDownloadStatus.Idle
     )
     actual val downloadStatus: StateFlow<ModelDownloadStatus> = _downloadStatus.asStateFlow()
+
+    init {
+        // Evict any abandoned jobs on startup so the guard can't be blocked by them.
+        reconcileStaleJobs()
+    }
+
+    private fun pendingServiceJobs() =
+        jobScheduler.allPendingJobs.filter { it.service == serviceComponentName }
+
+    private fun isJobStale(slug: String): Boolean =
+        DownloadJobLiveness.isStale(heartbeatStore.lastHeartbeat(slug), System.currentTimeMillis())
+
+    private fun reconcileStaleJobs() {
+        pendingServiceJobs().forEach { job ->
+            val slug = job.extras.getString(ModelDownloadService.KEY_MODEL_SLUG)
+            if (slug == null || isJobStale(slug)) {
+                Logger.withTag("ModelDownloadManager").w {
+                    "Cancelling stale/abandoned download job for $slug (id=${job.id})."
+                }
+                jobScheduler.cancel(job.id)
+                slug?.let { heartbeatStore.clear(it) }
+            }
+        }
+    }
 
     private fun buildNetworkRequest(allowMetered: Boolean): NetworkRequest {
         val builder = NetworkRequest.Builder()
@@ -91,61 +146,72 @@ actual class ModelDownloadManager(
         return builder.build()
     }
 
-    actual fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
-        val existingJobs = jobScheduler.allPendingJobs.filter { it.service == serviceComponentName }
-        if (existingJobs.isNotEmpty()) {
-            val allSameModel = existingJobs.all {
-                it.extras.getString(ModelDownloadService.KEY_MODEL_SLUG) == modelInfo.slug
-            }
-            if (allSameModel) {
-                Logger.withTag("ModelDownloadManager").i { "Download job already scheduled for ${modelInfo.slug}, skipping." }
-                return true
-            }
-            existingJobs.forEach { job ->
-                val slug = job.extras.getString(ModelDownloadService.KEY_MODEL_SLUG)
-                Logger.withTag("ModelDownloadManager").w { "Cancelling existing download job for $slug to download ${modelInfo.slug}." }
-                jobScheduler.cancel(job.id)
-            }
+    /**
+     * Schedules a download, replacing any existing job for our service. A job
+     * for the same model that is still alive is left running; stale jobs and
+     * jobs for other models are cancelled first so a hung job can never
+     * permanently block a new download.
+     */
+    private fun scheduleDownload(modelInfo: ModelInfo, stt: Boolean, allowMetered: Boolean): Boolean {
+        val existingJobs = pendingServiceJobs()
+        val aliveSameModelJob = existingJobs.firstOrNull {
+            it.extras.getString(ModelDownloadService.KEY_MODEL_SLUG) == modelInfo.slug &&
+                !isJobStale(modelInfo.slug)
         }
+        if (aliveSameModelJob != null && existingJobs.size == 1) {
+            Logger.withTag("ModelDownloadManager").i {
+                "Download already in progress for ${modelInfo.slug}, skipping."
+            }
+            return true
+        }
+        existingJobs.forEach { job ->
+            val slug = job.extras.getString(ModelDownloadService.KEY_MODEL_SLUG)
+            Logger.withTag("ModelDownloadManager").w {
+                "Cancelling existing download job for $slug to download ${modelInfo.slug}."
+            }
+            jobScheduler.cancel(job.id)
+            slug?.let { heartbeatStore.clear(it) }
+        }
+        heartbeatStore.clear(modelInfo.slug)
         val info = buildJobInfo(
             modelSlug = modelInfo.slug,
             modelSizeMb = modelInfo.sizeInMB,
-            stt = true,
+            stt = stt,
             networkRequest = buildNetworkRequest(allowMetered),
             allowMetered = allowMetered
         )
         return jobScheduler.schedule(info) == JobScheduler.RESULT_SUCCESS
     }
 
-    actual fun downloadLanguageModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean {
-        val info = buildJobInfo(
-            modelSlug = modelInfo.slug,
-            modelSizeMb = modelInfo.sizeInMB,
-            stt = false,
-            networkRequest = buildNetworkRequest(allowMetered),
-            allowMetered = allowMetered
-        )
-        return jobScheduler.schedule(info) == JobScheduler.RESULT_SUCCESS
-    }
+    actual fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean =
+        scheduleDownload(modelInfo, stt = true, allowMetered = allowMetered)
+
+    actual fun downloadLanguageModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean =
+        scheduleDownload(modelInfo, stt = false, allowMetered = allowMetered)
 
     actual fun cancelDownload() {
-        jobScheduler.allPendingJobs.forEach {
-            if (it.service == serviceComponentName) {
-                jobScheduler.cancel(it.id)
-            }
+        pendingServiceJobs().forEach { job ->
+            val slug = job.extras.getString(ModelDownloadService.KEY_MODEL_SLUG)
+            jobScheduler.cancel(job.id)
+            slug?.let { heartbeatStore.clear(it) }
         }
     }
 }
 
 class ModelDownloadService : JobService(), KoinComponent {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val modelDownloadManager: ModelDownloadManager by inject()
+    private val heartbeatStore: DownloadHeartbeatStore get() = modelDownloadManager.heartbeatStore
+    private var currentJob: Job? = null
+    private val stoppedBySystem = AtomicBoolean(false)
     lateinit var modelSlug: String
 
     companion object {
         const val KEY_MODEL_SLUG = "model_slug"
         const val KEY_IS_STT = "is_stt"
         private const val CHANNEL_ID = "model_download_channel"
+        // Generous upper bound so a wedged download can't run forever.
+        private const val DOWNLOAD_TIMEOUT_MILLIS = 45L * 60L * 1000L
         private val logger = Logger.withTag("ModelDownloadService")
     }
 
@@ -159,6 +225,7 @@ class ModelDownloadService : JobService(), KoinComponent {
         this.modelSlug = modelSlug
         if (!params.extras.containsKey(KEY_IS_STT)) return false
         val isStt = params.extras.getBoolean(KEY_IS_STT)
+        stoppedBySystem.set(false)
 
         logger.i { "Starting download job for model: $modelSlug, stt = $isStt" }
         createChannel()
@@ -174,34 +241,69 @@ class ModelDownloadService : JobService(), KoinComponent {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             setNotification(params, modelSlug.hashCode(), notification, JOB_END_NOTIFICATION_POLICY_DETACH)
         }
-        scope.launch {
+        currentJob = scope.launch {
+            val heartbeat = launch {
+                while (isActive) {
+                    heartbeatStore.record(modelSlug)
+                    delay(DownloadJobLiveness.DEFAULT_HEARTBEAT_INTERVAL_MILLIS)
+                }
+            }
             try {
+                heartbeatStore.record(modelSlug)
                 modelDownloadManager.updateDownloadStatus(ModelDownloadStatus.Downloading(modelSlug))
-                downloadModel(modelSlug, isStt)
+                withTimeout(DOWNLOAD_TIMEOUT_MILLIS) {
+                    downloadModel(modelSlug, isStt)
+                }
                 logger.i { "Completed download job for model: $modelSlug" }
-                val completedNotification = notifBuilder()
-                    .setContentTitle("Model Downloaded")
-                    .setContentText("Successfully downloaded model: $modelSlug")
-                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setOngoing(false)
-                    .build()
-                notificationManager.notify(modelSlug.hashCode(), completedNotification)
+                notificationManager.notify(
+                    modelSlug.hashCode(),
+                    notifBuilder()
+                        .setContentTitle("Model Downloaded")
+                        .setContentText("Successfully downloaded model: $modelSlug")
+                        .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                        .setOngoing(false)
+                        .build()
+                )
                 modelDownloadManager.updateDownloadStatus(ModelDownloadStatus.Idle)
-                jobFinished(params, false)
+            } catch (e: TimeoutCancellationException) {
+                logger.e(e) { "Timed out downloading model: $modelSlug" }
+                notificationManager.notify(
+                    modelSlug.hashCode(),
+                    notifBuilder()
+                        .setContentTitle("Model Download Failed")
+                        .setContentText("Download timed out: $modelSlug")
+                        .setSmallIcon(android.R.drawable.stat_notify_error)
+                        .setOngoing(false)
+                        .build()
+                )
+                modelDownloadManager.updateDownloadStatus(
+                    ModelDownloadStatus.Failed(modelSlug, "Download timed out")
+                )
             } catch (e: CancellationException) {
+                // Stopped by the system via onStopJob; it owns the reschedule decision.
                 throw e
             } catch (e: Throwable) {
                 logger.e(e) { "Failed download job for model: $modelSlug" }
-                val failedNotification = notifBuilder()
-                    .setContentTitle("Model Download Failed")
-                    .setContentText("Failed to download model: $modelSlug")
-                    .setSmallIcon(android.R.drawable.stat_notify_error)
-                    .setOngoing(false)
-                    .build()
-                notificationManager.notify(modelSlug.hashCode(), failedNotification)
-                modelDownloadManager.updateDownloadStatus(ModelDownloadStatus.Failed(modelSlug, "Download failed"))
-                jobFinished(params, false)
-                return@launch
+                notificationManager.notify(
+                    modelSlug.hashCode(),
+                    notifBuilder()
+                        .setContentTitle("Model Download Failed")
+                        .setContentText("Failed to download model: $modelSlug")
+                        .setSmallIcon(android.R.drawable.stat_notify_error)
+                        .setOngoing(false)
+                        .build()
+                )
+                modelDownloadManager.updateDownloadStatus(
+                    ModelDownloadStatus.Failed(modelSlug, "Download failed")
+                )
+            } finally {
+                heartbeat.cancel()
+                heartbeatStore.clear(modelSlug)
+                // If the system stopped us, it reschedules based on onStopJob's
+                // return value; calling jobFinished here would be a no-op anyway.
+                if (!stoppedBySystem.get()) {
+                    jobFinished(params, false)
+                }
             }
         }
         return true
@@ -217,13 +319,17 @@ class ModelDownloadService : JobService(), KoinComponent {
     }
 
     override fun onStopJob(params: JobParameters?): Boolean {
+        stoppedBySystem.set(true)
         val reason = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             params?.stopReason
         } else {
             null
         }
-        scope.cancel("Job cancelled")
-        logger.i { "Job cancelled for model: $modelSlug, reason = $reason" }
+        currentJob?.cancel(CancellationException("Job stopped by system, reason=$reason"))
+        logger.i { "Job stopped for model: $modelSlug, reason = $reason" }
+        if (::modelSlug.isInitialized) {
+            heartbeatStore.clear(modelSlug)
+        }
         val title = when (reason) {
             JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> "Model Download Paused"
             JobParameters.STOP_REASON_TIMEOUT -> "Model Download Error"
@@ -247,9 +353,21 @@ class ModelDownloadService : JobService(), KoinComponent {
             .setOngoing(false)
             .build()
 
-        notificationManager.notify(modelSlug.hashCode(), cancelledNotification)
+        if (::modelSlug.isInitialized) {
+            notificationManager.notify(modelSlug.hashCode(), cancelledNotification)
+        }
         modelDownloadManager.updateDownloadStatus(ModelDownloadStatus.Idle)
-        return false
+        // Let the system retry transient stops; don't retry app/user-driven ones.
+        return shouldReschedule(reason)
+    }
+
+    private fun shouldReschedule(stopReason: Int?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || stopReason == null) return true
+        return when (stopReason) {
+            JobParameters.STOP_REASON_CANCELLED_BY_APP,
+            JobParameters.STOP_REASON_USER -> false
+            else -> true
+        }
     }
 
     private fun createChannel() {

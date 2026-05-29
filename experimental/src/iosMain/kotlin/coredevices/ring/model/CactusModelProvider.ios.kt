@@ -1,7 +1,7 @@
 package coredevices.ring.model
 
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
+import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,7 +28,8 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     companion object {
         private val logger = Logger.withTag("CactusModelProvider")
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val QUANTIZATION = "int8"
+        private const val STT_QUANTIZATION = "int8"
+        private const val LM_QUANTIZATION = "int4"
         private val downloadMutex = Mutex()
     }
 
@@ -117,7 +118,9 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     private suspend fun downloadAndExtract(modelName: String, targetDir: String, version: String) {
-        val zipName = "${modelName.lowercase()}-$QUANTIZATION.zip"
+        val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
+        val zipName = "${modelName.lowercase()}-$quantization.zip"
         val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
         logger.i { "Downloading model: $url" }
 
@@ -217,7 +220,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
-        Cactus.setTelemetryEnvironment(cacheDir)
+        cactusSetTelemetryEnvironment(cacheDir)
         logger.d { "Telemetry environment set to $cacheDir" }
     }
 

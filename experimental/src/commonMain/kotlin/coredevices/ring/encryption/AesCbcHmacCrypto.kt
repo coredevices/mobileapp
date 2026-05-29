@@ -9,7 +9,7 @@ class TamperedException(message: String) : Exception(message)
  * Wire format: IV(16) || HMAC(32) || AES-CBC-ciphertext (PKCS7 padded).
  * HMAC covers IV + ciphertext.
  */
-expect object AesGcmCrypto {
+expect object AesCbcHmacCrypto {
     /** Encrypt plaintext. Returns IV(16) || HMAC(32) || ciphertext. */
     fun encrypt(plaintext: ByteArray, keyBase64: String): ByteArray
 

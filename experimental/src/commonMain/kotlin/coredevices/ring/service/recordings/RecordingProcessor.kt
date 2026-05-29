@@ -262,7 +262,9 @@ class RecordingProcessor(
         val noToolRan = conv.drop(convEndIdx).all { it.role != MessageRole.tool }
         if (forcedTool != null && noToolRan) {
             // Agent did not take any action, force tool
-            val toolResult = forcedTool()
+            val toolResult = withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
+                forcedTool()
+            }
             logger.w { "Forcing tool call result into conversation" }
             agent.addMessage(
                 ConversationMessageDocument(

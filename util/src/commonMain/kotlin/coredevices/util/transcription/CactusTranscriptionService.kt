@@ -1,8 +1,10 @@
 package coredevices.util.transcription
 
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
-import com.cactus.TranscriptionResult
+import com.cactus.cactusDestroy
+import com.cactus.cactusInit
+import com.cactus.cactusStop
+import com.cactus.cactusTranscribe
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
@@ -34,6 +36,9 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
 import kotlinx.io.readByteArray
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -59,19 +64,19 @@ class CactusTranscriptionService(
     }
 
     private val transcriptionMutex = Mutex()
-    private var model: Cactus? = null
+    private var modelHandle: Long = 0L
     private var initJob: Job? = null
     private var lastInitedModel: String? = null
     private val scope = CoroutineScope(Dispatchers.Default)
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
 
     /**
-     * Run cactus.transcribe() with cancellation support.
+     * Run cactusTranscribe() with cancellation support.
      * Since the native transcribe call is blocking and can't be interrupted by coroutine
-     * cancellation, we monitor the calling coroutine's Job and call cactus.stop() if it
+     * cancellation, we monitor the calling coroutine's Job and call cactusStop() if it
      * gets cancelled while the native call is in progress.
      */
-    private suspend fun cancellableTranscribe(cactus: Cactus, audioPath: String): TranscriptionResult {
+    private suspend fun cancellableTranscribe(handle: Long, audioPath: String): String {
         val freeMemory = try {
             getFreeMemoryMB()
         } catch (e: Exception) {
@@ -85,19 +90,28 @@ class CactusTranscriptionService(
         val callerJob = kotlin.coroutines.coroutineContext[Job]
         val completionHandle = callerJob?.invokeOnCompletion { cause ->
             if (cause != null) {
-                logger.d { "Calling cactus.stop() due to cancellation: ${cause.message}" }
-                cactus.stop()
+                logger.d { "Calling cactusStop() due to cancellation: ${cause.message}" }
+                cactusStop(handle)
             }
         }
         return try {
-            cactus.transcribe(audioPath = audioPath)
+            parseTranscriptionText(cactusTranscribe(handle, audioPath, null, null, null, null))
         } finally {
             completionHandle?.dispose()
         }
     }
 
+    private fun parseTranscriptionText(jsonResult: String): String {
+        return try {
+            Json.parseToJsonElement(jsonResult).jsonObject["response"]?.jsonPrimitive?.content ?: ""
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to parse transcription JSON, using raw result" }
+            jsonResult
+        }
+    }
+
     val lastModelUsed get() = lastInitedModel
-    val isModelReady get() = model != null
+    val isModelReady get() = modelHandle != 0L
     val configuredMode get() = sttConfig.value.mode
     val configuredModel get() = sttConfig.value.modelName
     private var _lastSuccessfulMode: CactusSTTMode? = null
@@ -147,10 +161,11 @@ class CactusTranscriptionService(
         }
         lastTranscriptionAt = TimeSource.Monotonic.markNow()
         warmupMutex.withLock {
-            val cactus = model ?: return
+            val handle = modelHandle
+            if (handle == 0L) return
             withHighPriorityThread {
                 withTimeout(2.seconds) {
-                    cactus.transcribe(pcmData = silentPcm)
+                    cactusTranscribe(handle, null, null, null, null, silentPcm)
                 }
             }
         }
@@ -166,12 +181,14 @@ class CactusTranscriptionService(
         }
         val start = Clock.System.now()
         if (config.modelName != lastInitedModel) {
-            model?.close()
-            model = null
+            if (modelHandle != 0L) {
+                cactusDestroy(modelHandle)
+                modelHandle = 0L
+            }
         }
-        if (model == null) {
+        if (modelHandle == 0L) {
             val modelPath = modelProvider.getSTTModelPath()
-            model = Cactus.create(modelPath)
+            modelHandle = cactusInit(modelPath, null, false)
             lastInitedModel = config.modelName
             val initDuration = Clock.System.now() - start
             logger.d { "Cactus STT model initialized in $initDuration" }
@@ -186,7 +203,7 @@ class CactusTranscriptionService(
             try {
                 initIfNeeded()
                 warmUpIfIdle()
-                onInitialized.trySend(model != null || sttConfig.value.mode == CactusSTTMode.RemoteOnly)
+                onInitialized.trySend(modelHandle != 0L || sttConfig.value.mode == CactusSTTMode.RemoteOnly)
             } catch (e: Throwable) {
                 logger.e(e) { "Cactus STT model initialization failed: ${e.message}" }
                 onInitialized.trySend(false)
@@ -197,8 +214,8 @@ class CactusTranscriptionService(
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
             CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable()
-            CactusSTTMode.LocalOnly -> model != null || modelExists()
-            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst -> wisprFlow.isAvailable() || model != null
+            CactusSTTMode.LocalOnly -> modelHandle != 0L || modelExists()
+            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst -> wisprFlow.isAvailable() || modelHandle != 0L
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
@@ -207,7 +224,7 @@ class CactusTranscriptionService(
     }
 
     override fun earlyInit() {
-        if (initJob == null || model == null || lastInitedModel != sttConfig.value.modelName) {
+        if (initJob == null || modelHandle == 0L || lastInitedModel != sttConfig.value.modelName) {
             if (initJob?.isActive == true) {
                 logger.d { "Cactus STT model initialization already in progress" }
                 return
@@ -227,7 +244,7 @@ class CactusTranscriptionService(
         val modelUsed: String?
     )
 
-    private suspend fun cactusTranscribe(
+    private suspend fun localTranscribe(
         audio: ByteArray,
         sampleRate: Int,
         language: STTLanguage,
@@ -263,17 +280,18 @@ class CactusTranscriptionService(
                     )
                 }
                 CactusSTTMode.LocalOnly -> {
-                    val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+                    val handle = modelHandle
+                    if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                     inferenceBoost.acquire()
-                    val result: TranscriptionResult = try {
+                    val text: String = try {
                         withTimeout(timeout) {
-                            cancellableTranscribe(cactus, path.toString())
+                            cancellableTranscribe(handle, path.toString())
                         }
                     } finally {
                         inferenceBoost.release()
                     }
                     LocalTranscriptionResult(
-                        text = result.text,
+                        text = text,
                         modeUsed = sttMode,
                         modelUsed = sttConfig.value.modelName
                     )
@@ -296,17 +314,18 @@ class CactusTranscriptionService(
                         )
                     } catch (e: Exception) {
                         logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
-                        val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+                        val handle = modelHandle
+                        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                         inferenceBoost.acquire()
-                        val result: TranscriptionResult = try {
+                        val text: String = try {
                             withTimeout(timeout) {
-                                cancellableTranscribe(cactus, path.toString())
+                                cancellableTranscribe(handle, path.toString())
                             }
                         } finally {
                             inferenceBoost.release()
                         }
                         LocalTranscriptionResult(
-                            text = result.text,
+                            text = text,
                             modeUsed = CactusSTTMode.LocalOnly,
                             modelUsed = sttConfig.value.modelName
                         )
@@ -314,17 +333,18 @@ class CactusTranscriptionService(
                 }
                 CactusSTTMode.LocalFirst -> {
                     try {
-                        val cactus = model ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+                        val handle = modelHandle
+                        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
                         inferenceBoost.acquire()
-                        val result: TranscriptionResult = try {
+                        val text: String = try {
                             withTimeout(timeout) {
-                                cancellableTranscribe(cactus, path.toString())
+                                cancellableTranscribe(handle, path.toString())
                             }
                         } finally {
                             inferenceBoost.release()
                         }
                         LocalTranscriptionResult(
-                            text = result.text,
+                            text = text,
                             modeUsed = sttMode,
                             modelUsed = sttConfig.value.modelName
                         )
@@ -426,7 +446,7 @@ class CactusTranscriptionService(
         timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "CactusTranscriptionService.transcribe() called" }
-        if (initJob == null || model == null || lastInitedModel != sttConfig.value.modelName) {
+        if (initJob == null || modelHandle == 0L || lastInitedModel != sttConfig.value.modelName) {
             if (initJob?.isActive != true) {
                 initJob = performInit()
             }
@@ -451,7 +471,7 @@ class CactusTranscriptionService(
             withTimeout(20.seconds) { initJob?.join() }
             val start = Clock.System.now()
             val (text, modeUsed, modelUsed) = transcriptionMutex.withLock {
-                cactusTranscribe(
+                localTranscribe(
                     audio = buffer.readByteArray(),
                     sampleRate = sampleRate,
                     language = language,

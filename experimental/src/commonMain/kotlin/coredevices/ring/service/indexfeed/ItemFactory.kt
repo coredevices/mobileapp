@@ -51,10 +51,11 @@ class ItemFactory {
         createdAt: Instant,
         title: String,
         listHint: String?,
+        resolvedListId: String? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
-        parents = listOf(pickNoteList(listHint)),
+        parents = listOf(resolvedListId ?: pickNoteList(listHint)),
         recordingId = sourceRecordingId,
         toolCallId = null,
         metadata = ItemMetadata.Note,

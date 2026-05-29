@@ -602,6 +602,10 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                     Text(
+                        "Short (3 times) LONG (1 second, 3 times) short (3 times)",
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                    )
+                    Text(
                         "You'll see the light flash red green blue repeatedly when successful.",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
                     )
@@ -861,6 +865,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                         size = 30.dp,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
+                    Text("Short (3 times) LONG (1 second, 3 times) short (3 times)", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
                     Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
                 }
             },

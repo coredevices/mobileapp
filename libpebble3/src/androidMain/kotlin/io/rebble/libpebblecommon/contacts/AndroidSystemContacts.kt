@@ -50,7 +50,7 @@ class AndroidSystemContacts(
         return flow
     }
 
-    override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
+    override suspend fun getContactImage(lookupKey: String): ImageBitmap? = try {
         val contactId = contentResolver.query(
             ContactsContract.Contacts.CONTENT_URI,
             arrayOf(ContactsContract.Contacts._ID),
@@ -74,6 +74,9 @@ class AndroidSystemContacts(
         }
 
         return null
+    } catch (e: SecurityException) {
+        logger.w(e) { "Permission error" }
+        null
     }
 
     override suspend fun getContacts(): List<SystemContact> {

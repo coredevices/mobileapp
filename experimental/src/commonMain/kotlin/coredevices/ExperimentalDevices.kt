@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +30,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.navigation.addRingRoutes
 import coredevices.ring.ui.screens.home.FeedTabContents
+import coredevices.ring.ui.screens.home.IndexFeedScreen
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import dev.gitlive.firebase.Firebase
@@ -152,43 +152,47 @@ class ExperimentalDevices(
                 }
             }
         }
-        LaunchedEffect(Unit) {
-            topBarParams.title("Index")
+        // The chrome's TopAppBar is hidden tab-wide by WatchHomeScreen
+        // whenever currentTab == Index, so we don't manage `setHidden`
+        // here — doing it per-screen would race with detail screens
+        // (their own DetailTopBar + the chrome would show double until
+        // the next compositional pass).
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            topBarParams.title("")
             topBarParams.searchAvailable(null)
-            topBarParams.actions {
+            topBarParams.actions { /* moved into IndexFeedScreen.IndexHeader */ }
+            onDispose { /* nothing to clean up */ }
+        }
+        IndexFeedScreen(
+            coreNav = coreNav,
+            scrollToTop = topBarParams.scrollToTop,
+            headerActions = {
                 BugReportButton(
                     coreNav,
                     pebble = false,
-                    screenContext = mapOf("screen" to "FeedTab")
+                    screenContext = mapOf("screen" to "IndexFeed"),
                 )
                 if (isDebugEnabled) {
                     IconButton(
-                        onClick = {
-                            launchWavImportDialog(listOf("audio/*"))
-                        }
+                        onClick = { launchWavImportDialog(listOf("audio/*")) },
                     ) {
                         Icon(Icons.Default.AudioFile, contentDescription = "Debug")
                     }
                 }
                 IconButton(
-                    onClick = {
-                        coreNav.navigateTo(RingRoutes.Settings)
-                    }
+                    onClick = { coreNav.navigateTo(RingRoutes.Settings) },
                 ) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                 }
-            }
-        }
-        FeedTabContents(
-            topBarParams,
-            PaddingValues.Zero,
-            coreNav,
-            onAddChat = { message ->
-                scope.launch {
-                    recordingQueue.queueTextProcessing(message)
-                }
-            }
+            },
         )
+        // (Legacy `FeedTabContents` is no longer referenced from here.
+        // It used to be kept-alive via a `::FeedTabContents` callable
+        // reference, but Kotlin/Native 2.3 crashes during IR lowering on
+        // `@Composable` function references whose arity exceeds Function6
+        // — KT-bug, "Unexpected number of type arguments". The function
+        // is public top-level so no static analysis will drop it; the
+        // callable-ref keep-alive was always cosmetic.)
     }
 
     suspend fun exportOutput(id: String): DocumentAttachment? {

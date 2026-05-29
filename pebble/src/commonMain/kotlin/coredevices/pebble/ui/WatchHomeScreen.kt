@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -79,6 +83,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
@@ -146,15 +151,21 @@ class WatchHomeViewModel(
     coreConfig: CoreConfigFlow,
     libPebble: LibPebble,
 ) : ViewModel() {
-    val selectedTab = mutableStateOf(if (libPebble.haveSeenFullyConnectedWatch()) {
-        WatchHomeNavTab.WatchFaces
-    } else {
-        WatchHomeNavTab.Watches
-    })
+    val selectedTab = mutableStateOf(
+        when {
+            coreConfig.value.enableIndex -> WatchHomeNavTab.Index
+            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
+            else -> WatchHomeNavTab.Watches
+        }
+    )
     private val actionsFlow = MutableStateFlow<@Composable RowScope.() -> Unit>({})
     private val searchStateFlow = MutableStateFlow<SearchState?>(null)
     private val titleFlow = MutableStateFlow("")
     private val canGoBackFlow = MutableStateFlow(false)
+    /** Set true by screens that render their own header (e.g.
+     *  IndexFeedScreen) to suppress the chrome's TopAppBar entirely so
+     *  the user doesn't see two stacked top bars. */
+    private val hiddenFlow = MutableStateFlow(false)
     val disableNextTransitionAnimation = mutableStateOf(false)
     val indexEnabled = coreConfig.flow.map {
         it.enableIndex
@@ -165,8 +176,8 @@ class WatchHomeViewModel(
     val preferHealthTab = coreConfig.flow.map {
         it.preferHealthTab
     }.stateIn(viewModelScope, SharingStarted.Lazily, coreConfig.value.preferHealthTab)
-    val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow) { actions, searchState, title, canGoBack ->
-        Params(actions, searchState, title, canGoBack)
+    val paramsFlow = combine(actionsFlow, searchStateFlow, titleFlow, canGoBackFlow, hiddenFlow) { actions, searchState, title, canGoBack, hidden ->
+        Params(actions, searchState, title, canGoBack, hidden)
     }.debounce(50.milliseconds)
 
     fun setActions(actions: @Composable RowScope.() -> Unit) {
@@ -181,6 +192,9 @@ class WatchHomeViewModel(
     fun setCanGoBack(canGoBack: Boolean) {
         canGoBackFlow.value = canGoBack
     }
+    fun setHidden(hidden: Boolean) {
+        hiddenFlow.value = hidden
+    }
 }
 
 data class Params(
@@ -188,13 +202,19 @@ data class Params(
     val searchState: SearchState? = null,
     val title: String = "",
     val canGoBack: Boolean = false,
+    val hidden: Boolean = false,
 )
 
 private val logger = Logger.withTag("WatchHomeScreen")
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
+fun WatchHomeScreen(
+    coreNav: CoreNav,
+    indexScreen: @Composable (TopBarParams, NavBarNav, CoreNav) -> Unit,
+    addExperimentalRoutes: NavGraphBuilder.(CoreNav) -> Unit = {},
+    isInnerScopedRoute: (CoreRoute) -> Boolean = { false },
+) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val viewModel = koinViewModel<WatchHomeViewModel>()
@@ -242,6 +262,16 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         }
         val pebbleNavHostController = navControllers[currentTab]!!
 
+        // The Index tab — and EVERY destination inside it (home, recording
+        // detail, list/object detail, full feed, all-lists, all-answers,
+        // settings, etc.) — renders its own inline header. Hide the chrome
+        // TopAppBar for the entire Index tab regardless of which inner
+        // route is active so we don't get a stacked "double top bar" when
+        // navigating from home into a detail screen.
+        LaunchedEffect(currentTab) {
+            viewModel.setHidden(currentTab == WatchHomeNavTab.Index)
+        }
+
         LaunchedEffect(Unit) {
             watchOnboardingFinished.finished.receiveAsFlow().collect {
                 logger.d { "Onboarding finished - switching to apps tab" }
@@ -270,6 +300,8 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
         val scrollToTopFlow = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val systemNavBarBottomHeight =
             WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val imeVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
+        val rootBackUiContext = rememberUiContext()
         val platform = koinInject<Platform>()
         val navBarHeight = remember(systemNavBarBottomHeight, platform) {
             when (platform) {
@@ -415,6 +447,11 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
 
         Scaffold(
             topBar = {
+                // When the active screen renders its own inline header
+                // (e.g. IndexFeedScreen.IndexHeader), suppress the chrome
+                // TopAppBar entirely so the user doesn't see an empty
+                // gray strip stacked above their content.
+                if (params.hidden) return@Scaffold
                 Crossfade(
                     modifier = Modifier.animateContentSize(),
                     targetState = params.searchState?.show == true,
@@ -578,12 +615,44 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     overrideGoBack = overrideGoBack,
                     showSnackbar = { scope.launch { snackbarHostState.showSnackbar(message = it) } },
                     scrollToTop = scrollToTopFlow,
+                    setHidden = { viewModel.setHidden(it) },
                 )
             }
-            val navBarNav = remember(pebbleNavHostController) {
+            // CoreNav scoped to the inner NavHost: routes flagged by
+            // [isInnerScopedRoute] navigate via the inner controller so
+            // the chrome's bottom NavigationBar stays visible. Anything
+            // else delegates to the outer [coreNav]. Used both by the
+            // index screen content and by the experimental detail
+            // routes registered below.
+            val scopedCoreNav = remember(pebbleNavHostController, coreNav, isInnerScopedRoute) {
+                object : CoreNav {
+                    override fun navigateTo(route: CoreRoute) {
+                        if (isInnerScopedRoute(route)) {
+                            pebbleNavHostController.navigate(route)
+                        } else {
+                            coreNav.navigateTo(route)
+                        }
+                    }
+
+                    override fun goBack() {
+                        if (pebbleNavHostController.previousBackStackEntry != null) {
+                            pebbleNavHostController.popBackStack()
+                        } else {
+                            coreNav.goBack()
+                        }
+                    }
+
+                    override fun goBackToPebble() {
+                        coreNav.goBackToPebble()
+                    }
+                }
+            }
+            val navBarNav = remember(pebbleNavHostController, scopedCoreNav) {
                 object : NavBarNav {
                     override fun navigateTo(route: CoreRoute) {
-                        coreNav.navigateTo(route)
+                        // Defer to the scoped variant so RingRoutes etc.
+                        // stay inside the bottom-nav chrome.
+                        scopedCoreNav.navigateTo(route)
                     }
 
                     override fun navigateTo(route: NavBarRoute) {
@@ -591,25 +660,58 @@ fun WatchHomeScreen(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, Na
                     }
 
                     override fun goBack() {
-                        pebbleNavHostController.popBackStack()
+                        if (pebbleNavHostController.previousBackStackEntry != null) {
+                            pebbleNavHostController.popBackStack()
+                        }
                     }
                 }
             }
 
+            // When the screen renders its own header inline (params.hidden),
+            // we drop the *top* inset from the NavHost padding so the
+            // screen's background extends all the way to the top of the
+            // window — otherwise the Scaffold's outer Box leaves a strip
+            // of MaterialTheme.colorScheme.background visible under the
+            // status bar. The inner screen is responsible for applying its
+            // own status-bar inset to keep its header below the status bar.
+            val effectiveInsets = if (params.hidden) {
+                androidx.compose.foundation.layout.PaddingValues(
+                    start = windowInsets.calculateStartPadding(LocalLayoutDirection.current),
+                    end = windowInsets.calculateEndPadding(LocalLayoutDirection.current),
+                    top = 0.dp,
+                    bottom = if (imeVisible) 0.dp else windowInsets.calculateBottomPadding(),
+                )
+            } else {
+                androidx.compose.foundation.layout.PaddingValues(
+                    start = windowInsets.calculateStartPadding(LocalLayoutDirection.current),
+                    end = windowInsets.calculateEndPadding(LocalLayoutDirection.current),
+                    top = windowInsets.calculateTopPadding(),
+                    bottom = if (imeVisible) 0.dp else windowInsets.calculateBottomPadding(),
+                )
+            }
             // Wrap each tab's NavHost in SaveableStateHolder to preserve state
             saveableStateHolder.SaveableStateProvider(key = currentTab) {
                 NavHost(
                     pebbleNavHostController,
                     startDestination = currentTab.route,
-                    modifier = Modifier.padding(windowInsets),
+                    modifier = Modifier.padding(effectiveInsets),
                 ) {
-                    addNavBarRoutes(navBarNav, topBarParams, indexScreen, viewModel)
+                    addNavBarRoutes(navBarNav, topBarParams, indexScreen, scopedCoreNav, viewModel)
+                    // Register Ring/Index detail routes inside the inner
+                    // NavHost so they render with the bottom NavigationBar
+                    // still visible.
+                    addExperimentalRoutes(scopedCoreNav)
                 }
                 // Handle back button when search bar is visible
                 // Placed AFTER NavHost so it registers later and takes priority
                 BackHandler(enabled = params.searchState?.show == true) {
                     params.searchState?.show = false
                     params.searchState?.query = ""
+                }
+                BackHandler(enabled = params.searchState?.show != true && !params.canGoBack) {
+                    if (!moveCurrentTaskToBackground(rootBackUiContext)) {
+                        coreNav.goBack()
+                    }
                 }
             }
         }
@@ -691,7 +793,7 @@ fun WatchHomePreview() {
     PreviewWrapper {
         val viewModel: WatchHomeViewModel = koinInject()
         viewModel.selectedTab.value = WatchHomeNavTab.Watches
-        WatchHomeScreen(NoOpCoreNav,  { _, _ ->})
+        WatchHomeScreen(NoOpCoreNav, { _, _, _ ->})
     }
 }
 

@@ -6,6 +6,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.serialization.decodeValue
 import com.russhwolf.settings.serialization.encodeValue
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.database.dao.BlobDbDao
@@ -33,6 +34,7 @@ import io.rebble.libpebblecommon.packets.blobdb.BlobDB2Response
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.BlobDBService
+import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.web.withTimeoutOr
 import kotlinx.coroutines.delay
@@ -109,6 +111,7 @@ class BlobDB(
     private val timeProvider: TimeProvider,
     private val notificationConfigFlow: NotificationConfigFlow,
     private val settings: Settings,
+    private val libPebbleConfigFlow: LibPebbleConfigFlow,
 ) {
     protected val watchIdentifier: String = identifier.asString
 
@@ -116,6 +119,7 @@ class BlobDB(
         private val BLOBDB_RESPONSE_TIMEOUT = 10.seconds
         private val QUERY_REFRESH_PERIOD = 1.hours
         private val PREF_KEY_DEVICES_HAVE_SYNCED_SETTINGS = "devicesHaveSyncedSettings"
+        private const val NUL_CHAR: Char = '\u0000'
     }
 
     private val logger = Logger.withTag("BlobDB-$watchIdentifier")
@@ -179,6 +183,7 @@ class BlobDB(
             firmwareVersion = firmwareVersion,
             vibePatternDao = blobDatabases.getVibePatternDao(),
             notificationRuleDao = blobDatabases.getNotificationRuleDao(),
+            libPebbleConfigFlow = libPebbleConfigFlow,
         )
         val deviceHasPreviouslySyncedSettings =
             loadDevicePreviousSettingsSyncState().identifiers.contains(identifier.asString)
@@ -223,19 +228,7 @@ class BlobDB(
                     if (message.database == BlobDatabase.WatchPrefs && !deviceHasPreviouslySyncedSettings) {
                         markDeviceHasSyncedSettings()
                     }
-                    // The watch firmware sends health settings (activityPreferences, unitsDistance)
-                    // via the WatchPrefs BlobDB, but the phone stores them in HealthParams.
-                    // Route these keys to the health settings DAO.
-                    val effectiveDatabase = if (message.database == BlobDatabase.WatchPrefs) {
-                        val key = message.key.toByteArray().decodeToString().trimEnd('\u0000')
-                        if (key == "activityPreferences" || key == "unitsDistance") {
-                            BlobDatabase.HealthParams
-                        } else {
-                            message.database
-                        }
-                    } else {
-                        message.database
-                    }
+                    val effectiveDatabase = effectiveDatabaseFor(message)
                     val dao = blobDatabases.get().find { it.databaseId() == effectiveDatabase }
                     val result = dao?.handleWrite(
                         write = message,
@@ -303,6 +296,21 @@ class BlobDB(
                     }
                 }
             }
+        }
+    }
+
+    // The watch firmware sends health settings (activityPreferences, unitsDistance,
+    // hrmPreferences, heartRatePreferences) via the WatchPrefs BlobDB, but the phone stores
+    // them in HealthParams. Route those keys to the health settings DAO.
+    private fun effectiveDatabaseFor(message: DbWrite): BlobDatabase {
+        if (message.database != BlobDatabase.WatchPrefs) return message.database
+        val key = message.key.toByteArray().decodeToString().trimEnd(NUL_CHAR)
+        return when (key) {
+            "activityPreferences",
+            "unitsDistance",
+            "hrmPreferences",
+            "heartRatePreferences" -> BlobDatabase.HealthParams
+            else -> message.database
         }
     }
 

@@ -24,6 +24,10 @@ import kotlin.time.Clock
 interface WatchPrefRealDao : WatchPrefItemDao {
     @Transaction
     override suspend fun handleWrite(write: DbWrite, transport: String, params: ValueParams): BlobResponse.BlobStatus {
+        if (!params.libPebbleConfigFlow.value.watchConfig.enableWatchSettingsSync) {
+            logger.d("Watch settings sync disabled")
+            return BlobResponse.BlobStatus.DataStale
+        }
         val writeItem = write.asWatchPrefItem(params)
         if (writeItem == null) {
             logger.e { "Couldn't decode watch pref item from blobdb write: $write" }

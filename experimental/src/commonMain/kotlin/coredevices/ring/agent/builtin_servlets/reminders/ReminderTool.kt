@@ -7,6 +7,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.currentSessionContext
 import coredevices.ring.ui.isLocale24HourFormat
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -182,7 +183,7 @@ class ReminderTool: BuiltInMcpTool(
         )
         return try {
             val reminderId = reminder.schedule()
-            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            currentSessionContext()?.let { ctx ->
                 runCatching {
                     itemRepo.setItem(
                         itemFactory.simpleUid(),

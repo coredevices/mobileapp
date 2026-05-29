@@ -6,7 +6,6 @@ import cocoapods.FirebaseAuth.FIRAuthErrorUserInfoUpdatedCredentialKey
 import cocoapods.FirebaseAuth.FIROAuthCredential
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.AuthCredential
-import dev.gitlive.firebase.auth.FirebaseAuthUserCollisionException
 import dev.gitlive.firebase.auth.OAuthCredential
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.auth.ios
@@ -18,8 +17,11 @@ private sealed interface LinkResult {
     data class Failure(val error: NSError) : LinkResult
 }
 
+private val logger = Logger.withTag("SignInButton.ios")
+
 internal actual suspend fun signInWithCredential(credential: AuthCredential) {
-    if (Firebase.auth.currentUser?.isAnonymous == true) {
+    val anonUid = if (Firebase.auth.currentUser?.isAnonymous == true) Firebase.auth.currentUser?.uid?.take(8) else null
+    if (anonUid != null) {
         val deferred = CompletableDeferred<LinkResult>()
         Firebase.auth.ios.currentUser()?.linkWithCredential(credential.ios) { authResult, error ->
             if (error != null) {
@@ -32,13 +34,13 @@ internal actual suspend fun signInWithCredential(credential: AuthCredential) {
             is LinkResult.Failure -> {
                 val userInfo = result.error.userInfo
                 val updatedCredential = userInfo[FIRAuthErrorUserInfoUpdatedCredentialKey] as? FIROAuthCredential
-                Logger.i { "User is already created, not linking anonymous user" }
-                updatedCredential?.let {
-                    Firebase.auth.signInWithCredential(OAuthCredential(it))
-                } ?: Firebase.auth.signInWithCredential(credential)
+                logger.i { "User is already created, not linking anonymous user: anonUid=$anonUid provider=${credential.providerId} usingUpdatedCredential=${updatedCredential != null}" }
+                throw AccountSwitchRequiredException(
+                    updatedCredential?.let { OAuthCredential(it) } ?: credential
+                )
             }
             is LinkResult.Success -> {
-                Logger.i { "Successfully linked anonymous user to account" }
+                logger.i { "Successfully linked anonymous user to account: anonUid=$anonUid provider=${credential.providerId} finalUid=${Firebase.auth.currentUser?.uid?.take(8)}" }
                 result.authResult?.credential()?.let {
                     Firebase.auth.signInWithCredential(OAuthCredential(it))
                 } ?: throw IllegalStateException("Linking succeeded but no credential returned")
@@ -46,5 +48,6 @@ internal actual suspend fun signInWithCredential(credential: AuthCredential) {
         }
     } else {
         Firebase.auth.signInWithCredential(credential)
+        logger.i { "signInWithCredential (non-anon path): provider=${credential.providerId} finalUid=${Firebase.auth.currentUser?.uid?.take(8)}" }
     }
 }

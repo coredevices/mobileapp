@@ -58,6 +58,8 @@ data class NotificationAppItem(
     val colorName: String?,
     @ColumnInfo(defaultValue = "null")
     val iconCode: String?,
+    @ColumnInfo(defaultValue = "0")
+    val allowDuplicates: Boolean = false,
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
@@ -233,6 +235,7 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             vibePatternName = null,
             colorName = null,
             iconCode = null,
+            allowDuplicates = false,
         )
     } catch (e: CancellationException) {
         throw e

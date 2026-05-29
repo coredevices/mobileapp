@@ -17,7 +17,7 @@ import javax.crypto.spec.SecretKeySpec
  *
  * Actually: use the full 32 bytes as AES-256 key, derive HMAC key as SHA-256("hmac" || key).
  */
-actual object AesGcmCrypto {
+actual object AesCbcHmacCrypto {
     private const val IV_LENGTH = 16 // AES block size
     private const val HMAC_LENGTH = 32
 

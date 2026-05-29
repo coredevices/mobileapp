@@ -5,6 +5,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -74,12 +75,14 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
             val noteId = noteClient.createNote(createNoteArgs.text)
-            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            currentSessionContext()?.let { ctx ->
                 runCatching {
                     itemRepo.setItem(
                         itemFactory.simpleUid(),
                         itemFactory.noteItem(ctx.sourceRecordingId, ctx.createdAt, createNoteArgs.text, null)
                     )
+                }.onFailure {
+                    Logger.e(it) { "Failed to create note item in database for recording ${ctx.sourceRecordingId}" }
                 }
             }
             ToolCallResult(

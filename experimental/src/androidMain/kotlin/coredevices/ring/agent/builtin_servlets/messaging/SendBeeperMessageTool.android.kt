@@ -9,6 +9,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.currentSessionContext
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -49,7 +50,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             if (resultUri?.getQueryParameter("messageId") != null) {
                 val contact = prefs.approvedBeeperContacts.value.find { it.roomId == contactId }
                 val displayName = contact?.nickname ?: contact?.name ?: "contact"
-                currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                currentSessionContext()?.let { ctx ->
                     runCatching {
                         itemRepo.setItem(
                             itemFactory.simpleUid(),
@@ -62,7 +63,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
                     SemanticResult.MessageSent(displayName)
                 )
             } else {
-                currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+                currentSessionContext()?.let { ctx ->
                     runCatching {
                         itemRepo.setItem(
                             itemFactory.simpleUid(),

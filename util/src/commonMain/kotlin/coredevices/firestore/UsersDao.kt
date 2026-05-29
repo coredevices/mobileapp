@@ -29,12 +29,6 @@ import kotlin.time.Duration.Companion.minutes
 interface UsersDao {
     val user: Flow<PebbleUser?>
     val loginEvents: Flow<PebbleUser>
-    suspend fun updateNotionToken(
-        notionToken: String?
-    )
-    suspend fun updateMcpRunToken(
-        mcpRunToken: String?
-    )
     suspend fun updateTodoBlockId(
         todoBlockId: String
     )
@@ -87,7 +81,8 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     old?.uid == new?.uid && old?.isAnonymous == new?.isAnonymous
                 }
                 .flatMapLatest { firebaseUser ->
-                    logger.v { "User changed: $firebaseUser" }
+                    val userInfo = firebaseUser?.let { "uid=${it.uid.take(8)} isAnonymous=${it.isAnonymous}" } ?: "null"
+                    logger.v { "User changed: $userInfo" }
                     if (firebaseUser == null) {
                         if (isInitialStartup) {
                             if (hadNonAnonymousAccount || hadAnonymousAccount) {
@@ -101,10 +96,13 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                                     logger.w { "Still waiting for auth restoration (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
                                 }
                             }
-                            logger.i { "User is null, no prior account, delay=2s before anonymous sign-in" }
+                            logger.i { "User is null, no prior account (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), delay=2s before anonymous sign-in" }
                             delay(2.seconds)
                             logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
                         } else {
+                            if (hadNonAnonymousAccount) {
+                                logger.i { "User became null post-startup, hadNonAnonymousAccount: true→false" }
+                            }
                             hadNonAnonymousAccount = false
                         }
                         _user.emit(null)
@@ -168,18 +166,6 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                     }
                 }
         }
-    }
-
-    override suspend fun updateNotionToken(
-        notionToken: String?
-    ) {
-        userDoc?.update(mapOf("notion_token" to notionToken))
-    }
-
-    override suspend fun updateMcpRunToken(
-        mcpRunToken: String?
-    ) {
-        userDoc?.update(mapOf("mcp_run_token" to mcpRunToken))
     }
 
     override suspend fun updateTodoBlockId(

@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,12 +37,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import co.touchlab.kermit.Logger
 import coredevices.coreapp.api.AtlasTicketDetails
 import coredevices.coreapp.api.BugReports
-import coredevices.util.auth.GoogleAuthUtil
+import coredevices.ui.SignInButtons
 import coredevices.util.emailOrNull
-import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -58,9 +55,6 @@ fun BugReportsListScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val scope = rememberCoroutineScope()
         val bugReports: BugReports = koinInject()
-        val logger = remember { Logger.withTag("BugReportsListScreen") }
-        val context = rememberUiContext()
-        val googleAuthUtil = koinInject<GoogleAuthUtil>()
         val tickets by bugReports.ticketDetails.collectAsState()
         val ticketDetails = tickets?.ticketDetails
 
@@ -72,18 +66,6 @@ fun BugReportsListScreen(
             it?.emailOrNull
         }.distinctUntilChanged()
             .collectAsState(Firebase.auth.currentUser?.emailOrNull)
-
-        fun signIn() {
-            scope.launch {
-                try {
-                    val credential = googleAuthUtil.signInGoogle(context!!) ?: return@launch
-                    Firebase.auth.signInWithCredential(credential)
-                } catch (e: Exception) {
-                    logger.e(e) { "Failed to sign in" }
-                    error = "Sign in failed: ${e.message}"
-                }
-            }
-        }
 
         fun loadBugReports() {
             scope.launch {
@@ -155,11 +137,12 @@ fun BugReportsListScreen(
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // Show sign in button if user is not authenticated
+                                // Show sign in buttons if user is not authenticated
                                 if (user == null) {
-                                    Button(onClick = { signIn() }) {
-                                        Text("Sign in with Google")
-                                    }
+                                    SignInButtons(
+                                        onDismiss = {},
+                                        primaryColor = true,
+                                    )
                                 } else {
                                     // Show refresh button if user is authenticated but there was an error
                                     IconButton(onClick = { loadBugReports() }) {

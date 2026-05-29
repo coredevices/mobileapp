@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.SpeakerNotesOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
@@ -48,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,15 +95,21 @@ import coredevices.ring.ui.components.feed.AnimatedAudioBars
 import coredevices.ring.ui.components.feed.AudioBars
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.screens.settings.AuthorizedIntegrations
+import coredevices.ring.ui.screens.settings.EncryptionKeyResultDialogs
+import coredevices.ring.ui.screens.settings.EncryptionSetupDialog
 import coredevices.ring.ui.screens.settings.IndexDeviceListItem
 import coredevices.ring.ui.screens.settings.NoteShortcutDialog
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.SignInDialog
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import theme.AppTheme
+import theme.currentColorScheme
 import theme.onboardingScheme
 import kotlin.time.Clock
 
@@ -310,6 +318,10 @@ fun RingOnboardingScreen(
 
                     SectionDivider()
 
+                    RingBackupsSection(viewModel)
+
+                    SectionDivider()
+
                     RingDemo(
                         nav = coreNav,
                     )
@@ -503,6 +515,117 @@ private fun RingDemo(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RingBackupsSection(viewModel: SettingsViewModel) {
+    val userId by viewModel.userId.collectAsState()
+    val loggedIn = userId != null
+    val backupEnabled by viewModel.backupEnabled.collectAsState()
+    val useEncryption by viewModel.useEncryption.collectAsState()
+    val encryptionStatus by viewModel.encryptionStatus.collectAsState()
+    val enablingEncryption by viewModel.enablingEncryption.collectAsState()
+    val uiContext = rememberUiContext()
+    var showSignInDialog by remember { mutableStateOf(false) }
+
+    SectionText("Backups")
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "Your recordings sync to the cloud so you can restore them on a new phone. Optionally encrypt them so only you can read them.",
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(10.dp))
+
+    if (!loggedIn) {
+        Text(
+            "Sign in to back up your recordings.",
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(10.dp))
+        PebbleElevatedButton(
+            text = "Sign In",
+            onClick = { showSignInDialog = true },
+            primaryColor = true,
+        )
+    } else {
+        ListItem(
+            modifier = Modifier.clickable { viewModel.setBackupEnabled(!backupEnabled) },
+            headlineContent = { Text("Cloud Backup") },
+            supportingContent = {
+                Text(
+                    if (backupEnabled) "Recordings sync to the cloud"
+                    else "Recordings stay on this device only"
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = backupEnabled,
+                    onCheckedChange = { viewModel.setBackupEnabled(it) },
+                )
+            },
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        if (!backupEnabled) {
+            Text(
+                "Turn on Cloud Backup to set up encryption.",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(10.dp))
+        }
+
+        // One switch for all key states; turning it on hands off to
+        // beginEncryptionSetup to generate or restore a key first.
+        ListItem(
+            modifier = Modifier.clickable(
+                enabled = backupEnabled && !enablingEncryption && (useEncryption || uiContext != null)
+            ) {
+                if (!useEncryption) {
+                    uiContext?.let { viewModel.beginEncryptionSetup(it) }
+                } else {
+                    viewModel.disableEncryption()
+                }
+            },
+            headlineContent = { Text("Encrypt Backups") },
+            supportingContent = {
+                Text(
+                    encryptionStatus
+                        ?: if (useEncryption) "Only you can read your backups"
+                        else "Encrypt Index data so only you can read it"
+                )
+            },
+            trailingContent = {
+                if (enablingEncryption) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Switch(
+                        checked = useEncryption,
+                        enabled = backupEnabled && (useEncryption || uiContext != null),
+                        onCheckedChange = { enable ->
+                            if (enable) {
+                                uiContext?.let { viewModel.beginEncryptionSetup(it) }
+                            } else {
+                                viewModel.disableEncryption()
+                            }
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    AppTheme {
+        EncryptionSetupDialog(viewModel)
+        EncryptionKeyResultDialogs(viewModel)
+    }
+    if (showSignInDialog) {
+        SignInDialog(onDismiss = { showSignInDialog = false })
     }
 }
 

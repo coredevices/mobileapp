@@ -29,6 +29,9 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
+    private val _triggerInput = MutableStateFlow(IndexWebhookTrigger.DoubleClickHold)
+    val triggerInput = _triggerInput.asStateFlow()
+
     val isLinked: Boolean
         get() = !_webhookUrl.value.isNullOrBlank() && !_authToken.value.isNullOrBlank()
 
@@ -49,6 +52,7 @@ class IndexWebhookSettingsViewModel(
         _urlInput.value = _webhookUrl.value ?: ""
         _tokenInput.value = _authToken.value ?: ""
         _payloadModeInput.value = webhookPreferences.payloadMode.value
+        _triggerInput.value = webhookPreferences.trigger.value
         _dialogOpen.value = true
     }
 
@@ -68,6 +72,10 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateTrigger(trigger: IndexWebhookTrigger) {
+        _triggerInput.value = trigger
+    }
+
     fun save() {
         viewModelScope.launch {
             val url = _urlInput.value.ifBlank { null }?.trim()
@@ -75,6 +83,7 @@ class IndexWebhookSettingsViewModel(
             webhookPreferences.setWebhookUrl(url)
             webhookPreferences.setAuthToken(token)
             webhookPreferences.setPayloadMode(_payloadModeInput.value)
+            webhookPreferences.setTrigger(_triggerInput.value)
             closeDialog()
         }
     }

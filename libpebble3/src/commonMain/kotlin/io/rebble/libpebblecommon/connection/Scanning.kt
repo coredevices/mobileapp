@@ -60,7 +60,13 @@ class RealScanning(
         Logger.d("startBleScan")
         bleScanJob?.cancel()
         watchConnector.clearScanResults()
-        val scanResults = bleScanner.scan()
+        val scanResults = try {
+            bleScanner.scan()
+        } catch (e: IllegalStateException) {
+            Logger.e(e) { "Ble scan failed" }
+            errorTracker.reportError(UserFacingError.FailedToScan("Failed to scan for watches"))
+            return
+        }
         _isBleScanning.value = true
         bleScanJob = libPebbleCoroutineScope.launch {
             launch {

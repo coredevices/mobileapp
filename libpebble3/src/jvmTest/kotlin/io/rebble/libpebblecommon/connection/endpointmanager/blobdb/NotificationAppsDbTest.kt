@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.connection.endpointmanager.blobdb
 
 import coredev.BlobDatabase
+import io.rebble.libpebblecommon.LibPebbleConfig
+import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -14,6 +16,8 @@ import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.StructMapper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlin.time.Instant
 import org.junit.Test
 import kotlin.test.assertContentEquals
@@ -157,7 +161,8 @@ class NotificationAppsDbTest {
             colorName = null,
             iconCode = null,
         )
-        val params = ValueParams(WatchType.APLITE, emptySet(), FW_TEST)
+        val config = LibPebbleConfigFlow(MutableStateFlow(LibPebbleConfig()))
+        val params = ValueParams(WatchType.APLITE, emptySet(), FW_TEST, libPebbleConfigFlow = config)
         val encoded = item.value(params)!!
         val write = DbWrite(
             token = 1.toUShort(),

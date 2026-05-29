@@ -2,15 +2,20 @@ package coredevices.ring.model
 
 import android.content.Context
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
+import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.mp.KoinPlatform
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
@@ -18,9 +23,15 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     companion object {
         private val logger = Logger.withTag("CactusModelProvider")
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val QUANTIZATION = "int8"
+        private const val STT_QUANTIZATION = "int8"
+        private const val LM_QUANTIZATION = "int4"
         private const val DOWNLOAD_BUFFER_SIZE = 256 * 1024
-        private val downloadMutex = Mutex()
+
+        // One mutex per model so an in-progress STT download doesn't head-of-line
+        // block an unrelated LM resolve (or vice versa).
+        private val modelMutexes = ConcurrentHashMap<String, Mutex>()
+        private fun mutexFor(modelName: String): Mutex =
+            modelMutexes.getOrPut(modelName) { Mutex() }
     }
 
     private val context: Context get() = KoinPlatform.getKoin().get()
@@ -62,7 +73,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         return if (dir.exists()) dir.walkTopDown().sumOf { it.length() } else 0L
     }
 
-    private suspend fun resolveModelPath(modelName: String, version: String): String = downloadMutex.withLock {
+    private suspend fun resolveModelPath(modelName: String, version: String): String = mutexFor(modelName).withLock {
         val modelDir = modelsDir.resolve(modelName)
         val versionFile = modelDir.resolve(".cactus_version")
 
@@ -80,26 +91,28 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         return modelDir.absolutePath
     }
 
-    private fun downloadAndExtract(modelName: String, targetDir: File, version: String) {
-        val zipName = "${modelName.lowercase()}-$QUANTIZATION.zip"
+    private suspend fun downloadAndExtract(modelName: String, targetDir: File, version: String) {
+        val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
+        val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
+        val zipName = "${modelName.lowercase()}-$quantization.zip"
         val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
         logger.i { "Downloading model: $url" }
 
         val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
+        // Cancel the in-flight HTTP call if the coroutine is cancelled so a blocked
+        // socket read unblocks promptly instead of hanging until readTimeout.
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+        val call = client.newCall(Request.Builder().url(url).build())
+        val cancelHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) call.cancel()
+        }
         try {
-            // Download using OkHttp which handles redirects and HTTP/2 properly
-            val client = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.MINUTES)
-                .followRedirects(true)
-                .followSslRedirects(true)
-                .build()
-
-            val request = Request.Builder()
-                .url(url)
-                .build()
-
-            client.newCall(request).execute().use { response ->
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     val errorBody = response.body?.string()?.take(500) ?: "no body"
                     throw Exception("Download failed: HTTP ${response.code} for $url — $errorBody")
@@ -116,6 +129,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                         val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
+                            currentCoroutineContext().ensureActive()
                             output.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
                             if (totalBytes > 0) {
@@ -141,6 +155,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             ZipInputStream(tempZip.inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
+                    currentCoroutineContext().ensureActive()
                     val outputFile = File(targetDir, entry.name)
                     // ZIP Slip protection
                     if (!outputFile.canonicalPath.startsWith(targetDir.canonicalPath)) {
@@ -159,11 +174,19 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                 }
             }
             logger.i { "Extraction complete to ${targetDir.absolutePath}" }
+        } catch (e: CancellationException) {
+            logger.i { "Model download cancelled for $modelName" }
+            targetDir.deleteRecursively()
+            throw e
         } catch (e: Exception) {
+            // A cancelled coroutine cancels the OkHttp call, surfacing as IOException;
+            // re-check liveness so cancellation propagates as CancellationException.
+            currentCoroutineContext().ensureActive()
             logger.e(e) { "Model download/extract failed for $modelName" }
             targetDir.deleteRecursively()
             throw e
         } finally {
+            cancelHandle?.dispose()
             tempZip.delete()
         }
     }
@@ -178,7 +201,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
         try {
-            Cactus.setTelemetryEnvironment(cacheDir.absolutePath)
+            cactusSetTelemetryEnvironment(cacheDir.absolutePath)
             logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
         } catch (e: Throwable) {
             logger.e(e) { "Failed to initialize telemetry environment" }

@@ -59,4 +59,8 @@ interface LocalRecordingDao {
     /** Sets the `updated` column explicitly. Room's type converter handles Instant <-> Long. */
     @Query("UPDATE LocalRecording SET updated = :updated WHERE id = :id")
     suspend fun setUpdated(id: Long, updated: Instant)
+
+    /** Records the `updated` value (epoch millis) of the last copy pushed to Firestore. */
+    @Query("UPDATE LocalRecording SET lastPushedUpdated = :updated WHERE id = :id")
+    suspend fun setLastPushedUpdated(id: Long, updated: Long)
 }

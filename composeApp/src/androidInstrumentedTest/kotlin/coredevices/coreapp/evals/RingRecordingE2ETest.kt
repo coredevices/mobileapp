@@ -1,10 +1,10 @@
 package coredevices.coreapp.evals
 
 import android.content.Context
+import android.os.Build
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import coredevices.indexai.agent.ServletRepository
-import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
@@ -85,7 +85,6 @@ import org.koin.dsl.module
 import java.io.File
 import kotlin.time.Duration
 import kotlinx.datetime.LocalTime
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -572,8 +571,6 @@ class RingRecordingE2ETest {
         single<coredevices.firestore.UsersDao> {
             object : coredevices.firestore.UsersDao {
                 override val user = kotlinx.coroutines.flow.flowOf<coredevices.firestore.PebbleUser?>(null)
-                override suspend fun updateNotionToken(notionToken: String?) {}
-                override suspend fun updateMcpRunToken(mcpRunToken: String?) {}
                 override suspend fun updateTodoBlockId(todoBlockId: String) {}
                 override suspend fun initUserDevToken(rebbleUserToken: String?) {}
                 override suspend fun updateLastConnectedWatch(serial: String) {}
@@ -611,6 +608,8 @@ class RingRecordingE2ETest {
         single<Platform> {
             object : Platform {
                 override val name = "Android"
+                override val deviceModelName: String
+                    get() = "${Build.MANUFACTURER} ${Build.MODEL}"
                 override suspend fun openUrl(url: String) {}
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }

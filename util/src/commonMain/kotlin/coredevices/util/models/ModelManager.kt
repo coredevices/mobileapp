@@ -43,7 +43,7 @@ class ModelManager(
         val currentModel = ModelInfo(
             slug = sttModel,
             sizeInMB = sttSizeMB,
-            url = "$HF_BASE/$sttModel/resolve/$sttVersion/weights/${sttModel.lowercase()}-$QUANTIZATION.zip"
+            url = "$HF_BASE/$sttModel/resolve/$sttVersion/weights/${sttModel.lowercase()}-$STT_QUANTIZATION.zip"
         )
 
         // Include old downloaded models (e.g. whisper) so they can be deleted
@@ -69,13 +69,14 @@ class ModelManager(
         return listOf(ModelInfo(
             slug = lmModel,
             sizeInMB = lmSizeMB,
-            url = "$HF_BASE/$lmModel/resolve/$lmVersion/weights/${lmModel.lowercase()}-$QUANTIZATION.zip"
+            url = "$HF_BASE/$lmModel/resolve/$lmVersion/weights/${lmModel.lowercase()}-$LM_QUANTIZATION.zip"
         ))
     }
 
     companion object {
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val QUANTIZATION = "int8"
+        private const val STT_QUANTIZATION = "int8"
+        private const val LM_QUANTIZATION = "int4"
         private const val KNOWN_STT_SIZE_MB = 670
         private const val KNOWN_LM_SIZE_MB = 530
     }

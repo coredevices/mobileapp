@@ -11,6 +11,8 @@ import platform.UIKit.UIDevice
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
+    override val deviceModelName: String
+        get() = UIDevice.currentDevice.model
 
     override suspend fun openUrl(url: String) {
         val completable = CompletableDeferred<Unit>()

@@ -1,7 +1,6 @@
 package coredevices.ring.model
 
 import co.touchlab.kermit.Logger
-import com.cactus.Cactus
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.transcription.CactusModelPathProvider
 

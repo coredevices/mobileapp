@@ -58,6 +58,16 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
+    suspend fun updateAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppAllowDuplicates: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(allowDuplicates = allowDuplicates))
+    }
+
+    @Transaction
     suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {
         val existing = getEntry(packageName)
         if (existing == null) {
@@ -96,6 +106,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 vibePatternName = existingItem?.vibePatternName ?: writeItem.vibePatternName,
                 colorName = existingItem?.colorName ?: writeItem.colorName,
                 iconCode = existingItem?.iconCode ?: writeItem.iconCode,
+                allowDuplicates = existingItem?.allowDuplicates ?: writeItem.allowDuplicates,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

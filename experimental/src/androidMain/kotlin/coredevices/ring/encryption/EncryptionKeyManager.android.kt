@@ -48,7 +48,7 @@ actual class EncryptionKeyManager(
     }
 
     actual suspend fun saveKeyLocally(key: String, email: String) {
-        val fingerprint = AesGcmCrypto.keyFingerprint(key)
+        val fingerprint = AesCbcHmacCrypto.keyFingerprint(key)
         val entry = StoredKeyEntry(email = email, keyBase64 = key, fingerprint = fingerprint)
 
         // Load existing entries, replace or add for this email

@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 class AndroidPlatform(private val context: Context) : Platform {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"
+    override val deviceModelName: String
+        get() = "${Build.MANUFACTURER} ${Build.MODEL}"
     override suspend fun openUrl(url: String) {
         context.startActivity(
             Intent(

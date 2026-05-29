@@ -295,6 +295,10 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
+        // No-op
+    }
+
     override suspend fun getAppIcon(packageName: String): ImageBitmap? {
         // Return a green square as a placeholder
         val width = 48
@@ -812,6 +816,7 @@ fun fakeNotificationApp(): NotificationAppItem {
         vibePatternName = null,
         colorName = null,
         iconCode = null,
+        allowDuplicates = false,
     )
 }
 

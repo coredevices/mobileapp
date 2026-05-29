@@ -86,6 +86,10 @@ data class WatchConfig(
      * Bluetooth Classic scan instead.
      */
     val allowLegacyWatchesInBleScan: Boolean = false,
+    /**
+     * Intended to be a debug option to dsiable watch settings sync.
+     */
+    val enableWatchSettingsSync: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

@@ -29,11 +29,14 @@ import io.rebble.libpebblecommon.structmapper.StructMapper
 import io.rebble.libpebblecommon.util.DataBuffer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -49,6 +52,9 @@ class SystemService(
     ConnectedPebble.Debug, ConnectedPebble.Time {
     private val logger = Logger.withTag("SystemService")
     private val lastSentTimezoneId: AtomicReference<String> = AtomicReference(TimeZone.currentSystemDefault().id)
+
+    // The watch RTC crystal drifts; re-sync periodically while connected.
+    private val timeSyncInterval = 1.hours
 
     private val _appVersionRequest = CompletableDeferred<PhoneAppVersion.AppVersionRequest>()
     val appVersionRequest: Deferred<PhoneAppVersion.AppVersionRequest> = _appVersionRequest
@@ -151,6 +157,12 @@ class SystemService(
 
     fun init() {
         scope.launch {
+            while (true) {
+                delay(timeSyncInterval)
+                updateTime()
+            }
+        }
+        scope.launch {
             protocolHandler.inboundMessages.collect { packet ->
                 when (packet) {
                     is WatchVersionResponse -> {
@@ -195,7 +207,11 @@ class SystemService(
         val time = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
         lastSentTimezoneId.store(timeZone.id)
-        val timeUtcSeconds = time.epochSeconds
+        // SetUTC only carries whole seconds and the watch RTC is whole-second, so
+        // round to nearest rather than truncating: floor() alone biases the watch
+        // ~0.5s slow, compounded by BLE/apply latency. Rounding removes the
+        // systematic truncation bias.
+        val timeUtcSeconds = (time + 500.milliseconds).epochSeconds
         val tzOffsetMinutes = timeZone.offsetAt(time).totalSeconds.seconds.inWholeMinutes
         logger.v("time=$time timeZone=$timeZone timeUtcSeconds=$timeUtcSeconds tzOffsetMinutes=$tzOffsetMinutes")
         protocolHandler.send(

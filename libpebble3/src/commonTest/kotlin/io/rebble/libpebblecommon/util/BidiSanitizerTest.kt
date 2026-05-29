@@ -44,4 +44,19 @@ class BidiSanitizerTest {
         val input = "X\u200EY\u200FZ\u202A\u202B\u202C\u202D\u202EW\u2060V\uFEFFU"
         assertEquals("XYZWVU", stripBidiIsolates(input))
     }
+
+    @Test
+    fun stripBidiIsolates_replacesNarrowNoBreakSpaceWithRegularSpace() {
+        // Android's ICU/CLDR time formatter emits U+202F before AM/PM in en_US (MOB-7052).
+        // The firmware font has no glyph for it; we must replace (not strip) to keep the space.
+        val input = "9:30 \u2013 10:30\u202FPM"
+        assertEquals("9:30 \u2013 10:30 PM", stripBidiIsolates(input))
+    }
+
+    @Test
+    fun stripBidiIsolates_preservesNarrowNoBreakSpaceAlongsideStrippedBidiMarks() {
+        // Real payload: bidi isolates wrap a time with U+202F inside.
+        val input = "\u200E\u202A9:30 \u2013 10:30\u202FPM\u202C\u200E"
+        assertEquals("9:30 \u2013 10:30 PM", stripBidiIsolates(input))
+    }
 }

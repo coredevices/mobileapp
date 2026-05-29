@@ -31,6 +31,7 @@ class NotificationDecisionTest {
     private fun appEntry(
         packageName: String = DEFAULT_PKG,
         muteState: MuteState = MuteState.Never,
+        allowDuplicates: Boolean = false,
     ) = NotificationAppItem(
         packageName = packageName,
         name = packageName,
@@ -41,6 +42,7 @@ class NotificationDecisionTest {
         vibePatternName = null,
         colorName = null,
         iconCode = null,
+        allowDuplicates = allowDuplicates,
     )
 
     private fun channel(muteState: MuteState) = ChannelItem(
@@ -115,6 +117,7 @@ class NotificationDecisionTest {
                 second,
                 inflight = listOf(first),
                 appProperties = NotificationProperties.Ring,
+                appEntry = appEntry("com.ringapp", allowDuplicates = true),
             ),
         )
     }
@@ -129,6 +132,7 @@ class NotificationDecisionTest {
                 second,
                 inflight = listOf(first),
                 appProperties = NotificationProperties.Ring,
+                appEntry = appEntry("com.ringapp", allowDuplicates = true),
             ),
         )
     }

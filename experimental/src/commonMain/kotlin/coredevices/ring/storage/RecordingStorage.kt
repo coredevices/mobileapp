@@ -283,7 +283,7 @@ class RecordingStorage(
         if (encryptionKey != null) {
             customMeta["encrypted"] = "true"
             customMeta["keyFingerprint"] =
-                coredevices.ring.encryption.AesGcmCrypto.keyFingerprint(encryptionKey)
+                coredevices.ring.encryption.AesCbcHmacCrypto.keyFingerprint(encryptionKey)
         }
 
         try {
@@ -367,48 +367,4 @@ class RecordingStorage(
         }
     }
 
-    /**
-     * Encrypt a cached audio file and re-upload to Firebase Storage, overwriting the existing file.
-     * Used during encryption migration.
-     * @return true if encrypted and uploaded, false if file not found in cache/storage
-     */
-    suspend fun encryptAndReuploadAudio(id: String, encryptionKey: String): Boolean {
-        val cachedPath = Path(getRecordingsCacheDirectory(), id)
-        val cachedMetadata = cachedMetadataDao.get(id)
-
-        // If not in local cache, try to download first
-        if (!SystemFileSystem.exists(cachedPath) || cachedMetadata == null) {
-            try {
-                openRecordingSource(id) // downloads + caches
-            } catch (e: Exception) {
-                logger.w { "Cannot download audio $id for encryption: ${e.message}" }
-                return false
-            }
-        }
-
-        val meta = cachedMetadataDao.get(id) ?: return false
-        if (!SystemFileSystem.exists(cachedPath)) return false
-
-        // Read plaintext bytes from cache
-        val fileSize = SystemFileSystem.metadataOrNull(cachedPath)?.size?.toInt() ?: return false
-        val plainBytes = ByteArray(fileSize)
-        SystemFileSystem.source(cachedPath).buffered().use { src ->
-            var offset = 0
-            while (offset < fileSize) {
-                val read = src.readAtMostTo(plainBytes, offset, fileSize)
-                if (read == -1) break
-                offset += read
-            }
-        }
-
-        uploadRecordingPcm(
-            id = id,
-            sampleRate = meta.sampleRate,
-            pcmBytes = plainBytes,
-            encryptionKey = encryptionKey,
-        )
-
-        logger.i { "Re-encoded, encrypted, and re-uploaded audio $id from ${plainBytes.size} bytes of PCM" }
-        return true
-    }
 }

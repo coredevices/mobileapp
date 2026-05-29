@@ -45,13 +45,6 @@ interface RecordingEntryDao {
     @Query("SELECT * FROM RecordingEntryEntity WHERE recordingId = :recordingId ORDER BY timestamp ASC")
     fun getEntriesForRecording(recordingId: Long): Flow<List<RecordingEntryEntity>>
 
-    /** Returns the set of recordingIds that have at least one entry.
-     *  Used by the push observer to skip empty placeholder rows — a
-     *  recording with zero entries hasn't produced user-visible content
-     *  yet, so uploading it just creates ghost "Index Recording" rows on
-     *  every other device. After server-side cleanup of empty docs,
-     *  devices that were offline at delete time would otherwise re-upload
-     *  their stale local placeholders and undo the cleanup. */
     @Query("SELECT DISTINCT recordingId FROM RecordingEntryEntity")
     suspend fun getRecordingIdsWithEntries(): List<Long>
 
@@ -71,8 +64,6 @@ interface RecordingEntryDao {
     @Query("SELECT * FROM RecordingEntryEntity WHERE id = :id")
     suspend fun getById(id: Long): RecordingEntryEntity?
 
-    /** Used by the remote-recording ingest path to wipe-and-replace
-     *  children when Firestore has a newer version of the recording. */
     @Query("DELETE FROM RecordingEntryEntity WHERE recordingId = :recordingId")
     suspend fun deleteAllForRecording(recordingId: Long)
 

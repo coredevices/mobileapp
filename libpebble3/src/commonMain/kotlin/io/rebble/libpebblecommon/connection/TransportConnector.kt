@@ -260,7 +260,7 @@ class RealPebbleConnector(
         musicControlManager.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
-        appOrderManager.init()
+        appOrderManager.init(forceResend = watchInfo.isUnfaithful || !previouslyConnected)
 
         _state.value = Connected.ConnectedNotInPrf(
             identifier = identifier,

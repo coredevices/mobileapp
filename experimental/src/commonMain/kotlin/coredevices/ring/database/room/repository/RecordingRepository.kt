@@ -55,6 +55,12 @@ class RecordingRepository(
     suspend fun setRecordingUpdated(id: Long, updated: Instant) =
         localRecordingDao.setUpdated(id, updated)
 
+    /** Watermark of the last `updated` value (epoch millis) successfully
+     *  pushed to Firestore, so the push observer can detect dirty rows
+     *  locally instead of doing a per-row remote read. */
+    suspend fun setLastPushedUpdated(id: Long, updated: Long) =
+        localRecordingDao.setLastPushedUpdated(id, updated)
+
     suspend fun getRecording(id: Long): LocalRecording? =
         localRecordingDao.getRecording(id)
 

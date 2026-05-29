@@ -4,6 +4,7 @@ import kotlinx.coroutines.channels.Channel
 
 interface Platform {
     val name: String
+    val deviceModelName: String
 
     suspend fun openUrl(url: String)
 

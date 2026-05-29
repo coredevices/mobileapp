@@ -87,7 +87,7 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
         .collection("entries")
         .snapshots(includeMetadataChanges = true)
         .filter {
-            logger.v { "observeLockerEntriesForUser: ${it.documents.size} isFromCache=${it.metadata.isFromCache}" }
+            logger.v { "observeLockerEntriesForUser uid=${uid.take(8)}: ${it.documents.size} isFromCache=${it.metadata.isFromCache}" }
             !it.metadata.isFromCache
         }
 }
@@ -111,7 +111,8 @@ class RealFirestoreLocker(
     override fun init() {
         GlobalScope.launch {
             Firebase.auth.authStateChanged.collectLatest { user ->
-                logger.v { "User changed: $user" }
+                val userInfo = user?.let { "uid=${it.uid.take(8)} isAnonymous=${it.isAnonymous}" } ?: "null"
+                logger.v { "User changed: $userInfo" }
                 if (user == null) {
                     return@collectLatest
                 }

@@ -1,7 +1,9 @@
 package coredevices.firestore
 
+import kotlinx.datetime.serializers.FormattedInstantSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 @Serializable
 data class EncryptionInfo(
@@ -11,6 +13,8 @@ data class EncryptionInfo(
     val createdAt: String,
     @SerialName("key_backup_location")
     val keyBackupLocation: String,
+    @SerialName("key_creation_device")
+    val keyCreationDevice: String? = null,
 )
 
 @Serializable

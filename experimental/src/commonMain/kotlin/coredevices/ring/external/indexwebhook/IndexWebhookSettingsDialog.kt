@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +42,7 @@ fun IndexWebhookSettingsDialog(
     val urlInput by viewModel.urlInput.collectAsState()
     val tokenInput by viewModel.tokenInput.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
+    val trigger by viewModel.triggerInput.collectAsState()
     val isLinked = viewModel.isLinked
 
     BasicAlertDialog(
@@ -114,7 +117,39 @@ fun IndexWebhookSettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Trigger selector
+                Text(
+                    "Trigger",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                IndexWebhookTrigger.entries.forEach { t ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.updateTrigger(t) }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        RadioButton(
+                            selected = t == trigger,
+                            onClick = { viewModel.updateTrigger(t) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(t.title())
+                            Text(
+                                t.description(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.align(Alignment.End)) {
                     if (isLinked) {
                         TextButton(onClick = viewModel::clearAll) {
@@ -139,4 +174,19 @@ private fun IndexWebhookPayloadMode.displayName(): String = when (this) {
     IndexWebhookPayloadMode.RecordingOnly -> "Recording only"
     IndexWebhookPayloadMode.TranscriptionOnly -> "Transcription only"
     IndexWebhookPayloadMode.Both -> "Recording + Transcription"
+}
+
+private fun IndexWebhookTrigger.title(): String = when (this) {
+    IndexWebhookTrigger.SingleClick -> "Single click & hold"
+    IndexWebhookTrigger.DoubleClickHold -> "Double click & hold"
+    IndexWebhookTrigger.Both -> "Both"
+}
+
+private fun IndexWebhookTrigger.description(): String = when (this) {
+    IndexWebhookTrigger.SingleClick ->
+        "Send only on single click & hold."
+    IndexWebhookTrigger.DoubleClickHold ->
+        "Send only on double click & hold."
+    IndexWebhookTrigger.Both ->
+        "Send on every recording."
 }

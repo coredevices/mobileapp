@@ -9,6 +9,7 @@ import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactT
 import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactToolConstants.INPUT_SCHEMA
 import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactToolConstants.TOOL_DESCRIPTION
 import coredevices.ring.agent.builtin_servlets.messaging.SearchBeeperForContactToolConstants.TOOL_NAME
+import coredevices.ring.agent.currentSessionContext
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -72,7 +73,7 @@ actual class SearchBeeperForContactTool : BuiltInMcpTool(
         logger.d { "Contact search for '$name': ${matches.size} match(es), best=${matches.first().first.name} (score=${matches.first().second})" }
 
         val summary = "Found ${resultMap.size} contact(s) matching '$name'"
-        currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+        currentSessionContext()?.let { ctx ->
             runCatching {
                 itemRepo.setItem(
                     itemFactory.simpleUid(),

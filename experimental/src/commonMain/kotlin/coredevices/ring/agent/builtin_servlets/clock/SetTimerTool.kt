@@ -7,6 +7,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -147,7 +148,7 @@ class SetTimerTool : BuiltInMcpTool(
         return try {
             setTimer(duration)
             val actualFireTime = Clock.System.now() + duration
-            currentCoroutineContext()[RecordingSessionContext]?.let { ctx ->
+            currentSessionContext()?.let { ctx ->
                 runCatching {
                     itemRepo.setItem(
                         itemFactory.simpleUid(),

@@ -66,7 +66,6 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     override fun onBind(intent: Intent?): IBinder? {
         logger.d { "onBind() ($this)" }
-        notificationHandler.onServiceBound()
         return super.onBind(intent)
     }
 
@@ -76,6 +75,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         // running because it has a notification listener...). Don't do anything here that shouldn't
         // be done twice.
         logger.d { "onListenerConnected() ($this)" }
+        notificationHandler.onServiceBound()
         connection.setService(this)
 
         notificationListenerScope = MainScope()

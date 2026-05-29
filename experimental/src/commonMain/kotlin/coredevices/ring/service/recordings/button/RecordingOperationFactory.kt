@@ -10,6 +10,7 @@ import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -34,7 +35,8 @@ class RecordingOperationFactory(
         forcedNoteTool: (suspend (messageText: String) -> ToolCallResult),
         sequence: List<ButtonPress>?
     ): RecordingOperation {
-        return if (sequence == secondaryOperationSequence) {
+        val isDoubleClickHold = sequence == secondaryOperationSequence
+        val inner = if (isDoubleClickHold) {
             createSecondaryOperation(
                 recordingId = recordingId,
                 fileId = fileId,
@@ -53,6 +55,37 @@ class RecordingOperationFactory(
                 forcedTool = forcedNoteTool
             )
         }
+        return maybeWrapWithWebhook(
+            recordingId = recordingId,
+            fileId = fileId,
+            isDoubleClickHold = isDoubleClickHold,
+            inner = inner,
+        )
+    }
+
+    private fun maybeWrapWithWebhook(
+        recordingId: Long,
+        fileId: String,
+        isDoubleClickHold: Boolean,
+        inner: RecordingOperation,
+    ): RecordingOperation {
+        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank() &&
+            !indexWebhookPreferences.authToken.value.isNullOrBlank()
+        if (!configured) return inner
+        val matchesTrigger = when (indexWebhookPreferences.trigger.value) {
+            IndexWebhookTrigger.SingleClick -> !isDoubleClickHold
+            IndexWebhookTrigger.DoubleClickHold -> isDoubleClickHold
+            IndexWebhookTrigger.Both -> true
+        }
+        if (!matchesTrigger) return inner
+        return IndexWebhookUploadRecordingOperation(
+            webhookApi = indexWebhookApi,
+            webhookPreferences = indexWebhookPreferences,
+            recordingStorage = recordingStorage,
+            fileId = fileId,
+            recordingId = recordingId,
+            decorated = inner,
+        )
     }
 
     fun createTextOnlyOperation(
@@ -100,25 +133,6 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     trace = trace,
                     forcedTool = null
-                )
-            }
-            SecondaryMode.IndexWebhook -> {
-                IndexWebhookUploadRecordingOperation(
-                    webhookApi = indexWebhookApi,
-                    webhookPreferences = indexWebhookPreferences,
-                    recordingStorage = recordingStorage,
-                    fileId = fileId,
-                    recordingId = recordingId,
-                    decorated = DefaultRecordingOperation(
-                        mcpSandboxRepository = mcpSandboxRepository,
-                        mcpSessionFactory = mcpSessionFactory,
-                        chatAgent = agentFactory.createForChatMode(ChatMode.Normal),
-                        recordingId = recordingId,
-                        transferId = transferId,
-                        fileId = fileId,
-                        trace = trace,
-                        forcedTool = forcedTool,
-                    ),
                 )
             }
         }

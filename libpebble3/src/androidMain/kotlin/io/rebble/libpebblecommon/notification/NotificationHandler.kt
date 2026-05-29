@@ -436,7 +436,7 @@ internal suspend fun decideNotification(
     val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
     val anyContactStarred = notification.people.any { it.muteState == MuteState.Exempt }
     val showLocalOnlyNotifications = notificationConfig.sendLocalOnlyNotifications || appProperties?.showLocalOnlyNotifications == true
-    val allowDuplicates = appProperties?.allowDuplicates ?: false
+    val allowDuplicates = appEntry.allowDuplicates
     return when {
         isLocalOnly && !showLocalOnlyNotifications -> NotSentLocalOnly
         anyContactMuted -> NotSendContactMuted

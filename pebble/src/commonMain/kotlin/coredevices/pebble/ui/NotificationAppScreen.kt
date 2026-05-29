@@ -242,6 +242,29 @@ fun NotificationAppScreen(
                             }
                         }
                     }
+                    item {
+                        ElevatedCard(
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                            modifier = Modifier.padding(10.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            ) {
+                                Text("Allow duplicate notifications", fontSize = 17.sp)
+                                Switch(
+                                    checked = appWrapper.app.allowDuplicates,
+                                    onCheckedChange = { newValue ->
+                                        notificationApps.updateNotificationAppAllowDuplicates(
+                                            packageName = appWrapper.app.packageName,
+                                            allowDuplicates = newValue,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
                 
                 // Notification filtering rules - synced to watch via BlobDB

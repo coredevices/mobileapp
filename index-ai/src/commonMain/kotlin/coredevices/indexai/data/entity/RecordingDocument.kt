@@ -31,6 +31,10 @@ data class LocalRecording(
     @ColumnInfo(defaultValue = "0")
     val updated: Instant = Clock.System.now(),
     val assistantTitle: String? = null,
+    // Epoch-millis `updated` of the last copy successfully pushed to Firestore.
+    // Null = never pushed → dirty. Lets the push observer decide dirtiness
+    // locally instead of a per-row remote read.
+    val lastPushedUpdated: Long? = null,
 ) {
     fun toDocument(
         entries: List<RecordingEntry>,

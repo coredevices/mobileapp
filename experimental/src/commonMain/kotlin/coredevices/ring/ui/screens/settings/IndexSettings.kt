@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +55,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +74,8 @@ import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
+import coredevices.ring.encryption.EncryptionSetupState
+import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
@@ -164,7 +171,6 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeSecondaryModeDialog()
             },
-            webhookEnabled = webhookIsLinked,
         )
     }
     if (showNoteShortcutDialog) {
@@ -294,7 +300,6 @@ fun IndexSettings(coreNav: CoreNav) {
                             when (secondaryMode) {
                                 SecondaryMode.Disabled -> "Disabled"
                                 SecondaryMode.Search -> "Search"
-                                SecondaryMode.IndexWebhook -> "Webhook"
                             }
                         )
                     }
@@ -570,7 +575,6 @@ fun SecondaryModeDialog(
     currentMode: SecondaryMode,
     onModeSelected: (SecondaryMode) -> Unit,
     onDismissRequest: () -> Unit,
-    webhookEnabled: Boolean,
 ) {
     var targetMode by remember { mutableStateOf(currentMode) }
     M3Dialog(
@@ -642,39 +646,6 @@ fun SecondaryModeDialog(
                             "Get web search results on a double click & hold.",
                             fontSize = 12.sp,
                         )
-                    }
-                }
-            }
-            item(SecondaryMode.IndexWebhook) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = webhookEnabled) {
-                            targetMode = SecondaryMode.IndexWebhook
-                        }
-                ) {
-                    RadioButton(
-                        selected = targetMode == SecondaryMode.IndexWebhook,
-                        onClick = {
-                            targetMode = SecondaryMode.IndexWebhook
-                        },
-                        enabled = webhookEnabled
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text("Webhook")
-                        Text(
-                            "Send recording data to your webhook on a double click & hold.",
-                            fontSize = 12.sp,
-                        )
-                        if (!webhookEnabled) {
-                            Text(
-                                "Configure webhook first.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
                     }
                 }
             }
@@ -759,13 +730,11 @@ fun BackupDialog(
     val backupLoading by viewModel.backupLoading.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val backupEnabled by viewModel.backupEnabled.collectAsState()
-    val hasLocalKey by viewModel.hasLocalKey.collectAsState()
+    val keyStorageStatus by viewModel.keyStorageStatus.collectAsState()
     val encryptionKeyStatus by viewModel.encryptionKeyStatus.collectAsState()
     val encryptionKeyLoading by viewModel.encryptionKeyLoading.collectAsState()
-    val generatedKey by viewModel.generatedKey.collectAsState()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val uiContext = rememberUiContext()
-    val clipboardManager = LocalClipboardManager.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleteInput by remember { mutableStateOf("") }
     var showDeleteLocalConfirm by remember { mutableStateOf(false) }
@@ -774,7 +743,6 @@ fun BackupDialog(
 
     LaunchedEffect(Unit) {
         viewModel.loadBackupCount()
-        viewModel.checkLocalKey()
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -788,7 +756,12 @@ fun BackupDialog(
             onDismissRequest = { showOverwriteKeyConfirm = false },
             title = { Text("Overwrite Encryption Key?") },
             text = {
-                Text("An encryption key already exists. Generating a new one will overwrite it. Previously encrypted backups will not be decryptable with the new key.")
+                Text(buildAnnotatedString {
+                    append("An encryption key already exists. Generating a new one will overwrite it.\n\n")
+                    withStyle(SpanStyle(color = Color.Red, fontWeight = FontWeight.Bold)) {
+                        append("Previously encrypted backups (cloud sync or local) will be permanently lost.")
+                    }
+                })
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -805,45 +778,7 @@ fun BackupDialog(
             }
         )
     }
-    if (generatedKey != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.clearGeneratedKey() },
-            title = { Text("Encryption Key Backup") },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "Save this key securely. You will need it to decrypt your backups.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        QrCodeImage(
-                            data = generatedKey!!,
-                            size = 220.dp
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    clipboardManager.setText(AnnotatedString(generatedKey!!))
-                }) {
-                    Text("Copy Key")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.clearGeneratedKey() }) {
-                    Text("Done")
-                }
-            }
-        )
-    }
+    EncryptionKeyResultDialogs(viewModel)
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
@@ -973,23 +908,6 @@ fun BackupDialog(
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            // Sync now
-            ListItem(
-                modifier = Modifier.clickable(enabled = !syncing) {
-                    viewModel.downloadFeedHistory()
-                },
-                headlineContent = { Text("Sync now") },
-                supportingContent = {
-                    Text(syncStatus ?: "Upload local & download cloud recordings")
-                },
-                trailingContent = {
-                    if (syncing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
             // Download full backup
             ListItem(
                 modifier = Modifier.clickable(enabled = !backupDownloading && !syncing && uiContext != null) {
@@ -1007,26 +925,29 @@ fun BackupDialog(
             )
 
             // Import backup
-            ListItem(
-                modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
-                    scope.launch {
-                        val path = uiContext?.let { pickZipFile(it) }
-                        if (path != null) {
-                            viewModel.importBackup(path)
+            if (debugDetailsEnabled) {
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !importing && !backupDownloading && uiContext != null) {
+                        scope.launch {
+                            val path = uiContext?.let { pickZipFile(it) }
+                            if (path != null) {
+                                viewModel.importBackup(path)
+                            }
+                        }
+                    },
+                    headlineContent = { Text("Import Backup") },
+                    supportingContent = {
+                        Text(importStatus ?: "Restore recordings from a backup zip file")
+                    },
+                    trailingContent = {
+                        if (importing) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         }
                     }
-                },
-                headlineContent = { Text("Import Backup") },
-                supportingContent = {
-                    Text(importStatus ?: "Restore recordings from a backup zip file")
-                },
-                trailingContent = {
-                    if (importing) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                }
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
+
 
             // Delete backup
             ListItem(
@@ -1034,7 +955,7 @@ fun BackupDialog(
                     showDeleteConfirm = true
                 },
                 headlineContent = {
-                    Text("Delete my backup", color = MaterialTheme.colorScheme.error)
+                    Text("Delete cloud backup", color = MaterialTheme.colorScheme.error)
                 },
                 supportingContent = {
                     Text(backupStatus ?: "Permanently delete all cloud data")
@@ -1050,10 +971,13 @@ fun BackupDialog(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            // Generate encryption key
+            // Generate encryption key. A key already exists (here or on
+            // another device) unless status is NoKeyStored — regenerating it
+            // orphans prior backups, so warn and gate behind debug details.
+            val keyExists = keyStorageStatus != KeyStorageStatus.NoKeyStored
             ListItem(
-                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!hasLocalKey || debugDetailsEnabled)) {
-                    if (hasLocalKey) {
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading && uiContext != null && (!keyExists || debugDetailsEnabled)) {
+                    if (keyExists) {
                         showOverwriteKeyConfirm = true
                     } else {
                         uiContext?.let { viewModel.generateAndStoreKey(it) }
@@ -1062,14 +986,21 @@ fun BackupDialog(
                 headlineContent = { Text("Generate Encryption Key") },
                 supportingContent = {
                     Text(
-                        encryptionKeyStatus
-                            ?: if (hasLocalKey) buildString {
+                        encryptionKeyStatus?.let { AnnotatedString(it) } ?: when (keyStorageStatus) {
+                            KeyStorageStatus.KeyLocallyAvailable -> buildAnnotatedString {
                                 append("Key exists")
-                                if (debugDetailsEnabled) {
+                                if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
                                     append(" — tap to regenerate")
                                 }
                             }
-                            else "Create AES-256 encryption key"
+                            KeyStorageStatus.KeyGeneratedBefore -> buildAnnotatedString {
+                                append("A key was generated before but isn't on this device — restore it instead")
+                                if (debugDetailsEnabled) withStyle(SpanStyle(color = Color.Red)) {
+                                    append(", or tap to regenerate")
+                                }
+                            }
+                            KeyStorageStatus.NoKeyStored -> AnnotatedString("Create encryption key")
+                        }
                     )
                 },
                 trailingContent = {
@@ -1092,15 +1023,15 @@ fun BackupDialog(
 
             // Enable/disable encryption
             val useEncryption by viewModel.useEncryption.collectAsState()
-            val migrationStatus by viewModel.migrationStatus.collectAsState()
-            val migrating by viewModel.migrating.collectAsState()
+            val encryptionStatus by viewModel.encryptionStatus.collectAsState()
+            val enablingEncryption by viewModel.enablingEncryption.collectAsState()
 
-            if (hasLocalKey) {
+            if (keyStorageStatus == KeyStorageStatus.KeyLocallyAvailable) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ListItem(
-                    modifier = Modifier.clickable(enabled = !migrating) {
+                    modifier = Modifier.clickable(enabled = !enablingEncryption && (useEncryption || uiContext != null)) {
                         if (!useEncryption) {
-                            viewModel.enableEncryption()
+                            uiContext?.let { viewModel.requestEnableEncryption(it) }
                         } else {
                             viewModel.disableEncryption()
                         }
@@ -1110,13 +1041,13 @@ fun BackupDialog(
                     },
                     supportingContent = {
                         Text(
-                            migrationStatus
+                            encryptionStatus
                                 ?: if (useEncryption) "All new uploads are encrypted"
                                 else "Encrypt all recordings before uploading to cloud"
                         )
                     },
                     trailingContent = {
-                        if (migrating) {
+                        if (enablingEncryption) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         }
                     }
@@ -1125,25 +1056,233 @@ fun BackupDialog(
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // --- Danger zone ---
-            Text(
-                "Danger Zone",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            ListItem(
-                modifier = Modifier.clickable(enabled = !backupLoading) {
-                    showDeleteLocalConfirm = true
-                },
-                headlineContent = {
-                    Text("Delete local feed", color = MaterialTheme.colorScheme.error)
-                },
-                supportingContent = {
-                    Text("Remove all recordings from this device (cloud unaffected)")
-                }
-            )
+            if (debugDetailsEnabled) {
+                Text(
+                    "Danger Zone",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                ListItem(
+                    modifier = Modifier.clickable(enabled = !backupLoading) {
+                        showDeleteLocalConfirm = true
+                    },
+                    headlineContent = {
+                        Text("Delete local feed", color = MaterialTheme.colorScheme.error)
+                    },
+                    supportingContent = {
+                        Text("Remove all recordings from this device (cloud unaffected)")
+                    }
+                )
+            }
         }
     }
+}
+
+/**
+ * The "key not backed up" warning and generated-key QR/backup sheet,
+ * driven by [SettingsViewModel] so any host of the key flow can render them.
+ */
+@Composable
+fun EncryptionKeyResultDialogs(viewModel: SettingsViewModel) {
+    val showKeyNotBackedUpDialog by viewModel.showKeyNotBackedUpDialog.collectAsState()
+    val generatedKey by viewModel.generatedKey.collectAsState()
+    val clipboardManager = LocalClipboardManager.current
+
+    if (showKeyNotBackedUpDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissKeyNotBackedUpDialog() },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red) },
+            title = { Text("Encryption key not backed up") },
+            text = {
+                Text(
+                    buildAnnotatedString {
+                        append("You're attempting to enable backup encryption without a confirmed keychain backup of your key, ")
+                        append("please ensure you've saved your key either via QR code or copied it to your clipboard and saved it elsewhere.\n\n")
+                        withStyle(SpanStyle(color = Color.Red, fontWeight = FontWeight.Bold)) {
+                            append("If you lose this key, you will not be able to sync or restore anything from backups and will have to start fresh.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmEnableEncryption() }) {
+                    Text("I confirm, my key is saved elsewhere")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissKeyNotBackedUpDialog() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (generatedKey != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearGeneratedKey() },
+            title = { Text("Encryption Key Backup") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Save this key securely. You will need it to decrypt your backups.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        QrCodeImage(
+                            data = generatedKey!!,
+                            size = 220.dp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(generatedKey!!))
+                }) {
+                    Text("Copy Key")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.clearGeneratedKey() }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Guided "turn on encryption" dialog, driven by
+ * [SettingsViewModel.encryptionSetup] through generate or restore before
+ * encryption is enabled, so it's reusable wherever the switch lives.
+ */
+@Composable
+fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
+    val current by viewModel.encryptionSetup.collectAsState()
+    if (current is EncryptionSetupState.Hidden) return
+
+    val uiContext = rememberUiContext()
+    val clipboardManager = LocalClipboardManager.current
+    var pasted by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { viewModel.cancelEncryptionSetup() },
+        title = { Text("Set up backup encryption") },
+        text = {
+            when (val s = current) {
+                EncryptionSetupState.Hidden -> {}
+                EncryptionSetupState.PromptGenerate -> Text(
+                    "Generate an encryption key so only you can read your backups. " +
+                        "You'll save a copy so you can restore on another device."
+                )
+
+                EncryptionSetupState.Generating -> Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Generating your key and saving it to your password manager…")
+                }
+
+                is EncryptionSetupState.ShowKey -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Saved to your password manager. Save this key somewhere safe too — " +
+                            "you'll need it to restore your backups and it can't be recovered.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        QrCodeImage(data = s.keyBase64, size = 220.dp)
+                    }
+                }
+
+                EncryptionSetupState.Restoring -> Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Looking for your key in your password manager…")
+                }
+
+                is EncryptionSetupState.PasteKey -> Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Your key was generated on another device and isn't in this " +
+                            "password manager. Paste your backup key to continue."
+                    )
+                    OutlinedTextField(
+                        value = pasted,
+                        onValueChange = { pasted = it },
+                        singleLine = true,
+                        label = { Text("Encryption key") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    s.error?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                is EncryptionSetupState.Failed -> Text(
+                    s.message,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        confirmButton = {
+            when (val s = current) {
+                EncryptionSetupState.PromptGenerate -> TextButton(
+                    enabled = uiContext != null,
+                    onClick = { uiContext?.let { viewModel.generateKeyForSetup(it) } }
+                ) { Text("Generate Key") }
+
+                is EncryptionSetupState.ShowKey -> TextButton(
+                    onClick = { viewModel.completeEncryptionSetup() }
+                ) { Text("Done") }
+
+                is EncryptionSetupState.PasteKey -> TextButton(
+                    enabled = pasted.isNotBlank(),
+                    onClick = { viewModel.restoreFromPastedKey(pasted) }
+                ) { Text("Restore") }
+
+                is EncryptionSetupState.Failed -> TextButton(
+                    enabled = uiContext != null,
+                    onClick = { uiContext?.let { viewModel.generateKeyForSetup(it) } }
+                ) { Text("Retry") }
+
+                else -> {}
+            }
+        },
+        dismissButton = {
+            when (val s = current) {
+                is EncryptionSetupState.ShowKey -> TextButton(
+                    onClick = { clipboardManager.setText(AnnotatedString(s.keyBase64)) }
+                ) { Text("Copy Key") }
+
+                EncryptionSetupState.Generating,
+                EncryptionSetupState.Restoring,
+                EncryptionSetupState.Hidden -> {}
+
+                else -> TextButton(
+                    onClick = { viewModel.cancelEncryptionSetup() }
+                ) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 @Composable

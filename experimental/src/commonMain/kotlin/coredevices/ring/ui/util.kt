@@ -2,10 +2,14 @@ package coredevices.ring.ui
 
 import androidx.compose.runtime.Composable
 import kotlin.time.Clock
+import kotlin.time.Instant
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.format
 import kotlinx.datetime.format.DateTimeFormat
 import kotlinx.datetime.format.DayOfWeekNames
@@ -153,12 +157,34 @@ object UITimeUtil {
     suspend fun humanDate(date: LocalDate): String {
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val dayNames = dayNamesStatic()
+        // NB: use DatePeriod(days = 1) here, NOT raw `LocalDate(year, month,
+        // dayOfMonth ± 1)`. The latter overflows on the last day of any
+        // 30-day month (Apr 30 → "April 31" → DateTimeException) and on
+        // the 1st of any month (day 0). MOB-6712 traced an app crash on
+        // Apr 30 to this exact spot, which then dropped the next
+        // notification because the watch wasn't connected during the
+        // crash-restart window.
+        val tomorrow = now.plus(DatePeriod(days = 1))
+        val yesterday = now.minus(DatePeriod(days = 1))
         when {
             now == date -> return getString(Res.string.today)
-            LocalDate(now.year, now.month, now.dayOfMonth + 1) == date -> return getString(Res.string.tomorrow)
-            LocalDate(now.year, now.month, now.dayOfMonth - 1) == date -> return getString(Res.string.yesterday)
+            tomorrow == date -> return getString(Res.string.tomorrow)
+            yesterday == date -> return getString(Res.string.yesterday)
             now.daysUntil(date) < 7 -> return date.format(LocalDate.Format { dayOfWeek(dayNames) })
             else -> return date.format(shortDateFormat())
         }
     }
+}
+
+/** "just now" / "5m ago" / "3h ago" / "2d ago" — short relative time
+ *  used by the index feed list rows. Single source of truth. */
+internal fun relativeTime(at: Instant): String {
+    val now = Clock.System.now().toEpochMilliseconds()
+    val s = ((now - at.toEpochMilliseconds()) / 1000L).toInt()
+    if (s < 60) return "just now"
+    val m = s / 60
+    if (m < 60) return "${m}m ago"
+    val h = m / 60
+    if (h < 24) return "${h}h ago"
+    return "${h / 24}d ago"
 }

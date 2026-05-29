@@ -7,7 +7,9 @@ import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
@@ -94,7 +96,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 35,
+    version = 37,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -121,6 +123,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 32, to = 33),
         AutoMigration(from = 33, to = 34),
         AutoMigration(from = 34, to = 35),
+        AutoMigration(from = 35, to = 36),
+        AutoMigration(from = 36, to = 37, spec = AutoMigration37::class),
     ],
     exportSchema = true,
 )
@@ -150,6 +154,14 @@ abstract class Database : RoomDatabase() {
 @DeleteTable(tableName = "WatchSettingsEntity")
 @DeleteTable(tableName = "WatchSettingsSyncEntity")
 class AutoMigration30 : AutoMigrationSpec
+
+class AutoMigration37 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "UPDATE NotificationAppItemEntity SET allowDuplicates = 1 WHERE packageName = 'com.ringapp'"
+        )
+    }
+}
 
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

@@ -80,6 +80,9 @@ object PebbleNavBarRoutes {
     data object WatchSettingsRoute : NavBarRoute
 
     @Serializable
+    data object BatterySettingsRoute : NavBarRoute
+
+    @Serializable
     data object PermissionsRoute : NavBarRoute
 
     @Serializable
@@ -152,7 +155,10 @@ inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
 fun NavGraphBuilder.addNavBarRoutes(
     nav: NavBarNav,
     topBarParams: TopBarParams,
-    indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit,
+    indexScreen: @Composable (TopBarParams, NavBarNav, CoreNav) -> Unit,
+    /** A CoreNav scoped to the inner controller so RingRoute navigations
+     *  stay inside the bottom-nav chrome. Forwarded to [indexScreen]. */
+    scopedCoreNav: CoreNav,
     viewModel: WatchHomeViewModel,
 ) {
     composableWithAnimations<PebbleNavBarRoutes.WatchesRoute>(viewModel) {
@@ -181,7 +187,7 @@ fun NavGraphBuilder.addNavBarRoutes(
         HealthScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
-        indexScreen(topBarParams, nav)
+        indexScreen(topBarParams, nav, scopedCoreNav)
     }
     composableWithAnimations<PebbleNavBarRoutes.NotificationAppRoute>(viewModel) {
         val route: PebbleNavBarRoutes.NotificationAppRoute = it.toRoute()
@@ -189,6 +195,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.WatchSettingsRoute>(viewModel) {
         WatchSettingsScreen(nav, topBarParams)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.BatterySettingsRoute>(viewModel) {
+        BatterySettingsScreen(nav, topBarParams)
     }
     composableWithAnimations<PebbleNavBarRoutes.PermissionsRoute>(viewModel) {
         PermissionsScreen(nav, topBarParams)
@@ -255,9 +264,23 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
 }
 
-fun NavGraphBuilder.addPebbleRoutes(coreNav: CoreNav, indexScreen: @Composable (TopBarParams, NavBarNav) -> Unit) {
+fun NavGraphBuilder.addPebbleRoutes(
+    coreNav: CoreNav,
+    indexScreen: @Composable (TopBarParams, NavBarNav, CoreNav) -> Unit,
+    /** Adds the Index/Ring detail routes (RecordingDetails, ObjectDetails,
+     *  FullFeed, etc.) to the inner NavHost so they keep the bottom
+     *  NavigationBar visible. The receiver is the inner NavGraphBuilder;
+     *  the [CoreNav] parameter is a wrapper that routes those routes
+     *  through the inner controller. Default empty for callers that don't
+     *  need experimental devices. */
+    addExperimentalRoutes: NavGraphBuilder.(CoreNav) -> Unit = {},
+    /** Tells [WatchHomeScreen] which [CoreRoute]s should be navigated via
+     *  the inner controller (keeping the bottom nav) vs. the outer one
+     *  (popping out of the chrome). Default: nothing inner-scoped. */
+    isInnerScopedRoute: (CoreRoute) -> Boolean = { false },
+) {
     composable<PebbleRoutes.WatchHomeRoute> {
-        WatchHomeScreen(coreNav, indexScreen)
+        WatchHomeScreen(coreNav, indexScreen, addExperimentalRoutes, isInnerScopedRoute)
     }
     composable<PebbleRoutes.FirmwareSideloadRoute> {
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()

@@ -1,7 +1,9 @@
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.interop.LocalUIViewController
 import coredevices.util.toBuffer
 import kotlinx.cinterop.memScoped
@@ -65,15 +67,16 @@ private fun NSURL.toDocumentAttachment(): DocumentAttachment {
 @Composable
 actual fun rememberOpenDocumentLauncher(onResult: (List<DocumentAttachment>?) -> Unit): (mimeTypeFilter: List<String>) -> Unit {
     val presentationController = LocalUIViewController.current
+    val currentOnResult by rememberUpdatedState(onResult)
     val delegate = remember {
         object : NSObject(), UIDocumentPickerDelegateProtocol {
             override fun documentPicker(controller: UIDocumentPickerViewController, didPickDocumentsAtURLs: List<*>) {
                 val urls = didPickDocumentsAtURLs.filterIsInstance<NSURL>()
                 val results = urls.map { it.toDocumentAttachment() }
                 if (results.isNotEmpty()) {
-                    onResult(results)
+                    currentOnResult(results)
                 } else {
-                    onResult(null)
+                    currentOnResult(null)
                 }
             }
         }
@@ -90,6 +93,7 @@ actual fun rememberOpenDocumentLauncher(onResult: (List<DocumentAttachment>?) ->
 actual fun rememberOpenPhotoLauncher(onResult: (List<DocumentAttachment>?) -> Unit): () -> Unit {
     val presentationController = LocalUIViewController.current
     val scope = rememberCoroutineScope()
+    val currentOnResult by rememberUpdatedState(onResult)
     val delegate = remember {
         object : NSObject(), PHPickerViewControllerDelegateProtocol {
             override fun picker(picker: PHPickerViewController, didFinishPicking: List<*>) {
@@ -133,15 +137,15 @@ actual fun rememberOpenPhotoLauncher(onResult: (List<DocumentAttachment>?) -> Un
                 scope.launch {
                     val resolvedResults = results.awaitAll().filterNotNull()
                     if (resolvedResults.isNotEmpty()) {
-                        onResult(resolvedResults)
+                        currentOnResult(resolvedResults)
                     } else {
-                        onResult(null)
+                        currentOnResult(null)
                     }
                 }
             }
         }
     }
-    val imagePickerController = remember {
+    return {
         val configuration = PHPickerConfiguration(PHPhotoLibrary.sharedPhotoLibrary()).apply {
             setFilter(PHPickerFilter.anyFilterMatchingSubfilters(
                 listOf(
@@ -155,12 +159,9 @@ actual fun rememberOpenPhotoLauncher(onResult: (List<DocumentAttachment>?) -> Un
             setSelection(PHPickerConfigurationSelectionOrdered)
             setSelectionLimit(8)
         }
-        PHPickerViewController(configuration = configuration).apply {
+        val imagePickerController = PHPickerViewController(configuration = configuration).apply {
             setDelegate(delegate)
         }
-    }
-
-    return {
         presentationController.presentViewController(imagePickerController, animated = true, completion = null)
     }
 }

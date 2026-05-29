@@ -19,7 +19,23 @@ enum class IndexWebhookPayloadMode(val id: Int) {
 }
 
 /**
- * Stores webhook configuration: URL, auth token, and payload mode.
+ * Trigger controls which button gestures cause a webhook send.
+ */
+enum class IndexWebhookTrigger(val id: Int) {
+    SingleClick(0),
+    DoubleClickHold(1),
+    Both(2);
+
+    companion object {
+        // Default to DoubleClickHold so users migrating from the old
+        // SecondaryMode.IndexWebhook setup keep the same behavior.
+        fun fromId(id: Int): IndexWebhookTrigger =
+            entries.firstOrNull { it.id == id } ?: DoubleClickHold
+    }
+}
+
+/**
+ * Stores webhook configuration: URL, auth token, payload mode, and trigger.
  */
 class IndexWebhookPreferences(private val settings: Settings) {
 
@@ -27,6 +43,7 @@ class IndexWebhookPreferences(private val settings: Settings) {
         private const val URL_KEY = "index_webhook_url"
         private const val TOKEN_KEY = "index_webhook_auth_token"
         private const val PAYLOAD_MODE_KEY = "index_webhook_payload_mode"
+        private const val TRIGGER_KEY = "index_webhook_trigger"
     }
 
     private val _webhookUrl = MutableStateFlow(settings.getStringOrNull(URL_KEY))
@@ -39,6 +56,11 @@ class IndexWebhookPreferences(private val settings: Settings) {
         IndexWebhookPayloadMode.fromId(settings.getInt(PAYLOAD_MODE_KEY, IndexWebhookPayloadMode.RecordingOnly.id))
     )
     val payloadMode = _payloadMode.asStateFlow()
+
+    private val _trigger = MutableStateFlow(
+        IndexWebhookTrigger.fromId(settings.getInt(TRIGGER_KEY, IndexWebhookTrigger.DoubleClickHold.id))
+    )
+    val trigger = _trigger.asStateFlow()
 
     fun setWebhookUrl(url: String?) {
         if (url != null) {
@@ -63,12 +85,19 @@ class IndexWebhookPreferences(private val settings: Settings) {
         _payloadMode.value = mode
     }
 
+    fun setTrigger(trigger: IndexWebhookTrigger) {
+        settings.putInt(TRIGGER_KEY, trigger.id)
+        _trigger.value = trigger
+    }
+
     fun clearAll() {
         settings.remove(URL_KEY)
         settings.remove(TOKEN_KEY)
         settings.remove(PAYLOAD_MODE_KEY)
+        settings.remove(TRIGGER_KEY)
         _webhookUrl.value = null
         _authToken.value = null
         _payloadMode.value = IndexWebhookPayloadMode.RecordingOnly
+        _trigger.value = IndexWebhookTrigger.DoubleClickHold
     }
 }
