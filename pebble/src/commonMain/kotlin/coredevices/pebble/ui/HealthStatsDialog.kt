@@ -35,6 +35,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DayOfWeek
 import kotlin.time.Duration.Companion.seconds
 
 private val logger = Logger.withTag("HealthStatsDialog")
@@ -171,6 +172,66 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Text(
+                            "Typical steps by weekday",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        for (wd in DayOfWeek.entries) {
+                            val total = s.weekdayTypicalSteps[wd]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    wd.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    total?.toString() ?: "--",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (total != null) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Text(
+                            "Typical sleep by weekday",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        for (wd in DayOfWeek.entries) {
+                            val typ = s.weekdayTypicalSleep[wd]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    wd.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    typ?.let {
+                                        "${formatHm(it.sleepDurationSeconds)} / ${formatHm(it.deepSleepDurationSeconds)}  ${formatClock(it.fallAsleepSecondsOfDay)}→${formatClock(it.wakeupSecondsOfDay)}"
+                                    } ?: "--",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (typ != null) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
+                        }
                     }
                 } else {
                     Text(
@@ -186,3 +247,15 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
 
 expect fun Double.format(digits: Int): String
 fun Float.format(digits: Int): String = toDouble().format(digits)
+
+private fun formatHm(totalSeconds: Int): String {
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
+    return "${h}h${m.toString().padStart(2, '0')}m"
+}
+
+private fun formatClock(secondsOfDay: Int): String {
+    val h = secondsOfDay / 3600
+    val m = (secondsOfDay % 3600) / 60
+    return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
+}
