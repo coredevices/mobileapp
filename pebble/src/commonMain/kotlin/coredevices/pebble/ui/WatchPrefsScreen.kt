@@ -135,22 +135,67 @@ fun WatchPref<*>.section(): Section = when (this) {
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref
-    return basicSettingsNumberItem(
-        id = pref.id,
-        title = pref.displayName,
-        description = pref.description,
-        topLevelType = TopLevelType.Watch,
-        section = pref.section(),
-        value = item.valueOrDefault(),
-        min = pref.min,
-        max = pref.max,
-        onValueChange = {
-            libPebble.setWatchPref(item.copy(value = it))
-        },
-        isDebugSetting = pref.isDebugSetting,
-        defaultValue = pref.defaultValue,
-        unit = pref.unit,
-    )
+    return when (pref) {
+        NumberWatchPref.BacklightTimeoutMs -> {
+            val secValue = item.valueOrDefault() / 1000
+            basicSettingsNumberItem(
+                id = pref.id,
+                title = pref.displayName,
+                description = pref.description,
+                topLevelType = TopLevelType.Watch,
+                section = pref.section(),
+                value = secValue,
+                min = 1,
+                max = 10,
+                onValueChange = {
+                    libPebble.setWatchPref(item.copy(value = it * 1000))
+                },
+                isDebugSetting = pref.isDebugSetting,
+                defaultValue = pref.defaultValue / 1000,
+                unit = "seconds",
+                valueFormatter = { "$it seconds" },
+            )
+        }
+        NumberWatchPref.NotificationTimeoutMs -> {
+            val secValue = item.valueOrDefault() / 1000
+            basicSettingsNumberItem(
+                id = pref.id,
+                title = pref.displayName,
+                description = pref.description,
+                topLevelType = TopLevelType.Watch,
+                section = pref.section(),
+                value = secValue,
+                min = 0,
+                max = 600,
+                onValueChange = {
+                    libPebble.setWatchPref(item.copy(value = it * 1000))
+                },
+                isDebugSetting = pref.isDebugSetting,
+                defaultValue = pref.defaultValue / 1000,
+                unit = "",
+                valueFormatter = { v ->
+                    "${v / 60}:${(v % 60).toString().padStart(2, '0')}"
+                },
+                stepsOverride = 19,
+            )
+        }
+        else -> basicSettingsNumberItem(
+            id = pref.id,
+            title = pref.displayName,
+            description = pref.description,
+            topLevelType = TopLevelType.Watch,
+            section = pref.section(),
+            value = item.valueOrDefault(),
+            min = pref.min,
+            max = pref.max,
+            onValueChange = {
+                libPebble.setWatchPref(item.copy(value = it))
+            },
+            isDebugSetting = pref.isDebugSetting,
+            defaultValue = pref.defaultValue,
+            unit = pref.unit,
+        )
+    }
 }
 
 private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble): SettingsItem {
