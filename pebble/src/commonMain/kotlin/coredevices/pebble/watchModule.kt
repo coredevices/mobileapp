@@ -66,11 +66,13 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.TokenProvider
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -95,22 +97,38 @@ import org.koin.dsl.module
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
+import coredevices.util.CoreConfigHolder
 
 val watchModule = module {
-    single {
-        Logger.d("watchModule get LibPebble3")
-        LibPebble3.create(
-            get(),
-            get(),
-            get(),
-            get(),
-            flow { emitAll(Firebase.auth.idTokenChanged) }
-                .map { try { it?.getIdToken(false) } catch (e: Exception) { Logger.w(e) { "Failed to get ID token" }; null } }
-                .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
-            get(),
-            get(),
-        )
-    } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
+    single<LibPebble> {
+        val configHolder = get<CoreConfigHolder>()
+        val fakeWatchType = configHolder.config.value.fakeWatchType
+        if (fakeWatchType.isNotEmpty()) {
+            val hwPlatform = WatchHardwarePlatform.entries.firstOrNull { it.revision == fakeWatchType }
+                ?: WatchHardwarePlatform.CORE_ASTERIX
+            Logger.d("watchModule using FakeLibPebble with watch type: $hwPlatform")
+            FakeLibPebble(watchHardwarePlatform = hwPlatform)
+        } else {
+            Logger.d("watchModule get LibPebble3")
+            LibPebble3.create(
+                get(),
+                get(),
+                get(),
+                get(),
+                flow { emitAll(Firebase.auth.idTokenChanged) }
+                    .map { try { it?.getIdToken(false) } catch (e: Exception) { Logger.w(e) { "Failed to get ID token" }; null } }
+                    .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
+                get(),
+                get(),
+            )
+        }
+    }
+    single<LibPebble3> {
+        val libPebble = get<LibPebble>()
+        if (libPebble is LibPebble3) libPebble else throw IllegalStateException("LibPebble3 not available when useFakeLibPebble is enabled")
+    }
+    single<NotificationApps> { get<LibPebble>() as NotificationApps }
+    single<SystemGeolocation> { get<LibPebble>() as SystemGeolocation }
 
     includes(platformWatchModule)
 
@@ -214,7 +232,7 @@ val watchModule = module {
     single {
         CactusTranscription(
             get(),
-            lazy { get<LibPebble3>() },
+            lazy { get<LibPebble>() },
             get(),
         )
     } bind TranscriptionProvider::class

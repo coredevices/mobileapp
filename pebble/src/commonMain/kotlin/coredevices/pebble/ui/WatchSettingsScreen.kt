@@ -149,6 +149,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.Dispatchers
@@ -1305,6 +1306,29 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         settings.set(SHOW_DEBUG_OPTIONS_SETTINGS_KEY, it)
                         debugOptionsEnabled = it
                     },
+                ),
+                basicSettingsDropdownItem(
+                    title = "Fake watch (requires restart)",
+                    description = "Use a simulated watch for testing. Does not require a real Bluetooth connection. Restart the app after changing this setting.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    selectedItem = coreConfig.fakeWatchType,
+                    items = listOf("") + WatchHardwarePlatform.entries.filter {
+                        it != WatchHardwarePlatform.UNKNOWN
+                            && !it.name.contains("EVT")
+                            && !it.name.contains("DVT")
+                            && !it.name.contains("EV_")
+                            && !it.name.contains("BIGBOARD")
+                            && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
+                            && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
+                    }.map { it.revision },
+                    onItemSelected = {
+                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeWatchType = it))
+                    },
+                    itemText = {
+                        if (it.isEmpty()) "Disabled" else WatchHardwarePlatform.entries.first { hw -> hw.revision == it }.displayName
+                    },
+                    isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
                     title = "PKJS Debugger",

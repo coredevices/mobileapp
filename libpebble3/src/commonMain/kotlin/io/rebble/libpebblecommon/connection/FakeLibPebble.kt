@@ -79,12 +79,14 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-class FakeLibPebble : LibPebble {
+class FakeLibPebble(
+    private val watchHardwarePlatform: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+) : LibPebble {
     override fun init() {
         // No-op
     }
 
-    override val watches: PebbleDevices = MutableStateFlow(fakeWatches())
+    override val watches: PebbleDevices = MutableStateFlow(listOf(fakeWatch(connected = true, watchType = watchHardwarePlatform)))
     override val connectionEvents: Flow<PebbleConnectionEvent> = MutableSharedFlow()
 
     override fun watchesDebugState(): String {
@@ -183,7 +185,7 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
-        return flow { emit(fakeLockerEntries.first()) }
+        return locker.map { it.firstOrNull() }
     }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
@@ -206,8 +208,7 @@ class FakeLibPebble : LibPebble {
     override fun restoreSystemAppOrder() {
     }
 
-    override val activeWatchface: StateFlow<LockerWrapper?>
-        get() = MutableStateFlow(fakeLockerEntry())
+    override val activeWatchface: StateFlow<LockerWrapper?> = MutableStateFlow(null)
 
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
@@ -493,62 +494,24 @@ fun fakeWatches(): List<PebbleDevice> {
     }
 }
 
-fun fakeWatch(connected: Boolean = Random.nextBoolean()): PebbleDevice {
-    val num = Random.nextInt(1111, 9999)
-    val name = "Core $num"
-    val fakeIdentifier = if (PlatformUtils.IS_JVM) {
-        randomMacAddress().asPebbleBleIdentifier()
-    } else {
-        Uuid.random().toString().asPebbleBleIdentifier()
-    }
+fun fakeWatch(connected: Boolean = true, watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX): PebbleDevice {
+    val name = "Core ${watchType.revision}"
+    val fakeIdentifier = "AA:BB:CC:DD:EE:FF".asPebbleBleIdentifier()
     return if (connected) {
-        val updating = Random.nextBoolean()
-        val fwupState = if (updating) {
-            val fakeUpdate = FirmwareUpdateCheckResult.FoundUpdate(
-                version = FirmwareVersion.from(
-                    "v4.9.9-core1",
-                    isRecovery = false,
-                    gitHash = "",
-                    timestamp = Instant.DISTANT_PAST,
-                    isDualSlot = false,
-                    isSlot0 = false,
-                )!!,
-                url = "",
-                notes = "v4.9.9-core1 is great",
-            )
-            FirmwareUpdater.FirmwareUpdateStatus.InProgress(fakeUpdate, MutableStateFlow(0.47f))
-        } else {
-            FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
-        }
-        val fwupAvailable = if (!updating && Random.nextBoolean()) {
-            FirmwareUpdateCheckResult.FoundUpdate(
-                version = FirmwareVersion.from(
-                    "v4.9.9-core2",
-                    isRecovery = false,
-                    gitHash = "",
-                    timestamp = kotlin.time.Instant.DISTANT_PAST,
-                    isDualSlot = false,
-                    isSlot0 = false,
-                )!!,
-                url = "http://something",
-                notes = "update!!",
-            )
-        } else {
-            null
-        }
         FakeConnectedDevice(
             identifier = fakeIdentifier,
-            firmwareUpdateAvailable = FirmwareUpdateCheckState(false, fwupAvailable),
-            firmwareUpdateState = fwupState,
+            firmwareUpdateAvailable = FirmwareUpdateCheckState(false, null),
+            firmwareUpdateState = FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle(),
             name = name,
             nickname = null,
             connectionFailureInfo = null,
+            watchType = watchType,
         )
     } else {
         object : DiscoveredPebbleDevice {
             override val identifier = fakeIdentifier
-            override val name: String = "Fake 1234"
-            override val nickname: String? = "Faker 1234"
+            override val name: String = name
+            override val nickname: String? = null
             override val connectionFailureInfo: ConnectionFailureInfo? = null
 
             override fun connect() {
@@ -577,7 +540,7 @@ class FakeConnectedDevice(
     override val runningFwVersion: String = "v1.2.3-core",
     override val connectionFailureInfo: ConnectionFailureInfo?,
     override val usingBtClassic: Boolean = false,
-    override val capabilities: Set<ProtocolCapsFlag> = emptySet()
+    override val capabilities: Set<ProtocolCapsFlag> = setOf(ProtocolCapsFlag.SupportsBlobDbVersion)
 ) : ConnectedPebbleDevice {
 
     override fun forget() {}
@@ -731,7 +694,7 @@ class FakeConnectedDeviceInRecovery(
     override val runningFwVersion: String = "v1.2.3-core",
     override val connectionFailureInfo: ConnectionFailureInfo?,
     override val usingBtClassic: Boolean = false,
-    override val capabilities: Set<ProtocolCapsFlag> = emptySet(),
+    override val capabilities: Set<ProtocolCapsFlag> = setOf(ProtocolCapsFlag.SupportsBlobDbVersion),
 ) : ConnectedPebbleDeviceInRecovery {
 
     override fun forget() {}
