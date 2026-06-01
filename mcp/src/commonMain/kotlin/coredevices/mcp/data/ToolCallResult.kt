@@ -72,11 +72,13 @@ sealed class SemanticResult {
      * Generic failure, with an optional user-facing error message
      * @param userErrorMessage An optional message to show to the user explaining the failure
      * @param llmRecoverable Whether the LLM can attempt to recover from this failure
+     * @param forceFallbackTool Whether the system should attempt to use a fallback tool if available
      */
     @Serializable
     @SerialName("GenericFailure")
     data class GenericFailure(
         val userErrorMessage: String?,
-        val llmRecoverable: Boolean = false
+        val llmRecoverable: Boolean = false,
+        val forceFallbackTool: Boolean = false,
     ): SemanticResult()
 }

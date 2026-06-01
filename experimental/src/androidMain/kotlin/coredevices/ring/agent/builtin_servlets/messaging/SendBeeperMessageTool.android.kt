@@ -13,11 +13,10 @@ import coredevices.ring.agent.currentSessionContext
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import androidx.core.net.toUri
 
 actual class SendBeeperMessageTool : BuiltInMcpTool(
     definition = Tool(
@@ -25,7 +24,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
         description = SendBeeperMessageToolConstants.TOOL_DESCRIPTION,
         inputSchema = SendBeeperMessageToolConstants.INPUT_SCHEMA
     ),
-    extraContext = "If the user explicitly requests sending a message, use the contact/messaging " +
+    extraContext = "If the user explicitly requests sending a message, use the messaging " +
             "tools."
 ), KoinComponent {
     private val context: Context by inject()
@@ -37,29 +36,48 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
         private val logger = Logger.withTag("SendBeeperMessageTool")
     }
 
+    private fun searchForContactId(name: String): List<Pair<ApprovedBeeperContact, Int>> {
+        val approvedContacts = prefs.approvedBeeperContacts.value
+        return approvedContacts
+            .map { it to it.matchScore(name) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+    }
+
     actual override suspend fun call(jsonInput: String): ToolCallResult {
         return try {
-            val (contactId, text) = JsonSnake.decodeFromString<SendBeeperMessageArgs>(jsonInput)
+            val (contactName, text) = JsonSnake.decodeFromString<SendBeeperMessageArgs>(jsonInput)
+
+            val matches = searchForContactId(contactName)
+            logger.d { "Found ${matches.size} matching contacts, scores: ${matches.joinToString { it.second.toString() }}" }
+            if (matches.isEmpty()) {
+                return ToolCallResult(
+                    "No contacts matching '$contactName'.",
+                    SemanticResult.GenericFailure("No approved contacts match '$contactName'", forceFallbackTool = true)
+                )
+            }
+
+            val (contact, _) = matches.first()
 
             val encodedText = Uri.encode(text)
+            val encodedId = Uri.encode(contact.roomId)
             val uri =
-                Uri.parse("content://com.beeper.api/messages?roomId=$contactId&text=$encodedText")
+                "content://com.beeper.api/messages?roomId=${encodedId}&text=$encodedText".toUri()
 
             val resultUri = context.contentResolver.insert(uri, ContentValues())
 
             if (resultUri?.getQueryParameter("messageId") != null) {
-                val contact = prefs.approvedBeeperContacts.value.find { it.roomId == contactId }
-                val displayName = contact?.nickname ?: contact?.name ?: "contact"
+                val displayName = contact.nickname ?: contact.name
                 currentSessionContext()?.let { ctx ->
                     runCatching {
                         itemRepo.setItem(
                             itemFactory.simpleUid(),
-                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, displayName, text, contactId, ItemDocument.ItemMetadata.Message.Status.Sent)
+                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, displayName, text, contact.roomId, ItemDocument.ItemMetadata.Message.Status.Sent)
                         )
                     }
                 }
                 ToolCallResult(
-                    "{}",
+                    "{\"success\": true}",
                     SemanticResult.MessageSent(displayName)
                 )
             } else {
@@ -67,20 +85,20 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
                     runCatching {
                         itemRepo.setItem(
                             itemFactory.simpleUid(),
-                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, null, text, contactId, ItemDocument.ItemMetadata.Message.Status.Failed,
+                            itemFactory.messageItem(ctx.sourceRecordingId, ctx.createdAt, null, text, contact.roomId, ItemDocument.ItemMetadata.Message.Status.Failed,
                                 "Failed to send message. Check permissions and if Beeper is installed.")
                         )
                     }
                 }
                 ToolCallResult(
-                    "{}",
+                    "{\"success\": false}",
                     SemanticResult.GenericFailure("Failed to send message. Check permissions and if Beeper is installed.")
                 )
             }
         } catch (e: Exception) {
             logger.e(e) { "Error sending message: ${e.message}" }
             ToolCallResult(
-                "{}",
+                "{\"success\": false}",
                 SemanticResult.GenericFailure("Internal error while sending message")
             )
         }

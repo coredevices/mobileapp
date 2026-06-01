@@ -10,7 +10,6 @@ object MessagingServlet: BuiltInMcpIntegration(
     name = "builtin_messaging",
     tools = listOf(
         SendBeeperMessageTool(),
-        SearchBeeperForContactTool()
     )
 ), KoinComponent {
     private val logger by lazy { Logger.withTag("MessagingServlet") }
@@ -19,7 +18,7 @@ object MessagingServlet: BuiltInMcpIntegration(
         val approvedContacts = prefs.approvedBeeperContacts.value
         return if (approvedContacts.isEmpty()) {
             logger.d { "No approved contacts for messaging tools, disabling them." }
-            listOf(SearchBeeperForContactToolConstants.TOOL_NAME, SendBeeperMessageToolConstants.TOOL_NAME)
+            listOf(SendBeeperMessageToolConstants.TOOL_NAME)
         } else {
             emptyList()
         }

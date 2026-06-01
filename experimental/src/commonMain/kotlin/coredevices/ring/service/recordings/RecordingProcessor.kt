@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.TranscriptionSessionStatus
 import coredevices.mcp.client.McpSession
+import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
@@ -259,8 +260,15 @@ class RecordingProcessor(
             updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
         }
         val conv = agent.conversation.firstOrNull() ?: emptyList()
-        val noToolRan = conv.drop(convEndIdx).all { it.role != MessageRole.tool }
-        if (forcedTool != null && noToolRan) {
+        // No tool messages
+        val noToolRan = conv.drop(convEndIdx).none {
+            it.role == MessageRole.tool
+        }
+        // Last tool message indicates fallback was requested
+        val toolRequestedFallback = conv.drop(convEndIdx).lastOrNull { it.role == MessageRole.tool }?.let {
+            it.semantic_result is SemanticResult.GenericFailure && (it.semantic_result as SemanticResult.GenericFailure).forceFallbackTool
+        } ?: false
+        if (forcedTool != null && (noToolRan || toolRequestedFallback)) {
             // Agent did not take any action, force tool
             val toolResult = withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
                 forcedTool()
