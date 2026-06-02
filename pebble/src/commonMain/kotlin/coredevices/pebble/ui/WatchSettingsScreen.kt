@@ -1730,14 +1730,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         if (showAddFakeWatchDialog.value) {
             FakeWatchPickerDialog(
                 currentWatches = coreConfig.fakeWatches,
-                onAddWatch = { revision ->
+                onAddWatches = { revisions ->
                     val current = coreConfig.fakeWatches
-                    if (revision !in current) {
-                        coreConfigHolder.update(coreConfigHolder.config.value.copy(
-                            fakeWatches = current + revision,
-                            fakeActiveWatch = coreConfig.fakeActiveWatch.ifEmpty { revision },
-                        ))
-                    }
+                    val updated = current + revisions.filter { it !in current }
+                    val newActive = coreConfig.fakeActiveWatch.ifEmpty { revisions.firstOrNull() ?: "" }
+                    coreConfigHolder.update(coreConfigHolder.config.value.copy(
+                        fakeWatches = updated,
+                        fakeActiveWatch = newActive,
+                    ))
                     showAddFakeWatchDialog.value = false
                 },
                 onDismissRequest = { showAddFakeWatchDialog.value = false },
@@ -2700,7 +2700,7 @@ private fun fakeWatchItems(
 @Composable
 private fun FakeWatchPickerDialog(
     currentWatches: List<String>,
-    onAddWatch: (String) -> Unit,
+    onAddWatches: (List<String>) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val consumerWatchPlatforms = WatchHardwarePlatform.entries.filter {
@@ -2712,13 +2712,20 @@ private fun FakeWatchPickerDialog(
             && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
             && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
     }
-    val availablePlatforms = consumerWatchPlatforms.filter { it.revision !in currentWatches }
+    val availablePlatforms = remember(currentWatches) {
+        consumerWatchPlatforms.filter { it.revision !in currentWatches }
+    }
+    val selectedRevisions = remember(currentWatches) { mutableStateOf(setOf<String>()) }
 
     M3Dialog(
         onDismissRequest = onDismissRequest,
-        title = { Text("Add Fake Watch") },
+        title = { Text("Add Fake Watches") },
         buttons = {
             TextButton(onClick = onDismissRequest) { Text("Cancel") }
+            TextButton(
+                onClick = { onAddWatches(selectedRevisions.value.toList()) },
+                enabled = selectedRevisions.value.isNotEmpty(),
+            ) { Text("Add") }
         },
     ) {
         if (availablePlatforms.isEmpty()) {
@@ -2730,10 +2737,27 @@ private fun FakeWatchPickerDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onAddWatch(platform.revision) }
-                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                            .clickable {
+                                selectedRevisions.value = if (platform.revision in selectedRevisions.value) {
+                                    selectedRevisions.value - platform.revision
+                                } else {
+                                    selectedRevisions.value + platform.revision
+                                }
+                            }
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
                     ) {
-                        Text(platform.displayName)
+                        Checkbox(
+                            checked = platform.revision in selectedRevisions.value,
+                            onCheckedChange = {
+                                selectedRevisions.value = if (platform.revision in selectedRevisions.value) {
+                                    selectedRevisions.value - platform.revision
+                                } else {
+                                    selectedRevisions.value + platform.revision
+                                }
+                            },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(platform.displayName, modifier = Modifier.weight(1f))
                     }
                 }
             }
