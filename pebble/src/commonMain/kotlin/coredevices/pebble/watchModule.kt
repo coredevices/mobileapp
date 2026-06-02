@@ -100,8 +100,7 @@ import coredevices.util.CoreConfigHolder
 
 val watchModule = module {
     single<LibPebble> {
-        val configHolder = get<CoreConfigHolder>()
-        val config = configHolder.config.value
+        val config = get<CoreConfigHolder>().config.value
         if (config.fakeWatches.isNotEmpty()) {
             Logger.d { "watchModule using FakeLibPebble with ${config.fakeWatches.size} watches, active: ${config.fakeActiveWatch}" }
             FakeLibPebble(
@@ -122,13 +121,12 @@ val watchModule = module {
                 get(),
             )
         }
-    }
+    } binds arrayOf(LibPebble::class, NotificationApps::class, SystemGeolocation::class)
     single<LibPebble3> {
         val libPebble = get<LibPebble>()
-        if (libPebble is LibPebble3) libPebble else throw IllegalStateException("LibPebble3 not available when useFakeLibPebble is enabled")
+        libPebble as? LibPebble3
+            ?: error("LibPebble3 is not available while fake watches are enabled (got ${libPebble::class.simpleName}); request LibPebble, NotificationApps, or SystemGeolocation instead")
     }
-    single<NotificationApps> { get<LibPebble>() as NotificationApps }
-    single<SystemGeolocation> { get<LibPebble>() as SystemGeolocation }
 
     includes(platformWatchModule)
 
