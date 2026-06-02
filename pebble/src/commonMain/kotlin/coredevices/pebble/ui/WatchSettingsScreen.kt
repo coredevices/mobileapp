@@ -1730,10 +1730,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         if (showAddFakeWatchDialog.value) {
             FakeWatchPickerDialog(
                 currentWatches = coreConfig.fakeWatches,
-                onAddWatches = { revisions ->
-                    val current = coreConfig.fakeWatches
-                    val updated = current + revisions.filter { it !in current }
-                    val newActive = coreConfig.fakeActiveWatch.ifEmpty { revisions.firstOrNull() ?: "" }
+                onAddWatches = { selected ->
+                    if (selected.isEmpty()) {
+                        showAddFakeWatchDialog.value = false
+                        return@FakeWatchPickerDialog
+                    }
+                    val updated = coreConfig.fakeWatches + selected
+                    val newActive = coreConfig.fakeActiveWatch ?: selected.first()
                     coreConfigHolder.update(coreConfigHolder.config.value.copy(
                         fakeWatches = updated,
                         fakeActiveWatch = newActive,
@@ -2631,91 +2634,95 @@ private fun fakeWatchItems(
     coreConfigHolder: CoreConfigHolder,
     showAddDialog: MutableState<Boolean>,
 ): List<SettingsItem> {
-    return listOfNotNull(
-        basicSettingsActionItem(
-            title = "Add fake watch (requires restart)",
-            description = "Add a simulated watch for testing. Does not require a real Bluetooth connection.",
-            topLevelType = TopLevelType.Phone,
-            section = Section.Debug,
-            action = { showAddDialog.value = true },
-            isDebugSetting = true,
-            keywords = "fake watch debug",
-        ),
-    ) + coreConfig.fakeWatches.mapIndexed { index, watch ->
-        val displayName = WatchHardwarePlatform.entries.firstOrNull { it.revision == watch }?.displayName ?: watch
-        val isActive = watch == coreConfig.fakeActiveWatch
-        SettingsItem(
-            title = displayName,
-            topLevelType = TopLevelType.Phone,
-            section = Section.Debug,
-            isDebugSetting = true,
-            item = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+    val addItem = basicSettingsActionItem(
+        title = "Add fake watch (requires restart)",
+        description = "Add a simulated watch for testing. Does not require a real Bluetooth connection.",
+        topLevelType = TopLevelType.Phone,
+        section = Section.Debug,
+        action = { showAddDialog.value = true },
+        isDebugSetting = true,
+        keywords = "fake watch debug",
+    )
+    return buildList {
+        add(addItem)
+        coreConfig.fakeWatches.forEach { watch ->
+            val isActive = watch == coreConfig.fakeActiveWatch
+            add(
+                SettingsItem(
+                    title = watch.displayName,
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    isDebugSetting = true,
+                    item = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                                    }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                            ) {
+                                RadioButton(
+                                    selected = isActive,
+                                    onClick = {
+                                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                                    },
+                                )
+                                Column {
+                                    Text(watch.displayName)
+                                    Text(
+                                        text = if (isActive) "Active (connected)" else "Tap to set as active",
+                                        fontSize = 11.sp,
+                                    )
+                                }
                             }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                    ) {
-                        RadioButton(
-                            selected = isActive,
-                            onClick = {
-                                coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
-                            },
-                        )
-                        Column {
-                            Text(displayName)
-                            Text(
-                                text = if (isActive) "Active (connected)" else "Tap to set as active",
-                                fontSize = 11.sp,
-                            )
+                            TextButton(onClick = {
+                                val updated = coreConfig.fakeWatches - watch
+                                val newActive = when (coreConfig.fakeActiveWatch) {
+                                    watch -> updated.firstOrNull()
+                                    else -> coreConfig.fakeActiveWatch
+                                }
+                                coreConfigHolder.update(coreConfigHolder.config.value.copy(
+                                    fakeWatches = updated,
+                                    fakeActiveWatch = newActive,
+                                ))
+                            }) {
+                                Text("Remove")
+                            }
                         }
-                    }
-                    TextButton(onClick = {
-                        val updated = coreConfig.fakeWatches.filter { it != watch }
-                        val newActive = if (watch == coreConfig.fakeActiveWatch) {
-                            updated.firstOrNull() ?: ""
-                        } else {
-                            coreConfig.fakeActiveWatch
-                        }
-                        coreConfigHolder.update(coreConfigHolder.config.value.copy(
-                            fakeWatches = updated,
-                            fakeActiveWatch = newActive,
-                        ))
-                    }) {
-                        Text("Remove")
-                    }
-                }
-            },
-        )
+                    },
+                )
+            )
+        }
     }
 }
 
 @Composable
 private fun FakeWatchPickerDialog(
-    currentWatches: List<String>,
-    onAddWatches: (List<String>) -> Unit,
+    currentWatches: Set<WatchHardwarePlatform>,
+    onAddWatches: (Set<WatchHardwarePlatform>) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    val consumerWatchPlatforms = WatchHardwarePlatform.entries.filter {
-        it != WatchHardwarePlatform.UNKNOWN
-            && !it.name.contains("EVT")
-            && !it.name.contains("DVT")
-            && !it.name.contains("EV_")
-            && !it.name.contains("BIGBOARD")
-            && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
-            && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
+    val consumerWatchPlatforms = remember {
+        WatchHardwarePlatform.entries.filter {
+            it != WatchHardwarePlatform.UNKNOWN
+                && !it.name.contains("EVT")
+                && !it.name.contains("DVT")
+                && !it.name.contains("EV_")
+                && !it.name.contains("BIGBOARD")
+                && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
+                && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
+        }
     }
     val availablePlatforms = remember(currentWatches) {
-        consumerWatchPlatforms.filter { it.revision !in currentWatches }
+        consumerWatchPlatforms.filter { it !in currentWatches }
     }
-    val selectedRevisions = remember(currentWatches) { mutableStateOf(setOf<String>()) }
+    val selected = remember(currentWatches) { mutableStateOf<Set<WatchHardwarePlatform>>(emptySet()) }
 
     M3Dialog(
         onDismissRequest = onDismissRequest,
@@ -2723,8 +2730,8 @@ private fun FakeWatchPickerDialog(
         buttons = {
             TextButton(onClick = onDismissRequest) { Text("Cancel") }
             TextButton(
-                onClick = { onAddWatches(selectedRevisions.value.toList()) },
-                enabled = selectedRevisions.value.isNotEmpty(),
+                onClick = { onAddWatches(selected.value) },
+                enabled = selected.value.isNotEmpty(),
             ) { Text("Add") }
         },
     ) {
@@ -2733,28 +2740,19 @@ private fun FakeWatchPickerDialog(
         } else {
             LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                 items(availablePlatforms, key = { it.revision }) { platform ->
+                    val isSelected = platform in selected.value
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                selectedRevisions.value = if (platform.revision in selectedRevisions.value) {
-                                    selectedRevisions.value - platform.revision
-                                } else {
-                                    selectedRevisions.value + platform.revision
-                                }
+                                selected.value = selected.value.toggle(platform)
                             }
                             .padding(vertical = 4.dp, horizontal = 4.dp),
                     ) {
                         Checkbox(
-                            checked = platform.revision in selectedRevisions.value,
-                            onCheckedChange = {
-                                selectedRevisions.value = if (platform.revision in selectedRevisions.value) {
-                                    selectedRevisions.value - platform.revision
-                                } else {
-                                    selectedRevisions.value + platform.revision
-                                }
-                            },
+                            checked = isSelected,
+                            onCheckedChange = { selected.value = selected.value.toggle(platform) },
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(platform.displayName, modifier = Modifier.weight(1f))
@@ -2764,6 +2762,8 @@ private fun FakeWatchPickerDialog(
         }
     }
 }
+
+private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
 
 enum class RegularSyncInterval(
     val period: Duration,

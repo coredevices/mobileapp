@@ -72,7 +72,6 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.TokenProvider
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -104,19 +103,11 @@ val watchModule = module {
         val configHolder = get<CoreConfigHolder>()
         val config = configHolder.config.value
         if (config.fakeWatches.isNotEmpty()) {
-            val fakeWatches = config.fakeWatches.map { rev ->
-                WatchHardwarePlatform.entries.firstOrNull { it.revision == rev }
-                    ?: WatchHardwarePlatform.CORE_ASTERIX
-            }
-            val activeRevision = config.fakeActiveWatch
-            val activeWatch = if (activeRevision.isNotEmpty() && activeRevision in config.fakeWatches) {
-                WatchHardwarePlatform.entries.firstOrNull { it.revision == activeRevision }
-                    ?: fakeWatches.first()
-            } else {
-                fakeWatches.first()
-            }
-            Logger.d("watchModule using FakeLibPebble with ${fakeWatches.size} watches, active: $activeWatch")
-            FakeLibPebble(fakeWatches = fakeWatches, activeWatch = activeWatch)
+            Logger.d { "watchModule using FakeLibPebble with ${config.fakeWatches.size} watches, active: ${config.fakeActiveWatch}" }
+            FakeLibPebble(
+                fakeWatches = config.fakeWatches.toList(),
+                activeWatch = config.fakeActiveWatch ?: config.fakeWatches.first(),
+            )
         } else {
             Logger.d("watchModule get LibPebble3")
             LibPebble3.create(
