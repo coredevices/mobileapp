@@ -102,12 +102,21 @@ import coredevices.util.CoreConfigHolder
 val watchModule = module {
     single<LibPebble> {
         val configHolder = get<CoreConfigHolder>()
-        val fakeWatchType = configHolder.config.value.fakeWatchType
-        if (fakeWatchType.isNotEmpty()) {
-            val hwPlatform = WatchHardwarePlatform.entries.firstOrNull { it.revision == fakeWatchType }
-                ?: WatchHardwarePlatform.CORE_ASTERIX
-            Logger.d("watchModule using FakeLibPebble with watch type: $hwPlatform")
-            FakeLibPebble(watchHardwarePlatform = hwPlatform)
+        val config = configHolder.config.value
+        if (config.fakeWatches.isNotEmpty()) {
+            val fakeWatches = config.fakeWatches.map { rev ->
+                WatchHardwarePlatform.entries.firstOrNull { it.revision == rev }
+                    ?: WatchHardwarePlatform.CORE_ASTERIX
+            }
+            val activeRevision = config.fakeActiveWatch
+            val activeWatch = if (activeRevision.isNotEmpty() && activeRevision in config.fakeWatches) {
+                WatchHardwarePlatform.entries.firstOrNull { it.revision == activeRevision }
+                    ?: fakeWatches.first()
+            } else {
+                fakeWatches.first()
+            }
+            Logger.d("watchModule using FakeLibPebble with ${fakeWatches.size} watches, active: $activeWatch")
+            FakeLibPebble(fakeWatches = fakeWatches, activeWatch = activeWatch)
         } else {
             Logger.d("watchModule get LibPebble3")
             LibPebble3.create(

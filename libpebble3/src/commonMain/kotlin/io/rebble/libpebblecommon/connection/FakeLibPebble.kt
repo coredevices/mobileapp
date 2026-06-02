@@ -80,13 +80,16 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class FakeLibPebble(
-    private val watchHardwarePlatform: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+    fakeWatches: List<WatchHardwarePlatform> = listOf(WatchHardwarePlatform.CORE_ASTERIX),
+    activeWatch: WatchHardwarePlatform = fakeWatches.firstOrNull() ?: WatchHardwarePlatform.CORE_ASTERIX,
 ) : LibPebble {
     override fun init() {
         // No-op
     }
 
-    override val watches: PebbleDevices = MutableStateFlow(listOf(fakeWatch(connected = true, watchType = watchHardwarePlatform)))
+    override val watches: PebbleDevices = MutableStateFlow(
+        fakeWatches.mapIndexed { index, hw -> fakeWatch(connected = hw == activeWatch, watchType = hw, index = index) }
+    )
     override val connectionEvents: Flow<PebbleConnectionEvent> = MutableSharedFlow()
 
     override fun watchesDebugState(): String {
@@ -494,9 +497,9 @@ fun fakeWatches(): List<PebbleDevice> {
     }
 }
 
-fun fakeWatch(connected: Boolean = true, watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX): PebbleDevice {
-    val name = "Core ${watchType.revision}"
-    val fakeIdentifier = "AA:BB:CC:DD:EE:FF".asPebbleBleIdentifier()
+fun fakeWatch(connected: Boolean = true, watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX, index: Int = 0): PebbleDevice {
+    val name = watchType.displayName
+    val fakeIdentifier = "AA:BB:CC:DD:EE:${index.toString(16).padStart(2, '0').uppercase()}".asPebbleBleIdentifier()
     return if (connected) {
         FakeConnectedDevice(
             identifier = fakeIdentifier,

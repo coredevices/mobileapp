@@ -79,6 +79,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -349,6 +350,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
+    val showAddFakeWatchDialog = remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
     if (showSpokenLanguageDialog) {
@@ -1307,29 +1309,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         debugOptionsEnabled = it
                     },
                 ),
-                basicSettingsDropdownItem(
-                    title = "Fake watch (requires restart)",
-                    description = "Use a simulated watch for testing. Does not require a real Bluetooth connection. Restart the app after changing this setting.",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
-                    selectedItem = coreConfig.fakeWatchType,
-                    items = listOf("") + WatchHardwarePlatform.entries.filter {
-                        it != WatchHardwarePlatform.UNKNOWN
-                            && !it.name.contains("EVT")
-                            && !it.name.contains("DVT")
-                            && !it.name.contains("EV_")
-                            && !it.name.contains("BIGBOARD")
-                            && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
-                            && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
-                    }.map { it.revision },
-                    onItemSelected = {
-                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeWatchType = it))
-                    },
-                    itemText = {
-                        if (it.isEmpty()) "Disabled" else WatchHardwarePlatform.entries.first { hw -> hw.revision == it }.displayName
-                    },
-                    isDebugSetting = true,
-                ),
                 basicSettingsToggleItem(
                     title = "PKJS Debugger",
                     description = "Allow connection via the ${if (platform == Platform.Android) "Chrome" else "Safari"} remote inspector to debug PKJS apps. Restart watchapp after changing.",
@@ -1745,7 +1724,24 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfigHolder.update(coreConfig.copy(interceptPKJSWeather = it))
                     },
                 ),
-            ) + watchPrefs
+            ) + fakeWatchItems(coreConfig, coreConfigHolder, showAddFakeWatchDialog) + watchPrefs
+        }
+
+        if (showAddFakeWatchDialog.value) {
+            FakeWatchPickerDialog(
+                currentWatches = coreConfig.fakeWatches,
+                onAddWatch = { revision ->
+                    val current = coreConfig.fakeWatches
+                    if (revision !in current) {
+                        coreConfigHolder.update(coreConfigHolder.config.value.copy(
+                            fakeWatches = current + revision,
+                            fakeActiveWatch = coreConfig.fakeActiveWatch.ifEmpty { revision },
+                        ))
+                    }
+                    showAddFakeWatchDialog.value = false
+                },
+                onDismissRequest = { showAddFakeWatchDialog.value = false },
+            )
         }
 
     return SettingsItemsState(
@@ -2628,6 +2624,121 @@ object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"
     const val KEY_ENABLE_FIREBASE_UPLOADS = "enable_firebase_uploads"
     const val KEY_ENABLE_MIXPANEL_UPLOADS = "enable_mixpanel_uploads"
+}
+
+private fun fakeWatchItems(
+    coreConfig: CoreConfig,
+    coreConfigHolder: CoreConfigHolder,
+    showAddDialog: MutableState<Boolean>,
+): List<SettingsItem> {
+    return listOfNotNull(
+        basicSettingsActionItem(
+            title = "Add fake watch (requires restart)",
+            description = "Add a simulated watch for testing. Does not require a real Bluetooth connection.",
+            topLevelType = TopLevelType.Phone,
+            section = Section.Debug,
+            action = { showAddDialog.value = true },
+            isDebugSetting = true,
+            keywords = "fake watch debug",
+        ),
+    ) + coreConfig.fakeWatches.mapIndexed { index, watch ->
+        val displayName = WatchHardwarePlatform.entries.firstOrNull { it.revision == watch }?.displayName ?: watch
+        val isActive = watch == coreConfig.fakeActiveWatch
+        SettingsItem(
+            title = displayName,
+            topLevelType = TopLevelType.Phone,
+            section = Section.Debug,
+            isDebugSetting = true,
+            item = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                            }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                    ) {
+                        RadioButton(
+                            selected = isActive,
+                            onClick = {
+                                coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                            },
+                        )
+                        Column {
+                            Text(displayName)
+                            Text(
+                                text = if (isActive) "Active (connected)" else "Tap to set as active",
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                    TextButton(onClick = {
+                        val updated = coreConfig.fakeWatches.filter { it != watch }
+                        val newActive = if (watch == coreConfig.fakeActiveWatch) {
+                            updated.firstOrNull() ?: ""
+                        } else {
+                            coreConfig.fakeActiveWatch
+                        }
+                        coreConfigHolder.update(coreConfigHolder.config.value.copy(
+                            fakeWatches = updated,
+                            fakeActiveWatch = newActive,
+                        ))
+                    }) {
+                        Text("Remove")
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun FakeWatchPickerDialog(
+    currentWatches: List<String>,
+    onAddWatch: (String) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    val consumerWatchPlatforms = WatchHardwarePlatform.entries.filter {
+        it != WatchHardwarePlatform.UNKNOWN
+            && !it.name.contains("EVT")
+            && !it.name.contains("DVT")
+            && !it.name.contains("EV_")
+            && !it.name.contains("BIGBOARD")
+            && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
+            && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
+    }
+    val availablePlatforms = consumerWatchPlatforms.filter { it.revision !in currentWatches }
+
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Add Fake Watch") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+        },
+    ) {
+        if (availablePlatforms.isEmpty()) {
+            Text("All available watches have been added.")
+        } else {
+            LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                items(availablePlatforms, key = { it.revision }) { platform ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onAddWatch(platform.revision) }
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                    ) {
+                        Text(platform.displayName)
+                    }
+                }
+            }
+        }
+    }
 }
 
 enum class RegularSyncInterval(
