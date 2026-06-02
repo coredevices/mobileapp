@@ -60,6 +60,10 @@ class CoreConfigHolder(
         _config.value = value
     }
 
+    fun update(transform: (CoreConfig) -> CoreConfig) {
+        update(transform(config.value))
+    }
+
     private val _config: MutableStateFlow<CoreConfig> = MutableStateFlow(defaultValue())
     val config: StateFlow<CoreConfig> = _config.asStateFlow()
 }

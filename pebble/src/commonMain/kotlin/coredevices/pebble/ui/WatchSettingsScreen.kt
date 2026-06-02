@@ -1731,16 +1731,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             FakeWatchPickerDialog(
                 currentWatches = coreConfig.fakeWatches,
                 onAddWatches = { selected ->
-                    if (selected.isEmpty()) {
-                        showAddFakeWatchDialog.value = false
-                        return@FakeWatchPickerDialog
-                    }
-                    val updated = coreConfig.fakeWatches + selected
-                    val newActive = coreConfig.fakeActiveWatch ?: selected.first()
-                    coreConfigHolder.update(coreConfigHolder.config.value.copy(
-                        fakeWatches = updated,
-                        fakeActiveWatch = newActive,
-                    ))
+                    coreConfigHolder.addFakeWatches(selected)
                     showAddFakeWatchDialog.value = false
                 },
                 onDismissRequest = { showAddFakeWatchDialog.value = false },
@@ -2663,14 +2654,14 @@ private fun fakeWatchItems(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clickable {
-                                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                                        coreConfigHolder.setActiveFakeWatch(watch)
                                     }
                                     .padding(vertical = 8.dp, horizontal = 4.dp),
                             ) {
                                 RadioButton(
                                     selected = isActive,
                                     onClick = {
-                                        coreConfigHolder.update(coreConfigHolder.config.value.copy(fakeActiveWatch = watch))
+                                        coreConfigHolder.setActiveFakeWatch(watch)
                                     },
                                 )
                                 Column {
@@ -2681,17 +2672,7 @@ private fun fakeWatchItems(
                                     )
                                 }
                             }
-                            TextButton(onClick = {
-                                val updated = coreConfig.fakeWatches - watch
-                                val newActive = when (coreConfig.fakeActiveWatch) {
-                                    watch -> updated.firstOrNull()
-                                    else -> coreConfig.fakeActiveWatch
-                                }
-                                coreConfigHolder.update(coreConfigHolder.config.value.copy(
-                                    fakeWatches = updated,
-                                    fakeActiveWatch = newActive,
-                                ))
-                            }) {
+                            TextButton(onClick = { coreConfigHolder.removeFakeWatch(watch) }) {
                                 Text("Remove")
                             }
                         }
@@ -2700,6 +2681,34 @@ private fun fakeWatchItems(
             )
         }
     }
+}
+
+private fun CoreConfigHolder.addFakeWatches(watches: Set<WatchHardwarePlatform>) {
+    if (watches.isEmpty()) return
+    update {
+        val newWatches = it.fakeWatches + watches
+        it.copy(
+            fakeWatches = newWatches,
+            fakeActiveWatch = it.fakeActiveWatch ?: watches.first(),
+        )
+    }
+}
+
+private fun CoreConfigHolder.removeFakeWatch(watch: WatchHardwarePlatform) {
+    update {
+        val newWatches = it.fakeWatches - watch
+        it.copy(
+            fakeWatches = newWatches,
+            fakeActiveWatch = when (it.fakeActiveWatch) {
+                watch -> newWatches.firstOrNull()
+                else -> it.fakeActiveWatch
+            },
+        )
+    }
+}
+
+private fun CoreConfigHolder.setActiveFakeWatch(watch: WatchHardwarePlatform) {
+    update { it.copy(fakeActiveWatch = watch) }
 }
 
 @Composable
