@@ -2718,15 +2718,7 @@ private fun FakeWatchPickerDialog(
     onDismissRequest: () -> Unit,
 ) {
     val consumerWatchPlatforms = remember {
-        WatchHardwarePlatform.entries.filter {
-            it != WatchHardwarePlatform.UNKNOWN
-                && !it.name.contains("EVT")
-                && !it.name.contains("DVT")
-                && !it.name.contains("EV_")
-                && !it.name.contains("BIGBOARD")
-                && it != WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
-                && it != WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
-        }
+        WatchHardwarePlatform.entries.filter { it.isConsumer }
     }
     val availablePlatforms = remember(currentWatches) {
         consumerWatchPlatforms.filter { it !in currentWatches }

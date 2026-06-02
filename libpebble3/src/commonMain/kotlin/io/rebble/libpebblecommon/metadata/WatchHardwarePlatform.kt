@@ -14,7 +14,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchType: WatchType, val revision: String, val displayName: String) {
+enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchType: WatchType, val revision: String, val displayName: String, val isConsumer: Boolean = false) {
     UNKNOWN(0u, WatchType.BASALT, "unknown", "Unknown (Basalt)"),
     PEBBLE_ONE_EV_1(1u, WatchType.APLITE, "ev1", "Pebble One EV1 (Aplite)"),
     PEBBLE_ONE_EV_2(2u, WatchType.APLITE, "ev2", "Pebble One EV2 (Aplite)"),
@@ -24,20 +24,20 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchTy
     PEBBLE_TWO_POINT_ZERO(6u, WatchType.APLITE, "v2_0", "Pebble Two V2.0 (Aplite)"),
     PEBBLE_SNOWY_EVT_2(7u, WatchType.BASALT, "snowy_evt2", "Pebble Time EVT2 (Basalt)"),
     PEBBLE_SNOWY_DVT(8u, WatchType.BASALT, "snowy_dvt", "Pebble Time DVT (Basalt)"),
-    PEBBLE_BOBBY_SMILES(10u, WatchType.BASALT, "snowy_s3", "Pebble Time (Basalt)"),
+    PEBBLE_BOBBY_SMILES(10u, WatchType.BASALT, "snowy_s3", "Pebble Time (Basalt)", isConsumer = true),
     PEBBLE_ONE_BIGBOARD_2(254u, WatchType.APLITE, "bb2", "Pebble One Bigboard 2 (Aplite)"),
     PEBBLE_ONE_BIGBOARD(255u, WatchType.APLITE, "bigboard", "Pebble One Bigboard (Aplite)"),
     PEBBLE_SNOWY_BIGBOARD(253u, WatchType.BASALT, "snowy_bb2", "Pebble Time Bigboard (Basalt)"),
     PEBBLE_SNOWY_BIGBOARD_2(252u, WatchType.BASALT, "unk", "Pebble Time Bigboard 2 (Basalt)"),
     PEBBLE_SPALDING_EVT(9u, WatchType.CHALK, "spalding_evt", "Pebble Time Round EVT (Chalk)"),
-    PEBBLE_SPALDING_PVT(11u, WatchType.CHALK, "spalding", "Pebble Time Round (Chalk)"),
+    PEBBLE_SPALDING_PVT(11u, WatchType.CHALK, "spalding", "Pebble Time Round (Chalk)", isConsumer = true),
     PEBBLE_SPALDING_BIGBOARD(251u, WatchType.CHALK, "spalding_bb2", "Pebble Time Round Bigboard (Chalk)"),
     PEBBLE_SILK_EVT(12u, WatchType.DIORITE, "silk_evt", "Pebble 2 EVT (Diorite)"),
-    PEBBLE_SILK(14u, WatchType.DIORITE, "silk", "Pebble 2 (Diorite)"),
-    CORE_ASTERIX(15u, WatchType.FLINT, "asterix", "Core Asterix (Flint)"),
+    PEBBLE_SILK(14u, WatchType.DIORITE, "silk", "Pebble 2 (Diorite)", isConsumer = true),
+    CORE_ASTERIX(15u, WatchType.FLINT, "asterix", "Core Asterix (Flint)", isConsumer = true),
     CORE_OBELIX_EVT(16u, WatchType.EMERY, "obelix_evt", "Core Obelix EVT (Emery)"),
     CORE_OBELIX_DVT(17u, WatchType.EMERY, "obelix_dvt", "Core Obelix DVT (Emery)"),
-    CORE_OBELIX_PVT(18u, WatchType.EMERY, "obelix_pvt", "Core Obelix (Emery)"),
+    CORE_OBELIX_PVT(18u, WatchType.EMERY, "obelix_pvt", "Core Obelix (Emery)", isConsumer = true),
     CORE_GETAFIX_EVT(19u, WatchType.GABBRO, "getafix_evt", "Core Getafix EVT (Gabbro)"),
     CORE_GETAFIX_DVT(20u, WatchType.GABBRO, "getafix_dvt", "Core Getafix DVT (Gabbro)"),
     CORE_GETAFIX_DVT2(21u, WatchType.GABBRO, "getafix_dvt2", "Core Getafix DVT2 (Gabbro)"),

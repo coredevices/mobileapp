@@ -188,7 +188,7 @@ class FakeLibPebble(
     }
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
-        return locker.map { it.firstOrNull() }
+        return locker.map { list -> list.firstOrNull { it.properties.id == id } }
     }
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
@@ -211,7 +211,9 @@ class FakeLibPebble(
     override fun restoreSystemAppOrder() {
     }
 
-    override val activeWatchface: StateFlow<LockerWrapper?> = MutableStateFlow(null)
+    override val activeWatchface: StateFlow<LockerWrapper?> = MutableStateFlow(
+        locker.value.firstOrNull { it.properties.type == AppType.Watchface }
+    )
 
     private val _notificationApps = MutableStateFlow(fakeNotificationApps)
 
