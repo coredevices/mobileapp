@@ -87,6 +87,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.pebble.ui.toPngBytes
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.util.toImageBitmap
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import coredevices.ui.SignInDialog
@@ -460,7 +461,7 @@ fun BugReportScreen(
                         screenshotLoading = true
                         scope.launch {
                             try {
-                                watchScreenshot = connectedScreenshotWatch.takeScreenshot()
+                                watchScreenshot = connectedScreenshotWatch.takeScreenshot()?.toImageBitmap()
                             } catch (e: Exception) {
                                 Logger.withTag("BugReportScreen").e(e) { "Failed to capture screenshot" }
                             } finally {

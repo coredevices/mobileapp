@@ -1,12 +1,11 @@
 package io.rebble.libpebblecommon.connection
 
-import androidx.compose.runtime.Stable
-import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
@@ -36,7 +35,6 @@ data class ConnectionFailureInfo(
 )
 
 // <T : Transport> ?
-@Stable
 sealed interface PebbleDevice {
     val identifier: PebbleIdentifier
     val name: String
@@ -145,7 +143,7 @@ object ConnectedPebble {
     }
 
     interface Screenshot {
-        suspend fun takeScreenshot(): ImageBitmap?
+        suspend fun takeScreenshot(): PebbleBitmap?
     }
 
     interface Logs {

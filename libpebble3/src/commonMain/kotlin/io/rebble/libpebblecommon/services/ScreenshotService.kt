@@ -1,12 +1,10 @@
 package io.rebble.libpebblecommon.services
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import io.rebble.libpebblecommon.packets.ScreenshotData
 import io.rebble.libpebblecommon.packets.ScreenshotHeader
 import io.rebble.libpebblecommon.packets.ScreenshotRequest
@@ -14,7 +12,6 @@ import io.rebble.libpebblecommon.packets.ScreenshotResponseCode
 import io.rebble.libpebblecommon.packets.ScreenshotVersion
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket.Companion.deserialize
 import io.rebble.libpebblecommon.util.DataBuffer
-import io.rebble.libpebblecommon.util.createImageBitmapFromPixelArray
 import io.rebble.libpebblecommon.util.isScreenshotFinished
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -36,7 +33,7 @@ class ScreenshotService(
     private val logger = Logger.withTag("ScreenshotService")
     private val state = MutableStateFlow(ScreenshotState.Idle)
 
-    override suspend fun takeScreenshot(): ImageBitmap? =
+    override suspend fun takeScreenshot(): PebbleBitmap? =
         withContext(connectionCoroutineScope.coroutineContext + Dispatchers.IO) {
             try {
                 if (state.value == ScreenshotState.Busy) {
@@ -111,10 +108,10 @@ class ScreenshotService(
                                     val bitIndex = x % 8
                                     val bit = (bytes[byteIndex].toInt() shr bitIndex) and 1
                                     val index = (y * finalHeader.width) + x
-                                    pixels[index] = if (bit == 0) Color.Black.toArgb() else Color.White.toArgb()
+                                    pixels[index] = if (bit == 0) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
                                 }
                             }
-                            createImageBitmapFromPixelArray(pixels = pixels, width = finalHeader.width, height = finalHeader.height)
+                            PebbleBitmap(width = finalHeader.width, height = finalHeader.height, pixels = pixels)
                         }
                         ScreenshotVersion.COLOR_8_BIT -> {
                             val buffer = data ?: throw IllegalStateException("data buffer is null")
@@ -137,7 +134,7 @@ class ScreenshotService(
                                     pixels[index] = color
                                 }
                             }
-                            createImageBitmapFromPixelArray(pixels = pixels, width = finalHeader.width, height = finalHeader.height)
+                            PebbleBitmap(width = finalHeader.width, height = finalHeader.height, pixels = pixels)
                         }
                     }
                 } else {

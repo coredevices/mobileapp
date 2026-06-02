@@ -2,9 +2,9 @@ package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.FakeAppMessages
-import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.connection.fakeWatch
+import io.rebble.libpebblecommon.fake.FakeLibPebble
+import io.rebble.libpebblecommon.fake.fakeWatch
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.Resources

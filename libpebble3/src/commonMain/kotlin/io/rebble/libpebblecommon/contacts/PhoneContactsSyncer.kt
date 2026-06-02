@@ -1,11 +1,11 @@
 package io.rebble.libpebblecommon.contacts
 
-import androidx.compose.ui.graphics.ImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,7 +24,7 @@ interface SystemContacts {
     fun registerForContactsChanges(): Flow<Unit>
     suspend fun getContacts(): List<SystemContact>
     fun hasPermission(): Boolean
-    suspend fun getContactImage(lookupKey: String): ImageBitmap?
+    suspend fun getContactImage(lookupKey: String): PebbleBitmap?
 }
 
 class PhoneContactsSyncer(

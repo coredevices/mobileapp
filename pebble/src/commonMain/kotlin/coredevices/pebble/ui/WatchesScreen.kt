@@ -175,6 +175,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateErrorS
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
+import io.rebble.libpebblecommon.util.toImageBitmap
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
@@ -1730,7 +1731,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
 
     suspend fun takeScreenshot() {
         screenshot = null
-        screenshot = watch.takeScreenshot()
+        screenshot = watch.takeScreenshot()?.toImageBitmap()
         logger.v { "screenshot = $screenshot" }
     }
 

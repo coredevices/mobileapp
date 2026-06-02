@@ -1,13 +1,13 @@
 package io.rebble.libpebblecommon.notification
 
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.paging.PagingSource
-import io.rebble.libpebblecommon.connection.Contacts
+import io.rebble.libpebblecommon.contacts.Contacts
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -34,7 +34,7 @@ class ContactsApi(
         }
     }
 
-    override suspend fun getContactImage(lookupKey: String): ImageBitmap? {
+    override suspend fun getContactImage(lookupKey: String): PebbleBitmap? {
         return systemContacts.getContactImage(lookupKey)
     }
 }

@@ -43,6 +43,7 @@ import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.iconUrlFor
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.isAfter
+import io.rebble.libpebblecommon.util.toImageBitmap
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
 import kotlin.time.Clock
@@ -251,7 +252,7 @@ fun AppIconImage(
         // Android: load from OS
         Platform.Android -> {
             val icon by produceState<ImageBitmap?>(initialValue = null, app.packageName) {
-                value = notificationApps.getAppIcon(app.packageName)
+                value = notificationApps.getAppIcon(app.packageName)?.toImageBitmap()
             }
             icon.let {
                 if (it != null) {

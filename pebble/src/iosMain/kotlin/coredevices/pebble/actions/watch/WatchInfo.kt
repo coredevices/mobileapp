@@ -5,6 +5,7 @@ import coredevices.util.imageBitmapToPngBytes
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.util.toImageBitmap
 
 /**
  * Returns the battery level (0–100) of the connected watch, or null if no watch is connected
@@ -46,7 +47,7 @@ suspend fun getWatchScreenshotBase64(libPebble: LibPebble): String {
         .filterIsInstance<ConnectedPebbleDevice>()
         .firstOrNull()
     if (watch is ConnectedPebble.Screenshot) {
-        val bitmap = watch.takeScreenshot()
+        val bitmap = watch.takeScreenshot()?.toImageBitmap()
         if (bitmap != null) {
             return imageBitmapToPngBase64(bitmap)
         }
@@ -63,7 +64,7 @@ suspend fun getWatchScreenshotBytes(libPebble: LibPebble): ByteArray? {
         .filterIsInstance<ConnectedPebbleDevice>()
         .firstOrNull()
     if (watch is ConnectedPebble.Screenshot) {
-        val bitmap = watch.takeScreenshot() ?: return null
+        val bitmap = watch.takeScreenshot()?.toImageBitmap() ?: return null
         return imageBitmapToPngBytes(bitmap)
     }
     return null

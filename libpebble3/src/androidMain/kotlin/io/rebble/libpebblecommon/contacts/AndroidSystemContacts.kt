@@ -9,13 +9,13 @@ import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.provider.ContactsContract
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.contacts.SystemContact
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.image.PebbleBitmap
+import io.rebble.libpebblecommon.util.toPebbleBitmap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -50,7 +50,7 @@ class AndroidSystemContacts(
         return flow
     }
 
-    override suspend fun getContactImage(lookupKey: String): ImageBitmap? = try {
+    override suspend fun getContactImage(lookupKey: String): PebbleBitmap? = try {
         val contactId = contentResolver.query(
             ContactsContract.Contacts.CONTENT_URI,
             arrayOf(ContactsContract.Contacts._ID),
@@ -70,7 +70,7 @@ class AndroidSystemContacts(
 
         ContactsContract.Contacts.openContactPhotoInputStream(contentResolver,
             ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, contactId))?.use { inputStream ->
-            return BitmapFactory.decodeStream(inputStream).asImageBitmap()
+            return BitmapFactory.decodeStream(inputStream).toPebbleBitmap()
         }
 
         return null

@@ -50,6 +50,7 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ShowOnceTooltipBox
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.util.toImageBitmap
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -261,7 +262,7 @@ fun ContactCard(entry: ContactWithCount, nav: NavBarNav, firstOrOnlyItem: Boolea
 fun ContactImage(entry: ContactWithCount, modifier: Modifier) {
     val libPebble = rememberLibPebble()
     val icon by produceState<ImageBitmap?>(initialValue = null, entry.contact.lookupKey) {
-        value = libPebble.getContactImage(entry.contact.lookupKey)
+        value = libPebble.getContactImage(entry.contact.lookupKey)?.toImageBitmap()
     }
     icon.let {
         if (it != null) {

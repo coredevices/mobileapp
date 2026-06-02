@@ -1,8 +1,5 @@
 package io.rebble.libpebblecommon.connection
 
-import androidx.compose.runtime.Stable
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.paging.PagingSource
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -17,11 +14,11 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.contacts.Contacts
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.HealthDao
-import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPreference
@@ -41,6 +38,7 @@ import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.image.PebbleBitmap
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.locker.AppBasicProperties
@@ -85,7 +83,6 @@ sealed class PebbleConnectionEvent {
     data class PebbleDisconnectedEvent(val identifier: PebbleIdentifier) : PebbleConnectionEvent()
 }
 
-@Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi {
@@ -305,14 +302,6 @@ interface LockerApi {
     val activeWatchface: StateFlow<LockerWrapper?>
 }
 
-interface Contacts {
-    fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount>
-    fun getContact(id: String): Flow<ContactWithCount?>
-    fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?)
-    suspend fun getContactImage(lookupKey: String): ImageBitmap?
-}
-
-@Stable
 interface NotificationApps {
     fun notificationApps(): Flow<List<AppWithCount>>
     fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>>
@@ -341,7 +330,7 @@ interface NotificationApps {
     fun deleteNotificationRule(rule: NotificationRuleEntity)
 
     /** Will only return a value on Android */
-    suspend fun getAppIcon(packageName: String): ImageBitmap?
+    suspend fun getAppIcon(packageName: String): PebbleBitmap?
 }
 
 interface Vibrations {
@@ -365,7 +354,7 @@ interface PKJSToken {
 
 // Impl
 
-class LibPebble3(
+class LibPebble3 internal constructor(
     private val watchManager: WatchManager,
     private val scanning: Scanning,
     private val locker: Locker,

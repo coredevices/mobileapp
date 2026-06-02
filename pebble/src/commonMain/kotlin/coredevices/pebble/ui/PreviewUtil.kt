@@ -58,11 +58,11 @@ import coredevices.util.PermissionResult
 import coredevices.util.RequiredPermissions
 import coredevices.util.WeatherUnit
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.fake.FakeLibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerAddResponse

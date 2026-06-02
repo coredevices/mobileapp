@@ -20,7 +20,6 @@ import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.AnalyticsEvents
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureHandler
-import io.rebble.libpebblecommon.connection.Contacts
 import io.rebble.libpebblecommon.connection.CreatePlatformIdentifier
 import io.rebble.libpebblecommon.connection.LegacyBtClassicMigrator
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -93,6 +92,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneCo
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
+import io.rebble.libpebblecommon.contacts.Contacts
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.Database
