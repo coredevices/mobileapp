@@ -102,6 +102,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import co.touchlab.kermit.Logger
+import com.cactus.isCactusSupported
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.CoreBackgroundSync
@@ -456,6 +457,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             value = modelManager.getDownloadedModelSlugs().any { it.startsWith("parakeet", false) }
         }
     }
+    val cactusSupported = remember { isCactusSupported() }
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
     val weatherFetcher: WeatherFetcher = koinInject()
@@ -1370,7 +1372,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     items = CactusSTTMode.entries,
                     selectedItem = coreConfig.sttConfig.mode,
                     onItemSelected = {
-                        if (it != CactusSTTMode.LocalOnly && coreUser == null ) {
+                        if (it != CactusSTTMode.RemoteOnly && !cactusSupported) {
+                            snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
+                        } else if (it != CactusSTTMode.LocalOnly && coreUser == null ) {
                             snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
                             showSignInDialog = true
                         } else if (it != CactusSTTMode.RemoteOnly && !hasOfflineModels) {

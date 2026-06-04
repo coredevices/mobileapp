@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cactus.isCactusSupported
 import coredevices.pebble.ui.ModelDownloadPromptDialog
 import coredevices.pebble.ui.SnackbarDisplay
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -161,8 +162,12 @@ internal fun SetupStep(
             )
         }
     }
+    val cactusSupported = remember { isCactusSupported() }
     val selectSpeechMode: (CactusSTTMode) -> Unit = { mode ->
         when {
+            mode != CactusSTTMode.RemoteOnly && !cactusSupported -> {
+                snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
+            }
             mode != CactusSTTMode.LocalOnly && coreUser == null -> {
                 snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
                 showSignInDialog = true

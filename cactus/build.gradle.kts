@@ -58,6 +58,14 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

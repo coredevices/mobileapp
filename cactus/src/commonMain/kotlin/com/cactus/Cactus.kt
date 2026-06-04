@@ -8,6 +8,8 @@ fun interface CactusLogCallback {
     fun onLog(level: Int, component: String, message: String)
 }
 
+expect fun isCactusSupported(): Boolean
+
 expect fun cactusInit(modelPath: String, corpusDir: String?, cacheIndex: Boolean): Long
 expect fun cactusDestroy(model: Long)
 expect fun cactusReset(model: Long)

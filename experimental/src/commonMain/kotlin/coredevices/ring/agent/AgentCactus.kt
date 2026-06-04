@@ -3,6 +3,7 @@ package coredevices.ring.agent
 import co.touchlab.kermit.Logger
 import com.cactus.cactusComplete
 import com.cactus.cactusInit
+import com.cactus.isCactusSupported
 import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.IterativeAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
@@ -48,6 +49,7 @@ class AgentCactus(
     override suspend fun prepare() {
         agentMutex.withLock {
             if (modelHandle == 0L) {
+                if (!isCactusSupported()) throw IllegalStateException("CactusAgent unavailable on this CPU")
                 logger.d { "Initializing CactusAgent for the first time..." }
                 val initStart = Clock.System.now()
                 val modelPath = modelProvider.getLMModelPath()

@@ -3,6 +3,8 @@ package com.cactus
 import cactus.*
 import kotlinx.cinterop.*
 
+actual fun isCactusSupported(): Boolean = true
+
 @OptIn(ExperimentalForeignApi::class)
 actual fun cactusInit(modelPath: String, corpusDir: String?, cacheIndex: Boolean): Long {
     val ptr = cactus_init(modelPath, corpusDir, cacheIndex)
