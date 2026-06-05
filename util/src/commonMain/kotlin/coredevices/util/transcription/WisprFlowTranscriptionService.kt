@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -159,7 +160,15 @@ class WisprFlowTranscriptionService(
 
         try {
             session.sendAuth(clientKey, language, conversationContext, dictionaryContext, contentContext)
-            waitForAuth(session)
+            try {
+                withTimeout(4.seconds) {
+                    waitForAuth(session)
+                }
+            } catch (e: TimeoutCancellationException) {
+                logger.w { "Auth response timeout, retrying auth message" }
+                session.sendAuth(clientKey, language, conversationContext, dictionaryContext, contentContext)
+                waitForAuth(session)
+            }
 
             emit(TranscriptionSessionStatus.Open)
 
@@ -285,7 +294,7 @@ class WisprFlowTranscriptionService(
                 modelUsed = "wisprflow"
             )
         }
-    }.timeout(10.seconds)
+    }.timeout(30.seconds)
 
     private suspend fun WebSocketSession.sendAuth(
         clientKey: String,

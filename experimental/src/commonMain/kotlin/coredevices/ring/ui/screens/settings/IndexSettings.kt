@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,6 +51,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,9 +65,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coreapp.ring.generated.resources.Res
-import coreapp.ring.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.back
+import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
@@ -113,8 +115,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val platform = koinInject<Platform>()
     val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
-    val webhookToken by webhookViewModel.authToken.collectAsState()
-    val webhookIsLinked = !webhookUrl.isNullOrBlank() && !webhookToken.isNullOrBlank()
+    val webhookIsLinked = !webhookUrl.isNullOrBlank()
     val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
@@ -1297,34 +1298,24 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val platform = koinInject<Platform>()
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        IntegrationItem(
+            title = "Built-in",
+            hasReminder = true,
+            hasNotes = true,
+            selectedReminderProvider = currentReminderProvider == ReminderProvider.BuiltIn,
+            selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+            onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
+            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+        )
         if (platform.isIOS) {
             IntegrationItem(
-                title = "Built-in",
-                hasReminder = false,
-                hasNotes = true,
-                selectedReminderProvider = false,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-                onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
-            )
-            IntegrationItem(
-                title = "iOS",
+                title = "iOS Reminders",
                 hasReminder = true,
                 hasNotes = false,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.IOSReminders,
                 selectedNoteProvider = false,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.IOSReminders) },
                 onSelectNoteProvider = {}
-            )
-        } else {
-            IntegrationItem(
-                title = "Built-in",
-                hasReminder = true,
-                hasNotes = true,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
             )
         }
         if (gTasksAuth) {
@@ -1339,6 +1330,10 @@ fun AuthorizedIntegrations(preferences: Preferences) {
             )
         }
         if (notionAuth) {
+            var showNotionPageDialog by remember { mutableStateOf(false) }
+            if (showNotionPageDialog) {
+                NotionPageDialog(onDismiss = { showNotionPageDialog = false })
+            }
             IntegrationItem(
                 title = NotionIntegration.DEFINITION.title,
                 hasReminder = false,
@@ -1346,8 +1341,89 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 selectedReminderProvider = false,
                 selectedNoteProvider = currentNoteProvider == NoteProvider.Notion,
                 onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) }
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notion) },
+                onConfigure = { showNotionPageDialog = true }
             )
+        }
+    }
+}
+
+/**
+ * Lets the user pick which Notion page to-do block is placed
+ */
+@Composable
+fun NotionPageDialog(onDismiss: () -> Unit) {
+    val notion = koinInject<NotionIntegration>()
+    val scope = rememberCoroutineScope()
+    var pages by remember { mutableStateOf<List<NotionIntegration.NotionPage>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val loaded = notion.listPages()
+            selectedId = notion.selectedPageId() ?: loaded.firstOrNull()?.id
+            pages = loaded
+        } catch (e: Throwable) {
+            error = e.message ?: "Failed to load pages"
+        }
+    }
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Notion Page") },
+        buttons = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(
+                enabled = selectedId != null && !saving,
+                onClick = {
+                    val pageId = selectedId ?: return@TextButton
+                    saving = true
+                    scope.launch {
+                        notion.selectPage(pageId)
+                        onDismiss()
+                    }
+                }
+            ) { Text("OK") }
+        }
+    ) {
+        Column {
+            Text(
+                "Choose the page to place your notes' Todo list in.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(12.dp))
+            val loadedPages = pages
+            when {
+                error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
+                loadedPages == null -> Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+                loadedPages.isEmpty() -> Text(
+                    "No pages found. Give Index access to a page in Notion, then try again."
+                )
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(loadedPages) { page ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedId = page.id }
+                        ) {
+                            RadioButton(
+                                selected = selectedId == page.id,
+                                onClick = { selectedId = page.id }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(page.title)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1361,12 +1437,22 @@ fun IntegrationItem(
     selectedNoteProvider: Boolean,
     onSelectReminderProvider: () -> Unit,
     onSelectNoteProvider: () -> Unit,
+    onConfigure: (() -> Unit)? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(title)
+        if (onConfigure != null) {
+            IconButton(onClick = onConfigure, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Configure $title",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
         Spacer(Modifier.weight(1f))
         RadioButton(
             enabled = hasReminder,
@@ -1401,7 +1487,7 @@ fun IndexDeviceListItem(
             modifier = Modifier.padding(8.dp)
         ) {
             Image(
-                imageResource(Res.drawable.ring_wireframe),
+                imageResource(UtilRes.drawable.ring_wireframe),
                 contentDescription = null,
                 modifier = Modifier.size(110.dp)
             )

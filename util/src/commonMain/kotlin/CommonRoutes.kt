@@ -51,6 +51,10 @@ interface CoreNav {
     fun navigateTo(route: CoreRoute)
     fun goBack()
     fun goBackToPebble()
+    fun replaceWith(route: CoreRoute) {
+        goBack()
+        navigateTo(route)
+    }
 }
 
 object NoOpCoreNav : CoreNav {

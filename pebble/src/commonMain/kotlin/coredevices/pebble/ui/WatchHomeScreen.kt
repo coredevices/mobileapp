@@ -100,6 +100,7 @@ import coreapp.pebble.generated.resources.settings
 import coreapp.util.generated.resources.back
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.InterviewedIndexDevice
+import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
@@ -141,6 +142,8 @@ fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
     it.isFullyConnected()
 }
 
+fun LibIndex.isAnyRingPaired() = rings.value.any { it is KnownIndexDevice }
+
 fun PebbleDevice.isFullyConnected() = this is KnownPebbleDevice && runningFwVersion != UNKNOWN_WATCH_SERIAL_OR_VERSION
 
 class WatchOnboardingFinished {
@@ -150,10 +153,11 @@ class WatchOnboardingFinished {
 class WatchHomeViewModel(
     coreConfig: CoreConfigFlow,
     libPebble: LibPebble,
+    libIndex: LibIndex,
 ) : ViewModel() {
     val selectedTab = mutableStateOf(
         when {
-            coreConfig.value.enableIndex -> WatchHomeNavTab.Index
+            coreConfig.value.enableIndex && libIndex.isAnyRingPaired() -> WatchHomeNavTab.Index
             libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
             else -> WatchHomeNavTab.Watches
         }
@@ -644,6 +648,15 @@ fun WatchHomeScreen(
 
                     override fun goBackToPebble() {
                         coreNav.goBackToPebble()
+                    }
+
+                    override fun replaceWith(route: CoreRoute) {
+                        if (isInnerScopedRoute(route)) {
+                            pebbleNavHostController.popBackStack()
+                            pebbleNavHostController.navigate(route)
+                        } else {
+                            coreNav.replaceWith(route)
+                        }
                     }
                 }
             }

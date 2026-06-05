@@ -27,6 +27,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
+import kotlin.time.Clock
 
 /**
  * Online agent backed by the Nenya HTTP API. Iterative: tool results are fed
@@ -50,10 +51,11 @@ help with a multitude of tasks in addition to this too.
 ## Interpretation guidelines:
  - Create a note with the user's input unless they specify a different action, do not assume an action that wasn't explicitly requested, just make a note.
  - Avoid asking follow-up questions unless necessary.
- - Always lean towards creating a note, for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
+ - When user requests are ambiguous, always lean towards creating a note; for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
  - Prioritise the first action a user requests, for example 'remind me tomorrow to message John' should create a reminder and not attempt a message.
  - When users provide multiple items, for example 'remind me to buy milk and bread tomorrow', or 'add Apple and China to my book list', take a single action with
 both as the content unless it's clearly two separate actions, for example 'remind me to buy milk tomorrow and bread the day after' should create two reminders.
+ - When fulfilling a user request, do not also passively take a note if you have already taken another requested action.
 
 ## Response and action guidelines:
  - Eagerly run tools to assist the user by gathering required information and taking actions.
@@ -85,16 +87,22 @@ both as the content unless it's clearly two separate actions, for example 'remin
                                     enum = param.jsonObject["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                     minimum = param.jsonObject["minimum"]?.toString()?.toIntOrNull(),
                                     maximum = param.jsonObject["maximum"]?.toString()?.toIntOrNull(),
-                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.map { anyOfParam ->
+                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.mapNotNull { anyOfParam ->
                                         val p = anyOfParam.jsonObject
+                                        val type = p["type"] ?: return@mapNotNull null
                                         FunctionDeclarationParameter(
-                                            type = p["type"]!!,
+                                            type = type,
                                             description = p["description"]?.toString(),
                                             enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
+                                            items = p["items"]?.jsonObject ?: if (p["type"]?.toString()?.trim('"') == "array") {
+                                                buildJsonObject {
+                                                    put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
+                                                }
+                                            } else null,
                                         )
-                                    },
+                                    }?.takeIf { it.isNotEmpty() },
                                     items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {
                                         buildJsonObject {
                                             put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
@@ -220,7 +228,8 @@ both as the content unless it's clearly two separate actions, for example 'remin
                         sourceRecordingId = ctx.sourceRecordingId,
                         createdAt = ctx.createdAt,
                         question = input,
-                        answer = text ?: "No results"
+                        answer = text ?: "No results",
+                        toolCallId = null
                     )
                 )
             }

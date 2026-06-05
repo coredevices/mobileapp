@@ -19,7 +19,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.request.RequestInterceptor
@@ -69,6 +71,8 @@ internal expect fun webViewFactory(
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
 internal expect fun persistLocalStorage(webView: NativeWebView)
 
+private val logger = Logger.withTag("WatchappSettingsScreen")
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @Composable
 fun WatchappSettingsScreen(
@@ -93,6 +97,23 @@ fun WatchappSettingsScreen(
                 }
         }
         val pkjsSession by pkjsSessionFlow.collectAsState(null)
+        // Close the screen if the PKJS session we opened settings for ends or is
+        // replaced — otherwise the webviewclosed event would route to a different
+        // app's session.
+        var originalSessionUuid by remember { mutableStateOf<Uuid?>(null) }
+        LaunchedEffect(pkjsSession?.uuid) {
+            val currentUuid = pkjsSession?.uuid
+            if (originalSessionUuid == null) {
+                if (currentUuid != null) originalSessionUuid = currentUuid
+            } else if (currentUuid != originalSessionUuid) {
+                logger.d {
+                    "PKJS session changed (was $originalSessionUuid, now $currentUuid); closing settings"
+                }
+                withContext(Dispatchers.Main) {
+                    coreNav.goBack()
+                }
+            }
+        }
         val state = rememberWebViewState(url) {
             androidWebSettings.domStorageEnabled = true
             iOSWebSettings.isInspectable = true
@@ -102,7 +123,7 @@ fun WatchappSettingsScreen(
                 onSuccess = { data ->
                     runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     pkjsSession?.triggerOnWebviewClosed(data) ?: run {
-                        Logger.w { "No PKJS session found for $watchIdentifier, cannot handle webview close" }
+                        logger.w { "No PKJS session found for $watchIdentifier, cannot handle webview close" }
                     }
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
@@ -119,7 +140,7 @@ fun WatchappSettingsScreen(
         val navigator = rememberWebViewNavigator(requestInterceptor = interceptor)
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Loading) {
-                Logger.d("WatchappSettingsScreen") { "Page load finished, applying shims" }
+                logger.d { "Page load finished, applying shims" }
                 val nativeWebView = runCatching { state.nativeWebView }.getOrNull() ?: return@LaunchedEffect
                 restoreLocalStorage(nativeWebView)
             }

@@ -114,6 +114,16 @@ sealed class TraceEventData {
         val transferCompleteTimestamp: Instant? = null,
     ): TraceEventData()
 
+    @Serializable @SerialName("saving_recording_start")
+    data class SavingRecordingStart(
+        val transferId: Long,
+    ): TraceEventData()
+
+    @Serializable @SerialName("saving_recording_end")
+    data class SavingRecordingEnd(
+        val transferId: Long,
+    ): TraceEventData()
+
     @Serializable @SerialName("scheduling_audio_task")
     data class SchedulingAudioTask(
         val transferId: Long,

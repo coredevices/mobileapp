@@ -12,6 +12,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import androidx.core.content.edit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 actual class IntegrationTokenStorageImpl(
     context: Context
@@ -71,13 +73,13 @@ actual class IntegrationTokenStorageImpl(
         return String(cipher.doFinal(ciphertext))
     }
 
-    actual override suspend fun saveToken(key: String, token: String) {
+    actual override suspend fun saveToken(key: String, token: String) = withContext(Dispatchers.IO) {
         prefs.edit { putString(key, encrypt(token)) }
     }
 
-    actual override suspend fun getToken(key: String): String? {
-        val encrypted = prefs.getString(key, null) ?: return null
-        return try {
+    actual override suspend fun getToken(key: String): String? = withContext(Dispatchers.IO) {
+        val encrypted = prefs.getString(key, null) ?: return@withContext null
+        return@withContext try {
             decrypt(encrypted)
         } catch (_: Exception) {
             // If decryption fails (e.g. key was rotated), remove the corrupt entry
@@ -86,7 +88,7 @@ actual class IntegrationTokenStorageImpl(
         }
     }
 
-    actual override suspend fun deleteToken(key: String) {
+    actual override suspend fun deleteToken(key: String) = withContext(Dispatchers.IO) {
         prefs.edit { remove(key) }
     }
 

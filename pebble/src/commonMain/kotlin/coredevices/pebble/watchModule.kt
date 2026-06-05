@@ -183,7 +183,7 @@ val watchModule = module {
     singleOf(::AnalyticsHeartbeatQueue)
     singleOf(::ContactDeveloperApi)
     factoryOf(::Cohorts)
-    factoryOf(::FirmwareUpdateCheck)
+    singleOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
     factoryOf(::LanguagePackRepository)

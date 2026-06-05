@@ -7,7 +7,6 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -21,12 +20,6 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
-import kotlinx.coroutines.currentCoroutineContext
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -53,9 +46,7 @@ class SetTimerTool : BuiltInMcpTool(
     extraContext = """
         When using the 'set_timer' tool, lean towards setting timers for durations when it's ambiguous, for example a timer for '3:20' should be set for '3 hours and 20 minutes' not 'at 3:20'.
     """.trimIndent()
-), KoinComponent {
-    private val itemRepo: ItemRepository by inject()
-    private val itemFactory: ItemFactory by inject()
+) {
     companion object {
         private val logger = Logger.withTag(SetTimerTool::class.simpleName!!)
         const val TOOL_NAME = "set_timer"
@@ -148,14 +139,6 @@ class SetTimerTool : BuiltInMcpTool(
         return try {
             setTimer(duration)
             val actualFireTime = Clock.System.now() + duration
-            currentSessionContext()?.let { ctx ->
-                runCatching {
-                    itemRepo.setItem(
-                        itemFactory.simpleUid(),
-                        itemFactory.timerItem(ctx.sourceRecordingId, ctx.createdAt, actualFireTime, duration)
-                    )
-                }
-            }
             ToolCallResult(
                 JsonSnake.encodeToString(SetTimerResult(success = true)),
                 SemanticResult.TimerCreation(duration, actualFireTime)

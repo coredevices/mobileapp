@@ -87,19 +87,21 @@ class ObjectDetailViewModel(
     ) { item, list -> item to list }
         .flatMapLatest { (item, list) ->
             when {
-                list != null -> listRepo.getAllFlow().let { _ ->
+                list != null -> {
                     // List body needs the children too. Combine with list's items.
                     combine(
-                        flowOf(list),
+                        listRepo.getAllFlow(),
                         itemRepo.getByListFlow(objectId),
                         listSearch,
                         listSort,
                         showDone,
-                    ) { l, children, q, sort, done ->
+                    ) { lists, children, q, sort, done ->
+                        val allChildren = children.filter { !it.deleted }
                         UiState.ListView(
-                            list = l,
-                            children = children
-                                .filter { !it.deleted }
+                            list = list,
+                            allLists = lists.filter { !it.deleted },
+                            childCount = allChildren.size,
+                            children = allChildren
                                 .let { all ->
                                     val filtered = if (q.isBlank()) all
                                     else all.filter { it.title.contains(q, ignoreCase = true) }
@@ -229,16 +231,60 @@ class ObjectDetailViewModel(
             when (val s = state.value) {
                 is UiState.ItemView -> {
                     itemRepo.softDelete(s.item.firestoreId)
-                    snackbarHostState.showSnackbar(
-                        "Deleted ${kindLabel(s.item.kind).lowercase()}"
-                    )
+                    onAfter()
                 }
                 is UiState.ListView -> {
                     listRepo.softDelete(s.list.firestoreId)
-                    snackbarHostState.showSnackbar("Deleted list")
+                    onAfter()
                 }
                 else -> return@launch
             }
+        }
+    }
+
+    fun deleteListAndChildren(onAfter: () -> Unit) {
+        val s = state.value as? UiState.ListView ?: return
+        viewModelScope.launch {
+            val now = Clock.System.now()
+            val children = itemRepo.getByList(s.list.firestoreId)
+            children.forEach { child ->
+                val nextParents = child.parentListIds().filter { it != s.list.firestoreId }
+                if (nextParents.isEmpty()) {
+                    itemRepo.softDelete(child.firestoreId)
+                } else {
+                    itemRepo.setItem(
+                        child.firestoreId,
+                        child.toDocument().copy(
+                            parentListIds = nextParents,
+                            updatedAt = now,
+                        ),
+                    )
+                }
+            }
+            listRepo.softDelete(s.list.firestoreId)
+            onAfter()
+        }
+    }
+
+    fun deleteListMovingChildren(targetListId: String, onAfter: () -> Unit) {
+        val s = state.value as? UiState.ListView ?: return
+        if (targetListId == s.list.firestoreId) return
+        viewModelScope.launch {
+            val now = Clock.System.now()
+            val children = itemRepo.getByList(s.list.firestoreId)
+            children.forEach { child ->
+                val nextParents = (child.parentListIds()
+                    .filter { it != s.list.firestoreId } + targetListId)
+                    .distinct()
+                itemRepo.setItem(
+                    child.firestoreId,
+                    child.toDocument().copy(
+                        parentListIds = nextParents,
+                        updatedAt = now,
+                    ),
+                )
+            }
+            listRepo.softDelete(s.list.firestoreId)
             onAfter()
         }
     }
@@ -366,6 +412,8 @@ class ObjectDetailViewModel(
         ) : UiState()
         data class ListView(
             val list: CachedList,
+            val allLists: List<CachedList>,
+            val childCount: Int,
             val children: List<CachedItem>,
             val query: String,
             val sort: ListSort,

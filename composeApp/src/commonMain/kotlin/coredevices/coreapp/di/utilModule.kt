@@ -30,6 +30,7 @@ import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
 import dev.gitlive.firebase.Firebase
@@ -88,6 +89,7 @@ val utilModule = module {
         CactusTranscriptionService(
             get(),
             get(),
+            get(),
             getOrNull<CactusModelPathProvider>() ?: object : CactusModelPathProvider {
                 override suspend fun getSTTModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
                 override suspend fun getLMModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
@@ -102,6 +104,7 @@ val utilModule = module {
         )
     } bind TranscriptionService::class
     singleOf(::WisprFlowTranscriptionService)
+    singleOf(::KirinkiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get()) }
     singleOf(::HealthSyncTracker)
     singleOf(::PlatformHealthSync)

@@ -46,6 +46,7 @@ import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
@@ -544,6 +545,7 @@ class RingRecordingE2ETest {
         singleOf(::NenyaClientImpl) bind NenyaClient::class
         singleOf(::WisprFlowAuth)
         singleOf(::WisprFlowTranscriptionService)
+        singleOf(::KirinkiTranscriptionService)
 
         // Cactus local transcription
         single { CactusModelProvider() }
@@ -558,7 +560,7 @@ class RingRecordingE2ETest {
             ))
         }
         single {
-            CactusTranscriptionService(get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
         } bind TranscriptionService::class
 
         // MCP tools
@@ -645,7 +647,7 @@ private class E2EPreferences : Preferences {
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<String>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
-    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.Native)
+    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)

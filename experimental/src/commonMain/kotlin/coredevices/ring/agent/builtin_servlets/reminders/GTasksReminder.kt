@@ -26,7 +26,9 @@ class GTasksReminder(
 
     override suspend fun scheduleToList(listName: String): String {
         val lists = gTasksIntegration.searchForList(listName)
-        require(lists.isNotEmpty()) { "No list found with name $listName" }
+        if (lists.isEmpty()) {
+            throw ListNotFoundException(listName)
+        }
         val list = lists.first()
         val id = gTasksIntegration.createReminder(message, time, list.id)
             ?: throw Exception("Failed to create reminder in Google Tasks")

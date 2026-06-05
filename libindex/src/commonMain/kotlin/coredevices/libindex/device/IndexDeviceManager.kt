@@ -85,27 +85,31 @@ class IndexDeviceManager(
     }
 
     fun init() {
-        prefs.ringPaired.value?.let { pairedId ->
-            val association = associations?.associations?.value?.firstOrNull { it.identifier == IndexIdentifier(pairedId) }
-            if (associations != null && association == null) {
-                logger.d { "Paired ring $pairedId not found in bt associations, clearing paired state" }
-                prefs.setRingPaired(null)
-                prefs.setRingPairedName(null)
-            } else if (association != null && association.deviceName != prefs.ringPairedName.value) {
-                prefs.setRingPairedName(association.deviceName)
-            }
-        } ?: scope.launch {
+        scope.launch {
+            // Only reconcile the stored paired ring once associations have actually been
+            // loaded. (e.g. after bt enabled/permitted)
             associations?.associationsReady?.await()
-            logger.d { "No paired ring stored, looking for one in bt associations" }
-            val candidate = associations?.associations?.value
-                ?.firstOrNull { it.deviceName.contains("Pebble Index", ignoreCase = true) }
-            candidate?.let {
-                logger.d { "Found candidate ${it.deviceName} (${it.identifier.asString}) in bt associations, setting as paired ring" }
-                prefs.setRingPaired(it.identifier.asString)
-                prefs.setRingPairedName(it.deviceName)
-                scope.launch(Dispatchers.IO) {
-                    indexStorage.setLastSuccessfulCollectionIndex(null)
-                    transferRepo.markTransfersAsPreviousIndexIteration()
+            val decision = resolvePairedRing(
+                storedPairedId = prefs.ringPaired.value,
+                storedPairedName = prefs.ringPairedName.value,
+                associations = associations?.associations?.value,
+            )
+            when (decision) {
+                PairedRingDecision.Keep -> {}
+                PairedRingDecision.Clear -> {
+                    logger.d { "Paired ring ${prefs.ringPaired.value} not found in loaded bt associations, clearing paired state" }
+                    prefs.setRingPaired(null)
+                    prefs.setRingPairedName(null)
+                }
+                is PairedRingDecision.UpdateName -> prefs.setRingPairedName(decision.name)
+                is PairedRingDecision.Adopt -> {
+                    logger.d { "Found candidate ${decision.name} (${decision.identifier}) in bt associations, setting as paired ring" }
+                    prefs.setRingPaired(decision.identifier)
+                    prefs.setRingPairedName(decision.name)
+                    scope.launch(Dispatchers.IO) {
+                        indexStorage.setLastSuccessfulCollectionIndex(null)
+                        transferRepo.markTransfersAsPreviousIndexIteration()
+                    }
                 }
             }
         }
@@ -178,7 +182,13 @@ class IndexDeviceManager(
 
     fun addScanResult(result: IndexScanResult) {
         _rings.update { prev ->
-            val existingIdx = prev.indexOfFirst { it.identifier.asString.equals(result.identifier.asString, ignoreCase = true) }
+            // Match by identifier, or by name: a ring entering failsafe advertises a
+            // slightly different address/id but the same name, so overwrite the existing
+            // discovered entry rather than showing a duplicate.
+            val existingIdx = prev.indexOfFirst {
+                it.identifier.asString.equals(result.identifier.asString, ignoreCase = true) ||
+                    (it is DiscoveredIndexDevice && it.name == result.name)
+            }
             val existing = existingIdx.takeIf { it != -1 }?.let { prev[it] }
             if (existing is DiscoveredIndexDevice) {
                 prev
@@ -217,4 +227,37 @@ data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
+    val isFailsafe: Boolean
 )
+
+internal sealed interface PairedRingDecision {
+    data object Keep : PairedRingDecision
+    data object Clear : PairedRingDecision
+    data class UpdateName(val name: String) : PairedRingDecision
+    data class Adopt(val identifier: String, val name: String) : PairedRingDecision
+}
+
+/**
+ * Pure decision for what to do with the stored paired ring on startup.
+ *
+ * [associations] is null when the platform has no bt association support (iOS) or the
+ * list has not been loaded yet (BLUETOOTH_CONNECT not granted / BT off).
+ */
+internal fun resolvePairedRing(
+    storedPairedId: String?,
+    storedPairedName: String?,
+    associations: List<IndexAssociation>?,
+): PairedRingDecision {
+    if (associations == null) return PairedRingDecision.Keep
+    if (storedPairedId != null) {
+        val match = associations.firstOrNull { it.identifier == IndexIdentifier(storedPairedId) }
+        return when {
+            match == null -> PairedRingDecision.Clear
+            match.deviceName != storedPairedName -> PairedRingDecision.UpdateName(match.deviceName)
+            else -> PairedRingDecision.Keep
+        }
+    }
+    val candidate = associations.firstOrNull { it.deviceName.contains("Pebble Index", ignoreCase = true) }
+    return candidate?.let { PairedRingDecision.Adopt(it.identifier.asString, it.deviceName) }
+        ?: PairedRingDecision.Keep
+}

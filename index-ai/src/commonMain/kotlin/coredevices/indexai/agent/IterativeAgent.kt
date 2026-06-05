@@ -19,7 +19,8 @@ import kotlinx.serialization.json.JsonElement
  * (optionally) loops until the model stops calling tools.
  */
 abstract class IterativeAgent(
-    initialConversation: List<ConversationMessageDocument>
+    initialConversation: List<ConversationMessageDocument>,
+    private val singleIterationMode: Boolean = false,
 ) : Agent {
     private val _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(
         replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
@@ -119,6 +120,10 @@ abstract class IterativeAgent(
                 }
                 if (fatalError != null) {
                     logger.w { "Aborting tool loop due to error semantic result" }
+                    return
+                }
+                if (singleIterationMode) {
+                    logger.i { "Single iteration mode, not looping back to inference" }
                     return
                 }
                 round++

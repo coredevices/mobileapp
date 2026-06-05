@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -49,7 +48,6 @@ class IndexWebhookApiImpl(
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookApi")
-        private const val WIDGET_TOKEN_HEADER = "X-Widget-Token"
         private const val AUDIO_SIZE_HEADER = "X-Audio-Size"
     }
 
@@ -58,9 +56,8 @@ class IndexWebhookApiImpl(
 
     init {
         scope.launch {
-            combine(webhookPreferences.webhookUrl, webhookPreferences.authToken) { url, token ->
-                !url.isNullOrBlank() && !token.isNullOrBlank()
-            }.collect { enabled ->
+            webhookPreferences.webhookUrl.collect { url ->
+                val enabled = !url.isNullOrBlank()
                 _isEnabled.value = enabled
                 logger.d { "Index webhook enabled: $enabled" }
             }
@@ -69,9 +66,9 @@ class IndexWebhookApiImpl(
 
     override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?) {
         val url = webhookPreferences.webhookUrl.value
-        val token = webhookPreferences.authToken.value
-        if (url.isNullOrBlank() || token.isNullOrBlank()) return
+        if (url.isNullOrBlank()) return
 
+        val headers = webhookPreferences.headers.value
         val payloadMode = webhookPreferences.payloadMode.value
 
         scope.launch {
@@ -93,7 +90,7 @@ class IndexWebhookApiImpl(
 
                 val result = upload(
                     url = url,
-                    authToken = token,
+                    headers = headers,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
                     transcription = transcriptionToSend
@@ -111,7 +108,7 @@ class IndexWebhookApiImpl(
 
     private suspend fun upload(
         url: String,
-        authToken: String,
+        headers: Map<String, String>,
         audioData: ByteArray?,
         filename: String,
         transcription: String?
@@ -132,7 +129,7 @@ class IndexWebhookApiImpl(
 
             val response = client.post(url) {
                 contentType(ContentType.parse("multipart/form-data; boundary=$boundary"))
-                header(WIDGET_TOKEN_HEADER, authToken)
+                headers.forEach { (name, value) -> header(name, value) }
                 if (audioData != null) {
                     header(AUDIO_SIZE_HEADER, audioData.size.toString())
                 }

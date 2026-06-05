@@ -150,6 +150,7 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import org.koin.core.Koin
@@ -558,7 +559,7 @@ fun initKoin(
                                 } else {
                                     get<DevConnectionCloudpebbleProxy>()
                                 }
-                            },
+                            }.distinctUntilChanged(),
                             identifier = get(),
                             protocolHandler = get(),
                             companionAppLifecycleManager = get(),

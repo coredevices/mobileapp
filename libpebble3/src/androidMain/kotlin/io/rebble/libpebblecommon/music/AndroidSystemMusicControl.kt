@@ -86,6 +86,10 @@ class AndroidSystemMusicControl(
             return true
         } catch (e: SecurityException) {
             return false
+        } catch (e: IllegalArgumentException) {
+            // Seen inside app-virtualization frameworks (e.g. VLite) that proxy ISessionManager and trip "packageName is not owned by the calling process".
+            logger.w(e) { "Media session listener rejected (virtualized/cloned env?)" }
+            return false
         }
     }
 
@@ -107,6 +111,8 @@ class AndroidSystemMusicControl(
             )
         } catch (e: SecurityException) {
             logger.e(e) { "Error getting music sessions" }
+        } catch (e: IllegalArgumentException) {
+            logger.e(e) { "Error getting music sessions (virtualized/cloned env?)" }
         }
         awaitClose {
             mediaSessionManager.removeOnActiveSessionsChangedListener(listener)

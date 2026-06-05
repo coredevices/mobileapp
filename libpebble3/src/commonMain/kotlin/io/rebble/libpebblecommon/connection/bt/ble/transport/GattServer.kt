@@ -8,6 +8,8 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.SERVER_META_RESPONSE
+import io.rebble.libpebblecommon.database.dao.KnownWatchDao
+import io.rebble.libpebblecommon.database.entity.TransportType
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +49,7 @@ class GattServerManager(
     private val appContext: AppContext,
     private val bleConfigFlow: BleConfigFlow,
     private val blePlatformConfig: BlePlatformConfig,
+    private val knownWatchDao: KnownWatchDao,
 ) {
     private val serverMutex = Mutex()
     private val logger = Logger.withTag("GattServerManager")
@@ -57,7 +60,15 @@ class GattServerManager(
             bluetoothStateProvider.state.collect { bluetooth ->
                 logger.d("Bluetooth state: $bluetooth")
                 when (bluetooth) {
-                    BluetoothState.Enabled -> openIfNeeded()
+                    BluetoothState.Enabled -> {
+                        val hasBleWatch = knownWatchDao.knownWatches()
+                            .any { it.transportType == TransportType.BluetoothLe }
+                        if (hasBleWatch) {
+                            openIfNeeded()
+                        } else {
+                            logger.d("no BLE watches registered, skipping GATT server pre-registration")
+                        }
+                    }
                     BluetoothState.Disabled -> {
                         if (blePlatformConfig.closeGattServerWhenBtDisabled) {
                             close()
@@ -73,7 +84,7 @@ class GattServerManager(
         sendChannel: SendChannel<ByteArray>
     ): Boolean {
         if (gattServer == null && bluetoothStateProvider.state.value == BluetoothState.Enabled) {
-            logger.w("Trying to open gatt server to register device. This should only happen after bluetooth permission was just granted on android, during first use")
+            logger.w("Trying to open gatt server to register device. This happens on first pairing of a BLE watch, or after bluetooth permission is just granted.")
             openIfNeeded()
         }
         val gs = gattServer

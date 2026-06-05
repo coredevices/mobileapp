@@ -77,8 +77,10 @@ class BasicNotificationProcessor(
             title = title,
             body = body,
             icon = icon,
+            // Clamp to postTime so messaging apps that set `when` to thread-start time
+            // don't get filtered out by BlobDB's `onlyInsertAfter` sync threshold (MOB-7284).
             timestamp = if (showWhen) {
-                Instant.fromEpochMilliseconds(sbn.notification.`when`)
+                Instant.fromEpochMilliseconds(maxOf(sbn.notification.`when`, sbn.postTime))
             } else {
                 Instant.fromEpochMilliseconds(sbn.postTime)
             },

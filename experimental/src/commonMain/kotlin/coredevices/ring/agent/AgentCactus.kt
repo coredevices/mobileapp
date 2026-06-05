@@ -34,7 +34,7 @@ class AgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
-) : KoinComponent, IterativeAgent(conversation) {
+) : KoinComponent, IterativeAgent(conversation, true) {
     override val label = "Cactus"
 
     override val logger = Logger.withTag("AgentCactus")

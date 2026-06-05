@@ -13,7 +13,7 @@ expect class SendBeeperMessageTool() : BuiltInMcpTool {
 
 @Serializable
 internal data class SendBeeperMessageArgs(
-    val contactId: String,
+    val contactName: String,
     val text: String
 )
 
@@ -21,10 +21,10 @@ internal object SendBeeperMessageToolConstants {
     val INPUT_SCHEMA = ToolSchema(
         properties = JsonObject(
             mapOf(
-                "contact_id" to JsonObject(
+                "contact_name" to JsonObject(
                     mapOf(
                         "type" to "string",
-                        "description" to "The unique identifier of the contact to whom the instant message will be sent."
+                        "description" to "The name of the contact to send the instant message to."
                     ).toJson()
                 ),
                 "text" to JsonObject(
@@ -35,7 +35,7 @@ internal object SendBeeperMessageToolConstants {
                 )
             )
         ),
-        required = listOf("contact_id", "text")
+        required = listOf("contact_name", "text")
     )
     val TOOL_NAME: String = "send_instant_message"
     val TOOL_DESCRIPTION: String = "Sends an instant message to a specified contact."

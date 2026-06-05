@@ -45,6 +45,10 @@ class AndroidClassicScanner(
                 } ?: return
                 val name = try { device.name } catch (e: SecurityException) { null } ?: return
                 if (!PEBBLE_NAME_REGEX.matches(name)) return
+                val type = try { device.type } catch (_: SecurityException) { BluetoothDevice.DEVICE_TYPE_UNKNOWN }
+                if (type != BluetoothDevice.DEVICE_TYPE_CLASSIC) {
+                    return
+                }
                 val rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, 0.toShort()).toInt()
                 trySend(
                     PebbleScanResult(

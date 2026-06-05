@@ -8,6 +8,7 @@ import PlatformUiContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -90,6 +92,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -1598,6 +1601,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Re-publish GATT services after BT restore",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.republishGattServicesOnRestore,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    republishGattServicesOnRestore = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsRestartingGattServerAfterBtPowerOn() }
+                ),
                 basicSettingsActionItem(
                     title = "Post test notification",
                     description = "Create a test notification, with actions",
@@ -2007,7 +2026,18 @@ fun WatchSettingsCategoryScreen(
     section: Section,
     topLevelType: TopLevelType,
 ) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).fillMaxSize()) {
+    val focusManager = LocalFocusManager.current
+    val dismissInteractionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .fillMaxSize()
+            .imePadding()
+            .clickable(
+                interactionSource = dismissInteractionSource,
+                indication = null,
+            ) { focusManager.clearFocus() },
+    ) {
         val state = rememberSettingsItemsState(navBarNav, topBarParams) ?: return
 
         LaunchedEffect(Unit) {

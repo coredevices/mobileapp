@@ -15,4 +15,5 @@ class PebbleFeatures(
     fun supportsVibePatterns(): Boolean = platform == Platform.Android
     fun supportsLinkingToOsBtSettings(): Boolean = platform == Platform.Android
     fun supportsForegroundService(): Boolean = platform == Platform.Android
+    fun supportsRestartingGattServerAfterBtPowerOn(): Boolean = platform == Platform.IOS
 }

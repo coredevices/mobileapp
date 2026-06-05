@@ -90,10 +90,15 @@ class HttpMcpIntegration(
 
     @OptIn(ExperimentalAtomicApi::class)
     override suspend fun connect() {
-        client.connect(transport)
-        connectionOpened = true
-        connectionLocks.incrementAndFetch()
-        logger.d { "Connected to MCP server: ${client.serverVersion}" }
+        if (connectionLocks.incrementAndFetch() > 1) return
+        try {
+            client.connect(transport)
+            connectionOpened = true
+            logger.d { "Connected to MCP server: ${client.serverVersion}" }
+        } catch (e: Throwable) {
+            connectionLocks.decrementAndFetch()
+            throw e
+        }
     }
 
     override suspend fun resetCache() {

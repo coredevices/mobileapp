@@ -3,6 +3,7 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import coredevices.ring.ui.relativeTime
+import CoreRoute
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -119,6 +120,7 @@ internal fun ItemView(
     var dueAtTouched by remember(it.firestoreId) { mutableStateOf(false) }
     var draftParentListIds by remember(it.firestoreId) { mutableStateOf(it.parentListIds()) }
     var listsTouched by remember(it.firestoreId) { mutableStateOf(false) }
+    var deleting by remember(it.firestoreId) { mutableStateOf(false) }
     val allLists by vm.allLists.collectAsStateWithLifecycle()
 
     // rememberUpdatedState wrappers so the auto-save lambda captured by
@@ -136,8 +138,10 @@ internal fun ItemView(
     val latestListsTouched = androidx.compose.runtime.rememberUpdatedState(listsTouched)
     val latestOriginalTitle = androidx.compose.runtime.rememberUpdatedState(it.title)
     val latestOriginalBody = androidx.compose.runtime.rememberUpdatedState(it.body)
+    val latestDeleting = androidx.compose.runtime.rememberUpdatedState(deleting)
 
-    val flushDraft: () -> Unit = {
+    val flushDraft: () -> Unit = flushDraft@{
+        if (latestDeleting.value) return@flushDraft
         val titleChanged = latestTitle.value.trim() != latestOriginalTitle.value.trim()
         val bodyChanged = latestBody.value != latestOriginalBody.value
         val dirty = titleChanged || bodyChanged || latestKindTouched.value ||
@@ -187,7 +191,9 @@ internal fun ItemView(
                             text = { Text("Delete ${kindLabel(it.kind).lowercase()}", color = colors.error) },
                             onClick = {
                                 menuOpen = false
-                                vm.deleteThis { coreNav.goBack() }
+                                val destination = deleteDestinationForItem(draftKind, draftParentListIds)
+                                deleting = true
+                                vm.deleteThis { coreNav.replaceWith(destination) }
                             },
                         )
                     }
@@ -207,10 +213,27 @@ internal fun ItemView(
                     allLists = allLists,
                     selectedListIds = draftParentListIds,
                     onKind = { newKind ->
+                        // Only relocate parents when the kind crosses
+                        // the todos-domain boundary. Switching between
+                        // note ↔ checklist (both notes-domain) used to
+                        // forcibly snap the item to LIST_NOTES_SELF_ID,
+                        // wiping the user's actual parent list (e.g.
+                        // "Index Features"). The fix compares the
+                        // CURRENT draft kind, not the original `it.kind`,
+                        // so a multi-step change like
+                        // note → reminder → checklist correctly relocates
+                        // out of Todos and back into a notes-domain list
+                        // on each boundary cross.
+                        val oldKind = draftKind
                         draftKind = newKind
                         kindTouched = true
-                        listsTouched = true
-                        draftParentListIds = defaultParentListsForKind(newKind)
+                        val isTodoDomain: (String) -> Boolean = { k ->
+                            k == "reminder" || k == "scheduled"
+                        }
+                        if (isTodoDomain(oldKind) != isTodoDomain(newKind)) {
+                            listsTouched = true
+                            draftParentListIds = defaultParentListsForKind(newKind)
+                        }
                         if (newKind != "reminder" && newKind != "scheduled") {
                             draftDueAt = null
                             dueAtTouched = true
@@ -261,6 +284,15 @@ internal fun ItemView(
 private fun defaultParentListsForKind(kind: String): List<String> =
     if (kind == "reminder" || kind == "scheduled") listOf(LIST_TODOS_ID)
     else listOf(LIST_NOTES_SELF_ID)
+
+private fun deleteDestinationForItem(kind: String, parentListIds: List<String>): CoreRoute =
+    when {
+        kind == "reminder" || kind == "scheduled" -> RingRoutes.ObjectDetails(LIST_TODOS_ID)
+        kind == "answer" -> RingRoutes.AllAnswers
+        else -> RingRoutes.ObjectDetails(
+            parentListIds.firstOrNull { it != LIST_TODOS_ID } ?: LIST_NOTES_SELF_ID,
+        )
+    }
 
 @Composable
 private fun ItemHeroCard(

@@ -21,7 +21,10 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
 import kotlin.math.absoluteValue
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -30,11 +33,11 @@ class FirestoreRingDebugDelegate(
 ): KMPHaversineDebugDelegate {
     companion object {
         private val logger = Logger.withTag("FirestoreRingDebugDelegate")
-        private val RX_RSSI_INTERVAL = 2.hours
+        private val RX_RSSI_INTERVAL = 1.minutes
     }
     private val pendingUploads = mutableListOf<KMPHaversineDebugInfo>()
     private var waitForAuthJob: Job? = null
-    private var lastRxRssiReadTime: TimeMark? = null
+    private var lastRxRssiReadTime: Instant? = null
 
     private fun waitForAuth() {
         if (Firebase.auth.currentUser != null) return
@@ -74,9 +77,10 @@ class FirestoreRingDebugDelegate(
     }
 
     override fun shouldReadRxRSSI(satellite: KMPHaversineSatellite): Boolean {
-        val elapsed = lastRxRssiReadTime?.elapsedNow()
+        val now = Clock.System.now()
+        val elapsed = lastRxRssiReadTime?.let { now - it }
         if (elapsed == null || elapsed >= RX_RSSI_INTERVAL) {
-            lastRxRssiReadTime = TimeSource.Monotonic.markNow()
+            lastRxRssiReadTime = now
             return true
         } else {
             return false
@@ -92,6 +96,7 @@ class FirestoreRingDebugDelegate(
             "ring.rssi_measurement",
             mapOf(
                 "ring_serial" to (state?.programmedSerialNumber ?: state?.serialNumber ?: "<none>"),
+                "ring_mac" to (state?.serialNumber ?: "<none>"),
                 "ring_rssi" to rssi,
                 "phone_rssi" to (txRssi ?: "<none>"),
                 "rssi_diff" to (diff ?: "<none>")

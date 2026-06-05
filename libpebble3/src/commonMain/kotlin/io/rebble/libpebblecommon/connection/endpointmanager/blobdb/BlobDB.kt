@@ -346,13 +346,7 @@ class BlobDB(
         }
         val timestamp = item.record.timestamp()
         val command = when {
-            timestamp == null -> BlobCommand.InsertCommand(
-                token = generateToken(),
-                database = db.databaseId(),
-                key = key,
-                value = value,
-            )
-            blobDbVersion >= 1 -> {
+            timestamp != null && blobDbVersion >= 1 -> {
                 logger.v { "inserting with timestamp: $timestamp" }
                 BlobCommand.InsertWithTimestampCommand(
                     token = generateToken(),
@@ -362,6 +356,12 @@ class BlobDB(
                     timestamp = timestamp,
                 )
             }
+            timestamp == null || db.databaseId().supportsLegacyInsert -> BlobCommand.InsertCommand(
+                token = generateToken(),
+                database = db.databaseId(),
+                key = key,
+                value = value,
+            )
             else -> null
         }
         if (command == null) {

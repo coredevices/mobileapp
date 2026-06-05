@@ -88,7 +88,7 @@ class IOSRemindersReminder(
         @Suppress("UNCHECKED_CAST")
         val calendar = (eventStore.calendarsForEntityType(EKEntityType.EKEntityTypeReminder) as List<EKCalendar>)
             .firstOrNull { it.title.contains(listName, ignoreCase = true) }
-            ?: throw Exception("No reminder list found with name $listName")
+            ?: throw ListNotFoundException(listName)
         _listTitle = calendar.title
         return scheduleForCalendar(eventStore, calendar, message, time?.toNSDate())
     }

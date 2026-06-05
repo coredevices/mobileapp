@@ -77,7 +77,11 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
      * Call this on app startup to resume any pending tasks that were not completed in the previous session.
      */
     fun resumePendingTasks() {
-        check(!scheduledTaskBefore) { "resumePendingTasks should only be called once, and before any tasks are scheduled" }
+        if (scheduledTaskBefore) {
+            logger.w { "resumePendingTasks already called, skipping" }
+            return
+        }
+        scheduledTaskBefore = true
         scope.launch {
             val pending = repository.getPendingTasks()
             logger.i { "Rescheduling ${pending.size} pending task(s)" }

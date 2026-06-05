@@ -111,7 +111,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     )
     override val secondaryMode = _secondaryMode.asStateFlow()
     private val _reminderProvider = MutableStateFlow(
-        settings.getInt("reminder_provider", ReminderProvider.Native.id)
+        settings.getInt("reminder_provider", ReminderProvider.BuiltIn.id)
             .let { ReminderProvider.fromId(it)!! }
     )
     override val reminderProvider = _reminderProvider.asStateFlow()

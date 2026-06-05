@@ -254,7 +254,6 @@ class IndexNotificationManager(
                             else -> {}
                         }
                     }
-                    logger.d { "(Job ID ${currentCoroutineContext()[Job]?.hashCode()?.toHexString()}) Created notification for transfer ${transfer.id}: $notif" }
                     inflightNotifications[transfer.id] = notif
 
                     notif

@@ -8,17 +8,31 @@ import android.content.Intent
 import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
-private val logger = Logger.withTag("registerNativeBtStateLogging")
+private val logger = Logger.withTag("nativeBluetoothStateFlow")
 
-actual fun registerNativeBtStateLogging(appContext: AppContext) {
-    val adapter = BluetoothAdapter.getDefaultAdapter()
-    logger.v { "btState native at init: ${adapter.state}" }
+actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState>? = callbackFlow {
+    val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+
+    fun currentState(): BluetoothState =
+        if (adapter?.isEnabled == true) BluetoothState.Enabled else BluetoothState.Disabled
+
+    logger.v { "btState native at init: ${adapter?.state}" }
+    trySend(currentState())
+
     val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            logger.v { "btState native changed: ${adapter.state}" }
+            logger.v { "btState native changed: ${adapter?.state}" }
+            trySend(currentState())
         }
     }
-    val intentFilter = IntentFilter(ACTION_STATE_CHANGED)
-    appContext.context.registerReceiver(receiver, intentFilter)
-}
+    appContext.context.registerReceiver(receiver, IntentFilter(ACTION_STATE_CHANGED))
+
+    awaitClose {
+        appContext.context.unregisterReceiver(receiver)
+    }
+}.distinctUntilChanged()

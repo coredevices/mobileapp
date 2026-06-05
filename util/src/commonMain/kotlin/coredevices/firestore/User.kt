@@ -25,6 +25,8 @@ data class User(
     val notionOauthErrorReason: String? = null,
     @SerialName("todo_block_id")
     val todoBlockId: String? = null,
+    @SerialName("notion_page_id")
+    val notionPageId: String? = null,
     @SerialName("rebble_user_token")
     val rebbleUserToken: String? = null,
     @SerialName("pebble_user_token")
