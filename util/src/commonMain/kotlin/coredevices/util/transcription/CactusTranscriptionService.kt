@@ -216,16 +216,12 @@ class CactusTranscriptionService(
         return when (configuredMode) {
             CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable() || kirinki.isAvailable()
             CactusSTTMode.LocalOnly -> modelHandle != 0L || modelExists()
-<<<<<<< rebble-asr
-            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst -> wisprFlow.isAvailable() || modelHandle != 0L
+            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
+                wisprFlow.isAvailable() || kirinki.isAvailable() || modelHandle != 0L
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
             CactusSTTMode.RebbleFallback -> false
-=======
-            CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
-                wisprFlow.isAvailable() || kirinki.isAvailable() || modelHandle != 0L
->>>>>>> master
         }
     }
 
