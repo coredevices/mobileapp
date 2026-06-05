@@ -440,14 +440,14 @@ class CactusTranscriptionService(
         sampleRate: Int,
         timeout: Duration = Duration.INFINITE,
     ): String {
-        if (initJob == null || model == null) {
+        if (initJob == null || modelHandle == 0L) {
             if (initJob?.isActive != true) {
                 initJob = performInit()
             }
         }
         withTimeout(20.seconds) { initJob?.join() }
-        val cactus = model
-            ?: throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+        val handle = modelHandle
+        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
 
         val path = getCacheFilePath()
         return transcriptionMutex.withLock {
@@ -459,15 +459,15 @@ class CactusTranscriptionService(
             }
             try {
                 inferenceBoost.acquire()
-                val result: TranscriptionResult = try {
+                val text: String = try {
                     withTimeout(timeout) {
-                        cancellableTranscribe(cactus, path.toString())
+                        cancellableTranscribe(handle, path.toString())
                     }
                 } finally {
                     inferenceBoost.release()
                 }
                 _lastSuccessfulMode = CactusSTTMode.LocalOnly
-                result.text?.takeIf { it.isNotBlank() }
+                text.takeIf { it.isNotBlank() }
                     ?: throw TranscriptionException.NoSpeechDetected(
                         "empty_result",
                         modelUsed = sttConfig.value.modelName,
