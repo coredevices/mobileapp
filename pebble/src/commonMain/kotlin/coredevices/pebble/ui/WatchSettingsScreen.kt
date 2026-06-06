@@ -2143,7 +2143,7 @@ fun basicSettingsNumberItem(
                     }
                     val minF = remember(min) { min.toFloat() }
                     val maxF = remember(max) { max.toFloat() }
-                    val steps = steps ?: remember(max, min) {
+                    val resolvedSteps = steps ?: remember(max, min) {
                         val range = max - min
                         if (range in 1..100) range - 1 else 0
                     }
@@ -2151,7 +2151,7 @@ fun basicSettingsNumberItem(
                         value = sliderPosition.toFloat(),
                         onValueChange = { sliderPosition = it.roundToLong() },
                         valueRange = minF..maxF,
-                        steps = steps,
+                        steps = resolvedSteps,
                         onValueChangeFinished = {
                             onValueChange(sliderPosition)
                         },
