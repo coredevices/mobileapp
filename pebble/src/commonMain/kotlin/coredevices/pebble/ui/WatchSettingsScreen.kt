@@ -2121,7 +2121,7 @@ fun basicSettingsNumberItem(
     isDebugSetting: Boolean = false,
     defaultValue: Long? = null,
     valueFormatter: ((Long) -> String)? = null,
-    stepsOverride: Int? = null,
+    steps: Int? = null,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2143,7 +2143,7 @@ fun basicSettingsNumberItem(
                     }
                     val minF = remember(min) { min.toFloat() }
                     val maxF = remember(max) { max.toFloat() }
-                    val steps = stepsOverride ?: remember(max, min) {
+                    val steps = steps ?: remember(max, min) {
                         val range = max - min
                         if (range in 1..100) range - 1 else 0
                     }

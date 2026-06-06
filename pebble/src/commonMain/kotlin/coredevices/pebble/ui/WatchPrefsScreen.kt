@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.sp
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ConfirmDialog
 import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import io.rebble.libpebblecommon.SystemAppIDs.BACKLIGHT_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.HEALTH_APP_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.MOTION_BACKLIGHT_UUID
@@ -37,6 +39,10 @@ import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
+
+// Snap the notification timeout slider to 30-second increments (20 stops across 0..600s)
+// so the displayed MM:SS value is always a clean :00 or :30.
+private const val NOTIFICATION_TIMEOUT_STEP_COUNT = 19
 
 @Composable
 fun watchPrefs(): List<SettingsItem> {
@@ -137,46 +143,22 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
     val pref = item.pref as NumberWatchPref
     return when (pref) {
         NumberWatchPref.BacklightTimeoutMs -> {
-            val secValue = item.valueOrDefault() / 1000
-            basicSettingsNumberItem(
-                id = pref.id,
-                title = pref.displayName,
-                description = pref.description,
-                topLevelType = TopLevelType.Watch,
-                section = pref.section(),
-                value = secValue,
-                min = 1,
-                max = 10,
-                onValueChange = {
-                    libPebble.setWatchPref(item.copy(value = it * 1000))
-                },
-                isDebugSetting = pref.isDebugSetting,
-                defaultValue = pref.defaultValue / 1000,
-                unit = "seconds",
-                valueFormatter = { "$it seconds" },
+            basicSettingsNumberSecondsItem(
+                pref = pref,
+                item = item,
+                libPebble = libPebble,
+                valueFormatter = { seconds -> "$seconds seconds" },
             )
         }
         NumberWatchPref.NotificationTimeoutMs -> {
-            val secValue = item.valueOrDefault() / 1000
-            basicSettingsNumberItem(
-                id = pref.id,
-                title = pref.displayName,
-                description = pref.description,
-                topLevelType = TopLevelType.Watch,
-                section = pref.section(),
-                value = secValue,
-                min = 0,
-                max = 600,
-                onValueChange = {
-                    libPebble.setWatchPref(item.copy(value = it * 1000))
+            basicSettingsNumberSecondsItem(
+                pref = pref,
+                item = item,
+                libPebble = libPebble,
+                valueFormatter = { seconds ->
+                    "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
                 },
-                isDebugSetting = pref.isDebugSetting,
-                defaultValue = pref.defaultValue / 1000,
-                unit = "",
-                valueFormatter = { v ->
-                    "${v / 60}:${(v % 60).toString().padStart(2, '0')}"
-                },
-                stepsOverride = 19,
+                steps = NOTIFICATION_TIMEOUT_STEP_COUNT,
             )
         }
         else -> basicSettingsNumberItem(
@@ -197,6 +179,31 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
         )
     }
 }
+
+private fun basicSettingsNumberSecondsItem(
+    pref: NumberWatchPref,
+    item: WatchPreference<Long>,
+    libPebble: LibPebble,
+    valueFormatter: (Long) -> String,
+    steps: Int? = null,
+): SettingsItem = basicSettingsNumberItem(
+    id = pref.id,
+    title = pref.displayName,
+    description = pref.description,
+    topLevelType = TopLevelType.Watch,
+    section = pref.section(),
+    value = item.valueOrDefault().milliseconds.inWholeSeconds,
+    min = pref.min.milliseconds.inWholeSeconds.toInt(),
+    max = pref.max.milliseconds.inWholeSeconds.toInt(),
+    onValueChange = {
+        libPebble.setWatchPref(item.copy(value = it.seconds.inWholeMilliseconds))
+    },
+    isDebugSetting = pref.isDebugSetting,
+    defaultValue = pref.defaultValue.milliseconds.inWholeSeconds,
+    unit = "",
+    valueFormatter = valueFormatter,
+    steps = steps,
+)
 
 private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as ColorWatchPref
