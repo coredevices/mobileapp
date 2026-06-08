@@ -153,11 +153,6 @@ data class NotificationConfig(
      * Shown under "Canned messages" in the watch action menu.
      */
     val cannedResponses: List<String> = listOf("Ok", "Yes", "No", "Call me", "Call you later"),
-    /**
-     * Allow notifications from apps without an ap record (should be system apps, may also be apps
-     * from other profiles)
-     */
-    val allowUnknownAppNotifications: Boolean = false,
 )
 
 class NotificationConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

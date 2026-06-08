@@ -11,6 +11,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 @Serializable
 data class BootConfig(
@@ -24,6 +26,7 @@ data class BootConfig(
         val notifications: Notifications,
         val links: Links,
         val cohorts: Cohorts,
+        val voice: Voice? = null,
     ) {
         @Serializable
         data class Locker(
@@ -63,6 +66,22 @@ data class BootConfig(
         data class Cohorts(
             val endpoint: String
         )
+
+        @Serializable
+        data class Voice(
+            @SerialName("first_party_uuids")
+            val firstPartyUuids: List<String> = emptyList(),
+            val languages: List<Language> = emptyList(),
+        ) {
+            @Serializable
+            data class Language(
+                val endpoint: String,
+                @SerialName("four_char_locale")
+                val fourCharLocale: String,
+                @SerialName("six_char_locale")
+                val sixCharLocale: String,
+            )
+        }
     }
 }
 
@@ -124,6 +143,13 @@ class RealBootConfigProvider(
         val bootConfig = bootConfigService.getBootConfig(url)
         logger.d("got bootconfig: $bootConfig")
         settings.putString(BOOTCONFIG_KEY, Json.encodeToString(bootConfig))
+        settings.putLong(BOOTCONFIG_FETCHED_AT_KEY, Clock.System.now().toEpochMilliseconds())
+    }
+
+    private fun isStale(): Boolean {
+        val fetchedAt = settings.getLongOrNull(BOOTCONFIG_FETCHED_AT_KEY) ?: return true
+        val age = Clock.System.now().toEpochMilliseconds() - fetchedAt
+        return age >= REFRESH_INTERVAL.inWholeMilliseconds || age < 0
     }
 
     private fun applyOverrides(config: BootConfig): BootConfig {
@@ -169,6 +195,15 @@ class RealBootConfigProvider(
     override suspend fun getBootConfig(): BootConfig? {
         if (!settings.hasKey(BOOTCONFIG_KEY)) {
             fetch()
+        } else if (isStale()) {
+            // Refresh in case tokens/URLs (e.g. the Rebble ASR access tokens baked into
+            // voice.languages[].endpoint) have rotated. Best-effort: fall back to the cached
+            // version if the network is unavailable.
+            try {
+                fetch()
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to refresh stale boot config, using cached version" }
+            }
         }
         val config = loadFromSettings()
         if (config != null) {
@@ -184,5 +219,7 @@ class RealBootConfigProvider(
     companion object {
         private val BOOTCONFIG_URL_KEY = "boot_config_url"
         private val BOOTCONFIG_KEY = "boot_config"
+        private val BOOTCONFIG_FETCHED_AT_KEY = "boot_config_fetched_at"
+        private val REFRESH_INTERVAL = 24.hours
     }
 }

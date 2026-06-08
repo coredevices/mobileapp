@@ -139,6 +139,7 @@ import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
 import coredevices.pebble.services.LanguagePackRepository
@@ -666,6 +667,7 @@ fun WatchesPreview() {
                                 override val identifier = IndexIdentifier("1234")
                                 override val name = "Index 01"
                                 override val rssi = -50
+                                override val isFailsafe: Boolean = false
                                 override val pairingState: IndexPairingState =
                                     IndexPairingState.NotPaired
 
@@ -738,7 +740,11 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
         },
         supportingContent = {
             val stateText = when (ring) {
-                is DiscoveredIndexDevice -> "Available to pair"
+                is DiscoveredIndexDevice -> if (ring.isFailsafe) {
+                    "Failsafe mode"
+                } else {
+                    "Available to pair"
+                }
                 is InterviewedIndexDevice if (ring.updating) -> "Updating..."
                 else -> "Ready"
             }
@@ -777,6 +783,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                     }
                     if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
                         Button(
+                            enabled = !ring.isFailsafe,
                             onClick = {
                                 scope.launch {
                                     val result = try {
@@ -1245,6 +1252,22 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         showScreenshotDialog = true
                     }
                 )
+
+                if (watch.watchInfo.platform.isCoreDevice()) {
+                    DropdownMenuItem(
+                        text = { Text("Battery Life") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.BatteryFull,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            navBarNav.navigateTo(PebbleNavBarRoutes.BatterySettingsRoute)
+                        }
+                    )
+                }
                 HorizontalDivider()
             }
 

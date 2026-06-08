@@ -648,35 +648,24 @@ internal fun RoutingMatrix(
     }
 
     val visible = buildList {
-        if (isAndroid) {
-            add(
-                RoutingProvider(
-                    name = "Index",
-                    sub = "Built into Pebble app",
-                    supportsReminder = true,
-                    supportsNote = true,
-                    reminderValue = ReminderProvider.Native,
-                    noteValue = NoteProvider.Builtin,
-                )
+        add(
+            RoutingProvider(
+                name = "Index",
+                sub = "Built into Pebble app",
+                supportsReminder = true,
+                supportsNote = true,
+                reminderValue = ReminderProvider.BuiltIn,
+                noteValue = NoteProvider.Builtin,
             )
-        } else {
-            add(
-                RoutingProvider(
-                    name = "Index",
-                    sub = "Built into Pebble app",
-                    supportsReminder = false,
-                    supportsNote = true,
-                    reminderValue = null,
-                    noteValue = NoteProvider.Builtin,
-                )
-            )
+        )
+        if (!isAndroid) {
             add(
                 RoutingProvider(
                     name = "iPhone Reminders",
                     sub = "Built into iOS",
                     supportsReminder = true,
                     supportsNote = false,
-                    reminderValue = ReminderProvider.Native,
+                    reminderValue = ReminderProvider.IOSReminders,
                     noteValue = null,
                 )
             )

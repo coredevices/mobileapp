@@ -4,25 +4,22 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
-import androidx.glance.action.action
-import coredevices.ExperimentalDevices
 import kotlin.math.roundToInt
 
-const val PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID = "pebble_debug"
-const val PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME = "Pebble Debug"
+const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID = "index_transfer"
+const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME = "Index Recordings"
 
 actual class PlatformIndexNotificationManager(
     private val context: Context,
 ) {
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private fun buildDebugNotification() =
-        NotificationCompat.Builder(context, PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID)
+        NotificationCompat.Builder(context, INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setGroup("ring_debug")
+            .setGroup("index_transfer")
             .setCategory(NotificationCompat.CATEGORY_STATUS)
     actual fun notify(notification: GenericNotification) {
         val uriIntent = notification.deepLink?.let {

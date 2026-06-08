@@ -27,6 +27,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
+import kotlin.time.Clock
 
 /**
  * Online agent backed by the Nenya HTTP API. Iterative: tool results are fed
@@ -227,7 +228,8 @@ both as the content unless it's clearly two separate actions, for example 'remin
                         sourceRecordingId = ctx.sourceRecordingId,
                         createdAt = ctx.createdAt,
                         question = input,
-                        answer = text ?: "No results"
+                        answer = text ?: "No results",
+                        toolCallId = null
                     )
                 )
             }

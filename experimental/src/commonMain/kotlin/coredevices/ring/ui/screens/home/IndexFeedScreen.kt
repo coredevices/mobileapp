@@ -193,6 +193,7 @@ fun IndexFeedScreen(
                         PeekStrip(
                             peeks = state.recordings.take(8),
                             onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(it.id)) },
+                            onRetryRecording = { rec, entry -> vm.retryRecording(rec.id, entry) },
                         )
                     }
                 }

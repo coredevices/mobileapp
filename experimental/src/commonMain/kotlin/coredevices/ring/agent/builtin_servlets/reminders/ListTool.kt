@@ -7,10 +7,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import coredevices.ring.agent.currentSessionContext
-import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
-import coredevices.ring.service.indexfeed.ItemFactory
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -63,8 +60,6 @@ class ListTool: BuiltInMcpTool(
     )
 ), KoinComponent {
     val reminderFactory: ReminderFactory by inject()
-    private val itemRepo: ItemRepository by inject()
-    private val itemFactory: ItemFactory by inject()
     private val listRepo: ListRepository by inject()
 
     companion object Companion {
@@ -162,35 +157,17 @@ class ListTool: BuiltInMcpTool(
             } else {
                 reminder.schedule() to null
             }
-            currentSessionContext()?.let { ctx ->
-                runCatching {
-                    val resolvedListId = resolveListIdByHint(listItemArgs.list_name)
-                    itemRepo.setItem(
-                        itemFactory.simpleUid(),
-                        itemFactory.noteItem(
-                            ctx.sourceRecordingId,
-                            ctx.createdAt,
-                            reminder.message,
-                            listItemArgs.list_name,
-                            resolvedListId = resolvedListId,
-                        )
-                    )
-                }
-            }
+            // Always a note (routed to the resolved list); the item itself is created centrally
+            // in RecordingProcessor from this semantic result so it can carry the tool_call_id.
+            val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(
                 JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),
-                if ((reminder as? ListAssignableReminder)?.listTitle != null) {
-                    SemanticResult.ListItemCreation(
-                        content = reminder.message,
-                        listUsed = listUsed,
-                        remindAt = reminder.time
-                    )
-                } else {
-                    SemanticResult.TaskCreation(
-                        title = reminder.message,
-                        deadline = reminder.time
-                    )
-                }
+                SemanticResult.ListItemCreation(
+                    content = reminder.message,
+                    listUsed = listUsed,
+                    remindAt = reminder.time,
+                    resolvedListId = resolvedListId,
+                )
             )
         } catch (e: Exception) {
             logger.e(e) { "Failed to create reminder" }

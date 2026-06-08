@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+/** A single editable webhook header row. */
+data class WebhookHeaderInput(val name: String, val value: String)
+
 class IndexWebhookSettingsViewModel(
     private val webhookPreferences: IndexWebhookPreferences
 ) : ViewModel() {
@@ -14,17 +17,14 @@ class IndexWebhookSettingsViewModel(
     private val _webhookUrl = MutableStateFlow<String?>(null)
     val webhookUrl = _webhookUrl.asStateFlow()
 
-    private val _authToken = MutableStateFlow<String?>(null)
-    val authToken = _authToken.asStateFlow()
-
     private val _dialogOpen = MutableStateFlow(false)
     val dialogOpen = _dialogOpen.asStateFlow()
 
     private val _urlInput = MutableStateFlow("")
     val urlInput = _urlInput.asStateFlow()
 
-    private val _tokenInput = MutableStateFlow("")
-    val tokenInput = _tokenInput.asStateFlow()
+    private val _headerInputs = MutableStateFlow<List<WebhookHeaderInput>>(emptyList())
+    val headerInputs = _headerInputs.asStateFlow()
 
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
@@ -33,7 +33,7 @@ class IndexWebhookSettingsViewModel(
     val triggerInput = _triggerInput.asStateFlow()
 
     val isLinked: Boolean
-        get() = !_webhookUrl.value.isNullOrBlank() && !_authToken.value.isNullOrBlank()
+        get() = !_webhookUrl.value.isNullOrBlank()
 
     init {
         viewModelScope.launch {
@@ -41,16 +41,14 @@ class IndexWebhookSettingsViewModel(
                 _webhookUrl.value = url?.ifBlank { null }
             }
         }
-        viewModelScope.launch {
-            webhookPreferences.authToken.collectLatest { token ->
-                _authToken.value = token?.ifBlank { null }
-            }
-        }
     }
 
     fun openDialog() {
         _urlInput.value = _webhookUrl.value ?: ""
-        _tokenInput.value = _authToken.value ?: ""
+        // Show existing headers, or a single empty row to start from.
+        _headerInputs.value = webhookPreferences.headers.value
+            .map { WebhookHeaderInput(it.key, it.value) }
+            .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = webhookPreferences.payloadMode.value
         _triggerInput.value = webhookPreferences.trigger.value
         _dialogOpen.value = true
@@ -64,8 +62,24 @@ class IndexWebhookSettingsViewModel(
         _urlInput.value = url
     }
 
-    fun updateTokenInput(token: String) {
-        _tokenInput.value = token
+    fun addHeader() {
+        _headerInputs.value = _headerInputs.value + WebhookHeaderInput("", "")
+    }
+
+    fun updateHeaderName(index: Int, name: String) {
+        _headerInputs.value = _headerInputs.value.toMutableList().also {
+            it[index] = it[index].copy(name = name)
+        }
+    }
+
+    fun updateHeaderValue(index: Int, value: String) {
+        _headerInputs.value = _headerInputs.value.toMutableList().also {
+            it[index] = it[index].copy(value = value)
+        }
+    }
+
+    fun removeHeader(index: Int) {
+        _headerInputs.value = _headerInputs.value.filterIndexed { i, _ -> i != index }
     }
 
     fun updatePayloadMode(mode: IndexWebhookPayloadMode) {
@@ -79,9 +93,13 @@ class IndexWebhookSettingsViewModel(
     fun save() {
         viewModelScope.launch {
             val url = _urlInput.value.ifBlank { null }?.trim()
-            val token = _tokenInput.value.ifBlank { null }?.trim()
+            // Drop rows with a blank name; later rows win on duplicate names.
+            val headers = _headerInputs.value
+                .map { it.name.trim() to it.value.trim() }
+                .filter { it.first.isNotEmpty() }
+                .toMap()
             webhookPreferences.setWebhookUrl(url)
-            webhookPreferences.setAuthToken(token)
+            webhookPreferences.setHeaders(headers)
             webhookPreferences.setPayloadMode(_payloadModeInput.value)
             webhookPreferences.setTrigger(_triggerInput.value)
             closeDialog()

@@ -22,7 +22,8 @@ class RealDiscoveredIndexDevice(
     private val indexPairing: IndexPairing,
     override val rssi: Int,
     override val name: String,
-    override val pairingState: IndexPairingState
+    override val pairingState: IndexPairingState,
+    override val isFailsafe: Boolean
 ): IndexDevice by indexDevice, DiscoveredIndexDevice {
     override suspend fun pair(): IndexPairingResult {
         return indexPairing.pairDevice(this)
@@ -80,6 +81,7 @@ class IndexDeviceFactory(
                 scanResult.rssi,
                 name,
                 pairingState,
+                scanResult.isFailsafe
             )
 
             else -> base

@@ -49,6 +49,7 @@ sealed interface IndexPairingState {
 interface DiscoveredIndexDevice: IndexDevice {
     val rssi: Int
     val pairingState: IndexPairingState
+    val isFailsafe: Boolean
     suspend fun pair(): IndexPairingResult
 }
 

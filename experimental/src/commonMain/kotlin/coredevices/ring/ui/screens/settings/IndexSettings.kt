@@ -115,8 +115,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val platform = koinInject<Platform>()
     val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
-    val webhookToken by webhookViewModel.authToken.collectAsState()
-    val webhookIsLinked = !webhookUrl.isNullOrBlank() && !webhookToken.isNullOrBlank()
+    val webhookIsLinked = !webhookUrl.isNullOrBlank()
     val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
@@ -1299,34 +1298,24 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val platform = koinInject<Platform>()
 
     Column(modifier = Modifier.fillMaxWidth()) {
+        IntegrationItem(
+            title = "Built-in",
+            hasReminder = true,
+            hasNotes = true,
+            selectedReminderProvider = currentReminderProvider == ReminderProvider.BuiltIn,
+            selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
+            onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
+            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+        )
         if (platform.isIOS) {
             IntegrationItem(
-                title = "Built-in",
-                hasReminder = false,
-                hasNotes = true,
-                selectedReminderProvider = false,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-                onSelectReminderProvider = {},
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
-            )
-            IntegrationItem(
-                title = "iOS",
+                title = "iOS Reminders",
                 hasReminder = true,
                 hasNotes = false,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.IOSReminders,
                 selectedNoteProvider = false,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.IOSReminders) },
                 onSelectNoteProvider = {}
-            )
-        } else {
-            IntegrationItem(
-                title = "Built-in",
-                hasReminder = true,
-                hasNotes = true,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.Native,
-                selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Native) },
-                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
             )
         }
         if (gTasksAuth) {

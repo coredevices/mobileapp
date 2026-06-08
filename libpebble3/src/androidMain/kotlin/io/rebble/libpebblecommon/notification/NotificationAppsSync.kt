@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.NotificationConfigFlow
@@ -92,19 +93,15 @@ class AndroidNotificationAppsSync(
         val osApps = pm.getInstalledApplications(0)
         val notificationConfig = notificationConfigFlow.value
         osApps.onEach { osApp ->
-            // null = this is a system app
-            try {
-                pm.getLaunchIntentForPackage(osApp.packageName)
-            } catch (e: Exception) {
-                logger.w(e) { "Error loading app launch intent" }
-            } ?: return@onEach
+            val isSystemApp = (osApp.flags and ApplicationInfo.FLAG_SYSTEM) != 0 &&
+                NotificationProperties.lookup(osApp.packageName) == null
             val existing = existingApps.remove(osApp.packageName)
             val channels = notificationListenerConnection.getChannelsForApp(osApp.packageName)
             val name = pm.getApplicationLabel(osApp).toString()
             val newAppItem = NotificationAppItem(
                 packageName = osApp.packageName,
                 name = name,
-                muteState = notificationConfig.defaultMuteStateForPackage(osApp.packageName),
+                muteState = notificationConfig.defaultMuteStateForPackage(osApp.packageName, isSystemApp),
                 channelGroups = channels,
                 stateUpdated = timeProvider.now().asMillisecond(),
                 lastNotified = Instant.DISTANT_PAST.asMillisecond(),
@@ -112,6 +109,8 @@ class AndroidNotificationAppsSync(
                 colorName = null,
                 iconCode = null,
                 allowDuplicates = NotificationProperties.lookup(osApp.packageName)?.allowDuplicates ?: false,
+                isSystemApp = isSystemApp,
+                autoAdded = false,
             )
             if (existing == null) {
 //                logger.d("adding ${osApp.packageName}")
@@ -137,6 +136,8 @@ class AndroidNotificationAppsSync(
                     colorName = existing.colorName,
                     iconCode = existing.iconCode,
                     allowDuplicates = existing.allowDuplicates,
+                    isSystemApp = isSystemApp,
+                    autoAdded = false,
                 )
                 if (existing != newEntryWithExistingStates) {
                     logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")
@@ -148,17 +149,23 @@ class AndroidNotificationAppsSync(
                 }
             }
         }
-        existingApps.values.forEach { app ->
-            logger.d("deleting $app")
-            notificationAppDao.markForDeletion(app.packageName)
-        }
+        existingApps.values
+            .filter { !it.autoAdded }
+            .forEach { app ->
+                logger.d("deleting $app")
+                notificationAppDao.markForDeletion(app.packageName)
+            }
         logger.d("/syncAppsFromOS")
     }
 
     companion object {
-        private fun NotificationConfig.defaultMuteStateForPackage(pkg: String) = when {
+        internal fun NotificationConfig.defaultMuteStateForPackage(
+            pkg: String,
+            isSystemApp: Boolean,
+        ) = when {
             !defaultAppsToEnabled -> MuteState.Always
             pkg in NOTIFICATIONS_DISABLED_BY_DEFAULT_PACKAGES -> MuteState.Always
+            isSystemApp -> MuteState.Always
             else -> MuteState.Never
         }
 

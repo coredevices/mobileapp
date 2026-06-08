@@ -31,7 +31,7 @@ sealed class SemanticResult {
      */
     @Serializable
     @SerialName("ListItemCreation")
-    data class ListItemCreation(val content: String, val listUsed: String? = null, val remindAt: Instant? = null): SemanticResult()
+    data class ListItemCreation(val content: String, val listUsed: String? = null, val remindAt: Instant? = null, val resolvedListId: String? = null): SemanticResult()
     /**
      * Tool call resulted in an alarm creation action
      */
@@ -58,10 +58,22 @@ sealed class SemanticResult {
     /**
      * Tool call resulted in a message being sent to a contact
      * @param recipientName The display name of the message recipient
+     * @param text The message body that was sent
+     * @param contactId The id of the contact/room the message was sent to
      */
     @Serializable
     @SerialName("MessageSent")
-    data class MessageSent(val recipientName: String): SemanticResult()
+    data class MessageSent(val recipientName: String, val text: String = "", val contactId: String = ""): SemanticResult()
+    /**
+     * Tool call performed an action that should be logged in the feed (e.g. running JavaScript)
+     * @param toolName The name of the tool that ran
+     * @param title A short human-readable title for the action
+     * @param success Whether the action succeeded
+     * @param body Optional detail (e.g. the code that ran)
+     */
+    @Serializable
+    @SerialName("ActionLogged")
+    data class ActionLogged(val toolName: String, val title: String, val success: Boolean, val body: String = ""): SemanticResult()
     /**
      * Generic success or failure without additional context
      */
@@ -72,11 +84,13 @@ sealed class SemanticResult {
      * Generic failure, with an optional user-facing error message
      * @param userErrorMessage An optional message to show to the user explaining the failure
      * @param llmRecoverable Whether the LLM can attempt to recover from this failure
+     * @param forceFallbackTool Whether the system should attempt to use a fallback tool if available
      */
     @Serializable
     @SerialName("GenericFailure")
     data class GenericFailure(
         val userErrorMessage: String?,
-        val llmRecoverable: Boolean = false
+        val llmRecoverable: Boolean = false,
+        val forceFallbackTool: Boolean = false,
     ): SemanticResult()
 }

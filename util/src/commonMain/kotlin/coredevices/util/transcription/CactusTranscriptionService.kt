@@ -220,6 +220,10 @@ class CactusTranscriptionService(
             CactusSTTMode.LocalOnly -> isCactusSupported() && (modelHandle != 0L || modelExists())
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
                 wisprFlow.isAvailable() || kirinki.isAvailable() || (isCactusSupported() && modelHandle != 0L)
+            // Rebble modes are dispatched by STTRouter and never reach this service.
+            CactusSTTMode.RebbleOnly,
+            CactusSTTMode.RebbleFirst,
+            CactusSTTMode.RebbleFallback -> false
         }
     }
 
@@ -270,6 +274,8 @@ class CactusTranscriptionService(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
+
             if (!kirinki.isAvailable()) {
                 logger.w(e) { "WisprFlow transcription failed and kirinki unavailable: ${e.message}" }
                 throw e
@@ -402,10 +408,69 @@ class CactusTranscriptionService(
                         )
                     }
                 }
+                // Rebble modes are routed by STTRouter and never reach this service.
+                CactusSTTMode.RebbleOnly,
+                CactusSTTMode.RebbleFirst,
+                CactusSTTMode.RebbleFallback ->
+                    error("Rebble mode $sttMode should be handled by STTRouter, not CactusTranscriptionService")
             }
         } finally {
             try { SystemFileSystem.delete(path) } catch (e: Exception) {
                 logger.w(e) { "Failed to delete temp file $path" }
+            }
+        }
+    }
+
+    /**
+     * Run the local Cactus model directly on a pre-collected PCM buffer, ignoring [sttConfig.mode].
+     * Intended for callers (e.g. Rebble ASR fallback) that decide mode externally.
+     * Returns the recognized text. Throws [TranscriptionException.TranscriptionRequiresDownload]
+     * if the local model isn't initialized; throws [TranscriptionException.NoSpeechDetected]
+     * if the result is empty.
+     */
+    suspend fun transcribeLocalForFallback(
+        audio: ByteArray,
+        sampleRate: Int,
+        timeout: Duration = Duration.INFINITE,
+    ): String {
+        if (initJob == null || modelHandle == 0L) {
+            if (initJob?.isActive != true) {
+                initJob = performInit()
+            }
+        }
+        withTimeout(20.seconds) { initJob?.join() }
+        val handle = modelHandle
+        if (handle == 0L) throw TranscriptionException.TranscriptionRequiresDownload("Model not initialized")
+
+        val path = getCacheFilePath()
+        return transcriptionMutex.withLock {
+            withContext(Dispatchers.IO) {
+                SystemFileSystem.sink(path).buffered().use { sink ->
+                    sink.writeWavHeader(sampleRate, audioSize = audio.size)
+                    sink.write(audio)
+                }
+            }
+            try {
+                inferenceBoost.acquire()
+                val text: String = try {
+                    withTimeout(timeout) {
+                        cancellableTranscribe(handle, path.toString())
+                    }
+                } finally {
+                    inferenceBoost.release()
+                }
+                _lastSuccessfulMode = CactusSTTMode.LocalOnly
+                text.takeIf { it.isNotBlank() }
+                    ?: throw TranscriptionException.NoSpeechDetected(
+                        "empty_result",
+                        modelUsed = sttConfig.value.modelName,
+                    )
+            } finally {
+                try {
+                    SystemFileSystem.delete(path)
+                } catch (e: Exception) {
+                    logger.w(e) { "Failed to delete temp file $path" }
+                }
             }
         }
     }

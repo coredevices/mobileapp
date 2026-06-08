@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
@@ -129,40 +130,39 @@ class NotificationHandler(
             }
             return null
         }
-        val appEntry = notificationAppDao.getEntry(sbn.packageName)
-        // Don't do any further processing if we don't know the app
-        if (appEntry == null && !notificationConfig.value.allowUnknownAppNotifications) {
-            verboseLog {
-                "Ignoring unknown (maybe system) app notification from ${
-                    sbn.packageName.obfuscate(
-                        privateLogger
-                    )
-                }"
-            }
-            return null
-        }
-        if (appEntry != null) {
-            notificationAppDao.insertOrReplace(
-                appEntry.copy(
-                    lastNotified = timeProvider.now().asMillisecond()
-                )
+        val appEntry = notificationAppDao.getEntry(sbn.packageName) ?: run {
+            // Likely an app from another profile which we can now insert
+            val substituteName = sbn.notification.extras
+                ?.getString("android.substName")
+            val now = timeProvider.now().asMillisecond()
+            val newItem = NotificationAppItem(
+                packageName = sbn.packageName,
+                name = substituteName ?: sbn.packageName,
+                muteState = notificationConfig.value
+                    .defaultMuteStateForPackage(sbn.packageName, isSystemApp = false),
+                channelGroups = emptyList(),
+                stateUpdated = now,
+                lastNotified = now,
+                muteExpiration = null,
+                vibePatternName = null,
+                colorName = null,
+                iconCode = null,
+                allowDuplicates = NotificationProperties
+                    .lookup(sbn.packageName)?.allowDuplicates ?: false,
+                isSystemApp = false,
+                autoAdded = true,
             )
+            logger.d { "auto-adding unknown app ${sbn.packageName.obfuscate(privateLogger)}" }
+            notificationAppDao.insertOrReplace(newItem)
+            newItem
         }
-        val appEntryToUse = appEntry ?: NotificationAppItem(
-            packageName = sbn.packageName,
-            iconCode = null,
-            colorName = null,
-            name = sbn.packageName,
-            muteState = MuteState.Never,
-            allowDuplicates = false,
-            channelGroups = emptyList(),
-            lastNotified = timeProvider.now().asMillisecond(),
-            vibePatternName = null,
-            stateUpdated = timeProvider.now().asMillisecond(),
-            muteExpiration = null,
+        notificationAppDao.insertOrReplace(
+            appEntry.copy(
+                lastNotified = timeProvider.now().asMillisecond()
+            )
         )
-        val channel = appEntry?.getChannelFor(sbn)
-        val result = extractNotification(sbn, appEntryToUse, channel)
+        val channel = appEntry.getChannelFor(sbn)
+        val result = extractNotification(sbn, appEntry, channel)
         if (notificationConfig.value.dumpNotificationContent) {
             sbn.dump(result)
         }
@@ -178,13 +178,13 @@ class NotificationHandler(
         val appProperties = NotificationProperties.lookup(sbn.packageName)
         val decision = decideNotification(
             notification = notification,
-            appEntry = appEntryToUse,
+            appEntry = appEntry,
             channel = channel,
             appProperties = appProperties,
             inflightNotifications = inflightNotifications.values,
             notificationConfig = notificationConfig.value,
             isLocalOnly = sbn.notification.isLocalOnly(),
-            isRuleFiltered = { checkRuleFiltered(appEntryToUse, notification) },
+            isRuleFiltered = { checkRuleFiltered(appEntry, notification) },
             screenIsOnAndUnlocked = ::screenIsOnAndUnlocked,
         )
         val storeNotification = when {

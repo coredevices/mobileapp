@@ -36,6 +36,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.emailOrNull
+import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.DocumentSnapshot
@@ -92,6 +93,7 @@ class SettingsViewModel(
     private val itemRepository: coredevices.ring.database.room.repository.ItemRepository,
     private val listRepository: coredevices.ring.database.room.repository.ListRepository,
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val platform: coredevices.util.Platform,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -163,7 +165,10 @@ class SettingsViewModel(
 
     private suspend fun updateAvailableReminderProviders() {
         _availableReminderProviders.value = buildList {
-            add(ReminderProvider.Native)
+            add(ReminderProvider.BuiltIn)
+            if (platform.isIOS) {
+                add(ReminderProvider.IOSReminders)
+            }
             if (gTasksIntegration.isAuthorized()) {
                 add(ReminderProvider.GoogleTasks)
             }

@@ -36,6 +36,7 @@ val ItemMetadata.kind: String get() = when (this) {
     is ItemMetadata.ActionLog -> "action_log"
     is ItemMetadata.McpCall -> "mcp_call"
     ItemMetadata.Note -> "note"
+    ItemMetadata.Checklist -> "checklist"
 }
 
 val CachedItem.kind: String get() = metadata.kind
@@ -88,6 +89,7 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
             put("success", success)
         }
         ItemMetadata.Note -> JsonObject(emptyMap())
+        ItemMetadata.Checklist -> JsonObject(emptyMap())
     }
 }
 
@@ -136,6 +138,7 @@ fun metadataForKind(kind: String, existing: ItemMetadata? = null): ItemMetadata 
             sentAt = Clock.System.now(),
             status = ItemMetadata.Message.Status.Sent,
         )
+        "checklist" -> ItemMetadata.Checklist
         else -> ItemMetadata.Note
     }
 }

@@ -97,13 +97,19 @@ fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
         uuid = id,
         flags = entryPlatform.processInfoFlags.toUInt(),
         icon = entryPlatform.pbwIconResourceId.toUInt(),
-        appVersionMajor = appVersionMajor.toUByte(),
-        appVersionMinor = appVersionMinor.toUByte(),
-        sdkVersionMajor = sdkVersionMajor.toUByte(),
-        sdkVersionMinor = sdkVersionMinor.toUByte(),
+        // Wire protocol uses one byte per version component, so clamp any
+        // value > 255 instead of throwing — apps with three-digit version
+        // segments would otherwise abort BlobDB sync to the watch.
+        appVersionMajor = appVersionMajor.toVersionByte(),
+        appVersionMinor = appVersionMinor.toVersionByte(),
+        sdkVersionMajor = sdkVersionMajor.toVersionByte(),
+        sdkVersionMinor = sdkVersionMinor.toVersionByte(),
         appName = title
     )
 }
+
+private fun String.toVersionByte(): UByte =
+    toUIntOrNull()?.coerceAtMost(UByte.MAX_VALUE.toUInt())?.toUByte() ?: 0u
 
 data class LockerEntryAppstoreData(
     val hearts: Int,

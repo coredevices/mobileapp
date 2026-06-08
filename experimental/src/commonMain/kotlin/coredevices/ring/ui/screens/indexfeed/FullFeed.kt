@@ -7,9 +7,11 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import CoreNav
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,16 +57,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,7 +81,12 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.FullFeedViewModel
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.math.absoluteValue
+import kotlin.math.roundToInt
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -112,6 +126,7 @@ fun FullFeed(coreNav: CoreNav) {
         val statusBarPad = WindowInsets.statusBars.asPaddingValues()
         val listState = rememberLazyListState()
         val scope = rememberCoroutineScope()
+        val timestampRevealState = remember { RecordingTimestampRevealState() }
         var preSearchIndex by rememberSaveable { mutableIntStateOf(0) }
         var preSearchOffset by rememberSaveable { mutableIntStateOf(0) }
         Column(
@@ -194,9 +209,14 @@ fun FullFeed(coreNav: CoreNav) {
                             ImessageRecordingRow(
                                 recording = entry.recording,
                                 transcription = entry.transcription,
+                                retryEntry = entry.retryEntry,
                                 assistantReply = entry.assistantReply,
                                 chips = entry.chips,
+                                timestampRevealState = timestampRevealState,
                                 onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(entry.recording.id)) },
+                                onRetryRecording = { retryEntry ->
+                                    vm.retryRecording(entry.recording.id, retryEntry)
+                                },
                                 onOpenObject = { id -> coreNav.navigateTo(RingRoutes.ObjectDetails(id)) },
                             )
                         }
@@ -344,36 +364,27 @@ private fun DayDivider(label: String, sticky: Boolean = false) {
 private fun ImessageRecordingRow(
     recording: LocalRecording,
     transcription: String,
+    retryEntry: coredevices.indexai.data.entity.RecordingEntryEntity?,
     assistantReply: String?,
     chips: List<FullFeedViewModel.Chip>,
+    timestampRevealState: RecordingTimestampRevealState,
     onOpenRecording: () -> Unit,
+    onRetryRecording: (coredevices.indexai.data.entity.RecordingEntryEntity) -> Unit,
     onOpenObject: (String) -> Unit,
 ) {
     val colors = IndexTheme.colors
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
         // 1. User transcription bubble first — right-aligned, red, white text.
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp))
-                    .background(colors.primary)
-                    .clickable { onOpenRecording() }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    transcription.takeIf { it.isNotBlank() }
-                        ?: recording.assistantTitle?.takeIf { it.isNotBlank() }
-                        ?: "Index Recording",
-                    color = colors.onPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Normal,
-                    lineHeight = 20.sp,
-                    letterSpacing = (-0.1).sp,
-                    modifier = Modifier.fillMaxWidth(0.85f),
-                )
-            }
-        }
+        SwipeRevealRecordingBubble(
+            text = transcription.takeIf { it.isNotBlank() }
+                ?: recording.assistantTitle?.takeIf { it.isNotBlank() }
+                ?: "Index Recording",
+            timestamp = recording.localTimestamp,
+            revealState = timestampRevealState,
+            onOpenRecording = onOpenRecording,
+            onRetry = retryEntry?.let { entry -> { onRetryRecording(entry) } },
+        )
 
         // 2. Assistant action chips below the user bubble (matches prototype).
         if (chips.isNotEmpty()) {
@@ -427,6 +438,117 @@ private fun ImessageRecordingRow(
             }
         }
     }
+}
+
+private class RecordingTimestampRevealState {
+    var dragging by mutableStateOf(false)
+    var dragOffsetPx by mutableFloatStateOf(0f)
+    var settledOffsetPx by mutableFloatStateOf(0f)
+}
+
+@Composable
+private fun SwipeRevealRecordingBubble(
+    text: String,
+    timestamp: Instant,
+    revealState: RecordingTimestampRevealState,
+    onOpenRecording: () -> Unit,
+    onRetry: (() -> Unit)?,
+) {
+    val colors = IndexTheme.colors
+    val revealWidthPx = with(LocalDensity.current) { 82.dp.toPx() }
+    val animatedOffsetPx by animateFloatAsState(
+        targetValue = if (revealState.dragging) revealState.dragOffsetPx else revealState.settledOffsetPx,
+        label = "recording timestamp reveal",
+    )
+    val revealProgress = (animatedOffsetPx.absoluteValue / revealWidthPx).coerceIn(0f, 1f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(revealWidthPx) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        revealState.dragging = true
+                        revealState.dragOffsetPx = revealState.settledOffsetPx
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        revealState.dragOffsetPx =
+                            (revealState.dragOffsetPx + dragAmount).coerceIn(-revealWidthPx, 0f)
+                    },
+                    onDragEnd = {
+                        revealState.settledOffsetPx = if (revealState.dragOffsetPx.absoluteValue > revealWidthPx * 0.42f) {
+                            -revealWidthPx
+                        } else {
+                            0f
+                        }
+                        revealState.dragging = false
+                    },
+                    onDragCancel = {
+                        revealState.settledOffsetPx = 0f
+                        revealState.dragging = false
+                    },
+                )
+            },
+    ) {
+        Text(
+            formatBubbleTimestamp(timestamp),
+            color = colors.onSurfaceVariant,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 2.dp)
+                .alpha(revealProgress),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset { IntOffset(animatedOffsetPx.roundToInt(), 0) }
+                .clip(RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp))
+                .background(colors.primary)
+                .clickable { onOpenRecording() }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(0.85f),
+            ) {
+                if (onRetry != null) {
+                    IconButton(
+                        onClick = onRetry,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Retry transcription",
+                            tint = colors.onPrimary,
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(2.dp))
+                }
+                Text(
+                    text,
+                    color = colors.onPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Normal,
+                    lineHeight = 20.sp,
+                    letterSpacing = (-0.1).sp,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+private fun formatBubbleTimestamp(timestamp: Instant): String {
+    val local = timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
+    val hour12 = (local.hour % 12).let { if (it == 0) 12 else it }
+    val minute = local.minute.toString().padStart(2, '0')
+    val amPm = if (local.hour < 12) "AM" else "PM"
+    return "$hour12:$minute $amPm"
 }
 
 @Composable

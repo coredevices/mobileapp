@@ -649,6 +649,15 @@ fun WatchHomeScreen(
                     override fun goBackToPebble() {
                         coreNav.goBackToPebble()
                     }
+
+                    override fun replaceWith(route: CoreRoute) {
+                        if (isInnerScopedRoute(route)) {
+                            pebbleNavHostController.popBackStack()
+                            pebbleNavHostController.navigate(route)
+                        } else {
+                            coreNav.replaceWith(route)
+                        }
+                    }
                 }
             }
             val navBarNav = remember(pebbleNavHostController, scopedCoreNav) {

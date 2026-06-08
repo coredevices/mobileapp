@@ -12,6 +12,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.ByteArrayContent
@@ -97,8 +98,16 @@ class Memfault(
             }
 
             HttpStatusCode.NoContent -> {
-                logger.i("No new firmware available")
-                FirmwareUpdateCheckResult.FoundNoUpdate
+                // Memfault returns 204 for both "no update available" and "device exceeded
+                // 100 calls/day to /latest". Without disambiguation, a rate-limited 204 is
+                // cached as FoundNoUpdate and locks the user out of OTA.
+                if (response.isRateLimited()) {
+                    logger.w { "Memfault rate-limited at /releases/latest" }
+                    FirmwareUpdateCheckResult.UpdateCheckFailed("Error checking for updates")
+                } else {
+                    logger.i("No new firmware available")
+                    FirmwareUpdateCheckResult.FoundNoUpdate
+                }
             }
 
             else -> {
@@ -175,6 +184,14 @@ class Memfault(
             "v$version"
         }
     }
+
+    /**
+     * Memfault signals rate-limiting via `Memfault-Reason: rate-limited`
+     * (confirmed by Memfault support). We need this to disambiguate a
+     * "no new firmware" 204 from a "you've burned your daily quota" 204.
+     */
+    private fun HttpResponse.isRateLimited(): Boolean =
+        headers["Memfault-Reason"]?.equals("rate-limited", ignoreCase = true) == true
 
     companion object {
         private fun WatchInfo.partialMacAddress(): String = btAddress

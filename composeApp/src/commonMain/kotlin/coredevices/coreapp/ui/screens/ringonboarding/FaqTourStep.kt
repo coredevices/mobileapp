@@ -2,12 +2,14 @@ package coredevices.coreapp.ui.screens.ringonboarding
 
 import CoreNav
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,19 +40,27 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coreapp.composeapp.generated.resources.Res
+import coreapp.composeapp.generated.resources.index01_mic
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.imageResource
 
 private data class FaqEntry(
     val id: String,
     val icon: ImageVector,
     val question: String,
     val answer: AnnotatedString,
+    val image: DrawableResource? = null,
 )
 
 private val FaqEntries: List<FaqEntry> = listOf(
@@ -69,7 +79,9 @@ private val FaqEntries: List<FaqEntry> = listOf(
         "Can I wear it in the shower?",
         ann(
             "We don't recommend it. Index 01 is splash resistant but not waterproof " +
-                    "especially in hot or soapy water."
+                    "especially in hot or soapy water.\n\n" +
+                    "Water or soap may block the microphone hole, which reduces the " +
+                    "volume of recordings."
         ),
     ),
     FaqEntry(
@@ -88,6 +100,16 @@ private val FaqEntries: List<FaqEntry> = listOf(
                     "you need to remember! Double-click-and-hold to ask quick questions and get " +
                     "the answer in a notification."
         ),
+    ),
+    FaqEntry(
+        "mic", Icons.Default.Mic,
+        "Where's the microphone?",
+        ann(
+            "Look for the small hole, that's the mic.\n\n" +
+                    "Hold it within 5-10 cm of your mouth when recording, and wear the ring " +
+                    "so your finger doesn't cover the hole."
+        ),
+        image = Res.drawable.index01_mic,
     ),
     FaqEntry(
         "how", Icons.Default.Mic,
@@ -228,19 +250,54 @@ private fun FaqTourPage(entry: FaqEntry, coreNav: CoreNav) {
     ) {
         // More breathing room between the top bar and the hero icon, per design.
         Spacer(Modifier.height(48.dp))
-        Box(
-            modifier = Modifier
-                .size(132.dp)
-                .clip(RoundedCornerShape(36.dp))
-                .background(LocalPalette.current.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = entry.icon,
-                contentDescription = null,
-                modifier = Modifier.size(60.dp),
-                tint = LocalPalette.current.primary,
-            )
+        val palette = LocalPalette.current
+        if (entry.image != null) {
+            // Pages with a labeled photo (e.g. mic location) get a larger square
+            // tile. PNG has a white background, so we fill the pink container
+            // first and draw the image with BlendMode.Multiply.
+            val bitmap = imageResource(entry.image)
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .clip(RoundedCornerShape(36.dp))
+                    .aspectRatio(1f),
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(color = palette.primaryContainer)
+                    val srcW = bitmap.width.toFloat()
+                    val srcH = bitmap.height.toFloat()
+                    val maxW = size.width * 0.92f
+                    val maxH = size.height * 0.92f
+                    val scale = minOf(maxW / srcW, maxH / srcH)
+                    val drawW = srcW * scale
+                    val drawH = srcH * scale
+                    val offX = ((size.width - drawW) / 2f).toInt()
+                    val offY = ((size.height - drawH) / 2f).toInt()
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(bitmap.width, bitmap.height),
+                        dstOffset = IntOffset(offX, offY),
+                        dstSize = IntSize(drawW.toInt(), drawH.toInt()),
+                        blendMode = BlendMode.Multiply,
+                    )
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(132.dp)
+                    .clip(RoundedCornerShape(36.dp))
+                    .background(palette.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = entry.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(60.dp),
+                    tint = palette.primary,
+                )
+            }
         }
         Spacer(Modifier.height(40.dp))
         Text(

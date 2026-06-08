@@ -60,6 +60,15 @@ data class NotificationAppItem(
     val iconCode: String?,
     @ColumnInfo(defaultValue = "0")
     val allowDuplicates: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val isSystemApp: Boolean = false,
+    /**
+     * Set true for rows inserted by NotificationHandler in response to a notification from a
+     * package not visible to PackageManager (typically a cross-profile or secondary-user app).
+     * Used by the sync deletion sweep to avoid clobbering these rows on the next OS sync.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val autoAdded: Boolean = false,
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()
@@ -236,6 +245,8 @@ fun DbWrite.asNotificationAppItem(): NotificationAppItem? {
             colorName = null,
             iconCode = null,
             allowDuplicates = false,
+            isSystemApp = false,
+            autoAdded = false,
         )
     } catch (e: CancellationException) {
         throw e

@@ -4,6 +4,7 @@ package coredevices.ring.service.indexfeed
 
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
+import coredevices.mcp.data.SemanticResult
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
@@ -20,6 +21,33 @@ class ItemFactory {
         "_" +
         ((1..1_000_000).random().toString(36))
 
+    /**
+     * Maps a tool's [SemanticResult] to the feed item it should produce, stamped with the
+     * originating [toolCallId]. Returns null for results that do not create an item.
+     */
+    fun createFromSemanticResult(
+        result: SemanticResult,
+        sourceRecordingId: String,
+        createdAt: Instant,
+        toolCallId: String?,
+    ): ItemDocument? = when (result) {
+        is SemanticResult.TaskCreation ->
+            reminderItem(sourceRecordingId, createdAt, result.title, result.deadline, toolCallId)
+        is SemanticResult.ListItemCreation ->
+            noteItem(sourceRecordingId, createdAt, result.content, result.listUsed, toolCallId, result.resolvedListId)
+        is SemanticResult.AlarmCreation ->
+            alarmItem(sourceRecordingId, createdAt, result.fireTime, toolCallId)
+        is SemanticResult.TimerCreation ->
+            timerItem(sourceRecordingId, createdAt, result.fireTime, result.requestedDuration, toolCallId)
+        is SemanticResult.MessageSent ->
+            messageItem(sourceRecordingId, createdAt, result.recipientName, result.text, result.contactId, ItemMetadata.Message.Status.Sent, toolCallId)
+        is SemanticResult.ActionLogged ->
+            actionLogItem(sourceRecordingId, createdAt, result.title, result.toolName, result.success, toolCallId, result.body)
+        is SemanticResult.SupportingData,
+        SemanticResult.GenericSuccess,
+        is SemanticResult.GenericFailure -> null
+    }
+
     // --- Per-call item factories used by tool implementations ---
 
     fun reminderItem(
@@ -27,13 +55,14 @@ class ItemFactory {
         createdAt: Instant,
         title: String,
         dueAt: Instant?,
+        toolCallId: String?
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
         dueAt = dueAt,
         parents = listOf(LIST_TODOS_ID),
         recordingId = sourceRecordingId,
-        toolCallId = null,
+        toolCallId = toolCallId,
         metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push"),
     )
 
@@ -51,13 +80,14 @@ class ItemFactory {
         createdAt: Instant,
         title: String,
         listHint: String?,
+        toolCallId: String?,
         resolvedListId: String? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
         parents = listOf(resolvedListId ?: pickNoteList(listHint)),
         recordingId = sourceRecordingId,
-        toolCallId = null,
+        toolCallId = toolCallId,
         metadata = ItemMetadata.Note,
     )
 
@@ -65,7 +95,8 @@ class ItemFactory {
         sourceRecordingId: String,
         createdAt: Instant,
         fireTime: LocalTime,
-        repeatDays: Set<Int> = emptySet()
+        toolCallId: String?,
+        repeatDays: Set<Int> = emptySet(),
     ): ItemDocument {
         val timeStr = fireTime.toString().substringBefore('.').take(5)
         return createItem(
@@ -73,7 +104,7 @@ class ItemFactory {
             title = "Alarm · $timeStr",
             parents = listOf(LIST_TODOS_ID),
             recordingId = sourceRecordingId,
-            toolCallId = null,
+            toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(
                 fireKind = ItemMetadata.Scheduled.FireKind.Alarm,
                 fireTime = fireTime,
@@ -88,6 +119,7 @@ class ItemFactory {
         createdAt: Instant,
         dueAt: Instant?,
         duration: Duration?,
+        toolCallId: String?,
     ): ItemDocument {
         val durationPretty = duration?.toString()
         val title = "Timer" + (durationPretty?.let { " · $it" } ?: "")
@@ -97,7 +129,7 @@ class ItemFactory {
             dueAt = dueAt,
             parents = listOf(LIST_TODOS_ID),
             recordingId = sourceRecordingId,
-            toolCallId = null,
+            toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(
                 fireKind = ItemMetadata.Scheduled.FireKind.Timer,
                 duration = duration?.inWholeMilliseconds,
@@ -112,6 +144,7 @@ class ItemFactory {
         text: String,
         contactId: String,
         status: ItemMetadata.Message.Status,
+        toolCallId: String?,
         errorMessage: String? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
@@ -119,7 +152,7 @@ class ItemFactory {
         body = text,
         parents = emptyList(),
         recordingId = sourceRecordingId,
-        toolCallId = null,
+        toolCallId = toolCallId,
         metadata = ItemMetadata.Message(
             integration = "beeper",
             contact = contactId,
@@ -137,6 +170,7 @@ class ItemFactory {
         title: String,
         toolName: String,
         success: Boolean,
+        toolCallId: String?,
         body: String = "",
     ): ItemDocument = createItem(
         createdAt = createdAt,
@@ -144,7 +178,7 @@ class ItemFactory {
         body = body,
         parents = emptyList(),
         recordingId = sourceRecordingId,
-        toolCallId = null,
+        toolCallId = toolCallId,
         metadata = ItemMetadata.ActionLog(toolName = toolName, success = success),
     )
 
@@ -153,13 +187,14 @@ class ItemFactory {
         createdAt: Instant,
         question: String,
         answer: String,
+        toolCallId: String?,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = question.trim().replace(Regex("""\s+"""), " "),
         body = answer,
         parents = listOf(LIST_NOTES_SELF_ID),
         recordingId = sourceRecordingId,
-        toolCallId = null,
+        toolCallId = toolCallId,
         metadata = ItemMetadata.Answer(question = question.trim()),
     )
 

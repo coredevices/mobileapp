@@ -29,6 +29,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -154,7 +155,7 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                 newServer.startSuspend()
                 logger.w { "Dev connection server exited unexpectedly, restarting on port $PORT" }
             } catch (e: CancellationException) {
-                newServer.stopSuspend()
+                withContext(NonCancellable) { newServer.stopSuspend() }
                 throw e
             } catch (e: Exception) {
                 logger.e(e) { "Dev connection server crashed, restarting on port $PORT" }

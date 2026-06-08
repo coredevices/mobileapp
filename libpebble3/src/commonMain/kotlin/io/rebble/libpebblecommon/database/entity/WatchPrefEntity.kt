@@ -248,7 +248,11 @@ enum class QuicklaunchWatchPref(
     ;
 
     override val type = WatchPrefType.TypeQuickLaunch
-    override fun decodeValue(value: String): QuickLaunchSetting = QuickLaunchSetting.fromJson(value)
+    override fun decodeValue(value: String): QuickLaunchSetting = try {
+        QuickLaunchSetting.fromJson(value)
+    } catch (e: Exception) {
+        defaultValue
+    }
     override fun encodeValue(value: QuickLaunchSetting): String = value.toJson()
 }
 
@@ -461,8 +465,10 @@ enum class EnumWatchPref(
     ;
 
     override val type = WatchPrefType.TypeUInt8
-    override fun decodeValue(value: String): WatchPrefEnum =
-        options.firstOrNull { it.code == value.toUByte() } ?: defaultValue
+    override fun decodeValue(value: String): WatchPrefEnum {
+        val code = value.toUByteOrNull() ?: return defaultValue
+        return options.firstOrNull { it.code == code } ?: defaultValue
+    }
 
     override fun encodeValue(value: WatchPrefEnum): String = value.code.toString()
 }
@@ -530,7 +536,7 @@ enum class NumberWatchPref(
     ),
     ;
 
-    override fun decodeValue(value: String): Long = value.toLong()
+    override fun decodeValue(value: String): Long = value.toLongOrNull() ?: defaultValue
     override fun encodeValue(value: Long): String = value.toString()
 }
 

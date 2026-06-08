@@ -14,6 +14,7 @@ import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.libindex.device.IndexDeviceManager
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
@@ -38,9 +39,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -218,11 +222,24 @@ class RingSync(
             satelliteManager.lastRing.onEach {
                 _lastRing.value = it
             }.launchIn(this)
-            prefs.ringPaired.collectLatest { paired ->
-                if (paired != null) {
+            // Run the satellite scan/sync loop when a ring is paired, or when an unpaired
+            // ring is discovered in failsafe mode so it can be recovered via the scan.
+            combine(prefs.ringPaired, deviceManager.rings) { paired, rings ->
+                val isPaired = paired != null
+                val isFailsafe = rings.any { it is DiscoveredIndexDevice && it.isFailsafe }
+                isPaired to isFailsafe
+            }.distinctUntilChanged().map { (isPaired, isFailsafe) ->
+                if (isPaired) {
+                    logger.d { "Ring is paired, enabling sync job" }
+                } else if (isFailsafe) {
+                    logger.d { "Failsafe ring discovered, enabling sync job to allow recovery" }
+                }
+                isPaired || isFailsafe
+            }.collectLatest { syncEnabled ->
+                if (syncEnabled) {
                     var lastIdx: Int = -1
                     var transferRange: IntRange? = null
-                    logger.d { "Paired is true, starting scan/sync job" }
+                    logger.d { "Ring paired or failsafe ring discovered, starting scan/sync job" }
                     while (isActive) {
                         try {
                             logger.d { "Waiting for Bluetooth to become available..." }
@@ -718,7 +735,7 @@ class RingSync(
                         }
                     }
                 } else {
-                    logger.d { "Paired is false" }
+                    logger.d { "No paired or failsafe ring, sync loop disabled" }
                 }
             }
         }

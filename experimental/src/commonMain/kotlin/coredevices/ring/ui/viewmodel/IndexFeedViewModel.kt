@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.fields
@@ -17,6 +19,8 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_N
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_TODOS
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.serialization.json.Json
@@ -28,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
@@ -45,6 +50,7 @@ class IndexFeedViewModel(
     private val itemRepo: ItemRepository,
     listRepo: ListRepository,
     private val recordingQueue: RecordingProcessingQueue,
+    private val ringTransferDao: RingTransferDao,
 ) : ViewModel() {
 
     /** What the user typed into the search bar. Empty = not searching. */
@@ -103,6 +109,34 @@ class IndexFeedViewModel(
         val msg = text.trim().ifBlank { return }
         viewModelScope.launch {
             recordingQueue.queueTextProcessing(msg)
+        }
+    }
+
+    /** Re-enqueue a recording whose transcription failed. Mirrors
+     *  [FullFeedViewModel.retryRecording] / RecordingDetailsViewModel — a
+     *  ring transfer retries from the original audio, otherwise we retry the
+     *  locally-stored file. */
+    fun retryRecording(recordingId: Long, entry: RecordingEntryEntity) {
+        viewModelScope.launch {
+            val transfer = withContext(Dispatchers.IO) {
+                ringTransferDao.getByRecordingId(recordingId).firstOrNull()
+            }
+            if (transfer != null) {
+                recordingQueue.retryRecording(
+                    transferId = transfer.id,
+                    buttonSequence = null,
+                    recordingId = recordingId,
+                    recordingEntryId = entry.id,
+                )
+            } else {
+                val fileId = entry.fileName ?: return@launch
+                recordingQueue.retryLocalRecording(
+                    fileId = fileId,
+                    buttonSequence = null,
+                    recordingId = recordingId,
+                    recordingEntryId = entry.id,
+                )
+            }
         }
     }
 
@@ -186,6 +220,10 @@ class IndexFeedViewModel(
              *  "Alarm · 09:00", or "No action taken" when nothing was made. */
             val primaryChip: String,
             val orphan: Boolean,
+            /** Latest entry when its transcription failed and can be retried.
+             *  Non-null → the peek card shows "Transcription error" + a retry
+             *  button instead of the primary action chip. */
+            val retryEntry: RecordingEntryEntity? = null,
         )
 
         companion object {
@@ -226,8 +264,8 @@ class IndexFeedViewModel(
             val itemsByRecording = items
                 .filter { !it.deleted }
                 .groupBy { it.sourceRecordingId.orEmpty() }
-            val transcriptionByRec = entries
-                .groupBy { it.recordingId }
+            val entriesByRec = entries.groupBy { it.recordingId }
+            val transcriptionByRec = entriesByRec
                 .mapValues { (_, es) -> es.firstOrNull()?.transcription.orEmpty() }
             val recordingsView = (if (isSearching) {
                 recordings.filter { match(it.assistantTitle) || match(transcriptionByRec[it.id]) }
@@ -238,11 +276,20 @@ class IndexFeedViewModel(
                     val recItems = itemsByRecording[rec.firestoreId.orEmpty()].orEmpty() +
                         itemsByRecording["local:${rec.id}"].orEmpty()
                     val primary = recItems.firstOrNull()
+                    // Latest entry decides the error state — a recording can
+                    // accrue retries, so only the most recent attempt's status
+                    // is meaningful. Matches FullFeedViewModel.
+                    val latestEntry = entriesByRec[rec.id].orEmpty()
+                        .sortedWith(compareBy<RecordingEntryEntity> { it.timestamp }.thenBy { it.id })
+                        .lastOrNull()
+                    val retryEntry = latestEntry
+                        ?.takeIf { it.status == RecordingEntryStatus.transcription_error }
                     UiState.RecordingPeek(
                         recording = rec,
                         transcription = transcriptionByRec[rec.id].orEmpty(),
                         primaryChip = primary?.let { chipLabel(it, lists) } ?: "No action taken",
                         orphan = primary == null,
+                        retryEntry = retryEntry,
                     )
                 }
 
@@ -288,7 +335,13 @@ class IndexFeedViewModel(
             val itemsByList = items
                 .asSequence()
                 .filter { !it.deleted }
-                .filter { it.kind == "note" }
+                // Notes lists hold both `note` and `checklist` items —
+                // a checklist is just a note with a tickable checkbox,
+                // and the user can convert between the two via the
+                // type dropdown on the item-detail edit hero. Keeping
+                // `note` only here used to silently hide an item from
+                // its parent list the moment it was converted.
+                .filter { it.kind == "note" || it.kind == "checklist" }
                 .sortedByDescending { it.createdAt.toEpochMilliseconds() }
                 .toList()
                 .groupBy { it.parentListIds().firstOrNull() ?: LIST_NOTES_SELF_ID }

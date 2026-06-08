@@ -142,6 +142,7 @@ internal fun DetailTopBar(
     right: @Composable () -> Unit,
     titleSlot: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
+    onBack: () -> Unit = coreNav::goBack,
 ) {
     val colors = IndexTheme.colors
     Row(
@@ -152,7 +153,7 @@ internal fun DetailTopBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = coreNav::goBack) {
+        IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = colors.onSurface)
         }
         Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {

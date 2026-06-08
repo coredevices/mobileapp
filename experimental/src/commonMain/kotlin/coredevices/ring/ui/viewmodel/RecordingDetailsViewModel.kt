@@ -23,6 +23,7 @@ import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -122,7 +123,7 @@ class RecordingDetailsViewModel(
         }.launchIn(viewModelScope)
 
         // Load audio duration once we know the file id. Reading the audio
-        // header is cheap; we just need samples / sampleRate.
+        // header is cheap; we just need samples / (sampleRate * 2).
         recordingRepo.getRecordingEntriesFlow(recordingId).onEach { entries ->
             if (durationSeconds.value != null) return@onEach
             val fileName = entries.firstOrNull()?.fileName ?: return@onEach
@@ -135,7 +136,7 @@ class RecordingDetailsViewModel(
                         ?: return@withContext
                     src.close() // we just needed the header info, no need to keep the stream open
                     val rate = info.cachedMetadata.sampleRate.toFloat()
-                    if (rate > 0f) durationSeconds.value = info.size.toFloat() / rate
+                    if (rate > 0f) durationSeconds.value = info.size.toFloat() / (rate * Short.SIZE_BYTES)
                 }
             } catch (e: Throwable) {
                 logger.w(e) { "duration load failed for $fileName" }
@@ -163,8 +164,10 @@ class RecordingDetailsViewModel(
                 // home feed doesn't show orphaned chips.
                 val recId = firestoreId?.takeIf { it.isNotBlank() } ?: "local:$recordingId"
                 val linked = itemRepo.getByRecording(recId)
-                linked.forEach { itemRepo.softDelete(it.firestoreId) }
-                recordingRepo.deleteRecording(recordingId)
+                withContext(NonCancellable) {
+                    linked.forEach { itemRepo.softDelete(it.firestoreId) }
+                    recordingRepo.deleteRecording(recordingId)
+                }
                 snackbarHostState.showSnackbar(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
                 )

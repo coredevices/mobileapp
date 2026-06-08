@@ -100,6 +100,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             override fun goBackToPebble() {
                 navController.popBackStack(PebbleRoutes.WatchHomeRoute, inclusive = false)
             }
+
+            override fun replaceWith(route: CoreRoute) {
+                navController.popBackStack()
+                navController.navigate(route)
+            }
         }
     }
     val experimentalDevices: ExperimentalDevices = koinInject()

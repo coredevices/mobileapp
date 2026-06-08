@@ -29,4 +29,22 @@ interface TimelinePinRealDao : TimelinePinDao {
         markAllForDeletion(itemIds)
         reminderDao.markForDeletionByParentIds(itemIds)
     }
+
+    /**
+     * Mark every pin whose parent app is in [parentIds] (plus their reminders)
+     * for deletion. Call this when apps are removed from the locker so their
+     * pending pins don't stay on the watch as ghost notifications.
+     */
+    @Transaction
+    suspend fun markAllForDeletionByParentIdsWithReminders(
+        parentIds: List<Uuid>,
+        reminderDao: TimelineReminderRealDao,
+    ) {
+        if (parentIds.isEmpty()) return
+        val pinIds = parentIds.flatMap { parentId ->
+            getPinsForWatchapp(parentId).map { it.itemId }
+        }
+        if (pinIds.isEmpty()) return
+        markAllForDeletionWithReminders(pinIds, reminderDao)
+    }
 }
