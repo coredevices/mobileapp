@@ -175,7 +175,9 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         evaluateInternalScript("XMLHTTPRequest")
         evaluateInternalScript("JSTimeout")
-        evaluateInternalScript("WebSocket")
+        runBlocking(threadContext) {
+            jsContext?.evalCatching(WEB_SOCKET_SHIM)
+        }
     }
 
     private fun setupNavigator() {

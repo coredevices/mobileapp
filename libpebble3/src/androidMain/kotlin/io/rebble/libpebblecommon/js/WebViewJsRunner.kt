@@ -72,7 +72,10 @@ class WebViewJsRunner(
 
     private var webView: WebView? = null
     private var restoreCompleted: Boolean = false
-    private val initializedLock = Object()
+    private val initializedLock = Any()
+    private val webSocketManager = WebViewWebSocketManager(scope) {
+        webView?.evaluateJavascript(it, null)
+    }
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
@@ -88,7 +91,8 @@ class WebViewJsRunner(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
             Pair("_localStorage", localStorageInterface),
-            Pair("_PebbleGeo", geolocationInterface)
+            Pair("_PebbleGeo", geolocationInterface),
+            Pair("_WebSocketManager", webSocketManager)
     )
 
     private val webViewClient = object : WebViewClient() {
@@ -317,6 +321,7 @@ class WebViewJsRunner(
             } else {
                 logger.d { "Skipping persistLocalStorage: restore did not complete" }
             }
+            webSocketManager.shutdown()
             interfaces.forEach { (namespace, _) ->
                 webView?.removeJavascriptInterface(namespace)
             }
@@ -358,6 +363,7 @@ class WebViewJsRunner(
             withContext(Dispatchers.Main) {
                 webView.evaluateJavascript(
                         """
+                            $WEB_SOCKET_SHIM
                             (() => {
                                 const signalLoaded = () => {
                                     _Pebble.signalAppScriptLoadedByBootstrap();
