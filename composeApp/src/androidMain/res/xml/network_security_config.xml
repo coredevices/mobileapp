@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allow user-installed CA certificates to be trusted in addition to the system
+  CA store. Since Android 7.0 (API 24), apps only trust the system store by
+  default, so PKJS apps connecting to self-hosted servers with a self-signed or
+  private-CA cert (e.g. Home Assistant over wss://) fail to connect even after
+  the user installs and trusts the cert on their device.
+-->
+<network-security-config>
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
