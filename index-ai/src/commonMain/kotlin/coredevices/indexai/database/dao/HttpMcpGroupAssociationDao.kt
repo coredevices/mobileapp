@@ -16,4 +16,6 @@ interface HttpMcpGroupAssociationDao {
     suspend fun deleteAssociation(association: HttpMcpGroupAssociation)
     @Query("SELECT * FROM HttpMcpGroupAssociation WHERE groupId = :groupId")
     fun getAssociationsForGroupFlow(groupId: Long): Flow<List<HttpMcpGroupAssociation>>
+    @Query("SELECT groupId FROM HttpMcpGroupAssociation WHERE httpMcpId = :serverId")
+    suspend fun getGroupIdsForServer(serverId: Long): List<Long>
 }

@@ -1,8 +1,5 @@
-package coredevices.ring.ui.screens.settings
+package coredevices.ring.ui.screens.settings.mcp
 
-import BugReportButton
-import CoreNav
-import NoOpCoreNav
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -14,23 +11,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,159 +38,162 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
-import coreapp.util.generated.resources.back
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
+import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
 import coredevices.mcp.data.McpPrompt
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.McpServerEntry
-import io.modelcontextprotocol.kotlin.sdk.types.Implementation
-import kotlinx.coroutines.delay
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ui.M3Dialog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
+import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 
-class McpSandboxSettingsViewModel(
-    val sandboxGroupId: Long,
-    val mcpSandboxRepository: McpSandboxRepository
-): ViewModel() {
-    val serverEntries = mcpSandboxRepository.getMcpServerEntriesForGroup(sandboxGroupId)
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    fun removeEntry(entry: McpServerEntry) {
-        viewModelScope.launch(Dispatchers.IO) {
-            mcpSandboxRepository.removeEntry(entry, sandboxGroupId)
-        }
-    }
-
-    fun addUpdateEntry(entry: McpServerEntry) {
-        viewModelScope.launch(Dispatchers.IO) {
-            when (entry) {
-                is McpServerEntry.BuiltinMcpEntry -> {
-                    error("Adding/updating built-in MCP entries is not supported")
-                }
-                is McpServerEntry.HttpServerEntry -> {
-                    mcpSandboxRepository.addOrUpdateHttpServer(
-                        sandboxGroupId,
-                        entry.server
-                    )
-                }
-            }
-        }
-    }
-}
-
+/** "MCP Servers" tab: every known server (builtin and HTTP), each editable
+ *  to choose which sandbox groups it belongs to. */
 @Composable
-fun McpSandboxSettings(coreNav: CoreNav, sandboxGroupId: Long) {
-    val viewModel = koinViewModel<McpSandboxSettingsViewModel>(key = sandboxGroupId.toString()) {
-        parametersOf(sandboxGroupId)
-    }
-    McpSandboxSettings(
-        coreNav = coreNav,
-        serverEntries = viewModel.serverEntries,
-        onRemoveEntry = viewModel::removeEntry,
-        onAddUpdateEntry = viewModel::addUpdateEntry
-    )
-}
-
-@Composable
-private fun McpSandboxSettings(
-    coreNav: CoreNav,
+fun McpServersTab(
     serverEntries: StateFlow<List<McpServerEntry>>,
-    onRemoveEntry: (McpServerEntry) -> Unit,
-    onAddUpdateEntry: (McpServerEntry) -> Unit
+    allGroups: StateFlow<List<McpSandboxGroupEntity>>,
+    defaultGroupId: Long,
+    showAddServerDialog: Boolean,
+    onDismissAddServerDialog: () -> Unit,
+    loadGroupIds: suspend (McpServerEntry) -> Set<Long>,
+    onSaveHttpServer: (HttpMcpServerEntity, Set<Long>) -> Unit,
+    onSetBuiltinGroups: (String, Set<Long>) -> Unit,
+    onDeleteHttpServer: (HttpMcpServerEntity) -> Unit,
 ) {
     val entries by serverEntries.collectAsState()
+    val groups by allGroups.collectAsState()
     var editingEntry by remember { mutableStateOf<McpServerEntry?>(null) }
-    var showAddDialog by remember { mutableStateOf(false) }
+    var editingGroupIds by remember { mutableStateOf<Set<Long>?>(null) }
 
-    if (showAddDialog) {
-        EntryEditDialog(
-            initialEntry = null,
-            onDismiss = { showAddDialog = false },
-            onConfirm = { entry ->
-                onAddUpdateEntry(entry)
-                showAddDialog = false
+    LaunchedEffect(editingEntry) {
+        editingGroupIds = null
+        editingGroupIds = editingEntry?.let { loadGroupIds(it) }
+    }
+
+    if (showAddServerDialog) {
+        HttpServerEditDialog(
+            initialServer = null,
+            allGroups = groups,
+            initialGroupIds = emptySet(),
+            onDismiss = onDismissAddServerDialog,
+            onConfirm = { server, groupIds ->
+                onSaveHttpServer(server, groupIds)
+                onDismissAddServerDialog()
             },
-            onDelete = { }
+            onDelete = null
         )
     }
 
-    if (editingEntry != null) {
-        EntryEditDialog(
-            initialEntry = editingEntry,
-            onDismiss = { editingEntry = null },
-            onConfirm = { entry ->
-                onAddUpdateEntry(entry)
-                editingEntry = null
-            },
-            onDelete = { entry ->
-                onRemoveEntry(entry)
-                editingEntry = null
-            }
-        )
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(
-                        onClick = coreNav::goBack
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(coreapp.util.generated.resources.Res.string.back)
-                        )
+    val editing = editingEntry
+    val editingGroups = editingGroupIds
+    if (editing != null && editingGroups != null) {
+        when (editing) {
+            is McpServerEntry.BuiltinMcpEntry -> {
+                BuiltinGroupsDialog(
+                    entry = editing,
+                    allGroups = groups,
+                    defaultGroupId = defaultGroupId,
+                    initialGroupIds = editingGroups,
+                    onDismiss = { editingEntry = null },
+                    onConfirm = { groupIds ->
+                        onSetBuiltinGroups(editing.builtinMcpName, groupIds)
+                        editingEntry = null
                     }
-                },
-                title = {
-                    Text("MCP Sandbox Settings")
-                },
-                actions = {
-                    BugReportButton(
-                        coreNav,
-                        pebble = false,
-                        screenContext = mapOf(
-                            "screen" to "McpSandboxSettings",
-                        )
-                    )
-                }
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAddDialog = true },
-                modifier = Modifier.padding(16.dp),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add MCP Server")
+                )
+            }
+            is McpServerEntry.HttpServerEntry -> {
+                HttpServerEditDialog(
+                    initialServer = editing.server,
+                    allGroups = groups,
+                    initialGroupIds = editingGroups,
+                    onDismiss = { editingEntry = null },
+                    onConfirm = { server, groupIds ->
+                        onSaveHttpServer(server, groupIds)
+                        editingEntry = null
+                    },
+                    onDelete = {
+                        onDeleteHttpServer(editing.server)
+                        editingEntry = null
+                    }
+                )
             }
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding)
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(entries.size) { index ->
+            val entry = entries[index]
+            McpServerEntryItem(
+                entry = entry,
+                onClick = { editingEntry = entry }
+            )
+        }
+    }
+}
+
+/** Multi-select dropdown of sandbox groups. [optionEnabled] decides per group
+ *  whether its checkbox can be toggled, given its current selection state. */
+@Composable
+private fun GroupSelectionDropdown(
+    allGroups: List<McpSandboxGroupEntity>,
+    selectedGroupIds: Set<Long>,
+    onSelectionChange: (Set<Long>) -> Unit,
+    optionEnabled: (McpSandboxGroupEntity, Boolean) -> Boolean,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val summary = allGroups
+        .filter { it.id in selectedGroupIds }
+        .joinToString { it.title }
+        .ifEmpty { "None" }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        TextField(
+            value = summary,
+            onValueChange = { },
+            readOnly = true,
+            label = { Text("Groups") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(
+                ExposedDropdownMenuAnchorType.PrimaryNotEditable
+            ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
         ) {
-            items(entries.size) { index ->
-                val entry = entries[index]
-                McpServerEntryItem(
-                    entry = entry,
-                    onClick = { editingEntry = entry }
+            allGroups.forEach { group ->
+                val isSelected = group.id in selectedGroupIds
+                val enabled = optionEnabled(group, isSelected)
+                DropdownMenuItem(
+                    enabled = enabled,
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = null,
+                                enabled = enabled
+                            )
+                            Text(group.title)
+                        }
+                    },
+                    onClick = {
+                        onSelectionChange(
+                            if (isSelected) selectedGroupIds - group.id
+                            else selectedGroupIds + group.id
+                        )
+                    }
                 )
             }
         }
@@ -201,73 +201,53 @@ private fun McpSandboxSettings(
 }
 
 @Composable
-private fun EntryEditDialog(
-    initialEntry: McpServerEntry?,
-    onDismiss: () -> Unit,
-    onConfirm: (McpServerEntry) -> Unit,
-    onDelete: (McpServerEntry) -> Unit
-) {
-    when (initialEntry) {
-        is McpServerEntry.BuiltinMcpEntry -> {
-            BuiltinEntryDeleteDialog(
-                entry = initialEntry,
-                onDismiss = onDismiss,
-                onDelete = { onDelete(initialEntry) }
-            )
-        }
-        is McpServerEntry.HttpServerEntry -> {
-            HttpServerEditDialog(
-                initialServer = initialEntry.server,
-                onDismiss = onDismiss,
-                onConfirm = { server ->
-                    onConfirm(McpServerEntry.HttpServerEntry(server))
-                },
-                onDelete = { onDelete(initialEntry) }
-            )
-        }
-        null -> {
-            HttpServerEditDialog(
-                initialServer = null,
-                onDismiss = onDismiss,
-                onConfirm = { server ->
-                    onConfirm(McpServerEntry.HttpServerEntry(server))
-                },
-                onDelete = null
-            )
-        }
-    }
-}
-
-@Composable
-private fun BuiltinEntryDeleteDialog(
+private fun BuiltinGroupsDialog(
     entry: McpServerEntry.BuiltinMcpEntry,
+    allGroups: List<McpSandboxGroupEntity>,
+    defaultGroupId: Long,
+    initialGroupIds: Set<Long>,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit
+    onConfirm: (Set<Long>) -> Unit
 ) {
+    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
     M3Dialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Remove Built-in MCP")
+            Text(entry.builtinMcpName)
         },
         buttons = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
             Spacer(Modifier.width(8.dp))
-            TextButton(onClick = {}, enabled = false) {
-                Text("Remove")
+            TextButton(onClick = { onConfirm(selectedGroupIds) }) {
+                Text("Save")
             }
         }
     ) {
-        Text("Remove \"${entry.builtinMcpName}\" from this group?")
+        Column {
+            Text("Choose which sandbox groups include this built-in MCP. It can't be removed from the default group.")
+            Spacer(Modifier.height(8.dp))
+            GroupSelectionDropdown(
+                allGroups = allGroups,
+                selectedGroupIds = selectedGroupIds,
+                onSelectionChange = { selectedGroupIds = it },
+                // Builtins must stay in the default group
+                optionEnabled = { group, isSelected ->
+                    !(isSelected && group.id == defaultGroupId)
+                }
+            )
+        }
     }
 }
 
 @Composable
 private fun HttpServerEditDialog(
     initialServer: HttpMcpServerEntity?,
+    allGroups: List<McpSandboxGroupEntity>,
+    initialGroupIds: Set<Long>,
     onDismiss: () -> Unit,
-    onConfirm: (HttpMcpServerEntity) -> Unit,
+    onConfirm: (HttpMcpServerEntity, Set<Long>) -> Unit,
     onDelete: (() -> Unit)?
 ) {
     var name by remember { mutableStateOf(initialServer?.name ?: "") }
@@ -280,6 +260,7 @@ private fun HttpServerEditDialog(
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
+    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
 
     // Debounced fetch of server title and prompts when URL, protocol, or auth header changes
     LaunchedEffect(url, streamable, authHeader) {
@@ -342,7 +323,8 @@ private fun HttpServerEditDialog(
                             streamable = streamable,
                             authHeader = authHeader.ifBlank { null },
                             includedPrompts = selectedPrompts.toList()
-                        )
+                        ),
+                        selectedGroupIds
                     )
                 },
                 enabled = canSave
@@ -393,6 +375,22 @@ private fun HttpServerEditDialog(
                     Text("Streamable")
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            GroupSelectionDropdown(
+                allGroups = allGroups,
+                selectedGroupIds = selectedGroupIds,
+                onSelectionChange = { selectedGroupIds = it },
+                // Index Agent groups ignore HTTP servers, so only allow removal there
+                // (associations may exist from before a group's model type changed)
+                optionEnabled = { group, isSelected ->
+                    isSelected || group.modelType != SandboxModelType.IndexAgent
+                }
+            )
+            Text(
+                text = "HTTP servers can't be added to Index Agent groups as they would be ignored",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier
@@ -473,8 +471,8 @@ private fun HttpServerEditDialog(
                                     if (description != null) {
                                         Text(
                                             text = description,
-                                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -523,32 +521,44 @@ fun McpServerEntryItem(
     )
 }
 
+private val previewGroups = listOf(
+    McpSandboxGroupEntity(id = 1, title = "Default Group", modelType = SandboxModelType.IndexAgent),
+    McpSandboxGroupEntity(id = 2, title = "Custom Group", modelType = SandboxModelType.HighCapability)
+)
 
 @Preview
 @Composable
-private fun McpSandboxSettingsPreview() {
+private fun McpServersTabPreview() {
     PreviewWrapper {
-        McpSandboxSettings(
-            coreNav = NoOpCoreNav,
+        McpServersTab(
             serverEntries = MutableStateFlow(
                 listOf(
                     McpServerEntry.BuiltinMcpEntry("builtin-1"),
                 )
             ),
-            onRemoveEntry = {},
-            onAddUpdateEntry = {}
+            allGroups = MutableStateFlow(previewGroups),
+            defaultGroupId = 1L,
+            showAddServerDialog = false,
+            onDismissAddServerDialog = {},
+            loadGroupIds = { emptySet() },
+            onSaveHttpServer = { _, _ -> },
+            onSetBuiltinGroups = { _, _ -> },
+            onDeleteHttpServer = {}
         )
     }
 }
 
 @Preview
 @Composable
-private fun BuiltinEntryDeleteDialogPreview() {
+private fun BuiltinGroupsDialogPreview() {
     PreviewWrapper {
-        BuiltinEntryDeleteDialog(
+        BuiltinGroupsDialog(
             entry = McpServerEntry.BuiltinMcpEntry("clock"),
+            allGroups = previewGroups,
+            defaultGroupId = 1L,
+            initialGroupIds = setOf(1L),
             onDismiss = {},
-            onDelete = {}
+            onConfirm = {}
         )
     }
 }
@@ -559,8 +569,10 @@ private fun HttpServerEditDialogNewPreview() {
     PreviewWrapper {
         HttpServerEditDialog(
             initialServer = null,
+            allGroups = previewGroups,
+            initialGroupIds = emptySet(),
             onDismiss = {},
-            onConfirm = {},
+            onConfirm = { _, _ -> },
             onDelete = null
         )
     }
@@ -580,8 +592,10 @@ private fun HttpServerEditDialogEditPreview() {
                 authHeader = "Bearer 123abc",
                 includedPrompts = listOf("default")
             ),
+            allGroups = previewGroups,
+            initialGroupIds = setOf(2L),
             onDismiss = {},
-            onConfirm = {},
+            onConfirm = { _, _ -> },
             onDelete = {}
         )
     }

@@ -18,4 +18,7 @@ interface HttpMcpServerDao {
 
     @Query("SELECT * FROM HttpMcpServerEntity WHERE id IN (SELECT httpMcpId FROM HttpMcpGroupAssociation WHERE groupId = :groupId)")
     fun getAllByGroupId(groupId: Long): Flow<List<HttpMcpServerEntity>>
+
+    @Query("SELECT * FROM HttpMcpServerEntity")
+    fun getAllFlow(): Flow<List<HttpMcpServerEntity>>
 }

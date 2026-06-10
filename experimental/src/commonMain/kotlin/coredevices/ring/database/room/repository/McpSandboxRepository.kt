@@ -7,6 +7,7 @@ import coredevices.indexai.data.entity.mcp_sandbox.BuiltinMcpGroupAssociation
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpGroupAssociation
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.indexai.database.dao.BuiltinMcpGroupAssociationDao
 import coredevices.indexai.database.dao.HttpMcpGroupAssociationDao
 import coredevices.indexai.database.dao.HttpMcpServerDao
@@ -31,6 +32,23 @@ class McpSandboxRepository(
         return groupDao.getAllFlow().first().first().id
     }
 
+    suspend fun updateGroupModelType(groupId: Long, modelType: SandboxModelType) {
+        groupDao.updateModelType(groupId, modelType)
+    }
+
+    suspend fun createGroup(title: String): Long {
+        return groupDao.insertGroup(McpSandboxGroupEntity(title = title))
+    }
+
+    suspend fun deleteGroup(groupId: Long) {
+        // Associations are removed by FK cascade; servers themselves are kept.
+        groupDao.deleteGroup(groupId)
+    }
+
+    suspend fun getGroupById(groupId: Long): McpSandboxGroupEntity? {
+        return groupDao.getGroupById(groupId)
+    }
+
     fun getMcpServerEntriesForGroup(groupId: Long): Flow<List<McpServerEntry>> {
         return combine(
             builtinAssociationDao.getAssociationsForGroupFlow(groupId).map {
@@ -44,72 +62,82 @@ class McpSandboxRepository(
         }
     }
 
-    suspend fun removeEntry(entry: McpServerEntry, groupId: Long) {
-        when (entry) {
-            is McpServerEntry.BuiltinMcpEntry -> {
-                builtinAssociationDao.deleteAssociation(
-                    BuiltinMcpGroupAssociation(
-                        groupId = groupId,
-                        builtinMcpName = entry.builtinMcpName
-                    )
-                )
-            }
-            is McpServerEntry.HttpServerEntry -> {
-                httpMcpGroupAssociationDao.deleteAssociation(
-                    HttpMcpGroupAssociation(
-                        groupId = groupId,
-                        httpMcpId = entry.server.id
-                    )
-                )
+    /** All known servers regardless of group membership: every builtin plus every HTTP server. */
+    fun getAllServerEntriesFlow(): Flow<List<McpServerEntry>> {
+        return httpMcpServerDao.getAllFlow().map { servers ->
+            builtinMcpRepository.getAllServlets().map { McpServerEntry.BuiltinMcpEntry(it.name) } +
+                servers.map { McpServerEntry.HttpServerEntry(it) }
+        }
+    }
+
+    suspend fun getGroupIdsForEntry(entry: McpServerEntry): Set<Long> {
+        return when (entry) {
+            is McpServerEntry.BuiltinMcpEntry ->
+                builtinAssociationDao.getGroupIdsForBuiltin(entry.builtinMcpName)
+            is McpServerEntry.HttpServerEntry ->
+                httpMcpGroupAssociationDao.getGroupIdsForServer(entry.server.id)
+        }.toSet()
+    }
+
+    suspend fun setGroupsForEntry(entry: McpServerEntry, groupIds: Set<Long>) {
+        db.useWriterConnection {
+            it.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
+                applyGroupsForEntry(entry, groupIds)
             }
         }
     }
 
-    suspend fun addMcpEntryToGroup(
-        groupId: Long,
-        entry: McpServerEntry
-    ) {
+    private suspend fun applyGroupsForEntry(entry: McpServerEntry, groupIds: Set<Long>) {
+        val current = getGroupIdsForEntry(entry)
+        val toAdd = groupIds - current
+        val toRemove = current - groupIds
         when (entry) {
             is McpServerEntry.BuiltinMcpEntry -> {
-                builtinAssociationDao.insertAssociation(
-                    BuiltinMcpGroupAssociation(
-                        groupId = groupId,
-                        builtinMcpName = entry.builtinMcpName
+                toAdd.forEach {
+                    builtinAssociationDao.insertAssociation(
+                        BuiltinMcpGroupAssociation(groupId = it, builtinMcpName = entry.builtinMcpName)
                     )
-                )
+                }
+                toRemove.forEach {
+                    builtinAssociationDao.deleteAssociation(
+                        BuiltinMcpGroupAssociation(groupId = it, builtinMcpName = entry.builtinMcpName)
+                    )
+                }
             }
             is McpServerEntry.HttpServerEntry -> {
-                httpMcpGroupAssociationDao.insertAssociation(
-                    HttpMcpGroupAssociation(
-                        groupId = groupId,
-                        httpMcpId = entry.server.id
+                toAdd.forEach {
+                    httpMcpGroupAssociationDao.insertAssociation(
+                        HttpMcpGroupAssociation(groupId = it, httpMcpId = entry.server.id)
                     )
-                )
+                }
+                toRemove.forEach {
+                    httpMcpGroupAssociationDao.deleteAssociation(
+                        HttpMcpGroupAssociation(groupId = it, httpMcpId = entry.server.id)
+                    )
+                }
             }
         }
     }
 
     suspend fun addOrUpdateHttpServer(
-        initialGroupId: Long,
-        server: HttpMcpServerEntity
+        server: HttpMcpServerEntity,
+        groupIds: Set<Long>
     ): Long {
         return db.useWriterConnection {
             it.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
                 val id = httpMcpServerDao.insertServer(server)
-                if (server.id != 0L) {
-                    // If we're updating an existing server, no need to add a new association
-                    return@withTransaction id
-                }
-
-                httpMcpGroupAssociationDao.insertAssociation(
-                    HttpMcpGroupAssociation(
-                        groupId = initialGroupId,
-                        httpMcpId = id
-                    )
+                applyGroupsForEntry(
+                    McpServerEntry.HttpServerEntry(server.copy(id = id)),
+                    groupIds
                 )
-                return@withTransaction id
+                id
             }
         }
+    }
+
+    suspend fun deleteHttpServer(server: HttpMcpServerEntity) {
+        // Group associations are removed by FK cascade.
+        httpMcpServerDao.deleteServer(server)
     }
 
     suspend fun seedDatabase() {

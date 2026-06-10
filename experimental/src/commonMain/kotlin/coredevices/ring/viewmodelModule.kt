@@ -1,9 +1,8 @@
 package coredevices.ring
 
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
-import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.components.recording.RecordingTraceTimelineViewModel
-import coredevices.ring.ui.screens.settings.McpSandboxSettingsViewModel
+import coredevices.ring.ui.screens.settings.mcp.McpSandboxGroupsViewModel
 import coredevices.ring.ui.viewmodel.AllAnswersViewModel
 import coredevices.ring.ui.viewmodel.AllListsViewModel
 import coredevices.ring.ui.viewmodel.FeedViewModel
@@ -31,6 +30,6 @@ internal val viewmodelModule = module {
     viewModelOf(::NotesViewModel)
     viewModelOf(::ReminderDetailsViewModel)
     viewModelOf(::IndexWebhookSettingsViewModel)
-    viewModelOf(::McpSandboxSettingsViewModel)
+    viewModelOf(::McpSandboxGroupsViewModel)
     viewModelOf(::RecordingTraceTimelineViewModel)
 }

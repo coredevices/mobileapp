@@ -2,9 +2,6 @@ package coredevices.ring.ui.navigation
 
 import CoreNav
 import CoreRoute
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.navigation.NavDeepLink
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -21,12 +18,9 @@ import coredevices.ring.ui.screens.recording.RecordingDetails
 import coredevices.ring.ui.screens.settings.NotionOAuthResult
 import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
-import coredevices.ring.ui.screens.settings.McpSandboxSettings
-import kotlinx.coroutines.flow.flow
-import org.koin.compose.koinInject
+import coredevices.ring.ui.screens.settings.mcp.McpSandboxGroups
 
 /** Marker for routes that belong to the Index/Ring feature. The
  *  WatchHomeScreen registers these in its inner NavHost too so they
@@ -63,7 +57,7 @@ object RingRoutes {
     @Serializable
     data object RingSyncInspector : RingRoute
     @Serializable
-    data object McpSandboxSettings : RingRoute
+    data object McpSandboxGroups : RingRoute
     @Serializable
     data object AddIntegration : RingRoute
 }
@@ -112,12 +106,8 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     composable<RingRoutes.RingSyncInspector> {
         RingSyncInspectorScreen(coreNav)
     }
-    composable<RingRoutes.McpSandboxSettings> {
-        val repo = koinInject<McpSandboxRepository>()
-        val defaultGroup by remember { flow{ emit(repo.getDefaultGroupId()) } }.collectAsState(initial = null)
-        defaultGroup?.let {
-            McpSandboxSettings(coreNav, it)
-        }
+    composable<RingRoutes.McpSandboxGroups> {
+        McpSandboxGroups(coreNav)
     }
     composable<RingRoutes.AddIntegration> {
         AddIntegration(coreNav)

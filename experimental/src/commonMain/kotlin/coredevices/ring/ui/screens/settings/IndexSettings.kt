@@ -370,7 +370,7 @@ fun IndexSettings(coreNav: CoreNav) {
             item {
                 ListItem(
                     modifier = Modifier.clickable {
-                        coreNav.navigateTo(RingRoutes.McpSandboxSettings)
+                        coreNav.navigateTo(RingRoutes.McpSandboxGroups)
                     },
                     headlineContent = { Text("MCP & Tool Settings") },
                     supportingContent = {

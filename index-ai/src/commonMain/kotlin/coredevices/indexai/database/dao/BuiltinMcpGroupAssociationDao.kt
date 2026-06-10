@@ -21,4 +21,7 @@ interface BuiltinMcpGroupAssociationDao {
 
     @Query("SELECT * FROM BuiltinMcpGroupAssociation WHERE groupId = :groupId")
     fun getAssociationsForGroupFlow(groupId: Long): Flow<List<BuiltinMcpGroupAssociation>>
+
+    @Query("SELECT groupId FROM BuiltinMcpGroupAssociation WHERE builtinMcpName = :builtinMcpName")
+    suspend fun getGroupIdsForBuiltin(builtinMcpName: String): List<Long>
 }
