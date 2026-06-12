@@ -451,14 +451,15 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             if (debugDetailsEnabled) {
-                item {
-                    ListItem(
-                        modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
-                            viewModel.panicRing()
-                        },
-                        headlineContent = { Text("Panic Ring", color = Color.Red) }
-                    )
-                }
+                // Panic Ring button commented out for prod — crashes the app (MOB-7937).
+                // item {
+                //     ListItem(
+                //         modifier = Modifier.clickable(enabled = currentRingFirmware != null && !panicPending) {
+                //             viewModel.panicRing()
+                //         },
+                //         headlineContent = { Text("Panic Ring", color = Color.Red) }
+                //     )
+                // }
                 item {
                     ListItem(
                         modifier = Modifier.clickable(enabled = !platform.isAndroid) {
