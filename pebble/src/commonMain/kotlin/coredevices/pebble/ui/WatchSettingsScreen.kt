@@ -130,6 +130,8 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.fake.FakeWatchConfigStore
+import coredevices.pebble.fake.FakeWatchPickerDialog
+import coredevices.pebble.fake.fakeWatchItems
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
@@ -154,9 +156,6 @@ import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
-import io.rebble.libpebblecommon.connection.configuredFakeWatch
-import io.rebble.libpebblecommon.connection.fakeWatchDisplayName
-import io.rebble.libpebblecommon.connection.isConsumerWatchPlatform
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -332,6 +331,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
     val fakeWatchConfig: FakeWatchConfigStore = koinInject()
+    val fakeWatches by fakeWatchConfig.fakeWatches.collectAsState()
+    val activeFakeWatch by fakeWatchConfig.activeFakeWatch.collectAsState()
     val themeProvider: ThemeProvider = koinInject()
     val settings: Settings = koinInject()
     val currentTheme by themeProvider.theme.collectAsState()
@@ -505,7 +506,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             experimentalDevices,
             loggedIn,
             watchPrefs,
-            rebbleVoiceAvailable,
+            fakeWatches,
+            activeFakeWatch,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -1797,7 +1799,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
             ) + if (CommonBuildKonfig.FAKE_WATCH_ENABLED) {
-                fakeWatchItems(fakeWatchConfig, showAddFakeWatchDialog)
+                fakeWatchItems(fakeWatchConfig, fakeWatches, activeFakeWatch, showAddFakeWatchDialog)
             } else {
                 emptyList()
             } + watchPrefs
@@ -1805,7 +1807,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
 
         if (showAddFakeWatchDialog.value) {
             FakeWatchPickerDialog(
-                currentWatches = fakeWatchConfig.getFakeWatches(),
+                currentWatches = fakeWatches,
                 onAddWatches = { selected ->
                     fakeWatchConfig.addFakeWatches(selected)
                     showAddFakeWatchDialog.value = false
@@ -2706,126 +2708,6 @@ object SettingsKeys {
     const val KEY_ENABLE_FIREBASE_UPLOADS = "enable_firebase_uploads"
     const val KEY_ENABLE_MIXPANEL_UPLOADS = "enable_mixpanel_uploads"
 }
-
-private fun fakeWatchItems(
-    fakeWatchConfig: FakeWatchConfigStore,
-    showAddDialog: MutableState<Boolean>,
-): List<SettingsItem> {
-    val fakeWatches = fakeWatchConfig.getFakeWatches()
-    val activeFakeWatch = fakeWatchConfig.getActiveFakeWatch()
-    val addItem = basicSettingsActionItem(
-        title = "Add fake watch (requires restart)",
-        description = "Add a simulated watch for testing. Does not require a real Bluetooth connection.",
-        topLevelType = TopLevelType.Phone,
-        section = Section.Debug,
-        action = { showAddDialog.value = true },
-        isDebugSetting = true,
-        keywords = "fake watch debug",
-    )
-    return buildList {
-        add(addItem)
-        fakeWatches.forEach { watch ->
-            val isActive = watch == activeFakeWatch
-            val displayName = fakeWatchDisplayName(watch)
-            add(
-                SettingsItem(
-                    title = displayName,
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
-                    isDebugSetting = true,
-                    item = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable {
-                                        fakeWatchConfig.setActiveFakeWatch(watch)
-                                    }
-                                    .padding(vertical = 8.dp, horizontal = 4.dp),
-                            ) {
-                                RadioButton(
-                                    selected = isActive,
-                                    onClick = {
-                                        fakeWatchConfig.setActiveFakeWatch(watch)
-                                    },
-                                )
-                                Column {
-                                    Text(displayName)
-                                    Text(
-                                        text = if (isActive) "Active (connected)" else "Tap to set as active",
-                                        fontSize = 11.sp,
-                                    )
-                                }
-                            }
-                            TextButton(onClick = { fakeWatchConfig.removeFakeWatch(watch) }) {
-                                Text("Remove")
-                            }
-                        }
-                    },
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun FakeWatchPickerDialog(
-    currentWatches: Set<WatchHardwarePlatform>,
-    onAddWatches: (Set<WatchHardwarePlatform>) -> Unit,
-    onDismissRequest: () -> Unit,
-) {
-    val consumerWatchPlatforms = remember {
-        WatchHardwarePlatform.entries.filter { isConsumerWatchPlatform(it) }
-    }
-    val availablePlatforms = remember(currentWatches) {
-        consumerWatchPlatforms.filter { it !in currentWatches }
-    }
-    val selected = remember(currentWatches) { mutableStateOf<Set<WatchHardwarePlatform>>(emptySet()) }
-
-    M3Dialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text("Add Fake Watches") },
-        buttons = {
-            TextButton(onClick = onDismissRequest) { Text("Cancel") }
-            TextButton(
-                onClick = { onAddWatches(selected.value) },
-                enabled = selected.value.isNotEmpty(),
-            ) { Text("Add") }
-        },
-    ) {
-        if (availablePlatforms.isEmpty()) {
-            Text("All available watches have been added.")
-        } else {
-            LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                items(availablePlatforms, key = { it.revision }) { platform ->
-                    val isSelected = platform in selected.value
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selected.value = selected.value.toggle(platform)
-                            }
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
-                    ) {
-                        Checkbox(
-                            checked = isSelected,
-                            onCheckedChange = { selected.value = selected.value.toggle(platform) },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(fakeWatchDisplayName(platform), modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
 
 enum class RegularSyncInterval(
     val period: Duration,
