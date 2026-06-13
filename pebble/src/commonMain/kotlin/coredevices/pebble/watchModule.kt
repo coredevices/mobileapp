@@ -69,6 +69,7 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.ConfiguredFakeLibPebble
 import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -99,16 +100,20 @@ import org.koin.dsl.module
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
+import coredevices.pebble.fake.FakeWatchConfigStore
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigHolder
 
 val watchModule = module {
     single<LibPebble> {
-        val config = get<CoreConfigHolder>().config.value
-        if (config.fakeWatches.isNotEmpty()) {
-            Logger.d { "watchModule using FakeLibPebble with ${config.fakeWatches.size} watches, active: ${config.fakeActiveWatch}" }
-            FakeLibPebble(
-                fakeWatches = config.fakeWatches.toList(),
-                activeWatch = config.fakeActiveWatch ?: config.fakeWatches.first(),
+        val fakeWatchConfig = get<FakeWatchConfigStore>()
+        val fakeWatches = fakeWatchConfig.getFakeWatches()
+        if (CommonBuildKonfig.FAKE_WATCH_ENABLED && fakeWatches.isNotEmpty()) {
+            val active = fakeWatchConfig.getActiveFakeWatch() ?: fakeWatches.first()
+            Logger.d { "watchModule using FakeLibPebble with ${fakeWatches.size} watches, active: $active" }
+            ConfiguredFakeLibPebble(
+                fakeWatches = fakeWatches.toList(),
+                activeWatch = active,
             )
         } else {
             Logger.d("watchModule get LibPebble3")
@@ -130,6 +135,7 @@ val watchModule = module {
         libPebble as? LibPebble3
             ?: error("LibPebble3 is not available while fake watches are enabled (got ${libPebble::class.simpleName}); request LibPebble, NotificationApps, or SystemGeolocation instead")
     }
+    singleOf(::FakeWatchConfigStore)
 
     includes(platformWatchModule)
 

@@ -129,10 +129,12 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.fake.FakeWatchConfigStore
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
@@ -152,6 +154,9 @@ import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.configuredFakeWatch
+import io.rebble.libpebblecommon.connection.fakeWatchDisplayName
+import io.rebble.libpebblecommon.connection.isConsumerWatchPlatform
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -326,6 +331,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val libPebbleConfig by libPebble.config.collectAsState()
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
+    val fakeWatchConfig: FakeWatchConfigStore = koinInject()
     val themeProvider: ThemeProvider = koinInject()
     val settings: Settings = koinInject()
     val currentTheme by themeProvider.theme.collectAsState()
@@ -1790,14 +1796,18 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfigHolder.update(coreConfig.copy(interceptPKJSWeather = it))
                     },
                 ),
-            ) + fakeWatchItems(coreConfig, coreConfigHolder, showAddFakeWatchDialog) + watchPrefs
+            ) + if (CommonBuildKonfig.FAKE_WATCH_ENABLED) {
+                fakeWatchItems(fakeWatchConfig, showAddFakeWatchDialog)
+            } else {
+                emptyList()
+            } + watchPrefs
         }
 
         if (showAddFakeWatchDialog.value) {
             FakeWatchPickerDialog(
-                currentWatches = coreConfig.fakeWatches,
+                currentWatches = fakeWatchConfig.getFakeWatches(),
                 onAddWatches = { selected ->
-                    coreConfigHolder.addFakeWatches(selected)
+                    fakeWatchConfig.addFakeWatches(selected)
                     showAddFakeWatchDialog.value = false
                 },
                 onDismissRequest = { showAddFakeWatchDialog.value = false },
@@ -2698,10 +2708,11 @@ object SettingsKeys {
 }
 
 private fun fakeWatchItems(
-    coreConfig: CoreConfig,
-    coreConfigHolder: CoreConfigHolder,
+    fakeWatchConfig: FakeWatchConfigStore,
     showAddDialog: MutableState<Boolean>,
 ): List<SettingsItem> {
+    val fakeWatches = fakeWatchConfig.getFakeWatches()
+    val activeFakeWatch = fakeWatchConfig.getActiveFakeWatch()
     val addItem = basicSettingsActionItem(
         title = "Add fake watch (requires restart)",
         description = "Add a simulated watch for testing. Does not require a real Bluetooth connection.",
@@ -2713,11 +2724,12 @@ private fun fakeWatchItems(
     )
     return buildList {
         add(addItem)
-        coreConfig.fakeWatches.forEach { watch ->
-            val isActive = watch == coreConfig.fakeActiveWatch
+        fakeWatches.forEach { watch ->
+            val isActive = watch == activeFakeWatch
+            val displayName = fakeWatchDisplayName(watch)
             add(
                 SettingsItem(
-                    title = watch.displayName,
+                    title = displayName,
                     topLevelType = TopLevelType.Phone,
                     section = Section.Debug,
                     isDebugSetting = true,
@@ -2731,25 +2743,25 @@ private fun fakeWatchItems(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clickable {
-                                        coreConfigHolder.setActiveFakeWatch(watch)
+                                        fakeWatchConfig.setActiveFakeWatch(watch)
                                     }
                                     .padding(vertical = 8.dp, horizontal = 4.dp),
                             ) {
                                 RadioButton(
                                     selected = isActive,
                                     onClick = {
-                                        coreConfigHolder.setActiveFakeWatch(watch)
+                                        fakeWatchConfig.setActiveFakeWatch(watch)
                                     },
                                 )
                                 Column {
-                                    Text(watch.displayName)
+                                    Text(displayName)
                                     Text(
                                         text = if (isActive) "Active (connected)" else "Tap to set as active",
                                         fontSize = 11.sp,
                                     )
                                 }
                             }
-                            TextButton(onClick = { coreConfigHolder.removeFakeWatch(watch) }) {
+                            TextButton(onClick = { fakeWatchConfig.removeFakeWatch(watch) }) {
                                 Text("Remove")
                             }
                         }
@@ -2760,34 +2772,6 @@ private fun fakeWatchItems(
     }
 }
 
-private fun CoreConfigHolder.addFakeWatches(watches: Set<WatchHardwarePlatform>) {
-    if (watches.isEmpty()) return
-    update {
-        val newWatches = it.fakeWatches + watches
-        it.copy(
-            fakeWatches = newWatches,
-            fakeActiveWatch = it.fakeActiveWatch ?: watches.first(),
-        )
-    }
-}
-
-private fun CoreConfigHolder.removeFakeWatch(watch: WatchHardwarePlatform) {
-    update {
-        val newWatches = it.fakeWatches - watch
-        it.copy(
-            fakeWatches = newWatches,
-            fakeActiveWatch = when (it.fakeActiveWatch) {
-                watch -> newWatches.firstOrNull()
-                else -> it.fakeActiveWatch
-            },
-        )
-    }
-}
-
-private fun CoreConfigHolder.setActiveFakeWatch(watch: WatchHardwarePlatform) {
-    update { it.copy(fakeActiveWatch = watch) }
-}
-
 @Composable
 private fun FakeWatchPickerDialog(
     currentWatches: Set<WatchHardwarePlatform>,
@@ -2795,7 +2779,7 @@ private fun FakeWatchPickerDialog(
     onDismissRequest: () -> Unit,
 ) {
     val consumerWatchPlatforms = remember {
-        WatchHardwarePlatform.entries.filter { it.isConsumer }
+        WatchHardwarePlatform.entries.filter { isConsumerWatchPlatform(it) }
     }
     val availablePlatforms = remember(currentWatches) {
         consumerWatchPlatforms.filter { it !in currentWatches }
@@ -2833,7 +2817,7 @@ private fun FakeWatchPickerDialog(
                             onCheckedChange = { selected.value = selected.value.toggle(platform) },
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(platform.displayName, modifier = Modifier.weight(1f))
+                        Text(fakeWatchDisplayName(platform), modifier = Modifier.weight(1f))
                     }
                 }
             }

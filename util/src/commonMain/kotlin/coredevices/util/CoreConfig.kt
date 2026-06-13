@@ -4,8 +4,6 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.util.models.CactusSTTMode
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatformSerializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,15 +97,7 @@ data class CoreConfig(
     val obfuscateSensitiveLogs: Boolean = true,
     val hidePermissionWarningBadges: Boolean = false,
     val androidForegroundServiceForWatchConnection: Boolean = false,
-    val fakeWatches: Set<WatchHardwarePlatform> = emptySet(),
-    val fakeActiveWatch: WatchHardwarePlatform? = null,
-) {
-    init {
-        require(fakeActiveWatch == null || fakeActiveWatch in fakeWatches) {
-            "fakeActiveWatch ($fakeActiveWatch) must be in fakeWatches ($fakeWatches)"
-        }
-    }
-}
+)
 
 @Serializable
 data class STTConfig(
