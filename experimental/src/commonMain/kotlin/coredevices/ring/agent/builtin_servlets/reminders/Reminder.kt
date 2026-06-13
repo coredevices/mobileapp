@@ -13,3 +13,5 @@ interface ListAssignableReminder : Reminder {
     suspend fun scheduleToList(listName: String): String
     val listTitle: String?
 }
+
+class ListNotFoundException(listName: String) : Exception("List with name '$listName' not found")

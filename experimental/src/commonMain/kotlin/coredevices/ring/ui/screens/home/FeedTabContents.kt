@@ -119,12 +119,10 @@ fun FeedTabContents(
             val fileId = currentFileId ?: return@launch
             currentRecorder?.stopRecording()
             recordingJob?.join()
-            logger.i { "Stopped recording, saving clean copy and queueing: $fileId" }
-            // Save original as -clean before preprocessing overwrites the raw file
-            // (same pattern as Ring recordings in RingSync)
+            logger.i { "Stopped recording, saving orig copy and queueing: $fileId" }
             withContext(Dispatchers.IO) {
                 val (source, info) = recordingStorage.openRecordingSource(fileId)
-                val cleanSink = recordingStorage.openCleanRecordingSink(
+                val cleanSink = recordingStorage.openOriginalRecordingSink(
                     fileId, info.cachedMetadata.sampleRate, info.cachedMetadata.mimeType
                 )
                 source.use { src ->

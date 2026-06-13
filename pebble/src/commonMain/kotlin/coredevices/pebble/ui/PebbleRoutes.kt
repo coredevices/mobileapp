@@ -32,6 +32,12 @@ object PebbleRoutes {
         val watchIdentifier: String,
         val title: String,
     ) : CoreRoute
+
+    @Serializable
+    data class ContactDeveloperRoute(
+        val appId: String,
+        val appTitle: String,
+    ) : CoreRoute
 }
 
 @Stable
@@ -292,6 +298,14 @@ fun NavGraphBuilder.addPebbleRoutes(
             coreNav = coreNav,
             watchIdentifier = route.watchIdentifier,
             title = route.title,
+        )
+    }
+    composable<PebbleRoutes.ContactDeveloperRoute> {
+        val route: PebbleRoutes.ContactDeveloperRoute = it.toRoute()
+        ContactDeveloperScreen(
+            coreNav = coreNav,
+            appId = route.appId,
+            appTitle = route.appTitle,
         )
     }
 }

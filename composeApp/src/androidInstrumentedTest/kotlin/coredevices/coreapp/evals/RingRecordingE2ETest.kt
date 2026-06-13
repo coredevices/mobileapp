@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.AgentNenya
+import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -39,6 +40,7 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
@@ -46,6 +48,7 @@ import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
@@ -544,6 +547,7 @@ class RingRecordingE2ETest {
         singleOf(::NenyaClientImpl) bind NenyaClient::class
         singleOf(::WisprFlowAuth)
         singleOf(::WisprFlowTranscriptionService)
+        singleOf(::KirinkiTranscriptionService)
 
         // Cactus local transcription
         single { CactusModelProvider() }
@@ -558,7 +562,7 @@ class RingRecordingE2ETest {
             ))
         }
         single {
-            CactusTranscriptionService(get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get(), get(), get<CactusModelPathProvider>(), NoOpInferenceBoost())
         } bind TranscriptionService::class
 
         // MCP tools
@@ -591,13 +595,14 @@ class RingRecordingE2ETest {
         singleOf(::DocumentEncryptor)
 
         // Processing pipeline
-        singleOf(::RecordingStorage)
+        singleOf(::RealRecordingStorage) bind RecordingStorage::class
         singleOf(::RecordingPreprocessor)
         singleOf(::RecordingProcessor)
         singleOf(::RingTraceSession)
 
         // Agent
-        factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
+        factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList()) }
+        factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
         singleOf(::RecordingOperationFactory)
 
@@ -645,7 +650,7 @@ private class E2EPreferences : Preferences {
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<String>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
-    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.Native)
+    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)

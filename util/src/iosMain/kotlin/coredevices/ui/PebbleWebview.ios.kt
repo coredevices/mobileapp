@@ -1,6 +1,7 @@
 package coredevices.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -12,6 +13,7 @@ import kotlinx.cinterop.readValue
 import platform.CoreGraphics.CGRectZero
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
+import platform.UIKit.UIUserInterfaceStyle
 import platform.WebKit.WKNavigationAction
 import platform.WebKit.WKNavigationActionPolicy
 import platform.WebKit.WKNavigationDelegateProtocol
@@ -19,6 +21,8 @@ import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.javaScriptEnabled
 import platform.darwin.NSObject
+import theme.CoreAppColorScheme
+import theme.currentColorScheme
 
 private val logger = Logger.withTag("PebbleWebview")
 
@@ -59,6 +63,10 @@ actual fun PebbleWebview(
                             return false
                         }
                     }
+
+                    override fun reload() {
+                        webView.reload()
+                    }
                 }
                 interceptor.navigator = pebbleNavigator
 
@@ -92,6 +100,17 @@ actual fun PebbleWebview(
             this.navigationDelegate = navigationDelegate
         }
     }
+
+    // Mirror the in-app theme to the webview so prefers-color-scheme inside the page
+    // matches the app's App Theme setting, not the OS setting.
+    val colorScheme = currentColorScheme()
+    LaunchedEffect(colorScheme) {
+        webView.overrideUserInterfaceStyle = when (colorScheme) {
+            CoreAppColorScheme.Grey -> UIUserInterfaceStyle.UIUserInterfaceStyleDark
+            CoreAppColorScheme.Light -> UIUserInterfaceStyle.UIUserInterfaceStyleLight
+        }
+    }
+
     UIKitView(
         factory = {
             // This is called once to create the WKWebView instance

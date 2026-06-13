@@ -3,6 +3,9 @@ package coredevices.ring.external.indexwebhook
 import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 /**
  * Payload mode controls what data is sent to the webhook endpoint.
@@ -35,22 +38,34 @@ enum class IndexWebhookTrigger(val id: Int) {
 }
 
 /**
- * Stores webhook configuration: URL, auth token, payload mode, and trigger.
+ * Stores webhook configuration: URL, user-settable request headers, payload mode, and trigger.
  */
 class IndexWebhookPreferences(private val settings: Settings) {
 
     companion object {
         private const val URL_KEY = "index_webhook_url"
-        private const val TOKEN_KEY = "index_webhook_auth_token"
+        private const val TOKEN_KEY = "index_webhook_auth_token" // legacy, migrated into HEADERS_KEY
+        private const val HEADERS_KEY = "index_webhook_headers"
         private const val PAYLOAD_MODE_KEY = "index_webhook_payload_mode"
         private const val TRIGGER_KEY = "index_webhook_trigger"
+
+        // Header name the auth token used to be hardcoded to before headers were user-settable.
+        private const val LEGACY_TOKEN_HEADER = "X-Widget-Token"
+
+        private val json = Json
+        private val headersSerializer = MapSerializer(String.serializer(), String.serializer())
+    }
+
+    // Migrate the old single auth token into the headers map before loading them below.
+    init {
+        migrateLegacyToken()
     }
 
     private val _webhookUrl = MutableStateFlow(settings.getStringOrNull(URL_KEY))
     val webhookUrl = _webhookUrl.asStateFlow()
 
-    private val _authToken = MutableStateFlow(settings.getStringOrNull(TOKEN_KEY))
-    val authToken = _authToken.asStateFlow()
+    private val _headers = MutableStateFlow(loadHeaders())
+    val headers = _headers.asStateFlow()
 
     private val _payloadMode = MutableStateFlow(
         IndexWebhookPayloadMode.fromId(settings.getInt(PAYLOAD_MODE_KEY, IndexWebhookPayloadMode.RecordingOnly.id))
@@ -62,6 +77,23 @@ class IndexWebhookPreferences(private val settings: Settings) {
     )
     val trigger = _trigger.asStateFlow()
 
+    private fun loadHeaders(): Map<String, String> {
+        val raw = settings.getStringOrNull(HEADERS_KEY) ?: return emptyMap()
+        return try {
+            json.decodeFromString(headersSerializer, raw)
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun migrateLegacyToken() {
+        val legacyToken = settings.getStringOrNull(TOKEN_KEY) ?: return
+        if (settings.getStringOrNull(HEADERS_KEY) == null && legacyToken.isNotBlank()) {
+            settings.putString(HEADERS_KEY, json.encodeToString(headersSerializer, mapOf(LEGACY_TOKEN_HEADER to legacyToken)))
+        }
+        settings.remove(TOKEN_KEY)
+    }
+
     fun setWebhookUrl(url: String?) {
         if (url != null) {
             settings.putString(URL_KEY, url)
@@ -71,13 +103,13 @@ class IndexWebhookPreferences(private val settings: Settings) {
         _webhookUrl.value = url
     }
 
-    fun setAuthToken(token: String?) {
-        if (token != null) {
-            settings.putString(TOKEN_KEY, token)
+    fun setHeaders(headers: Map<String, String>) {
+        if (headers.isEmpty()) {
+            settings.remove(HEADERS_KEY)
         } else {
-            settings.remove(TOKEN_KEY)
+            settings.putString(HEADERS_KEY, json.encodeToString(headersSerializer, headers))
         }
-        _authToken.value = token
+        _headers.value = headers
     }
 
     fun setPayloadMode(mode: IndexWebhookPayloadMode) {
@@ -92,11 +124,11 @@ class IndexWebhookPreferences(private val settings: Settings) {
 
     fun clearAll() {
         settings.remove(URL_KEY)
-        settings.remove(TOKEN_KEY)
+        settings.remove(HEADERS_KEY)
         settings.remove(PAYLOAD_MODE_KEY)
         settings.remove(TRIGGER_KEY)
         _webhookUrl.value = null
-        _authToken.value = null
+        _headers.value = emptyMap()
         _payloadMode.value = IndexWebhookPayloadMode.RecordingOnly
         _trigger.value = IndexWebhookTrigger.DoubleClickHold
     }

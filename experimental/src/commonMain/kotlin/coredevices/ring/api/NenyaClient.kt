@@ -18,7 +18,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
 import kotlinx.io.IOException
@@ -62,12 +61,21 @@ data class OpenAIConversationMessage(
 
 data class RunResult(val statusCode: HttpStatusCode, val response: RunResponse?)
 
+/** Language model selection, mirrors nenya's `model_type` values. */
+@Serializable
+enum class NenyaModel {
+    @SerialName("default") Default,
+    @SerialName("search") Search,
+    @SerialName("high_capability") HighCapability,
+}
+
 @Serializable
 private data class RunRequestData(
     val device_tool_specifications: List<ToolDeclaration>,
     val conversation_history: List<ConversationMessageDocument>,
     val additional_context: String,
-    val search_mode: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val model_type: NenyaModel? = null,
 )
 
 interface NenyaClient {
@@ -80,6 +88,7 @@ interface NenyaClient {
      * @param recordingId The ID of the recording feed entry to which this conversation belongs.
      * @param toolSpecs The specifications of the available tools to run.
      * @param timezone The timezone of the user.
+     * @param model The language model to use for the run.
      * @return The result of the run.
      */
     suspend fun run(
@@ -87,7 +96,7 @@ interface NenyaClient {
         toolSpecs: List<ToolDeclaration> = emptyList(),
         additionalContext: String = "",
         timezone: TimeZone = TimeZone.currentSystemDefault(),
-        searchMode: Boolean = false,
+        model: NenyaModel = NenyaModel.Default,
     ): RunResult
 }
 
@@ -100,7 +109,7 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
         toolSpecs: List<ToolDeclaration>,
         additionalContext: String,
         timezone: TimeZone,
-        searchMode: Boolean
+        model: NenyaModel
     ): RunResult {
         var retries = 0
         var resp: HttpResponse? = null
@@ -115,7 +124,7 @@ class NenyaClientImpl(config: ApiConfig): NenyaClient, ApiClient(config.version)
                             device_tool_specifications = toolSpecs,
                             conversation_history = conversationHistory,
                             additional_context = additionalContext,
-                            search_mode = searchMode
+                            model_type = model.takeIf { it != NenyaModel.Default }
                         )
                     )
                 }

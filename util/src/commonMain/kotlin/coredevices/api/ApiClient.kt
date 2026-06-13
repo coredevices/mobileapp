@@ -63,8 +63,9 @@ abstract class ApiClient(version: String, timeout: Duration = 30.seconds):
     }
 
     protected suspend fun requireUserToken(): String {
-        try {
-            return Firebase.auth.currentUser?.getIdToken(false) ?: throw ApiAuthException("No user")
+        return try {
+            val user = Firebase.auth.currentUser ?: throw ApiAuthException("No user")
+            user.getIdToken(false) ?: throw ApiAuthException("Failed to get token")
         } catch (e: ApiAuthException) {
             throw e
         } catch (e: Exception) {

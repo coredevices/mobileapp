@@ -23,6 +23,7 @@ import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -122,15 +123,20 @@ class RecordingDetailsViewModel(
         }.launchIn(viewModelScope)
 
         // Load audio duration once we know the file id. Reading the audio
-        // header is cheap; we just need samples / sampleRate.
+        // header is cheap; we just need samples / (sampleRate * 2).
         recordingRepo.getRecordingEntriesFlow(recordingId).onEach { entries ->
             if (durationSeconds.value != null) return@onEach
             val fileName = entries.firstOrNull()?.fileName ?: return@onEach
             try {
                 withContext(Dispatchers.IO) {
-                    val (_, info) = recordingStorage.openRecordingSource("$fileName-clean")
+                    // Only bother if we have the cached audio, try both the processed and original
+                    // but just give up otherwise to not trigger download.
+                    val (src, info) = recordingStorage.openCachedRecordingSource(fileName)
+                        ?: recordingStorage.openCachedRecordingSource(fileName, true)
+                        ?: return@withContext
+                    src.close() // we just needed the header info, no need to keep the stream open
                     val rate = info.cachedMetadata.sampleRate.toFloat()
-                    if (rate > 0f) durationSeconds.value = info.size.toFloat() / rate
+                    if (rate > 0f) durationSeconds.value = info.size.toFloat() / (rate * Short.SIZE_BYTES)
                 }
             } catch (e: Throwable) {
                 logger.w(e) { "duration load failed for $fileName" }
@@ -158,8 +164,10 @@ class RecordingDetailsViewModel(
                 // home feed doesn't show orphaned chips.
                 val recId = firestoreId?.takeIf { it.isNotBlank() } ?: "local:$recordingId"
                 val linked = itemRepo.getByRecording(recId)
-                linked.forEach { itemRepo.softDelete(it.firestoreId) }
-                recordingRepo.deleteRecording(recordingId)
+                withContext(NonCancellable) {
+                    linked.forEach { itemRepo.softDelete(it.firestoreId) }
+                    recordingRepo.deleteRecording(recordingId)
+                }
                 snackbarHostState.showSnackbar(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
                 )
@@ -174,29 +182,13 @@ class RecordingDetailsViewModel(
     private suspend fun playAudio(item: RecordingEntryEntity) {
         val fileName = item.fileName ?: return
         playbackState.value = MessagePlaybackState.Buffering(item.userMessageId ?: -1)
-        // Two cases:
-        //   1. Local recording the device made itself — both `<id>` and
-        //      `<id>-clean` exist (preprocessor wrote the clean variant
-        //      before upload). `-clean` is preferred because it's the
-        //      noise-suppressed/normalised version.
-        //   2. Cloud-synced recording downloaded from another device or
-        //      from an older app version that never produced a `-clean`.
-        //      In that case `<id>-clean` may not exist in Firebase
-        //      Storage at all and `openRecordingSource` will throw on
-        //      the metadata fetch. Fall back to the base file — the user
-        //      asked for "play whatever we have", which is exactly that.
         val (samples, info) = try {
-            recordingStorage.openRecordingSource("$fileName-clean")
+            recordingStorage.openRecordingSource(fileName)
         } catch (e: Exception) {
-            logger.w(e) { "No `-clean` audio for $fileName, falling back to base file" }
-            try {
-                recordingStorage.openRecordingSource(fileName)
-            } catch (e2: Exception) {
-                logger.e(e2) { "No playable audio for $fileName" }
-                playbackState.value = MessagePlaybackState.Stopped
-                snackbarHostState.showSnackbar("Could not play recording — audio unavailable")
-                return
-            }
+            logger.e(e) { "No playable audio for $fileName" }
+            playbackState.value = MessagePlaybackState.Stopped
+            snackbarHostState.showSnackbar("Could not play recording — audio unavailable")
+            return
         }
         withContext(Dispatchers.IO) {
             audioPlayer.playRaw(samples, info.cachedMetadata.sampleRate.toLong(), AudioEncoding.PCM_16BIT, info.size)
@@ -225,7 +217,7 @@ class RecordingDetailsViewModel(
         viewModelScope.launch {
             val item = itemState.value as? ItemState.Loaded ?: return@launch
             item.entries.firstOrNull()?.fileName?.let {
-                for (id in listOf(it, "$it-clean")) {
+                for (id in listOf(it, "$it-original")) {
                     val path = recordingStorage.exportRecording(id)
                     writeToDownloads(uiContext, path)
                 }

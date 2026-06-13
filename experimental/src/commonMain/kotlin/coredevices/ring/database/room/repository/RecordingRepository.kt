@@ -5,13 +5,22 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
+import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.RingDatabase
+import co.touchlab.kermit.Logger
+import coredevices.ring.service.RecordingBackgroundScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 class RecordingRepository(
     private val localRecordingDao: LocalRecordingDao,
     private val recordingEntryDao: RecordingEntryDao,
+    private val firestoreRecordingsDao: FirestoreRecordingsDao,
+    private val bgScope: RecordingBackgroundScope,
     private val db: RingDatabase
 ) {
     /** Insert a new LocalRecording. [firestoreId] is required and pre-
@@ -104,9 +113,22 @@ class RecordingRepository(
             )
         )
 
-    /** Hard-delete a single recording from Room (entries cascade via FK). */
+    /** Hard-delete a single recording from Room (entries cascade via FK)
+     *  and, when authenticated, delete its Firestore doc too. */
     suspend fun deleteRecording(id: Long) {
-        val rec = localRecordingDao.getRecording(id) ?: return
-        localRecordingDao.deleteRecording(rec)
+        withContext(Dispatchers.IO) {
+            val rec = localRecordingDao.getRecording(id) ?: return@withContext
+            localRecordingDao.deleteRecording(rec)
+            bgScope.launch(Dispatchers.IO) {
+                rec.firestoreId?.takeIf { it.isNotBlank() }?.let { firestoreId ->
+                    try {
+                        firestoreRecordingsDao.deleteRecordingsByIds(listOf(firestoreId))
+                    } catch (e: Exception) {
+                        Logger.withTag("RecordingRepository")
+                            .w(e) { "Failed to delete Firestore doc $firestoreId for recording $id" }
+                    }
+                }
+            }
+        }
     }
 }

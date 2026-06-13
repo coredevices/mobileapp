@@ -27,6 +27,11 @@ actual fun PebbleWebview(
             isJavaScriptEnabled = true
             androidWebSettings.apply {
                 domStorageEnabled = true
+                // Let WebView read the Activity's theme (set by MainActivity.setTheme based on the
+                // in-app App Theme) for prefers-color-scheme, instead of falling back to the OS
+                // Configuration.uiMode. Requires WebView component ~102+; older components fall
+                // back to OS-driven dark mode.
+                isAlgorithmicDarkeningAllowed = true
             }
         }
         onDispose { }
@@ -49,6 +54,10 @@ actual fun PebbleWebview(
                     } else {
                         return false
                     }
+                }
+
+                override fun reload() {
+                    navigator.reload()
                 }
             }
             interceptor.navigator = pebbleNavigator

@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChannelMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
@@ -129,17 +130,31 @@ class NotificationHandler(
             }
             return null
         }
-        val appEntry = notificationAppDao.getEntry(sbn.packageName)
-        // Don't do any further processing if we don't know the app
-        if (appEntry == null) {
-            verboseLog {
-                "Ignoring unknown (maybe system) app notification from ${
-                    sbn.packageName.obfuscate(
-                        privateLogger
-                    )
-                }"
-            }
-            return null
+        val appEntry = notificationAppDao.getEntry(sbn.packageName) ?: run {
+            // Likely an app from another profile which we can now insert
+            val substituteName = sbn.notification.extras
+                ?.getString("android.substName")
+            val now = timeProvider.now().asMillisecond()
+            val newItem = NotificationAppItem(
+                packageName = sbn.packageName,
+                name = substituteName ?: sbn.packageName,
+                muteState = notificationConfig.value
+                    .defaultMuteStateForPackage(sbn.packageName, isSystemApp = false),
+                channelGroups = emptyList(),
+                stateUpdated = now,
+                lastNotified = now,
+                muteExpiration = null,
+                vibePatternName = null,
+                colorName = null,
+                iconCode = null,
+                allowDuplicates = NotificationProperties
+                    .lookup(sbn.packageName)?.allowDuplicates ?: false,
+                isSystemApp = false,
+                autoAdded = true,
+            )
+            logger.d { "auto-adding unknown app ${sbn.packageName.obfuscate(privateLogger)}" }
+            notificationAppDao.insertOrReplace(newItem)
+            newItem
         }
         notificationAppDao.insertOrReplace(
             appEntry.copy(

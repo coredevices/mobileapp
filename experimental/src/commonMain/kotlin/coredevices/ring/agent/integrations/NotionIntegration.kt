@@ -12,7 +12,12 @@ import coredevices.util.integrations.IntegrationAuthException
 import coredevices.util.integrations.OAuthIntegration
 import coredevices.ring.database.firestore.dao.DaoAuthException
 import coredevices.firestore.UsersDao
+import coredevices.indexai.data.notion.NotionSearchResult
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class NotionIntegration(
     private val notionApi: NotionApi,
@@ -27,7 +32,7 @@ class NotionIntegration(
             reminder = null,
             notes = NoteProvider.Notion
         )
-        private val logger = Logger.withTag(NotionIntegration::class.simpleName!!)
+        private val logger = Logger.withTag("NotionIntegration")
     }
 
     suspend fun hasPage(): Boolean {
@@ -39,20 +44,35 @@ class NotionIntegration(
         }
     }
 
-    private suspend fun findPage(): String {
+    /** All non-archived pages the integration has been granted access to. */
+    suspend fun listPages(): List<NotionPage> {
         val response = notionApi.search(requireToken(),
             NotionSearchFilter(NotionSearchFilter.Value.page)
         )
-        return try {
-            val block = response.results.first()
-            if (block.archived) {
-                throw NotionPageNotFound("Notes page is archived")
-            } else {
-                block.id
-            }
-        } catch (e: NoSuchElementException) {
-            throw NotionPageNotFound(cause = e)
+        return response.results
+            .filter { !it.archived }
+            .map { NotionPage(it.id, it.pageTitle()) }
+    }
+
+    /** The page currently chosen to hold the Todo block, if any. */
+    suspend fun selectedPageId(): String? =
+        usersDao.user.firstOrNull()?.user?.notionPageId
+
+    /** Choose which page the Todo block lives in. */
+    suspend fun selectPage(pageId: String) {
+        usersDao.updateNotionPageId(pageId)
+    }
+
+    private suspend fun findPage(): String {
+        val pages = notionApi.search(requireToken(),
+            NotionSearchFilter(NotionSearchFilter.Value.page)
+        ).results.filter { !it.archived }
+        if (pages.isEmpty()) {
+            throw NotionPageNotFound("No accessible Notion page")
         }
+        val selectedId = selectedPageId()
+        return pages.firstOrNull { it.id == selectedId }?.id
+            ?: throw NotionPageNotFound("Selected page not found or archived")
     }
 
     private suspend fun getOrPutTodoBlock(pageId: String): NotionBlock {
@@ -77,4 +97,16 @@ class NotionIntegration(
     }
 
     class NotionPageNotFound(message: String? = null, cause: Throwable? = null): Exception(message, cause)
+
+    data class NotionPage(val id: String, val title: String)
+}
+
+private fun NotionSearchResult.pageTitle(): String {
+    val titleText = properties.values
+        .firstOrNull { it["type"]?.jsonPrimitive?.contentOrNull == "title" }
+        ?.get("title")?.jsonArray
+        ?.mapNotNull { it.jsonObject["plain_text"]?.jsonPrimitive?.contentOrNull }
+        ?.joinToString("")
+        ?.takeIf { it.isNotBlank() }
+    return titleText ?: "Untitled"
 }

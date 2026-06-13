@@ -3,8 +3,9 @@ package coredevices.ring.agent
 import co.touchlab.kermit.Logger
 import com.cactus.cactusComplete
 import com.cactus.cactusInit
+import com.cactus.isCactusSupported
 import coredevices.indexai.agent.AgentToolCall
-import coredevices.indexai.agent.IterativeAgent
+import coredevices.indexai.agent.ToolCallingAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
 import coredevices.indexai.data.entity.MessageRole
@@ -34,7 +35,7 @@ class AgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
-) : KoinComponent, IterativeAgent(conversation) {
+) : KoinComponent, ToolCallingAgent(conversation) {
     override val label = "Cactus"
 
     override val logger = Logger.withTag("AgentCactus")
@@ -48,6 +49,7 @@ class AgentCactus(
     override suspend fun prepare() {
         agentMutex.withLock {
             if (modelHandle == 0L) {
+                if (!isCactusSupported()) throw IllegalStateException("CactusAgent unavailable on this CPU")
                 logger.d { "Initializing CactusAgent for the first time..." }
                 val initStart = Clock.System.now()
                 val modelPath = modelProvider.getLMModelPath()

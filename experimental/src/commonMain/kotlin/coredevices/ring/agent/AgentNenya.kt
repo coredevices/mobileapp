@@ -7,12 +7,8 @@ import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
-import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.api.NenyaClient
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import io.ktor.http.isSuccess
 import kotlinx.io.IOException
 import kotlinx.serialization.EncodeDefault
@@ -35,10 +31,7 @@ import org.koin.core.component.KoinComponent
  */
 class AgentNenya(
     private val nenyaClient: NenyaClient,
-    private val itemFactory: ItemFactory,
-    private val itemRepository: ItemRepository,
     conversation: List<ConversationMessageDocument>,
-    private val useSearchMode: Boolean = false
 ): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"
 
@@ -50,10 +43,11 @@ help with a multitude of tasks in addition to this too.
 ## Interpretation guidelines:
  - Create a note with the user's input unless they specify a different action, do not assume an action that wasn't explicitly requested, just make a note.
  - Avoid asking follow-up questions unless necessary.
- - Always lean towards creating a note, for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
+ - When user requests are ambiguous, always lean towards creating a note; for example if the user doesn't ask for a timer don't create a timer, even if the request has a duration in it.
  - Prioritise the first action a user requests, for example 'remind me tomorrow to message John' should create a reminder and not attempt a message.
  - When users provide multiple items, for example 'remind me to buy milk and bread tomorrow', or 'add Apple and China to my book list', take a single action with
 both as the content unless it's clearly two separate actions, for example 'remind me to buy milk tomorrow and bread the day after' should create two reminders.
+ - When fulfilling a user request, do not also passively take a note if you have already taken another requested action.
 
 ## Response and action guidelines:
  - Eagerly run tools to assist the user by gathering required information and taking actions.
@@ -62,10 +56,22 @@ both as the content unless it's clearly two separate actions, for example 'remin
 """
     }
 
+    /**
+     * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
+     * + 64 max chars. Covers Gemini + Claude
+     */
+    private fun sanitizeToolName(name: String): String {
+        return name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_").take(64)
+    }
+
     private fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
         return tools.mapNotNull {
             val definition = it.tool.definition
-            val compositeName = "${it.integrationName}__${definition.name}"
+            val compositeNameRaw = "${it.integrationName}__${definition.name}"
+            val compositeName = sanitizeToolName(compositeNameRaw)
+            if (compositeName != compositeNameRaw) {
+                logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }
+            }
             try {
                 ToolDeclaration(
                     function = FunctionDeclaration(
@@ -85,16 +91,22 @@ both as the content unless it's clearly two separate actions, for example 'remin
                                     enum = param.jsonObject["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                     minimum = param.jsonObject["minimum"]?.toString()?.toIntOrNull(),
                                     maximum = param.jsonObject["maximum"]?.toString()?.toIntOrNull(),
-                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.map { anyOfParam ->
+                                    anyOf = param.jsonObject["anyOf"]?.jsonArray?.mapNotNull { anyOfParam ->
                                         val p = anyOfParam.jsonObject
+                                        val type = p["type"] ?: return@mapNotNull null
                                         FunctionDeclarationParameter(
-                                            type = p["type"]!!,
+                                            type = type,
                                             description = p["description"]?.toString(),
                                             enum = p["enum"]?.jsonArray?.map { it.toString().trim('"') },
                                             minimum = p["minimum"]?.toString()?.toIntOrNull(),
                                             maximum = p["maximum"]?.toString()?.toIntOrNull(),
+                                            items = p["items"]?.jsonObject ?: if (p["type"]?.toString()?.trim('"') == "array") {
+                                                buildJsonObject {
+                                                    put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
+                                                }
+                                            } else null,
                                         )
-                                    },
+                                    }?.takeIf { it.isNotEmpty() },
                                     items = param.jsonObject["items"]?.jsonObject ?: if (param.jsonObject["type"]?.toString() == "array") {
                                         buildJsonObject {
                                             put("type", JsonPrimitive("string")) // default to string arrays if items schema is missing
@@ -167,65 +179,6 @@ both as the content unless it's clearly two separate actions, for example 'remin
 
     override fun encodeToolResultContent(result: ToolCallResult): String =
         buildJsonObject { put("result", result.resultString) }.toString()
-
-    override suspend fun send(
-        input: String,
-        mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
-        skipToolExecution: Boolean
-    ) {
-        if (useSearchMode) {
-            sendSearch(input, mcpSession)
-        } else {
-            super.send(input, mcpSession, includePromptsFromMcps, skipToolExecution)
-        }
-    }
-
-    private suspend fun sendSearch(input: String, mcpSession: McpSession) {
-        emit(ConversationMessageDocument(role = MessageRole.user, content = input))
-        val resp = try {
-            nenyaClient.run(
-                conversationHistory = currentConversation().filter {
-                    it.role != MessageRole.tool || it.tool_call_id != null // filter out tool messages that are not tool call responses (e.g. fake search completion message above)
-                },
-                toolSpecs = emptyList(),
-                additionalContext = "Provide a concise answer to the query after searching the internet, to be shown on a small display. The answer should have no additional commentary or markdown formatting.",
-                searchMode = true
-            )
-        } catch (e: IOException) {
-            throw AgentNetworkException("Network error when running agent: ${e.message}", e)
-        }
-        if (!resp.statusCode.isSuccess()) {
-            if (resp.statusCode.value in 501..504) {
-                throw AgentNetworkException("Network error at gateway when running agent: ${resp.statusCode} (${resp.response?.message})")
-            } else {
-                throw Exception("Failed to run agent: ${resp.statusCode} (${resp.response?.message})")
-            }
-        }
-        val text = resp.response?.conversation?.last()!!.toConversationMessage(resp.response.language_model_used).content
-            ?.replace("**", "") // remove markdown bolding
-        emit(
-            ConversationMessageDocument(
-                role = MessageRole.tool,
-                content = "",
-                semantic_result = SemanticResult.SupportingData(text ?: "No results", assistiveOnly = false)
-            )
-        )
-
-        currentSessionContext()?.let { ctx ->
-            runCatching {
-                itemRepository.setItem(
-                    itemFactory.simpleUid(),
-                    itemFactory.answerItem(
-                        sourceRecordingId = ctx.sourceRecordingId,
-                        createdAt = ctx.createdAt,
-                        question = input,
-                        answer = text ?: "No results"
-                    )
-                )
-            }
-        }
-    }
 }
 
 @Serializable

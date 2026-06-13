@@ -51,12 +51,15 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.ui.M3Dialog
 import coredevices.util.CoreConfigHolder
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterIsInstance
@@ -120,9 +123,26 @@ class ModelManagementScreenViewModel(
         _downloadedModels.value = modelManager.getDownloadedModelSlugs()
     }
 
+    private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val snackbarMessages = _snackbarMessages.asSharedFlow()
+
     fun deleteModel(slug: String) {
         modelManager.deleteModel(slug)
         refreshDownloadedModels()
+        // With no STT models left, local speech recognition can't run, so fall
+        // back to cloud-only and let the user know.
+        if (modelManager.getDownloadedSTTModelSlugs().isEmpty() &&
+            coreConfigHolder.config.value.sttConfig.mode != CactusSTTMode.RemoteOnly
+        ) {
+            coreConfigHolder.update(
+                coreConfigHolder.config.value.copy(
+                    sttConfig = coreConfigHolder.config.value.sttConfig.copy(
+                        mode = CactusSTTMode.RemoteOnly
+                    )
+                )
+            )
+            _snackbarMessages.tryEmit("Speech recognition switched to Cloud Only")
+        }
     }
 
     fun downloadSTTModel(info: ModelInfo) {
@@ -437,6 +457,10 @@ fun ModelManagementScreen(
     val currentSTTModel = viewModel.currentSTTModel.collectAsState()
     val downloadStatus = viewModel.modelDownloadState.collectAsState()
     val recommendedSTTModel = remember { viewModel.getRecommendedSTTModel() }
+
+    LaunchedEffect(viewModel, topBarParams) {
+        viewModel.snackbarMessages.collect { topBarParams.showSnackbar(it) }
+    }
 
     ModelManagementScreen(
         navBarNav = navBarNav,

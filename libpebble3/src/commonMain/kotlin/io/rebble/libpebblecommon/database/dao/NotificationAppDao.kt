@@ -107,6 +107,8 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 colorName = existingItem?.colorName ?: writeItem.colorName,
                 iconCode = existingItem?.iconCode ?: writeItem.iconCode,
                 allowDuplicates = existingItem?.allowDuplicates ?: writeItem.allowDuplicates,
+                isSystemApp = existingItem?.isSystemApp ?: writeItem.isSystemApp,
+                autoAdded = existingItem?.autoAdded ?: writeItem.autoAdded,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

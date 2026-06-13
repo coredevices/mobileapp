@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import platform.CoreBluetooth.CBATTErrorRequestNotSupported
 import platform.CoreBluetooth.CBATTErrorSuccess
@@ -101,6 +103,7 @@ actual class GattServer(
     private val registeredServices = mutableMapOf<Uuid, CBMutableService>()
     private var wasSubscribedAtRestore = false
     private var wasRestoredFromKilledState = false
+    private val addServicesMutex = Mutex()
 
     private fun verboseLog(message: () -> String) {
         if (bleConfigFlow.value.verbosePpogLogging) {
@@ -134,37 +137,39 @@ actual class GattServer(
             ?.firstOrNull { it.UUID.asUuid() == characteristicUuid }
 
     actual suspend fun addServices() {
-        logger.d("addServices: waiting for power on${if (wasRestoredFromKilledState) " (restored from killed state)" else ""}")
-        peripheralManagerState.first { it == CBManagerStatePoweredOn }
-        addService(
-            PPOGATT_DEVICE_SERVICE_UUID_SERVER,
-            listOf(
-                CBMutableCharacteristic(
-                    type = META_CHARACTERISTIC_SERVER.asCbUuid(),
-                    properties = CBCharacteristicPropertyRead,
-                    value = null,
-                    permissions = CBAttributePermissionsReadable,// CBAttributePermissionsReadEncryptionRequired,
+        addServicesMutex.withLock {
+            logger.d("addServices: waiting for power on${if (wasRestoredFromKilledState) " (restored from killed state)" else ""}")
+            peripheralManagerState.first { it == CBManagerStatePoweredOn }
+            addService(
+                PPOGATT_DEVICE_SERVICE_UUID_SERVER,
+                listOf(
+                    CBMutableCharacteristic(
+                        type = META_CHARACTERISTIC_SERVER.asCbUuid(),
+                        properties = CBCharacteristicPropertyRead,
+                        value = null,
+                        permissions = CBAttributePermissionsReadable,// CBAttributePermissionsReadEncryptionRequired,
+                    ),
+                    CBMutableCharacteristic(
+                        type = PPOGATT_DEVICE_CHARACTERISTIC_SERVER.asCbUuid(),
+                        properties = CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyNotify,
+                        value = null,
+                        permissions = CBAttributePermissionsWriteable// CBAttributePermissionsWriteEncryptionRequired,
+                    ),
                 ),
-                CBMutableCharacteristic(
-                    type = PPOGATT_DEVICE_CHARACTERISTIC_SERVER.asCbUuid(),
-                    properties = CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyNotify,
-                    value = null,
-                    permissions = CBAttributePermissionsWriteable// CBAttributePermissionsWriteEncryptionRequired,
+            )
+            addService(
+                FAKE_SERVICE_UUID,
+                listOf(
+                    CBMutableCharacteristic(
+                        type = FAKE_SERVICE_UUID.asCbUuid(),
+                        properties = CBCharacteristicPropertyRead,
+                        value = null,
+                        permissions = CBAttributePermissionsReadable, //CBAttributePermissionsReadEncryptionRequired,
+                    ),
                 ),
-            ),
-        )
-        addService(
-            FAKE_SERVICE_UUID,
-            listOf(
-                CBMutableCharacteristic(
-                    type = FAKE_SERVICE_UUID.asCbUuid(),
-                    properties = CBCharacteristicPropertyRead,
-                    value = null,
-                    permissions = CBAttributePermissionsReadable, //CBAttributePermissionsReadEncryptionRequired,
-                ),
-            ),
-        )
-        wasRestoredFromKilledState = false
+            )
+            wasRestoredFromKilledState = false
+        }
     }
 
     private suspend fun addService(
@@ -314,7 +319,14 @@ actual class GattServer(
     override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
         logger.d("peripheralManagerDidUpdateState: ${peripheral.state}")
         if (peripheral.state == CBManagerStatePoweredOn) {
+            val rePublishAfterRestore = bleConfigFlow.value.republishGattServicesOnRestore &&
+                    wasRestoredFromKilledState &&
+                    registeredServices.isNotEmpty()
             peripheralManagerState.value = CBManagerStatePoweredOn
+            if (rePublishAfterRestore) {
+                logger.d("auto re-publishing services after BT state restore (republishGattServicesOnRestore=true)")
+                libPebbleCoroutineScope.launch { addServices() }
+            }
         }
     }
 

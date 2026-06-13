@@ -246,11 +246,11 @@ class HumanDateTimeParser(
         atTimePattern.find(input)?.let { match ->
             val timeStr = match.groupValues[1]
             val time = parseTimeString(timeStr) ?: return null
-            return InterpretedDateTime.AbsoluteTime(time)
+            return InterpretedDateTime.AbsoluteTime(time, amPmExplicit = amPmPattern.containsMatchIn(timeStr))
         }
 
         parseTimeString(input)?.let { time ->
-            return InterpretedDateTime.AbsoluteTime(time)
+            return InterpretedDateTime.AbsoluteTime(time, amPmExplicit = amPmPattern.containsMatchIn(input))
         }
 
         return null
@@ -452,6 +452,7 @@ class HumanDateTimeParser(
         // Absolute time patterns
         private val atTimePattern = Regex("""at\s+(.+)""")
         private val timePattern = Regex("""^(\d{1,2})(?::(\d{2}))?(am|pm)?$""")
+        private val amPmPattern = Regex("""[ap]\.?\s*m\.?""")
 
         // Absolute date patterns
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
@@ -495,7 +496,7 @@ class HumanDateTimeParser(
 sealed class InterpretedDateTime {
     data class Relative(val duration: Duration = Duration.ZERO, val period: DatePeriod? = null) : InterpretedDateTime()
     data class AbsoluteDateTime(val dateTime: LocalDateTime) : InterpretedDateTime()
-    data class AbsoluteTime(val time: LocalTime) : InterpretedDateTime()
+    data class AbsoluteTime(val time: LocalTime, val amPmExplicit: Boolean = false) : InterpretedDateTime()
     data class AbsoluteDate(val date: LocalDate) : InterpretedDateTime()
 }
 

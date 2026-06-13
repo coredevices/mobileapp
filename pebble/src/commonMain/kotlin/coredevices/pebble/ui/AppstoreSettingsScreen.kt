@@ -136,7 +136,9 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                 if (sources.firstOrNull {
                         parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false
                     }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
-                        uriHandler.openUri(REBBLE_LOGIN_URI)
+                        if (!uriHandler.open(REBBLE_LOGIN_URI)) {
+                            topBarParams.showSnackbar("Couldn't open login page")
+                        }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
                 }

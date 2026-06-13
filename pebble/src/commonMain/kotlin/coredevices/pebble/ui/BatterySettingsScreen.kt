@@ -28,13 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
-import com.multiplatform.webview.web.LoadingState
-import com.multiplatform.webview.web.WebView
-import com.multiplatform.webview.web.rememberWebViewNavigator
-import com.multiplatform.webview.web.rememberWebViewState
 import com.russhwolf.settings.Settings
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.PebbleWebview
+import coredevices.ui.PebbleWebviewNavigator
+import coredevices.ui.PebbleWebviewUrlInterceptor
 import coredevices.ui.SignInDialog
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
@@ -147,11 +146,15 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
         return
     }
 
-    val state = rememberWebViewState(currentUrl)
-    val navigator = rememberWebViewNavigator()
-    LaunchedEffect(Unit) {
+    val interceptor = remember {
+        object : PebbleWebviewUrlInterceptor {
+            override var navigator: PebbleWebviewNavigator? = null
+            override fun onIntercept(url: String, navigator: PebbleWebviewNavigator) = true
+        }
+    }
+    LaunchedEffect(interceptor) {
         topBarParams.actions {
-            IconButton(onClick = { navigator.reload() }) {
+            IconButton(onClick = { interceptor.navigator?.reload() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
             }
         }
@@ -161,14 +164,11 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        WebView(
-            state = state,
+        PebbleWebview(
+            url = currentUrl,
+            interceptor = interceptor,
             modifier = Modifier.fillMaxSize(),
-            navigator = navigator,
         )
-        if (state.loadingState is LoadingState.Loading) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-        }
     }
 }
 

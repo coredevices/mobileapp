@@ -21,6 +21,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HealthStat
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.util.DataBuffer
@@ -32,6 +33,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 private val logger = Logger.withTag("HealthStatsSync")
 
@@ -115,6 +117,15 @@ internal suspend fun updateHealthStatsInDatabase(
         ))
     }
 
+    // Per-weekday typical-step blobs (consumed by firmware activity_insights for the
+    // "X% above/below typical" comparison in the end-of-day activity summary notification).
+    val typicalsByWeekday = computeAllWeekdayTypicalSteps(healthDao, today, timeZone)
+    for ((dayOfWeek, payload) in typicalsByWeekday) {
+        val key = STEP_TYPICAL_KEYS.getValue(dayOfWeek)
+        stats.add(HealthStat(key = key, payload = payload))
+    }
+    logger.d { "HEALTH_STATS: Wrote ${typicalsByWeekday.size} weekday typical-step rows" }
+
     // Batch insert all stats
     healthStatDao.insertOrReplace(stats)
     logger.d { "HEALTH_STATS: Updated ${stats.size} stats in database for automatic syncing" }
@@ -178,6 +189,101 @@ private fun movementPayload(dayStartEpochSec: Long, aggregates: HealthAggregates
     return buffer.array()
 }
 
+/**
+ * Bins a flat list of HealthDataEntity rows into per-weekday 15-minute typical-step payloads.
+ *
+ * For each weekday with at least MIN_DAYS_FOR_TYPICAL distinct matching days in the input,
+ * emits a 192-byte little-endian payload of 96 UShort values. A slot's value is the average
+ * step count across the distinct matching days that had at least one row overlapping that
+ * slot; if zero matching days covered the slot, the value is UNKNOWN_TYPICAL_STEPS so the
+ * watch sum-skips it. Weekdays below the threshold are omitted from the result.
+ */
+internal fun buildWeekdayTypicalsFromData(
+    allData: List<HealthDataEntity>,
+    timeZone: TimeZone,
+): Map<DayOfWeek, ByteArray> {
+    if (allData.isEmpty()) return emptyMap()
+
+    val slotSteps = Array(7) { LongArray(TYPICAL_STEP_BINS) }
+    val slotDays = Array(7) { Array(TYPICAL_STEP_BINS) { mutableSetOf<Long>() } }
+    val matchingDays = Array(7) { mutableSetOf<Long>() }
+
+    for (entry in allData) {
+        val entryDate = kotlinx.datetime.Instant.fromEpochSeconds(entry.timestamp)
+            .toLocalDateTime(timeZone).date
+        val wd = entryDate.dayOfWeek.ordinal
+        val dayStart = entryDate.atStartOfDayIn(timeZone).epochSeconds
+        val slot = ((entry.timestamp - dayStart) / TYPICAL_STEP_BIN_SECONDS)
+            .toInt()
+            .coerceIn(0, TYPICAL_STEP_BINS - 1)
+        slotSteps[wd][slot] += entry.steps.toLong()
+        slotDays[wd][slot].add(dayStart)
+        matchingDays[wd].add(dayStart)
+    }
+
+    val result = mutableMapOf<DayOfWeek, ByteArray>()
+    for (wd in 0..6) {
+        if (matchingDays[wd].size < MIN_DAYS_FOR_TYPICAL) continue
+        val buffer = DataBuffer(TYPICAL_STEP_BINS * UShort.SIZE_BYTES)
+            .apply { setEndian(Endian.Little) }
+        for (slot in 0 until TYPICAL_STEP_BINS) {
+            val count = slotDays[wd][slot].size
+            val value: UShort = if (count == 0) {
+                UNKNOWN_TYPICAL_STEPS
+            } else {
+                (slotSteps[wd][slot] / count).coerceIn(0L, 0xFFFEL).toInt().toUShort()
+            }
+            buffer.putUShort(value)
+        }
+        result[DayOfWeek.entries[wd]] = buffer.array().toByteArray()
+    }
+    return result
+}
+
+/**
+ * Queries the last [TYPICAL_STEP_HISTORY_WEEKS] weeks of HealthDataEntity rows (excluding today)
+ * and bins them into per-weekday 15-min typical-step payloads via [buildWeekdayTypicalsFromData].
+ *
+ * Returns one entry per weekday that has at least [MIN_DAYS_FOR_TYPICAL] distinct matching days
+ * in the queried window. Empty map when there's no data or no weekday clears the threshold.
+ */
+/**
+ * Sums the 96 little-endian UShort step counts in a typical-step payload, skipping the
+ * UNKNOWN sentinel — i.e., "total typical steps for the day represented by this payload."
+ *
+ * Used by the debug stats dialog to surface the per-weekday typical totals; mirrors the
+ * watch firmware's [`prv_cur_step_avg`](activity_insights.c:1143) which sums the same
+ * array.
+ */
+internal fun decodeTypicalStepTotal(payload: ByteArray): Int {
+    require(payload.size == TYPICAL_STEP_BINS * UShort.SIZE_BYTES) {
+        "typical-step payload must be ${TYPICAL_STEP_BINS * UShort.SIZE_BYTES} bytes, got ${payload.size}"
+    }
+    var total = 0
+    for (slot in 0 until TYPICAL_STEP_BINS) {
+        val byteOffset = slot * 2
+        val lo = payload[byteOffset].toInt() and 0xFF
+        val hi = payload[byteOffset + 1].toInt() and 0xFF
+        val v = (hi shl 8) or lo
+        if (v != UNKNOWN_TYPICAL_STEPS.toInt()) total += v
+    }
+    return total
+}
+
+internal suspend fun computeAllWeekdayTypicalSteps(
+    healthDao: HealthDao,
+    today: LocalDate,
+    timeZone: TimeZone,
+): Map<DayOfWeek, ByteArray> {
+    val rangeEnd = today.atStartOfDayIn(timeZone).epochSeconds
+    val rangeStart = today
+        .minus(DatePeriod(days = TYPICAL_STEP_HISTORY_WEEKS * 7))
+        .atStartOfDayIn(timeZone)
+        .epochSeconds
+    val allData = healthDao.getHealthDataForRange(rangeStart, rangeEnd)
+    return buildWeekdayTypicalsFromData(allData, timeZone)
+}
+
 // Extension functions
 private fun Long.kilocalories(): Long = this / 1000L
 
@@ -232,3 +338,19 @@ private val SLEEP_KEYS =
         DayOfWeek.SATURDAY to "saturday_sleepData",
         DayOfWeek.SUNDAY to "sunday_sleepData",
     )
+
+private const val TYPICAL_STEP_BINS = 96
+private const val TYPICAL_STEP_BIN_SECONDS = 900L
+private const val TYPICAL_STEP_HISTORY_WEEKS = 7
+private const val MIN_DAYS_FOR_TYPICAL = 2
+private const val UNKNOWN_TYPICAL_STEPS: UShort = 0xFFFFu
+
+private val STEP_TYPICAL_KEYS = mapOf(
+    DayOfWeek.MONDAY to "monday_steps",
+    DayOfWeek.TUESDAY to "tuesday_steps",
+    DayOfWeek.WEDNESDAY to "wednesday_steps",
+    DayOfWeek.THURSDAY to "thursday_steps",
+    DayOfWeek.FRIDAY to "friday_steps",
+    DayOfWeek.SATURDAY to "saturday_steps",
+    DayOfWeek.SUNDAY to "sunday_steps",
+)

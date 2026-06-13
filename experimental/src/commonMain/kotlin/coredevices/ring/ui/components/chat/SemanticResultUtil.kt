@@ -65,6 +65,7 @@ fun SemanticResultIcon(
         is SemanticResult.TaskCreation -> Icons.Outlined.Checklist
         is SemanticResult.ListItemCreation -> Icons.AutoMirrored.Outlined.Note
         is SemanticResult.SupportingData -> Icons.Outlined.IntegrationInstructions
+        is SemanticResult.ActionLogged -> Icons.Default.Code
     }
     Icon(
         imageVector = icon,
@@ -232,5 +233,6 @@ suspend fun SemanticResult.actionText(): String {
             getString(Res.string.noted)
         }
         is SemanticResult.SupportingData -> "Gathered info"
+        is SemanticResult.ActionLogged -> this.title
     }
 }

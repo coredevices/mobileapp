@@ -28,6 +28,11 @@ class ModelManager(
             ?: listOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
     }
 
+    // Downloaded STT models, i.e. everything except the language model (matches getAvailableSTTModels).
+    fun getDownloadedSTTModelSlugs(): List<String> {
+        return getDownloadedModelSlugs().filter { it != CommonBuildKonfig.CACTUS_LM_MODEL_NAME }
+    }
+
     fun deleteModel(modelName: String) {
         modelPathProvider?.deleteModel(modelName)
     }

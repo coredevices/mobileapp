@@ -33,7 +33,7 @@ class AgentFactory: KoinComponent {
                 if (Firebase.auth.currentUser?.emailOrNull == null) {
                     throw AgentAuthenticationException("User must be authenticated to use search mode")
                 }
-                get<AgentNenya>() { parametersOf(existingConversation, true) }
+                get<SearchAgentNenya> { parametersOf(existingConversation) }
             }
         }
     }

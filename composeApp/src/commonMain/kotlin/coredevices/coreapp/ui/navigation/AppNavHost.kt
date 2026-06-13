@@ -24,7 +24,7 @@ import coredevices.ring.ui.navigation.RingRoute
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
-import coredevices.coreapp.ui.screens.RingOnboardingScreen
+import coredevices.coreapp.ui.screens.ringonboarding.RingOnboardingScreen
 import coredevices.coreapp.ui.screens.ViewBugReportScreen
 import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
@@ -99,6 +99,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
 
             override fun goBackToPebble() {
                 navController.popBackStack(PebbleRoutes.WatchHomeRoute, inclusive = false)
+            }
+
+            override fun replaceWith(route: CoreRoute) {
+                navController.popBackStack()
+                navController.navigate(route)
             }
         }
     }

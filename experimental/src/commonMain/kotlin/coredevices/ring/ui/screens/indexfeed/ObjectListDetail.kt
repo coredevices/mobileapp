@@ -42,18 +42,22 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,9 +74,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -125,16 +131,26 @@ internal fun ListView(
     val isCoreList = s.list.firestoreId in setOf(LIST_NOTES_SELF_ID, LIST_TODOS_ID, LIST_SHOPPING_ID)
     var searching by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var deleteDialogOpen by remember { mutableStateOf(false) }
+    var deleteAction by remember(s.list.firestoreId) { mutableStateOf(DeleteListAction.MoveItems) }
+    var deleteTargetListId by remember(s.list.firestoreId) { mutableStateOf(LIST_NOTES_SELF_ID) }
     var editing by remember(s.list.firestoreId) { mutableStateOf(startEditing && !isTodos) }
-    var draftTitle by remember(s.list.firestoreId) { mutableStateOf(s.list.title) }
+    val initialNewListRename = startEditing && s.list.title == "New list"
+    var draftTitle by remember(s.list.firestoreId) {
+        val initialTitle = if (initialNewListRename) "" else s.list.title
+        mutableStateOf(TextFieldValue(initialTitle, selection = TextRange(initialTitle.length)))
+    }
     var draftIcon by remember(s.list.firestoreId) { mutableStateOf(s.list.icon) }
+    var titleHadFocus by remember(s.list.firestoreId) { mutableStateOf(false) }
+    var emojiPickerOpen by remember(s.list.firestoreId) { mutableStateOf(false) }
+    var saveAfterEmojiPickerCloses by remember(s.list.firestoreId) { mutableStateOf(false) }
     val listTitleFocusRequester = remember(s.list.firestoreId) { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     androidx.compose.runtime.LaunchedEffect(s.list.title, s.list.icon) {
         // Refresh the draft when the list title changes from outside (e.g.
         // a Firestore sync) and we're not actively editing.
         if (!editing) {
-            draftTitle = s.list.title
+            draftTitle = TextFieldValue(s.list.title, selection = TextRange(s.list.title.length))
             draftIcon = s.list.icon
         }
     }
@@ -153,16 +169,71 @@ internal fun ListView(
     val active = s.children.filter { !it.done || it.firestoreId in animatingDoneIds }
     val done = s.children.filter { it.done && it.firestoreId !in animatingDoneIds }
     var focusItemId by remember(s.list.firestoreId) { mutableStateOf<String?>(null) }
+    val deleteTargetLists = remember(s.allLists, s.list.firestoreId) {
+        s.allLists
+            .filter { !it.deleted && it.firestoreId != s.list.firestoreId && it.firestoreId != LIST_TODOS_ID }
+            .sortedWith(
+                compareBy<coredevices.ring.data.entity.room.indexfeed.CachedList> {
+                    if (it.firestoreId == LIST_NOTES_SELF_ID) 0 else 1
+                }.thenBy { it.title.lowercase() },
+            )
+    }
+    LaunchedEffect(deleteDialogOpen, deleteTargetLists) {
+        if (deleteDialogOpen) {
+            val ids = deleteTargetLists.map { it.firestoreId }.toSet()
+            if (deleteTargetListId !in ids) {
+                deleteTargetListId = deleteTargetLists.firstOrNull()?.firestoreId ?: LIST_NOTES_SELF_ID
+            }
+            if (deleteTargetLists.isEmpty()) {
+                deleteAction = DeleteListAction.DeleteItems
+            }
+        }
+    }
 
-    fun cancelEdit() {
-        editing = false
-        draftTitle = s.list.title
-        draftIcon = s.list.icon
+    fun commitListEdit(titleText: String = draftTitle.text, iconText: String = draftIcon) {
+        val t = titleText.trim()
+        val icon = iconText.trim()
+        if (t.isNotBlank() && (t != s.list.title || icon != s.list.icon)) {
+            vm.renameList(t, icon)
+        }
     }
     fun saveEdit() {
-        val t = draftTitle.trim()
-        if (t.isNotBlank()) vm.renameList(t, draftIcon.trim())
+        commitListEdit()
         editing = false
+        titleHadFocus = false
+        emojiPickerOpen = false
+        saveAfterEmojiPickerCloses = false
+    }
+    fun startTitleEdit() {
+        draftTitle = TextFieldValue(s.list.title, selection = TextRange(s.list.title.length))
+        draftIcon = s.list.icon
+        titleHadFocus = false
+        emojiPickerOpen = false
+        saveAfterEmojiPickerCloses = false
+        editing = true
+    }
+    fun handleTitleFocusLost() {
+        if (emojiPickerOpen) {
+            saveAfterEmojiPickerCloses = true
+        } else {
+            saveEdit()
+        }
+    }
+    fun handleEmojiPickerOpenChange(open: Boolean) {
+        emojiPickerOpen = open
+        if (!open && saveAfterEmojiPickerCloses && editing) {
+            saveEdit()
+        }
+    }
+    val latestEditing by rememberUpdatedState(editing)
+    val latestDraftTitle by rememberUpdatedState(draftTitle)
+    val latestDraftIcon by rememberUpdatedState(draftIcon)
+    DisposableEffect(s.list.firestoreId) {
+        onDispose {
+            if (latestEditing) {
+                commitListEdit(latestDraftTitle.text, latestDraftIcon)
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -186,6 +257,7 @@ internal fun ListView(
                             ListEmojiPicker(
                                 value = draftIcon,
                                 onChange = { draftIcon = it },
+                                onOpenChange = ::handleEmojiPickerOpenChange,
                             )
                             Spacer(Modifier.width(8.dp))
                             BasicTextField(
@@ -193,17 +265,33 @@ internal fun ListView(
                                 onValueChange = { draftTitle = it },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .focusRequester(listTitleFocusRequester),
+                                    .focusRequester(listTitleFocusRequester)
+                                    .onFocusChanged { state ->
+                                        if (titleHadFocus && !state.isFocused) handleTitleFocusLost()
+                                        titleHadFocus = state.isFocused
+                                    },
                                 singleLine = true,
                                 textStyle = TextStyle(
                                     color = colors.onSurface,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    letterSpacing = (-0.1).sp,
                                 ).indexTextEntryStyle(),
                                 cursorBrush = SolidColor(colors.primary),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveEdit() }),
+                                decorationBox = { innerTextField ->
+                                    Box {
+                                        if (draftTitle.text.isBlank()) {
+                                            Text(
+                                                "New list",
+                                                color = colors.onSurfaceVariant.copy(alpha = 0.55f),
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
                             )
                         }
                     }
@@ -213,11 +301,7 @@ internal fun ListView(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    editing = true
-                                    draftTitle = s.list.title
-                                    draftIcon = s.list.icon
-                                }
+                                .clickable { startTitleEdit() }
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -232,9 +316,11 @@ internal fun ListView(
                             }
                             Text(
                                 s.list.title.ifBlank { "List" },
-                                color = colors.onSurface,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                style = TextStyle(
+                                    color = colors.onSurface,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                ).indexTextEntryStyle(),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -242,11 +328,13 @@ internal fun ListView(
                     }
                 } else null,
                 onTitleClick = if (!isTodos && !editing) ({
-                    editing = true
-                    draftTitle = s.list.title
-                    draftIcon = s.list.icon
+                    startTitleEdit()
                 }) else null,
                 coreNav = coreNav,
+                onBack = {
+                    if (editing) saveEdit()
+                    coreNav.goBack()
+                },
                 right = {
                     if (editing) {
                         Text(
@@ -271,9 +359,7 @@ internal fun ListView(
                                         text = { Text("Rename list") },
                                         onClick = {
                                             menuOpen = false
-                                            editing = true
-                                            draftTitle = s.list.title
-                                            draftIcon = s.list.icon
+                                            startTitleEdit()
                                         },
                                     )
                                 }
@@ -282,7 +368,21 @@ internal fun ListView(
                                         text = { Text("Delete list", color = colors.error) },
                                         onClick = {
                                             menuOpen = false
-                                            vm.deleteThis { coreNav.goBack() }
+                                            if (s.childCount == 0) {
+                                                vm.deleteListAndChildren {
+                                                    coreNav.replaceWith(RingRoutes.AllLists)
+                                                }
+                                                return@DropdownMenuItem
+                                            }
+                                            deleteTargetListId = deleteTargetLists.firstOrNull {
+                                                it.firestoreId == LIST_NOTES_SELF_ID
+                                            }?.firestoreId ?: deleteTargetLists.firstOrNull()?.firestoreId.orEmpty()
+                                            deleteAction = if (deleteTargetLists.isNotEmpty()) {
+                                                DeleteListAction.MoveItems
+                                            } else {
+                                                DeleteListAction.DeleteItems
+                                            }
+                                            deleteDialogOpen = true
                                         },
                                     )
                                 }
@@ -313,7 +413,7 @@ internal fun ListView(
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
-                            vm.createChildItem(text) { focusItemId = it }
+                            vm.createChildItem(text) { focusItemId = NEW_NOTE_FOCUS_ID }
                         },
                     )
                 }
@@ -325,6 +425,7 @@ internal fun ListView(
                         child = child,
                         requestFocus = focusItemId == child.firestoreId,
                         onFocusConsumed = { focusItemId = null },
+                        onToggle = { vm.toggleChildDone(child) },
                         onSave = { text -> vm.patchChildItem(child.firestoreId, title = text) },
                         onDelete = { vm.deleteChildItem(child.firestoreId) },
                         onEnter = { text ->
@@ -350,7 +451,7 @@ internal fun ListView(
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
-                            vm.createChildItem(text) { focusItemId = it }
+                            vm.createChildItem(text) { focusItemId = NEW_NOTE_FOCUS_ID }
                         },
                     )
                 }
@@ -369,6 +470,185 @@ internal fun ListView(
                 }
             }
             item { Spacer(Modifier.height(80.dp)) }
+        }
+    }
+
+    if (deleteDialogOpen) {
+        DeleteListDialog(
+            listTitle = s.list.title.ifBlank { "this list" },
+            childCount = s.childCount,
+            targetLists = deleteTargetLists,
+            selectedAction = deleteAction,
+            selectedTargetListId = deleteTargetListId,
+            onAction = { deleteAction = it },
+            onTargetList = { deleteTargetListId = it },
+            onDismiss = { deleteDialogOpen = false },
+            onConfirm = {
+                deleteDialogOpen = false
+                if (deleteAction == DeleteListAction.MoveItems && deleteTargetListId.isNotBlank()) {
+                    vm.deleteListMovingChildren(deleteTargetListId) {
+                        coreNav.replaceWith(RingRoutes.AllLists)
+                    }
+                } else {
+                    vm.deleteListAndChildren {
+                        coreNav.replaceWith(RingRoutes.AllLists)
+                    }
+                }
+            },
+        )
+    }
+}
+
+private enum class DeleteListAction { MoveItems, DeleteItems }
+
+@Composable
+private fun DeleteListDialog(
+    listTitle: String,
+    childCount: Int,
+    targetLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
+    selectedAction: DeleteListAction,
+    selectedTargetListId: String,
+    onAction: (DeleteListAction) -> Unit,
+    onTargetList: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    val selectedTarget = targetLists.firstOrNull { it.firestoreId == selectedTargetListId }
+    var targetMenuOpen by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Delete list?",
+                color = colors.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = if (childCount > 0) {
+            {
+                Column {
+                    Text(
+                        "$listTitle has $childCount ${if (childCount == 1) "subitem" else "subitems"}.",
+                        color = colors.onSurfaceVariant,
+                        fontSize = 14.sp,
+                        lineHeight = 19.sp,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    if (targetLists.isNotEmpty()) {
+                        DeleteChoiceRow(
+                            selected = selectedAction == DeleteListAction.MoveItems,
+                            title = "Move subitems",
+                            subtitle = "Add them to another list before deleting this one.",
+                            onClick = { onAction(DeleteListAction.MoveItems) },
+                        )
+                        if (selectedAction == DeleteListAction.MoveItems) {
+                            Box(modifier = Modifier.padding(start = 42.dp, top = 8.dp, bottom = 4.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .border(1.dp, colors.outlineVariant, RoundedCornerShape(12.dp))
+                                        .clickable { targetMenuOpen = true }
+                                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        selectedTarget?.icon.orEmpty(),
+                                        color = colors.onSurface,
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                    )
+                                    if (!selectedTarget?.icon.isNullOrBlank()) Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        selectedTarget?.title?.ifBlank { "List" } ?: "Notes to self",
+                                        color = colors.onSurface,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = targetMenuOpen,
+                                    onDismissRequest = { targetMenuOpen = false },
+                                ) {
+                                    targetLists.forEach { list ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (list.icon.isNotBlank()) {
+                                                        Text(list.icon, fontSize = 14.sp)
+                                                        Spacer(Modifier.width(8.dp))
+                                                    }
+                                                    Text(list.title.ifBlank { "List" })
+                                                }
+                                            },
+                                            onClick = {
+                                                onTargetList(list.firestoreId)
+                                                targetMenuOpen = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    DeleteChoiceRow(
+                        selected = selectedAction == DeleteListAction.DeleteItems,
+                        title = "Delete all subitems",
+                        subtitle = "Remove every subitem in this list.",
+                        onClick = { onAction(DeleteListAction.DeleteItems) },
+                    )
+                }
+            }
+        } else null,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete list", color = colors.error, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = colors.onSurfaceVariant)
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteChoiceRow(
+    selected: Boolean,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Column(modifier = Modifier.weight(1f).padding(top = 2.dp)) {
+            Text(
+                title,
+                color = colors.onSurface,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    subtitle,
+                    color = colors.onSurfaceVariant,
+                    fontSize = 12.5.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
         }
     }
 }
@@ -452,6 +732,7 @@ private const val NEW_NOTE_FOCUS_ID = "__new_note__"
 private fun ListEmojiPicker(
     value: String,
     onChange: (String) -> Unit,
+    onOpenChange: (Boolean) -> Unit,
 ) {
     val colors = IndexTheme.colors
     var open by remember { mutableStateOf(false) }
@@ -469,24 +750,39 @@ private fun ListEmojiPicker(
             }
         }
     }
+    val trimmedValue = value.trim()
+    fun setOpen(next: Boolean) {
+        open = next
+        onOpenChange(next)
+    }
     Box {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(1.dp, colors.outlineVariant, RoundedCornerShape(8.dp))
-                .clickable { open = true },
-            contentAlignment = Alignment.Center,
-        ) {
+        if (trimmedValue.isNotBlank()) {
             Text(
-                value.trim(),
+                trimmedValue,
                 color = colors.onSurface,
-                fontSize = 19.sp,
+                fontSize = 18.sp,
                 maxLines = 1,
+                modifier = Modifier.clickable { setOpen(true) },
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, colors.outlineVariant, RoundedCornerShape(8.dp))
+                    .clickable { setOpen(true) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    trimmedValue,
+                    color = colors.onSurface,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                )
+            }
         }
         if (open) {
-            Dialog(onDismissRequest = { open = false }) {
+            Dialog(onDismissRequest = { setOpen(false) }) {
                 Column(
                     modifier = Modifier
                         .width(340.dp)
@@ -512,12 +808,12 @@ private fun ListEmojiPicker(
                             color = colors.primary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    onChange("")
-                                    open = false
-                                }
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        onChange("")
+                                        setOpen(false)
+                                    }
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                         )
                     }
@@ -579,7 +875,7 @@ private fun ListEmojiPicker(
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable {
                                         onChange(option.emoji)
-                                        open = false
+                                        setOpen(false)
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -598,6 +894,7 @@ private fun EditableNoteRow(
     child: CachedItem,
     requestFocus: Boolean,
     onFocusConsumed: () -> Unit,
+    onToggle: () -> Unit,
     onSave: (String) -> Unit,
     onDelete: () -> Unit,
     onEnter: (String) -> Unit,
@@ -608,6 +905,13 @@ private fun EditableNoteRow(
     var hadFocus by remember(child.firestoreId) { mutableStateOf(false) }
     var isFocused by remember(child.firestoreId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    // Per-item kind indicator: a checklist item shows the same tickable
+    // circle the home Todos carousel uses; a plain note has no glyph
+    // (keeps the column visually clean — note text starts at 22dp
+    // exactly like the rest of the screen). Mixing both within a single
+    // notes-domain list (e.g. Index features holding a checklist among
+    // notes) now reads correctly at a glance.
+    val isChecklist = child.kind == "checklist"
 
     fun flush() {
         val clean = draft.trim()
@@ -627,9 +931,28 @@ private fun EditableNoteRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 22.dp, end = 14.dp, top = 1.dp, bottom = 1.dp),
+            .padding(
+                start = 22.dp,
+                end = 14.dp,
+                top = 1.dp,
+                bottom = 1.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Reserve the same left "gutter" on every row regardless of kind
+        // so all titles in a mixed list (notes and checklists side by
+        // side) align at the same x-coordinate. Checklist rows fill that
+        // gutter with the tickable circle; plain-note rows leave it
+        // empty. Width = TodoCheckCircle.Small (19dp) + 12dp gap.
+        if (isChecklist) {
+            TodoCheckCircle(
+                done = child.done,
+                onToggle = onToggle,
+            )
+            Spacer(Modifier.width(12.dp))
+        } else {
+            Spacer(Modifier.width(31.dp))
+        }
         BasicTextField(
             value = draft,
             onValueChange = { next ->
@@ -668,6 +991,7 @@ private fun EditableNoteRow(
                 color = colors.onSurface,
                 fontSize = 15.sp,
                 lineHeight = 18.sp,
+                textDecoration = if (child.done) TextDecoration.LineThrough else TextDecoration.None,
             ).indexTextEntryStyle(),
             cursorBrush = SolidColor(colors.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),

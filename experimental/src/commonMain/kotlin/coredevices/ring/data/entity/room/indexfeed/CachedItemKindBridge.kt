@@ -11,6 +11,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 
 /**
@@ -35,6 +36,7 @@ val ItemMetadata.kind: String get() = when (this) {
     is ItemMetadata.ActionLog -> "action_log"
     is ItemMetadata.McpCall -> "mcp_call"
     ItemMetadata.Note -> "note"
+    ItemMetadata.Checklist -> "checklist"
 }
 
 val CachedItem.kind: String get() = metadata.kind
@@ -57,7 +59,7 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
                 ItemMetadata.Scheduled.FireKind.Timer -> "timer"
             })
             fireTime?.let { put("fireTime", it.toString().substringBefore('.').take(5)) }
-            duration?.let { put("duration", it) }
+            duration?.let { put("duration", it.milliseconds.toIsoString()) }
             if (repeatDays.isNotEmpty()) {
                 put("repeatDays", JsonPrimitive(repeatDays.joinToString(",")))
             }
@@ -87,6 +89,7 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
             put("success", success)
         }
         ItemMetadata.Note -> JsonObject(emptyMap())
+        ItemMetadata.Checklist -> JsonObject(emptyMap())
     }
 }
 
@@ -135,6 +138,7 @@ fun metadataForKind(kind: String, existing: ItemMetadata? = null): ItemMetadata 
             sentAt = Clock.System.now(),
             status = ItemMetadata.Message.Status.Sent,
         )
+        "checklist" -> ItemMetadata.Checklist
         else -> ItemMetadata.Note
     }
 }

@@ -36,6 +36,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.emailOrNull
+import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.DocumentSnapshot
@@ -92,6 +93,7 @@ class SettingsViewModel(
     private val itemRepository: coredevices.ring.database.room.repository.ItemRepository,
     private val listRepository: coredevices.ring.database.room.repository.ListRepository,
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val platform: coredevices.util.Platform,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -163,7 +165,10 @@ class SettingsViewModel(
 
     private suspend fun updateAvailableReminderProviders() {
         _availableReminderProviders.value = buildList {
-            add(ReminderProvider.Native)
+            add(ReminderProvider.BuiltIn)
+            if (platform.isIOS) {
+                add(ReminderProvider.IOSReminders)
+            }
             if (gTasksIntegration.isAuthorized()) {
                 add(ReminderProvider.GoogleTasks)
             }
@@ -373,7 +378,7 @@ class SettingsViewModel(
                 _backupStatus.value = "Collecting audio files..."
                 val audioFileIds = mutableListOf<String>()
                 withContext(Dispatchers.IO) {
-                    var cursor: dev.gitlive.firebase.firestore.DocumentSnapshot? = null
+                    var cursor: DocumentSnapshot? = null
                     while (true) {
                         val snapshot = firestoreRecordingsDao.getPaginated(100, cursor)
                         val docs = snapshot.documents
@@ -384,7 +389,7 @@ class SettingsViewModel(
                                 for (entry in recording.entries) {
                                     val fileName = entry.fileName ?: continue
                                     audioFileIds.add(fileName)
-                                    audioFileIds.add("$fileName-clean")
+                                    audioFileIds.add("$fileName-original")
                                 }
                             } catch (_: Exception) {}
                         }
@@ -757,7 +762,7 @@ class SettingsViewModel(
                         // Download audio files for each entry
                         for (entry in doc.entries) {
                             val fileName = entry.fileName ?: continue
-                            for (variant in listOf(fileName, "$fileName-clean")) {
+                            for (variant in listOf(fileName, "$fileName-original")) {
                                 try {
                                     val (source, meta) = recordingStorage.openRecordingSource(variant)
                                     source.use { src ->
@@ -854,7 +859,7 @@ class SettingsViewModel(
                         }
                         val audioFiles = doc.entries.flatMap { entry ->
                             val fileName = entry.fileName ?: return@flatMap emptyList()
-                            listOf(fileName, "$fileName-clean").mapNotNull { variant ->
+                            listOf(fileName, "$fileName-original").mapNotNull { variant ->
                                 val rawEntry = entryMap["recordings/$dirId/$variant.raw"] ?: return@mapNotNull null
                                 val metaEntry = entryMap["recordings/$dirId/$variant.meta.json"]
                                 var sampleRate = 16000; var mimeType = "audio/raw"

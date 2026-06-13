@@ -16,7 +16,12 @@ annotation class GenerateRoomEntity(
 )
 
 // TODO move somewhere better
-enum class BlobDatabase(val id: UByte, val sendClear: Boolean = true) {
+enum class BlobDatabase(
+    val id: UByte,
+    val sendClear: Boolean = true,
+    /** False if this DB only exists on watches that support BlobDb v1+. */
+    val supportsLegacyInsert: Boolean = true,
+) {
     Test(0u),
     Pin(1u),
     App(2u),
@@ -29,7 +34,7 @@ enum class BlobDatabase(val id: UByte, val sendClear: Boolean = true) {
     AppConfigs(9u),
     HealthStats(10u),
     AppGlance(11u),
-    WatchPrefs(12u, sendClear = false),
+    WatchPrefs(12u, sendClear = false, supportsLegacyInsert = false),
     Invalid(0xFFu),
     ;
     companion object {

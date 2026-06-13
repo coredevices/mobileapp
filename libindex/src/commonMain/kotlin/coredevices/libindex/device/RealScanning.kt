@@ -2,6 +2,8 @@ package coredevices.libindex.device
 
 import co.touchlab.kermit.Logger
 import com.juul.kable.Scanner
+import coredevices.haversine.KMPHaversineAdvertisement
+import coredevices.haversine.fingerprintMatchesFailsafe
 import coredevices.libindex.Scanning
 import io.rebble.libpebblecommon.connection.BleScanResult
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.asPebbleBleIdentifier
@@ -29,6 +31,7 @@ class RealScanning(
 
     companion object {
         private val BLE_SCANNING_TIMEOUT = 30.seconds
+        private val logger = Logger.withTag("RealScanning")
     }
 
     private fun scan(): Flow<BleScanResult> {
@@ -64,11 +67,18 @@ class RealScanning(
             }
             try {
                 scanResults.collect {
+                    val fingerprint = KMPHaversineAdvertisement.parseToStateFingerprint(it.manufacturerData.data)
+                    if (fingerprint == null) {
+                        logger.w { "No fingerprint found in advertisement from ${it.identifier.asString}, ignoring advertisement" }
+                        return@collect
+                    }
+                    val isFailsafe = fingerprintMatchesFailsafe(fingerprint)
                     indexDeviceManager.addScanResult(
                         IndexScanResult(
                             identifier = IndexIdentifier.fromPlatformAddress(it.identifier.asString),
                             name = it.name,
                             rssi = it.rssi,
+                            isFailsafe = isFailsafe,
                         )
                     )
                 }

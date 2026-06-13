@@ -49,6 +49,14 @@ interface CachedItemDao {
     """)
     fun getByListFlow(listId: String): Flow<List<CachedItem>>
 
+    @Query("""
+        SELECT * FROM CachedItem
+        WHERE deleted = 0
+          AND (',' || parentListIdsCsv || ',') LIKE '%,' || :listId || ',%'
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getByList(listId: String): List<CachedItem>
+
     @Query("DELETE FROM CachedItem WHERE firestoreId = :id")
     suspend fun deleteById(id: String)
 

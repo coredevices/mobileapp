@@ -19,4 +19,5 @@ interface PebbleWebviewUrlInterceptor {
 interface PebbleWebviewNavigator {
     fun loadUrl(url: String)
     fun goBack(): Boolean
+    fun reload()
 }

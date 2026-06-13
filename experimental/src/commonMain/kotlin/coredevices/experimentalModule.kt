@@ -16,6 +16,7 @@ import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.AgentNenya
+import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.ShortcutActionHandler
@@ -60,6 +61,7 @@ import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
+import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
@@ -187,7 +189,7 @@ val experimentalModule = module {
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
-    singleOf(::RecordingStorage)
+    singleOf(::RealRecordingStorage) bind RecordingStorage::class
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)
@@ -197,7 +199,8 @@ val experimentalModule = module {
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
-    factory { p -> AgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: false) }
+    factory { p -> AgentNenya(get(), p.getOrNull() ?: emptyList()) }
+    factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
     factory { p -> AgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }

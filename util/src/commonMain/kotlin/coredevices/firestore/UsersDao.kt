@@ -32,6 +32,7 @@ interface UsersDao {
     suspend fun updateTodoBlockId(
         todoBlockId: String
     )
+    suspend fun updateNotionPageId(pageId: String) {}
     suspend fun initUserDevToken(rebbleUserToken: String?)
     suspend fun updateLastConnectedWatch(serial: String)
     suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int)
@@ -172,6 +173,11 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
         todoBlockId: String
     ) {
         userDoc?.update(mapOf("todo_block_id" to todoBlockId))
+    }
+
+    override suspend fun updateNotionPageId(pageId: String) {
+        // Reset the cached Todo block so a new one is created in the chosen page.
+        userDoc?.update(mapOf("notion_page_id" to pageId, "todo_block_id" to null))
     }
 
     override suspend fun initUserDevToken(rebbleUserToken: String?) {

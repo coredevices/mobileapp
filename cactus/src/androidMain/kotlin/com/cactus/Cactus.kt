@@ -1,6 +1,21 @@
 @file:JvmName("Cactus")
 package com.cactus
 
+private object CactusCpuJNI {
+    init { System.loadLibrary("cactus_cpu") }
+    @JvmStatic external fun nativeIsCactusSupported(): Boolean
+}
+
+private val cactusSupported: Boolean by lazy {
+    try {
+        CactusCpuJNI.nativeIsCactusSupported()
+    } catch (_: Throwable) {
+        false
+    }
+}
+
+actual fun isCactusSupported(): Boolean = cactusSupported
+
 private object CactusJNI {
     init {
         System.loadLibrary("cactus")

@@ -1,9 +1,13 @@
 package coredevices.pebble.ui
 
+import CoreNav
+import DocumentAttachment
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,9 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,8 +28,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,31 +45,38 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
+import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.back
 import coredevices.pebble.services.ContactAttachment
 import coredevices.pebble.services.ContactDeveloperApi
 import coredevices.pebble.services.ContactResult
 import coredevices.ui.SignInDialog
-import kotlinx.io.readByteArray
+import coredevices.util.Platform
+import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.io.readByteArray
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
+import rememberOpenPhotoLauncher
 
 private const val MAX_BODY = 5000
 private const val MAX_ATTACHMENTS = 3
 private const val MAX_ATTACHMENT_BYTES = 2L * 1024 * 1024
 
 @Composable
-fun ContactDeveloperDialog(
+fun ContactDeveloperScreen(
+    coreNav: CoreNav,
     appId: String,
     appTitle: String,
-    onDismiss: () -> Unit,
 ) {
     val api = koinInject<ContactDeveloperApi>()
+    val platform = koinInject<Platform>()
     val scope = rememberCoroutineScope()
-    val logger = remember { Logger.withTag("ContactDeveloperDialog") }
+    val logger = remember { Logger.withTag("ContactDeveloperScreen") }
 
     val signedIn by Firebase.auth.authStateChanged
         .map { it != null }
@@ -76,8 +89,8 @@ fun ContactDeveloperDialog(
     var sent by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val pickAttachments = rememberOpenDocumentLauncher { picked ->
-        if (picked == null) return@rememberOpenDocumentLauncher
+    fun handlePicked(picked: List<DocumentAttachment>?) {
+        if (picked == null) return
         val capped = picked.take(MAX_ATTACHMENTS)
         // The picker's reported size can be unreliable on Android (uses
         // InputStream.available()); read bytes eagerly so we can enforce
@@ -89,11 +102,11 @@ fun ContactDeveloperDialog(
             } catch (e: Exception) {
                 logger.w(e) { "Failed to read picked attachment: ${doc.fileName}" }
                 error = "Could not read \"${doc.fileName}\"."
-                return@rememberOpenDocumentLauncher
+                return
             }
             if (bytes.size > MAX_ATTACHMENT_BYTES) {
                 error = "Attachment \"${doc.fileName}\" exceeds 2 MB."
-                return@rememberOpenDocumentLauncher
+                return
             }
             prepared += ContactAttachment(
                 fileName = doc.fileName,
@@ -103,6 +116,13 @@ fun ContactDeveloperDialog(
         }
         error = null
         attachments = prepared
+    }
+
+    val pickAttachments = rememberOpenDocumentLauncher(::handlePicked)
+    val pickPhotos = if (platform.isIOS) {
+        rememberOpenPhotoLauncher(::handlePicked)
+    } else {
+        null
     }
 
     fun submit() {
@@ -143,14 +163,34 @@ fun ContactDeveloperDialog(
         SignInDialog(onDismiss = { showSignInDialog = false })
     }
 
-    AlertDialog(
-        onDismissRequest = { if (!sending) onDismiss() },
-        title = { Text("Contact the developer") },
-        text = {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Contact the developer") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = coreNav::goBack,
+                        enabled = !sending,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = stringResource(Res.string.back),
+                        )
+                    }
+                },
+            )
+        },
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Text(
                     "Send a message about $appTitle. The developer will receive it via email and can reply to you. Your email address is not shared with them.",
@@ -165,6 +205,13 @@ fun ContactDeveloperDialog(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                         )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = coreNav::goBack,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Close")
+                        }
                     }
 
                     !signedIn -> {
@@ -173,6 +220,13 @@ fun ContactDeveloperDialog(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error,
                         )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { showSignInDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Sign in")
+                        }
                     }
 
                     else -> {
@@ -181,7 +235,7 @@ fun ContactDeveloperDialog(
                             onValueChange = { if (it.length <= MAX_BODY) message = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(160.dp),
+                                .height(200.dp),
                             label = { Text("Message") },
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Sentences,
@@ -195,18 +249,43 @@ fun ContactDeveloperDialog(
                         )
 
                         Spacer(Modifier.height(12.dp))
-                        OutlinedButton(
-                            onClick = { pickAttachments(listOf("*/*")) },
-                            enabled = !sending && attachments.size < MAX_ATTACHMENTS,
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        Text(
+                            "Attach up to $MAX_ATTACHMENTS files, 2 MB each (optional)",
+                            fontSize = 12.sp,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                Icons.Default.AttachFile,
-                                contentDescription = null,
-                                modifier = Modifier.size(ButtonDefaults.IconSize),
-                            )
-                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                            Text("Add files (optional, up to $MAX_ATTACHMENTS, 2 MB each)")
+                            OutlinedButton(
+                                onClick = { pickAttachments(listOf("*/*")) },
+                                enabled = !sending && attachments.size < MAX_ATTACHMENTS,
+                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            ) {
+                                Icon(
+                                    Icons.Default.AttachFile,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                                )
+                                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                Text("Add files")
+                            }
+                            if (pickPhotos != null) {
+                                OutlinedButton(
+                                    onClick = { pickPhotos() },
+                                    enabled = !sending && attachments.size < MAX_ATTACHMENTS,
+                                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                ) {
+                                    Icon(
+                                        Icons.Default.PhotoLibrary,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                                    )
+                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                    Text("Add photos")
+                                }
+                            }
                         }
                         attachments.forEachIndexed { index, file ->
                             Row(
@@ -248,45 +327,26 @@ fun ContactDeveloperDialog(
                                 fontSize = 13.sp,
                             )
                         }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            when {
-                sent -> {
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                }
 
-                !signedIn -> {
-                    Button(onClick = { showSignInDialog = true }) { Text("Sign in") }
-                }
-
-                else -> {
-                    Button(
-                        onClick = ::submit,
-                        enabled = !sending && message.trim().isNotEmpty(),
-                    ) {
-                        if (sending) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Text("Send message")
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = ::submit,
+                            enabled = !sending && message.trim().isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (sending) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Text("Send message")
+                            }
                         }
                     }
                 }
             }
-        },
-        dismissButton = {
-            if (!sent) {
-                TextButton(
-                    onClick = onDismiss,
-                    enabled = !sending,
-                ) { Text("Cancel") }
-            }
-        },
-    )
+        }
+    }
 }

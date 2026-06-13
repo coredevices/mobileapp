@@ -535,6 +535,24 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteTimeFlagsExplicitAmPm() {
+        val withAm = parser.parse("at 11 a.m.")
+        assertIs<InterpretedDateTime.AbsoluteTime>(withAm)
+        assertEquals(true, withAm.amPmExplicit)
+
+        val withPm = parser.parse("3pm")
+        assertIs<InterpretedDateTime.AbsoluteTime>(withPm)
+        assertEquals(true, withPm.amPmExplicit)
+    }
+
+    @Test
+    fun testAbsoluteTimeFlagsBareNumberAsNotExplicit() {
+        val result = parser.parse("at 15:00")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(false, result.amPmExplicit)
+    }
+
+    @Test
     fun testAbsoluteDateTimeWithDottedPm() {
         val result = parser.parse("tomorrow at 3 p.m.")
         assertIs<InterpretedDateTime.AbsoluteDateTime>(result)

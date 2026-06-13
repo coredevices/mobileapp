@@ -14,7 +14,6 @@ interface Agent {
     /**
      * Send input to the agent for processing.
      * @param input The transcribed text to process
-     * @param mode The chat mode to use for this input
      * @param mcpSession The MCP session to use for tool calls
      * @param includePromptsFromMcps A map of MCP integration names to sets of prompt names to include as context
      * @param skipToolExecution If true, the agent will not execute any tools, only generate responses (useful for testing)

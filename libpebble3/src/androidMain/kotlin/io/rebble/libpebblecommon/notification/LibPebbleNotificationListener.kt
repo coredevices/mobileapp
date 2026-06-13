@@ -92,6 +92,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         logger.d { "onListenerDisconnected() ($this)" }
         connection.setService(null)
         notificationListenerScope.cancel()
+        connection.onListenerDisconnected()
     }
 
     override fun onNotificationChannelModified(

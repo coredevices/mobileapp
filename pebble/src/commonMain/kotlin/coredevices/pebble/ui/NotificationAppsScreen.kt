@@ -60,6 +60,7 @@ class NotificationAppsScreenViewModel : ViewModel() {
     val sortBy = mutableStateOf(NotificationAppSort.Recent)
     val searchState = SearchState()
     val sortAscending = mutableStateOf(false)
+    val showSystemApps = mutableStateOf(false)
 }
 
 @Composable
@@ -93,16 +94,19 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
             viewModel.onlyNotified.value,
             viewModel.enabledFilter.value,
             viewModel.sortBy.value,
-            viewModel.sortAscending.value
+            viewModel.sortAscending.value,
+            viewModel.showSystemApps.value,
         ) {
             derivedStateOf {
-                val filtered = apps.asSequence().filter { app ->
-                    if (viewModel.searchState.query.isNotEmpty()) {
-                        app.app.name.contains(viewModel.searchState.query, ignoreCase = true)
-                    } else {
-                        app.app.everNotified() || !viewModel.onlyNotified.value
+                val filtered = apps.asSequence()
+                    .filter { viewModel.showSystemApps.value || !it.app.isSystemApp }
+                    .filter { app ->
+                        if (viewModel.searchState.query.isNotEmpty()) {
+                            app.app.name.contains(viewModel.searchState.query, ignoreCase = true)
+                        } else {
+                            app.app.everNotified() || !viewModel.onlyNotified.value
+                        }
                     }
-                }
                 val now = Clock.System.now()
                 val filteredByEnabled = when (viewModel.enabledFilter.value) {
                     EnabledFilter.All -> filtered
@@ -185,101 +189,129 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
                         )
                         val filterExpanded = remember { mutableStateOf(false) }
                         Box(modifier = Modifier.padding(horizontal = 4.dp)) {
-                        ElevatedFilterChip(
-                            onClick = { filterExpanded.value = !filterExpanded.value },
-                            label = { Text(viewModel.enabledFilter.value.label) },
-                            selected = viewModel.enabledFilter.value != EnabledFilter.All,
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = if (filterExpanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                    contentDescription = if (filterExpanded.value) "Collapse" else "Expand",
-                                )
-                            },
-                            elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
-                            colors = FilterChipDefaults.elevatedFilterChipColors(
-                                containerColor = MaterialTheme.colorScheme.background,
-                            ),
-                        )
-                        DropdownMenu(
-                            expanded = filterExpanded.value,
-                            onDismissRequest = { filterExpanded.value = false }
-                        ) {
-                            EnabledFilter.entries.forEach { filterOption ->
-                                androidx.compose.material3.DropdownMenuItem(
-                                    onClick = {
-                                        viewModel.enabledFilter.value = filterOption
-                                        filterExpanded.value = false
-                                    },
-                                    text = { Text(filterOption.label) },
-                                    leadingIcon = {
-                                        if (viewModel.enabledFilter.value == filterOption) Icon(
-                                            imageVector = Icons.Filled.Done,
-                                            contentDescription = "Done"
-                                        )
-                                    }
-                                )
+                            ElevatedFilterChip(
+                                onClick = { filterExpanded.value = !filterExpanded.value },
+                                label = { Text(viewModel.enabledFilter.value.label) },
+                                selected = viewModel.enabledFilter.value != EnabledFilter.All,
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = if (filterExpanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = if (filterExpanded.value) "Collapse" else "Expand",
+                                    )
+                                },
+                                elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                                colors = FilterChipDefaults.elevatedFilterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                ),
+                            )
+                            DropdownMenu(
+                                expanded = filterExpanded.value,
+                                onDismissRequest = { filterExpanded.value = false }
+                            ) {
+                                EnabledFilter.entries.forEach { filterOption ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        onClick = {
+                                            viewModel.enabledFilter.value = filterOption
+                                            filterExpanded.value = false
+                                        },
+                                        text = { Text(filterOption.label) },
+                                        leadingIcon = {
+                                            if (viewModel.enabledFilter.value == filterOption) Icon(
+                                                imageVector = Icons.Filled.Done,
+                                                contentDescription = "Done"
+                                            )
+                                        }
+                                    )
+                                }
                             }
-                        }
                         }
                         val expanded = remember { mutableStateOf(false) }
                         Box(modifier = Modifier.padding(horizontal = 4.dp)) {
-                        ElevatedFilterChip(
-                            onClick = {
-                                expanded.value = !expanded.value
-                            },
-                            label = {
-                                Text(viewModel.sortBy.value.name)
-                            },
-                            selected = false,
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = "Sort Options",
-                                    modifier = Modifier
-                                        .size(FilterChipDefaults.IconSize)
-                                        .graphicsLayer {
-                                            scaleY = if (viewModel.sortAscending.value) 1f else -1f
+                            ElevatedFilterChip(
+                                onClick = {
+                                    expanded.value = !expanded.value
+                                },
+                                label = {
+                                    Text(viewModel.sortBy.value.name)
+                                },
+                                selected = false,
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = "Sort Options",
+                                        modifier = Modifier
+                                            .size(FilterChipDefaults.IconSize)
+                                            .graphicsLayer {
+                                                scaleY =
+                                                    if (viewModel.sortAscending.value) 1f else -1f
+                                            }
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = if (expanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = if (expanded.value) "Collapse" else "Expand",
+                                    )
+                                },
+                                elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                                colors = FilterChipDefaults.elevatedFilterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                ),
+                            )
+                            DropdownMenu(
+                                expanded = expanded.value,
+                                onDismissRequest = { expanded.value = false }
+                            ) {
+                                NotificationAppSort.entries.filter {
+                                    it != NotificationAppSort.Count || pebbleFeatures.supportsNotificationCountSorting()
+                                }.forEach { sortOption ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        onClick = {
+                                            if (viewModel.sortBy.value == sortOption) {
+                                                viewModel.sortAscending.value =
+                                                    !viewModel.sortAscending.value
+                                            } else {
+                                                viewModel.sortBy.value = sortOption
+                                                viewModel.sortAscending.value = false
+                                            }
+                                            expanded.value = false
+                                        },
+                                        text = { Text(sortOption.name) },
+                                        leadingIcon = {
+                                            if (viewModel.sortBy.value == sortOption) Icon(
+                                                imageVector = Icons.Filled.Done,
+                                                contentDescription = "Done"
+                                            )
                                         }
-                                )
-                            },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = if (expanded.value) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                    contentDescription = if (expanded.value) "Collapse" else "Expand",
-                                )
-                            },
-                            elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
-                            colors = FilterChipDefaults.elevatedFilterChipColors(
-                                containerColor = MaterialTheme.colorScheme.background,
-                            ),
-                        )
-                        DropdownMenu(
-                            expanded = expanded.value,
-                            onDismissRequest = { expanded.value = false }
-                        ) {
-                            NotificationAppSort.entries.filter { 
-                                it != NotificationAppSort.Count || pebbleFeatures.supportsNotificationCountSorting()
-                            }.forEach { sortOption ->
-                                androidx.compose.material3.DropdownMenuItem(
-                                    onClick = {
-                                        if (viewModel.sortBy.value == sortOption) {
-                                            viewModel.sortAscending.value = !viewModel.sortAscending.value
-                                        } else {
-                                            viewModel.sortBy.value = sortOption
-                                            viewModel.sortAscending.value = false
-                                        }
-                                        expanded.value = false
-                                    },
-                                    text = { Text(sortOption.name) },
-                                    leadingIcon = {
-                                        if (viewModel.sortBy.value == sortOption) Icon(
-                                            imageVector = Icons.Filled.Done,
-                                            contentDescription = "Done"
-                                        )
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
+                        if (pebbleFeatures.supportsNotificationFiltering()) {
+                            ElevatedFilterChip(
+                                onClick = {
+                                    viewModel.showSystemApps.value =
+                                        !viewModel.showSystemApps.value
+                                },
+                                label = { Text("Show system apps") },
+                                selected = viewModel.showSystemApps.value,
+                                leadingIcon = if (viewModel.showSystemApps.value) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = "Done icon",
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                                elevation = FilterChipDefaults.filterChipElevation(elevation = 2.dp),
+                                colors = FilterChipDefaults.elevatedFilterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
                         }
                     }
                 }

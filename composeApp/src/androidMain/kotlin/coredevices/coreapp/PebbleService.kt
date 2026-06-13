@@ -14,8 +14,8 @@ import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.IndexNotificationManager
-import coredevices.ring.service.PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID
-import coredevices.ring.service.PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME
+import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
+import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingSync
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -43,7 +43,9 @@ class PebbleService: Service(), KoinComponent {
     }
 
     private val satelliteManager: KMPHaversineSatelliteManager by inject()
-    private lateinit var notificationManagerCompat: NotificationManagerCompat
+    private val notificationManagerCompat: NotificationManagerCompat by lazy {
+        NotificationManagerCompat.from(this)
+    }
     private val scope: RecordingBackgroundScope by inject()
     private var recordingDebugNotificationJob: Job? = null
     private var ringSyncJob: Job? = null
@@ -68,9 +70,9 @@ class PebbleService: Service(), KoinComponent {
         recordingDebugNotificationJob?.cancel()
         recordingDebugNotificationJob = scope.launch {
             val notificationChannel = NotificationChannelCompat.Builder(
-                PEBBLE_DEBUG_NOTIFICATION_CHANNEL_ID,
+                INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID,
                 NotificationManager.IMPORTANCE_DEFAULT)
-                .setName(PEBBLE_DEBUG_NOTIFICATION_CHANNEL_NAME)
+                .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
                 .build()
             notificationManagerCompat.createNotificationChannel(notificationChannel)
 
@@ -103,29 +105,11 @@ class PebbleService: Service(), KoinComponent {
         }
     }
 
-    private fun observeRingPaired() {
-        if (ringObserverJob?.isActive == true) return
-        ringObserverJob = commonPrefs.ringPaired
-            .map { it != null }
-            .distinctUntilChanged()
-            .onEach { ringPaired ->
-                logger.d { "ringPaired changed: $ringPaired" }
-                if (ringPaired) {
-                    startRingSyncJob()
-                    startRecordingDebugNotificationJob()
-                } else {
-                    stopRingJobs()
-                }
-            }
-            .launchIn(GlobalScope)
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         logger.v { "onStartCommand()" }
         if (intent != null) {
             handleIntent(intent)
         }
-        notificationManagerCompat = NotificationManagerCompat.from(this)
         val notificationChannel = NotificationChannelCompat.Builder(
             NOTIFICATION_CHANNEL_ID,
             NotificationManager.IMPORTANCE_MIN)
@@ -139,17 +123,22 @@ class PebbleService: Service(), KoinComponent {
             .setOngoing(true)
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
-        ServiceCompat.startForeground(
-            this,
-            1,
-            notification,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            } else {
-                0
-            }
-        )
-        observeRingPaired()
+        try {
+            ServiceCompat.startForeground(
+                this,
+                1,
+                notification,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                } else {
+                    0
+                }
+            )
+        } catch (e: SecurityException) {
+            logger.w(e) { "Error starting FG service" }
+        }
+        startRingSyncJob()
+        startRecordingDebugNotificationJob()
         pebbleBackgroundManager.onServiceStarted()
         return START_STICKY
     }

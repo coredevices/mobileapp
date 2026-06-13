@@ -85,7 +85,12 @@ class AllListsViewModel(
 
             val notesByList = items
                 .asSequence()
-                .filter { !it.deleted && it.kind == "note" }
+                // Notes lists hold both `note` and `checklist` items;
+                // see IndexFeedViewModel.compute() for the same filter
+                // and rationale (converting a note → checklist via the
+                // item-detail type dropdown shouldn't make it vanish
+                // from its parent list).
+                .filter { !it.deleted && (it.kind == "note" || it.kind == "checklist") }
                 .sortedByDescending { it.createdAt }
                 .toList()
                 .groupBy { it.parentListIds().firstOrNull().orEmpty() }

@@ -1,10 +1,11 @@
 package coredevices.ring.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import theme.CoreAppColorScheme
+import theme.currentColorScheme
 
 /**
  * Design tokens scoped to the index feed screens. The shared M3 theme
@@ -116,16 +117,16 @@ object IndexTheme {
 }
 
 /**
- * Wrap a screen in [IndexThemeHost] to bind [IndexColors] to the system
- * dark/light setting (or a forced override). New screens use this; the rest
- * of the app keeps Material3 colors.
+ * Wrap a screen in [IndexThemeHost] to bind [IndexColors] to the app-level
+ * theme setting (Settings → General → App Theme), or a forced override. The
+ * app theme resolves Light/Dark/System; only "System" defers to the OS.
  */
 @Composable
 fun IndexThemeHost(
     forceDark: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
-    val dark = forceDark ?: isSystemInDarkTheme()
+    val dark = forceDark ?: (currentColorScheme() == CoreAppColorScheme.Grey)
     val colors = if (dark) IndexColors.Dark else IndexColors.Light
     androidx.compose.runtime.CompositionLocalProvider(
         LocalIndexColors provides colors,

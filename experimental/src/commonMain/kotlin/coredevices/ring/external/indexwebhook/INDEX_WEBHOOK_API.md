@@ -5,16 +5,17 @@ Send Index ring recording data to any HTTP endpoint.
 ## Setup
 
 1. In Index Settings, tap **Webhook**
-2. Enter your webhook URL and auth token
-3. Choose what to send: Recording only, Transcription only, or Both
-4. Set **Double click and hold** action to "Webhook"
+2. Enter your webhook URL
+3. Add any request headers you need (e.g. an auth header)
+4. Choose what to send: Recording only, Transcription only, or Both
+5. Set **Double click and hold** action to "Webhook"
 
 ## Request Format
 
 ```
 POST <your webhook URL>
 Content-Type: multipart/form-data; boundary=<uuid>
-X-Widget-Token: <your auth token>
+<each user-configured header>
 X-Audio-Size: <byte count>  (when audio is included)
 ```
 
@@ -50,9 +51,17 @@ Always set to `"ring"`.
 | Transcription only | No      | Yes             | Yes          | Yes      |
 | Both               | Yes     | Yes             | Yes          | Yes      |
 
+## Headers
+
+Headers are fully user-configurable in the webhook settings — add as many name/value pairs as you need. They are sent verbatim on every request, so use them for authentication (e.g. an `Authorization` or `X-Widget-Token` header) or any other metadata your server expects.
+
+`X-Audio-Size` is still added automatically when audio is included (it carries the audio byte count) and cannot be overridden.
+
+> Migration note: users who previously configured an auth token have it automatically carried over as an `X-Widget-Token` header, preserving existing behaviour.
+
 ## Authentication
 
-The auth token is sent as the `X-Widget-Token` HTTP header. Your server should validate this token to authenticate requests.
+Authentication is whatever your headers say it is. The original integration used an `X-Widget-Token` header; the example below keeps that convention, but any scheme works.
 
 ## Example: Receiving with a simple server
 

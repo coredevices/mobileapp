@@ -103,6 +103,11 @@ fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watc
 data class BleConfig(
     val reversedPPoG: Boolean = false,
     val verbosePpogLogging: Boolean = false,
+    /**
+     * iOS only. When true, re-publish the GATT services automatically after the BT stack
+     * returns to PoweredOn following a state restoration.
+     */
+    val republishGattServicesOnRestore: Boolean = false,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

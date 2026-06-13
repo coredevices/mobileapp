@@ -35,6 +35,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DayOfWeek
 import kotlin.time.Duration.Companion.seconds
 
 private val logger = Logger.withTag("HealthStatsDialog")
@@ -170,6 +171,35 @@ fun HealthStatsDialog(libPebble: LibPebble, onDismissRequest: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Text(
+                            "Typical steps by weekday",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        for (wd in DayOfWeek.entries) {
+                            val total = s.weekdayTypicalSteps[wd]
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    wd.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    total?.toString() ?: "--",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (total != null) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
                         }
                     }
                 } else {

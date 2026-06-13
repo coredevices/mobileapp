@@ -139,6 +139,7 @@ import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
 import coredevices.pebble.services.LanguagePackRepository
@@ -666,6 +667,7 @@ fun WatchesPreview() {
                                 override val identifier = IndexIdentifier("1234")
                                 override val name = "Index 01"
                                 override val rssi = -50
+                                override val isFailsafe: Boolean = false
                                 override val pairingState: IndexPairingState =
                                     IndexPairingState.NotPaired
 
@@ -715,7 +717,7 @@ sealed interface DeviceListEntry {
     val key: String
 
     data class Watch(val device: PebbleDevice) : DeviceListEntry {
-        override val key get() = "watch-${device.identifier.asString}"
+        override val key get() = "watch-${device.identifier::class.simpleName}-${device.identifier.asString}"
     }
 
     data class Ring(val device: IndexDevice) : DeviceListEntry {
@@ -738,7 +740,11 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
         },
         supportingContent = {
             val stateText = when (ring) {
-                is DiscoveredIndexDevice -> "Available to pair"
+                is DiscoveredIndexDevice -> if (ring.isFailsafe) {
+                    "Failsafe mode"
+                } else {
+                    "Available to pair"
+                }
                 is InterviewedIndexDevice if (ring.updating) -> "Updating..."
                 else -> "Ready"
             }
@@ -777,6 +783,7 @@ fun RingItem(ring: IndexDevice, scope: CoroutineScope) {
                     }
                     if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
                         Button(
+                            enabled = !ring.isFailsafe,
                             onClick = {
                                 scope.launch {
                                     val result = try {
@@ -1245,6 +1252,22 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         showScreenshotDialog = true
                     }
                 )
+
+                if (watch.watchInfo.platform.isCoreDevice()) {
+                    DropdownMenuItem(
+                        text = { Text("Battery Life") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.BatteryFull,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            navBarNav.navigateTo(PebbleNavBarRoutes.BatterySettingsRoute)
+                        }
+                    )
+                }
                 HorizontalDivider()
             }
 
@@ -2014,6 +2037,18 @@ fun WatchDetails(
                     "in watch settings (Settings > Bluetooth), then accept the new pairing request.",
         )
     }
+    if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.MalformedConnectivityStatus) {
+        ConnectionFailureGuidanceButton(
+            appContext = appContext,
+            pebbleFeatures = pebbleFeatures,
+            buttonText = "Error Connecting - Restart Your Watch",
+            dialogTitle = "Restart your watch",
+            dialogText = "Your watch needs to be restarted before it can connect. " +
+                    "Press and hold the back button (top-left) for about 15 seconds " +
+                    "until the watch restarts, then try connecting again.",
+            showBluetoothSettingsLink = false,
+        )
+    }
     Row {
         Box(modifier = Modifier.weight(1f)) {
             if (watch is ActiveDevice) {
@@ -2053,9 +2088,10 @@ private fun ConnectionFailureGuidanceButton(
     buttonText: String,
     dialogTitle: String,
     dialogText: String,
+    showBluetoothSettingsLink: Boolean = true,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val canDeepLink = pebbleFeatures.supportsLinkingToOsBtSettings()
+    val canDeepLink = showBluetoothSettingsLink && pebbleFeatures.supportsLinkingToOsBtSettings()
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },

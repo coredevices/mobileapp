@@ -5,21 +5,15 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import coredevices.util.CoreConfigFlow
-import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
-import org.koin.core.component.inject
 
 class EvaluateJSTool : BuiltInMcpTool(
     definition = Tool(
@@ -54,8 +48,6 @@ class EvaluateJSTool : BuiltInMcpTool(
     ),
     extraContext = CONTEXT,
 ), KoinComponent {
-    private val itemRepo: ItemRepository by inject()
-    private val itemFactory: ItemFactory by inject()
 
     companion object {
         private val logger = Logger.withTag(EvaluateJSTool::class.simpleName!!)
@@ -98,24 +90,14 @@ class EvaluateJSTool : BuiltInMcpTool(
         val consoleOutput = jsEngine.evaluate(evaluateJSArgs.js)
         val result = JsonSnake.encodeToString(EvaluateJSResult(consoleOutput))
         logger.v { "JavaScript evaluation result: ${if (obfuscate) "[redacted]" else result}" }
-        currentSessionContext()?.let { ctx ->
-            runCatching {
-                itemRepo.setItem(
-                    itemFactory.simpleUid(),
-                    itemFactory.actionLogItem(
-                        sourceRecordingId = ctx.sourceRecordingId,
-                        createdAt = ctx.createdAt,
-                        title = "Ran JavaScript",
-                        toolName = TOOL_NAME,
-                        success = true,
-                        body = evaluateJSArgs.js.take(240),
-                    )
-                )
-            }
-        }
         return ToolCallResult(
             result,
-            semanticResult = SemanticResult.SupportingData("JavaScript evaluation result")
+            semanticResult = SemanticResult.ActionLogged(
+                toolName = TOOL_NAME,
+                title = "Ran JavaScript",
+                success = true,
+                body = evaluateJSArgs.js.take(240),
+            )
         )
     }
 }

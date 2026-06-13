@@ -8,6 +8,7 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
 import coredevices.ring.agent.ToolDeclaration
 import coredevices.ring.api.NenyaClient
+import coredevices.ring.api.NenyaModel
 import coredevices.ring.api.OpenAIConversationMessage
 import coredevices.ring.api.RunResponse
 import coredevices.ring.api.RunResult
@@ -38,7 +39,7 @@ class FakeNenyaClient : NenyaClient {
         toolSpecs: List<ToolDeclaration>,
         additionalContext: String,
         timezone: TimeZone,
-        searchMode: Boolean,
+        model: NenyaModel,
     ): RunResult {
         val response = responseQueue.removeFirst()
         return when (response) {

@@ -5,7 +5,6 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import coredevices.ring.agent.currentSessionContext
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -13,12 +12,7 @@ import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
-import kotlinx.coroutines.currentCoroutineContext
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory) : BuiltInMcpTool(
     definition = Tool(
@@ -52,8 +46,6 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
         )
     ),
 ), KoinComponent {
-    private val itemRepo: ItemRepository by inject()
-    private val itemFactory: ItemFactory by inject()
 
     companion object {
         const val TOOL_NAME = "create_note"
@@ -71,20 +63,10 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
 
     override suspend fun call(jsonInput: String): ToolCallResult {
         val createNoteArgs = JsonSnake.decodeFromString<CreateNoteArgs>(jsonInput)
-        Logger.d { "Creating note with text: ${createNoteArgs.text}" }
+        Logger.d { "Creating note with text length: ${createNoteArgs.text.length}" }
         return try {
             val noteClient = noteIntegrationFactory.createNoteClient()
             val noteId = noteClient.createNote(createNoteArgs.text)
-            currentSessionContext()?.let { ctx ->
-                runCatching {
-                    itemRepo.setItem(
-                        itemFactory.simpleUid(),
-                        itemFactory.noteItem(ctx.sourceRecordingId, ctx.createdAt, createNoteArgs.text, null)
-                    )
-                }.onFailure {
-                    Logger.e(it) { "Failed to create note item in database for recording ${ctx.sourceRecordingId}" }
-                }
-            }
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
                 SemanticResult.ListItemCreation(createNoteArgs.text)

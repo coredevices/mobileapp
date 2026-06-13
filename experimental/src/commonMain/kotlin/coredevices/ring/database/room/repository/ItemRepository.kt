@@ -29,6 +29,8 @@ class ItemRepository(
 
     fun getByListFlow(listId: String): Flow<List<CachedItem>> = cacheDao.getByListFlow(listId)
 
+    suspend fun getByList(listId: String): List<CachedItem> = cacheDao.getByList(listId)
+
     fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> =
         cacheDao.getByRecordingFlow(recordingId)
 

@@ -223,21 +223,20 @@ fun NotionDialog(
             }
         }
     }
+    // Once signed in, jump straight into picking the page for the to-do block.
+    if (state is SignInState.Success) {
+        NotionPageDialog(onDismiss = onDismiss)
+        return
+    }
     M3Dialog(
         onDismissRequest = onDismiss,
         title = { Text("Notion") },
         buttons = {
-            if (state !is SignInState.Success) {
-                TextButton(
-                    enabled = state !is SignInState.SigningIn,
-                    onClick = ::onSignIn
-                ) {
-                    Text("Sign In")
-                }
-            } else if (state is SignInState.Success) {
-                TextButton(onClick = onDismiss) {
-                    Text("Done")
-                }
+            TextButton(
+                enabled = state !is SignInState.SigningIn,
+                onClick = ::onSignIn
+            ) {
+                Text("Sign In")
             }
         }
     ) {
@@ -254,11 +253,6 @@ fun NotionDialog(
                         CircularProgressIndicator()
                     }
                 }
-                is SignInState.Success -> {
-                    Column {
-                        Text("Successfully signed in.")
-                    }
-                }
                 is SignInState.Error -> {
                     Text(
                         "Error signing in:\n${s.message}",
@@ -267,6 +261,7 @@ fun NotionDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                is SignInState.Success -> {}
             }
         }
     }

@@ -3,7 +3,6 @@ package coredevices.util.transcription
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlin.time.Duration
 
 interface TranscriptionService {
     /**
@@ -32,7 +31,6 @@ interface TranscriptionService {
         dictionaryContext: List<String>? = null,
         contentContext: String? = null,
         encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
-        timeout: Duration = Duration.INFINITE
     ): Flow<TranscriptionSessionStatus>
 
     val onInitialized: Channel<Boolean>

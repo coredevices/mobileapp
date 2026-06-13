@@ -77,6 +77,8 @@ class Locker(
     private val settings: Settings,
 ) : LockerApi {
     private val lockerEntryDao = database.lockerEntryDao()
+    private val timelinePinDao = database.timelinePinDao()
+    private val timelineReminderDao = database.timelineReminderDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
@@ -178,6 +180,7 @@ class Locker(
             }
         }
         lockerEntryDao.markForDeletion(id)
+        timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -205,6 +208,9 @@ class Locker(
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
+            // Preferred source for this UUID failed this sync; don't downgrade existing entry
+            // to a fallback source's (potentially older) entry. Leave the DB row alone.
+            if (newEntity.id in locker.failedToFetchUuids) return@mapNotNull null
             val existing = existingApps.remove(newEntity.id)
             if (existing == null) {
                 newEntity
@@ -235,6 +241,7 @@ class Locker(
         }
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
+        timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
         performCacheCleanup()
     }
 

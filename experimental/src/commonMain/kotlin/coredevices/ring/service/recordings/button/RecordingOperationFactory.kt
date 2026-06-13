@@ -69,8 +69,7 @@ class RecordingOperationFactory(
         isDoubleClickHold: Boolean,
         inner: RecordingOperation,
     ): RecordingOperation {
-        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank() &&
-            !indexWebhookPreferences.authToken.value.isNullOrBlank()
+        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank()
         if (!configured) return inner
         val matchesTrigger = when (indexWebhookPreferences.trigger.value) {
             IndexWebhookTrigger.SingleClick -> !isDoubleClickHold

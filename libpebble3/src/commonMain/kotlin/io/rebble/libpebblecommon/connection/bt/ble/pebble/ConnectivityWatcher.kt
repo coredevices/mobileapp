@@ -2,6 +2,8 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
 import co.touchlab.kermit.Logger
 import com.juul.kable.GattStatusException
+import io.rebble.libpebblecommon.connection.ConnectionException
+import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.CONNECTIVITY_CHARACTERISTIC
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.UUIDs.PAIRING_SERVICE_UUID
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
@@ -92,6 +94,14 @@ class ConnectivityStatus(characteristicValue: ByteArray) {
     val pairingErrorCode: PairingErrorCode
 
     init {
+        if (characteristicValue.size < CONNECTIVITY_STATUS_LENGTH) {
+            // A healthy watch always reports a 4-byte connectivity characteristic. Legacy watches
+            // wedged in a bad state (e.g. factory PRF firmware that has gotten stuck) return a
+            // too-short/empty value here. Surface a specific failure reason instead of crashing
+            // with ArrayIndexOutOfBoundsException, so the UI can tell the user to reboot the watch
+            // (MOB-7460).
+            throw ConnectionException(ConnectionFailureReason.MalformedConnectivityStatus)
+        }
         val flags = characteristicValue[0]
         connected = flags and 0b1 > 0
         paired = flags and 0b10 > 0
@@ -100,6 +110,11 @@ class ConnectivityStatus(characteristicValue: ByteArray) {
         supportsPinningWithoutSlaveSecurity = flags and 0b10000 > 0
         hasRemoteAttemptedToUseStalePairing = flags and 0b100000 > 0
         pairingErrorCode = PairingErrorCode.getByValue(characteristicValue[3])
+    }
+
+    companion object {
+        // flags byte + 2 reserved bytes + pairing error code byte
+        private const val CONNECTIVITY_STATUS_LENGTH = 4
     }
 
     override fun toString(): String =

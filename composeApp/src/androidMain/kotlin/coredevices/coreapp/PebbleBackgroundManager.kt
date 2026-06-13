@@ -1,9 +1,13 @@
 package coredevices.coreapp
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.content.ContextCompat
 import co.touchlab.kermit.Logger
+import coredevices.libindex.LibIndex
+import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.ring.database.Preferences
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.ActiveDevice
@@ -22,30 +26,55 @@ class PebbleBackgroundManager(
     private val commonPrefs: Preferences,
     private val coreConfigFlow: CoreConfigFlow,
     private val libPebble: LibPebble,
+    private val libIndex: LibIndex
 ) {
     companion object {
         private val logger = Logger.withTag("PebbleBackgroundManager")
     }
 
     private fun startBackground() {
-        ContextCompat.startForegroundService(context, Intent(context, PebbleService::class.java))
+        try {
+            ContextCompat.startForegroundService(context, Intent(context, PebbleService::class.java))
+        } catch (e: Exception) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                logger.w(e) { "Cannot start PebbleService from background (no CDM exemption?)" }
+            } else {
+                throw e
+            }
+        }
     }
 
     private fun stopBackground() {
         val serviceIntent = Intent(context, PebbleService::class.java).apply {
             action = PebbleService.ACTION_STOP
         }
-        ContextCompat.startForegroundService(context, serviceIntent)
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } catch (e: Exception) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                // App may already be backgrounded by the time we try to stop; startService is allowed for an already-running service.
+                logger.w(e) { "Cannot deliver STOP via foreground service from background; falling back to startService" }
+                context.startService(serviceIntent)
+            } else {
+                throw e
+            }
+        }
     }
 
     fun monitorToStartBackground() {
+        var holdIndexEnabled = false
         combine(
             commonPrefs.ringPaired,
+            libIndex.rings,
             coreConfigFlow.flow,
             libPebble.bluetoothEnabled,
             libPebble.watches,
-        ) { ringPaired, config, btState, watches ->
-            val ringActive = ringPaired != null
+        ) { ringPaired, rings, config, btState, watches ->
+            val ringRecover = rings.any { it is DiscoveredIndexDevice && it.isFailsafe }
+            if (ringRecover) {
+                holdIndexEnabled = true
+            }
+            val ringActive = (ringPaired != null || ringRecover || holdIndexEnabled) && btState.enabled()
             val watchKeepAlive = config.androidForegroundServiceForWatchConnection &&
                 btState.enabled() &&
                 watches.any { it is ActiveDevice }

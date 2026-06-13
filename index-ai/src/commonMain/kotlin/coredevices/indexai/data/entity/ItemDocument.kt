@@ -97,5 +97,15 @@ data class ItemDocument(
         @Serializable
         @SerialName("note")
         object Note : ItemMetadata
+
+        /**
+         * A note-shaped item that the user has explicitly asked to render
+         * with a tickable checkbox. Lives alongside `Note` in the same
+         * notes-domain lists (Notes to self, custom note lists) — the
+         * difference is purely how the UI renders it.
+         */
+        @Serializable
+        @SerialName("checklist")
+        object Checklist : ItemMetadata
     }
 }

@@ -27,7 +27,7 @@ class FirmwareDownloader(
 
     suspend fun downloadFirmware(url: String, type: String): Path? {
         logger.d { "downloadFirmware: $url" }
-        return withTimeoutOr(20.seconds, {
+        return withTimeoutOr(30.seconds, {
             val path = Path(fwDir, "download.$type")
             SystemFileSystem.delete(path, mustExist = false)
             val response = try {

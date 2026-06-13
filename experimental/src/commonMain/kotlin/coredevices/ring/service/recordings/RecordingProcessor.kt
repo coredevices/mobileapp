@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.TranscriptionSessionStatus
 import coredevices.mcp.client.McpSession
+import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
@@ -38,11 +39,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class RecordingProcessor(
@@ -81,7 +84,7 @@ class RecordingProcessor(
 
     companion object {
         private const val AUDIO_STREAM_BUFFER_SIZE = 1024
-        private val TRANSCRIPTION_TIMEOUT = 2.minutes
+        private val TRANSCRIPTION_TIMEOUT = 45.seconds
         private val logger = Logger.withTag("RecordingProcessor")
     }
 
@@ -106,13 +109,14 @@ class RecordingProcessor(
         sampleRate: Int,
         language: STTLanguage,
         encoding: AudioEncoding
-    ) = transcriptionService.transcribe(
-        audioStreamFlow,
-        sampleRate,
-        language = language,
-        encoding = encoding,
-        timeout = transcriptionTimeout
-    ).flowOn(Dispatchers.IO)
+    ) = withTimeout(transcriptionTimeout) {
+        transcriptionService.transcribe(
+            audioStreamFlow,
+            sampleRate,
+            language = language,
+            encoding = encoding,
+        ).flowOn(Dispatchers.IO)
+    }
 
     private suspend fun updateRecordingEntryMessage(entryId: Long, messageId: Long) {
         withContext(Dispatchers.IO) {
@@ -259,8 +263,15 @@ class RecordingProcessor(
             updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
         }
         val conv = agent.conversation.firstOrNull() ?: emptyList()
-        val noToolRan = conv.drop(convEndIdx).all { it.role != MessageRole.tool }
-        if (forcedTool != null && noToolRan) {
+        // No tool messages
+        val noToolRan = conv.drop(convEndIdx).none {
+            it.role == MessageRole.tool
+        }
+        // Last tool message indicates fallback was requested
+        val toolRequestedFallback = conv.drop(convEndIdx).lastOrNull { it.role == MessageRole.tool }?.let {
+            it.semantic_result is SemanticResult.GenericFailure && (it.semantic_result as SemanticResult.GenericFailure).forceFallbackTool
+        } ?: false
+        if (forcedTool != null && (noToolRan || toolRequestedFallback)) {
             // Agent did not take any action, force tool
             val toolResult = withContext(if (sessionContext != null) currentCoroutineContext() + sessionContext else currentCoroutineContext()) {
                 forcedTool()
@@ -276,6 +287,20 @@ class RecordingProcessor(
                     is_forced_tool = true
                 )
             )
+        }
+        // Create feed items from this turn's tool messages, stamping each with the tool_call_id
+        // that produced it. Done centrally (rather than in each tool) because only the tool message
+        // carries the tool_call_id.
+        if (firestoreId != null) {
+            agent.conversation.first().drop(convEndIdx)
+                .filter { it.role == MessageRole.tool }
+                .forEach { msg ->
+                    val item = msg.semantic_result?.let {
+                        itemFactory.createFromSemanticResult(it, firestoreId, createdAt, msg.tool_call_id)
+                    } ?: return@forEach
+                    runCatching { itemRepo.setItem(itemFactory.simpleUid(), item) }
+                        .onFailure { logger.e(it) { "Failed to persist item for tool_call ${msg.tool_call_id}" } }
+                }
         }
         updateConversation(recordingId, agent.conversation.first())
         linkUserMessageToEntry(recordingId, recordingEntryId)

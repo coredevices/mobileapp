@@ -77,6 +77,10 @@ class RawOverlayRecord : StructMappable() {
 
 /**
  * Debug statistics for health data, used for diagnostics and testing.
+ *
+ * [weekdayTypicalSteps] carries the per-weekday typical-step totals computed for the
+ * `<weekday>_steps` BlobDB rows; absent keys are weekdays where the user has insufficient
+ * same-weekday history (we don't write a row for them, so the watch shows no comparison).
  */
 data class HealthDebugStats(
     val totalSteps30Days: Long,
@@ -86,5 +90,6 @@ data class HealthDebugStats(
     val todaySteps: Long,
     val lastNightSleepHours: Float?,
     val latestDataTimestamp: Long?,
-    val daysOfData: Int
+    val daysOfData: Int,
+    val weekdayTypicalSteps: Map<kotlinx.datetime.DayOfWeek, Int> = emptyMap(),
 )

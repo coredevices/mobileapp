@@ -80,6 +80,9 @@ class RemoteTimelineEmulator(
         } catch (e: SerializationException) {
             logger.w(e) { "Failed to parse pin JSON" }
             return
+        } catch (e: IllegalArgumentException) {
+            logger.w(e) { "Failed to parse pin JSON" }
+            return
         }
 //        logger.v { "insertPin: pin=$pin" }
         insertPin(appUuid, pin)

@@ -204,7 +204,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val sharedViewModel: SharedLockerViewModel = koinInject()
         sharedViewModel.Init()
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
-        val showContactDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
         val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value)
@@ -266,13 +265,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                 }
             }
             topBarParams.title(entry?.type?.name ?: "")
-        }
-        if (showContactDialog.value && entry?.storeId != null) {
-            ContactDeveloperDialog(
-                appId = entry.storeId,
-                appTitle = entry.title,
-                onDismiss = { showContactDialog.value = false },
-            )
         }
         PullToRefreshBox(
             isRefreshing = viewModel.loadingFromStore,
@@ -661,7 +653,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             nameModifier = propertyNameModifier,
                             value = entry.androidCompanion.name,
                             onClick = {
-                                urlLauncher.openUri(entry.androidCompanion.url)
+                                urlLauncher.open(entry.androidCompanion.url)
                             },
                         )
                     }
@@ -735,16 +727,24 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             onClick = { urlLauncher.open(developerLink) }
                         )
                     }
+                    val contactStoreId = entry.storeId
                     if (
                         commonAppStore?.contactable == true &&
                         commonAppStore.storeSource.isPebbleFeed() &&
-                        entry.storeId != null
+                        contactStoreId != null
                     ) {
                         PropertyRow(
                             name = "CONTACT DEVELOPER",
                             nameModifier = propertyNameModifier,
                             value = "Send Message",
-                            onClick = { showContactDialog.value = true },
+                            onClick = {
+                                navBarNav.navigateTo(
+                                    PebbleRoutes.ContactDeveloperRoute(
+                                        appId = contactStoreId,
+                                        appTitle = entry.title,
+                                    )
+                                )
+                            },
                             onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                         )
                     }
@@ -806,7 +806,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
 
                     storeSource?.let { storeSource ->
                         val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
-                            { urlLauncher.open("https://apps.repebble.com/${entry.storeId}") }
+                            {
+                                urlLauncher.open("https://apps.repebble.com/${entry.storeId}")
+                                Unit
+                            }
                         } else {
                             null
                         }
@@ -823,12 +826,20 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
     }
 }
 
-fun UriHandler.open(url : String) {
+fun UriHandler.open(url : String): Boolean {
     val urlParsed = parseUrl(url)
     if (urlParsed != null && urlParsed.protocolOrNull in listOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
-        openUri(url)
+        try {
+            openUri(url)
+            return true
+        } catch (e: Exception) {
+            // No browser / VIEW handler installed (Android Go, stripped ROMs, DPC policy).
+            logger.w(e) { "Failed to open URL: $url" }
+            return false
+        }
     } else {
         logger.w { "Not opening invalid URL: $url" }
+        return false
     }
 }
 

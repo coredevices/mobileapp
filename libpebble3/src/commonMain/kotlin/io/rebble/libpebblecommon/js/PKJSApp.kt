@@ -66,7 +66,9 @@ class PKJSApp(
     val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
-    private val urlOpenRequests = Channel<String>(Channel.RENDEZVOUS)
+    // Buffered so JS-side `loadUrl(...).trySend(url)` can't silently drop the URL when the
+    // receiver in requestConfigurationUrl() hasn't yet reached `receive()`.
+    private val urlOpenRequests = Channel<String>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val _logMessages = Channel<String>(2, BufferOverflow.DROP_OLDEST)
     val logMessages: ReceiveChannel<String> = _logMessages
@@ -142,6 +144,8 @@ class PKJSApp(
             logger.e { "Cannot show configuration, PKJSApp is not running" }
             return null
         }
+        // Drop any stale URL that the JS may have queued spontaneously before this call.
+        while (urlOpenRequests.tryReceive().isSuccess) { /* discard */ }
         val url = runningScope!!.async { urlOpenRequests.receive() }
         try {
             val jsRunner = jsRunner

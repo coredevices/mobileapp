@@ -50,6 +50,12 @@ class PbwApp(private val path: Path) {
     }
 }
 
+/**
+ * Pick best variant, ignoring appinfo targetPlatforms which can be wrong for old pbws
+ */
+fun PbwApp.bestVariantFor(watchType: WatchType): WatchType? =
+    watchType.getCompatibleAppVariants().firstOrNull { getManifest(it) != null }
+
 fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
     val platforms = info.targetPlatforms.mapNotNull {

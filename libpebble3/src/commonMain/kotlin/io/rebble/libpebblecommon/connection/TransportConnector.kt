@@ -51,6 +51,7 @@ enum class ConnectionFailureReason {
     ConnectTimeout,
     SubscribeConnectivity,
     ConnectionStatus,
+    MalformedConnectivityStatus,
     MtuGattError,
     NegotiationFailed,
     PeripheralAlreadyClosed,

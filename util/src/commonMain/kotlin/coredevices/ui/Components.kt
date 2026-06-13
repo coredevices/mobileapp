@@ -110,6 +110,19 @@ fun CoreLinearProgressIndicator(
     )
 }
 
+@Composable
+fun CoreLinearProgressIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.tertiaryContainer,
+) {
+    LinearProgressIndicator(
+        modifier = modifier,
+        color = color,
+        trackColor = trackColor,
+    )
+}
+
 /**
  * Tooltip which is shown the first time the screen is displayed, then only when long pressed after
  * that (uses a setting with [settingsKey] to remember that the screen has already been shown).

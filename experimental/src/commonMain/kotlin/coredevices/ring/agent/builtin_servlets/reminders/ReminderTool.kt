@@ -7,7 +7,6 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import coredevices.ring.agent.currentSessionContext
 import coredevices.ring.ui.isLocale24HourFormat
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -21,12 +20,8 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
-import coredevices.ring.service.indexfeed.RecordingSessionContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlinx.coroutines.currentCoroutineContext
 import kotlin.time.Clock
 
 class ReminderTool: BuiltInMcpTool(
@@ -63,8 +58,6 @@ class ReminderTool: BuiltInMcpTool(
     )
 ), KoinComponent {
     val reminderFactory: ReminderFactory by inject()
-    private val itemRepo: ItemRepository by inject()
-    private val itemFactory: ItemFactory by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
@@ -109,7 +102,7 @@ class ReminderTool: BuiltInMcpTool(
                     val currentTime = Clock.System.now().toLocalDateTime(tz)
                     if (parsed.time < currentTime.time) {
                         val is12HourFormat = !isLocale24HourFormat()
-                        if (is12HourFormat && parsed.time.hour in 1..11) {
+                        if (is12HourFormat && parsed.time.hour in 1..11 && !parsed.amPmExplicit) {
                             // If the parsed time is in the past for today, and the locale is 12-hour format, there's a chance it was an AM/PM issue.
                             // For example, if it's currently 3pm and the user said "at 3", it might have been parsed as 3am which has already passed.
                             logger.d { "Parsed time is in the past and locale is 12-hour format, assuming it's an AM/PM parsing issue and adding 12 hours" }
@@ -183,14 +176,6 @@ class ReminderTool: BuiltInMcpTool(
         )
         return try {
             val reminderId = reminder.schedule()
-            currentSessionContext()?.let { ctx ->
-                runCatching {
-                    itemRepo.setItem(
-                        itemFactory.simpleUid(),
-                        itemFactory.reminderItem(ctx.sourceRecordingId, ctx.createdAt, reminder.message, reminder.time)
-                    )
-                }
-            }
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(

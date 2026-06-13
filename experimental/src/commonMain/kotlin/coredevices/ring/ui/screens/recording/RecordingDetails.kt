@@ -4,7 +4,6 @@ import BugReportButton
 import CoreNav
 import androidx.compose.foundation.combinedClickable
 import coredevices.ring.data.entity.room.indexfeed.kind
-import coredevices.ring.data.entity.room.indexfeed.recipientName
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -47,10 +47,10 @@ import kotlinx.datetime.format.Padding
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,8 +62,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,10 +76,11 @@ import coreapp.ring.generated.resources.more_options
 import coreapp.util.generated.resources.back
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
-import coredevices.indexai.data.entity.RecordingDocument
-import coredevices.indexai.data.entity.RecordingEntry
+import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
-import coredevices.ring.ui.components.chat.ChatInput
+import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.mcp.data.SemanticResult
+import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
@@ -90,6 +89,10 @@ import coredevices.ring.ui.viewmodel.RecordingDetailsViewModel
 import coredevices.util.rememberUiContext
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -250,6 +253,40 @@ private fun RecordingDetailsContents(
 ) {
     val transcription = entries.firstOrNull()?.transcription.orEmpty()
     val firstEntry = entries.firstOrNull()
+    // Latest attempt decides the error state (a recording can accrue retries).
+    // Matches IndexFeedViewModel / FullFeedViewModel.
+    val transcriptionFailed = entries
+        .sortedWith(compareBy<RecordingEntryEntity> { it.timestamp }.thenBy { it.id })
+        .lastOrNull()
+        ?.status == RecordingEntryStatus.transcription_error
+
+    // Tool calls that produced a saved object render as a navigable item chip
+    // instead of a raw call; everything else falls back to the tool call.
+    val itemsByToolCallId = remember(linkedItems) {
+        linkedItems.asSequence()
+            .filter { !it.sourceToolCallId.isNullOrBlank() }
+            .associateBy { it.sourceToolCallId!! }
+    }
+    // Items that weren't tied to a tool call in this conversation (no
+    // sourceToolCallId, or one that matches no call we rendered) are appended
+    // as trailing chips so nothing extracted from the recording is dropped.
+    val referencedToolCallIds = remember(messages) {
+        messages.asSequence()
+            .flatMap { it.document.tool_calls.orEmpty().asSequence() }
+            .map { it.id }
+            .toSet()
+    }
+    val trailingItems = remember(linkedItems, referencedToolCallIds) {
+        linkedItems.filter { it.sourceToolCallId.isNullOrBlank() || it.sourceToolCallId !in referencedToolCallIds }
+    }
+    // Tool-result (`tool` role) message content, keyed by tool_call_id. A tool
+    // call collapses with its result into a single chip showing the result.
+    val toolResultsByCallId = remember(messages) {
+        messages.asSequence()
+            .map { it.document }
+            .filter { it.role == MessageRole.tool && !it.tool_call_id.isNullOrBlank() }
+            .associate { it.tool_call_id!! to (it.semantic_result ?: SemanticResult.GenericSuccess) }
+    }
 
     LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         // 1. Audio player widget
@@ -264,40 +301,44 @@ private fun RecordingDetailsContents(
             }
         }
 
-        // 2. User transcription bubble (right-aligned, red)
-        if (transcription.isNotBlank()) {
+        // 2. Full conversation, in order. User turns are right-aligned red
+        // bubbles; assistant turns show a reply bubble plus action chips for
+        // their tool calls. Tool-result messages aren't shown — the chip on
+        // the assistant turn already represents the call and its outcome.
+        if (messages.isNotEmpty()) {
+            items(messages, key = { it.id }, contentType = { it.document.role }) { message ->
+                ConversationMessage(
+                    message = message,
+                    itemsByToolCallId = itemsByToolCallId,
+                    toolResultsByCallId = toolResultsByCallId,
+                    allLists = allLists,
+                    onOpenObject = onOpenObject,
+                )
+            }
+        } else if (transcription.isNotBlank()) {
+            // Fallback for recordings captured before the conversation was
+            // persisted: show the raw transcription as the user bubble.
             item("bubble") {
                 Spacer(Modifier.height(16.dp))
                 TranscriptionBubble(transcription)
             }
         }
 
-        // 3. Index reply + action chips. Mirrors the prototype's
-        // RecordingViewChat: ◎ avatar on the left, then a reply bubble
-        // (Q&A body or "To X: ..." for messages) and below it the
-        // remaining chips. The bubble's source item is suppressed from
-        // the chip list since the bubble already represents it.
-        if (linkedItems.isNotEmpty()) {
-            val answerItem = linkedItems.firstOrNull { it.kind == "answer" }
-            val messageItem = if (answerItem == null)
-                linkedItems.firstOrNull { it.kind == "message" && it.body.isNotBlank() }
-                else null
-            val replyText = answerItem?.body
-                ?: messageItem?.let { msg ->
-                    val recip = msg.recipientName()
-                    if (!recip.isNullOrBlank()) "To $recip: ${msg.body}" else msg.body
-                }
-                ?: ""
-            val suppressedId = answerItem?.firestoreId ?: messageItem?.firestoreId
-            val chipsToShow = if (suppressedId != null)
-                linkedItems.filter { it.firestoreId != suppressedId }
-                else linkedItems
-            item("reply-row") {
+        // 2b. Transcription failed — surface the error inline with a retry,
+        // so the user can recover without digging into the more menu.
+        if (transcriptionFailed) {
+            item("transcription-error") {
                 Spacer(Modifier.height(8.dp))
-                IndexReplyRow(
-                    replyText = replyText,
-                    bubbleTargetId = if (replyText.isNotBlank()) suppressedId else null,
-                    chips = chipsToShow,
+                TranscriptionErrorRow(onRetry = onRetry)
+            }
+        }
+
+        // 3. Trailing chips for extracted items not surfaced by a tool call.
+        if (trailingItems.isNotEmpty()) {
+            item("trailing-items") {
+                Spacer(Modifier.height(8.dp))
+                TrailingItemChips(
+                    items = trailingItems,
                     allLists = allLists,
                     onOpenObject = onOpenObject,
                 )
@@ -462,12 +503,227 @@ private fun TranscriptionBubble(text: String) {
     }
 }
 
+/** Renders a single conversation message as a chat row. User turns are
+ *  right-aligned bubbles; assistant turns get the ◎ avatar, reply bubble and
+ *  action chips. Tool-result messages render nothing. */
+@Composable
+private fun ConversationMessage(
+    message: ConversationMessageEntity,
+    itemsByToolCallId: Map<String, coredevices.ring.data.entity.room.indexfeed.CachedItem>,
+    toolResultsByCallId: Map<String, SemanticResult>,
+    allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
+    onOpenObject: (String) -> Unit,
+) {
+    val doc = message.document
+    when (doc.role) {
+        MessageRole.user -> {
+            val text = doc.content?.trim().orEmpty()
+            if (text.isNotBlank()) {
+                Spacer(Modifier.height(16.dp))
+                TranscriptionBubble(text)
+            }
+        }
+        MessageRole.assistant -> {
+            val text = doc.content?.trim().orEmpty()
+            val toolCalls = doc.tool_calls.orEmpty()
+            if (text.isNotBlank() || toolCalls.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                AssistantTurn(
+                    replyText = text,
+                    toolCalls = toolCalls,
+                    itemsByToolCallId = itemsByToolCallId,
+                    toolResultsByCallId = toolResultsByCallId,
+                    allLists = allLists,
+                    onOpenObject = onOpenObject,
+                )
+            }
+        }
+        // Tool results are represented by the chip on the assistant turn.
+        MessageRole.tool -> Unit
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun IndexReplyRow(
+private fun AssistantTurn(
     replyText: String,
-    bubbleTargetId: String?,
-    chips: List<coredevices.ring.data.entity.room.indexfeed.CachedItem>,
+    toolCalls: List<coredevices.indexai.data.entity.ToolCall>,
+    itemsByToolCallId: Map<String, coredevices.ring.data.entity.room.indexfeed.CachedItem>,
+    toolResultsByCallId: Map<String, SemanticResult>,
+    allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
+    onOpenObject: (String) -> Unit,
+) {
+    // Don't render empty assistant turns
+    when {
+        replyText.isBlank() && toolCalls.isEmpty() -> return
+        replyText.trim().replace("OK", "", ignoreCase = true).length <= 2 && toolCalls.isEmpty() -> return
+    }
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(colors.redSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            RingGlyphCanvas(sizeDp = 14, color = colors.primary)
+        }
+        Spacer(Modifier.width(8.dp))
+        // An "answer" tool call is the assistant's reply, so render its body as
+        // a bubble rather than a chip; every other call stays a chip.
+        val answerItems = toolCalls.mapNotNull { call ->
+            itemsByToolCallId[call.id]?.takeIf { it.kind == "answer" && it.body.isNotBlank() }
+        }
+        val chipCalls = toolCalls.filter { itemsByToolCallId[it.id]?.kind != "answer" }
+        Column(
+            modifier = Modifier.foundationFillMaxWidth(0.85f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (replyText.isNotBlank()) ReplyBubble(replyText)
+            answerItems.forEach { ReplyBubble(it.body) }
+            if (chipCalls.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    chipCalls.forEach { call ->
+                        val item = itemsByToolCallId[call.id]
+                        val result = toolResultsByCallId[call.id]
+                        val resultActionText by remember {
+                            flow { emit(result?.actionText()) }.flowOn(Dispatchers.IO)
+                        }.collectAsState("")
+                        when {
+                            // Prefer the saved object's chip (navigable, richly
+                            // labelled) when the tool call produced one.
+                            item != null -> ActionChip(
+                                glyph = chipGlyph(item.kind),
+                                label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
+                                    .chipLabel(item, allLists).take(64),
+                                onClick = { onOpenObject(item.firestoreId) },
+                            )
+                            // Otherwise collapse the call + its result into one
+                            // chip showing the result.
+                            resultActionText != null -> ActionChip(
+                                glyph = "•",
+                                label = resultActionText!!,
+                                onClick = null,
+                            )
+                            // No result yet — show the pending tool call.
+                            else -> ActionChip(
+                                glyph = "•",
+                                label = toolCallLabel(call),
+                                onClick = null,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Index reply bubble (left-aligned, rounded). Long-press copies the text. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun ReplyBubble(text: String) {
+    val colors = IndexTheme.colors
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+            .background(colors.surfaceContainerLow)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+                    haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                },
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text,
+            color = colors.onSurface,
+            fontSize = 14.5.sp,
+            lineHeight = 21.sp,
+        )
+    }
+}
+
+/** Assistant-side row shown when transcription failed: an error bubble with
+ *  an inline Retry button that re-enqueues the recording. Mirrors the
+ *  assistant turn's avatar so it reads as part of the conversation. */
+@Composable
+private fun TranscriptionErrorRow(onRetry: () -> Unit) {
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(colors.redSurface),
+            contentAlignment = Alignment.Center,
+        ) {
+            RingGlyphCanvas(sizeDp = 14, color = colors.primary)
+        }
+        Spacer(Modifier.width(8.dp))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+                .background(colors.errorContainer)
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Transcription error",
+                color = colors.onErrorContainer,
+                fontSize = 14.5.sp,
+                lineHeight = 21.sp,
+            )
+            Spacer(Modifier.width(10.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(colors.primary)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = "Retry transcription",
+                    tint = colors.onPrimary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Retry",
+                    color = colors.onPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+/** Trailing chips for extracted items that weren't tied to a rendered tool
+ *  call. Mirrors the assistant turn's avatar + chip flow so they read as part
+ *  of the same conversation. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TrailingItemChips(
+    items: List<coredevices.ring.data.entity.room.indexfeed.CachedItem>,
     allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
     onOpenObject: (String) -> Unit,
 ) {
@@ -487,70 +743,67 @@ private fun IndexReplyRow(
             RingGlyphCanvas(sizeDp = 14, color = colors.primary)
         }
         Spacer(Modifier.width(8.dp))
+        // Answers read as reply bubbles; everything else as chips.
+        val answerItems = items.filter { it.kind == "answer" && it.body.isNotBlank() }
+        val chipItems = items.filter { it.kind != "answer" }
         Column(
             modifier = Modifier.foundationFillMaxWidth(0.85f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (replyText.isNotBlank()) {
-                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-                val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
-                        .background(colors.surfaceContainerLow)
-                        // Tap opens the linked object (if any); long-press
-                        // copies the reply text to clipboard. We collapse
-                        // the previous bubble.clickable into combinedClickable
-                        // so both gestures work on the same target.
-                        .combinedClickable(
-                            onClick = { if (bubbleTargetId != null) onOpenObject(bubbleTargetId) },
-                            onLongClick = {
-                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(replyText))
-                                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            },
-                        )
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Text(
-                        replyText,
-                        color = colors.onSurface,
-                        fontSize = 14.5.sp,
-                        lineHeight = 21.sp,
-                    )
-                }
-            }
-            if (chips.isNotEmpty()) {
+            answerItems.forEach { ReplyBubble(it.body) }
+            if (chipItems.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    chips.take(8).forEach { item ->
-                        val label = coredevices.ring.ui.viewmodel.IndexFeedViewModel.chipLabel(item, allLists).take(64)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(colors.redSurface)
-                                .border(1.dp, colors.chipOutline, RoundedCornerShape(percent = 50))
-                                .clickable { onOpenObject(item.firestoreId) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) {
-                            Text(chipGlyph(item.kind), color = colors.primary, fontSize = 12.sp)
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                label,
-                                color = colors.onPrimaryContainer,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                    chipItems.forEach { item ->
+                        ActionChip(
+                            glyph = chipGlyph(item.kind),
+                            label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
+                                .chipLabel(item, allLists).take(64),
+                            onClick = { onOpenObject(item.firestoreId) },
+                        )
                     }
                 }
             }
         }
     }
+}
+
+/** Pill-shaped action chip. [onClick] null = non-interactive (raw tool call). */
+@Composable
+private fun ActionChip(glyph: String, label: String, onClick: (() -> Unit)?) {
+    val colors = IndexTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(colors.redSurface)
+            .border(1.dp, colors.chipOutline, RoundedCornerShape(percent = 50))
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text(glyph, color = colors.primary, fontSize = 12.sp)
+        Spacer(Modifier.width(5.dp))
+        Text(
+            label,
+            color = colors.onPrimaryContainer,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Humanise a tool call's function name for display, e.g. `search_contacts`
+ *  -> "Search contacts". Falls back to the call type or "Action". */
+private fun toolCallLabel(call: coredevices.indexai.data.entity.ToolCall): String {
+    val name = call.function?.name?.takeIf { it.isNotBlank() } ?: call.type
+    return name.replace('_', ' ').trim()
+        .replaceFirstChar { it.uppercase() }
+        .ifBlank { "Action" }
+        .take(64)
 }
 
 private fun chipGlyph(kind: String): String = when (kind) {

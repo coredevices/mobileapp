@@ -35,7 +35,7 @@ interface ContactDao {
             "WHERE a.lookupKey = :id " +
             "GROUP BY a.lookupKey " +
             "ORDER BY a.name ASC")
-    fun getContactWithCountFlow(id: String): Flow<ContactWithCount>
+    fun getContactWithCountFlow(id: String): Flow<ContactWithCount?>
 
     @Query("""
         SELECT *

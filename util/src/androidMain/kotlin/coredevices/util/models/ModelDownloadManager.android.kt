@@ -235,6 +235,7 @@ class ModelDownloadService : JobService(), KoinComponent {
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(0, 0, true)
             .setOngoing(true)
+            .setGroup("model_downloads")
             .build()
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(modelSlug.hashCode(), notification)

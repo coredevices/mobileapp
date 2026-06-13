@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.disk.pbw.bestVariantFor
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -68,8 +69,8 @@ class AppFetchProvider(
     }
 
     private suspend fun sendApp(app: PbwApp, appId: UInt, watchType: WatchType) {
-        val variant = watchType.getBestVariant(app.info.targetPlatforms) ?: run {
-            logger.e { "No compatible variant found for ${app.info.targetPlatforms}" }
+        val variant = app.bestVariantFor(watchType) ?: run {
+            logger.e { "No compatible build in pbw for $watchType (targetPlatforms=${app.info.targetPlatforms})" }
             appFetchService.sendResponse(AppFetchResponseStatus.NO_DATA)
             return
         }
