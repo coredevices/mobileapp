@@ -355,6 +355,7 @@ fun initKoin(
                 single { get<Database>().vibePatternDao() }
                 single { get<Database>().notificationRuleDao() }
                 single { get<Database>().healthDao() }
+                single { get<Database>().spo2Dao() }
                 single { get<Database>().healthStatDao() }
                 singleOf(::HealthDataProcessor)
                 single { get<Database>().watchPrefDao() }
