@@ -2,9 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Health Connect: blood oxygen (SpO2). health-kmp 1.4.0 doesn't model OxygenSaturation,
+         so this is requested/written directly via androidx.health.connect. -->
+    <uses-permission android:name="android.permission.health.WRITE_OXYGEN_SATURATION" />
     <application>
         <receiver android:name=".ui.TestActionReceiver" android:exported="false" />
         <receiver android:name="coredevices.pebble.firmware.UpdateActionReceiver" android:exported="false" />
+
+        <activity
+            android:name="coredevices.pebble.health.OxygenSaturationPermissionActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
 
         <provider
             android:authorities="coredevices.coreapp.pebblekit"

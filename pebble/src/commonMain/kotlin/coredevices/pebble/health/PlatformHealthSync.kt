@@ -85,6 +85,14 @@ class PlatformHealthSync(
             return false
         }
         val success = result.getOrDefault(false)
+        // Best-effort: also request blood-oxygen write permission (health-kmp doesn't cover SpO2).
+        if (success && supportsOxygenSaturationWriting()) {
+            try {
+                requestOxygenSaturationPermission()
+            } catch (e: Exception) {
+                logger.w(e) { "Failed requesting SpO2 permission" }
+            }
+        }
         logger.v { "requestPermissions success=$success" }
         tracker.setEnabled(success)
         GlobalScope.launch {
@@ -119,6 +127,7 @@ class PlatformHealthSync(
             }
             syncStepsAndHeartRate()
             syncOverlays()
+            syncOxygenSaturation()
             logger.d { "Health platform sync completed" }
         } catch (e: Exception) {
             logger.e(e) { "Health platform sync failed" }
@@ -177,6 +186,21 @@ class PlatformHealthSync(
             }
         } else {
             tracker.lastSyncedStepsTimestamp = records.last().timestamp
+        }
+    }
+
+    private suspend fun syncOxygenSaturation() {
+        if (!supportsOxygenSaturationWriting()) return
+        val lastTimestamp = tracker.lastSyncedSpo2Timestamp
+        val readings = healthDataApi.getSpo2ReadingsAfter(lastTimestamp)
+        if (readings.isEmpty()) return
+
+        val result = writeOxygenSaturationToPlatform(readings)
+        if (result) {
+            tracker.lastSyncedSpo2Timestamp = readings.last().timestamp
+            logger.d { "Synced ${readings.size} SpO2 records" }
+        } else {
+            logger.e { "Failed to write SpO2 records: keeping last-synced cursor" }
         }
     }
 
