@@ -7,6 +7,9 @@ import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsBlobItem
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue.Companion.encodeToString
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesBlobItem
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.DistanceUnitsBlobItem
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
@@ -95,6 +98,13 @@ interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
                         zone1Threshold = blob.zone1Threshold.get().toShort(),
                         zone2Threshold = blob.zone2Threshold.get().toShort(),
                         zone3Threshold = blob.zone3Threshold.get().toShort(),
+                    ).encodeToString()
+                }
+                "bloodOxygenPreferences" -> {
+                    val blob = BloodOxygenPreferencesBlobItem(enabled = false)
+                    blob.fromBytes(value)
+                    BloodOxygenPreferencesValue(
+                        enabled = blob.enabled.get() != 0.toByte(),
                     ).encodeToString()
                 }
                 else -> {
