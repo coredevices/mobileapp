@@ -8,6 +8,8 @@ import android.telephony.TelephonyManager
 import android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.calls.Call
+import io.rebble.libpebblecommon.calls.CallDoNotDisturbFilter
+import io.rebble.libpebblecommon.calls.InCallServiceCallCoordinator
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.LibPebbleInCallService.Companion.resolveNameFromContacts
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
@@ -40,6 +42,8 @@ class AndroidPhoneReceiver(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val context: Context,
     private val callDetector: NotificationCallDetector,
+    private val callDoNotDisturbFilter: CallDoNotDisturbFilter,
+    private val inCallServiceCallCoordinator: InCallServiceCallCoordinator,
     private val privateLogger: PrivateLogger,
 ) : LegacyPhoneReceiver {
     private val logger = Logger.withTag("AndroidPhoneReceiver")
@@ -93,7 +97,7 @@ class AndroidPhoneReceiver(
                             nullCallJob = libPebbleCoroutineScope.launch {
                                 delay(0.5.seconds)
                                 logger.v { "No second RINGING with number received, handling with null number" }
-                                if (currentCall.value != null) {
+                                if (currentCall.value != null || inCallServiceCallCoordinator.isHandlingCall()) {
                                     logger.v { "InCallService already handling this call, skipping" }
                                     return@launch
                                 }
@@ -140,7 +144,7 @@ class AndroidPhoneReceiver(
         }
     }
 
-    private fun handleRingingWithDelay(currentCall: MutableStateFlow<Call?>, number: String?) {
+    private suspend fun handleRingingWithDelay(currentCall: MutableStateFlow<Call?>, number: String?) {
         if (inCallServiceAvailable()) {
             // InCallService is available — give it a moment to claim the call.
             // If it doesn't (VoIP call), we handle it.
@@ -148,7 +152,7 @@ class AndroidPhoneReceiver(
             ringingDelayJob = libPebbleCoroutineScope.launch {
                 logger.v { "scheduling ringingDelayJob" }
                 delay(500.milliseconds)
-                if (currentCall.value != null) {
+                if (currentCall.value != null || inCallServiceCallCoordinator.isHandlingCall()) {
                     logger.v { "InCallService already handling this call, skipping" }
                     return@launch
                 }
@@ -160,15 +164,20 @@ class AndroidPhoneReceiver(
         }
     }
 
-    private fun handleRinging(currentCall: MutableStateFlow<Call?>, number: String?) {
+    private suspend fun handleRinging(currentCall: MutableStateFlow<Call?>, number: String?) {
         logger.v { "handle ringing" }
         val cookie = Random.nextUInt()
-        receiverCookie = cookie
 
         // Prefer contact info from the CATEGORY_CALL notification
         val contactName = callDetector.contactName
             ?: context.contentResolver.resolveNameFromContacts(number)
         val contactNumber = callDetector.contactNumber ?: number ?: "Unknown number"
+
+        if (callDoNotDisturbFilter.shouldSuppressIncomingCall(contactName, contactNumber)) {
+            return
+        }
+
+        receiverCookie = cookie
 
         val answerAction = callDetector.answerAction
         val declineAction = callDetector.declineAction

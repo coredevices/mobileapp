@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
+import io.rebble.libpebblecommon.calls.CallDoNotDisturbFilter
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
@@ -51,6 +52,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     private val notificationHandler: NotificationHandler by inject()
     private val notificationCallDetector: NotificationCallDetector by inject()
+    private val callDoNotDisturbFilter: CallDoNotDisturbFilter by inject()
     private val connection: AndroidPebbleNotificationListenerConnection by inject()
 
     private val configHolder: NotificationConfigFlow by inject()
@@ -167,6 +169,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            callDoNotDisturbFilter.recordCallNotification(sbn, notificationMatchesInterruptionFilter(sbn))
             notificationCallDetector.handleCallNotificationPosted(sbn)
             return
         }
@@ -190,10 +193,27 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         reason: Int
     ) {
         if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            callDoNotDisturbFilter.clearCallNotification(sbn)
             notificationCallDetector.handleCallNotificationRemoved(sbn)
             return
         }
         notificationHandler.handleNotificationRemoved(sbn)
+    }
+
+    override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
+        val ranking = Ranking()
+        try {
+            getActiveNotifications()
+                ?.asSequence()
+                ?.filter { it.notification.category == Notification.CATEGORY_CALL }
+                ?.forEach { sbn ->
+                    if (rankingMap.getRanking(sbn.key, ranking)) {
+                        callDoNotDisturbFilter.updateCallRanking(sbn.key, ranking.matchesInterruptionFilter())
+                    }
+                }
+        } catch (e: SecurityException) {
+            logger.e("error getting active call notifications", e)
+        }
     }
 
     private fun controlListenerHints() = notificationListenerScope.launch {
@@ -225,10 +245,17 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     fun isNotificationFilteredByDoNotDisturb(statusBarNotification: StatusBarNotification): Boolean {
-        val rankingMap = getCurrentRanking() ?: return false
+        return notificationMatchesInterruptionFilter(statusBarNotification) == false
+    }
+
+    private fun notificationMatchesInterruptionFilter(statusBarNotification: StatusBarNotification): Boolean? {
+        val rankingMap = getCurrentRanking() ?: return null
 
         val ranking = Ranking()
-        return rankingMap.getRanking(statusBarNotification.getKey(), ranking) &&
-                !ranking.matchesInterruptionFilter()
+        return if (rankingMap.getRanking(statusBarNotification.getKey(), ranking)) {
+            ranking.matchesInterruptionFilter()
+        } else {
+            null
+        }
     }
 }

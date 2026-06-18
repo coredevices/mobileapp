@@ -704,7 +704,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Respect Phone Do Not Disturb",
-                    description = "Notifications won't be sent to watch if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings)",
+                    description = "Notifications and calls won't be sent to watch if phone is in Do Not Disturb mode (unless allowed by phone settings)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
                     checked = libPebbleConfig.notificationConfig.respectDoNotDisturb,
