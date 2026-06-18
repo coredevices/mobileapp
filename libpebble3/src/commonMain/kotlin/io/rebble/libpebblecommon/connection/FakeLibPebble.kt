@@ -373,6 +373,7 @@ class FakeLibPebble : LibPebble {
             hrZone2Threshold = 154,
             hrZone3Threshold = 172,
             bloodOxygenEnabled = false,
+            bloodOxygenActivityEnabled = false,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}

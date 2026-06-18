@@ -474,6 +474,8 @@ data class HealthSettings(
     val hrZone3Threshold: Short,
     // BloodOxygenPreferences
     val bloodOxygenEnabled: Boolean,
+    // BloodOxygenActivityPreferences (SpO2 during activities; gated by HR During Activities)
+    val bloodOxygenActivityEnabled: Boolean,
 )
 
 /** Time range for displaying health data */

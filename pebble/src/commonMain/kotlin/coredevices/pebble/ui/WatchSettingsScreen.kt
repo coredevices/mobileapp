@@ -246,6 +246,7 @@ object SettingsIds {
     const val HrmMeasurementInterval = "HrmMeasurementInterval"
     const val HrmActivityTracking = "HrmActivityTracking"
     const val BloodOxygenEnabled = "BloodOxygenEnabled"
+    const val BloodOxygenActivityEnabled = "BloodOxygenActivityEnabled"
 }
 
 data class SettingsItem(
@@ -1017,8 +1018,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     checked = healthSettings.hrmActivityTrackingEnabled,
                     show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
                     onCheckChanged = {
+                        // Turning HR During Activities off also disables activity SpO2 — the watch
+                        // clears it locally, but keep the app's synced setting in sync too.
                         libPebble.updateHealthSettings(
-                            healthSettings.copy(hrmActivityTrackingEnabled = it)
+                            healthSettings.copy(
+                                hrmActivityTrackingEnabled = it,
+                                bloodOxygenActivityEnabled = if (!it) false else healthSettings.bloodOxygenActivityEnabled,
+                            )
                         )
                     },
                 ),
@@ -1033,6 +1039,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(bloodOxygenEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.BloodOxygenActivityEnabled,
+                    title = "Blood Oxygen During Activities",
+                    description = "Take a blood oxygen (SpO2) reading roughly every 5 minutes during detected activities. Requires 'HR During Activities' to be enabled.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.bloodOxygenActivityEnabled,
+                    enabled = healthSettings.hrmActivityTrackingEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(bloodOxygenActivityEnabled = it)
                         )
                     },
                 ),
@@ -2168,6 +2189,7 @@ fun basicSettingsToggleItem(
     keywords: String = "",
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
+    enabled: Boolean = true,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2185,6 +2207,7 @@ fun basicSettingsToggleItem(
                 Checkbox(
                     checked = checked,
                     onCheckedChange = onCheckChanged,
+                    enabled = enabled,
                 )
             },
             supportingContent = {
