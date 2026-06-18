@@ -928,3 +928,181 @@ fun fakeLockerEntry(): LockerWrapper {
         sync = true,
     )
 }
+
+/**
+ * [FakeLibPebble] configured for a deterministic set of fake watches.
+ * This is used in development builds to power the app without a real Bluetooth connection.
+ */
+class ConfiguredFakeLibPebble(
+    fakeWatches: List<WatchHardwarePlatform>,
+    activeWatch: WatchHardwarePlatform = fakeWatches.firstOrNull() ?: WatchHardwarePlatform.CORE_ASTERIX,
+) : LibPebble {
+    private val delegate = FakeLibPebble()
+    override fun init() = delegate.init()
+    override val watches: PebbleDevices = MutableStateFlow(
+        fakeWatches.mapIndexed { index, hw -> configuredFakeWatch(connected = hw == activeWatch, watchType = hw, index = index) }
+    )
+    override val connectionEvents: Flow<PebbleConnectionEvent> = MutableSharedFlow()
+    override fun watchesDebugState(): String = ""
+    override val config: StateFlow<LibPebbleConfig> = MutableStateFlow(LibPebbleConfig())
+    override fun updateConfig(config: LibPebbleConfig) = delegate.updateConfig(config)
+    override suspend fun sendNotification(notification: TimelineNotification, actionHandlers: Map<UByte, CustomTimelineActionHandler>?) = delegate.sendNotification(notification, actionHandlers)
+    override suspend fun markNotificationRead(itemId: Uuid) = delegate.markNotificationRead(itemId)
+    override suspend fun sendPing(cookie: UInt) = delegate.sendPing(cookie)
+    override suspend fun launchApp(uuid: Uuid) = delegate.launchApp(uuid)
+    override suspend fun stopApp(uuid: Uuid) = delegate.stopApp(uuid)
+    override fun doStuffAfterPermissionsGranted() = delegate.doStuffAfterPermissionsGranted()
+    override fun checkForFirmwareUpdates() = delegate.checkForFirmwareUpdates()
+    override suspend fun updateTimeIfNeeded() = delegate.updateTimeIfNeeded()
+    override val bluetoothEnabled: StateFlow<BluetoothState> = MutableStateFlow(BluetoothState.Enabled)
+    override val isScanningBle: StateFlow<Boolean> = MutableStateFlow(false)
+    override val isScanningClassic: StateFlow<Boolean> = MutableStateFlow(false)
+    override fun startBleScan() = delegate.startBleScan()
+    override fun stopBleScan() = delegate.stopBleScan()
+    override fun startClassicScan() = delegate.startClassicScan()
+    override fun stopClassicScan() = delegate.stopClassicScan()
+    override fun requestLockerSync(): Deferred<Unit> = delegate.requestLockerSync()
+    override suspend fun sideloadApp(pbwPath: Path): Boolean = delegate.sideloadApp(pbwPath)
+    override fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>> = delegate.getAllLockerBasicInfo()
+    override fun getAllLockerUuids(): Flow<List<Uuid>> = delegate.getAllLockerUuids()
+    override fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>> = delegate.getLocker(type, searchQuery, limit)
+    override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> = delegate.getLockerApp(id)
+    override suspend fun setAppOrder(id: Uuid, order: Int) = delegate.setAppOrder(id, order)
+    override suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean = delegate.waitUntilAppSyncedToWatch(id, identifier, timeout)
+    override suspend fun removeApp(id: Uuid): Boolean = delegate.removeApp(id)
+    override suspend fun addAppToLocker(app: LockerEntry) = delegate.addAppToLocker(app)
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>) = delegate.addAppsToLocker(apps)
+    override fun restoreSystemAppOrder() = delegate.restoreSystemAppOrder()
+    override val activeWatchface: StateFlow<LockerWrapper?> = MutableStateFlow(null)
+    override fun notificationApps(): Flow<List<AppWithCount>> = delegate.notificationApps()
+    override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> = delegate.notificationAppChannelCounts(packageName)
+    override fun mostRecentNotificationsFor(pkg: String?, channelId: String?, contactId: String?, limit: Int): Flow<List<NotificationEntity>> = delegate.mostRecentNotificationsFor(pkg, channelId, contactId, limit)
+    override fun mostRecentNotificationParticipants(limit: Int): Flow<List<String>> = delegate.mostRecentNotificationParticipants(limit)
+    override fun updateNotificationAppMuteState(packageName: String?, muteState: MuteState) = delegate.updateNotificationAppMuteState(packageName, muteState)
+    override fun updateNotificationAppState(packageName: String, vibePatternName: String?, colorName: String?, iconName: String?) = delegate.updateNotificationAppState(packageName, vibePatternName, colorName, iconName)
+    override fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>> = delegate.notificationRulesForApp(packageName)
+    override fun upsertNotificationRule(rule: NotificationRuleEntity) = delegate.upsertNotificationRule(rule)
+    override fun deleteNotificationRule(rule: NotificationRuleEntity) = delegate.deleteNotificationRule(rule)
+    override fun updateNotificationChannelMuteState(packageName: String, channelId: String, muteState: MuteState) = delegate.updateNotificationChannelMuteState(packageName, channelId, muteState)
+    override fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) = delegate.updateNotificationAppAllowDuplicates(packageName, allowDuplicates)
+    override suspend fun getAppIcon(packageName: String): ImageBitmap? = delegate.getAppIcon(packageName)
+    override val currentCall: MutableStateFlow<Call?> = MutableStateFlow(null)
+    override fun calendars(): Flow<List<CalendarEntity>> = delegate.calendars()
+    override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) = delegate.updateCalendarEnabled(calendarId, enabled)
+    override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> = delegate.otherPebbleCompanionAppsInstalled()
+    override suspend fun getAccountToken(appUuid: Uuid): String? = delegate.getAccountToken(appUuid)
+    override val userFacingErrors: Flow<UserFacingError> = delegate.userFacingErrors
+    override fun getContactsWithCounts(searchTerm: String, onlyNotified: Boolean): PagingSource<Int, ContactWithCount> = delegate.getContactsWithCounts(searchTerm, onlyNotified)
+    override fun getContact(id: String): Flow<ContactWithCount?> = delegate.getContact(id)
+    override fun updateContactState(contactId: String, muteState: MuteState, vibePatternName: String?) = delegate.updateContactState(contactId, muteState, vibePatternName)
+    override suspend fun getContactImage(lookupKey: String): ImageBitmap? = delegate.getContactImage(lookupKey)
+    override val analyticsEvents: Flow<AnalyticsEvent> = delegate.analyticsEvents
+    override val healthSettings: Flow<HealthSettings> = delegate.healthSettings
+    override fun updateHealthSettings(healthSettings: HealthSettings) = delegate.updateHealthSettings(healthSettings)
+    override suspend fun getHealthDebugStats(): HealthDebugStats = delegate.getHealthDebugStats()
+    override fun requestHealthData(fullSync: Boolean) = delegate.requestHealthData(fullSync)
+    override fun sendHealthAveragesToWatch() = delegate.sendHealthAveragesToWatch()
+    override val healthDataUpdated: SharedFlow<Unit> = MutableStateFlow(Unit)
+    override suspend fun getCurrentPosition(maximumAge: Duration?, timeout: Duration?, highAccuracy: Boolean): GeolocationPositionResult = delegate.getCurrentPosition(maximumAge, timeout, highAccuracy)
+    override suspend fun watchPosition(interval: Duration, highAccuracy: Boolean): Flow<GeolocationPositionResult> = delegate.watchPosition(interval, highAccuracy)
+    override fun insertOrReplace(pin: TimelinePin) = delegate.insertOrReplace(pin)
+    override fun delete(pinUuid: Uuid) = delegate.delete(pinUuid)
+    override fun vibePatterns(): Flow<List<VibePattern>> = delegate.vibePatterns()
+    override fun addCustomVibePattern(name: String, pattern: List<Long>) = delegate.addCustomVibePattern(name, pattern)
+    override fun deleteCustomPattern(name: String) = delegate.deleteCustomPattern(name)
+    override val watchPrefs: Flow<List<WatchPreference<*>>> = delegate.watchPrefs
+    override fun setWatchPref(watchPref: WatchPreference<*>) = delegate.setWatchPref(watchPref)
+    override fun updateWeatherData(weatherData: List<WeatherLocationData>) = delegate.updateWeatherData(weatherData)
+    override suspend fun getLatestTimestamp(): Long? = delegate.getLatestTimestamp()
+    override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> = delegate.getHealthDataAfter(afterTimestamp)
+    override suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity> = delegate.getOverlayEntriesAfter(afterTimestamp, types)
+    override suspend fun getHealthDataForRange(start: Long, end: Long) = delegate.getHealthDataForRange(start, end)
+    override suspend fun getDailyAggregates(start: Long, end: Long) = delegate.getDailyAggregates(start, end)
+    override suspend fun getTotalHealthData(start: Long, end: Long): HealthAggregates? = delegate.getTotalHealthData(start, end)
+    override suspend fun getAverageHeartRate(start: Long, end: Long): Double? = delegate.getAverageHeartRate(start, end)
+    override suspend fun getSleepEntries(start: Long, end: Long) = delegate.getSleepEntries(start, end)
+    override suspend fun getDailySleepSession(dayStartEpochSec: Long): DailySleep? = delegate.getDailySleepSession(dayStartEpochSec)
+    override suspend fun getLatestHeartRateReading(): LatestHeartRate? = delegate.getLatestHeartRateReading()
+    override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? = delegate.getRestingHeartRate(dayStartEpochSec)
+    override suspend fun getHRZoneMinutes(start: Long, end: Long) = delegate.getHRZoneMinutes(start, end)
+    override suspend fun getActivitySessions(start: Long, end: Long) = delegate.getActivitySessions(start, end)
+    override suspend fun getTypicalSteps(dayOfWeek: Int) = delegate.getTypicalSteps(dayOfWeek)
+    override suspend fun getTypicalSleepSeconds() = delegate.getTypicalSleepSeconds()
+    override suspend fun populateDebugHealthData() = delegate.populateDebugHealthData()
+}
+
+fun configuredFakeWatch(
+    connected: Boolean = true,
+    watchType: WatchHardwarePlatform = WatchHardwarePlatform.CORE_ASTERIX,
+    index: Int = 0,
+): PebbleDevice {
+    val name = fakeWatchDisplayName(watchType)
+    val fakeIdentifier = "AA:BB:CC:DD:EE:${index.toString(16).padStart(2, '0').uppercase()}".asPebbleBleIdentifier()
+    return if (connected) {
+        FakeConnectedDevice(
+            identifier = fakeIdentifier,
+            firmwareUpdateAvailable = FirmwareUpdateCheckState(false, null),
+            firmwareUpdateState = FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle(),
+            name = name,
+            nickname = null,
+            connectionFailureInfo = null,
+            watchType = watchType,
+            capabilities = setOf(ProtocolCapsFlag.SupportsBlobDbVersion),
+        )
+    } else {
+        object : DiscoveredPebbleDevice {
+            override val identifier = fakeIdentifier
+            override val name: String = name
+            override val nickname: String? = null
+            override val connectionFailureInfo: ConnectionFailureInfo? = null
+
+            override fun connect() {
+            }
+        }
+    }
+}
+
+fun fakeWatchDisplayName(watchType: WatchHardwarePlatform): String = when (watchType) {
+    WatchHardwarePlatform.UNKNOWN -> "Unknown (Basalt)"
+    WatchHardwarePlatform.PEBBLE_ONE_EV_1 -> "Pebble One EV1 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_ONE_EV_2 -> "Pebble One EV2 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_ONE_EV_2_3 -> "Pebble One EV2.3 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_ONE_EV_2_4 -> "Pebble One EV2.4 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE -> "Pebble One V1.5 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO -> "Pebble Two V2.0 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_SNOWY_EVT_2 -> "Pebble Time EVT2 (Basalt)"
+    WatchHardwarePlatform.PEBBLE_SNOWY_DVT -> "Pebble Time DVT (Basalt)"
+    WatchHardwarePlatform.PEBBLE_BOBBY_SMILES -> "Pebble Time (Basalt)"
+    WatchHardwarePlatform.PEBBLE_ONE_BIGBOARD_2 -> "Pebble One Bigboard 2 (Aplite)"
+    WatchHardwarePlatform.PEBBLE_ONE_BIGBOARD -> "Pebble One Bigboard (Aplite)"
+    WatchHardwarePlatform.PEBBLE_SNOWY_BIGBOARD -> "Pebble Time Bigboard (Basalt)"
+    WatchHardwarePlatform.PEBBLE_SNOWY_BIGBOARD_2 -> "Pebble Time Bigboard 2 (Basalt)"
+    WatchHardwarePlatform.PEBBLE_SPALDING_EVT -> "Pebble Time Round EVT (Chalk)"
+    WatchHardwarePlatform.PEBBLE_SPALDING_PVT -> "Pebble Time Round (Chalk)"
+    WatchHardwarePlatform.PEBBLE_SPALDING_BIGBOARD -> "Pebble Time Round Bigboard (Chalk)"
+    WatchHardwarePlatform.PEBBLE_SILK_EVT -> "Pebble 2 EVT (Diorite)"
+    WatchHardwarePlatform.PEBBLE_SILK -> "Pebble 2 (Diorite)"
+    WatchHardwarePlatform.CORE_ASTERIX -> "Core Asterix (Flint)"
+    WatchHardwarePlatform.CORE_OBELIX_EVT -> "Core Obelix EVT (Emery)"
+    WatchHardwarePlatform.CORE_OBELIX_DVT -> "Core Obelix DVT (Emery)"
+    WatchHardwarePlatform.CORE_OBELIX_PVT -> "Core Obelix (Emery)"
+    WatchHardwarePlatform.CORE_GETAFIX_EVT -> "Core Getafix EVT (Gabbro)"
+    WatchHardwarePlatform.CORE_GETAFIX_DVT -> "Core Getafix DVT (Gabbro)"
+    WatchHardwarePlatform.CORE_GETAFIX_DVT2 -> "Core Getafix DVT2 (Gabbro)"
+    WatchHardwarePlatform.PEBBLE_SILK_BIGBOARD -> "Pebble 2 Bigboard (Diorite)"
+    WatchHardwarePlatform.PEBBLE_SILK_BIGBOARD_2_PLUS -> "Pebble 2 Bigboard 2+ (Diorite)"
+    WatchHardwarePlatform.PEBBLE_ROBERT_EVT -> "Pebble 2+ EVT (Emery)"
+    WatchHardwarePlatform.PEBBLE_ROBERT_BIGBOARD -> "Pebble 2+ Bigboard (Emery)"
+    WatchHardwarePlatform.PEBBLE_ROBERT_BIGBOARD_2 -> "Pebble 2+ Bigboard 2 (Emery)"
+    WatchHardwarePlatform.CORE_OBELIX_BIGBOARD -> "Core Obelix Bigboard (Emery)"
+    WatchHardwarePlatform.CORE_OBELIX_BIGBOARD_2 -> "Core Obelix Bigboard 2 (Emery)"
+}
+
+fun isConsumerWatchPlatform(watchType: WatchHardwarePlatform): Boolean = when (watchType) {
+    WatchHardwarePlatform.PEBBLE_BOBBY_SMILES,
+    WatchHardwarePlatform.PEBBLE_SPALDING_PVT,
+    WatchHardwarePlatform.PEBBLE_SILK,
+    WatchHardwarePlatform.CORE_ASTERIX,
+    WatchHardwarePlatform.CORE_OBELIX_PVT -> true
+    else -> false
+}

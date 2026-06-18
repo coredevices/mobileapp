@@ -190,6 +190,7 @@ val headSha by lazy {
     }.standardOutput.asText.get().trim()
 }
 val enableQa = System.getenv("QA")?.toBoolean() ?: properties.getProperty("QA")?.toBoolean() ?: true
+val fakeWatchEnabled = gradleBooleanProp("fakeWatchEnabled", default = false)
 
 fun gradleStringPropOrNull(name: String): String? {
     val local = properties.getProperty(name)?.takeIf { it.isNotEmpty() }
@@ -224,5 +225,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_WEIGHTS_VERSION", "v1.10")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_WEIGHTS_VERSION", "v1.15")
+        buildConfigField(FieldSpec.Type.BOOLEAN, "FAKE_WATCH_ENABLED", fakeWatchEnabled.toString())
     }
 }

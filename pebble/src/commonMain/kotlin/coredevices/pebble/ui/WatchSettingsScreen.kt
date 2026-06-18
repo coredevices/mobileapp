@@ -81,6 +81,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -128,10 +129,14 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.fake.FakeWatchConfigStore
+import coredevices.pebble.fake.FakeWatchPickerDialog
+import coredevices.pebble.fake.fakeWatchItems
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.PermissionRequester
@@ -154,6 +159,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.Dispatchers
@@ -324,6 +330,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val libPebbleConfig by libPebble.config.collectAsState()
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
+    val fakeWatchConfig: FakeWatchConfigStore = koinInject()
+    val fakeWatches by fakeWatchConfig.fakeWatches.collectAsState()
+    val activeFakeWatch by fakeWatchConfig.activeFakeWatch.collectAsState()
     val themeProvider: ThemeProvider = koinInject()
     val settings: Settings = koinInject()
     val currentTheme by themeProvider.theme.collectAsState()
@@ -353,6 +362,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
+    val showAddFakeWatchDialog = remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
     if (showSpokenLanguageDialog) {
@@ -496,7 +506,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             experimentalDevices,
             loggedIn,
             watchPrefs,
-            rebbleVoiceAvailable,
+            fakeWatches,
+            activeFakeWatch,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -1787,7 +1798,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfigHolder.update(coreConfig.copy(interceptPKJSWeather = it))
                     },
                 ),
-            ) + watchPrefs
+            ) + if (CommonBuildKonfig.FAKE_WATCH_ENABLED) {
+                fakeWatchItems(fakeWatchConfig, fakeWatches, activeFakeWatch, showAddFakeWatchDialog)
+            } else {
+                emptyList()
+            } + watchPrefs
+        }
+
+        if (showAddFakeWatchDialog.value) {
+            FakeWatchPickerDialog(
+                currentWatches = fakeWatches,
+                onAddWatches = { selected ->
+                    fakeWatchConfig.addFakeWatches(selected)
+                    showAddFakeWatchDialog.value = false
+                },
+                onDismissRequest = { showAddFakeWatchDialog.value = false },
+            )
         }
 
     return SettingsItemsState(
