@@ -245,6 +245,7 @@ object SettingsIds {
     const val HrmEnabled = "HrmEnabled"
     const val HrmMeasurementInterval = "HrmMeasurementInterval"
     const val HrmActivityTracking = "HrmActivityTracking"
+    const val BloodOxygenEnabled = "BloodOxygenEnabled"
 }
 
 data class SettingsItem(
@@ -1018,6 +1019,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     onCheckChanged = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(hrmActivityTrackingEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.BloodOxygenEnabled,
+                    title = "Blood Oxygen",
+                    description = "Allow the watch to measure blood oxygen (SpO2). Readings are taken roughly every 10 minutes.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.bloodOxygenEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(bloodOxygenEnabled = it)
                         )
                     },
                 ),

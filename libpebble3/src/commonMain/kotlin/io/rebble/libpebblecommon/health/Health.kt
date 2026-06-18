@@ -5,14 +5,17 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthApi
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LatestHeartRate
+import io.rebble.libpebblecommon.connection.LatestSpo2
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
@@ -44,6 +47,7 @@ class Health(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
+    private val spo2Dao: Spo2Dao,
     private val watchManager: WatchManager,
     private val healthDataProcessor: HealthDataProcessor,
 ) : HealthApi, HealthDataApi {
@@ -225,6 +229,24 @@ class Health(
 
     override suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long> =
         healthDao.getHeartRateZoneMinutes(start, end).associate { it.heartRateZone to it.minutes }
+
+    override suspend fun getSpo2Readings(start: Long, end: Long): List<Spo2ReadingEntity> =
+        spo2Dao.getSpo2Readings(start, end)
+
+    override suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity> =
+        spo2Dao.getSpo2ReadingsAfter(afterTimestamp)
+
+    override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
+        spo2Dao.getAverageSpo2(start, end)
+
+    override suspend fun getLatestSpo2Reading(): LatestSpo2? {
+        val entry = spo2Dao.getLatestSpo2Reading() ?: return null
+        return LatestSpo2(
+            spo2Percent = entry.spo2Percent,
+            quality = entry.quality,
+            timestampEpochSec = entry.timestamp,
+        )
+    }
 
     override suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity> =
         healthDao.getOverlayEntries(start, end, listOf(
@@ -450,6 +472,8 @@ data class HealthSettings(
     val hrZone1Threshold: Short,
     val hrZone2Threshold: Short,
     val hrZone3Threshold: Short,
+    // BloodOxygenPreferences
+    val bloodOxygenEnabled: Boolean,
 )
 
 /** Time range for displaying health data */

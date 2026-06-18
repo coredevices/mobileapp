@@ -42,6 +42,8 @@ internal val SleepHeaderColor = Color(0xFF065C91)
 internal val SleepBgColor = Color(0xFF014981)
 internal val HRHeaderColor = Color(0xFF7C33A5)
 internal val HRBgColor = Color(0xFF6A1B9A)
+internal val SpO2HeaderColor = Color(0xFF0288D1)
+internal val SpO2BgColor = Color(0xFF01579B)
 
 internal val ActivityFillColor = Color(0xFF00C896)
 internal val ActivityBarColor = Color(0xFFA8E6CF)
@@ -53,6 +55,7 @@ internal val HRLineColor = Color(0xFFF0437D)
 internal val HRZone1Color = Color(0xFFF0437D)
 internal val HRZone2Color = Color(0xFF179AC6)
 internal val HRZone3Color = Color(0xFF00C3FD)
+internal val SpO2LineColor = Color(0xFF4FC3F7)
 
 internal val BarAlpha = 0.85f
 internal val BarAlphaSelected = 1.0f
@@ -351,6 +354,36 @@ internal fun HRLineChart(hrs: List<Double?>, scrub: ScrubState, tm: androidx.com
         }
         val pointsPerHour = (hrs.size / 24).coerceAtLeast(1)
         for (i in hrs.indices step pointsPerHour * 6) { drawText(tm.measure("${i / pointsPerHour}", ls), topLeft = Offset(i * sx, cH + 2.dp.toPx())) }
+    }
+}
+
+@Composable
+internal fun Spo2LineChart(values: List<Double?>, scrub: ScrubState, tm: androidx.compose.ui.text.TextMeasurer) {
+    val ls = TextStyle(fontSize = 9.sp, color = AxisLabelColor); val si = scrub.scrubIndex
+    Canvas(Modifier.fillMaxWidth().height(160.dp).scrubGesture(values.size, scrub)) {
+        val lH = 14.dp.toPx(); val cH = size.height - lH
+        // SpO2 sits in a narrow band (~85–100); show that range so variation is visible.
+        val dataMin = values.filterNotNull().minOrNull()
+        val dataMax = values.filterNotNull().maxOrNull()
+        val mn = (dataMin?.let { it - 3 } ?: 85.0).coerceIn(70.0, 97.0)
+        val mx = (dataMax?.let { it + 3 } ?: 100.0).coerceIn(mn + 1.0, 100.0)
+        val rg = (mx - mn).coerceAtLeast(1.0)
+        drawRect(ChartOverlayColor, Offset.Zero, Size(size.width, cH))
+        val sx = size.width / (values.size - 1).coerceAtLeast(1)
+        val pts = values.mapIndexedNotNull { i, v -> v?.let { Offset(i * sx, cH - ((it - mn) / rg * cH).toFloat()) } }
+        if (pts.size >= 2) {
+            drawPath(smoothFilledPath(pts, cH), SpO2LineColor.copy(alpha = 0.2f))
+            drawPath(smoothLinePath(pts), SpO2LineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+        } else if (pts.size == 1) {
+            // Single sparse reading: draw a dot so the user sees it.
+            drawCircle(SpO2LineColor, 4.dp.toPx(), pts.first())
+        }
+        if (si != null && si in values.indices) {
+            val x = si * sx; drawLine(ScrubLineColor, Offset(x, 0f), Offset(x, cH), 1.5.dp.toPx())
+            values[si]?.let { val y = cH - ((it - mn) / rg * cH).toFloat(); drawCircle(Color.White, 5.dp.toPx(), Offset(x, y)); drawCircle(SpO2LineColor, 3.5.dp.toPx(), Offset(x, y)) }
+        }
+        val pointsPerHour = (values.size / 24).coerceAtLeast(1)
+        for (i in values.indices step pointsPerHour * 6) { drawText(tm.measure("${i / pointsPerHour}", ls), topLeft = Offset(i * sx, cH + 2.dp.toPx())) }
     }
 }
 

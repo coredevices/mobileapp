@@ -95,6 +95,14 @@ data class HeartRateUiState(
     val isLoading: Boolean = true,
 )
 
+data class Spo2UiState(
+    val averageSpo2: Int? = null,
+    val latestSpo2: Int? = null,
+    /** 5-minute buckets of SpO2 percent for the day; null where there's no reading. */
+    val spo2Samples: List<Double?> = emptyList(),
+    val isLoading: Boolean = true,
+)
+
 class HealthViewModel(
     private val libPebble: LibPebble,
 ) : ViewModel() {
@@ -115,6 +123,8 @@ class HealthViewModel(
     val sleep: StateFlow<SleepUiState> = _sleep.asStateFlow()
     private val _heartRate = MutableStateFlow(HeartRateUiState())
     val heartRate: StateFlow<HeartRateUiState> = _heartRate.asStateFlow()
+    private val _spo2 = MutableStateFlow(Spo2UiState())
+    val spo2: StateFlow<Spo2UiState> = _spo2.asStateFlow()
     private val _dateLabel = MutableStateFlow("")
     val dateLabel: StateFlow<String> = _dateLabel.asStateFlow()
 
@@ -175,6 +185,8 @@ class HealthViewModel(
         val zonesD = async { libPebble.getHRZoneMinutes(dayStart, dayEnd) }
         val latestHRD = async { libPebble.getLatestHeartRateReading() }
         val restingHRD = async { libPebble.getRestingHeartRate(dayStart) }
+        val spo2ReadingsD = async { libPebble.getSpo2Readings(dayStart, dayEnd) }
+        val avgSpo2D = async { libPebble.getAverageSpo2(dayStart, dayEnd) }
 
         val healthData = healthDataD.await()
         val aggregates = aggregatesD.await()
@@ -184,6 +196,7 @@ class HealthViewModel(
 
         val hourlySteps = LongArray(24)
         val hrBuckets = Array<MutableList<Int>>(288) { mutableListOf() } // 5-minute resolution
+        val spo2Buckets = Array<MutableList<Int>>(288) { mutableListOf() } // 5-minute resolution
         for (entry in healthData) {
             val hour = ((entry.timestamp - dayStart) / 3600).toInt().coerceIn(0, 23)
             hourlySteps[hour] += entry.steps
@@ -191,6 +204,12 @@ class HealthViewModel(
                 val bucket = ((entry.timestamp - dayStart) / 300).toInt().coerceIn(0, 287)
                 hrBuckets[bucket].add(entry.heartRate)
             }
+        }
+        // SpO2 comes from a separate (sparse) stream; bucket the same way for the line chart.
+        val spo2Readings = spo2ReadingsD.await()
+        for (reading in spo2Readings) {
+            val bucket = ((reading.timestamp - dayStart) / 300).toInt().coerceIn(0, 287)
+            spo2Buckets[bucket].add(reading.spo2Percent)
         }
 
         val sessionUis = sessions.map { ov ->
@@ -236,6 +255,13 @@ class HealthViewModel(
             restingHR = restingHRD.await(),
             hrSamples = hrBuckets.map { if (it.isEmpty()) null else it.average() },
             zoneMinutes = zonesD.await(),
+            isLoading = false,
+        )
+
+        _spo2.value = Spo2UiState(
+            averageSpo2 = avgSpo2D.await()?.roundToInt(),
+            latestSpo2 = spo2Readings.maxByOrNull { it.timestamp }?.spo2Percent,
+            spo2Samples = spo2Buckets.map { if (it.isEmpty()) null else it.average() },
             isLoading = false,
         )
     }
@@ -328,6 +354,15 @@ class HealthViewModel(
         )
     }
 
+    private suspend fun buildSpo2State(start: Long, end: Long): Spo2UiState {
+        val latest = libPebble.getLatestSpo2Reading()
+        return Spo2UiState(
+            averageSpo2 = libPebble.getAverageSpo2(start, end)?.roundToInt(),
+            latestSpo2 = latest?.spo2Percent,
+            isLoading = false,
+        )
+    }
+
     private suspend fun buildSleepState(
         stackedData: List<StackedSleepEntry>, daysWithData: Int,
         sleepEntries: List<io.rebble.libpebblecommon.database.entity.OverlayDataEntity>, tz: TimeZone,
@@ -392,6 +427,7 @@ class HealthViewModel(
         }
         _sleep.value = buildSleepState(stackedSleep, daysWithData, sleepEntries, tz)
         _heartRate.value = buildHeartRateState(start, end, dayStarts, dayLabels)
+        _spo2.value = buildSpo2State(start, end)
     }
 
     private suspend fun loadAggregatedMonthly(
@@ -423,6 +459,7 @@ class HealthViewModel(
         }
         _sleep.value = buildSleepState(stackedSleep, daysWithData, sleepEntries, tz)
         _heartRate.value = buildHeartRateState(start, end)
+        _spo2.value = buildSpo2State(start, end)
     }
 
 }
