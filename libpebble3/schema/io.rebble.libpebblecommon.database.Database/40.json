@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 39,
-    "identityHash": "e4ceeeab2a7214eb338550b7d2f79726",
+    "version": 40,
+    "identityHash": "e44a80014384141f5b3e24ddb6697cb6",
     "entities": [
       {
         "tableName": "KnownWatchItem",
@@ -1335,6 +1335,36 @@
         }
       },
       {
+        "tableName": "spo2_readings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`timestamp` INTEGER NOT NULL, `spo2Percent` INTEGER NOT NULL, `quality` INTEGER NOT NULL, PRIMARY KEY(`timestamp`))",
+        "fields": [
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spo2Percent",
+            "columnName": "spo2Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quality",
+            "columnName": "quality",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "timestamp"
+          ]
+        }
+      },
+      {
         "tableName": "HealthStatEntity",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`recordHashcode` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `sync` INTEGER NOT NULL DEFAULT 1, `key` TEXT NOT NULL, `payload` BLOB NOT NULL, `lastUpdated` INTEGER NOT NULL, PRIMARY KEY(`key`))",
         "fields": [
@@ -1822,7 +1852,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e4ceeeab2a7214eb338550b7d2f79726')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e44a80014384141f5b3e24ddb6697cb6')"
     ]
   }
 }
