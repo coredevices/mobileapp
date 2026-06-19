@@ -57,6 +57,28 @@ expect suspend fun withHighPriorityThread(block: suspend () -> Unit)
 expect suspend fun getFreeMemoryMB(): Long
 expect val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long
 
+private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
+
+/**
+ * Throws [TranscriptionException.NoSpeechDetected] if [text] is blank or contains no usable speech
+ * (only noise / non-speech tokens / stutters). Returns normally otherwise.
+ *
+ * Used both as the final guard on a transcription result and, for [CactusSTTMode.LocalFirst], to
+ * treat an empty local result as a failure that triggers the remote fallback (HARD-324).
+ */
+internal fun validateContainsSpeech(text: String?, modelUsed: String?) {
+    when {
+        text.isNullOrBlank() ->
+            throw TranscriptionException.NoSpeechDetected("empty_result", modelUsed = modelUsed)
+        text.length < 2 ->
+            throw TranscriptionException.NoSpeechDetected("too_short", modelUsed = modelUsed)
+        text.replace(nonSpeechRegex, "").isBlank() ->
+            throw TranscriptionException.NoSpeechDetected("non_speech_tokens", modelUsed = modelUsed)
+        text.replace("s*", "").lowercase().count { it.isLetterOrDigit() } < 2 ->
+            throw TranscriptionException.NoSpeechDetected("stutters_or_noise", modelUsed = modelUsed)
+    }
+}
+
 class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val wisprFlow: WisprFlowTranscriptionService,
@@ -67,7 +89,6 @@ class CactusTranscriptionService(
 ): TranscriptionService {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
-        private val nonSpeechRegex = "\\[[^\\]]*\\]|\\([^)]*\\)".toRegex()
         private val wisprSkipInterval = 1.minutes
     }
 
@@ -465,6 +486,9 @@ class CactusTranscriptionService(
                 CactusSTTMode.LocalFirst -> {
                     try {
                         val text = runLocalTranscribe(path, 10.seconds)
+                        // Treat an empty/no-speech local result as a failure so we fall back to
+                        // remote, as remote is more accurate.
+                        validateContainsSpeech(text, sttConfig.value.modelName)
                         LocalTranscriptionResult(
                             text = text,
                             modeUsed = sttMode,
@@ -615,16 +639,7 @@ class CactusTranscriptionService(
             val duration = Clock.System.now() - start
             logger.d { "Transcription completed in $duration" }
 
-            when {
-                text.isNullOrBlank() ->
-                    throw TranscriptionException.NoSpeechDetected("empty_result", modelUsed = modelUsed)
-                text.length < 2 ->
-                    throw TranscriptionException.NoSpeechDetected("too_short", modelUsed = modelUsed)
-                text.replace(nonSpeechRegex, "").isBlank() ->
-                    throw TranscriptionException.NoSpeechDetected("non_speech_tokens", modelUsed = modelUsed)
-                text.replace("s*", "").lowercase().count { it.isLetterOrDigit() } < 2 ->
-                    throw TranscriptionException.NoSpeechDetected("stutters_or_noise", modelUsed = modelUsed)
-            }
+            validateContainsSpeech(text, modelUsed)
 
             if (!coreConfigFlow.value.obfuscateSensitiveLogs) {
                 logger.d { "Transcription text: '$text' (${text?.length} chars), used $modelUsed" }
