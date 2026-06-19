@@ -11,11 +11,6 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.reminders.ReminderReceiver
-import coredevices.util.AndroidPlatform
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlin.time.Instant
 import org.koin.core.component.KoinComponent
@@ -27,7 +22,6 @@ class AndroidBuiltInReminder(
 ): ListAssignableReminder, KoinComponent {
     private val context: Context by inject()
     private val db: RingDatabase by inject()
-    private val scope = CoroutineScope(Dispatchers.Default)
 
     private var _reminderId: Int? = null
     val reminderId: Int? get() = _reminderId
@@ -41,15 +35,13 @@ class AndroidBuiltInReminder(
         require(time == null || time > Clock.System.now()) { "Time must be in the future" }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                val result = scope.async { AndroidPlatform.notificationPermResults.first() }
-                AndroidPlatform.triggerNotificationPermRequest()
-                check(result.await()) { "Notification permission not granted" }
+            check(context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                "Notification permission not granted, enable notifications for the app in Settings."
             }
         }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            check(alarmManager.canScheduleExactAlarms()) { "No permissions to schedule reminders, tell user to check under 'Special app access > Alarms and reminders' in Settings app." }
+            check(alarmManager.canScheduleExactAlarms()) { "No permissions to schedule reminders, check under 'Special app access > Alarms and reminders' in Settings app." }
         }
 
         val reminder = LocalReminderData(0, time, message)
