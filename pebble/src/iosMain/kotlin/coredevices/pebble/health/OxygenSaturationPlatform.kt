@@ -7,6 +7,4 @@ internal actual fun supportsOxygenSaturationWriting(): Boolean = false
 
 internal actual suspend fun hasOxygenSaturationPermission(): Boolean = false
 
-internal actual suspend fun requestOxygenSaturationPermission(): Boolean = false
-
 internal actual suspend fun writeOxygenSaturationToPlatform(readings: List<Spo2ReadingEntity>): Boolean = false

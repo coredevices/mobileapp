@@ -31,6 +31,18 @@ internal expect fun exerciseWriteTypes(): List<HealthDataType>
 
 internal expect fun supportsSleepWriting(): Boolean
 
+/**
+ * Requests the platform's health read/write permissions in a single prompt where the platform
+ * allows it. On Android this bundles the standard types together with blood oxygen (SpO2), which
+ * health-kmp can't model, so they don't surface as two separate prompts. Returns true if the
+ * standard types were granted (SpO2 is treated as best-effort on Android).
+ */
+internal expect suspend fun requestPlatformHealthPermissions(
+    healthManager: HealthManager,
+    readTypes: List<HealthDataType>,
+    writeTypes: List<HealthDataType>,
+): Boolean
+
 class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
@@ -74,24 +86,12 @@ class PlatformHealthSync(
 
     /** Request write permissions. Returns true if granted. */
     suspend fun requestPermissions(): Boolean {
-        val result = try {
-            healthManager.requestAuthorization(
-                readTypes = RequestedReadTypes,
-                writeTypes = RequestedWriteTypes,
-            )
+        val success = try {
+            requestPlatformHealthPermissions(healthManager, RequestedReadTypes, RequestedWriteTypes)
         } catch (e: Exception) {
             logger.w(e) { "Health platform doesn't support requested types" }
             tracker.setEnabled(false)
             return false
-        }
-        val success = result.getOrDefault(false)
-        // Best-effort: also request blood-oxygen write permission (health-kmp doesn't cover SpO2).
-        if (success && supportsOxygenSaturationWriting()) {
-            try {
-                requestOxygenSaturationPermission()
-            } catch (e: Exception) {
-                logger.w(e) { "Failed requesting SpO2 permission" }
-            }
         }
         logger.v { "requestPermissions success=$success" }
         tracker.setEnabled(success)

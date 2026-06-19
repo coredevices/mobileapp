@@ -11,8 +11,5 @@ internal expect fun supportsOxygenSaturationWriting(): Boolean
 
 internal expect suspend fun hasOxygenSaturationPermission(): Boolean
 
-/** Requests the platform's blood-oxygen write permission. Returns true if granted. */
-internal expect suspend fun requestOxygenSaturationPermission(): Boolean
-
 /** Writes the given SpO2 readings to the platform. Returns true on success. */
 internal expect suspend fun writeOxygenSaturationToPlatform(readings: List<Spo2ReadingEntity>): Boolean
