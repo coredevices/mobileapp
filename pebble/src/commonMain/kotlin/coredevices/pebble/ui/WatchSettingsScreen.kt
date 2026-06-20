@@ -55,6 +55,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Badge
@@ -95,7 +97,9 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,10 +136,11 @@ import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
+import coredevices.util.CloudSTTProvider
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
+import coredevices.util.OpenAiSTTConfig
 import coredevices.util.PermissionRequester
-import coredevices.util.STTConfig
 import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
@@ -353,6 +358,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
+    var showOpenAiSttConfigDialog by remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
     if (showSpokenLanguageDialog) {
@@ -367,6 +373,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 showSpokenLanguageDialog = false
             },
             onDismissRequest = { showSpokenLanguageDialog = false },
+        )
+    }
+    if (showOpenAiSttConfigDialog) {
+        OpenAiSttConfigDialog(
+            config = coreConfig.sttConfig.openAi,
+            onSave = { updated ->
+                coreConfigHolder.update(
+                    coreConfig.copy(
+                        sttConfig = coreConfig.sttConfig.copy(openAi = updated)
+                    )
+                )
+                showOpenAiSttConfigDialog = false
+            },
+            onDismissRequest = { showOpenAiSttConfigDialog = false },
         )
     }
     pendingSTTModeDialog?.let { pendingSTTMode ->
@@ -397,7 +417,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     } else {
                         coreConfigHolder.update(
                             coreConfig.copy(
-                                sttConfig = STTConfig(
+                                // copy() so the provider, OpenAI config and language aren't reset.
+                                sttConfig = coreConfig.sttConfig.copy(
                                     mode = pendingSTTMode,
                                     modelName = recommendedModelFinal.slug
                                 )
@@ -1376,21 +1397,41 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                 it == CactusSTTMode.LocalFirst ||
                                 it == CactusSTTMode.RebbleFirst ||
                                 it == CactusSTTMode.RebbleFallback
+                        val usesCloud = it != CactusSTTMode.LocalOnly && !isRebble
+                        // Cloud needs a Core account for WisprFlow, but a configured OpenAI backend
+                        // works signed-out, so prefer it over forcing sign-in.
+                        val openAiReady = coreConfig.sttConfig.openAi.isConfigured
+                        val useOpenAiWithoutSignIn = usesCloud && coreUser == null && openAiReady
+                        val cloudProvider = if (useOpenAiWithoutSignIn) {
+                            CloudSTTProvider.OpenAiCompatible
+                        } else {
+                            coreConfig.sttConfig.cloudProvider
+                        }
                         if (isRebble && !rebbleVoiceAvailable) {
                             snackbarDisplay.showSnackbar("Rebble speech recognition requires a Rebble subscription")
                             showSignInDialog = true
                         } else if (it != CactusSTTMode.RemoteOnly && !cactusSupported) {
                             snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
-                        } else if (it != CactusSTTMode.LocalOnly && !isRebble && coreUser == null) {
-                            snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
+                        } else if (usesCloud && coreUser == null && !openAiReady) {
+                            snackbarDisplay.showSnackbar("Sign in, or configure an OpenAI-compatible backend, to use cloud speech recognition")
                             showSignInDialog = true
                         } else if (needsLocal && !hasOfflineModels) {
+                            // Persist the provider switch before the model-download dialog (which
+                            // only carries the mode) so the chosen cloud fallback isn't lost.
+                            if (cloudProvider != coreConfig.sttConfig.cloudProvider) {
+                                coreConfigHolder.update(
+                                    coreConfig.copy(
+                                        sttConfig = coreConfig.sttConfig.copy(cloudProvider = cloudProvider)
+                                    )
+                                )
+                            }
                             pendingSTTModeDialog = it
                         } else {
                             coreConfigHolder.update(
                                 coreConfig.copy(
                                     sttConfig = coreConfig.sttConfig.copy(
-                                        mode = it
+                                        mode = it,
+                                        cloudProvider = cloudProvider,
                                     )
                                 )
                             )
@@ -1458,30 +1499,89 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Speech,
                     action = { showSpokenLanguageDialog = true },
                 ),
-                SettingsItem(
-                    title = "Cloud Recognition Provider",
-                    isDebugSetting = false,
+                // Wispr Flow keeps its branded logo row; other providers use a plain dropdown.
+                if (coreConfig.sttConfig.cloudProvider == CloudSTTProvider.WisprFlow) {
+                    SettingsItem(
+                        title = "Cloud Recognition Provider",
+                        isDebugSetting = false,
+                        topLevelType = TopLevelType.Phone,
+                        section = Section.Speech,
+                        keywords = "stt speech recognition cloud provider wispr openai whisper",
+                        item = {
+                            val logo = if (currentColorScheme() == CoreAppColorScheme.Grey) {
+                                Res.drawable.wispr_flow_logo_white
+                            } else {
+                                Res.drawable.wispr_flow_logo_black
+                            }
+                            var expanded by remember { mutableStateOf(false) }
+                            ListItem(
+                                headlineContent = { Text("Cloud Recognition Provider") },
+                                trailingContent = {
+                                    Box {
+                                        TextButton(onClick = { expanded = true }) {
+                                            Image(
+                                                painter = painterResource(logo),
+                                                contentDescription = "Wispr Flow",
+                                                modifier = Modifier.height(20.dp),
+                                            )
+                                        }
+                                        CloudProviderDropdown(
+                                            expanded = expanded,
+                                            onDismissRequest = { expanded = false },
+                                            onProviderSelected = { provider ->
+                                                expanded = false
+                                                coreConfigHolder.update(
+                                                    coreConfig.copy(
+                                                        sttConfig = coreConfig.sttConfig.copy(
+                                                            cloudProvider = provider
+                                                        )
+                                                    )
+                                                )
+                                                if (provider == CloudSTTProvider.OpenAiCompatible &&
+                                                    !coreConfig.sttConfig.openAi.isConfigured
+                                                ) {
+                                                    showOpenAiSttConfigDialog = true
+                                                }
+                                            },
+                                        )
+                                    }
+                                },
+                                shadowElevation = ELEVATION,
+                            )
+                        }
+                    )
+                } else {
+                    basicSettingsDropdownItem(
+                        title = "Cloud Recognition Provider",
+                        keywords = "stt speech recognition cloud provider wispr openai whisper",
+                        topLevelType = TopLevelType.Phone,
+                        section = Section.Speech,
+                        items = CloudSTTProvider.entries,
+                        selectedItem = coreConfig.sttConfig.cloudProvider,
+                        onItemSelected = { provider ->
+                            coreConfigHolder.update(
+                                coreConfig.copy(
+                                    sttConfig = coreConfig.sttConfig.copy(cloudProvider = provider)
+                                )
+                            )
+                        },
+                        itemText = { it.displayName() },
+                    )
+                },
+                basicSettingsActionItem(
+                    title = "OpenAI-Compatible Settings",
+                    description = coreConfig.sttConfig.openAi.let { cfg ->
+                        if (cfg.isConfigured) {
+                            "${cfg.model} · ${cfg.endpoint}"
+                        } else {
+                            "Tap to set endpoint, API key and model"
+                        }
+                    },
+                    keywords = "openai whisper endpoint api key model stt speech custom",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
-                    keywords = "",
-                    item = {
-                        val logo = if (currentColorScheme() == CoreAppColorScheme.Grey) {
-                            Res.drawable.wispr_flow_logo_white
-                        } else {
-                            Res.drawable.wispr_flow_logo_black
-                        }
-                        ListItem(
-                            headlineContent = { Text("Cloud Recognition Provider") },
-                            trailingContent = {
-                                Image(
-                                    painter = painterResource(logo),
-                                    contentDescription = "Wispr Flow",
-                                    modifier = Modifier.height(20.dp),
-                                )
-                            },
-                            shadowElevation = ELEVATION,
-                        )
-                    }
+                    show = { coreConfig.sttConfig.cloudProvider == CloudSTTProvider.OpenAiCompatible },
+                    action = { showOpenAiSttConfigDialog = true },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -2524,6 +2624,118 @@ fun PKJSCopyTokenDialog(onDismissRequest: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+fun CloudSTTProvider.displayName(): String = when (this) {
+    CloudSTTProvider.WisprFlow -> "Wispr Flow"
+    CloudSTTProvider.OpenAiCompatible -> "OpenAI-Compatible"
+}
+
+@Composable
+fun CloudProviderDropdown(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onProviderSelected: (CloudSTTProvider) -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+    ) {
+        CloudSTTProvider.entries.forEach { provider ->
+            DropdownMenuItem(
+                text = { Text(provider.displayName()) },
+                onClick = { onProviderSelected(provider) },
+            )
+        }
+    }
+}
+
+// OpenAiSttConfigDialog edits the endpoint/API key/model. The key is optional (blank for
+// no-auth backends), so Save only requires endpoint and model.
+@Composable
+fun OpenAiSttConfigDialog(
+    config: OpenAiSTTConfig,
+    onSave: (OpenAiSTTConfig) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    var endpoint by remember { mutableStateOf(config.endpoint) }
+    var apiKey by remember { mutableStateOf(config.apiKey) }
+    var model by remember { mutableStateOf(config.model) }
+    var apiKeyVisible by remember { mutableStateOf(false) }
+    val canSave = endpoint.isNotBlank() && model.isNotBlank()
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Cloud, contentDescription = null) },
+        title = { Text("OpenAI-Compatible Backend") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+            TextButton(
+                enabled = canSave,
+                onClick = {
+                    onSave(
+                        OpenAiSTTConfig(
+                            endpoint = endpoint.trim(),
+                            apiKey = apiKey.trim(),
+                            model = model.trim(),
+                        )
+                    )
+                },
+            ) { Text("Save") }
+        },
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Transcriptions are sent to your endpoint's /audio/transcriptions route. " +
+                    "Works with OpenAI, a self-hosted Whisper server, or any compatible API.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+            OutlinedTextField(
+                value = endpoint,
+                onValueChange = { endpoint = it },
+                label = { Text("Endpoint") },
+                placeholder = { Text("https://api.openai.com/v1") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = { Text("API Key") },
+                singleLine = true,
+                visualTransformation = if (apiKeyVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                trailingIcon = {
+                    IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                        Icon(
+                            imageVector = if (apiKeyVisible) {
+                                Icons.Default.VisibilityOff
+                            } else {
+                                Icons.Default.Visibility
+                            },
+                            contentDescription = if (apiKeyVisible) "Hide API key" else "Show API key",
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = model,
+                onValueChange = { model = it },
+                label = { Text("Model") },
+                placeholder = { Text("whisper-1") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

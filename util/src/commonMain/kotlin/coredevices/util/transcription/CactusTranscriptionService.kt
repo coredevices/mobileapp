@@ -9,6 +9,7 @@ import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
 import coredevices.analytics.CoreAnalytics
 import coredevices.util.AudioEncoding
+import coredevices.util.CloudSTTProvider
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
@@ -61,6 +62,7 @@ class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val wisprFlow: WisprFlowTranscriptionService,
     private val kirinki: KirinkiTranscriptionService,
+    private val openAi: OpenAiTranscriptionService,
     private val modelProvider: CactusModelPathProvider,
     private val analytics: CoreAnalytics,
     private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
@@ -236,12 +238,18 @@ class CactusTranscriptionService(
         }
     }
 
+    private suspend fun remoteAvailable(): Boolean =
+        when (sttConfig.value.cloudProvider) {
+            CloudSTTProvider.OpenAiCompatible -> openAi.isAvailable()
+            CloudSTTProvider.WisprFlow -> wisprFlow.isAvailable() || kirinki.isAvailable()
+        }
+
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
-            CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable() || kirinki.isAvailable()
+            CactusSTTMode.RemoteOnly -> remoteAvailable()
             CactusSTTMode.LocalOnly -> isCactusSupported() && (modelHandle != 0L || modelExists())
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
-                wisprFlow.isAvailable() || kirinki.isAvailable() || (isCactusSupported() && modelHandle != 0L)
+                remoteAvailable() || (isCactusSupported() && modelHandle != 0L)
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
@@ -270,11 +278,8 @@ class CactusTranscriptionService(
         val modelUsed: String?
     )
 
-    /**
-     * Run remote transcription via WisprFlow.
-     *
-     * When [willFallbackLocal] is false kirinki is used as a backup and timeouts are more lenient.
-     */
+    // remoteTranscribe runs cloud transcription via the configured provider. willFallbackLocal
+    // shortens timeouts and disables the kirinki backup so a local fallback can take over.
     private suspend fun remoteTranscribe(
         audio: ByteArray,
         sampleRate: Int,
@@ -284,6 +289,17 @@ class CactusTranscriptionService(
         contentContext: String?,
         willFallbackLocal: Boolean
     ): TranscriptionSessionStatus.Transcription {
+        if (sttConfig.value.cloudProvider == CloudSTTProvider.OpenAiCompatible) {
+            return openAiTranscribe(
+                audio = audio,
+                sampleRate = sampleRate,
+                language = language,
+                conversationContext = conversationContext,
+                dictionaryContext = dictionaryContext,
+                contentContext = contentContext,
+                willFallbackLocal = willFallbackLocal,
+            )
+        }
         // We reduce the timeout if we have the potential to fall back locally since some consumers
         // (e.g. pebble firmware) have hard timeouts.
         val initialTimeout = if (willFallbackLocal) 7.seconds else 10.seconds
@@ -353,6 +369,41 @@ class CactusTranscriptionService(
             }
             logger.w(e) { "WisprFlow transcription failed, falling back to kirinki: ${e.message}" }
             transcribeKirinki()
+        }
+    }
+
+    // openAiTranscribe runs cloud STT against the user's OpenAI-compatible endpoint;
+    // NoSpeechDetected is re-thrown as a valid (non-failure) result.
+    private suspend fun openAiTranscribe(
+        audio: ByteArray,
+        sampleRate: Int,
+        language: STTLanguage,
+        conversationContext: STTConversationContext?,
+        dictionaryContext: List<String>?,
+        contentContext: String?,
+        willFallbackLocal: Boolean
+    ): TranscriptionSessionStatus.Transcription {
+        // A local fallback caps the wait; without one, allow longer for slow self-hosted endpoints.
+        val timeout = if (willFallbackLocal) 7.seconds else 15.seconds
+        return try {
+            val res = withTimeout(timeout) {
+                openAi.transcribe(
+                    audioStreamFrames = flowOf(audio),
+                    sampleRate = sampleRate,
+                    language = language,
+                    conversationContext = conversationContext,
+                    dictionaryContext = dictionaryContext,
+                    contentContext = contentContext
+                ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
+            }
+            analytics.logTranscriptionSuccess("openai")
+            res
+        } catch (e: Exception) {
+            if (e !is TimeoutCancellationException && e is CancellationException) throw e
+            analytics.logTranscriptionFailure("openai", transcriptionFailureReason(e), e.message)
+            if (e is TranscriptionException.NoSpeechDetected) throw e
+            logger.w(e) { "OpenAI transcription failed, propagating to caller: ${e.message}" }
+            throw e
         }
     }
 

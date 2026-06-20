@@ -101,4 +101,24 @@ data class STTConfig(
     val modelName: String? = null,
     /** ISO 639-1 language code. Null means auto-detect. */
     val spokenLanguage: String? = null,
+    val cloudProvider: CloudSTTProvider = CloudSTTProvider.WisprFlow,
+    val openAi: OpenAiSTTConfig = OpenAiSTTConfig(),
 )
+
+// CloudSTTProvider selects the backend for cloud ("Remote") STT modes.
+enum class CloudSTTProvider {
+    WisprFlow,
+    OpenAiCompatible,
+}
+
+@Serializable
+data class OpenAiSTTConfig(
+    // endpoint is the API base URL; audio is POSTed to "$endpoint/audio/transcriptions".
+    val endpoint: String = "https://api.openai.com/v1",
+    // apiKey may be blank for backends that need no auth (e.g. a local server).
+    val apiKey: String = "",
+    val model: String = "whisper-1",
+) {
+    val isConfigured: Boolean
+        get() = endpoint.isNotBlank() && model.isNotBlank()
+}

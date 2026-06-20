@@ -12,6 +12,7 @@ import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
+import coredevices.util.transcription.OpenAiTranscriptionService
 import coredevices.util.transcription.WisprFlowTranscriptionService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -99,14 +100,16 @@ class CactusLocalCancellationTest {
                 println("[cactus-cancel] model dir=${modelDir.absolutePath} present=$modelPresent")
 
                 if (modelPresent) {
-                    val svc = CactusTranscriptionService(
-                        coreConfigFlow = CoreConfigFlow(
-                            MutableStateFlow(
-                                CoreConfig(sttConfig = STTConfig(mode = CactusSTTMode.LocalOnly, modelName = MODEL_NAME)),
-                            ),
+                    val cancelConfigFlow = CoreConfigFlow(
+                        MutableStateFlow(
+                            CoreConfig(sttConfig = STTConfig(mode = CactusSTTMode.LocalOnly, modelName = MODEL_NAME)),
                         ),
+                    )
+                    val svc = CactusTranscriptionService(
+                        coreConfigFlow = cancelConfigFlow,
                         wisprFlow = WisprFlowTranscriptionService(WisprFlowAuth()),
                         kirinki = KirinkiTranscriptionService(),
+                        openAi = OpenAiTranscriptionService(cancelConfigFlow),
                         modelProvider = provider,
                         analytics = NoopAnalytics,
                         inferenceBoost = NoOpInferenceBoost(),
