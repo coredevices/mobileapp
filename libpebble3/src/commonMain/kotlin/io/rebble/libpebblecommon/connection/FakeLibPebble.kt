@@ -374,6 +374,7 @@ class FakeLibPebble : LibPebble {
             hrZone3Threshold = 172,
             bloodOxygenEnabled = false,
             bloodOxygenActivityEnabled = false,
+            spo2MeasurementInterval = HRMonitoringInterval.TenMin,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}

@@ -247,6 +247,7 @@ object SettingsIds {
     const val HrmActivityTracking = "HrmActivityTracking"
     const val BloodOxygenEnabled = "BloodOxygenEnabled"
     const val BloodOxygenActivityEnabled = "BloodOxygenActivityEnabled"
+    const val Spo2MeasurementInterval = "Spo2MeasurementInterval"
 }
 
 data class SettingsItem(
@@ -1031,7 +1032,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsToggleItem(
                     id = SettingsIds.BloodOxygenEnabled,
                     title = "Blood Oxygen",
-                    description = "Allow the watch to measure blood oxygen (SpO2). Readings are taken roughly every 10 minutes.",
+                    description = "Allow the watch to measure blood oxygen (SpO2). The sampling rate is configurable below.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     checked = healthSettings.bloodOxygenEnabled,
@@ -1041,6 +1042,29 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             healthSettings.copy(bloodOxygenEnabled = it)
                         )
                     },
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.Spo2MeasurementInterval,
+                    title = "SpO2 Monitoring Rate",
+                    description = "How often the watch takes a background blood oxygen (SpO2) reading. Set to Off to pause background sampling. A faster rate can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.spo2MeasurementInterval,
+                    items = HRMonitoringInterval.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(spo2MeasurementInterval = it)
+                        )
+                    },
+                    itemText = {
+                        when (it) {
+                            HRMonitoringInterval.TenMin -> "Every 10 minutes"
+                            HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
+                            HRMonitoringInterval.OneHour -> "Every hour"
+                            HRMonitoringInterval.Disabled -> "Off"
+                        }
+                    },
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled && healthSettings.bloodOxygenEnabled },
                 ),
                 basicSettingsToggleItem(
                     id = SettingsIds.BloodOxygenActivityEnabled,

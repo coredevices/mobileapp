@@ -476,6 +476,8 @@ data class HealthSettings(
     val bloodOxygenEnabled: Boolean,
     // BloodOxygenActivityPreferences (SpO2 during activities; gated by HR During Activities)
     val bloodOxygenActivityEnabled: Boolean,
+    // Spo2Preferences — SpO2 monitoring rate; sampling runs only when bloodOxygenEnabled && rate != Disabled
+    val spo2MeasurementInterval: HRMonitoringInterval,
 )
 
 /** Time range for displaying health data */
