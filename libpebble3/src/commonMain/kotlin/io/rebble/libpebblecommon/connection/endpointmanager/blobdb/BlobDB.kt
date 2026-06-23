@@ -300,9 +300,9 @@ class BlobDB(
     }
 
     // The watch firmware sends health settings (activityPreferences, unitsDistance,
-    // hrmPreferences, heartRatePreferences, bloodOxygenPreferences, bloodOxygenActivityPreferences)
-    // via the WatchPrefs BlobDB, but the phone stores them in HealthParams. Route those keys to the
-    // health settings DAO.
+    // hrmPreferences, heartRatePreferences, bloodOxygenPreferences, bloodOxygenActivityPreferences,
+    // spo2Preferences) via the WatchPrefs BlobDB, but the phone stores them in HealthParams. Route
+    // those keys to the health settings DAO.
     private fun effectiveDatabaseFor(message: DbWrite): BlobDatabase {
         if (message.database != BlobDatabase.WatchPrefs) return message.database
         val key = message.key.toByteArray().decodeToString().trimEnd(NUL_CHAR)
@@ -312,7 +312,8 @@ class BlobDB(
             "hrmPreferences",
             "heartRatePreferences",
             "bloodOxygenPreferences",
-            "bloodOxygenActivityPreferences" -> BlobDatabase.HealthParams
+            "bloodOxygenActivityPreferences",
+            "spo2Preferences" -> BlobDatabase.HealthParams
             else -> message.database
         }
     }
