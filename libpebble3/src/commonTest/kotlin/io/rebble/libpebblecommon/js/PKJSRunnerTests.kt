@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -42,7 +41,7 @@ abstract class PKJSRunnerTests(
         jsPath: Path,
         device: CompanionAppDevice,
         urlOpenRequests: Channel<String>,
-        logMessages: MutableSharedFlow<String>
+        logMessages: Channel<String>
     ) -> JsRunner
 ) {
     companion object {
@@ -75,15 +74,15 @@ abstract class PKJSRunnerTests(
         return jsPath
     }
 
-    private val logMessageFlow = MutableSharedFlow<String>().also {
+    private val logMessages = Channel<String>(Channel.UNLIMITED).also {
         GlobalScope.launch {
-            it.collect { msg ->
+            for (msg in it) {
                 println("JSLOG: $msg")
             }
         }
     }
 
-    private fun makeRunner(
+    protected fun makeRunner(
         js: String,
         uuid: Uuid,
         scope: CoroutineScope = CoroutineScope(Dispatchers.Default),
@@ -103,7 +102,7 @@ abstract class PKJSRunnerTests(
                 appMessages
             ),
             Channel(Channel.UNLIMITED),
-            logMessageFlow,
+            logMessages,
         )
     }
 

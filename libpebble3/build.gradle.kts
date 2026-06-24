@@ -184,6 +184,8 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
             implementation(libs.pebblekit)
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.ktor.websockets)
         }
 
         iosMain.dependencies {

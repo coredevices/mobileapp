@@ -8,7 +8,6 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.files.Path
 
 fun createJsRunner(
@@ -19,8 +18,9 @@ fun createJsRunner(
     jsPath: Path,
     device: CompanionAppDevice,
     urlOpenRequests: Channel<String>,
-    logMessages: MutableSharedFlow<String>
+    logMessages: Channel<String>
 ): JsRunner {
+    val watchConfigFlow = testWatchConfigFlow()
     return JavascriptCoreJsRunner(
         appContext = AppContext(),
         libPebble = libPebble,
@@ -30,7 +30,8 @@ fun createJsRunner(
                     return null
                 }
             },
-            lockerEntryDao = FakeLockerEntryDao()
+            lockerEntryDao = FakeLockerEntryDao(),
+            watchConfigFlow = watchConfigFlow,
         ),
         device = device,
         scope = scope,
@@ -39,6 +40,8 @@ fun createJsRunner(
         jsPath = jsPath,
         urlOpenRequests = urlOpenRequests,
         logMessages = logMessages,
-        pkjsBundleIdentifier = null
+        remoteTimelineEmulator = testRemoteTimelineEmulator(),
+        httpInterceptorManager = testHttpInterceptorManager(),
+        notificationConfigFlow = testNotificationConfigFlow(),
     )
 }

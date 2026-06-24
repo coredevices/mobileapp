@@ -1,13 +1,12 @@
 package io.rebble.libpebblecommon.js
 
+import android.webkit.JavascriptInterface
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.darwin.Darwin
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.header
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
@@ -16,58 +15,40 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import platform.JavaScriptCore.JSValue
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
-class WebSocketManager(
+class WebViewWebSocketManager(
     private val scope: CoroutineScope,
-    private val eval: (String) -> JSValue?,
-): RegisterableJsInterface {
-    private var lastInstance = 0
-    private val instances = mutableMapOf<Int, WSInstance>()
-    private val client = HttpClient(Darwin) {
-        install(WebSockets)
-    }
-    private val logger = Logger.withTag("WebSocketManager")
+    private val eval: (String) -> Unit,
+) {
+    private val lastInstance = AtomicInteger(0)
+    private val generation = AtomicInteger(0)
+    private val instances = ConcurrentHashMap<Int, WSInstance>()
+    @Volatile
+    private var client = createClient()
+    @Volatile
+    private var shuttingDown = false
+    private val logger = Logger.withTag("WebViewWebSocketManager")
 
-    override val name = "_WebSocketManager"
-    override val interf = mapOf(
-        "createInstance" to this::createInstance,
-        "connect" to this::connect,
-        "send" to this::send,
-        "close" to this::closeInstance,
-    )
-
-    override fun dispatch(method: String, args: List<Any?>) = when (method) {
-        "createInstance" -> createInstance(args[0].toString(), args.getOrNull(1)?.toString())
-        "connect" -> { connect((args[0] as Number).toInt()); null }
-        "send" -> { send((args[0] as Number).toInt(), args[1].toString(), args.getOrNull(2) as? Boolean ?: false); null }
-        "close" -> {
-            closeInstance(
-                (args[0] as Number).toInt(),
-                (args.getOrNull(1) as? Number)?.toInt() ?: 1000,
-                args.getOrNull(2)?.toString() ?: ""
-            )
-            null
-        }
-        else -> error("Unknown method: $method")
-    }
-
-    private fun createInstance(url: String, protocols: String?): Int {
+    @JavascriptInterface
+    fun createInstance(url: String, protocols: String?): Int {
         WebSocketBridge.validateUrl(url)
         val requestedProtocols = WebSocketBridge.parseProtocols(protocols)
-        val id = ++lastInstance
-        val instance = WSInstance(id, url, requestedProtocols)
+        ensureClient()
+        val id = lastInstance.incrementAndGet()
+        val instance = WSInstance(id, url, requestedProtocols, generation.get())
         instances[id] = instance
         return id
     }
 
-    private fun connect(instanceId: Int) {
+    @JavascriptInterface
+    fun connect(instanceId: Int) {
         val instance = instances[instanceId]
         if (instance == null) {
             logger.w { "connect called on unknown instance $instanceId" }
@@ -76,7 +57,8 @@ class WebSocketManager(
         instance.connect()
     }
 
-    private fun send(instanceId: Int, data: String, isBinary: Boolean = false) {
+    @JavascriptInterface
+    fun send(instanceId: Int, data: String, isBinary: Boolean) {
         val instance = instances[instanceId]
         if (instance == null) {
             logger.w { "send called on unknown instance $instanceId" }
@@ -85,7 +67,8 @@ class WebSocketManager(
         instance.send(data, isBinary)
     }
 
-    private fun closeInstance(instanceId: Int, code: Int, reason: String) {
+    @JavascriptInterface
+    fun close(instanceId: Int, code: Int, reason: String) {
         WebSocketBridge.validateClose(code, reason)
         val instance = instances[instanceId]
         if (instance == null) {
@@ -95,10 +78,36 @@ class WebSocketManager(
         instance.close(code, reason)
     }
 
-    inner class WSInstance(val id: Int, private val url: String, private val protocols: List<String>) {
+    private fun evalOnMain(instanceGeneration: Int, js: String) {
+        scope.launch(Dispatchers.Main) {
+            if (!shuttingDown && generation.get() == instanceGeneration) {
+                eval(js)
+            }
+        }
+    }
+
+    @Synchronized
+    private fun ensureClient(): HttpClient {
+        if (shuttingDown) {
+            client = createClient()
+            shuttingDown = false
+        }
+        return client
+    }
+
+    private fun createClient() = HttpClient(OkHttp) {
+        install(WebSockets)
+    }
+
+    inner class WSInstance(
+        private val id: Int,
+        private val url: String,
+        private val protocols: List<String>,
+        private val instanceGeneration: Int,
+    ) {
         private var session: WebSocketSession? = null
         private var connectionJob: Job? = null
-        private val stateMutex = Mutex()
+        private val stateLock = Any()
         private var connectStarted = false
         private var opened = false
         private var closeRequested: CloseReason? = null
@@ -106,18 +115,20 @@ class WebSocketManager(
         private val jsInstance = "WebSocket._instances.get($id)"
 
         fun connect() {
-            if (connectStarted || closeDispatched) {
-                return
+            synchronized(stateLock) {
+                if (connectStarted || closeDispatched) {
+                    return
+                }
+                connectStarted = true
             }
-            connectStarted = true
             connectionJob = scope.launch(Dispatchers.IO) {
                 try {
-                    val ws = client.webSocketSession(urlString = url) {
+                    val ws = ensureClient().webSocketSession(urlString = url) {
                         if (protocols.isNotEmpty()) {
                             header("Sec-WebSocket-Protocol", protocols.joinToString(","))
                         }
                     }
-                    val requestedClose = stateMutex.withLock {
+                    val requestedClose = synchronized(stateLock) {
                         session = ws
                         closeRequested
                     }
@@ -133,66 +144,60 @@ class WebSocketManager(
                         failConnection()
                         return@launch
                     }
-                    stateMutex.withLock {
+                    synchronized(stateLock) {
                         opened = true
                     }
-                    scope.launch {
-                        eval(
-                            """
-                                (function(ws) {
-                                    if (ws && ws.readyState === WebSocket.CONNECTING) {
-                                        ws._onOpen(${Json.encodeToString(negotiatedProtocol)});
-                                    }
-                                })($jsInstance)
-                            """.trimIndent()
-                        )
-                    }
+                    evalOnMain(
+                        instanceGeneration,
+                        """
+                            (function(ws) {
+                                if (ws && ws.readyState === WebSocket.CONNECTING) {
+                                    ws._onOpen(${Json.encodeToString(negotiatedProtocol)});
+                                }
+                            })($jsInstance)
+                        """.trimIndent()
+                    )
 
                     for (frame in ws.incoming) {
                         when (frame) {
                             is Frame.Text -> {
                                 val text = frame.readText()
-                                scope.launch {
-                                    eval("$jsInstance._onMessage(${Json.encodeToString(text)}, false)")
-                                }
+                                evalOnMain(instanceGeneration, "$jsInstance._onMessage(${Json.encodeToString(text)}, false)")
                             }
                             is Frame.Binary -> {
                                 @OptIn(ExperimentalEncodingApi::class)
                                 val base64 = Base64.encode(frame.data)
-                                scope.launch {
-                                    eval("$jsInstance._onMessage(${Json.encodeToString(base64)}, true)")
-                                }
+                                evalOnMain(instanceGeneration, "$jsInstance._onMessage(${Json.encodeToString(base64)}, true)")
                             }
                             else -> { /* Ping/Pong handled by ktor */ }
                         }
                     }
 
-                    // Connection closed normally
                     val reason = ws.closeReason.await()
                     val code = reason?.code?.toInt() ?: 1000
                     val reasonText = reason?.message ?: ""
                     dispatchClose(code, reasonText, true)
-                    instances.remove(id)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     logger.e(e) { "WebSocket error for instance $id: ${e.message}" }
                     failConnection()
+                } finally {
                     instances.remove(id)
                 }
             }
         }
 
         fun send(data: String, isBinary: Boolean = false) {
+            val currentSession = synchronized(stateLock) {
+                session.takeIf { opened && closeRequested == null && !closeDispatched }
+            }
+            if (currentSession == null) {
+                logger.w { "send called while instance $id is not open" }
+                return
+            }
             scope.launch(Dispatchers.IO) {
                 try {
-                    val currentSession = stateMutex.withLock {
-                        session.takeIf { opened && closeRequested == null && !closeDispatched }
-                    }
-                    if (currentSession == null) {
-                        logger.w { "send called while instance $id is not open" }
-                        return@launch
-                    }
                     if (isBinary) {
                         @OptIn(ExperimentalEncodingApi::class)
                         currentSession.send(Frame.Binary(true, Base64.decode(data)))
@@ -203,28 +208,26 @@ class WebSocketManager(
                     throw e
                 } catch (e: Exception) {
                     logger.e(e) { "WebSocket send error for instance $id: ${e.message}" }
-                    scope.launch {
-                        eval("$jsInstance._onError()")
-                    }
+                    evalOnMain(instanceGeneration, "$jsInstance._onError()")
                 }
             }
         }
 
         fun close(code: Int, reason: String) {
+            val closeReason = CloseReason(code.toShort(), reason)
+            val currentSession = synchronized(stateLock) {
+                if (closeRequested == null) {
+                    closeRequested = closeReason
+                }
+                session
+            }
+            if (currentSession == null) {
+                connectionJob?.cancel()
+                failConnection(dispatchError = false)
+                instances.remove(id)
+                return
+            }
             scope.launch(Dispatchers.IO) {
-                val closeReason = CloseReason(code.toShort(), reason)
-                val currentSession = stateMutex.withLock {
-                    if (closeRequested == null) {
-                        closeRequested = closeReason
-                    }
-                    session
-                }
-                if (currentSession == null) {
-                    connectionJob?.cancel()
-                    failConnection(dispatchError = false)
-                    instances.remove(id)
-                    return@launch
-                }
                 try {
                     currentSession.close(closeReason)
                 } catch (e: CancellationException) {
@@ -250,33 +253,36 @@ class WebSocketManager(
             wasClean: Boolean,
             dispatchError: Boolean = false,
         ) {
-            scope.launch {
-                if (stateMutex.withLock {
-                    if (closeDispatched) {
-                        false
-                    } else {
-                        closeDispatched = true
-                        true
-                    }
-                }) {
-                    eval(
-                        """
-                            (function(ws) {
-                                if (ws) {
-                                    ${if (dispatchError) "ws._onError();" else ""}
-                                    ws._onClose($code, ${Json.encodeToString(reason)}, $wasClean);
-                                }
-                            })($jsInstance)
-                        """.trimIndent()
-                    )
+            val shouldDispatch = synchronized(stateLock) {
+                if (closeDispatched) {
+                    false
+                } else {
+                    closeDispatched = true
+                    true
                 }
             }
+            if (!shouldDispatch) {
+                return
+            }
+            evalOnMain(
+                instanceGeneration,
+                """
+                    (function(ws) {
+                        if (ws) {
+                            ${if (dispatchError) "ws._onError();" else ""}
+                            ws._onClose($code, ${Json.encodeToString(reason)}, $wasClean);
+                        }
+                    })($jsInstance)
+                """.trimIndent()
+            )
         }
     }
 
-    override fun close() {
-        client.close()
+    fun shutdown() {
+        shuttingDown = true
+        generation.incrementAndGet()
         instances.values.forEach { it.cancel() }
         instances.clear()
+        client.close()
     }
 }
