@@ -648,6 +648,9 @@ enum class ColorWatchPref(
 - alarmsAppOpened
 - hrmPreferences (see HealthSettingsEntry)
 - heartRatePreferences (see HealthSettingsEntry)
+ - bloodOxygenPreferences (see HealthSettingsEntry)
+ - bloodOxygenActivityPreferences (see HealthSettingsEntry)
+ - spo2Preferences (see HealthSettingsEntry)
 - workerId (need UI to figure out which apps are eligible)
 - dndWeekdaySchedule (need to figure out how to do this)
 - dndWeekdayScheduleEnabled

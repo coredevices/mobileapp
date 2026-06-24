@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -45,6 +46,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -83,6 +85,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         VibePatternEntity::class,
         HealthDataEntity::class,
         OverlayDataEntity::class,
+        Spo2ReadingEntity::class,
         HealthStatEntity::class,
         HealthStatSyncEntity::class,
         WatchPrefItemEntity::class,
@@ -93,7 +96,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 39,
+    version = 40,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -124,6 +127,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 36, to = 37),
         AutoMigration(from = 37, to = 38),
         AutoMigration(from = 38, to = 39),
+        AutoMigration(from = 39, to = 40),
     ],
     exportSchema = true,
 )
@@ -143,6 +147,7 @@ abstract class Database : RoomDatabase() {
     abstract fun contactDao(): ContactDao
     abstract fun vibePatternDao(): VibePatternDao
     abstract fun healthDao(): HealthDao
+    abstract fun spo2Dao(): Spo2Dao
     abstract fun healthStatDao(): HealthStatDao
     abstract fun watchPrefDao(): WatchPrefRealDao
     abstract fun weatherAppDao(): WeatherAppRealDao

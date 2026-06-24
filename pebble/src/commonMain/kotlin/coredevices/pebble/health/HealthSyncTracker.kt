@@ -16,6 +16,7 @@ class HealthSyncTracker(private val settings: Settings) {
         private const val KEY_ENABLED = "health_platform_sync_enabled"
         private const val KEY_LAST_SYNCED_STEPS = "health_sync_last_steps_timestamp"
         private const val KEY_LAST_SYNCED_OVERLAY = "health_sync_last_overlay_timestamp"
+        private const val KEY_LAST_SYNCED_SPO2 = "health_sync_last_spo2_timestamp"
     }
 
     private val _enabled = MutableStateFlow<Boolean>(settings.getBoolean(KEY_ENABLED, false))
@@ -33,4 +34,8 @@ class HealthSyncTracker(private val settings: Settings) {
     var lastSyncedOverlayTimestamp: Long
         get() = settings.getLong(KEY_LAST_SYNCED_OVERLAY, 0L)
         set(value) { settings[KEY_LAST_SYNCED_OVERLAY] = value }
+
+    var lastSyncedSpo2Timestamp: Long
+        get() = settings.getLong(KEY_LAST_SYNCED_SPO2, 0L)
+        set(value) { settings[KEY_LAST_SYNCED_SPO2] = value }
 }

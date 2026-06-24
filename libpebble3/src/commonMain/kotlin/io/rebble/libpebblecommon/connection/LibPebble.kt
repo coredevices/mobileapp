@@ -33,6 +33,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.database.entity.TimelinePin
@@ -145,6 +146,15 @@ data class LatestHeartRate(
     val timestampEpochSec: Long,
 )
 
+/**
+ * Represents the most recent SpO2 (blood oxygen saturation) reading from the watch.
+ */
+data class LatestSpo2(
+    val spo2Percent: Int,
+    val quality: Int,
+    val timestampEpochSec: Long,
+)
+
 interface HealthDataApi {
     suspend fun getLatestTimestamp(): Long?
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
@@ -182,6 +192,18 @@ interface HealthDataApi {
 
     /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
     suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
+
+    /** Returns SpO2 readings (percent > 0) in the epoch-second range. */
+    suspend fun getSpo2Readings(start: Long, end: Long): List<Spo2ReadingEntity>
+
+    /** Returns SpO2 readings after the given timestamp, in ascending order. */
+    suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity>
+
+    /** Returns the average SpO2 percent for readings in the range, or null if none. */
+    suspend fun getAverageSpo2(start: Long, end: Long): Double?
+
+    /** Returns the most recent SpO2 reading, or null if none exists. */
+    suspend fun getLatestSpo2Reading(): LatestSpo2?
 
     /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
     suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>

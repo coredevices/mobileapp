@@ -139,6 +139,8 @@ kotlin {
                 // commonMain by default and will correctly pull the Android artifacts of any KMP
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
+                // SpO2 (blood oxygen) Health Connect writing; health-kmp 1.4.0 lacks OxygenSaturation.
+                implementation(libs.health.connect)
             }
         }
 

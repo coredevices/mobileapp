@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.connection.LatestHeartRate
+import io.rebble.libpebblecommon.connection.LatestSpo2
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -33,6 +34,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
@@ -370,6 +372,9 @@ class FakeLibPebble : LibPebble {
             hrZone1Threshold = 130,
             hrZone2Threshold = 154,
             hrZone3Threshold = 172,
+            bloodOxygenEnabled = false,
+            bloodOxygenActivityEnabled = false,
+            spo2MeasurementInterval = HRMonitoringInterval.TenMin,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
@@ -480,6 +485,10 @@ class FakeLibPebble : LibPebble {
     override suspend fun getLatestHeartRateReading(): LatestHeartRate? = null
     override suspend fun getRestingHeartRate(dayStartEpochSec: Long): Int? = null
     override suspend fun getHRZoneMinutes(start: Long, end: Long) = emptyMap<Int, Long>()
+    override suspend fun getSpo2Readings(start: Long, end: Long) = emptyList<Spo2ReadingEntity>()
+    override suspend fun getSpo2ReadingsAfter(afterTimestamp: Long) = emptyList<Spo2ReadingEntity>()
+    override suspend fun getAverageSpo2(start: Long, end: Long): Double? = null
+    override suspend fun getLatestSpo2Reading(): LatestSpo2? = null
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()
     override suspend fun getTypicalSteps(dayOfWeek: Int) = emptyList<Long>()
     override suspend fun getTypicalSleepSeconds() = 0L

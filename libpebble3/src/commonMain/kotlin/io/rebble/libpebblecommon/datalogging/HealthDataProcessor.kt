@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.datalogging
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.dao.insertOverlayDataWithDeduplication
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
@@ -35,6 +36,7 @@ class HealthDataProcessor(
     private val scope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
+    private val spo2Dao: Spo2Dao,
 ) {
     private val logger = Logger.withTag("HealthDataProcessor")
 
@@ -187,9 +189,12 @@ class HealthDataProcessor(
     }
 
     private suspend fun processStepsData(payload: ByteArray, itemSize: UShort): String? {
-        val records = parseStepsData(payload, itemSize)
-        logger.d { "HEALTH_DATA: Parsed ${records.size} step records from payload" }
-        if (records.isEmpty()) {
+        val parsed = parseStepsData(payload, itemSize)
+        val records = parsed.healthData
+        logger.d {
+            "HEALTH_DATA: Parsed ${records.size} step records and ${parsed.spo2Readings.size} SpO2 readings from payload"
+        }
+        if (records.isEmpty() && parsed.spo2Readings.isEmpty()) {
             return null
         }
 
@@ -213,11 +218,18 @@ class HealthDataProcessor(
             "HEALTH_DATA: About to insert ${records.size} records into database (steps=$totalSteps, active=${totalActiveKcal}kcal, resting=${totalRestingKcal}kcal, distance=${totalDistanceKm}km, activeMin=$totalActiveMin, $hrSummary)"
         }
 
-        healthDao.insertHealthDataWithPriority(records)
+        if (records.isNotEmpty()) {
+            healthDao.insertHealthDataWithPriority(records)
+        }
+        if (parsed.spo2Readings.isNotEmpty()) {
+            spo2Dao.insertSpo2Readings(parsed.spo2Readings)
+            logger.d { "HEALTH_DATA: Inserted ${parsed.spo2Readings.size} SpO2 readings" }
+        }
         _healthDataUpdated.emit(Unit)
         logger.d { "HEALTH_DATA: Health update event emitted successfully" }
 
-        return "${records.size} records (${totalSteps} steps)"
+        return "${records.size} records (${totalSteps} steps)" +
+            if (parsed.spo2Readings.isNotEmpty()) ", ${parsed.spo2Readings.size} SpO2" else ""
     }
 
     private suspend fun processOverlayData(payload: ByteArray, itemSize: UShort): String? {

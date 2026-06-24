@@ -171,3 +171,5 @@ compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.re
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
 coredevices-krispPrivate = { group = "coredevices.krispkmp", name = "library", version.ref = "coredevices-krisp" }
 health-kmp = { module = "com.viktormykhailiv:health-kmp", version.ref = "health-kmp" }
+# health-kmp 1.4.0 doesn't model OxygenSaturation, so we depend on connect-client directly.
+health-connect = { module = "androidx.health.connect:connect-client", version = "1.1.0" }

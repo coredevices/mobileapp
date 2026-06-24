@@ -7,6 +7,12 @@ import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsBlobItem
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue.Companion.encodeToString
+import io.rebble.libpebblecommon.database.entity.BloodOxygenActivityPreferencesBlobItem
+import io.rebble.libpebblecommon.database.entity.BloodOxygenActivityPreferencesValue
+import io.rebble.libpebblecommon.database.entity.BloodOxygenActivityPreferencesValue.Companion.encodeToString
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesBlobItem
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue
+import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.DistanceUnitsBlobItem
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
@@ -19,6 +25,9 @@ import io.rebble.libpebblecommon.database.entity.HeartRatePreferencesValue.Compa
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesBlobItem
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue.Companion.encodeToString
+import io.rebble.libpebblecommon.database.entity.Spo2PreferencesBlobItem
+import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue
+import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue.Companion.encodeToString
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
@@ -95,6 +104,31 @@ interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
                         zone1Threshold = blob.zone1Threshold.get().toShort(),
                         zone2Threshold = blob.zone2Threshold.get().toShort(),
                         zone3Threshold = blob.zone3Threshold.get().toShort(),
+                    ).encodeToString()
+                }
+                "bloodOxygenPreferences" -> {
+                    val blob = BloodOxygenPreferencesBlobItem(enabled = false)
+                    blob.fromBytes(value)
+                    BloodOxygenPreferencesValue(
+                        enabled = blob.enabled.get() != 0.toByte(),
+                    ).encodeToString()
+                }
+                "bloodOxygenActivityPreferences" -> {
+                    val blob = BloodOxygenActivityPreferencesBlobItem(enabled = false)
+                    blob.fromBytes(value)
+                    BloodOxygenActivityPreferencesValue(
+                        enabled = blob.enabled.get() != 0.toByte(),
+                    ).encodeToString()
+                }
+                "spo2Preferences" -> {
+                    val blob = Spo2PreferencesBlobItem(measurementInterval = 0)
+                    blob.fromBytes(value)
+                    // Only 0..3 are valid; the watch clamps anything else to 10 min on read.
+                    val interval = HRMonitoringInterval.entries
+                        .firstOrNull { it.value == blob.measurementInterval.get() }
+                        ?: HRMonitoringInterval.TenMin
+                    Spo2PreferencesValue(
+                        measurementInterval = interval,
                     ).encodeToString()
                 }
                 else -> {
