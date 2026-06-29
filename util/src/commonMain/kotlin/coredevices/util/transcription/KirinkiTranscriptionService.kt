@@ -1,11 +1,13 @@
 package coredevices.util.transcription
 
+import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import coredevices.api.ApiClient
 import coredevices.api.ApiAuthException
 import coredevices.util.AudioEncoding
 import coredevices.util.CommonBuildKonfig
 import io.ktor.client.call.body
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -100,6 +102,9 @@ class KirinkiTranscriptionService : ApiClient(CommonBuildKonfig.USER_AGENT_VERSI
 
         val response = try {
             client.post(url) {
+                if (language is STTLanguage.Specific && language.languageCodes.isNotEmpty()) {
+                    parameter("language_code", toBcp47(language.languageCodes.first(), Locale.current.region))
+                }
                 firebaseAuth()
                 contentType(ContentType.Application.OctetStream)
                 setBody(wav)
