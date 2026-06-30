@@ -207,15 +207,29 @@ class ExperimentalDevices(
         // callable-ref keep-alive was always cosmetic.)
     }
 
-    suspend fun exportOutput(id: String): DocumentAttachment? {
-        val path = recordingStorage.exportRecording(id)
-        val source = SystemFileSystem.source(path).buffered()
-        return DocumentAttachment(
-            fileName = "recording.wav",
-            mimeType = "audio/wav",
-            source = source.buffered(),
-            size = path.size(),
-        )
+    suspend fun exportOutput(id: String): List<DocumentAttachment> {
+        val logger = co.touchlab.kermit.Logger.withTag("ExperimentalDevices")
+        val attachments = mutableListOf<DocumentAttachment>()
+        // Export both the processed audio and the original raw capture for the
+        // reported recording, so the bug report carries both for comparison.
+        for (useOriginal in listOf(false, true)) {
+            try {
+                val path = recordingStorage.exportRecording(id, useOriginalAudio = useOriginal)
+                val suffix = if (useOriginal) "-original" else ""
+                attachments.add(
+                    DocumentAttachment(
+                        fileName = "recording$suffix.wav",
+                        mimeType = "audio/wav",
+                        source = SystemFileSystem.source(path).buffered(),
+                        size = path.size(),
+                    )
+                )
+            } catch (e: Exception) {
+                val variant = if (useOriginal) "original" else "processed"
+                logger.w(e) { "Failed to export $variant audio for recording $id" }
+            }
+        }
+        return attachments
     }
 
     /**
@@ -236,18 +250,24 @@ class ExperimentalDevices(
             val messages = conversationMessageDao.getMessagesForRecording(recording.id).first()
 
             entries.mapNotNull { it.fileName }.distinct().forEach { fileName ->
-                try {
-                    val path = recordingStorage.exportRecording(fileName)
-                    attachments.add(
-                        DocumentAttachment(
-                            fileName = "recording-${recording.id}-$fileName.wav",
-                            mimeType = "audio/wav",
-                            source = SystemFileSystem.source(path).buffered(),
-                            size = path.size(),
+                // Export both the processed audio (what was transcribed) and the
+                // original raw capture, so bug reports carry both for comparison.
+                for (useOriginal in listOf(false, true)) {
+                    try {
+                        val path = recordingStorage.exportRecording(fileName, useOriginalAudio = useOriginal)
+                        val suffix = if (useOriginal) "-original" else ""
+                        attachments.add(
+                            DocumentAttachment(
+                                fileName = "recording-${recording.id}-$fileName$suffix.wav",
+                                mimeType = "audio/wav",
+                                source = SystemFileSystem.source(path).buffered(),
+                                size = path.size(),
+                            )
                         )
-                    )
-                } catch (e: Exception) {
-                    logger.w(e) { "Failed to export audio for recording ${recording.id} ($fileName)" }
+                    } catch (e: Exception) {
+                        val variant = if (useOriginal) "original" else "processed"
+                        logger.w(e) { "Failed to export $variant audio for recording ${recording.id} ($fileName)" }
+                    }
                 }
             }
 

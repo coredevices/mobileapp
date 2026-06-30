@@ -484,9 +484,7 @@ class BugReportProcessor(
         // Add recording if requested
         if (params.sendRecording && params.expOutputPath != null) {
             withContext(Dispatchers.IO) {
-                experimentalDevices.exportOutput(params.expOutputPath)?.let {
-                    attachments.add(it)
-                }
+                attachments.addAll(experimentalDevices.exportOutput(params.expOutputPath))
             }
         }
 
