@@ -5,6 +5,7 @@ import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.ToolCallingAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
@@ -44,6 +45,7 @@ class SearchAgentNenya(
     override suspend fun send(
         input: String,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
     ) {

@@ -42,6 +42,8 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
@@ -92,6 +94,7 @@ class IndexNotificationManager(
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
     }
+    private val mapMutex = Mutex() // Guards the three mutable maps below
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
     private var lastBugReportPrompt: Instant? = null
@@ -217,16 +220,18 @@ class IndexNotificationManager(
             }
         }
     }
-    private fun nextNotificationId() = (inflightNotifications.values.maxByOrNull { it.id }?.id?.plus(1) ?: (10 + 1))
+    private suspend fun nextNotificationId() = mapMutex.withLock {
+        (inflightNotifications.values.maxByOrNull { it.id }?.id?.plus(1) ?: (10 + 1))
+    }
     @OptIn(FlowPreview::class)
     private suspend fun startNotificationJobFor(transfer: RingTransfer, scope: CoroutineScope) {
-        if (inflightNotificationJobs.containsKey(transfer.id)) {
+        if (mapMutex.withLock { inflightNotificationJobs.containsKey(transfer.id) }) {
             logger.d { "Notification job already exists for recording ${transfer.id}" }
             return
         }
 
         val id = transfer.id
-        inflightNotificationJobs[id] = scope.launch {
+        val job = scope.launch {
             platform.runWithBgTask("transfer_notif_${transfer.id}") {
                 ringTransferRepo.getTransferWithFeedItemFlow(transfer.id).filterNotNull().flatMapLatest {
                     val conv = it.ringTransfer?.recordingId?.let {conversationMessageDao.getMessagesForRecording(it) } ?: flowOf(null)
@@ -241,10 +246,11 @@ class IndexNotificationManager(
 
                     val lastEntry = rec?.entry
                     rec?.id?.let {
-                        transferToRecordingId[transfer.id] = it
+                        mapMutex.withLock { transferToRecordingId[transfer.id] = it }
                     }
+                    val notifId = mapMutex.withLock { inflightNotifications[id]?.id } ?: nextNotificationId()
                     val notif = makeInflightNotification(
-                        inflightNotifications[id]?.id ?: nextNotificationId(),
+                        notifId,
                         transfer,
                         lastEntry
                     )
@@ -257,7 +263,7 @@ class IndexNotificationManager(
                             else -> {}
                         }
                     }
-                    inflightNotifications[transfer.id] = notif
+                    mapMutex.withLock { inflightNotifications[transfer.id] = notif }
 
                     notif
                 }
@@ -338,6 +344,16 @@ class IndexNotificationManager(
                                                 is SemanticResult.AlarmCreation -> {
                                                     val time = lastAction.fireTime
                                                     appendLine("Alarm set for ${time.format(UITimeUtil.timeFormat())}")
+                                                }
+                                                is SemanticResult.CalendarEventCreation -> {
+                                                    val dateTime = lastAction.startTime.toLocalDateTime(
+                                                        TimeZone.currentSystemDefault()
+                                                    )
+                                                    val humanDate = UITimeUtil.humanDate(dateTime.date)
+                                                    val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
+                                                    appendLine("Event added for ${humanDate}, ${humanTime}")
+                                                    appendLine()
+                                                    appendLine(lastAction.title)
                                                 }
                                                 is SemanticResult.TimerCreation -> {
                                                     val requested = lastAction.requestedDuration
@@ -423,7 +439,7 @@ class IndexNotificationManager(
                                 }
                             )
                         } else {
-                            inflightNotifications[transfer.id]?.id?.let { platformIndexNotificationManager.cancel(it) }
+                            mapMutex.withLock { inflightNotifications[transfer.id]?.id }?.let { platformIndexNotificationManager.cancel(it) }
                         }
 
                         if (
@@ -431,11 +447,13 @@ class IndexNotificationManager(
                             notification is InflightIndexNotification.Error ||
                             notification is InflightIndexNotification.Discarded
                         ) {
-                            inflightNotificationJobs.remove(id)?.cancel("Notification complete")
+                            mapMutex.withLock { inflightNotificationJobs.remove(id) }?.cancel("Notification complete")
                         }
                     }.onCompletion {
-                        inflightNotificationJobs.remove(id)
-                        val recordingId = transferToRecordingId[transfer.id]
+                        val recordingId = mapMutex.withLock {
+                            inflightNotificationJobs.remove(id)
+                            transferToRecordingId[transfer.id]
+                        }
                         val recordingIdTxt = recordingId?.let {
                             "recording $it"
                         } ?: "transfer $id"
@@ -447,9 +465,10 @@ class IndexNotificationManager(
                     }.collect()
             }
         }
+        mapMutex.withLock { inflightNotificationJobs[id] = job }
     }
 
-    fun sendBugReportPrompt(
+    suspend fun sendBugReportPrompt(
         title: String,
         content: String
     ) {

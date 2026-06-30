@@ -14,6 +14,7 @@ class ReminderFactory(private val preferences: Preferences) {
             ReminderProvider.BuiltIn -> createBuiltInReminder(time, message)
             ReminderProvider.GoogleTasks -> GTasksReminder(time, message)
             ReminderProvider.IOSReminders -> createRemindersAppReminder(time, message)
+            ReminderProvider.Tasker -> createTaskerReminder(time, message)
         }
     }
 }

@@ -47,8 +47,8 @@ class ListRepository(
         cacheDao.upsertAll(lists.map { (id, doc) -> CachedList.fromDocument(id, doc) })
     }
 
-    suspend fun upsertLocal(id: String, doc: ListDocument) {
-        cacheDao.upsert(CachedList.fromDocument(id, doc))
+    suspend fun upsertLocal(id: String, doc: ListDocument, locked: Boolean = false) {
+        cacheDao.upsert(CachedList.fromDocument(id, doc, locked))
     }
 
     suspend fun upsertAllLocal(lists: List<Pair<String, ListDocument>>) {

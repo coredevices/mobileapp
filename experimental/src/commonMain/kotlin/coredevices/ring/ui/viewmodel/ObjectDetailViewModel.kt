@@ -96,7 +96,7 @@ class ObjectDetailViewModel(
                         listSort,
                         showDone,
                     ) { lists, children, q, sort, done ->
-                        val allChildren = children.filter { !it.deleted }
+                        val allChildren = children.filter { !it.deleted && !it.locked }
                         UiState.ListView(
                             list = list,
                             allLists = lists.filter { !it.deleted },
@@ -430,6 +430,7 @@ internal fun kindLabel(kind: String): String = when (kind) {
     "answer" -> "Answer"
     "message" -> "Message"
     "action_log" -> "Action"
+    "calendar_event" -> "Event"
     "list" -> "List"
     else -> kind.replaceFirstChar { it.uppercase() }
 }
@@ -454,15 +455,21 @@ private fun todoComparator(): Comparator<CachedItem> {
     return compareBy<CachedItem> { task ->
         val dueMs = task.dueAt?.toEpochMilliseconds()
         when {
-            dueMs != null && dueMs <= urgentCutoffMs -> 0
-            dueMs == null -> 1
-            else -> 2
+            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
+            dueMs != null && dueMs <= nowMs -> 1
+            dueMs == null -> 2
+            else -> 3
         }
     }
         .thenBy { task ->
             val dueMs = task.dueAt?.toEpochMilliseconds()
-            if (dueMs != null && dueMs <= urgentCutoffMs) dueMs else Long.MAX_VALUE
+            when {
+                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
+                dueMs != null && dueMs <= nowMs -> -dueMs
+                dueMs == null -> Long.MAX_VALUE
+                else -> dueMs
+            }
         }
-        .thenByDescending { it.createdAt.toEpochMilliseconds() }
+        .thenBy { it.createdAt.toEpochMilliseconds() }
         .thenBy { it.title.lowercase() }
 }

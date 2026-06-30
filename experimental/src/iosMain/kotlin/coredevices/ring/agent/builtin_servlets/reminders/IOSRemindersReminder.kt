@@ -7,6 +7,7 @@ import kotlinx.datetime.toNSDate
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import platform.EventKit.EKAlarm
+import platform.EventKit.EKAuthorizationStatusAuthorized
 import platform.EventKit.EKCalendar
 import platform.EventKit.EKEntityType
 import platform.EventKit.EKEventStore
@@ -19,6 +20,8 @@ import platform.Foundation.NSCalendarUnitMonth
 import platform.Foundation.NSCalendarUnitSecond
 import platform.Foundation.NSCalendarUnitYear
 import platform.Foundation.NSDate
+import platform.Foundation.NSError
+import platform.UIKit.UIDevice
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Instant
@@ -41,11 +44,18 @@ class IOSRemindersReminder(
 
     private suspend fun requestAccess(eventStore: EKEventStore): Boolean {
         return suspendCoroutine { continuation ->
-            eventStore.requestAccessToEntityType(EKEntityType.EKEntityTypeReminder) { granted, error ->
+            val majorVersion =
+                UIDevice.currentDevice.systemVersion.split(".").firstOrNull()?.toIntOrNull() ?: 0
+            val completionHandler = { granted: Boolean, error: NSError? ->
                 if (error != null) {
                     logger.e { "Error requesting reminder permissions: $error" }
                 }
                 continuation.resume(granted)
+            }
+            if (majorVersion >= 17) {
+                eventStore.requestFullAccessToRemindersWithCompletion(completionHandler)
+            } else {
+                eventStore.requestAccessToEntityType(EKEntityType.EKEntityTypeReminder, completionHandler)
             }
         }
     }
@@ -73,6 +83,10 @@ class IOSRemindersReminder(
     override suspend fun schedule(): String {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }
+        val status = EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeReminder)
+        if (status != EKAuthorizationStatusAuthorized) {
+            throw Exception("Reminders full access not granted. Please enable full access in Settings → Privacy & Security → Reminders → Pebble.")
+        }
         val calendar = eventStore.defaultCalendarForNewReminders()
             ?: throw Exception("No default calendar found for reminders")
         return scheduleForCalendar(eventStore, calendar, message, time?.toNSDate())

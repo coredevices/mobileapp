@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineHacksDelegate
 import coredevices.haversine.KMPHaversineSatellite
+import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.Preferences
 import kotlinx.coroutines.Dispatchers
@@ -27,13 +28,11 @@ class RingHacksDelegate(
     }
 
     override fun wipedCollectionsBeforeTransfer(satellite: KMPHaversineSatellite) {
-        if (satellite.id == prefs.ringPaired.value) {
-            logger.i { "Marking paired ring ${satellite.id} as wiped" }
-            prefs.setLastWipedRing(satellite.id)
-            collectionIndexStorage.setLastSuccessfulCollectionIndex(null)
-            scope.launch(Dispatchers.IO) {
-                transferRepo.markTransfersAsPreviousIndexIteration()
-            }
+        logger.i { "Marking paired ring ${satellite.id} as wiped" }
+        prefs.setLastWipedRing(satellite.id)
+        collectionIndexStorage.setLastSuccessfulCollectionIndex(null)
+        scope.launch(Dispatchers.IO) {
+            transferRepo.markTransfersAsPreviousIndexIteration()
         }
     }
 

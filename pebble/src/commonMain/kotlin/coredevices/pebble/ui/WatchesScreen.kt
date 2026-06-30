@@ -850,6 +850,9 @@ fun RingItem(
                                                 showRingAlreadyPairedDialog = true
                                             }
                                         }
+                                        is IndexPairingResult.EraseFailed -> {
+                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "erase_failed"))
+                                        }
                                         null -> {
                                             coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
                                         }

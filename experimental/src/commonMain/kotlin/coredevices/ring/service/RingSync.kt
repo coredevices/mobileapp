@@ -609,7 +609,7 @@ class RingSync(
                                                                     }
                                                                 },
                                                         )
-                                                        if (audioDuration >= 1.5) {
+                                                        if (audioDuration >= 1.0) {
                                                             withContext(Dispatchers.IO) {
                                                                 ringTransferRepository.updateTransferInfo(
                                                                     transfer.id,
@@ -802,7 +802,7 @@ class RingSync(
         }
     }
 
-    fun sendBugReportPrompt() {
+    suspend fun sendBugReportPrompt() {
         indexNotificationManager.sendBugReportPrompt(
             "Index ran into a problem",
             """

@@ -14,4 +14,8 @@ enum class CactusSTTMode(val id: Int) {
             return entries.firstOrNull { it.id == id } ?: RemoteOnly
         }
     }
+
+    fun usesLocalCactus(): Boolean {
+        return this in setOf(RemoteFirst, LocalOnly, LocalFirst, RebbleFirst, RebbleFallback)
+    }
 }

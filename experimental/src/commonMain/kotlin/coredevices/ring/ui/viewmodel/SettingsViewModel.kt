@@ -31,6 +31,7 @@ import coredevices.ring.encryption.KeyStorageStatus
 import coredevices.ring.encryption.KeyFingerprintMismatchException
 import coredevices.ring.encryption.TamperedException
 import coredevices.ring.RingDelegate
+import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.BackupZipReader
 import coredevices.ring.ui.components.QrPhotoPickResult
@@ -41,6 +42,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ui.ModelType
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.emailOrNull
+import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -101,6 +103,7 @@ class SettingsViewModel(
     private val platform: coredevices.util.Platform,
     private val mcpSandboxRepository: McpSandboxRepository,
     private val ringDelegate: RingDelegate,
+    private val cactusModelProvider: CactusModelProvider,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -185,6 +188,12 @@ class SettingsViewModel(
             if (gTasksIntegration.isAuthorized()) {
                 add(ReminderProvider.GoogleTasks)
             }
+            // Tasker shares one opt-in across notes & reminders; reuse the note client's auth check.
+            if (platform.isAndroid &&
+                noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized()
+            ) {
+                add(ReminderProvider.Tasker)
+            }
         }
     }
 
@@ -202,7 +211,9 @@ class SettingsViewModel(
     fun toggleCactusAgent() {
         viewModelScope.launch {
             if (!_useCactusAgent.value) {
-                _showModelDownloadDialog.value = ModelType.Agent(CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+                // Trigger LM model extraction, should be already integrated into assets so no DL
+                cactusModelProvider.getLMModelPath()
+                preferences.setUseCactusAgent(true)
             } else {
                 preferences.setUseCactusAgent(false)
             }

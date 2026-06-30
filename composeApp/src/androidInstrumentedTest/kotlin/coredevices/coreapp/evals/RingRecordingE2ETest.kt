@@ -47,11 +47,11 @@ import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.OpenAiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.TranscriptionService
-import coredevices.util.transcription.WisprFlowTranscriptionService
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.STTConfig
@@ -62,6 +62,7 @@ import com.russhwolf.settings.SharedPreferencesSettings
 import coredevices.firestore.PebbleUser
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
+import coredevices.util.transcription.WisprFlowRESTTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CompletableJob
@@ -552,7 +553,7 @@ class RingRecordingE2ETest {
         // Real API clients
         singleOf(::NenyaClientImpl) bind NenyaClient::class
         singleOf(::WisprFlowAuth)
-        singleOf(::WisprFlowTranscriptionService)
+        singleOf(::WisprFlowRESTTranscriptionService)
         singleOf(::KirinkiTranscriptionService)
         singleOf(::OpenAiTranscriptionService)
 
@@ -579,7 +580,10 @@ class RingRecordingE2ETest {
             }
         }
         single {
-            CactusTranscriptionService(get(), get(), get(), get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
+        }
+        single {
+            HybridTranscriptionService(get(), get(), get(), get(), get(), get())
         } bind TranscriptionService::class
 
         // MCP tools

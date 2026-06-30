@@ -1,6 +1,7 @@
 package coredevices.ring.service.recordings.button
 
 import coredevices.indexai.agent.Agent
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.AgentFactory
@@ -37,7 +38,7 @@ class RecordingOperationFactory(
         recordingId: Long,
         fileId: String,
         transferId: Long?,
-        forcedNoteTool: (suspend (messageText: String) -> ToolCallResult),
+        forcedNoteTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult),
         sequence: List<ButtonPress>?
     ): RecordingOperation {
         val isDoubleClickHold = sequence == secondaryOperationSequence
@@ -57,7 +58,7 @@ class RecordingOperationFactory(
                 transferId = transferId,
                 fileId = fileId,
                 trace = trace,
-                forcedTool = { text, _ -> forcedNoteTool(text) }
+                forcedTool = { text, _, sessionContext -> forcedNoteTool(text, sessionContext) }
             )
         }
         return maybeWrapWithWebhook(
@@ -95,7 +96,7 @@ class RecordingOperationFactory(
     fun createTextOnlyOperation(
         recordingId: Long,
         text: String,
-        forcedTool: (suspend () -> ToolCallResult),
+        forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult),
         agent: Agent = agentFactory.createForChatMode(ChatMode.Normal),
     ): RecordingOperation {
         return TextOnlyRecordingOperation(
@@ -112,7 +113,7 @@ class RecordingOperationFactory(
         recordingId: Long,
         transferId: Long?,
         fileId: String,
-        forcedTool: (suspend (messageText: String) -> ToolCallResult)
+        forcedTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult)
     ): RecordingOperation {
         return when (prefs.secondaryMode.value) {
             SecondaryMode.Disabled -> {
@@ -124,7 +125,7 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     fileId = fileId,
                     trace = trace,
-                    forcedTool = { text, _ -> forcedTool(text) }
+                    forcedTool = { text, _, sessionContext -> forcedTool(text, sessionContext) }
                 )
             }
             SecondaryMode.Search -> {
@@ -155,9 +156,9 @@ class RecordingOperationFactory(
                     // Sandbox mode doesn't force a note; if the agent only replied
                     // with a message, capture it as an answer instead
                     forcedTool = if (group == null) {
-                        { text, _ -> forcedTool(text) }
+                        { text, _, sessionContext -> forcedTool(text, sessionContext) }
                     } else {
-                        ::forcedAnswerTool
+                        { text, answer, _ -> forcedAnswerTool(text, answer) }
                     },
                     sandboxGroupId = group?.id
                 )

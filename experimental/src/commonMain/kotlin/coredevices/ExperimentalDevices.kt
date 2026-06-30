@@ -16,8 +16,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import com.eygraber.uri.Uri
 import com.mmk.kmpnotifier.notification.NotifierManager
+import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
@@ -41,13 +43,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.io.Buffer
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.writeString
+import kotlinx.serialization.json.Json
 import org.koin.compose.koinInject
 import rememberOpenDocumentLauncher
 import size
@@ -58,6 +64,8 @@ class ExperimentalDevices(
     private val recordingStorage: RecordingStorage,
     private val ringDelegate: RingDelegate,
     private val sandboxRepository: McpSandboxRepository,
+    private val recordingRepository: RecordingRepository,
+    private val conversationMessageDao: ConversationMessageDao,
     private val preferences: Preferences,
     private val shortcutActionHandler: ShortcutActionHandler,
     private val libIndex: LibIndex,
@@ -208,6 +216,55 @@ class ExperimentalDevices(
             source = source.buffered(),
             size = path.size(),
         )
+    }
+
+    /**
+     * Export the most recent [limit] recordings for a bug report: one
+     * `recent_recordings.json` capturing each recording's [LocalRecording],
+     * entries and conversation messages (the data shown in `RecordingDetails`),
+     * plus one WAV per recording entry that has audio. Audio export per entry is
+     * best-effort — an un-uploaded or missing file is skipped, not fatal.
+     */
+    suspend fun exportRecentRecordings(limit: Int = 10): List<DocumentAttachment> = withContext(Dispatchers.IO) {
+        val logger = co.touchlab.kermit.Logger.withTag("ExperimentalDevices")
+        val recordings = recordingRepository.getRecentRecordings(limit)
+        if (recordings.isEmpty()) return@withContext emptyList()
+
+        val attachments = mutableListOf<DocumentAttachment>()
+        val exports = recordings.map { recording ->
+            val entries = recordingRepository.getRecordingEntriesFlow(recording.id).first()
+            val messages = conversationMessageDao.getMessagesForRecording(recording.id).first()
+
+            entries.mapNotNull { it.fileName }.distinct().forEach { fileName ->
+                try {
+                    val path = recordingStorage.exportRecording(fileName)
+                    attachments.add(
+                        DocumentAttachment(
+                            fileName = "recording-${recording.id}-$fileName.wav",
+                            mimeType = "audio/wav",
+                            source = SystemFileSystem.source(path).buffered(),
+                            size = path.size(),
+                        )
+                    )
+                } catch (e: Exception) {
+                    logger.w(e) { "Failed to export audio for recording ${recording.id} ($fileName)" }
+                }
+            }
+
+            RecentRecordingExport(recording, entries, messages)
+        }
+
+        val json = Json.encodeToString(exports)
+        val buffer = Buffer().apply { writeString(json) }
+        attachments.add(
+            DocumentAttachment(
+                fileName = "recent_recordings.json",
+                mimeType = "application/json",
+                source = buffer,
+                size = buffer.size,
+            )
+        )
+        attachments
     }
 
     fun debugSummary(): String {

@@ -2,7 +2,6 @@ package coredevices.coreapp.transcription
 
 import androidx.test.platform.app.InstrumentationRegistry
 import coredevices.analytics.CoreAnalytics
-import coredevices.api.WisprFlowAuth
 import coredevices.ring.model.CactusModelProvider
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -10,10 +9,7 @@ import coredevices.util.STTConfig
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
-import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
-import coredevices.util.transcription.OpenAiTranscriptionService
-import coredevices.util.transcription.WisprFlowTranscriptionService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -100,16 +95,12 @@ class CactusLocalCancellationTest {
                 println("[cactus-cancel] model dir=${modelDir.absolutePath} present=$modelPresent")
 
                 if (modelPresent) {
-                    val cancelConfigFlow = CoreConfigFlow(
-                        MutableStateFlow(
-                            CoreConfig(sttConfig = STTConfig(mode = CactusSTTMode.LocalOnly, modelName = MODEL_NAME)),
-                        ),
-                    )
                     val svc = CactusTranscriptionService(
-                        coreConfigFlow = cancelConfigFlow,
-                        wisprFlow = WisprFlowTranscriptionService(WisprFlowAuth()),
-                        kirinki = KirinkiTranscriptionService(),
-                        openAi = OpenAiTranscriptionService(cancelConfigFlow),
+                        coreConfigFlow = CoreConfigFlow(
+                            MutableStateFlow(
+                                CoreConfig(sttConfig = STTConfig(mode = CactusSTTMode.LocalOnly, modelName = MODEL_NAME)),
+                            ),
+                        ),
                         modelProvider = provider,
                         analytics = NoopAnalytics,
                         inferenceBoost = NoOpInferenceBoost(),
@@ -147,7 +138,7 @@ class CactusLocalCancellationTest {
      */
     private suspend fun runTranscriptionIgnoringResult(audio: ByteArray) {
         try {
-            service.transcribe(audioStreamFrames = flowOf(audio), sampleRate = SAMPLE_RATE).collect { }
+            service.transcribeLocal(audio = audio, sampleRate = SAMPLE_RATE)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

@@ -3,6 +3,7 @@ package coredevices.ring.agent.builtin_servlets.notes
 import co.touchlab.kermit.Logger
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.database.Preferences
 import coredevices.firestore.UsersDao
 import org.koin.core.component.KoinComponent
@@ -20,6 +21,8 @@ class NoteIntegrationFactory(
         return when (integration) {
             NoteProvider.Builtin -> LocalNoteClient()
             NoteProvider.Notion -> get<NotionIntegration>()
+            NoteProvider.Obsidian -> get<ObsidianIntegration>()
+            NoteProvider.Tasker -> createTaskerNoteClient()
         }
     }
 }

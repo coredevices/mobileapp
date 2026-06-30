@@ -11,6 +11,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.util.JsonSnake
 import coredevices.ring.database.Preferences
 import coredevices.ring.encryption.DocumentEncryptor
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.firestore.dao.FirestoreTracesDao
@@ -386,7 +387,7 @@ class RecordingProcessingQueue(
         }
     }
 
-    private suspend fun forcedNoteTool(messageText: String): ToolCallResult {
+    private suspend fun forcedNoteTool(messageText: String, sessionContext: SessionContext): ToolCallResult {
         val noteTool: CreateNoteTool = get()
         return noteTool.call(
             JsonSnake.encodeToString(
@@ -396,7 +397,8 @@ class RecordingProcessingQueue(
                         automatic = true
                     )
                 ).jsonObject
-            )
+            ),
+            sessionContext
         )
     }
 
@@ -528,7 +530,7 @@ class RecordingProcessingQueue(
         val operation = recordingOperationFactory.createTextOnlyOperation(
             recordingId = recordingId,
             text = transcription,
-            forcedTool = { forcedNoteTool(transcription) }
+            forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) }
         )
         operation.run(handle)
     }

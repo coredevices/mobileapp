@@ -46,6 +46,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coredevices.ring.ui.components.feed.TodoCheckCircle
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -92,6 +94,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
+import coredevices.ring.data.entity.room.indexfeed.displayTitle
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
@@ -123,6 +126,7 @@ internal fun IndexHeader(
     val colors = IndexTheme.colors
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     LaunchedEffect(searching) {
         if (searching) {
             searchFocus.requestFocus()
@@ -154,6 +158,10 @@ internal fun IndexHeader(
                     textStyle = TextStyle(color = colors.onSurface, fontSize = 15.sp).indexTextEntryStyle(),
                     cursorBrush = SolidColor(colors.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                    }),
                     decorationBox = { inner ->
                         if (query.isEmpty()) {
                             Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
@@ -481,15 +489,21 @@ internal fun TaskRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                // Locked rows can't be opened/edited (no key to decrypt) — a
+                // write would clobber the cloud ciphertext with cleartext.
+                .let { if (task.locked) it else it.clickable { onClick() } }
                 .padding(horizontal = 22.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            TodoCheckCircle(
-                done = task.done,
-                onToggle = onToggle,
-                modifier = Modifier.padding(top = 1.dp),
-            )
+            if (task.locked) {
+                Text("🔒", fontSize = 15.sp, modifier = Modifier.padding(top = 1.dp))
+            } else {
+                TodoCheckCircle(
+                    done = task.done,
+                    onToggle = onToggle,
+                    modifier = Modifier.padding(top = 1.dp),
+                )
+            }
             Spacer(Modifier.width(12.dp))
             // Strike-through + faded look while the row lingers post-toggle
             // (the row is dropped from the list ~600 ms later by the
@@ -506,7 +520,7 @@ internal fun TaskRow(
                     .graphicsLayer { alpha = rowAlpha },
             ) {
                 Text(
-                    task.title,
+                    task.displayTitle,
                     color = colors.onSurface,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
@@ -733,16 +747,20 @@ fun NoteListCard(
             .clip(RoundedCornerShape(14.dp))
             .background(colors.surfaceContainerLow)
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            // A locked list can't be opened — its title and items are encrypted.
+            .let { if (list.locked) it else it.clickable { onClick() } }
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon.isNotEmpty()) {
+            if (list.locked) {
+                Text(text = "🔒", fontSize = 16.sp)
+                Spacer(Modifier.width(6.dp))
+            } else if (icon.isNotEmpty()) {
                 Text(text = icon, fontSize = 16.sp)
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                list.title.ifBlank { "List" },
+                list.displayTitle.ifBlank { "List" },
                 color = colors.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -831,9 +849,10 @@ internal fun AnswerCard(answer: CachedItem, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (answer.body.isNotBlank()) {
+        val sanitizedBody = answer.body.replace(Regex("<[^>]*>"), "").trim()
+        if (sanitizedBody.isNotBlank()) {
             Text(
-                answer.body,
+                sanitizedBody,
                 color = colors.onSurfaceVariant,
                 fontSize = 12.5.sp,
                 lineHeight = 17.5.sp,

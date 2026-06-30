@@ -66,7 +66,14 @@ class CompanionAppLifecycleManager(
 
     private suspend fun handleAppStop() {
         activeAppScope.cancel()
-        runningApps.value.forEach { it.stop() }
+        runningApps.value.forEach { app ->
+            // Don't error out if one app fails to stop
+            try {
+                app.stop()
+            } catch (e: Exception) {
+                logger.e(e) { "Error stopping companion app: ${e.message}" }
+            }
+        }
         runningApps.value = emptyList()
     }
 

@@ -2,6 +2,7 @@ package coredevices.ring.agent
 
 import coredevices.indexai.agent.ServletRepository
 import coredevices.mcp.client.McpIntegration
+import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.js.JsServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
@@ -33,6 +34,10 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
                     McpServerDefinition(
                         name = ReminderServlet.name,
                         title = "Reminders"
+                    ),
+                    McpServerDefinition(
+                        name = CalendarServlet.NAME,
+                        title = "Calendar"
                     )
                 )
             )
@@ -61,6 +66,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             ClockServlet.name -> ClockServlet
             JsServlet.name -> JsServlet
             ReminderServlet.name -> ReminderServlet
+            CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> {
                 require(platform.isAndroid) { "Messaging servlet is only available on Android" }
                 MessagingServlet

@@ -53,7 +53,7 @@ coredevices-speex = "1946c84"
 mcp = "0.8.3"
 glance = "1.1.1"
 #noinspection GradleDependency
-coredevices-haversine = "de3a3b6"
+coredevices-haversine = "81f3721"
 #noinspection GradleDependency
 coredevices-krisp = "811c72e"
 junit-ext = "1.3.0"
@@ -133,6 +133,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
 identity-google = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleId" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version = "1.0.1" }
 play-update = { group = "com.google.android.play", name = "app-update", version.ref = "play-update" }
 play-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "play-update" }
 crashkios = { module = "co.touchlab.crashkios:crashlytics", version.ref = "crashkios" }

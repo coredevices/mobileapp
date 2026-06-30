@@ -410,6 +410,37 @@ class RecordingProcessingQueueTest {
     }
 
     @Test
+    fun localAudioProcessing_transcriptionBusy_deferredThenSucceeds() = runBlocking {
+        val fileId = "test-audio-txn-busy"
+        createFakeAudioFile(fileId)
+
+        // First attempt: model busy (TranscriptionInProgress) → RecoverableTaskException → retry,
+        // and the entry must NOT be marked transcription_error. Second attempt: succeeds.
+        fakeTranscription.enqueue(
+            FakeTranscriptionService.Behavior.Busy,
+            FakeTranscriptionService.Behavior.Success("Recovered after busy")
+        )
+        fakeNenya.enqueue(
+            FakeNenyaClient.NenyaResponse.SuccessWithToolCalls,
+            FakeNenyaClient.NenyaResponse.SuccessFinal
+        )
+
+        queue.queueLocalAudioProcessing(fileId)
+        awaitTaskDone(taskId = 1)
+
+        val task = taskDao.getTaskById(1)!!
+        assertEquals(TaskStatus.Success, task.status)
+        assertTrue("Expected at least 2 attempts (busy then success)", task.attempts >= 2)
+
+        // Busy is a transient deferral, not a transcription failure: the final entry is completed
+        // (and was never left in transcription_error, unlike noSpeechDetected which fails terminally).
+        val entries = entryDao.getEntriesForRecording(1).first()
+        assertEquals(1, entries.size)
+        assertEquals(RecordingEntryStatus.completed, entries[0].status)
+        assertEquals("Recovered after busy", entries[0].transcription)
+    }
+
+    @Test
     fun localAudioProcessing_noSpeechDetected_taskFails() = runBlocking {
         val fileId = "test-audio-no-speech"
         createFakeAudioFile(fileId)

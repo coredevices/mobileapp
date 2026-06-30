@@ -37,6 +37,8 @@ class ItemFactory {
             noteItem(sourceRecordingId, createdAt, result.content, result.listUsed, toolCallId, result.resolvedListId)
         is SemanticResult.AlarmCreation ->
             alarmItem(sourceRecordingId, createdAt, result.fireTime, toolCallId)
+        is SemanticResult.CalendarEventCreation ->
+            calendarEventItem(sourceRecordingId, createdAt, result.title, result.startTime, result.endTime, result.location, toolCallId)
         is SemanticResult.TimerCreation ->
             timerItem(sourceRecordingId, createdAt, result.fireTime, result.requestedDuration, toolCallId)
         is SemanticResult.MessageSent ->
@@ -117,6 +119,29 @@ class ItemFactory {
             ),
         )
     }
+
+    fun calendarEventItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        startTime: Instant,
+        endTime: Instant,
+        location: String?,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        body = location.orEmpty(),
+        dueAt = startTime,
+        parents = listOf(LIST_TODOS_ID),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemDocument.ItemMetadata.CalendarEvent(
+            startTime = startTime,
+            endTime = endTime,
+            location = location,
+        ),
+    )
 
     fun timerItem(
         sourceRecordingId: String,

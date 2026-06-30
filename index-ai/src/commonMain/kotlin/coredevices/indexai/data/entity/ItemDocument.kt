@@ -37,6 +37,7 @@ data class ItemDocument(
     val sourceToolCallId: String? = null,
     val metadata: ItemMetadata = ItemMetadata.Note,
     val deleted: Boolean = false,
+    val encrypted: EncryptedEnvelope? = null,
 ) {
     @Serializable
     sealed interface ItemMetadata {
@@ -88,6 +89,16 @@ data class ItemDocument(
                 Failed,
             }
         }
+
+        @Serializable
+        @SerialName("calendar_event")
+        data class CalendarEvent(
+            @Serializable(with = InstantComponentSerializer::class)
+            val startTime: Instant,
+            @Serializable(with = InstantComponentSerializer::class)
+            val endTime: Instant,
+            val location: String? = null,
+        ) : ItemMetadata
 
         @Serializable
         @SerialName("answer")

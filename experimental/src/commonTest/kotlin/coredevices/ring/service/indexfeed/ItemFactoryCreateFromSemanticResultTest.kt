@@ -98,6 +98,30 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
+    fun calendarEventCreationMapsToCalendarEventItem() {
+        val start = createdAt + 30.minutes
+        val end = createdAt + 90.minutes
+        val item = map(
+            SemanticResult.CalendarEventCreation(
+                title = "Lunch with Sam",
+                startTime = start,
+                endTime = end,
+                location = "Cafe",
+            )
+        )!!
+        assertEquals("Lunch with Sam", item.title)
+        assertEquals("Cafe", item.body)
+        assertEquals(start, item.dueAt)
+        assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
+        assertEquals(toolCallId, item.sourceToolCallId)
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.CalendarEvent)
+        assertEquals(start, meta.startTime)
+        assertEquals(end, meta.endTime)
+        assertEquals("Cafe", meta.location)
+    }
+
+    @Test
     fun messageSentMapsToSentMessage() {
         val item = map(SemanticResult.MessageSent(recipientName = "Alice", text = "hi", contactId = "room1"))!!
         val meta = item.metadata

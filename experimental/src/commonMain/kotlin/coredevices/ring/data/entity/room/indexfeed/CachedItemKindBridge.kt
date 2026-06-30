@@ -32,6 +32,7 @@ val ItemMetadata.kind: String get() = when (this) {
     is ItemMetadata.Reminder -> "reminder"
     is ItemMetadata.Scheduled -> "scheduled"
     is ItemMetadata.Message -> "message"
+    is ItemMetadata.CalendarEvent -> "calendar_event"
     is ItemMetadata.Answer -> "answer"
     is ItemMetadata.ActionLog -> "action_log"
     is ItemMetadata.McpCall -> "mcp_call"
@@ -41,6 +42,9 @@ val ItemMetadata.kind: String get() = when (this) {
 
 val CachedItem.kind: String get() = metadata.kind
 val ItemDocument.kind: String get() = metadata.kind
+
+val CachedItem.displayTitle: String get() = if (locked) "🔒 Encrypted" else title
+val CachedList.displayTitle: String get() = if (locked) "🔒 Encrypted" else title
 
 /**
  * Re-serialise the metadata to a flat JSON object the UI can read by key.
@@ -76,6 +80,11 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
                 ItemMetadata.Message.Status.Failed -> "failed"
             })
             errorMessage?.let { put("errorMessage", it) }
+        }
+        is ItemMetadata.CalendarEvent -> buildJsonObject {
+            put("startTime", startTime.toEpochMilliseconds())
+            put("endTime", endTime.toEpochMilliseconds())
+            location?.let { put("location", it) }
         }
         is ItemMetadata.Answer -> buildJsonObject {
             put("question", question)
@@ -137,6 +146,10 @@ fun metadataForKind(kind: String, existing: ItemMetadata? = null): ItemMetadata 
             text = "",
             sentAt = Clock.System.now(),
             status = ItemMetadata.Message.Status.Sent,
+        )
+        "calendar_event" -> ItemMetadata.CalendarEvent(
+            startTime = Clock.System.now(),
+            endTime = Clock.System.now(),
         )
         "checklist" -> ItemMetadata.Checklist
         else -> ItemMetadata.Note

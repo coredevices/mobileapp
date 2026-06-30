@@ -20,13 +20,13 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 
 /**
- * Mode-aware [TranscriptionProvider] dispatching between [CactusTranscription] (cloud/local via
+ * Mode-aware [TranscriptionProvider] dispatching between [HybridTranscription] (cloud/local via
  * Cactus + WisprFlow) and [RebbleAsrTranscription] (Rebble's ASR). Owns fallback orchestration
  * for `RebbleFirst`/`RebbleFallback` modes (which buffer Speex frames so they can be replayed
  * across both backends).
  */
 class STTRouter(
-    private val cactus: CactusTranscription,
+    private val cactus: HybridTranscription,
     private val rebble: RebbleAsrTranscription,
     private val cactusService: CactusTranscriptionService,
     private val coreConfigFlow: CoreConfigFlow,

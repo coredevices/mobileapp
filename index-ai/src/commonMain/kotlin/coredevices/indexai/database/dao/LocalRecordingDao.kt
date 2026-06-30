@@ -50,6 +50,9 @@ interface LocalRecordingDao {
     @Query("SELECT * FROM LocalRecording ORDER BY localTimestamp DESC LIMIT 1")
     suspend fun getMostRecentTimestamp(): LocalRecording?
 
+    @Query("SELECT * FROM LocalRecording ORDER BY localTimestamp DESC LIMIT :limit")
+    suspend fun getRecentRecordings(limit: Int): List<LocalRecording>
+
     @Query("SELECT firestoreId FROM LocalRecording WHERE firestoreId IS NOT NULL")
     suspend fun getAllFirestoreIds(): List<String>
 

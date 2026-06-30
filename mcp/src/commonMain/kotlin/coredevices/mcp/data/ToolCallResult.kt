@@ -46,6 +46,17 @@ sealed class SemanticResult {
     @SerialName("AlarmCreation")
     data class AlarmCreation(val fireTime: LocalTime): SemanticResult()
     /**
+     * Tool call created an event in the user's calendar
+     */
+    @Serializable
+    @SerialName("CalendarEventCreation")
+    data class CalendarEventCreation(
+        val title: String,
+        val startTime: Instant,
+        val endTime: Instant,
+        val location: String? = null,
+    ): SemanticResult()
+    /**
      * Tool call resulted in a timer creation action
      * @param requestedDuration The relative duration requested by the user, if any
      * @param fireTime The exact time the timer is set to go off

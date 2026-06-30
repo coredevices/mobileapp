@@ -175,8 +175,10 @@ class FullFeedViewModel(
                     chips = recItems.take(8).map { item ->
                         Chip(
                             itemId = item.firestoreId,
+                            // chipLabel already yields "🔒 Encrypted" for locked
+                            // rows; drop the kind glyph so the lock isn't doubled.
                             label = IndexFeedViewModel.chipLabel(item, lists).take(64),
-                            glyph = chipGlyph(item.kind),
+                            glyph = if (item.locked) "" else chipGlyph(item.kind),
                         )
                     },
                 )
@@ -192,6 +194,7 @@ class FullFeedViewModel(
             "answer" -> "✨"
             "message" -> "✉"
             "action_log" -> "✉"
+            "calendar_event" -> "📅"
             else -> "•"
         }
 

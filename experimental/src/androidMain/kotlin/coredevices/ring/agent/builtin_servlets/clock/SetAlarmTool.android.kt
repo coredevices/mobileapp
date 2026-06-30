@@ -7,6 +7,12 @@ import org.koin.mp.KoinPlatform
 
 actual suspend fun setAlarm(hours: Int, minutes: Int, label: String?) {
     val context = KoinPlatform.getKoin().get<Context>()
+    // Setting an alarm launches the clock app's activity. When we run in the background (the common
+    // case for the ring), startActivity is silently dropped unless we hold a CompanionDeviceManager
+    // association, which grants the background-activity-launch exemption.
+    check(context.hasCompanionDeviceAssociation()) {
+        "Background alarms require a device association, check the Devices tab to fix."
+    }
     val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
         if (label != null) {
             putExtra(AlarmClock.EXTRA_MESSAGE, label)

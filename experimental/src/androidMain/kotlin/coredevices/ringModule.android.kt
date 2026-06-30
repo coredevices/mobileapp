@@ -1,6 +1,8 @@
 package coredevices
 
 import android.content.Context
+import coredevices.ring.agent.integrations.obsidian.AndroidObsidianVault
+import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import coredevices.haversine.KMPHaversineSatelliteManager
@@ -60,4 +62,5 @@ actual val platformRingModule = module {
         Room.databaseBuilder<RingDatabase>(context = context.applicationContext, name = dbFile.absolutePath)
     } bind RoomDatabase.Builder::class
     viewModelOf(::SettingsBeeperContactsDialogViewModel)
+    single<ObsidianVault> { AndroidObsidianVault(get()) }
 }

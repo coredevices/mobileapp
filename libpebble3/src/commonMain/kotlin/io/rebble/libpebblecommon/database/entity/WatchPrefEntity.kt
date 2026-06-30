@@ -544,7 +544,7 @@ data class RgbColorPreset(val rgb: UInt, val displayName: String)
 
 // LED_WARM_WHITE in pebble-firmware:src/fw/drivers/led_controller.h — also the firmware
 // backlight default on color-backlight boards.
-private val LED_WARM_WHITE_RGB: UInt = 0x00F0D0B0u
+private val LED_WARM_WHITE_RGB: UInt = 0x00FFBFA2u
 
 // Quick-pick presets shown above the RGB color picker. The wire value is a free-form 24-bit
 // RGB UInt — the user can also dial in any custom color via the sliders or hex field.

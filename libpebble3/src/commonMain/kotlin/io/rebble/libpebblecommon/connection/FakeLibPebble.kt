@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -318,6 +319,8 @@ class FakeLibPebble : LibPebble {
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         // No-op
     }
+
+    override suspend fun createEvent(event: NewCalendarEvent): String? = null
 
     // OtherPebbleApps interface
     override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =

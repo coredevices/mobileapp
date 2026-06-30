@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
+import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -267,6 +268,9 @@ sealed class FirmwareUpdateCheckResult {
 interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>
     fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
+
+    /** Create an event in the device's primary/default calendar. Returns the new event id, or null. */
+    suspend fun createEvent(event: NewCalendarEvent): String?
 }
 
 fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {

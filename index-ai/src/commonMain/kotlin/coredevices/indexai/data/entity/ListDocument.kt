@@ -37,4 +37,5 @@ data class ListDocument(
      */
     val seed: String? = null,
     val deleted: Boolean = false,
+    val encrypted: EncryptedEnvelope? = null,
 )

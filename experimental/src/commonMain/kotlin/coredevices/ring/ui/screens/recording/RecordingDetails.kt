@@ -688,6 +688,11 @@ private fun AssistantTurn(
             if (replyText.isNotBlank()) ReplyBubble(replyText)
             answerItems.forEach { ReplyBubble(it.body) }
             if (chipCalls.isNotEmpty()) {
+                chipCalls.map { toolResultsByCallId[it.id] }.filterIsInstance<SemanticResult.GenericFailure>().forEach { result ->
+                    result.userErrorMessage?.let {
+                        ReplyBubble(it)
+                    }
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -701,11 +706,14 @@ private fun AssistantTurn(
                         when {
                             // Prefer the saved object's chip (navigable, richly
                             // labelled) when the tool call produced one.
+                            // Locked (encrypted, no key): chipLabel already
+                            // yields "🔒 Encrypted"; drop the glyph so the lock
+                            // isn't doubled, and make it non-navigable.
                             item != null -> ActionChip(
-                                glyph = chipGlyph(item.kind),
+                                glyph = if (item.locked) "" else chipGlyph(item.kind),
                                 label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                     .chipLabel(item, allLists).take(64),
-                                onClick = { onOpenObject(item.firestoreId) },
+                                onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
                             )
                             // Otherwise collapse the call + its result into one
                             // chip showing the result.
@@ -732,6 +740,7 @@ private fun AssistantTurn(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ReplyBubble(text: String) {
+    val sanitized = text.replace(Regex("<[^>]*>"), "").trim()
     val colors = IndexTheme.colors
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -742,14 +751,14 @@ private fun ReplyBubble(text: String) {
             .combinedClickable(
                 onClick = {},
                 onLongClick = {
-                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(sanitized))
                     haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 },
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Text(
-            text,
+            sanitized,
             color = colors.onSurface,
             fontSize = 14.5.sp,
             lineHeight = 21.sp,
@@ -859,10 +868,10 @@ private fun TrailingItemChips(
                 ) {
                     chipItems.forEach { item ->
                         ActionChip(
-                            glyph = chipGlyph(item.kind),
+                            glyph = if (item.locked) "" else chipGlyph(item.kind),
                             label = coredevices.ring.ui.viewmodel.IndexFeedViewModel
                                 .chipLabel(item, allLists).take(64),
-                            onClick = { onOpenObject(item.firestoreId) },
+                            onClick = if (item.locked) null else ({ onOpenObject(item.firestoreId) }),
                         )
                     }
                 }
@@ -914,6 +923,7 @@ private fun chipGlyph(kind: String): String = when (kind) {
     "answer" -> "✨"
     "message" -> "✉"
     "action_log" -> "✉"
+    "calendar_event" -> "📅"
     else -> "•"
 }
 

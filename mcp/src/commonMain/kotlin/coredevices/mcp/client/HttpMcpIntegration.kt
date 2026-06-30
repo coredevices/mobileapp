@@ -2,6 +2,7 @@ package coredevices.mcp.client
 
 import co.touchlab.kermit.Logger
 import coredevices.mcp.McpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.McpPrompt
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
@@ -146,7 +147,9 @@ class HttpMcpIntegration(
 
     override suspend fun callTool(
         toolName: String,
-        json: Map<String, JsonElement>
+        json: Map<String, JsonElement>,
+        // Session context is not forwarded to remote servers
+        context: SessionContext
     ): ToolCallResult {
         val result = client.callTool(toolName, json)
         if (result.isError == true) {

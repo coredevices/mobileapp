@@ -185,6 +185,7 @@ kotlin {
                 implementation(libs.coredevices.haversine)
                 implementation(project(":cactus"))
                 implementation(project(":libindex"))
+                implementation(project(":libpebble3"))
                 implementation(libs.settings)
                 implementation(libs.kable)
                 implementation(libs.uri)
@@ -196,6 +197,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.settings.test)
+                implementation(libs.coroutines.test)
             }
         }
 
@@ -208,6 +210,7 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.androidx.credentials)
                 implementation(libs.zxing.core)
+                implementation(libs.androidx.documentfile)
             }
         }
 

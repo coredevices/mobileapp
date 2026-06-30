@@ -76,8 +76,10 @@ data class LockerEntry(
 }
 
 fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
-    val compatiblePlatforms = platform.getCompatibleAppVariants().map { it.codename }
-    val entryPlatform = platforms.firstOrNull { it.name in compatiblePlatforms } ?: run {
+    // Pick the best-matching variant for this watch.
+    val entryPlatform = platform.getCompatibleAppVariants().firstNotNullOfOrNull { variant ->
+        platforms.firstOrNull { it.name == variant.codename }
+    } ?: run {
         logger.d { "No compatible platform found for $id" }
         return null
     }

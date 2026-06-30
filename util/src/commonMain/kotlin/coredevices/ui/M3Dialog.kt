@@ -1,5 +1,6 @@
 package coredevices.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -7,9 +8,12 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.LocalTextStyle
@@ -32,23 +36,40 @@ fun M3Dialog(
     buttons: (@Composable RowScope.() -> Unit)? = null,
     verticalButtons: (@Composable ColumnScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    // When the content can be taller than the space left above the soft keyboard
+    // (e.g. a form with many fields), set this so the content area scrolls and the
+    // button row stays pinned and reachable instead of being pushed off-screen.
+    scrollableContent: Boolean = false,
     contents: @Composable () -> Unit,
 ) {
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties,
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .then(modifier),
+        Box(modifier = Modifier.imePadding()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .then(modifier)
+                .dismissKeyboardOnTapOutside(),
             shape = MaterialTheme.shapes.extraLarge,
         ) {
             Column {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(
+                            if (scrollableContent) {
+                                // Cap the content to the available height and scroll it,
+                                // so the pinned button row below stays on screen.
+                                Modifier
+                                    .weight(1f, fill = false)
+                                    .verticalScroll(rememberScrollState())
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(24.dp),
                     horizontalAlignment = if (icon != null) {
                         Alignment.CenterHorizontally
@@ -90,7 +111,7 @@ fun M3Dialog(
                             .align(Alignment.End),
                         horizontalAlignment = Alignment.End
                     ) {
-                        verticalButtons()
+                        verticalButtons()}
                     }
                 }
             }

@@ -47,6 +47,18 @@ data class CalendarEvent(
     }
 }
 
+/**
+ * Parameters for creating a new event in the device's primary/default calendar.
+ * Minimal v1 field set; all-day/attendees/recurrence intentionally omitted (see RING-84).
+ */
+data class NewCalendarEvent(
+    val title: String,
+    val startTime: Instant,
+    val endTime: Instant,
+    val location: String? = null,
+    val description: String? = null,
+)
+
 private fun CalendarEvent.generateCompositeBackingId() = "${calendarId}T${baseEventId}T${startTime}"
 
 private fun transformDescription(rawDescription: String): String {

@@ -22,7 +22,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
 import coredevices.util.models.CactusSTTMode
-import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
@@ -61,6 +61,7 @@ data class BugReportGenerationParams(
     val screenContext: String,
     val attachments: List<DocumentAttachment>,
     val sendRecording: Boolean,
+    val sendRecentRecordings: Boolean,
     val expOutputPath: String?,
     val imageAttachments: List<DocumentAttachment>,
     val fetchPebbleLogs: Boolean,
@@ -139,7 +140,7 @@ class BugReportProcessor(
     private fun getSTTSummary(): String {
         return try {
             // Lazy grab in case of init issues
-            val transcriptionService = KoinPlatform.getKoin().get<CactusTranscriptionService>()
+            val transcriptionService = KoinPlatform.getKoin().get<HybridTranscriptionService>()
             val lastModel = transcriptionService.lastModelUsed
             val isModelReady = transcriptionService.isModelReady
             val configuredModel = transcriptionService.configuredModel
@@ -486,6 +487,15 @@ class BugReportProcessor(
                 experimentalDevices.exportOutput(params.expOutputPath)?.let {
                     attachments.add(it)
                 }
+            }
+        }
+
+        // Add the last few recordings + their data for Index bug reports
+        if (params.sendRecentRecordings) {
+            try {
+                attachments.addAll(experimentalDevices.exportRecentRecordings())
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to gather recent recordings" }
             }
         }
 

@@ -12,6 +12,7 @@ import coredevices.ring.database.firestore.dao.FirestoreItemsDao
 import coredevices.ring.database.firestore.dao.FirestoreListsDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
+import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.service.RecordingBackgroundScope
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -73,6 +74,7 @@ class IndexFeedSyncService(
     private val firestoreItemsDao: FirestoreItemsDao,
     private val firestoreListsDao: FirestoreListsDao,
     private val preferences: Preferences,
+    private val documentEncryptor: DocumentEncryptor,
     private val scope: RecordingBackgroundScope,
 ) {
     private val log = Logger.withTag("IndexFeedSync")
@@ -174,11 +176,21 @@ class IndexFeedSyncService(
 
     private suspend fun pushItems(items: List<CachedItem>) {
         val toPush = mutex.withLock {
-            items.filter { itemLastApplied[it.firestoreId] != it.updatedAt }
+            items.filter {
+                // Never re-push a locked row's content — we can't read it, and
+                // a blank cleartext doc would clobber the cloud ciphertext.
+                // Locked *tombstones* (deleted) still propagate the delete.
+                if (it.locked && !it.deleted) return@filter false
+                itemLastApplied[it.firestoreId] != it.updatedAt
+            }
         }
         if (toPush.isEmpty()) return
+        val key = encryptionKeyOrNull()
         try {
-            firestoreItemsDao.writeBatch(toPush.map { it.firestoreId to it.toDocument() })
+            firestoreItemsDao.writeBatch(toPush.map {
+                val doc = it.toDocument()
+                it.firestoreId to (if (key != null) documentEncryptor.encryptItem(doc, key) else doc)
+            })
             mutex.withLock { toPush.forEach { itemLastApplied[it.firestoreId] = it.updatedAt } }
             log.i { "pushed ${toPush.size} items" }
         } catch (e: Exception) {
@@ -188,15 +200,36 @@ class IndexFeedSyncService(
 
     private suspend fun pushLists(lists: List<CachedList>) {
         val toPush = mutex.withLock {
-            lists.filter { listLastApplied[it.firestoreId] != it.updatedAt }
+            lists.filter {
+                if (it.locked && !it.deleted) return@filter false
+                listLastApplied[it.firestoreId] != it.updatedAt
+            }
         }
         if (toPush.isEmpty()) return
+        val key = encryptionKeyOrNull()
         try {
-            firestoreListsDao.writeBatch(toPush.map { it.firestoreId to it.toDocument() })
+            firestoreListsDao.writeBatch(toPush.map {
+                val doc = it.toDocument()
+                // Seed lists (Notes to self, Todos, Shopping) have generic,
+                // non-sensitive titles and are bootstrapped locally — leave
+                // them cleartext so they stay readable on a keyless device.
+                val out = if (key != null && doc.seed == null) documentEncryptor.encryptList(doc, key) else doc
+                it.firestoreId to out
+            })
             mutex.withLock { toPush.forEach { listLastApplied[it.firestoreId] = it.updatedAt } }
             log.i { "pushed ${toPush.size} lists" }
         } catch (e: Exception) {
             log.w(e) { "pushLists failed (${toPush.size} lists kept locally)" }
+        }
+    }
+
+    /** Encryption key to use for outgoing pushes, or null to push cleartext.
+     *  Mirrors the recording upload path: encrypt only when the user has
+     *  encryption on AND a key is present; otherwise warn and push cleartext. */
+    private suspend fun encryptionKeyOrNull(): String? {
+        if (!preferences.useEncryption.value) return null
+        return documentEncryptor.getKey().also {
+            if (it == null) log.w { "Encryption enabled but no key available — pushing items/lists unencrypted" }
         }
     }
 
@@ -212,13 +245,15 @@ class IndexFeedSyncService(
 
     private suspend fun pullItems(snap: QuerySnapshot) {
         var applied = 0
+        val key = documentEncryptor.getKey()
         for (doc in snap.documents) {
             val remote = try { doc.data<ItemDocument>() } catch (e: Exception) {
                 log.w(e) { "skip item ${doc.id}: deser failed" }; continue
             }
             val local = itemRepo.getById(doc.id)
             if (local == null || remote.updatedAt > local.updatedAt) {
-                itemRepo.upsertLocal(doc.id, remote)
+                val (resolved, locked) = resolveItem(doc.id, remote, key)
+                itemRepo.upsertLocal(doc.id, resolved, locked)
                 mutex.withLock { itemLastApplied[doc.id] = remote.updatedAt }
                 applied++
             }
@@ -240,13 +275,15 @@ class IndexFeedSyncService(
 
     private suspend fun pullLists(snap: QuerySnapshot) {
         var applied = 0
+        val key = documentEncryptor.getKey()
         for (doc in snap.documents) {
             val remote = try { doc.data<ListDocument>() } catch (e: Exception) {
                 log.w(e) { "skip list ${doc.id}: deser failed" }; continue
             }
             val local = listRepo.getById(doc.id)
             if (local == null || remote.updatedAt > local.updatedAt) {
-                listRepo.upsertLocal(doc.id, remote)
+                val (resolved, locked) = resolveList(doc.id, remote, key)
+                listRepo.upsertLocal(doc.id, resolved, locked)
                 mutex.withLock { listLastApplied[doc.id] = remote.updatedAt }
                 applied++
             }
@@ -263,6 +300,41 @@ class IndexFeedSyncService(
         }
         if (applied > 0 || removed > 0) {
             log.i { "lists pull: applied=$applied removed=$removed" }
+        }
+    }
+
+    // ── decrypt-or-lock (mirrors RecordingProcessingQueue.ingestRemoteRecording) ──
+    //
+    // For an encrypted doc: decrypt when we have the key; otherwise store the
+    // row LOCKED (cleartext structural fields + blanked content from the doc).
+    // A locked row renders a "🔒 Encrypted" placeholder and is never re-pushed.
+    // Cleartext docs (encryption off, seed lists, legacy) pass through unlocked.
+
+    private fun resolveItem(id: String, remote: ItemDocument, key: String?): Pair<ItemDocument, Boolean> {
+        if (remote.encrypted == null) return remote to false
+        if (key == null) {
+            log.w { "Encrypted item $id but no key — storing locked" }
+            return remote to true
+        }
+        return try {
+            documentEncryptor.decryptItem(remote, key) to false
+        } catch (e: Exception) {
+            log.w(e) { "Item $id decrypt failed — storing locked" }
+            remote to true
+        }
+    }
+
+    private fun resolveList(id: String, remote: ListDocument, key: String?): Pair<ListDocument, Boolean> {
+        if (remote.encrypted == null) return remote to false
+        if (key == null) {
+            log.w { "Encrypted list $id but no key — storing locked" }
+            return remote to true
+        }
+        return try {
+            documentEncryptor.decryptList(remote, key) to false
+        } catch (e: Exception) {
+            log.w(e) { "List $id decrypt failed — storing locked" }
+            remote to true
         }
     }
 }

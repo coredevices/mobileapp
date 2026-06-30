@@ -11,9 +11,11 @@ import android.media.MediaPlayer
 import co.touchlab.kermit.Logger
 import coredevices.util.AudioEncoding
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
@@ -35,7 +37,13 @@ actual class AudioPlayer : AutoCloseable, KoinComponent {
     private var audioTrack: AudioTrack? = null
     private var mediaPlayer: MediaPlayer? = null
     private var streamJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Default)
+    // Reading the playback Source can throw (e.g. a closed/unreadable Source). Without a handler
+    // that would escape the launched coroutine and crash the whole app, so swallow it here.
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        logger.e(throwable) { "Playback failed" }
+        playbackState.value = PlaybackState.Stopped
+    }
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob() + exceptionHandler)
     private val released = AtomicBoolean(false)
     private val context: Context by inject()
     private val audioManager get() = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -47,33 +55,39 @@ actual class AudioPlayer : AutoCloseable, KoinComponent {
         }
         val buffer = ByteArray(sampleRate.toInt()*2)
         var bytesTotal = 0
-        samples.use {
-            while (!samples.exhausted()) {
-                val bytesRead = it.readAtMostTo(buffer)
-                try {
-                    runInterruptible {
-                        track.write(buffer, 0, bytesRead)
-                    }
-                    bytesTotal += bytesRead
-                    val percentage = bytesTotal.toDouble() / sizeHint
-                    playbackState.value = PlaybackState.Playing(percentage)
-                } catch (e: IOException) {
-                    logger.w(e) { "AudioTrack closed unexpectedly, released: ${released.get()}" }
-                    return@use
-                } catch (e: IllegalStateException) {
-                    if (e !is CancellationException) {
+        // Reading the Source (exhausted()/readAtMostTo) sits outside the per-write try/catch and can
+        // throw for a closed/unreadable source. Stop the track in finally so it doesn't stay in
+        // PLAYING state if reading fails and the exception propagates to the scope's handler.
+        try {
+            samples.use {
+                while (!samples.exhausted()) {
+                    val bytesRead = it.readAtMostTo(buffer)
+                    try {
+                        runInterruptible {
+                            track.write(buffer, 0, bytesRead)
+                        }
+                        bytesTotal += bytesRead
+                        val percentage = bytesTotal.toDouble() / sizeHint
+                        playbackState.value = PlaybackState.Playing(percentage)
+                    } catch (e: IOException) {
                         logger.w(e) { "AudioTrack closed unexpectedly, released: ${released.get()}" }
-                    } else {
-                        throw e
+                        return@use
+                    } catch (e: IllegalStateException) {
+                        if (e !is CancellationException) {
+                            logger.w(e) { "AudioTrack closed unexpectedly, released: ${released.get()}" }
+                        } else {
+                            throw e
+                        }
+                        return@use
                     }
-                    return@use
                 }
             }
+        } finally {
+            try {
+                track.stop()
+            } catch (_: Exception) {} // Best-effort stop, we might be here because track is released
         }
-        try {
-            track.stop()
-            playbackState.value = PlaybackState.Stopped
-        } catch (_: Exception) {} // Best-effort stop, we might be here because track is released
+        playbackState.value = PlaybackState.Stopped
     }
 
     actual fun playRaw(

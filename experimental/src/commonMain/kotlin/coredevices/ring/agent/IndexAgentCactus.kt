@@ -12,6 +12,7 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
+import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.util.CoreConfigFlow
@@ -61,19 +62,26 @@ class IndexAgentCactus(
     }
 
     // Use SHORT tool names (e.g. "create_note") not composite names
-    // (e.g. "builtin_note.create_note") because Needle's constrained decoding
+    // (e.g. "builtin_clock__set_alarm") because Needle's constrained decoding
     // grammar is built from these names and the model was trained on short names.
+    // Strip any "integration__tool" prefix defensively so the model only ever
+    // runs inference on the secondary part, regardless of how the tool is named.
     private fun prepareTools(tools: List<McpSessionTool>): CactusTools {
         val parentMap = mutableMapOf<String, String>()
+        // TODO(RING-84): the local Cactus model isn't trained on the calendar tool yet, so it is
+        //  only exposed via the online Nenya agent for now. Remove this filter once the on-device
+        //  model supports calendar event creation.
+        val tools = tools.filterNot { it.integrationName == CalendarServlet.NAME }
         val toolsJson = buildJsonArray {
             tools.forEach { (parentName, tool) ->
                 val definition = tool.definition
                 val required = definition.inputSchema.required ?: emptyList()
-                parentMap[definition.name] = parentName
+                val shortName = definition.name.substringAfter("__")
+                parentMap[shortName] = parentName
                 add(buildJsonObject {
                     put("type", "function")
                     put("function", buildJsonObject {
-                        put("name", definition.name)
+                        put("name", shortName)
                         put("description", definition.description ?: "")
                         put("parameters", buildJsonObject {
                             put("type", "object")

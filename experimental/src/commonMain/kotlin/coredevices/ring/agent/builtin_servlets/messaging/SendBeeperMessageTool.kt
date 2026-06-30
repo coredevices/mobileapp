@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.messaging
 
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -8,7 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
 expect class SendBeeperMessageTool() : BuiltInMcpTool {
-    override suspend fun call(jsonInput: String): ToolCallResult
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult
 }
 
 @Serializable

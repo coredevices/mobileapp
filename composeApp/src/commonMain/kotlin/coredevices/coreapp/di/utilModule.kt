@@ -30,10 +30,11 @@ import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
+import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.OpenAiTranscriptionService
 import coredevices.util.transcription.TranscriptionService
-import coredevices.util.transcription.WisprFlowTranscriptionService
+import coredevices.util.transcription.WisprFlowRESTTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -89,9 +90,6 @@ val utilModule = module {
     single {
         CactusTranscriptionService(
             get(),
-            get(),
-            get(),
-            get(),
             getOrNull<CactusModelPathProvider>() ?: object : CactusModelPathProvider {
                 override suspend fun getSTTModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
                 override suspend fun getLMModelPath(): String = throw IllegalStateException("CactusModelPathProvider not available")
@@ -105,8 +103,11 @@ val utilModule = module {
             get(),
             getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
         )
+    }
+    single {
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get())
     } bind TranscriptionService::class
-    singleOf(::WisprFlowTranscriptionService)
+    singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)
     singleOf(::OpenAiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get()) }

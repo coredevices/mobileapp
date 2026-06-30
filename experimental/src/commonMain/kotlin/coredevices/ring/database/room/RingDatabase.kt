@@ -84,7 +84,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 30,
+    version = 31,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -115,6 +115,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 27, to = 28, Migrate27To28::class),
         AutoMigration(from = 28, to = 29, Migrate27To28::class),
         AutoMigration(from = 29, to = 30),
+        // 30→31: adds CachedItem.locked / CachedList.locked (encrypted-without-key rows).
+        AutoMigration(from = 30, to = 31),
     ]
 )
 @TypeConverters(Converters::class)

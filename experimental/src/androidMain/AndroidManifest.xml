@@ -40,6 +40,8 @@
             <action android:name="android.intent.action.SET_TIMER"/>
         </intent>
         <package android:name="com.beeper.android"/>
+        <!-- Tasker integration checks for/launches the Tasker app (package visibility, Android 11+). -->
+        <package android:name="net.dinglisch.android.taskerm"/>
     </queries>
     <application>
         <receiver android:name=".glance.VoiceWidgetReceiver"

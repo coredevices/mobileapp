@@ -10,7 +10,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.io.IOException
-import kotlin.time.Duration
 
 class FakeTranscriptionService : TranscriptionService {
     private val behaviorQueue = ArrayDeque<Behavior>()
@@ -20,6 +19,8 @@ class FakeTranscriptionService : TranscriptionService {
         data class Success(val text: String = "Hello world") : Behavior()
         data object NetworkError : Behavior()
         data object NoSpeech : Behavior()
+        /** Simulates the single native model handle being busy with another in-progress transcription. */
+        data object Busy : Behavior()
     }
 
     fun enqueue(vararg behaviors: Behavior) {
@@ -36,7 +37,6 @@ class FakeTranscriptionService : TranscriptionService {
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
-        timeout: Duration,
     ): Flow<TranscriptionSessionStatus> = flow {
         val behavior = behaviorQueue.removeFirst()
         when (behavior) {
@@ -48,6 +48,9 @@ class FakeTranscriptionService : TranscriptionService {
             }
             is Behavior.NoSpeech -> {
                 throw TranscriptionException.NoSpeechDetected("silence")
+            }
+            is Behavior.Busy -> {
+                throw TranscriptionException.TranscriptionInProgress()
             }
         }
     }

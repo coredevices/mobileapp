@@ -1,6 +1,7 @@
 package coredevices.mcp.client
 
 import coredevices.mcp.McpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.McpPrompt
 import coredevices.mcp.data.ToolCallResult
 import kotlinx.serialization.json.JsonElement
@@ -11,7 +12,7 @@ interface McpIntegration {
     suspend fun connect()
     suspend fun close()
     suspend fun listTools(): List<McpTool>
-    suspend fun callTool(toolName: String, json: Map<String, JsonElement>): ToolCallResult
+    suspend fun callTool(toolName: String, json: Map<String, JsonElement>, context: SessionContext): ToolCallResult
     suspend fun getExtraContext(): String?
 }
 

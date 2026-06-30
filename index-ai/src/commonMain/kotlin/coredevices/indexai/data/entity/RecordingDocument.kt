@@ -18,6 +18,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 
+@Serializable
 @Entity(
     indices = [
         Index(value = ["firestoreId"], unique = true),
@@ -26,9 +27,11 @@ import kotlin.time.Instant
 )
 data class LocalRecording(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @Serializable(with = TolerantInstantSerializer::class)
     val localTimestamp: Instant = Clock.System.now(),
     val firestoreId: String? = null,
     @ColumnInfo(defaultValue = "0")
+    @Serializable(with = TolerantInstantSerializer::class)
     val updated: Instant = Clock.System.now(),
     val assistantTitle: String? = null,
     // Epoch-millis `updated` of the last copy successfully pushed to Firestore.
@@ -51,6 +54,7 @@ data class LocalRecording(
     }
 }
 
+@Serializable
 @Entity(
     foreignKeys = [
         ForeignKey(
@@ -69,6 +73,7 @@ data class LocalRecording(
 data class RecordingEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val recordingId: Long,
+    @Serializable(with = TolerantInstantSerializer::class)
     val timestamp: Instant = Clock.System.now(),
     /**
      * The file name of the recording in Firebase Storage (under the user's recordings directory).

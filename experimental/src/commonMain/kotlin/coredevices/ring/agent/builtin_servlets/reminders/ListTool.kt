@@ -5,6 +5,8 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
+import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.database.room.repository.ListRepository
@@ -82,12 +84,32 @@ class ListTool: BuiltInMcpTool(
         val id: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val listItemArgs = JsonSnake.decodeFromString<ListItemArgs>(jsonInput)
         val instant = listItemArgs.reminder_date_time_human?.let {
             val tz = TimeZone.currentSystemDefault()
-            val parser = HumanDateTimeParser(timeZone = tz)
+            // Anchor time resolution to when the user actually spoke. When that's unknown, only
+            // absolute times can fall back to the current clock; relative ones are refused.
+            val timeBase = context.timeBase
+            val anchor = timeBase ?: Clock.System.now()
+            val parser = HumanDateTimeParser(clock = anchor.asFrozenClock(), timeZone = tz)
             val parsed = parser.parse(listItemArgs.reminder_date_time_human)
+            if (timeBase == null && parsed is InterpretedDateTime.Relative) {
+                return ToolCallResult(
+                    JsonSnake.encodeToString(
+                        ListAddResult(
+                            success = false,
+                            errorMessage = "Cannot resolve relative time '$it': the recording's " +
+                                    "original time is unknown. Use an absolute time, or create " +
+                                    "the item without a reminder time."
+                        )
+                    ),
+                    SemanticResult.GenericFailure(
+                        "Couldn't determine when the recording was made",
+                        llmRecoverable = true
+                    )
+                )
+            }
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
                     logger.d { "Parsed absolute date: $parsed will assume 9am" }
@@ -102,7 +124,7 @@ class ListTool: BuiltInMcpTool(
                 }
                 is InterpretedDateTime.AbsoluteTime -> {
                     logger.d { "Parsed absolute time: $parsed" }
-                    val currentTime = Clock.System.now().toLocalDateTime(tz)
+                    val currentTime = anchor.toLocalDateTime(tz)
                     if (parsed.time < currentTime.time) {
                         // If the time has already passed today, assume it's for tomorrow
                         logger.d { "Parsed time has already passed today, assuming it's for tomorrow" }
@@ -120,8 +142,7 @@ class ListTool: BuiltInMcpTool(
                 }
                 is InterpretedDateTime.Relative -> {
                     logger.d { "Parsed relative date time: $parsed" }
-                    val currentTime = Clock.System.now()
-                    (currentTime + parsed.duration).toLocalDateTime(tz)
+                    (anchor + parsed.duration).toLocalDateTime(tz)
                 }
                 null -> {
                     logger.e { "Failed to parse date time: '${listItemArgs.reminder_date_time_human}'" }

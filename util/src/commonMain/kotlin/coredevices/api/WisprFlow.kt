@@ -85,6 +85,27 @@ data class WisprCommitMessage(
     val totalPackets: Int,
 )
 
+// REST API (https://api-docs.wisprflow.ai/rest_api_transcribe) messages
+
+@Serializable
+data class WisprTranscribeRequest(
+    /** Base64 encoded, 16kHz WAV audio. Max 25MB / 6 minutes. */
+    val audio: String,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val language: List<String>? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val context: WisprContext? = null,
+)
+
+@Serializable
+data class WisprTranscribeResponse(
+    val id: String? = null,
+    val text: String? = null,
+    val detectedLanguage: String? = null,
+    val totalTime: Double? = null,
+    val generatedTokens: Int? = null,
+)
+
 @Serializable
 data class WisprResponseBody(
     val text: String? = null,

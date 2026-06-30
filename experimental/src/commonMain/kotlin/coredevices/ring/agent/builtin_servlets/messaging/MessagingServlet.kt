@@ -23,4 +23,18 @@ object MessagingServlet: BuiltInMcpIntegration(
             emptyList()
         }
     }
+
+    override suspend fun getExtraContext(): String? {
+        return if (prefs.approvedBeeperContacts.value.isNotEmpty()) {
+            buildString {
+                appendLine(super.getExtraContext())
+                appendLine("Approved contacts for ${SendBeeperMessageToolConstants.TOOL_NAME}:")
+                prefs.approvedBeeperContacts.value.forEach { contact ->
+                    appendLine("- ${contact.name} ${contact.nickname?.let { "(Nickname: $it)" } ?: ""}".trim())
+                }
+            }
+        } else {
+            super.getExtraContext()
+        }
+    }
 }
