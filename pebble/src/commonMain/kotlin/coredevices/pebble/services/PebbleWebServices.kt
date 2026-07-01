@@ -254,12 +254,19 @@ interface PebbleWebServices {
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
     suspend fun fetchPebbleAppStoreHomes(hardwarePlatform: WatchType?, useCache: Boolean): Map<AppType, AppStoreHomeResult?>
     suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<Pair<AppstoreSource, StoreSearchResult>>
+    suspend fun resolveAppstoreDeepLink(appId: String, sourceHint: String? = null): AppstoreDeepLinkResolution?
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
     suspend fun addToLocker(entry: CommonAppType.Store, timelineToken: String?): Boolean
     suspend fun removeFromLegacyLocker(id: Uuid): Boolean
     suspend fun fetchUserHearts()
     suspend fun getWeather(latitude: Double, longitude: Double, units: WeatherUnit, language: String): WeatherResponse?
 }
+
+data class AppstoreDeepLinkResolution(
+    val appId: String,
+    val source: AppstoreSource,
+    val duplicateSources: List<AppstoreSource>,
+)
 
 class RealPebbleWebServices(
     private val httpClient: PebbleHttpClient,
@@ -429,6 +436,44 @@ class RealPebbleWebServices(
         }.awaitAll().filterNotNull()
     }
 
+    override suspend fun resolveAppstoreDeepLink(
+        appId: String,
+        sourceHint: String?,
+    ): AppstoreDeepLinkResolution? {
+        val sources = appstoreDeepLinkSources(
+            sources = getAllSources(enabledOnly = false),
+            sourceHint = sourceHint,
+        )
+        if (sources.isEmpty()) {
+            logger.w { "No appstore sources matched deep link source hint: $sourceHint" }
+            return null
+        }
+        val matches = coroutineScope {
+            sources.map { source ->
+                async {
+                    val found = appstoreServiceForSource(source)
+                        .fetchAppStoreApp(appId, hardwarePlatform = null, useCache = true)
+                        ?.data
+                        ?.isNotEmpty() == true
+                    if (found) source else null
+                }
+            }.awaitAll().filterNotNull()
+        }
+        val source = matches.firstOrNull() ?: return null
+        if (matches.size > 1) {
+            logger.w {
+                "Appstore deep link id $appId matched multiple sources: " +
+                        matches.joinToString { it.url } +
+                        ". Using ${source.url}"
+            }
+        }
+        return AppstoreDeepLinkResolution(
+            appId = appId,
+            source = source,
+            duplicateSources = matches.drop(1),
+        )
+    }
+
     override suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int, pageSize: Int): List<Pair<AppstoreSource, StoreSearchResult>> {
 //        val params = SearchMethodParams()
         val sources = getAllSources()
@@ -463,6 +508,40 @@ class RealPebbleWebServices(
 //        logger.v { "search response: $response" }
     }
 }
+
+internal fun appstoreDeepLinkSources(
+    sources: List<AppstoreSource>,
+    sourceHint: String?,
+): List<AppstoreSource> {
+    val candidates = sourceHint
+        ?.takeIf { it.isNotBlank() }
+        ?.let { hint -> sources.filter { it.matchesAppstoreDeepLinkHint(hint) } }
+        ?: sources
+
+    return candidates.sortedWith(
+        compareBy<AppstoreSource> { source ->
+            when (source.url.normalizedAppstoreSourceUrl()) {
+                PEBBLE_FEED_URL -> 0
+                REBBLE_FEED_URL -> 1
+                else -> 2
+            }
+        }.thenBy { it.id }
+    )
+}
+
+private fun AppstoreSource.matchesAppstoreDeepLinkHint(hint: String): Boolean {
+    val normalizedHint = hint.trim().trimEnd('/').lowercase()
+    val targetUrl = when (normalizedHint) {
+        "pebble", "repebble" -> PEBBLE_FEED_URL
+        "rebble" -> REBBLE_FEED_URL
+        else -> normalizedHint
+    }.normalizedAppstoreSourceUrl()
+
+    return url.normalizedAppstoreSourceUrl() == targetUrl ||
+            title.trim().lowercase() == normalizedHint
+}
+
+private fun String.normalizedAppstoreSourceUrl(): String = trim().trimEnd('/').lowercase()
 
 data class AppStoreHomeResult(
     val source: AppstoreSource,
