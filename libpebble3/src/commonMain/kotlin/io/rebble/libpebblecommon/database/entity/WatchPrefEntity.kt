@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting.Companion.toJson
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
@@ -66,6 +67,11 @@ data class WatchPrefItem(
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w { "Don't know how to encode watch pref key: $id" }
+            return null
+        }
+        if (type.isBacklightColorScheduleHelperPref() &&
+            !params.capabilities.contains(ProtocolCapsFlag.SupportsBacklightColorSchedule)) {
+            logger.d { "Skipping $id: watch does not support backlight color scheduling" }
             return null
         }
         logger.v { "trying to insert watch pref to watch blobdb: $id / $value" }
@@ -130,6 +136,13 @@ data class WatchPrefItem(
     override fun timestamp(): Instant {
         return timestamp.instant
     }
+}
+
+fun WatchPref<*>.isBacklightColorScheduleHelperPref(): Boolean {
+    return this == BoolWatchPref.BacklightColorDayNightEnabled ||
+            this == RgbColorWatchPref.BacklightColorNight ||
+            this == NumberWatchPref.BacklightColorSunriseMinute ||
+            this == NumberWatchPref.BacklightColorSunsetMinute
 }
 
 enum class WatchPrefType {
@@ -203,6 +216,12 @@ enum class BoolWatchPref(
     Backlight("lightEnabled", "Backlight", true),
     AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
     BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
+    BacklightColorDayNightEnabled(
+        id = "lightColorDayNightEnabled",
+        displayName = "Change Backlight Color at night",
+        defaultValue = false,
+        description = null,
+    ),
     DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true, description = "Adjust backlight intensity automatically to match environment (using light sensor)"),
     LanguageEnglish("langEnglish", "Language: English", false),
     TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
@@ -524,6 +543,26 @@ enum class NumberWatchPref(
         max = 30,
         unit = "minutes",
     ),
+    BacklightColorSunriseMinute(
+        id = "lightColorSunriseMinute",
+        displayName = "Backlight Color Sunrise Minute",
+        defaultValue = 6L * 60,
+        type = WatchPrefType.TypeUInt16,
+        min = 0,
+        max = 1439,
+        unit = "minutes",
+        isDebugSetting = true,
+    ),
+    BacklightColorSunsetMinute(
+        id = "lightColorSunsetMinute",
+        displayName = "Backlight Color Sunset Minute",
+        defaultValue = 18L * 60,
+        type = WatchPrefType.TypeUInt16,
+        min = 0,
+        max = 1439,
+        unit = "minutes",
+        isDebugSetting = true,
+    ),
     NotificationTimeoutMs(
         id = "notifWindowTimeout",
         displayName = "Notification Timeout",
@@ -577,6 +616,13 @@ enum class RgbColorWatchPref(
         defaultValue = LED_WARM_WHITE_RGB,
         presets = BACKLIGHT_COLOR_PRESETS,
         description = "LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)",
+    ),
+    BacklightColorNight(
+        id = "lightColorNight",
+        displayName = "Night",
+        defaultValue = LED_WARM_WHITE_RGB,
+        presets = BACKLIGHT_COLOR_PRESETS,
+        description = null,
     ),
     ;
 

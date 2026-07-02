@@ -3,6 +3,8 @@ package coredevices.pebble.weather
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.pebble.backlight.BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY
+import coredevices.pebble.backlight.backlightScheduleMinuteOfDay
 import coredevices.database.WeatherLocationDao
 import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.services.PebbleWebServices
@@ -13,6 +15,9 @@ import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.GeocoderResult
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
+import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -24,6 +29,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.datetime.TimeZone
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
@@ -94,6 +101,8 @@ class WeatherFetcher(
             weatherAppData(location, units)
                 ?: WeatherLocationData.WeatherLocationDataFailed(location.location.key)
         }
+        val today = fetchedData.pinDataForForecast(0)
+        writeBacklightColorScheduleFromWeather(today.backlightScheduleForecast())
         if (pinsEnabled) {
             createTimelinePins(fetchedData)
         }
@@ -136,12 +145,58 @@ class WeatherFetcher(
     )
 
     private fun createTimelinePins(weather: List<LocationWithData>) {
-        val today = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(0)) }
-        val tomorrow = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(1)) }
-        val dayAfterTomorrow = weather.map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(2)) }
+        val today = weather.pinDataForForecast(0)
+        val tomorrow = weather.pinDataForForecast(1)
+        val dayAfterTomorrow = weather.pinDataForForecast(2)
         createTimelinePins(today, Day.Today)
         createTimelinePins(tomorrow, Day.Tomorrow)
         createTimelinePins(dayAfterTomorrow, Day.DayAfterTomorrow)
+    }
+
+    private fun List<LocationWithData>.pinDataForForecast(index: Int): List<PinData> {
+        return map { PinData(it.location, it.data?.fcstdaily7?.data?.forecasts?.getOrNull(index)) }
+    }
+
+    private fun List<PinData>.backlightScheduleForecast(): DailyForecast? {
+        val currentLocation = firstOrNull { it.location.currentLocation }
+        if (currentLocation != null) {
+            return currentLocation.forecast
+        }
+        return firstOrNull { it.forecast != null }?.forecast
+    }
+
+    private suspend fun writeBacklightColorScheduleFromWeather(forecast: DailyForecast?) {
+        if (!settings.getBoolean(BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY, false)) {
+            return
+        }
+        forecast ?: return
+
+        val timeZone = backlightWeatherScheduleTimeZone() ?: return
+        val sunriseMinute = backlightScheduleMinuteOfDay(forecast.sunrise, timeZone)
+        val sunsetMinute = backlightScheduleMinuteOfDay(forecast.sunset, timeZone)
+        if (sunriseMinute == sunsetMinute) {
+            return
+        }
+
+        libPebble.setWatchPref(
+            WatchPreference(NumberWatchPref.BacklightColorSunriseMinute, sunriseMinute.toLong())
+        )
+        libPebble.setWatchPref(
+            WatchPreference(NumberWatchPref.BacklightColorSunsetMinute, sunsetMinute.toLong())
+        )
+    }
+
+    private suspend fun backlightWeatherScheduleTimeZone(): TimeZone? {
+        val watchPrefs = libPebble.watchPrefs.first()
+        val manualTimezone = watchPrefs
+            .firstOrNull { it.pref == BoolWatchPref.TimezoneSourceIsManual }
+            ?.let { BoolWatchPref.TimezoneSourceIsManual.castParent(it).valueOrDefault() }
+            ?: BoolWatchPref.TimezoneSourceIsManual.defaultValue
+        if (manualTimezone) {
+            logger.i { "Not updating weather backlight schedule while watch timezone is configured manually" }
+            return null
+        }
+        return TimeZone.currentSystemDefault()
     }
 
     private fun weatherAppData(locationWithData: LocationWithData, units: WeatherUnit): WeatherLocationData? {

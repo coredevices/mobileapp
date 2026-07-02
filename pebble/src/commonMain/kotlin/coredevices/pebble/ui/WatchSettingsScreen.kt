@@ -116,6 +116,7 @@ import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfigProvider
 import coredevices.pebble.account.PebbleAccount
+import coredevices.pebble.backlight.BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.rememberLibPebble
@@ -468,6 +469,16 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
     val weatherFetcher: WeatherFetcher = koinInject()
+    var useWeatherBacklightSchedule by remember {
+        mutableStateOf(settings.getBoolean(BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY, false))
+    }
+    val weatherBacklightScheduleAvailable = coreConfig.fetchWeather
+    LaunchedEffect(weatherBacklightScheduleAvailable) {
+        if (!weatherBacklightScheduleAvailable && useWeatherBacklightSchedule) {
+            useWeatherBacklightSchedule = false
+            settings.putBoolean(BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY, false)
+        }
+    }
     val watches by libPebble.watches.collectAsState(null)
     val watchesCastable = watches ?: return null
     val anyWatchSupportsSettingsSync = remember(watchesCastable) {
@@ -477,7 +488,25 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             )
         }
     }
-    val watchPrefs = watchPrefs()
+    val anyWatchSupportsBacklightColorSchedule = remember(watchesCastable) {
+        watchesCastable.any {
+            it is KnownPebbleDevice && it.capabilities.contains(
+                ProtocolCapsFlag.SupportsBacklightColorSchedule
+            )
+        }
+    }
+    val watchPrefs = watchPrefs(
+        hasDayNightBacklightSupport = anyWatchSupportsBacklightColorSchedule,
+        weatherScheduleAvailable = weatherBacklightScheduleAvailable,
+        useWeatherSchedule = useWeatherBacklightSchedule,
+        onUseWeatherScheduleChanged = { enabled ->
+            useWeatherBacklightSchedule = enabled
+            settings.putBoolean(BACKLIGHT_COLOR_USE_WEATHER_SCHEDULE_SETTINGS_KEY, enabled)
+            if (enabled) {
+                GlobalScope.launch { weatherFetcher.fetchWeather(this) }
+            }
+        },
+    )
     val coreAnalytics: CoreAnalytics = koinInject()
     val platformHealthSync: PlatformHealthSync = koinInject()
     val healthSyncTracker: HealthSyncTracker = koinInject()

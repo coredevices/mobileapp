@@ -1,23 +1,33 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.pebble.backlight.formatBacklightScheduleMinute
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.ConfirmDialog
 import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import io.rebble.libpebblecommon.SystemAppIDs.BACKLIGHT_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.HEALTH_APP_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.MOTION_BACKLIGHT_UUID
@@ -35,9 +45,12 @@ import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
 import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefEnum
+import io.rebble.libpebblecommon.database.entity.isBacklightColorScheduleHelperPref
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import kotlinx.coroutines.flow.map
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 // Snap the notification timeout slider to 30-second increments (20 stops across 0..600s)
@@ -45,18 +58,52 @@ import kotlin.uuid.Uuid
 private const val NOTIFICATION_TIMEOUT_STEP_COUNT = 19
 
 @Composable
-fun watchPrefs(): List<SettingsItem> {
+fun watchPrefs(
+    hasDayNightBacklightSupport: Boolean,
+    weatherScheduleAvailable: Boolean,
+    useWeatherSchedule: Boolean,
+    onUseWeatherScheduleChanged: (Boolean) -> Unit,
+): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions) {
-        settings.map { item ->
+    val mapped = remember(
+        settings,
+        quickLaunchOptions,
+        hasDayNightBacklightSupport,
+        weatherScheduleAvailable,
+        useWeatherSchedule,
+        onUseWeatherScheduleChanged,
+    ) {
+        val settingsByPref = settings.associateBy { it.pref }
+        val manualTimezone = preference(settingsByPref, BoolWatchPref.TimezoneSourceIsManual).valueOrDefault()
+        val weatherBacklightScheduleAvailable = weatherScheduleAvailable && !manualTimezone
+        settings.mapNotNull { item ->
+            if (item.pref.isBacklightColorScheduleHelperPref()) {
+                return@mapNotNull null
+            }
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
                 is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
                 is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
-                is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
+                is RgbColorWatchPref -> {
+                    if (pref == RgbColorWatchPref.BacklightColor && hasDayNightBacklightSupport) {
+                        backlightColorCompositePref(
+                            dayColor = preference(settingsByPref, RgbColorWatchPref.BacklightColor),
+                            nightColor = preference(settingsByPref, RgbColorWatchPref.BacklightColorNight),
+                            enabled = preference(settingsByPref, BoolWatchPref.BacklightColorDayNightEnabled),
+                            sunrise = preference(settingsByPref, NumberWatchPref.BacklightColorSunriseMinute),
+                            sunset = preference(settingsByPref, NumberWatchPref.BacklightColorSunsetMinute),
+                            weatherScheduleAvailable = weatherBacklightScheduleAvailable,
+                            useWeatherSchedule = useWeatherSchedule,
+                            onUseWeatherScheduleChanged = onUseWeatherScheduleChanged,
+                            libPebble = libPebble,
+                        )
+                    } else {
+                        rgbColorPref(pref.castParent(item), libPebble)
+                    }
+                }
                 is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
             }
         }
@@ -97,6 +144,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.Backlight -> Section.Display
     BoolWatchPref.AmbientLightSensor -> Section.Display
     BoolWatchPref.BacklightMotion -> Section.Display
+    BoolWatchPref.BacklightColorDayNightEnabled -> Section.Display
     BoolWatchPref.DynamicBacklightIntensity -> Section.Display
     BoolWatchPref.LanguageEnglish -> Section.Other
 //    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
@@ -106,9 +154,12 @@ fun WatchPref<*>.section(): Section = when (this) {
     EnumWatchPref.BacklightIntensity -> Section.Display
     EnumWatchPref.BacklightTouch -> Section.Display
     RgbColorWatchPref.BacklightColor -> Section.Display
+    RgbColorWatchPref.BacklightColorNight -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
     NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
+    NumberWatchPref.BacklightColorSunriseMinute -> Section.Display
+    NumberWatchPref.BacklightColorSunsetMinute -> Section.Display
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
@@ -137,6 +188,14 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
+}
+
+private fun <T> preference(
+    settingsByPref: Map<WatchPref<*>, WatchPreference<*>>,
+    pref: WatchPref<T>,
+): WatchPreference<T> {
+    val item = settingsByPref[pref] ?: return WatchPreference(pref, null)
+    return pref.castParent(item)
 }
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
@@ -302,6 +361,229 @@ private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): Set
         },
         isDebugSetting = pref.isDebugSetting,
     )
+}
+
+private fun backlightColorCompositePref(
+    dayColor: WatchPreference<UInt>,
+    nightColor: WatchPreference<UInt>,
+    enabled: WatchPreference<Boolean>,
+    sunrise: WatchPreference<Long>,
+    sunset: WatchPreference<Long>,
+    weatherScheduleAvailable: Boolean,
+    useWeatherSchedule: Boolean,
+    onUseWeatherScheduleChanged: (Boolean) -> Unit,
+    libPebble: LibPebble,
+): SettingsItem {
+    val dayPref = dayColor.pref as RgbColorWatchPref
+    val nightPref = nightColor.pref as RgbColorWatchPref
+    val isEnabled = enabled.valueOrDefault()
+    val weatherScheduleChecked = useWeatherSchedule && weatherScheduleAvailable
+    return SettingsItem(
+        id = dayPref.id,
+        title = dayPref.displayName,
+        topLevelType = TopLevelType.Watch,
+        section = Section.Display,
+        item = {
+            ListItem(
+                headlineContent = { Text("Backlight Color") },
+                supportingContent = {
+                    Column {
+                        Text(
+                            "LED color used when the backlight is on, unless over-ridden by an app.",
+                            fontSize = 11.sp,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = isEnabled,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        libPebble.setWatchPref(sunrise.copy(value = sunrise.valueOrDefault()))
+                                        libPebble.setWatchPref(sunset.copy(value = sunset.valueOrDefault()))
+                                        if (weatherScheduleChecked) {
+                                            onUseWeatherScheduleChanged(true)
+                                        }
+                                    }
+                                    libPebble.setWatchPref(enabled.copy(value = checked))
+                                },
+                            )
+                            Text(
+                                BoolWatchPref.BacklightColorDayNightEnabled.displayName,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (isEnabled) {
+                            SelectRgbColor(
+                                currentRgb = dayColor.valueOrDefault(),
+                                defaultRgb = dayPref.defaultValue,
+                                presets = dayPref.presets,
+                                label = "Day",
+                                onChangeColor = { rgb ->
+                                    libPebble.setWatchPref(dayColor.copy(value = rgb))
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            SelectRgbColor(
+                                currentRgb = nightColor.valueOrDefault(),
+                                defaultRgb = nightPref.defaultValue,
+                                presets = nightPref.presets,
+                                label = "Night",
+                                onChangeColor = { rgb ->
+                                    libPebble.setWatchPref(nightColor.copy(value = rgb))
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            WeatherScheduleCheckbox(
+                                checked = weatherScheduleChecked,
+                                enabled = weatherScheduleAvailable,
+                                onCheckedChange = onUseWeatherScheduleChanged,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            SelectTimeOfDay(
+                                label = "Sunrise",
+                                minuteOfDay = sunrise.valueOrDefault(),
+                                enabled = !weatherScheduleChecked,
+                                onChangeMinute = { minute ->
+                                    libPebble.setWatchPref(sunrise.copy(value = minute))
+                                },
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            SelectTimeOfDay(
+                                label = "Sunset",
+                                minuteOfDay = sunset.valueOrDefault(),
+                                enabled = !weatherScheduleChecked,
+                                onChangeMinute = { minute ->
+                                    libPebble.setWatchPref(sunset.copy(value = minute))
+                                },
+                            )
+                        } else {
+                            SelectRgbColor(
+                                currentRgb = dayColor.valueOrDefault(),
+                                defaultRgb = dayPref.defaultValue,
+                                presets = dayPref.presets,
+                                label = "Color",
+                                onChangeColor = { rgb ->
+                                    libPebble.setWatchPref(dayColor.copy(value = rgb))
+                                },
+                            )
+                        }
+                    }
+                },
+            )
+        },
+        isDebugSetting = dayPref.isDebugSetting,
+    )
+}
+
+@Composable
+private fun WeatherScheduleCheckbox(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val label = if (enabled) {
+        "Use local sunrise and sunset"
+    } else {
+        "Use local sunrise and sunset (requires Weather enabled in Settings)"
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+        )
+        Text(
+            label,
+            color = contentColor,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun SelectTimeOfDay(
+    label: String,
+    minuteOfDay: Long,
+    enabled: Boolean,
+    onChangeMinute: (Long) -> Unit,
+) {
+    val minute = minuteOfDay.coerceIn(0, 1439)
+    val hour = (minute / 60).toInt()
+    val minutePart = (minute % 60).toInt()
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    ListItem(
+        headlineContent = { Text(label, color = contentColor) },
+        supportingContent = {
+            Text(formatBacklightScheduleMinute(minute), color = contentColor)
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TimePartDropdown(
+                    value = hour,
+                    values = 0..23,
+                    enabled = enabled,
+                    onValueSelected = { selectedHour ->
+                        onChangeMinute((selectedHour * 60 + minutePart).toLong())
+                    },
+                )
+                Text(":", color = contentColor)
+                TimePartDropdown(
+                    value = minutePart,
+                    values = 0..59,
+                    enabled = enabled,
+                    onValueSelected = { selectedMinute ->
+                        onChangeMinute((hour * 60 + selectedMinute).toLong())
+                    },
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun TimePartDropdown(
+    value: Int,
+    values: IntRange,
+    enabled: Boolean,
+    onValueSelected: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(
+            enabled = enabled,
+            onClick = { expanded = true },
+        ) {
+            Text(value.toString().padStart(2, '0'))
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            values.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.toString().padStart(2, '0')) },
+                    onClick = {
+                        expanded = false
+                        onValueSelected(option)
+                    },
+                )
+            }
+        }
+    }
 }
 
 data class QuickLaunchOption(
