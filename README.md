@@ -4,6 +4,36 @@ Welcome to the official source code for the Pebble mobile app. Download the app 
 
 This app supports ALL Pebble watches, and Pebble Index 01 rings.
 
+# Architecture
+
+**New to Pebble?** A Pebble watch runs its own firmware and its own apps/watchfaces, but has no internet connection of its own. This app is the watch's companion and gateway to the world: it holds a persistent Bluetooth connection (BLE, or Bluetooth Classic on older watches) to relay notifications, sync data (time, weather, calendar, contacts, health), install watchapps, and proxy network requests on the watch's behalf. Much of the app's job is to be a reliable background service that stays connected and answers the watch quickly.
+
+The codebase is **Kotlin Multiplatform + Compose Multiplatform**: one shared codebase — including the UI — builds both the Android and iOS apps. Almost everything lives in `commonMain`; platform-specific pieces (BLE stack, notification access, background execution) sit behind `expect`/`actual` interfaces. On iOS, `iosApp` is a thin Swift shell that embeds the shared Kotlin code as a framework via CocoaPods.
+
+Watch communication lives in `libpebble3` and follows a few core concepts:
+
+- **Pebble Protocol** — a binary, endpoint-based message protocol spoken over the Bluetooth connection. Packet definitions live in `libpebble3` under `io/rebble/libpebblecommon/packets/`.
+- **Services & endpoint managers** — both scoped to a single watch connection. Services translate raw protocol messages into typed APIs for the rest of the app; endpoint managers handle the more complex stateful flows on top of them.
+- **BlobDB** — the watch keeps small key-value databases (notifications, timeline pins, installed apps, contacts, …). The phone keeps the canonical copy of each record in a Room database and reconciles with the watch over the protocol (mostly phone → watch, with some watch-originated writebacks). The `blobannotations` + `blobdbgen` modules generate the serialization/sync plumbing via KSP.
+- **PebbleKit JS** — watchapps can include a JavaScript component that runs on the *phone*, inside this app (`js/`), giving watchapps network access and configuration UIs.
+
+Module map:
+
+| Module | What it is |
+|---|---|
+| `composeApp` | App entry point: Compose UI, navigation, DI wiring (Koin), Firebase |
+| `libpebble3` | Everything needed to talk to a Pebble watch: BLE transport, protocol, services, BlobDB sync. Also usable as a standalone library |
+| `pebble` | Pebble app features shared between platforms, above the library layer |
+| `experimental` | Pebble Index 01 (ring) support: continuous BLE scanning, voice-note recording and ingestion |
+| `index-ai` | The "Index" AI assistant and its data layer (transcription, notes) |
+| `libindex` | Index device plumbing: pairing, transfer, storage |
+| `mcp` | MCP (Model Context Protocol) client/tool integration |
+| `cactus`, `resampler`, `krisp-stubs` | Audio/ML support: on-device LLM inference, audio resampling, and API stubs for the private Krisp noise-cancellation integration |
+| `blobannotations`, `blobdbgen` | KSP annotations + code generator for BlobDB records |
+| `util` | Shared utilities (logging, IO, …) |
+
+Stack at a glance: Koin (DI), Ktor (HTTP), Room (storage), Kermit (logging), coroutines/Flow throughout.
+
 # Mobile App
 
 The cross-platform Pebble mobile app is located in `composeApp`.
