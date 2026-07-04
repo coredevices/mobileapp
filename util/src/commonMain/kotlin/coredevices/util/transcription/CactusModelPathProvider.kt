@@ -1,7 +1,8 @@
 package coredevices.util.transcription
 
 interface CactusModelPathProvider {
-    suspend fun getSTTModelPath(): String
+    /** Resolves (downloading if needed) the on-disk path for the given STT model slug. */
+    suspend fun getSTTModelPath(modelSlug: String): String
     suspend fun getLMModelPath(): String
     fun isModelDownloaded(modelName: String): Boolean
     fun getDownloadedModels(): List<String>

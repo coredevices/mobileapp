@@ -89,7 +89,7 @@ class CactusLocalCancellationTest {
                     println("[cactus-cancel] model missing at ${modelDir.absolutePath} — downloading $MODEL_NAME (one-time, hundreds of MB)…")
                     // Only the *production* provider downloads; its delete-then-download is harmless
                     // when there's no valid model to lose.
-                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath() } }
+                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath(MODEL_NAME) } }
                 }
                 modelPresent = provider.isModelDownloaded(MODEL_NAME)
                 println("[cactus-cancel] model dir=${modelDir.absolutePath} present=$modelPresent")
@@ -227,7 +227,7 @@ class CactusLocalCancellationTest {
      * never downloads or deletes, so running the tests can't wipe the on-device model.
      */
     private class ReadOnlyModelPathProvider(private val modelsDir: File) : CactusModelPathProvider {
-        override suspend fun getSTTModelPath(): String = modelsDir.resolve(MODEL_NAME).absolutePath
+        override suspend fun getSTTModelPath(modelSlug: String): String = modelsDir.resolve(modelSlug).absolutePath
         override suspend fun getLMModelPath(): String = error("LM model not used in this test")
         override fun isModelDownloaded(modelName: String): Boolean =
             modelsDir.resolve(modelName).resolve("config.txt").exists()

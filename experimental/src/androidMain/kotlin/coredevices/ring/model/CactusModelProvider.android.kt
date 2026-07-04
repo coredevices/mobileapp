@@ -4,6 +4,9 @@ import android.content.Context
 import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.ModelDownloadManager
+import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.SttModelCatalog
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.mp.KoinPlatform
@@ -39,9 +42,8 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     private val context: Context get() = KoinPlatform.getKoin().get()
     private val modelsDir: File get() = context.filesDir.resolve("models").also { it.mkdirs() }
 
-    actual override suspend fun getSTTModelPath(): String = withContext(Dispatchers.IO) {
-        val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
+    actual override suspend fun getSTTModelPath(modelSlug: String): String = withContext(Dispatchers.IO) {
+        return@withContext resolveModelPath(modelSlug, SttModelCatalog.versionFor(modelSlug))
     }
 
     actual override suspend fun getLMModelPath(): String = withContext(Dispatchers.IO) {
@@ -113,6 +115,11 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
             logger.i { "Downloading model: $url" }
 
+            // Surface byte-level progress to the shared download status so the UI can show a
+            // real percentage (the JobService itself only knows start/end). Optional: absent
+            // in contexts without the manager (e.g. tests), in which case we just don't report.
+            val downloadManager = runCatching { KoinPlatform.getKoin().get<ModelDownloadManager>() }.getOrNull()
+
             val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
             // Cancel the in-flight HTTP call if the coroutine is cancelled so a blocked
             // socket read unblocks promptly instead of hanging until readTimeout.
@@ -138,6 +145,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                     val totalBytes = body.contentLength()
                     var downloadedBytes = 0L
                     var lastLoggedPct = -1
+                    var lastReportedPct = -1
 
                     body.byteStream().use { input ->
                         FileOutputStream(tempZip).use { output ->
@@ -152,6 +160,12 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                                     if (pct / 10 > lastLoggedPct / 10) {
                                         lastLoggedPct = pct
                                         logger.d { "Download progress: $pct% ($downloadedBytes / $totalBytes)" }
+                                    }
+                                    if (pct != lastReportedPct) {
+                                        lastReportedPct = pct
+                                        downloadManager?.updateDownloadStatus(
+                                            ModelDownloadStatus.Downloading(modelName, pct / 100f)
+                                        )
                                     }
                                 }
                             }

@@ -12,7 +12,7 @@ import coredevices.util.transcription.CactusModelPathProvider
  * Each model directory contains config.txt, vocab.txt, and .weights files.
  */
 expect class CactusModelProvider() : CactusModelPathProvider {
-    override suspend fun getSTTModelPath(): String
+    override suspend fun getSTTModelPath(modelSlug: String): String
     override suspend fun getLMModelPath(): String
     override fun isModelDownloaded(modelName: String): Boolean
     override fun getDownloadedModels(): List<String>

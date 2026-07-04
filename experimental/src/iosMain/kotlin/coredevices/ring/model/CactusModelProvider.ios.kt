@@ -3,6 +3,7 @@ package coredevices.ring.model
 import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.SttModelCatalog
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
@@ -40,9 +41,8 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     private val modelsDir: String get() = "$cachesDir/models"
 
-    actual override suspend fun getSTTModelPath(): String {
-        val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
+    actual override suspend fun getSTTModelPath(modelSlug: String): String {
+        return resolveModelPath(modelSlug, SttModelCatalog.versionFor(modelSlug))
     }
 
     actual override suspend fun getLMModelPath(): String {
@@ -64,7 +64,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     actual override fun getIncompatibleModels(): List<String> {
-        val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+        val compatible = SttModelCatalog.models.map { it.slug }.toSet() + CommonBuildKonfig.CACTUS_LM_MODEL_NAME
         return getDownloadedModels().filter { it !in compatible }
     }
 

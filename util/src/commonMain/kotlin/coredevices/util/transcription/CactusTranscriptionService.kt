@@ -8,9 +8,9 @@ import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
 import coredevices.analytics.CoreAnalytics
-import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.models.SttModelCatalog
 import coredevices.util.writeWavHeader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -200,9 +200,9 @@ class CactusTranscriptionService(
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
         if (!isCactusSupported()) return
-        val sttModelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        if (!modelProvider.isModelDownloaded(sttModelName)) {
-            logger.w { "STT model '$sttModelName' not downloaded, skipping init" }
+        val selectedSlug = config.modelName ?: SttModelCatalog.defaultSlug
+        if (!modelProvider.isModelDownloaded(selectedSlug)) {
+            logger.w { "STT model '$selectedSlug' not downloaded, skipping init" }
             return
         }
         val start = Clock.System.now()
@@ -213,7 +213,7 @@ class CactusTranscriptionService(
             }
         }
         if (modelHandle == 0L) {
-            val modelPath = modelProvider.getSTTModelPath()
+            val modelPath = modelProvider.getSTTModelPath(selectedSlug)
             modelHandle = cactusInit(modelPath, null, false)
             lastInitedModel = config.modelName
             val initDuration = Clock.System.now() - start
@@ -221,7 +221,8 @@ class CactusTranscriptionService(
         }
     }
 
-    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(CommonBuildKonfig.CACTUS_STT_MODEL)
+    private fun modelExists(): Boolean =
+        modelProvider.isModelDownloaded(sttConfig.value.modelName ?: SttModelCatalog.defaultSlug)
 
     private fun performInit(): Job {
         return scope.launch(Dispatchers.IO) {

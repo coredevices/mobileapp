@@ -56,6 +56,7 @@ import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
+import coredevices.util.models.SttModelCatalog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,13 +95,15 @@ class ModelManagementScreenViewModel(
         }
     }
 
-    val currentSTTModel = coreConfigHolder.config.map { it.sttConfig.modelName }.onEach {
-        Logger.d("Current STT model changed to $it")
-    }.stateIn(
-        viewModelScope,
-        started = kotlinx.coroutines.flow.SharingStarted.Lazily,
-        initialValue = coreConfigHolder.config.value.sttConfig.modelName
-    )
+    val currentSTTModel = coreConfigHolder.config
+        .map { it.sttConfig.modelName ?: SttModelCatalog.defaultSlug }
+        .onEach {
+            Logger.d("Current STT model changed to $it")
+        }.stateIn(
+            viewModelScope,
+            started = kotlinx.coroutines.flow.SharingStarted.Lazily,
+            initialValue = coreConfigHolder.config.value.sttConfig.modelName ?: SttModelCatalog.defaultSlug
+        )
 
     sealed interface AvailableModelsState {
         object Loading : AvailableModelsState
@@ -180,11 +183,13 @@ class ModelManagementScreenViewModel(
         viewModelScope.launch {
             _availableSTTModels.value = try {
                 val models = modelManager.getAvailableSTTModels()
-                val recommendedSTTModelSlug = modelManager.getRecommendedSTTModel()
+                val catalogSlugs = SttModelCatalog.models.map { it.slug }.toSet()
                 AvailableModelsState.Success(
                     if (!settings.showDebugOptions()) {
+                        // Always surface the catalog models (both parakeets); keep
+                        // hiding legacy models unless they're already on disk.
                         models.filter {
-                            it.slug == recommendedSTTModelSlug.modelSlug || it.slug in downloadedModels.value
+                            it.slug in catalogSlugs || it.slug in downloadedModels.value
                         }
                     } else {
                         models
@@ -218,6 +223,7 @@ fun ModelDownloadPromptDialog(
     downloadSizeInMb: Int,
     onGetRecommended: () -> Unit,
     onDismiss: () -> Unit,
+    onChooseModel: (() -> Unit)? = null,
 ) {
     M3Dialog(
         onDismissRequest = onDismiss,
@@ -237,7 +243,14 @@ fun ModelDownloadPromptDialog(
                 if (isLite) {
                     Text("Download lite model: ${downloadSizeInMb}MB")
                 } else {
-                    Text("Download offline model: ${downloadSizeInMb}MB")
+                    Text("Download recommended: ${downloadSizeInMb}MB")
+                }
+            }
+            if (onChooseModel != null) {
+                TextButton(
+                    onClick = onChooseModel,
+                ) {
+                    Text("Choose a different model")
                 }
             }
             TextButton(
@@ -378,6 +391,7 @@ private fun ModelListItem(
     onDelete: () -> Unit,
     onSelect: () -> Unit,
 ) {
+    val spec = SttModelCatalog.forSlug(model.slug)
     ListItem(
         modifier = modifier
             .fillMaxWidth()
@@ -385,8 +399,10 @@ private fun ModelListItem(
                 onSelect()
             },
         overlineContent = { if (isRecommended) { Text("Recommended for your device") } },
-        headlineContent = { Text(model.slug) },
-        supportingContent = { Text("${model.sizeInMB} MB") },
+        headlineContent = { Text(spec?.displayName ?: model.slug) },
+        supportingContent = {
+            Text(spec?.let { "${it.description} · ${model.sizeInMB} MB" } ?: "${model.sizeInMB} MB")
+        },
         leadingContent = {
             RadioButton(
                 selected = isSelected && downloadState == DownloadState.Downloaded,

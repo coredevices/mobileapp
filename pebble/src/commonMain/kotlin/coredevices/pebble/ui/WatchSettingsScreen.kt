@@ -407,6 +407,19 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     pendingSTTModeDialog = null
                 }
             },
+            onChooseModel = navBarNav?.let { nav ->
+                {
+                    // Switch to the chosen local mode and let the user pick/download
+                    // a specific model instead of being forced onto the recommended one.
+                    coreConfigHolder.update(
+                        coreConfig.copy(
+                            sttConfig = coreConfig.sttConfig.copy(mode = pendingSTTMode)
+                        )
+                    )
+                    pendingSTTModeDialog = null
+                    nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
+                }
+            },
             onDismiss = {
                 pendingSTTModeDialog = null
             }
