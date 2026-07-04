@@ -74,6 +74,7 @@ class HybridTranscriptionService(
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
             CactusSTTMode.RebbleFallback -> false
+            CactusSTTMode.Disabled -> false
         }
     }
 
@@ -238,6 +239,8 @@ class HybridTranscriptionService(
             CactusSTTMode.RebbleFirst,
             CactusSTTMode.RebbleFallback ->
                 error("Rebble mode $sttMode should be handled by STTRouter, not HybridTranscriptionService")
+            CactusSTTMode.Disabled ->
+                error("Disabled mode should not reach HybridTranscriptionService")
         }
     }
 

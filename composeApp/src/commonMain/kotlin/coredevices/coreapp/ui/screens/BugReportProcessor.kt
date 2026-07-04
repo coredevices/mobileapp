@@ -150,6 +150,7 @@ class BugReportProcessor(
                 CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> "Local"
                 CactusSTTMode.RemoteOnly, CactusSTTMode.RemoteFirst -> "Remote"
                 CactusSTTMode.RebbleOnly, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback -> "Rebble"
+                CactusSTTMode.Disabled -> "Disabled"
                 null -> "None"
             }
             "\nSTT Summary\n" +
