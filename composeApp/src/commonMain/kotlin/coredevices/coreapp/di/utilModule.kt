@@ -32,9 +32,11 @@ import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
+import coredevices.util.transcription.OpenAiRemoteTranscriber
 import coredevices.util.transcription.OpenAiTranscriptionService
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowRESTTranscriptionService
+import coredevices.util.transcription.WisprFlowRemoteTranscriber
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
@@ -104,12 +106,18 @@ val utilModule = module {
             getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
         )
     }
-    single {
-        HybridTranscriptionService(get(), get(), get(), get(), get(), get())
-    } bind TranscriptionService::class
     singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)
     singleOf(::OpenAiTranscriptionService)
+    single { WisprFlowRemoteTranscriber(get(), get(), get()) }
+    single { OpenAiRemoteTranscriber(get(), get()) }
+    single {
+        HybridTranscriptionService(
+            coreConfigFlow = get(),
+            cactus = get(),
+            remoteTranscribers = setOf(get<WisprFlowRemoteTranscriber>(), get<OpenAiRemoteTranscriber>()),
+        )
+    } bind TranscriptionService::class
     single<UsersDao> { UsersDaoImpl({ get() }, get()) }
     singleOf(::HealthSyncTracker)
     singleOf(::PlatformHealthSync)
