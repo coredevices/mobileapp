@@ -1,50 +1,39 @@
 package coredevices.util.transcription
 
 import co.touchlab.kermit.Logger
-import coredevices.analytics.CoreAnalytics
 import coredevices.util.AudioEncoding
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 /**
- * Mode-aware [TranscriptionService] that routes between the local Cactus model
- * ([CactusTranscriptionService]) and the remote backends (WisprFlow with Kirinki as backup),
- * and owns the fallback behaviour for the [CactusSTTMode] options.
+ * Mode-aware [TranscriptionService] owning local↔remote fallback for the [CactusSTTMode] options.
+ * Local runs on [CactusTranscriptionService]; the remote backend is whichever injected
+ * [RemoteTranscriber] matches [coredevices.util.STTConfig.cloudProvider], so adding a cloud backend
+ * needs no change here.
  */
 class HybridTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val cactus: CactusTranscriptionService,
-    private val wisprFlow: WisprFlowRESTTranscriptionService,
-    private val kirinki: KirinkiTranscriptionService,
-    private val analytics: CoreAnalytics,
+    remoteTranscribers: Set<RemoteTranscriber>,
 ) : TranscriptionService {
     companion object {
         private val logger = Logger.withTag("HybridTranscriptionService")
-        private val wisprSkipInterval = 1.seconds
     }
+
+    private val remotesByProvider = remoteTranscribers.associateBy { it.provider }
 
     // Read fresh from the config StateFlow on every access so a runtime mode/model change takes
     // effect without restarting the app (not cached in a stateIn that nothing collects).
     private val sttConfig get() = coreConfigFlow.value.sttConfig
-
-    private val lastErrorMutex = Mutex()
-    private var lastWisprError = Instant.DISTANT_PAST
 
     private var _lastSuccessfulMode: CactusSTTMode? = null
 
@@ -64,12 +53,18 @@ class HybridTranscriptionService(
         }
     }
 
+    private fun remoteTranscriber(): RemoteTranscriber =
+        remotesByProvider[sttConfig.cloudProvider]
+            ?: error("No RemoteTranscriber registered for ${sttConfig.cloudProvider}")
+
+    private suspend fun remoteAvailable(): Boolean = remoteTranscriber().isAvailable()
+
     override suspend fun isAvailable(): Boolean {
         return when (configuredMode) {
-            CactusSTTMode.RemoteOnly -> wisprFlow.isAvailable() || kirinki.isAvailable()
+            CactusSTTMode.RemoteOnly -> remoteAvailable()
             CactusSTTMode.LocalOnly -> cactus.isLocalAvailable()
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
-                wisprFlow.isAvailable() || kirinki.isAvailable() || cactus.isModelReady
+                remoteAvailable() || cactus.isModelReady
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
@@ -83,92 +78,6 @@ class HybridTranscriptionService(
         val modelUsed: String?
     )
 
-    /**
-     * Run remote transcription via WisprFlow.
-     *
-     * When [willFallbackLocal] is false kirinki is used as a backup and timeouts are more lenient.
-     */
-    private suspend fun remoteTranscribe(
-        audio: ByteArray,
-        sampleRate: Int,
-        language: STTLanguage,
-        conversationContext: STTConversationContext?,
-        dictionaryContext: List<String>?,
-        contentContext: String?,
-        willFallbackLocal: Boolean
-    ): TranscriptionSessionStatus.Transcription {
-        // We reduce the timeout if we have the potential to fall back locally since some consumers
-        // (e.g. pebble firmware) have hard timeouts.
-        val initialTimeout = if (willFallbackLocal) 7.seconds else 10.seconds
-
-        suspend fun transcribeKirinki() = try {
-            kirinki.transcribe(
-                audioStreamFrames = flowOf(audio),
-                sampleRate = sampleRate,
-                language = language,
-                conversationContext = conversationContext,
-                dictionaryContext = dictionaryContext,
-                contentContext = contentContext
-            ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first().also {
-                analytics.logTranscriptionSuccess("kirinki")
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            analytics.logTranscriptionFailure("kirinki", transcriptionFailureReason(e), e.message)
-            throw e
-        }
-
-        // Kirinki is only used as a backup when there's no local model to fall back on. When a local
-        // fallback is available we let the caller handle it by propagating the WisprFlow failure.
-        val canUseKirinki = !willFallbackLocal && kirinki.isAvailable()
-
-        val skipWispr = lastErrorMutex.withLock {
-            // Don't skip wispr if local fallback, because cactus might still be running, we can't trust its cancellation right now due to bug
-            ((Clock.System.now() - lastWisprError) < wisprSkipInterval && canUseKirinki) && !willFallbackLocal
-        }
-        if (skipWispr) {
-            if (canUseKirinki) {
-                logger.w { "Skipping WisprFlow transcription due to recent error, using kirinki directly" }
-                return transcribeKirinki()
-            }
-            logger.w { "Skipping WisprFlow transcription due to recent error, falling back to local" }
-            throw TranscriptionException.TranscriptionServiceUnavailable("wisprflow")
-        }
-
-        return try {
-            val res = withTimeout(initialTimeout) {
-                wisprFlow.transcribe(
-                    audioStreamFrames = flowOf(audio),
-                    sampleRate = sampleRate,
-                    language = language,
-                    conversationContext = conversationContext,
-                    dictionaryContext = dictionaryContext,
-                    contentContext = contentContext
-                ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
-            }
-            lastErrorMutex.withLock {
-                lastWisprError = Instant.DISTANT_PAST
-            }
-            analytics.logTranscriptionSuccess("wisprflow")
-            res
-        } catch (e: Exception) {
-            if (e !is TimeoutCancellationException && e is CancellationException) throw e
-            analytics.logTranscriptionFailure("wisprflow", transcriptionFailureReason(e), e.message)
-            if (e is TranscriptionException.NoSpeechDetected) throw e // NoSpeechDetected is a valid result, not a failure of the service
-            lastErrorMutex.withLock {
-                lastWisprError = Clock.System.now()
-            }
-
-            if (!canUseKirinki) {
-                logger.w(e) { "WisprFlow transcription failed, propagating to caller: ${e.message}" }
-                throw e
-            }
-            logger.w(e) { "WisprFlow transcription failed, falling back to kirinki: ${e.message}" }
-            transcribeKirinki()
-        }
-    }
-
     private suspend fun route(
         audio: ByteArray,
         sampleRate: Int,
@@ -178,7 +87,7 @@ class HybridTranscriptionService(
         contentContext: String?,
     ): RoutedResult {
         suspend fun remote(willFallbackLocal: Boolean): TranscriptionSessionStatus.Transcription =
-            remoteTranscribe(
+            remoteTranscriber().transcribe(
                 audio = audio,
                 sampleRate = sampleRate,
                 language = language,
