@@ -8,6 +8,7 @@ class PebbleFeatures(
     fun supportsNotifiedOnlyFilter(): Boolean = platform == Platform.Android
     fun supportsNotificationCountSorting(): Boolean = platform == Platform.Android
     fun supportsNotificationLogging(): Boolean = platform == Platform.Android
+    fun supportsNotificationHints(): Boolean = platform == Platform.Android
     fun supportsPostTestNotification(): Boolean = platform == Platform.Android
     fun supportsDetectingOtherPebbleApps(): Boolean = platform == Platform.Android
     fun supportsBtClassic(): Boolean = platform == Platform.Android
