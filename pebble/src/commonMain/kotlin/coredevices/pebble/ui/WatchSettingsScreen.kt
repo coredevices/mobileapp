@@ -719,6 +719,40 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
+                basicSettingsToggleItem(
+                    title = "Mute phone notification effects",
+                    description = "Mutes the phone's own notification vibration/sound while the watch is connected",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.mutePhoneNotificationSoundsWhenConnected,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    mutePhoneNotificationSoundsWhenConnected = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationHints() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Mute phone call effects",
+                    description = "Mutes the phone's own call vibration/sound while the watch is connected",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.mutePhoneCallSoundsWhenConnected,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    mutePhoneCallSoundsWhenConnected = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationHints() },
+                ),
                 SettingsItem(
                     title = "Vibration Pattern",
                     topLevelType = TopLevelType.Phone,
