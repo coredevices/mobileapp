@@ -616,7 +616,7 @@ class WatchManager(
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
                     pebbleConnector.connect(
-                        previouslyConnected = device.knownWatchProps != null,
+                        previouslyConnected = device.knownWatchProps?.lastConnected != null,
                         lastError = device.connectionFailureInfo?.reason,
                     )
                     disconnectDuringConnectionJob.cancel()
