@@ -138,7 +138,7 @@ class WatchManagerTest {
         override fun init(watchInfo: WatchInfo) {
         }
 
-        override fun checkForUpdates() {
+        override fun checkForUpdates(force: Boolean) {
         }
 
         override val availableUpdates: Flow<FirmwareUpdateCheckState>
@@ -156,7 +156,7 @@ class WatchManagerTest {
 
         override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
 
-        override fun checkforFirmwareUpdate() {}
+        override fun checkforFirmwareUpdate(force: Boolean) {}
     }
     private val bluetoothStateProvider = object : BluetoothStateProvider {
         override fun init() {
@@ -198,7 +198,7 @@ class WatchManagerTest {
             TODO("Not yet implemented")
         }
 
-        override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult {
+        override suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult {
             TODO("Not yet implemented")
         }
 
