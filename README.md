@@ -137,6 +137,14 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    - Download `GoogleService-Info.plist` and place it in `iosApp/iosApp/`
    - The file should be named exactly `GoogleService-Info.plist`
 
+   If you don't need any Firebase-dependent features, you can skip the
+   Firebase account and use the provided dummy config instead (same as
+   `google-services-dummy.json` on Android):
+
+   ```bash
+   cp iosApp/iosApp/GoogleService-Info-dummy.plist iosApp/iosApp/GoogleService-Info.plist
+   ```
+
 9. **Create a git tag for app version**
 
    Create a git tag that will be used as the version of the app:
