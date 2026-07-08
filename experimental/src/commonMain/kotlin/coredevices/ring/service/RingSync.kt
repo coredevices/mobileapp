@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
@@ -61,6 +62,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TimeSource
 import kotlin.time.measureTime
 import kotlin.uuid.Uuid
@@ -149,6 +151,9 @@ class RingSync(
     private val saveSemaphore = Semaphore(permits = 8)
     private val _lastRing: MutableStateFlow<KMPHaversineSatellite?> = MutableStateFlow(null)
     val lastRing = _lastRing.asStateFlow()
+
+    private val _lastSyncedAt: MutableStateFlow<Instant?> = MutableStateFlow(null)
+    val lastSyncedAt = _lastSyncedAt.asStateFlow()
 
     private fun resample(samples: ShortArray, sampleRate: Int): ShortArray {
         val resampler = Resampler(sampleRate, TARGET_SAMPLE_RATE)
@@ -394,6 +399,25 @@ class RingSync(
                                                                     }
                                                                 }
 
+                                                                // Advancing to a new start index means any lower index still in
+                                                                // Started never had its audio delivered (the ring moved on). Fail
+                                                                // them so they reach a terminal state (MOB-8727).
+                                                                val orphaned = withContext(Dispatchers.IO) {
+                                                                    ringTransferRepository.failOrphanedStartedTransfersBelow(idx)
+                                                                }
+                                                                orphaned.forEach { orphan ->
+                                                                    trace.markEvent("past_transfer_failed",
+                                                                        TraceEventData.PastTransferFailed(
+                                                                            satellite = satelliteSerial,
+                                                                            transferId = orphan.id
+                                                                        )
+                                                                    )
+                                                                    logger.i {
+                                                                        "Advanced to index $idx, marking orphaned transfer ${orphan.id} " +
+                                                                                "(start idx ${orphan.transferInfo?.collectionStartIndex}) as failed"
+                                                                    }
+                                                                }
+
                                                                 lastIdx = idx
                                                                 val id = withContext(Dispatchers.IO) {
                                                                     ringTransferRepository.createRingTransfer(
@@ -522,6 +546,7 @@ class RingSync(
                                                     }
 
                                                     is TransferStatus.TransferComplete -> {
+                                                        _lastSyncedAt.value = Clock.System.now()
                                                         val range = transferRange
                                                         trace.markEvent("transfer_completed",
                                                             TraceEventData.TransferCompleted(
@@ -609,11 +634,15 @@ class RingSync(
                                                                     }
                                                                 },
                                                         )
-                                                        if (audioDuration >= 1.5) {
+                                                        if (audioDuration >= 1.0) {
                                                             withContext(Dispatchers.IO) {
                                                                 ringTransferRepository.updateTransferInfo(
                                                                     transfer.id,
                                                                     transferInfo
+                                                                )
+                                                                ringTransferRepository.updateTransferStatus(
+                                                                    transfer.id,
+                                                                    RingTransferStatus.Saving
                                                                 )
                                                             }
                                                             logger.d { "Saving transfer..." }
@@ -681,6 +710,14 @@ class RingSync(
                                                                         throw e
                                                                     } catch (e: Exception) {
                                                                         logger.e(e) { "Error saving/queueing transfer ${transfer.id}: ${e.message}" }
+                                                                        // Saving is excluded from the orphan sweep, so give a failed
+                                                                        // save an explicit terminal state instead of stranding it.
+                                                                        withContext(NonCancellable + Dispatchers.IO) {
+                                                                            ringTransferRepository.updateTransferStatus(
+                                                                                transfer.id,
+                                                                                RingTransferStatus.Failed
+                                                                            )
+                                                                        }
                                                                         sendBugReportPrompt()
                                                                     }
                                                                 }
@@ -802,7 +839,7 @@ class RingSync(
         }
     }
 
-    fun sendBugReportPrompt() {
+    suspend fun sendBugReportPrompt() {
         indexNotificationManager.sendBugReportPrompt(
             "Index ran into a problem",
             """

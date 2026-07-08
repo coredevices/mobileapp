@@ -5,8 +5,11 @@ import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.indexai.time.InterpretedDateTime
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
+import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.ui.isLocale24HourFormat
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -23,6 +26,7 @@ import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 class ReminderTool: BuiltInMcpTool(
     definition = Tool(
@@ -43,6 +47,12 @@ class ReminderTool: BuiltInMcpTool(
                             "description" to "If provided by the user, the duration from now to remind the user in human readable format, use English keywords e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
                         ).toJson()
                     ),
+                    "notification_hours_before" to JsonObject(
+                        mapOf(
+                            "type" to "number",
+                            "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
+                        ).toJson()
+                    ),
                     "message" to JsonObject(
                         mapOf(
                             "type" to "string",
@@ -57,11 +67,11 @@ class ReminderTool: BuiltInMcpTool(
         )
     )
 ), KoinComponent {
-    val reminderFactory: ReminderFactory by inject()
+    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
-        const val TOOL_DESCRIPTION = "Create a reminder for the user at a specific time"
+        const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder or wants to be reminded at a specific time or date."
         private val logger = Logger.withTag("ReminderTool")
     }
 
@@ -69,6 +79,7 @@ class ReminderTool: BuiltInMcpTool(
     private data class RemindArgs(
         val date_time_human: String? = null,
         val duration_human: String? = null,
+        val notification_hours_before: Double? = null,
         val message: String
     )
 
@@ -79,12 +90,32 @@ class ReminderTool: BuiltInMcpTool(
         val reminderId: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val remindArgs = JsonSnake.decodeFromString<RemindArgs>(jsonInput)
         val instant = (remindArgs.date_time_human ?: remindArgs.duration_human)?.let { dateTimeHuman ->
             val tz = TimeZone.currentSystemDefault()
-            val parser = HumanDateTimeParser(timeZone = tz)
+            // Anchor time resolution to when the user actually spoke. When that's unknown, only
+            // absolute times can fall back to the current clock; relative ones are refused.
+            val timeBase = context.timeBase
+            val anchor = timeBase ?: Clock.System.now()
+            val parser = HumanDateTimeParser(clock = anchor.asFrozenClock(), timeZone = tz)
             val parsed = parser.parse(dateTimeHuman)
+            if (timeBase == null && parsed is InterpretedDateTime.Relative) {
+                return ToolCallResult(
+                    JsonSnake.encodeToString(
+                        RemindResult(
+                            success = false,
+                            errorMessage = "Cannot resolve relative time '$dateTimeHuman': the " +
+                                    "recording's original time is unknown. Use an absolute " +
+                                    "time, or create the reminder without a time."
+                        )
+                    ),
+                    SemanticResult.GenericFailure(
+                        "Couldn't determine when the recording was made",
+                        llmRecoverable = false
+                    )
+                )
+            }
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
                     logger.d { "Parsed absolute date: $parsed will assume 9am" }
@@ -99,7 +130,7 @@ class ReminderTool: BuiltInMcpTool(
                 }
                 is InterpretedDateTime.AbsoluteTime -> {
                     logger.d { "Parsed absolute time: $parsed" }
-                    val currentTime = Clock.System.now().toLocalDateTime(tz)
+                    val currentTime = anchor.toLocalDateTime(tz)
                     if (parsed.time < currentTime.time) {
                         val is12HourFormat = !isLocale24HourFormat()
                         if (is12HourFormat && parsed.time.hour in 1..11 && !parsed.amPmExplicit) {
@@ -142,7 +173,7 @@ class ReminderTool: BuiltInMcpTool(
                 }
                 is InterpretedDateTime.Relative -> {
                     logger.d { "Parsed relative date time: $parsed" }
-                    val currentTime = Clock.System.now()
+                    val currentTime = anchor
                     val period = parsed.period
                     if (period != null) {
                         val local = currentTime.toLocalDateTime(tz)
@@ -170,18 +201,21 @@ class ReminderTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
-        val reminder = reminderFactory.create(
-            time = instant,
-            message = remindArgs.message
-        )
+        // Lead time only makes sense alongside a reminder time; ignore otherwise.
+        val notifyBefore = instant?.let {
+            remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
+        }
+
         return try {
-            val reminderId = reminder.schedule()
+            val reminderId = reminderIntegrationFactory.createReminderIntegration()
+                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(
-                    title = reminder.message,
-                    deadline = reminder.time,
+                    title = remindArgs.message,
+                    deadline = instant,
                     localReminderId = reminderId.toIntOrNull(),
+                    notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
                 )
             )
         } catch (e: Exception) {

@@ -3,6 +3,7 @@ package coredevices.indexai.agent
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
@@ -52,6 +53,7 @@ abstract class ToolCallingAgent(
         history: List<ConversationMessageDocument>,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
     ): ConversationMessageDocument
 
@@ -92,9 +94,10 @@ abstract class ToolCallingAgent(
         input: String,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
     ): ConversationMessageDocument =
-        runInference(input, currentConversation(), tools, mcpSession, includePromptsFromMcps)
+        runInference(input, currentConversation(), tools, mcpSession, sessionContext, includePromptsFromMcps)
             .also { emit(it) }
 
     /** Dispatch [toolCalls], emit their results, and return `true` if a
@@ -102,10 +105,12 @@ abstract class ToolCallingAgent(
     protected suspend fun executeToolCalls(
         toolCalls: List<AgentToolCall>,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
     ): Boolean {
         val results = toolCalls.map { call ->
             val r = mcpSession.callTool(
-                call.integrationName, call.toolName, call.arguments, requireExists = false
+                call.integrationName, call.toolName, call.arguments, sessionContext,
+                requireExists = false
             )
             ConversationMessageDocument(
                 role = MessageRole.tool,
@@ -128,13 +133,14 @@ abstract class ToolCallingAgent(
     override suspend fun send(
         input: String,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
     ) = withToolSession(input, mcpSession) { tools ->
-        val assistantMessage = inferAndEmit(input, tools, mcpSession, includePromptsFromMcps)
+        val assistantMessage = inferAndEmit(input, tools, mcpSession, sessionContext, includePromptsFromMcps)
         val toolCalls = decodeToolCalls(assistantMessage)
         if (toolCalls.isEmpty() || skipToolExecution) return@withToolSession
-        executeToolCalls(toolCalls, mcpSession)
+        executeToolCalls(toolCalls, mcpSession, sessionContext)
         Unit
     }
 }

@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -101,7 +102,8 @@ fun WatchConfig.asFlow() = WatchConfigFlow(MutableStateFlow(LibPebbleConfig(watc
 
 @Serializable
 data class BleConfig(
-    val reversedPPoG: Boolean = false,
+    @SerialName("reversedPpog")
+    val legacyReversedPPoG: Boolean = false,
     val verbosePpogLogging: Boolean = false,
     /**
      * iOS only. When true, re-publish the GATT services automatically after the BT stack

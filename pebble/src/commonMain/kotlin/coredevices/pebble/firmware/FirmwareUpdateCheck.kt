@@ -36,7 +36,7 @@ class FirmwareUpdateCheck(
     private val mutex = Mutex()
     private val cache = mutableMapOf<CacheKey, CacheEntry>()
 
-    suspend fun checkForUpdates(watch: WatchInfo): FirmwareUpdateCheckResult {
+    suspend fun checkForUpdates(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult {
         val key = CacheKey(
             platform = watch.platform,
             serial = watch.serial,
@@ -44,10 +44,12 @@ class FirmwareUpdateCheck(
             isRecovery = watch.runningFwVersion.isRecovery,
         )
         val now = clock.now()
-        mutex.withLock {
-            cache[key]?.takeIf { it.expiresAt > now }?.let {
-                logger.v { "Serving FWUP from cache" }
-                return it.result
+        if (!force) {
+            mutex.withLock {
+                cache[key]?.takeIf { it.expiresAt > now }?.let {
+                    logger.v { "Serving FWUP from cache" }
+                    return it.result
+                }
             }
         }
         val result = doCheck(watch)

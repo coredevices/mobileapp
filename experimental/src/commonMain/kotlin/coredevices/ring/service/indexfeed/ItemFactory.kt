@@ -31,12 +31,10 @@ class ItemFactory {
         createdAt: Instant,
         toolCallId: String?,
     ): ItemDocument? = when (result) {
-        is SemanticResult.TaskCreation ->
-            reminderItem(sourceRecordingId, createdAt, result.title, result.deadline, toolCallId, result.localReminderId)
-        is SemanticResult.ListItemCreation ->
-            noteItem(sourceRecordingId, createdAt, result.content, result.listUsed, toolCallId, result.resolvedListId)
         is SemanticResult.AlarmCreation ->
             alarmItem(sourceRecordingId, createdAt, result.fireTime, toolCallId)
+        is SemanticResult.CalendarEventCreation ->
+            calendarEventItem(sourceRecordingId, createdAt, result.title, result.startTime, result.endTime, result.location, toolCallId)
         is SemanticResult.TimerCreation ->
             timerItem(sourceRecordingId, createdAt, result.fireTime, result.requestedDuration, toolCallId)
         is SemanticResult.MessageSent ->
@@ -45,6 +43,9 @@ class ItemFactory {
             actionLogItem(sourceRecordingId, createdAt, result.title, result.toolName, result.success, toolCallId, result.body)
         is SemanticResult.SupportingData if !result.assistiveOnly ->
             answerItem(sourceRecordingId, createdAt, result.question ?: "", result.summary ?: "", toolCallId)
+        // Notes and reminders/list items are created by the owning integration
+        is SemanticResult.TaskCreation,
+        is SemanticResult.ListItemCreation,
         is SemanticResult.SupportingData,
         is SemanticResult.Response,
         is SemanticResult.GenericSuccess,
@@ -60,6 +61,7 @@ class ItemFactory {
         dueAt: Instant?,
         toolCallId: String?,
         localReminderId: Int? = null,
+        notifyBeforeMillis: Long? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
         title = title,
@@ -67,7 +69,12 @@ class ItemFactory {
         parents = listOf(LIST_TODOS_ID),
         recordingId = sourceRecordingId,
         toolCallId = toolCallId,
-        metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push", localReminderId = localReminderId),
+        metadata = ItemMetadata.Reminder(
+            repeat = "one_time",
+            notification = "push",
+            localReminderId = localReminderId,
+            notifyBeforeMillis = notifyBeforeMillis,
+        ),
     )
 
     private fun pickNoteList(listUsedHint: String?): String {
@@ -86,14 +93,20 @@ class ItemFactory {
         listHint: String?,
         toolCallId: String?,
         resolvedListId: String? = null,
-    ): ItemDocument = createItem(
-        createdAt = createdAt,
-        title = title,
-        parents = listOf(resolvedListId ?: pickNoteList(listHint)),
-        recordingId = sourceRecordingId,
-        toolCallId = toolCallId,
-        metadata = ItemMetadata.Note,
-    )
+    ): ItemDocument {
+        val parentId = resolvedListId ?: pickNoteList(listHint)
+        // Items dictated into the Shopping list become checklist items so they
+        // can be ticked off, matching the list's checklist type (MOB-8946).
+        val metadata = if (parentId == LIST_SHOPPING_ID) ItemMetadata.Checklist else ItemMetadata.Note
+        return createItem(
+            createdAt = createdAt,
+            title = title,
+            parents = listOf(parentId),
+            recordingId = sourceRecordingId,
+            toolCallId = toolCallId,
+            metadata = metadata,
+        )
+    }
 
     fun alarmItem(
         sourceRecordingId: String,
@@ -103,10 +116,12 @@ class ItemFactory {
         repeatDays: Set<Int> = emptySet(),
     ): ItemDocument {
         val timeStr = fireTime.toString().substringBefore('.').take(5)
+        // The system clock app owns the alarm; surface it only on the recording,
+        // not in the Reminders list.
         return createItem(
             createdAt = createdAt,
             title = "Alarm · $timeStr",
-            parents = listOf(LIST_TODOS_ID),
+            parents = emptyList(),
             recordingId = sourceRecordingId,
             toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(
@@ -118,6 +133,29 @@ class ItemFactory {
         )
     }
 
+    fun calendarEventItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        startTime: Instant,
+        endTime: Instant,
+        location: String?,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        body = location.orEmpty(),
+        dueAt = startTime,
+        parents = listOf(LIST_TODOS_ID),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemDocument.ItemMetadata.CalendarEvent(
+            startTime = startTime,
+            endTime = endTime,
+            location = location,
+        ),
+    )
+
     fun timerItem(
         sourceRecordingId: String,
         createdAt: Instant,
@@ -127,11 +165,13 @@ class ItemFactory {
     ): ItemDocument {
         val durationPretty = duration?.toString()
         val title = "Timer" + (durationPretty?.let { " · $it" } ?: "")
+        // The system clock app owns the timer; surface it only on the recording,
+        // not in the Reminders list.
         return createItem(
             createdAt = createdAt,
             title = title,
             dueAt = dueAt,
-            parents = listOf(LIST_TODOS_ID),
+            parents = emptyList(),
             recordingId = sourceRecordingId,
             toolCallId = toolCallId,
             metadata = ItemMetadata.Scheduled(
@@ -184,6 +224,22 @@ class ItemFactory {
         recordingId = sourceRecordingId,
         toolCallId = toolCallId,
         metadata = ItemMetadata.ActionLog(toolName = toolName, success = success),
+    )
+
+    /** Marker item for a note/reminder handed to an external integration ("Sent to X"). */
+    fun delegatedItem(
+        sourceRecordingId: String?,
+        createdAt: Instant,
+        title: String,
+        integrationName: String,
+        toolCallId: String?,
+    ): ItemDocument = createItem(
+        createdAt = createdAt,
+        title = title,
+        parents = emptyList(),
+        recordingId = sourceRecordingId,
+        toolCallId = toolCallId,
+        metadata = ItemMetadata.DelegatedToIntegration(integration = integrationName),
     )
 
     fun answerItem(

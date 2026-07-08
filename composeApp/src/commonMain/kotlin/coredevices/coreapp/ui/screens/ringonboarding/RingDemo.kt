@@ -44,6 +44,10 @@ import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.service.RingEvent
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.RecordingStorage
+import coredevices.util.CoreConfigFlow
+import coredevices.util.models.CactusSTTMode
+import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.ModelManager
 import coredevices.ring.ui.components.chat.ChatBubble
 import coredevices.ring.ui.components.chat.RecordingChatBubble
 import coredevices.ring.ui.components.chat.ResponseBubble
@@ -68,10 +72,14 @@ internal fun RingDemo(nav: CoreNav) {
     val ringTransferDao = koinInject<RingTransferDao>()
     val audioPlayer = koinInject<AudioPlayer>()
     val recordingStorage = koinInject<RecordingStorage>()
+    val coreConfigFlow = koinInject<CoreConfigFlow>()
+    val modelManager = koinInject<ModelManager>()
     val scope = rememberCoroutineScope()
     val latestRingEvent by ringSync.ringEvents.collectAsStateWithLifecycle(null)
     val latestTransfer by ringTransferDao.getLatestTransferFeedItemFlow().collectAsStateWithLifecycle(null)
     val playerState by audioPlayer.playbackState.collectAsState()
+    val coreConfig by coreConfigFlow.flow.collectAsStateWithLifecycle()
+    val downloadStatus by modelManager.modelDownloadStatus.collectAsState()
 
     var buffering by remember { mutableStateOf(false) }
     val buffer = remember { Buffer() }
@@ -160,25 +168,52 @@ internal fun RingDemo(nav: CoreNav) {
         ) {
             when {
                 transfer == null -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    val isLocalOnly = coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly
+                    val downloading = downloadStatus as? ModelDownloadStatus.Downloading
+                    if (isLocalOnly && downloading != null) {
                         Text(
-                            "Try it out! Hold the button and speak into the ring, then release.",
+                            "Downloading speech model\u2026",
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
                         )
+                        Spacer(Modifier.height(8.dp))
+                        val progress = downloading.progress
+                        if (progress != null) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Please wait for the download to complete before trying.",
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            color = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Try it out! Hold the button and speak into the ring, then release.",
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        NotWorkingText()
                     }
-                    NotWorkingText()
                 }
 
                 transfer.status == RingTransferStatus.Started -> {

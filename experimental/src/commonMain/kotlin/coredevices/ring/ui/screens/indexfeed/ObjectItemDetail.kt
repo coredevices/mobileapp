@@ -3,7 +3,6 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import coredevices.ring.ui.relativeTime
-import CoreRoute
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,6 +80,8 @@ import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
@@ -104,6 +105,12 @@ internal fun ItemView(
     val colors = IndexTheme.colors
     var menuOpen by remember { mutableStateOf(false) }
     val title = s.parentList?.title?.takeIf { it.isNotBlank() } ?: kindLabel(it.kind)
+
+    // Early heads-up notification metadata (built-in reminders only carry a
+    // localReminderId, which is what lets us actually cancel the extra alarm).
+    val reminderMeta = it.metadata as? coredevices.indexai.data.entity.ItemDocument.ItemMetadata.Reminder
+    val notifyBeforeMillis = reminderMeta?.notifyBeforeMillis
+    val canRemoveExtraNotification = reminderMeta?.localReminderId != null
 
     // Always-edit, Apple Notes style. No "Save" button — the draft is
     // persisted automatically when the user navigates away (DisposableEffect
@@ -191,9 +198,14 @@ internal fun ItemView(
                             text = { Text("Delete ${kindLabel(it.kind).lowercase()}", color = colors.error) },
                             onClick = {
                                 menuOpen = false
-                                val destination = deleteDestinationForItem(draftKind, draftParentListIds)
                                 deleting = true
-                                vm.deleteThis { coreNav.replaceWith(destination) }
+                                // Pop back to the existing parent list already on the
+                                // stack. Using replaceWith here pushed a *new* parent
+                                // instance on every delete, stacking up duplicates so
+                                // back would cycle through the same page N times
+                                // (MOB-8492). The parent list filters out deleted = 0,
+                                // so the removed item disappears automatically.
+                                vm.deleteThis { coreNav.goBack() }
                             },
                         )
                     }
@@ -210,6 +222,9 @@ internal fun ItemView(
                     body = draftBody,
                     createdAt = draftCreatedAt,
                     dueAt = draftDueAt,
+                    notifyBeforeMillis = notifyBeforeMillis,
+                    canRemoveExtraNotification = canRemoveExtraNotification,
+                    onRemoveExtraNotification = { vm.removeExtraNotification() },
                     allLists = allLists,
                     selectedListIds = draftParentListIds,
                     onKind = { newKind ->
@@ -284,15 +299,6 @@ internal fun ItemView(
 private fun defaultParentListsForKind(kind: String): List<String> =
     if (kind == "reminder" || kind == "scheduled") listOf(LIST_TODOS_ID)
     else listOf(LIST_NOTES_SELF_ID)
-
-private fun deleteDestinationForItem(kind: String, parentListIds: List<String>): CoreRoute =
-    when {
-        kind == "reminder" || kind == "scheduled" -> RingRoutes.ObjectDetails(LIST_TODOS_ID)
-        kind == "answer" -> RingRoutes.AllAnswers
-        else -> RingRoutes.ObjectDetails(
-            parentListIds.firstOrNull { it != LIST_TODOS_ID } ?: LIST_NOTES_SELF_ID,
-        )
-    }
 
 @Composable
 private fun ItemHeroCard(
@@ -440,6 +446,9 @@ private fun ItemHeroEdit(
     body: String,
     createdAt: Instant,
     dueAt: Instant?,
+    notifyBeforeMillis: Long?,
+    canRemoveExtraNotification: Boolean,
+    onRemoveExtraNotification: () -> Unit,
     allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
     selectedListIds: List<String>,
     onKind: (String) -> Unit,
@@ -495,6 +504,15 @@ private fun ItemHeroEdit(
         Spacer(Modifier.height(10.dp))
         if (showsDue) {
             DueAtRow(label = "Due", dueAt = dueAt, onChange = onDueAt)
+            // Early heads-up notification, only for reminders that scheduled one and
+            // that we can actually cancel (built-in reminders).
+            if (kind == "reminder" && notifyBeforeMillis != null && canRemoveExtraNotification) {
+                Spacer(Modifier.height(10.dp))
+                EarlyNotificationRow(
+                    notifyBeforeMillis = notifyBeforeMillis,
+                    onRemove = onRemoveExtraNotification,
+                )
+            }
         } else {
             TimestampRow(timestamp = createdAt, onChange = onCreatedAt)
         }
@@ -798,6 +816,52 @@ private fun DueAtRow(label: String, dueAt: Instant?, onChange: (Instant?) -> Uni
                 }
             }
         }
+    }
+}
+
+/** Read-only row for a reminder's extra early notification, with a "Remove" action that
+ *  cancels just that heads-up (leaving the main reminder in place). */
+@Composable
+private fun EarlyNotificationRow(notifyBeforeMillis: Long, onRemove: () -> Unit) {
+    val colors = IndexTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text("Early alert", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
+        Text(
+            "${formatLeadTime(notifyBeforeMillis)} before",
+            color = colors.onSurface,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Remove",
+            color = colors.primary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .clickable { onRemove() }
+                .padding(start = 12.dp),
+        )
+    }
+}
+
+/** "2h", "2h 30m", "30m" — the human lead time for an early reminder notification. */
+private fun formatLeadTime(millis: Long): String {
+    val d = millis.milliseconds
+    return when {
+        d.inWholeHours >= 1 -> {
+            val hours = d.inWholeHours
+            val minutes = (d - hours.hours).inWholeMinutes
+            if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
+        }
+        d.inWholeMinutes >= 1 -> "${d.inWholeMinutes}m"
+        else -> "${d.inWholeSeconds}s"
     }
 }
 

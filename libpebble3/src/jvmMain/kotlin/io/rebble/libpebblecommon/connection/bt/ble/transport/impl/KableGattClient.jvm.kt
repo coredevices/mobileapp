@@ -10,3 +10,5 @@ actual fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: Strin
 actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     return mtu
 }
+
+actual suspend fun Peripheral.refreshServicesNative(): Boolean = false

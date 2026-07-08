@@ -16,7 +16,7 @@ import kotlin.time.Duration.Companion.seconds
 
 interface FirmwareUpdateManager {
     fun init(watchInfo: WatchInfo)
-    fun checkForUpdates()
+    fun checkForUpdates(force: Boolean)
     val availableUpdates: Flow<FirmwareUpdateCheckState>
 }
 
@@ -27,7 +27,7 @@ class RealFirmwareUpdateManager(
     private val _availableUpdates = MutableStateFlow<FirmwareUpdateCheckState>(
         FirmwareUpdateCheckState(checkingForUpdates = false, result = null)
     )
-    private val checkTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 5)
+    private val checkTrigger = MutableSharedFlow<Boolean>(extraBufferCapacity = 5)
     private var watchInfo: WatchInfo? = null
     private val logger = Logger.withTag("FirmwareUpdateManager")
 
@@ -39,21 +39,21 @@ class RealFirmwareUpdateManager(
         this.watchInfo = watchInfo
         connectionCoroutineScope.launch {
             checkTrigger.conflate().collect {
-                doUpdateCheck()
+                doUpdateCheck(it)
             }
         }
         connectionCoroutineScope.launch {
             delay(INITIAL_DELAY_PERIOD)
-            checkForUpdates()
+            checkForUpdates(false)
         }
     }
 
-    override fun checkForUpdates() {
+    override fun checkForUpdates(force: Boolean) {
         logger.d { "checkForUpdates" }
-        checkTrigger.tryEmit(Unit)
+        checkTrigger.tryEmit(force)
     }
 
-    private suspend fun doUpdateCheck() {
+    private suspend fun doUpdateCheck(force: Boolean) {
         val watch = watchInfo
         if (watch == null) {
             logger.e { "doUpdateCheck: watch is null!" }
@@ -61,7 +61,7 @@ class RealFirmwareUpdateManager(
         }
         logger.d { "doUpdateCheck" }
         _availableUpdates.value = _availableUpdates.value.copy(checkingForUpdates = true)
-        val firmwareUpdateAvailable = webServices.checkForFirmwareUpdate(watch)
+        val firmwareUpdateAvailable = webServices.checkForFirmwareUpdate(watch, force)
         logger.d { "firmwareUpdateAvailable = $firmwareUpdateAvailable" }
         _availableUpdates.value = FirmwareUpdateCheckState(checkingForUpdates = false, result = firmwareUpdateAvailable)
     }

@@ -8,11 +8,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.mp.KoinPlatform
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -37,14 +39,14 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     private val context: Context get() = KoinPlatform.getKoin().get()
     private val modelsDir: File get() = context.filesDir.resolve("models").also { it.mkdirs() }
 
-    actual override suspend fun getSTTModelPath(): String {
+    actual override suspend fun getSTTModelPath(): String = withContext(Dispatchers.IO) {
         val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
+        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
     }
 
-    actual override suspend fun getLMModelPath(): String {
+    actual override suspend fun getLMModelPath(): String = withContext(Dispatchers.IO) {
         val modelName = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION)
+        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION)
     }
 
     actual override fun isModelDownloaded(modelName: String): Boolean {
@@ -91,60 +93,88 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         return modelDir.absolutePath
     }
 
-    private suspend fun downloadAndExtract(modelName: String, targetDir: File, version: String) {
+    private suspend fun downloadAndExtract(modelName: String, targetDir: File, version: String) = withContext(Dispatchers.IO) {
         val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
         val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
         val zipName = "${modelName.lowercase()}-$quantization.zip"
-        val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
-        logger.i { "Downloading model: $url" }
 
-        val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
-        // Cancel the in-flight HTTP call if the coroutine is cancelled so a blocked
-        // socket read unblocks promptly instead of hanging until readTimeout.
-        val client = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-        val call = client.newCall(Request.Builder().url(url).build())
-        val cancelHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
-            if (cause != null) call.cancel()
-        }
-        try {
-            call.execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorBody = response.body?.string()?.take(500) ?: "no body"
-                    throw Exception("Download failed: HTTP ${response.code} for $url — $errorBody")
-                }
-
-                val body = response.body
-                    ?: throw Exception("Download failed: empty response body for $url")
-                val totalBytes = body.contentLength()
-                var downloadedBytes = 0L
-                var lastLoggedPct = -1
-
-                body.byteStream().use { input ->
+        val tempZip = if (context.assets.list("models")?.contains(zipName) == true) {
+            logger.i { "Found included model zip in assets: $zipName, extracting..." }
+            val tempZip = File(context.cacheDir, "cactus_asset_$modelName.zip")
+            withContext(Dispatchers.IO) {
+                context.assets.open("models/$zipName").use { input ->
                     FileOutputStream(tempZip).use { output ->
-                        val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            currentCoroutineContext().ensureActive()
-                            output.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                            if (totalBytes > 0) {
-                                val pct = (downloadedBytes * 100 / totalBytes).toInt()
-                                if (pct / 10 > lastLoggedPct / 10) {
-                                    lastLoggedPct = pct
-                                    logger.d { "Download progress: $pct% ($downloadedBytes / $totalBytes)" }
+                        input.copyTo(output)
+                    }
+                }
+            }
+            tempZip
+        } else {
+            val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
+            logger.i { "Downloading model: $url" }
+
+            val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
+            // Cancel the in-flight HTTP call if the coroutine is cancelled so a blocked
+            // socket read unblocks promptly instead of hanging until readTimeout.
+            val client = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
+            val call = client.newCall(Request.Builder().url(url).build())
+            val cancelHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+                if (cause != null) call.cancel()
+            }
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errorBody = response.body?.string()?.take(500) ?: "no body"
+                        throw Exception("Download failed: HTTP ${response.code} for $url — $errorBody")
+                    }
+
+                    val body = response.body
+                        ?: throw Exception("Download failed: empty response body for $url")
+                    val totalBytes = body.contentLength()
+                    var downloadedBytes = 0L
+                    var lastLoggedPct = -1
+
+                    body.byteStream().use { input ->
+                        FileOutputStream(tempZip).use { output ->
+                            val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
+                            var bytesRead: Int
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                currentCoroutineContext().ensureActive()
+                                output.write(buffer, 0, bytesRead)
+                                downloadedBytes += bytesRead
+                                if (totalBytes > 0) {
+                                    val pct = (downloadedBytes * 100 / totalBytes).toInt()
+                                    if (pct / 10 > lastLoggedPct / 10) {
+                                        lastLoggedPct = pct
+                                        logger.d { "Download progress: $pct% ($downloadedBytes / $totalBytes)" }
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                logger.i { "Download complete: ${tempZip.length()} bytes" }
+                tempZip
+            } catch (e: CancellationException) {
+                logger.i { "Model download cancelled for $modelName" }
+                throw e
+            } catch (e: Exception) {
+                // A cancelled coroutine cancels the OkHttp call, surfacing as IOException;
+                // re-check liveness so cancellation propagates as CancellationException.
+                currentCoroutineContext().ensureActive()
+                logger.e(e) { "Model download failed for $modelName" }
+                throw e
+            } finally {
+                cancelHandle?.dispose()
             }
-            logger.i { "Download complete: ${tempZip.length()} bytes" }
+        }
 
+        try {
             // Clear old model if present
             if (targetDir.exists()) {
                 targetDir.deleteRecursively()
@@ -186,7 +216,6 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             targetDir.deleteRecursively()
             throw e
         } finally {
-            cancelHandle?.dispose()
             tempZip.delete()
         }
     }

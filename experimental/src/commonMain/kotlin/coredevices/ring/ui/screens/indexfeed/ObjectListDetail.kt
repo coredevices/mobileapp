@@ -904,6 +904,9 @@ private fun EditableNoteRow(
     var draft by remember(child.firestoreId) { mutableStateOf(child.title) }
     var hadFocus by remember(child.firestoreId) { mutableStateOf(false) }
     var isFocused by remember(child.firestoreId) { mutableStateOf(false) }
+    // Tracks whether this entry's text wraps to more than one line. Set
+    // from the text field's layout result (see onTextLayout below).
+    var isMultiLine by remember(child.firestoreId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     // Per-item kind indicator: a checklist item shows the same tickable
     // circle the home Todos carousel uses; a plain note has no glyph
@@ -924,6 +927,15 @@ private fun EditableNoteRow(
             onFocusConsumed()
         }
     }
+    // Refresh the draft when the title changes from outside (an edit made on
+    // the item's detail screen, or a Firestore sync) while this row isn't
+    // being actively edited. draft is keyed only on firestoreId, so without
+    // this the row keeps rendering the title captured at first composition and
+    // external edits wouldn't appear until the list is fully reopened. Mirrors
+    // the list-header refresh above.
+    LaunchedEffect(child.title) {
+        if (!isFocused) draft = child.title
+    }
     DisposableEffect(child.firestoreId) {
         onDispose { flush() }
     }
@@ -934,8 +946,14 @@ private fun EditableNoteRow(
             .padding(
                 start = 22.dp,
                 end = 14.dp,
-                top = 1.dp,
-                bottom = 1.dp,
+                // Single-line notes stay tight (the compact, divider-less
+                // look). A note that wraps to multiple lines gets extra
+                // vertical air so it doesn't blur into its neighbours —
+                // otherwise the gap between entries is smaller than the line
+                // spacing within a wrapped entry and several notes read as
+                // one block (MOB-8502).
+                top = if (isMultiLine) 7.dp else 1.dp,
+                bottom = if (isMultiLine) 7.dp else 1.dp,
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -995,6 +1013,7 @@ private fun EditableNoteRow(
             ).indexTextEntryStyle(),
             cursorBrush = SolidColor(colors.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+            onTextLayout = { isMultiLine = it.lineCount > 1 },
             decorationBox = { inner ->
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
                     inner()

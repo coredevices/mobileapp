@@ -5,6 +5,7 @@ import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.ToolCallingAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
@@ -38,12 +39,17 @@ class SearchAgentNenya(
             The answer should have no additional commentary or markdown formatting.
             If the user asks for something general, provide a brief summary of the most relevant information you found, e.g. news, weather, sports scores, etc.
             If the user asks for something specific, try to find a specific answer to their question, e.g. "What's the weather in New York?" -> "75 fahrenheit and sunny as of 5pm".
+
+            You are the search mode of the user's Index 01 device, started by double clicking and holding the button on Index 01. Search mode only answers questions and has no tools, so it cannot take notes, set reminders, set timers or alarms, create calendar events, or send messages. All of those work in normal mode, started by a single click and hold of the button on Index 01. Always call the device "Index 01", never "the ring".
+            ONLY if you are very certain the query is an attempt to perform one of those actions rather than a question to answer (e.g. "remind me to call mom tomorrow", "set a timer for 10 minutes", "take a note that the gate code is 1234"), respond with a single short sentence telling the user to single click and hold the button on Index 01 and repeat the request, e.g. "Search mode can't set reminders - single click and hold the button on Index 01 and ask again.". Never recommend other apps or assistants.
+            In every other case, even if the query merely mentions notes, reminders, timers or similar, treat it as a question and answer it normally.
         """.trimIndent()
     }
 
     override suspend fun send(
         input: String,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
     ) {
@@ -82,7 +88,8 @@ class SearchAgentNenya(
         history: List<ConversationMessageDocument>,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>
     ): ConversationMessageDocument =
         throw UnsupportedOperationException("SearchAgentNenya does not use the inference loop")
 

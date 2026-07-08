@@ -4,7 +4,7 @@ import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.UIEmailIntegration
 import coredevices.ring.database.room.repository.RecordingRepository
@@ -17,7 +17,7 @@ class ShortcutActionHandler(
     private val uiEmailIntegration: UIEmailIntegration,
     private val recordingRepository: RecordingRepository,
     private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val reminderIntegrationFactory: ReminderFactory
+    private val reminderIntegrationFactory: ReminderIntegrationFactory
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     companion object {
@@ -65,12 +65,10 @@ class ShortcutActionHandler(
                     scope.launch {
                         try {
                             val entry = recordingRepository.getRecordingEntriesFlow(recordingId).first().first()
-                            val reminder = reminderIntegrationFactory.create(
-                                time = null,
-                                message = entry.transcription ?: "<No transcription>",
-                                integration = provider,
+                            reminderIntegrationFactory.createReminderIntegration(provider).createReminder(
+                                title = entry.transcription ?: "<No transcription>",
+                                deadline = null,
                             )
-                            reminder.schedule()
                         } catch (e: Exception) {
                             logger.e(e) { "Failed to send recording $recordingId to reminder provider $provider" }
                         }

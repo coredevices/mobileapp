@@ -33,6 +33,10 @@ data class CachedList(
     val listKind: String = "note",
     val seed: String? = null,
     @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    /** See [CachedItem.locked]: synced from an encrypted doc with no key on this
+     *  device.
+     */
+    @ColumnInfo(defaultValue = "0") val locked: Boolean = false,
 ) {
     fun toDocument(): ListDocument = ListDocument(
         createdAt = createdAt,
@@ -45,7 +49,7 @@ data class CachedList(
     )
 
     companion object {
-        fun fromDocument(firestoreId: String, doc: ListDocument): CachedList = CachedList(
+        fun fromDocument(firestoreId: String, doc: ListDocument, locked: Boolean = false): CachedList = CachedList(
             firestoreId = firestoreId,
             createdAt = doc.createdAt,
             updatedAt = doc.updatedAt,
@@ -54,6 +58,7 @@ data class CachedList(
             listKind = doc.listKind,
             seed = doc.seed,
             deleted = doc.deleted,
+            locked = locked,
         )
     }
 }

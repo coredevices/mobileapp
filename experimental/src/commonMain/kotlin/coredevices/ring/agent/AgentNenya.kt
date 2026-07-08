@@ -5,6 +5,7 @@ import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.IterativeAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.ToolCallResult
@@ -116,7 +117,8 @@ open class AgentNenya(
         history: List<ConversationMessageDocument>,
         tools: List<McpSessionTool>,
         mcpSession: McpSession,
-        includePromptsFromMcps: Map<String, Set<String>>,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>
     ): ConversationMessageDocument {
         logger.v { "Running inference with model $model, tool count = ${tools.size}, context length = ${context.length}, conversation history length = ${history.size}" }
         val tools = prepareTools(tools)
@@ -124,7 +126,7 @@ open class AgentNenya(
             nenyaClient.run(
                 conversationHistory = history,
                 toolSpecs = tools,
-                additionalContext = context + "\n" + mcpSession.getExtraContext(includePromptsFromMcps).orEmpty(),
+                additionalContext = context + "\n" + mcpSession.getExtraContext(sessionContext, includePromptsFromMcps).orEmpty(),
                 model = model
             )
         } catch (e: IOException) {

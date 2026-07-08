@@ -21,6 +21,7 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -29,15 +30,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.timeout
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class WisprFlowTranscriptionService(
@@ -47,8 +54,8 @@ class WisprFlowTranscriptionService(
         private val logger = Logger.withTag("WisprFlowTranscriptionService")
         private const val WISPR_WS_URL = "wss://platform-api.wisprflow.ai/api/v1/dash/client_ws"
         private const val TARGET_SAMPLE_RATE = 16000
-        private const val PACKET_DURATION_MS = 500
-        private const val SAMPLES_PER_PACKET = TARGET_SAMPLE_RATE * PACKET_DURATION_MS / 1000 // 800 samples
+        private const val PACKET_DURATION_MS = 1000
+        private const val SAMPLES_PER_PACKET = TARGET_SAMPLE_RATE * PACKET_DURATION_MS / 1000
         private const val BYTES_PER_PACKET = SAMPLES_PER_PACKET * 2 // 16-bit = 2 bytes per sample
     }
 
@@ -129,6 +136,7 @@ class WisprFlowTranscriptionService(
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow
@@ -157,10 +165,11 @@ class WisprFlowTranscriptionService(
         }
 
 
+        var listenerJob: Job? = null
         try {
             session.sendAuth(clientKey, language, conversationContext, dictionaryContext, contentContext)
             try {
-                withTimeout(4.seconds) {
+                withTimeout(3.seconds) {
                     waitForAuth(session)
                 }
             } catch (e: TimeoutCancellationException) {
@@ -175,7 +184,7 @@ class WisprFlowTranscriptionService(
             val partials = Channel<String>(Channel.UNLIMITED)
 
             // Listen for incoming frames continuously
-            scope.launch {
+            listenerJob = scope.launch {
                 try {
                     for (frame in session.incoming) {
                         if (frame !is Frame.Text) continue
@@ -243,7 +252,12 @@ class WisprFlowTranscriptionService(
                     val base64Audio = Base64.encode(packet)
                     val volume = calculateVolume(packet)
 
-                    session.sendAppend(packetPosition, base64Audio, volume, packetDuration)
+                    try {
+                        session.sendAppend(packetPosition, base64Audio, volume, packetDuration)
+                    } catch (e: TimeoutCancellationException) { // Caller may cancel us with timeout, log it
+                        logger.w { "Packet send timed out" }
+                        throw e
+                    }
                     packetPosition++
                     offset += BYTES_PER_PACKET
                 }
@@ -255,7 +269,7 @@ class WisprFlowTranscriptionService(
                 }
 
                 // Drain any partials that arrived while streaming
-                while (true) {
+                while (currentCoroutineContext().isActive) {
                     val partial = partials.tryReceive().getOrNull() ?: break
                     emit(TranscriptionSessionStatus.Partial(partial))
                 }
@@ -267,13 +281,23 @@ class WisprFlowTranscriptionService(
                 residualBuffer.copyInto(padded)
                 val base64Audio = Base64.encode(padded)
                 val volume = calculateVolume(padded)
-                session.sendAppend(packetPosition, base64Audio, volume, packetDuration)
+                try {
+                    session.sendAppend(packetPosition, base64Audio, volume, packetDuration)
+                } catch (e: TimeoutCancellationException) { // Caller may cancel us with timeout, log it
+                    logger.w { "Final packet send timed out" }
+                    throw e
+                }
                 packetPosition++
             }
 
             // Send commit
             val commitMsg = WisprCommitMessage(totalPackets = packetPosition)
-            session.send(Frame.Text(WisprJson.encodeToString(commitMsg)))
+            try {
+                session.send(Frame.Text(WisprJson.encodeToString(commitMsg)))
+            } catch (e: TimeoutCancellationException) {
+                logger.w { "Commit send timed out" }
+                throw e
+            }
             logger.d { "Sent commit with $packetPosition total packets" }
 
             // Drain remaining partials
@@ -295,8 +319,15 @@ class WisprFlowTranscriptionService(
                 cause = e,
                 modelUsed = "wisprflow"
             )
+        } finally {
+            // Tear down the listener and socket regardless of how the flow ended
+            // (success, error, or cancellation) to avoid leaking the coroutine/connection.
+            withContext(NonCancellable) {
+                listenerJob?.cancel()
+                session.close()
+            }
         }
-    }.timeout(30.seconds)
+    }
 
     private suspend fun WebSocketSession.sendAuth(
         clientKey: String,

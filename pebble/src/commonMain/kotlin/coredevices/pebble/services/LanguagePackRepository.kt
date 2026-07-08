@@ -4,6 +4,7 @@ import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
 import coredevices.pebble.firmware.isCoreDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -39,6 +40,17 @@ class LanguagePackRepository(
 
             .sortedByDescending { it.isoLocal.take(2) == locale.take(2) }
             .sortedByDescending { it.isoLocal == locale }
+    }
+
+    /**
+     * Friendly display name for a language pack read back from the watch, which only reports the
+     * raw ISO locale + version.
+     */
+    fun displayNameForInstalled(installed: InstalledLanguagePack): String {
+        val pack = languagePacks.firstOrNull { it.isoLocal == installed.isoLocal && it.version == installed.version }
+            ?: languagePacks.firstOrNull { it.isoLocal == installed.isoLocal }
+        return pack?.let { "${it.localName} (${it.name}) v${installed.version}" }
+            ?: "${installed.isoLocal} (v${installed.version})"
     }
 }
 

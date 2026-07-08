@@ -15,6 +15,7 @@ import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.di.LibIndexCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +45,7 @@ class FullFeedViewModel(
     listRepo: ListRepository,
     private val ringTransferDao: RingTransferDao,
     private val recordingQueue: RecordingProcessingQueue,
+    private val appScope: LibIndexCoroutineScope,
 ) : ViewModel() {
 
     val query = MutableStateFlow("")
@@ -72,7 +74,7 @@ class FullFeedViewModel(
     }
 
     fun retryRecording(recordingId: Long, entry: RecordingEntryEntity) {
-        viewModelScope.launch {
+        appScope.launch {
             val transfer = withContext(Dispatchers.IO) {
                 ringTransferDao.getByRecordingId(recordingId).firstOrNull()
             }
@@ -175,8 +177,10 @@ class FullFeedViewModel(
                     chips = recItems.take(8).map { item ->
                         Chip(
                             itemId = item.firestoreId,
+                            // chipLabel already yields "🔒 Encrypted" for locked
+                            // rows; drop the kind glyph so the lock isn't doubled.
                             label = IndexFeedViewModel.chipLabel(item, lists).take(64),
-                            glyph = chipGlyph(item.kind),
+                            glyph = if (item.locked) "" else chipGlyph(item.kind),
                         )
                     },
                 )
@@ -192,6 +196,8 @@ class FullFeedViewModel(
             "answer" -> "✨"
             "message" -> "✉"
             "action_log" -> "✉"
+            "delegated" -> "✉"
+            "calendar_event" -> "📅"
             else -> "•"
         }
 

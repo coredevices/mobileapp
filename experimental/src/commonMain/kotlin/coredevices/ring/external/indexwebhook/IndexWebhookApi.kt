@@ -9,7 +9,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,12 +142,14 @@ class IndexWebhookApiImpl(
             )
 
             val response = client.post(url) {
-                contentType(ContentType.parse("multipart/form-data; boundary=$boundary"))
                 headers.forEach { (name, value) -> header(name, value) }
                 if (audioData != null) {
                     header(AUDIO_SIZE_HEADER, audioData.size.toString())
                 }
-                setBody(bodyBytes)
+                setBody(ByteArrayContent(
+                    bytes = bodyBytes,
+                    contentType = ContentType.parse("multipart/form-data; boundary=$boundary"),
+                ))
             }
 
             if (response.status.isSuccess()) {

@@ -12,6 +12,13 @@ interface SystemCalendar {
     fun hasPermission(): Boolean
 
     /**
+     * Create an event in the device's primary/default calendar.
+     * @return the platform id of the created event, or null if creation failed (no permission,
+     *         no writable calendar, or a platform error).
+     */
+    suspend fun createEvent(event: NewCalendarEvent): String?
+
+    /**
      * Whether this platform can execute write-back pin actions (RSVP, cancel event).
      * Android: yes, via CalendarContract. iOS: no — EKParticipant is read-only and
      * EKEvent mutation requires user-owned calendars we don't reliably identify.

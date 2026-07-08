@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,12 +57,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,10 +74,13 @@ import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.ring_wireframe
 import coreapp.util.generated.resources.settings
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
@@ -89,8 +97,12 @@ import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ring.ui.viewmodel.pickZipFile
 import coredevices.ui.M3Dialog
 import coredevices.ui.ModelDownloadDialog
+import coredevices.ui.dismissKeyboardOnTapOutside
 import coredevices.ui.SignInDialog
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
 import coredevices.util.Platform
+import coredevices.util.granted
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
@@ -108,7 +120,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val useCactusAgent by viewModel.useCactusAgent.collectAsState()
-    val showModelDialog by viewModel.showModelDownloadDialog.collectAsState()
     val showMusicControlDialog by viewModel.showMusicControlDialog.collectAsState()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
@@ -135,14 +146,6 @@ fun IndexSettings(coreNav: CoreNav) {
 
     if (showSignInDialog) {
         SignInDialog(onDismiss = { showSignInDialog = false })
-    }
-    if (showModelDialog != null) {
-        ModelDownloadDialog(
-            onDismissRequest = { success ->
-                viewModel.onModelDownloadDialogDismissed(success)
-            },
-            models = setOf(showModelDialog!!)
-        )
     }
     if (showContactsDialog && platform.isAndroid) {
         SettingsBeeperContactsDialog(
@@ -400,9 +403,9 @@ fun IndexSettings(coreNav: CoreNav) {
             item {
                 ListItem(
                     modifier = Modifier.clickable(onClick = viewModel::toggleCactusAgent),
-                    headlineContent = { Text("Use Cactus Agent") },
+                    headlineContent = { Text("Use Local LLM") },
                     supportingContent = {
-                        Text("Experimental agent with enhanced capabilities")
+                        Text("Experimental! Less accurate than cloud")
                     },
                     trailingContent = {
                         Switch(
@@ -816,6 +819,8 @@ fun BackupDialog(
     var showDeleteLocalConfirm by remember { mutableStateOf(false) }
     var deleteLocalInput by remember { mutableStateOf("") }
     var showOverwriteKeyConfirm by remember { mutableStateOf(false) }
+    var showEnterKeyDialog by remember { mutableStateOf(false) }
+    var enterKeyInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.loadBackupCount()
@@ -854,13 +859,55 @@ fun BackupDialog(
             }
         )
     }
+    if (showEnterKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showEnterKeyDialog = false; enterKeyInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
+            title = { Text("Enter Encryption Key") },
+            text = {
+                Column {
+                    val focusManager = LocalFocusManager.current
+                    Text("Type or paste the encryption key from another device.")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = enterKeyInput,
+                        onValueChange = { enterKeyInput = it },
+                        singleLine = true,
+                        label = { Text("Encryption key") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = enterKeyInput.isNotBlank() && !encryptionKeyLoading,
+                    onClick = {
+                        viewModel.importKeyFromText(enterKeyInput)
+                        showEnterKeyDialog = false
+                        enterKeyInput = ""
+                    }
+                ) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnterKeyDialog = false; enterKeyInput = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
     EncryptionKeyResultDialogs(viewModel)
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false; deleteInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
             title = { Text("Delete Backup") },
             text = {
                 Column {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "This will permanently delete all your cloud backup data. This cannot be undone.",
                         color = MaterialTheme.colorScheme.error
@@ -872,7 +919,9 @@ fun BackupDialog(
                         value = deleteInput,
                         onValueChange = { deleteInput = it },
                         singleLine = true,
-                        placeholder = { Text("delete") }
+                        placeholder = { Text("delete") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                     )
                 }
             },
@@ -898,9 +947,11 @@ fun BackupDialog(
     if (showDeleteLocalConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteLocalConfirm = false; deleteLocalInput = "" },
+            modifier = Modifier.dismissKeyboardOnTapOutside(),
             title = { Text("Delete Local Feed") },
             text = {
                 Column {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "This will delete all recordings from the local feed on this device. Cloud backup is not affected. You can restore from cloud with Sync or from a backup zip with Import.",
                         color = MaterialTheme.colorScheme.error
@@ -912,7 +963,9 @@ fun BackupDialog(
                         value = deleteLocalInput,
                         onValueChange = { deleteLocalInput = it },
                         singleLine = true,
-                        placeholder = { Text("delete") }
+                        placeholder = { Text("delete") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                     )
                 }
             },
@@ -1108,6 +1161,18 @@ fun BackupDialog(
                 }
             )
 
+            // Enter the key manually as text (e.g. copied from another device)
+            ListItem(
+                modifier = Modifier.clickable(enabled = !encryptionKeyLoading) {
+                    enterKeyInput = ""
+                    showEnterKeyDialog = true
+                },
+                headlineContent = { Text("Enter Key Manually") },
+                supportingContent = {
+                    Text("Type or paste your encryption key as text")
+                }
+            )
+
             // Enable/disable encryption
             val useEncryption by viewModel.useEncryption.collectAsState()
             val encryptionStatus by viewModel.encryptionStatus.collectAsState()
@@ -1261,6 +1326,7 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
 
     AlertDialog(
         onDismissRequest = { viewModel.cancelEncryptionSetup() },
+        modifier = Modifier.dismissKeyboardOnTapOutside(),
         title = { Text("Set up backup encryption") },
         text = {
             when (val s = current) {
@@ -1312,6 +1378,7 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                 is EncryptionSetupState.PasteKey -> Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val focusManager = LocalFocusManager.current
                     Text(
                         "Your key was generated on another device and isn't in this " +
                             "password manager. Paste your backup key, or import the " +
@@ -1322,6 +1389,8 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
                         onValueChange = { pasted = it },
                         singleLine = true,
                         label = { Text("Encryption key") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.fillMaxWidth()
                     )
                     TextButton(
@@ -1389,12 +1458,25 @@ fun EncryptionSetupDialog(viewModel: SettingsViewModel) {
 fun AuthorizedIntegrations(preferences: Preferences) {
     val gTasks = koinInject<GTasksIntegration>()
     val notion = koinInject<NotionIntegration>()
+    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
+    val obsidian = koinInject<ObsidianIntegration>()
+    val obsidianAuth by flow { emit(obsidian.isAuthorized()) }.collectAsState(false)
     val gTasksAuth by flow { emit(gTasks.isAuthorized()) }.collectAsState(false)
     val notionAuth by flow { emit(notion.isAuthorized()) }.collectAsState(false)
+    val taskerAuth by flow {
+        emit(noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized())
+    }.collectAsState(false)
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
     val platform = koinInject<Platform>()
+
+    // Calendar (Built-in only): the dot reflects whether calendar permission is granted; tapping
+    // it requests the permission. Permission is the "connection" for the built-in calendar account.
+    val permissionRequester = koinInject<PermissionRequester>()
+    val uiContext = rememberUiContext()
+    val scope = rememberCoroutineScope()
+    val calendarGranted by permissionRequester.granted(Permission.Calendar).collectAsState(false)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         IntegrationItem(
@@ -1404,7 +1486,15 @@ fun AuthorizedIntegrations(preferences: Preferences) {
             selectedReminderProvider = currentReminderProvider == ReminderProvider.BuiltIn,
             selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
             onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
-            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) }
+            onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) },
+            hasCalendar = true,
+            calendarGranted = calendarGranted,
+            onToggleCalendar = {
+                if (!calendarGranted) {
+                    val ctx = uiContext ?: return@IntegrationItem
+                    scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
+                }
+            },
         )
         if (platform.isIOS) {
             IntegrationItem(
@@ -1444,6 +1534,33 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 onConfigure = { showNotionPageDialog = true }
             )
         }
+        if (obsidianAuth) {
+            var showObsidianConfig by remember { mutableStateOf(false) }
+            if (showObsidianConfig) {
+                ObsidianDialog(onDismiss = { showObsidianConfig = false })
+            }
+            IntegrationItem(
+                title = ObsidianIntegration.DEFINITION.title,
+                hasReminder = false,
+                hasNotes = true,
+                selectedReminderProvider = false,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Obsidian,
+                onSelectReminderProvider = {},
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Obsidian) },
+                onConfigure = { showObsidianConfig = true },
+            )
+        }
+        if (platform.isAndroid && taskerAuth) {
+            IntegrationItem(
+                title = TASKER_DEFINITION.title,
+                hasReminder = true,
+                hasNotes = true,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Tasker,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Tasker,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Tasker) },
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Tasker) }
+            )
+        }
     }
 }
 
@@ -1471,6 +1588,8 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
 
     M3Dialog(
         onDismissRequest = onDismiss,
+        // The page list can be long; scroll it so the buttons stay reachable.
+        scrollableContent = true,
         title = { Text("Notion Page") },
         buttons = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -1489,7 +1608,7 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
     ) {
         Column {
             Text(
-                "Choose the page to place your notes' Todo list in.",
+                "Choose the page to place your notes' Reminders list in.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(12.dp))
@@ -1505,8 +1624,10 @@ fun NotionPageDialog(onDismiss: () -> Unit) {
                 loadedPages.isEmpty() -> Text(
                     "No pages found. Give Index access to a page in Notion, then try again."
                 )
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(loadedPages) { page ->
+                // Plain Column (not LazyColumn): the dialog content scrolls via
+                // scrollableContent, and nested lazy lists inside verticalScroll crash.
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    loadedPages.forEach { page ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -1537,6 +1658,9 @@ fun IntegrationItem(
     onSelectReminderProvider: () -> Unit,
     onSelectNoteProvider: () -> Unit,
     onConfigure: (() -> Unit)? = null,
+    hasCalendar: Boolean = false,
+    calendarGranted: Boolean = false,
+    onToggleCalendar: () -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1553,23 +1677,52 @@ fun IntegrationItem(
             }
         }
         Spacer(Modifier.weight(1f))
-        RadioButton(
-            enabled = hasReminder,
+        OutputTypeOption(
+            label = "Reminders",
+            visible = hasReminder,
             selected = selectedReminderProvider,
-            onClick = {
-                onSelectReminderProvider()
-            }
+            onSelect = onSelectReminderProvider
         )
-        Text("Reminders")
         Spacer(Modifier.width(16.dp))
-        RadioButton(
-            enabled = hasNotes,
+        OutputTypeOption(
+            label = "Notes",
+            visible = hasNotes,
             selected = selectedNoteProvider,
-            onClick = {
-                onSelectNoteProvider()
-            }
+            onSelect = onSelectNoteProvider
         )
-        Text("Notes")
+        Spacer(Modifier.width(16.dp))
+        // Calendar (Built-in only): the dot reflects calendar permission; tapping requests it.
+        OutputTypeOption(
+            label = "Calendar",
+            visible = hasCalendar,
+            selected = calendarGranted,
+            onSelect = onToggleCalendar
+        )
+    }
+}
+
+/**
+ * A single "Reminders" / "Notes" radio option for a provider row. Output types a provider can't
+ * handle aren't shown at all (rather than greyed out), but the slot keeps its footprint so the
+ * columns stay aligned across provider rows.
+ */
+@Composable
+private fun OutputTypeOption(
+    label: String,
+    visible: Boolean,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (visible) Modifier else Modifier.alpha(0f)
+    ) {
+        RadioButton(
+            enabled = visible,
+            selected = selected,
+            onClick = onSelect
+        )
+        Text(label)
     }
 }
 

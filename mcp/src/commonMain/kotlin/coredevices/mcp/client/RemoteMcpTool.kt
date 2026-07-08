@@ -1,6 +1,7 @@
 package coredevices.mcp.client
 
 import coredevices.mcp.McpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.McpJson
@@ -14,7 +15,11 @@ class RemoteMcpTool internal constructor(
     override val definition: Tool
         get() = toolDef
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
-        return integration.callTool(toolName = toolDef.name, json = McpJson.decodeFromString(jsonInput))
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
+        return integration.callTool(
+            toolName = toolDef.name,
+            json = McpJson.decodeFromString(jsonInput),
+            context = context
+        )
     }
 }

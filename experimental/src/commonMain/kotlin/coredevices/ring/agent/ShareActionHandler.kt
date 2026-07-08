@@ -4,9 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
-import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.service.indexfeed.ItemFactory
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,9 +18,7 @@ import kotlin.time.Instant
  */
 class ShareActionHandler(
     private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val reminderFactory: ReminderFactory,
-    private val itemFactory: ItemFactory,
-    private val itemRepository: ItemRepository,
+    private val reminderIntegrationFactory: ReminderIntegrationFactory,
 ) {
     enum class Action { Note, Reminder }
 
@@ -59,33 +55,14 @@ class ShareActionHandler(
         }
     }
 
+    // The integration creates the feed item itself when builtin; external providers own the
+    // note/reminder remotely, so no local item is created.
     private suspend fun createNote(text: String) {
         noteIntegrationFactory.createNoteClient().createNote(text)
-        itemRepository.setItem(
-            itemFactory.simpleUid(),
-            itemFactory.noteItem(
-                sourceRecordingId = null,
-                createdAt = Clock.System.now(),
-                title = text,
-                listHint = null,
-                toolCallId = null,
-            ),
-        )
     }
 
     private suspend fun createReminder(text: String) {
-        val reminder = reminderFactory.create(time = parseReminderTime(text), message = text)
-        val localReminderId = reminder.schedule().toIntOrNull()
-        itemRepository.setItem(
-            itemFactory.simpleUid(),
-            itemFactory.reminderItem(
-                sourceRecordingId = null,
-                createdAt = Clock.System.now(),
-                title = reminder.message,
-                dueAt = reminder.time,
-                toolCallId = null,
-                localReminderId = localReminderId,
-            ),
-        )
+        reminderIntegrationFactory.createReminderIntegration()
+            .createReminder(text, parseReminderTime(text))
     }
 }

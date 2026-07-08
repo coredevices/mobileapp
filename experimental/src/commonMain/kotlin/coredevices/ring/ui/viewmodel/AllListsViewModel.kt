@@ -12,12 +12,15 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_TODOS
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -53,7 +56,7 @@ class AllListsViewModel(
      *  generated locally from the timestamp; the next "Sync now" will
      *  push it to Firestore alongside everything else. */
     fun newList(onCreated: (String) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val now = Clock.System.now()
             val newId = "list_${now.toEpochMilliseconds()}"
             listRepo.setList(
@@ -66,7 +69,9 @@ class AllListsViewModel(
                     listKind = "note",
                 ),
             )
-            onCreated(newId)
+            // Hop to Main: onCreated navigates, and NavController
+            // requires the main thread.
+            withContext(Dispatchers.Main) { onCreated(newId) }
         }
     }
 

@@ -49,5 +49,6 @@ enum class RingTransferStatus {
     Started,
     Discarded,
     Failed,
-    Completed
+    Completed,
+    Saving, // Data received but handed off to coroutine to save/resample
 }

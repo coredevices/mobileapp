@@ -147,6 +147,7 @@ fun BugReportScreen(
         val (sending, setSending) = remember { mutableStateOf(false) }
         val (showSuccess, setShowSuccess) = remember { mutableStateOf(false) }
         val (sendRecording, setSendRecording) = remember { mutableStateOf(recordingPath != null) }
+        val (sendRecentRecordings, setSendRecentRecordings) = remember { mutableStateOf(true) }
         val (attachments, setAttachments) = remember {
             mutableStateOf<List<DocumentAttachment>?>(
                 null
@@ -217,6 +218,7 @@ fun BugReportScreen(
                     screenContext = nextBugReportContext.nextContext ?: "",
                     attachments = attachments ?: emptyList(),
                     sendRecording = sendRecording,
+                    sendRecentRecordings = !isWatch && sendRecentRecordings,
                     expOutputPath = recordingPath,
                     imageAttachments = (imageAttachments ?: emptyList()) +
                             if (capturedPngBytes != null) {
@@ -451,6 +453,19 @@ fun BugReportScreen(
                         Checkbox(sendRecording, { setSendRecording(it) }, enabled = !sending)
                         Text(
                             "Include recording",
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        )
+                    }
+                }
+                if (coreConfig.enableIndex && !isWatch) {
+                    Row(
+                        modifier = Modifier.clickable(
+                            interactionSource = null,
+                            indication = null
+                        ) { setSendRecentRecordings(!sendRecentRecordings) }) {
+                        Checkbox(sendRecentRecordings, { setSendRecentRecordings(it) }, enabled = !sending)
+                        Text(
+                            "Include recent recordings",
                             modifier = Modifier.align(Alignment.CenterVertically)
                         )
                     }

@@ -141,22 +141,25 @@ class McpSandboxRepository(
     }
 
     suspend fun seedDatabase() {
-        if (groupDao.getAllFlow().first().isEmpty()) {
-            val defaultGroupId = groupDao.insertGroup(
-                McpSandboxGroupEntity(
-                    title = "Default MCP Sandbox"
-                )
-            )
+        val groups = groupDao.getAllFlow().first()
+        val defaultGroupId = if (groups.isEmpty()) {
+            groupDao.insertGroup(McpSandboxGroupEntity(title = "Default MCP Sandbox"))
+        } else {
+            groups.first().id
+        }
 
-            // Add all builtin MCPs to the default group
-            val builtinMcps = builtinMcpRepository.getAllServlets().map { it.name }
+        // Backfill any builtin MCPs missing from the default group. This runs on every startup (not
+        // just first launch) so users who upgrade gain builtins added in newer versions (e.g. the
+        // calendar tool) — otherwise their existing default group would never include them.
+        val existing = builtinAssociationDao.getAssociationsForGroupFlow(defaultGroupId).first()
+            .map { it.builtinMcpName }
+            .toSet()
+        val missing = builtinMcpRepository.getAllServlets()
+            .map { it.name }
+            .filter { it !in existing }
+        if (missing.isNotEmpty()) {
             builtinAssociationDao.insertAssociations(
-                builtinMcps.map {
-                    BuiltinMcpGroupAssociation(
-                        groupId = defaultGroupId,
-                        builtinMcpName = it
-                    )
-                }
+                missing.map { BuiltinMcpGroupAssociation(groupId = defaultGroupId, builtinMcpName = it) }
             )
         }
     }

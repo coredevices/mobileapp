@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class NullTranscriptionService: TranscriptionService {
@@ -25,6 +26,7 @@ class NullTranscriptionService: TranscriptionService {
         dictionaryContext: List<String>?,
         contentContext: String?,
         encoding: AudioEncoding,
+        initialTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         emit(TranscriptionSessionStatus.Open)
         logger.v { "Transcription flow opened" }

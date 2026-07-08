@@ -64,7 +64,7 @@ class RecordingPreprocessorTest {
 
             override fun deleteRecordingFromCache(id: String) {}
 
-            override suspend fun exportRecording(id: String): Path {
+            override suspend fun exportRecording(id: String, useOriginalAudio: Boolean): Path {
                 TODO()
             }
 

@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coredevices.pebble.Platform
 import coredevices.pebble.services.AppStoreHomeResult
+import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreOnboarding
 import coredevices.pebble.ui.CommonAppType
@@ -243,7 +244,8 @@ fun WatchOnboardingScreen(
                             snackbarDisplay = snackbarDisplay,
                         )
 
-                        val languagePackInstalled = connectedWatch.languagePackInstalled()
+                        val languagePackRepository: LanguagePackRepository = koinInject()
+                        val languagePackInstalled = connectedWatch.languagePackInstalled(languagePackRepository)
                         val installingLanguagePack =
                             connectedWatch.languagePackInstallState.installing()
                         SectionText("Install a language pack")

@@ -23,6 +23,7 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     companion object {
         const val NOTIFICATION_ID_BASE_REMINDER = 10
+        const val NOTIFICATION_ID_BASE_REMINDER_PRE = 1_000_000
         val audioPermResults = MutableSharedFlow<Boolean>()
         val alarmPermResults = MutableSharedFlow<Boolean>()
         val notificationPermResults = MutableSharedFlow<Boolean>()

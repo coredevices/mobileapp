@@ -18,7 +18,7 @@ interface CachedItemDao {
     @Query("SELECT * FROM CachedItem WHERE firestoreId = :id")
     suspend fun getById(id: String): CachedItem?
 
-    @Query("SELECT * FROM CachedItem WHERE firestoreId = :id")
+    @Query("SELECT * FROM CachedItem WHERE firestoreId = :id AND deleted = 0")
     fun getByIdFlow(id: String): Flow<CachedItem?>
 
     @Query("SELECT * FROM CachedItem WHERE deleted = 0 ORDER BY updatedAt DESC")
@@ -65,4 +65,7 @@ interface CachedItemDao {
 
     @Query("SELECT firestoreId FROM CachedItem")
     suspend fun getAllIds(): List<String>
+
+    @Query("SELECT COUNT(*) FROM CachedItem WHERE locked = 1")
+    suspend fun countLocked(): Int
 }

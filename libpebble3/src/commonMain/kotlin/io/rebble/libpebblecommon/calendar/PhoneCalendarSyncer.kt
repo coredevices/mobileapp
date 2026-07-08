@@ -202,25 +202,34 @@ class PhoneCalendarSyncer(
         remindersToDelete: MutableList<Uuid>,
     ) {
         val existingReminders = timelineReminderDao.getRemindersForPin(pinId)
-        val eventReminderTimestamps =
-            event.reminders.map { event.startTime - it.minutesBefore.minutes }
+        val desiredReminders = if (remindersEnabled) {
+            event.reminders.map { reminder ->
+                event.toTimelineReminder(event.startTime - reminder.minutesBefore.minutes, pinId)
+            }
+        } else {
+            emptyList()
+        }
 
         remindersToDelete += existingReminders.filter { er ->
-            if (!remindersEnabled) return@filter true
-            eventReminderTimestamps.none { t ->
-                er.content.timestamp.instant == t
-            }
+            desiredReminders.none { dr -> dr.content.timestamp.instant == er.content.timestamp.instant }
         }.map { it.itemId }
 
-        remindersToInsert += eventReminderTimestamps.filter { t ->
-            if (!remindersEnabled) return@filter false
-            existingReminders.none { er ->
-                er.content.timestamp.instant == t
+        remindersToInsert += desiredReminders.mapNotNull { dr ->
+            val existing = existingReminders.find {
+                it.content.timestamp.instant == dr.content.timestamp.instant
             }
-        }.map { event.toTimelineReminder(it, pinId) }
+            when {
+                existing == null -> dr
+                existing.recordHashCode() != dr.recordHashCode() -> dr.copy(itemId = existing.itemId)
+                else -> null
+            }
+        }
     }
 
     override fun calendars(): Flow<List<CalendarEntity>> = calendarDao.getFlow()
+
+    override suspend fun createEvent(event: NewCalendarEvent): String? =
+        systemCalendar.createEvent(event)
 
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         libPebbleCoroutineScope.launch {

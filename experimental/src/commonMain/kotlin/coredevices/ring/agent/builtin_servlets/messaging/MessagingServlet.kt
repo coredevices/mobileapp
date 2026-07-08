@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.messaging
 
 import co.touchlab.kermit.Logger
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
 import coredevices.ring.database.Preferences
 import org.koin.core.component.KoinComponent
@@ -21,6 +22,20 @@ object MessagingServlet: BuiltInMcpIntegration(
             listOf(SendBeeperMessageToolConstants.TOOL_NAME)
         } else {
             emptyList()
+        }
+    }
+
+    override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
+        return if (prefs.approvedBeeperContacts.value.isNotEmpty()) {
+            buildString {
+                appendLine(super.getExtraContext(sessionContext))
+                appendLine("Approved contacts for ${SendBeeperMessageToolConstants.TOOL_NAME}:")
+                prefs.approvedBeeperContacts.value.forEach { contact ->
+                    appendLine("- ${contact.name} ${contact.nickname?.let { "(Nickname: $it)" } ?: ""}".trim())
+                }
+            }
+        } else {
+            super.getExtraContext(sessionContext)
         }
     }
 }

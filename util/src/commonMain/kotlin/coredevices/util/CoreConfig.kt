@@ -92,7 +92,7 @@ data class CoreConfig(
     val preferHealthTab: Boolean = true,
     val obfuscateSensitiveLogs: Boolean = true,
     val hidePermissionWarningBadges: Boolean = false,
-    val androidForegroundServiceForWatchConnection: Boolean = false,
+    val androidForegroundServiceForWatchConnectionV2: Boolean = true,
 )
 
 @Serializable

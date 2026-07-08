@@ -37,6 +37,7 @@ data class ItemDocument(
     val sourceToolCallId: String? = null,
     val metadata: ItemMetadata = ItemMetadata.Note,
     val deleted: Boolean = false,
+    val encrypted: EncryptedEnvelope? = null,
 ) {
     @Serializable
     sealed interface ItemMetadata {
@@ -49,6 +50,9 @@ data class ItemDocument(
              *  local reminder notification deep link back to this item. Defaults to
              *  null for items decoded from older records. */
             val localReminderId: Int? = null,
+            /** Lead time (ms) before [dueAt] at which an extra early "heads-up"
+             *  notification was scheduled, or null if none. */
+            val notifyBeforeMillis: Long? = null,
         ) : ItemMetadata
 
         @Serializable
@@ -90,6 +94,16 @@ data class ItemDocument(
         }
 
         @Serializable
+        @SerialName("calendar_event")
+        data class CalendarEvent(
+            @Serializable(with = InstantComponentSerializer::class)
+            val startTime: Instant,
+            @Serializable(with = InstantComponentSerializer::class)
+            val endTime: Instant,
+            val location: String? = null,
+        ) : ItemMetadata
+
+        @Serializable
         @SerialName("answer")
         data class Answer(val question: String) : ItemMetadata
 
@@ -114,5 +128,14 @@ data class ItemDocument(
         @Serializable
         @SerialName("checklist")
         object Checklist : ItemMetadata
+
+        /**
+         * Marker for a note/reminder handed to an external integration rather than stored
+         * locally — the real object lives in that service. [integration] is the provider's
+         * display name (e.g. "Notion", "Google Tasks") so the feed can say "Sent to X".
+         */
+        @Serializable
+        @SerialName("delegated")
+        data class DelegatedToIntegration(val integration: String) : ItemMetadata
     }
 }

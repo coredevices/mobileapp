@@ -92,9 +92,30 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                                 // data. Wait for Firebase to restore auth state.
                                 logger.i { "User is null, prior account exists (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), waiting for restoration" }
                                 _user.emit(null)
+                                var attempt = 0
+                                var retryDelay = AUTH_RESTORE_INITIAL_RETRY_INTERVAL
                                 while (true) {
-                                    delay(1.minutes)
-                                    logger.w { "Still waiting for auth restoration (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
+                                    delay(retryDelay)
+                                    retryDelay = (retryDelay * 2).coerceAtMost(AUTH_RESTORE_MAX_RETRY_INTERVAL)
+                                    attempt++
+                                    // We rely on idTokenChanged (upstream of this flatMapLatest) firing
+                                    // with the restored user to break out of this wait. Occasionally the
+                                    // SDK repopulates currentUser without emitting a token event (seen after
+                                    // aggressive OS process kills), which would leave us waiting forever.
+                                    // If we can see a currentUser here, actively force a token refresh so
+                                    // idTokenChanged fires and flatMapLatest cancels this wait and processes
+                                    // the real user.
+                                    val restored = Firebase.auth.currentUser
+                                    if (restored != null) {
+                                        logger.i { "currentUser present during auth wait (uid=${restored.uid.take(8)}), forcing token refresh to resume" }
+                                        try {
+                                            withContext(NonCancellable) { restored.getIdToken(true) }
+                                        } catch (e: Exception) {
+                                            logger.w(e) { "Forced token refresh failed during auth restoration wait" }
+                                        }
+                                    } else {
+                                        logger.w { "Still waiting for auth restoration, attempt=$attempt (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
+                                    }
                                 }
                             }
                             logger.i { "User is null, no prior account (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), delay=2s before anonymous sign-in" }
@@ -223,6 +244,12 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
 
 private const val KEY_HAD_NON_ANONYMOUS_ACCOUNT = "had_non_anonymous_account"
 private const val KEY_HAD_ANONYMOUS_ACCOUNT = "had_anonymous_account"
+
+// Poll quickly at first so a silently-restored session is picked up within seconds
+// (the user is looking at a sign-in screen while we wait), backing off to a steady
+// 1-minute cadence to avoid needless wakeups/token refreshes during a long stall.
+private val AUTH_RESTORE_INITIAL_RETRY_INTERVAL = 2.seconds
+private val AUTH_RESTORE_MAX_RETRY_INTERVAL = 1.minutes
 
 fun generateRandomUserToken(): String {
     val charPool = "0123456789abcdef"

@@ -193,7 +193,7 @@ class RealPebbleDeepLinkHandler(
             pebbleAccount.setToken(token = token, bootUrl = path)
             _initialLockerSync.value = true
             libPebble.requestLockerSync().await()
-            libPebble.checkForFirmwareUpdates()
+            libPebble.checkForFirmwareUpdates(false)
             _initialLockerSync.value = false
             analytics.logEvent("rebble.logged-in")
         }

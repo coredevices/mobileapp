@@ -426,7 +426,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
                 if (firmwareUpdateUiTracker.shouldUiUpdateCheck()) {
                     firmwareUpdateUiTracker.didFirmwareUpdateCheckFromUi()
-                    libPebble.checkForFirmwareUpdates()
+                    libPebble.checkForFirmwareUpdates(false)
                 }
             }
 
@@ -642,6 +642,13 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         "You'll see the light flash red green blue repeatedly when successful.",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
                     )
+                    val uriHandler = LocalUriHandler.current
+                    TextButton(
+                        onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Text("Need more help? View detailed instructions")
+                    }
                 }
             },
             confirmButton = {
@@ -850,6 +857,9 @@ fun RingItem(
                                                 showRingAlreadyPairedDialog = true
                                             }
                                         }
+                                        is IndexPairingResult.EraseFailed -> {
+                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "erase_failed"))
+                                        }
                                         null -> {
                                             coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
                                         }
@@ -941,6 +951,13 @@ fun RingItem(
                     )
                     Text("Short (3 times) LONG (1 second, 3 times) short (3 times)", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
                     Text("You'll see the light flash red green blue repeatedly when successful.", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp) )
+                    val uriHandler = LocalUriHandler.current
+                    TextButton(
+                        onClick = { uriHandler.openUri("https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01") },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Text("Need more help? View detailed instructions")
+                    }
                 }
             },
             confirmButton = {
@@ -1278,7 +1295,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                             Icon(Icons.Outlined.Autorenew, contentDescription = null)
                         },
                         onClick = {
-                            watch.checkforFirmwareUpdate()
+                            watch.checkforFirmwareUpdate(true)
                         }
                     )
                 }
@@ -1287,7 +1304,8 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
             HorizontalDivider()
 
             if (watch is ConnectedPebbleDevice) {
-                val languagePackInstalled = watch.languagePackInstalled()
+                val languagePackRepository: LanguagePackRepository = koinInject()
+                val languagePackInstalled = watch.languagePackInstalled(languagePackRepository)
                 val languageText = when  {
                     languagePackInstalled.isNullOrBlank() -> "Language"
                     else -> "Language: $languagePackInstalled"
@@ -1665,10 +1683,10 @@ data class TestNotificationContent(
     val color: TimelineColor? = TimelineColor.Orange,
 )
 
-fun ConnectedPebbleDevice.languagePackInstalled(): String? {
+fun ConnectedPebbleDevice.languagePackInstalled(repository: LanguagePackRepository): String? {
     val languagePackInstalledAtConnectionTime = installedLanguagePack
     val languagePackRecentlyInstalledSinceConnection = (languagePackInstallState as? LanguagePackInstallState.Idle)?.successfullyInstalledLanguage
-    return languagePackRecentlyInstalledSinceConnection ?: languagePackInstalledAtConnectionTime?.let { "${it.isoLocal} (v${it.version})" }
+    return languagePackRecentlyInstalledSinceConnection ?: languagePackInstalledAtConnectionTime?.let { repository.displayNameForInstalled(it) }
 }
 
 private const val CUSTOM_NOTIFICATION_CONTENT_KEY = "custom_notification_content"

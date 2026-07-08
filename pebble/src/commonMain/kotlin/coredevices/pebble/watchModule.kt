@@ -22,7 +22,7 @@ import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
-import coredevices.pebble.services.CactusTranscription
+import coredevices.pebble.services.HybridTranscription
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.Memfault
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
@@ -216,7 +216,7 @@ val watchModule = module {
     }
     singleOf(::RebbleAsrService)
     single {
-        CactusTranscription(
+        HybridTranscription(
             get(),
             lazy { get<LibPebble3>() },
             get(),

@@ -235,7 +235,7 @@ class PebbleAppDelegate(
         val jobs = listOf(
             scope.launch {
                 // TODO not suspending
-                libPebble.checkForFirmwareUpdates()
+                libPebble.checkForFirmwareUpdates(false)
             },
             scope.launch {
                 libPebble.requestLockerSync().await()

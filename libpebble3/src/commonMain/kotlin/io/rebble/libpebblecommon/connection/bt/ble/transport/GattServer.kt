@@ -8,8 +8,6 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.SERVER_META_RESPONSE
-import io.rebble.libpebblecommon.database.dao.KnownWatchDao
-import io.rebble.libpebblecommon.database.entity.TransportType
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.Flow
@@ -43,37 +41,30 @@ expect class GattServer {
 }
 
 class GattServerManager(
-    private val config: BleConfigFlow,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val bluetoothStateProvider: BluetoothStateProvider,
     private val appContext: AppContext,
     private val bleConfigFlow: BleConfigFlow,
     private val blePlatformConfig: BlePlatformConfig,
-    private val knownWatchDao: KnownWatchDao,
 ) {
     private val serverMutex = Mutex()
     private val logger = Logger.withTag("GattServerManager")
     private var gattServer: GattServer? = null
+    private val registeredDevices = mutableSetOf<PebbleBleIdentifier>()
 
     fun init() {
+        // The GATT server is only needed when a watch uses forward PPoG (phone
+        // hosts the PPoG service). Reversed-PPoG connections skip
+        // registerDevice() and don't need the server open. We now open the
+        // server lazily in registerDevice() and close it in unregisterDevice()
+        // when the last registered device is gone, so a reversed-only setup
+        // never advertises the forward-PPoG service at all.
         libPebbleCoroutineScope.launch {
             bluetoothStateProvider.state.collect { bluetooth ->
                 logger.d("Bluetooth state: $bluetooth")
-                when (bluetooth) {
-                    BluetoothState.Enabled -> {
-                        val hasBleWatch = knownWatchDao.knownWatches()
-                            .any { it.transportType == TransportType.BluetoothLe }
-                        if (hasBleWatch) {
-                            openIfNeeded()
-                        } else {
-                            logger.d("no BLE watches registered, skipping GATT server pre-registration")
-                        }
-                    }
-                    BluetoothState.Disabled -> {
-                        if (blePlatformConfig.closeGattServerWhenBtDisabled) {
-                            close()
-                        }
-                    }
+                if (bluetooth == BluetoothState.Disabled &&
+                    blePlatformConfig.closeGattServerWhenBtDisabled) {
+                    close()
                 }
             }
         }
@@ -84,12 +75,12 @@ class GattServerManager(
         sendChannel: SendChannel<ByteArray>
     ): Boolean {
         if (gattServer == null && bluetoothStateProvider.state.value == BluetoothState.Enabled) {
-            logger.w("Trying to open gatt server to register device. This happens on first pairing of a BLE watch, or after bluetooth permission is just granted.")
             openIfNeeded()
         }
         val gs = gattServer
         if (gs != null) {
             gs.registerDevice(identifier, sendChannel)
+            registeredDevices.add(identifier)
             return true
         } else {
             return false
@@ -98,6 +89,10 @@ class GattServerManager(
 
     fun unregisterDevice(identifier: PebbleBleIdentifier) {
         gattServer?.unregisterDevice(identifier)
+        registeredDevices.remove(identifier)
+        if (registeredDevices.isEmpty() && gattServer != null) {
+            libPebbleCoroutineScope.launch { close() }
+        }
     }
 
     suspend fun sendData(
@@ -122,9 +117,6 @@ class GattServerManager(
     }
 
     private suspend fun openIfNeeded() {
-        if (config.value.reversedPPoG) {
-            return
-        }
         serverMutex.withLock {
             if (gattServer != null) return@withLock
             logger.d("open gatt server")

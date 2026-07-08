@@ -54,13 +54,15 @@ actual class AudioRecorder : AutoCloseable {
         withContext(Dispatchers.Main) {
             engine.prepare()
         }
-        session.setCategory(AVAudioSessionCategoryRecord, null)
-        session.setActive(true, null)
-        val builtinMic = session.availableInputs
-            ?.firstOrNull { (it as AVAudioSessionPortDescription).portType == AVAudioSessionPortBuiltInMic!! }
-                as AVAudioSessionPortDescription?
-        checkNotNull(builtinMic) { "Built-in microphone not found" }
-        session.setPreferredInput(builtinMic, null)
+        withContext(Dispatchers.Main) {
+            session.setCategory(AVAudioSessionCategoryRecord, null)
+            session.setActive(true, null)
+            val builtinMic = session.availableInputs
+                ?.firstOrNull { (it as AVAudioSessionPortDescription).portType == AVAudioSessionPortBuiltInMic!! }
+                    as AVAudioSessionPortDescription?
+            checkNotNull(builtinMic) { "Built-in microphone not found" }
+            session.setPreferredInput(builtinMic, null)
+        }
         val micFormat = withContext(Dispatchers.Main) {
             mic.inputFormatForBus(0u)
         }

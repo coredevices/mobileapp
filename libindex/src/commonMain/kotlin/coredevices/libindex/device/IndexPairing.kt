@@ -1,6 +1,8 @@
 package coredevices.libindex.device
 
 import co.touchlab.kermit.Logger
+import coredevices.haversine.KMPHaversineHacksDelegate
+import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -39,7 +41,9 @@ class RealIndexPairing(
     private val transferRepo: RingTransferRepository,
     private val prefs: BasePreferences,
     private val deviceRepo: IndexDeviceManager,
-    private val deviceFactory: IndexDeviceFactory
+    private val deviceFactory: IndexDeviceFactory,
+    private val haversineSatelliteManager: KMPHaversineSatelliteManager,
+    private val ringHacksDelegate: KMPHaversineHacksDelegate
 ): IndexPairing {
     companion object {
         private val logger = Logger.withTag("RealIndexPairing")
@@ -125,6 +129,17 @@ class RealIndexPairing(
                 withContext(Dispatchers.IO) {
                     indexStorage.setLastSuccessfulCollectionIndex(null)
                     transferRepo.markTransfersAsPreviousIndexIteration()
+                    try {
+                        // Wipe collections in case factory recordings survive, and then tell the delegate we don't need a wipe next time we transfer.
+                        haversineSatelliteManager.getSatelliteById(device.identifier.asString)?.let { satellite ->
+                            satellite.eraseCollections()
+                            logger.d { "Erased collections on satellite ${device.identifier.asString}" }
+                            ringHacksDelegate.wipedCollectionsBeforeTransfer(satellite)
+                        } ?: logger.w { "Could not find satellite with id ${device.identifier.asString} to erase collections" }
+                    } catch (e: Exception) {
+                        logger.e(e) { "Failed to erase collections on satellite ${device.identifier.asString}" }
+                        return@withContext IndexPairingResult.EraseFailed(e)
+                    }
                     prefs.setRingPaired(device.identifier.asString)
                     withTimeout(3.seconds) {
                         prefs.ringPaired.first { it == device.identifier.asString }
@@ -147,4 +162,5 @@ sealed interface PairingRequestResult {
 sealed interface IndexPairingResult {
     object Success: IndexPairingResult
     class PairingFailure(val cause: PairingRequestResult): IndexPairingResult
+    class EraseFailed(val cause: Throwable): IndexPairingResult
 }

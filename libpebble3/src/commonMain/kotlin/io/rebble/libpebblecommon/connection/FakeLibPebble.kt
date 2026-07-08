@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -124,7 +125,7 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override fun checkForFirmwareUpdates() {
+    override fun checkForFirmwareUpdates(force: Boolean) {
     }
 
     override suspend fun updateTimeIfNeeded() {
@@ -318,6 +319,8 @@ class FakeLibPebble : LibPebble {
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         // No-op
     }
+
+    override suspend fun createEvent(event: NewCalendarEvent): String? = null
 
     // OtherPebbleApps interface
     override fun otherPebbleCompanionAppsInstalled(): StateFlow<List<OtherPebbleApp>> =
@@ -607,7 +610,7 @@ class FakeConnectedDevice(
 
     override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
 
-    override fun checkforFirmwareUpdate() {}
+    override fun checkforFirmwareUpdate(force: Boolean) {}
 
     override suspend fun launchApp(uuid: Uuid) {}
 
@@ -747,7 +750,7 @@ class FakeConnectedDeviceInRecovery(
 
     override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {}
 
-    override fun checkforFirmwareUpdate() {}
+    override fun checkforFirmwareUpdate(force: Boolean) {}
 
     override val watchInfo: WatchInfo = WatchInfo(
         runningFwVersion = FirmwareVersion.from(

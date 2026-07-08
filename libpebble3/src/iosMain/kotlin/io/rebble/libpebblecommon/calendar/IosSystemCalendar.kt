@@ -30,6 +30,7 @@ import platform.EventKit.EKEventStatusNone
 import platform.EventKit.EKEventStatusTentative
 import platform.EventKit.EKEventStore
 import platform.EventKit.EKEventStoreChangedNotification
+import platform.EventKit.EKSpan
 import platform.EventKit.EKParticipant
 import platform.EventKit.EKParticipantStatus.EKParticipantStatusAccepted
 import platform.EventKit.EKParticipantStatus.EKParticipantStatusDeclined
@@ -177,6 +178,36 @@ class IosSystemCalendar(
 
     override fun hasPermission(): Boolean {
         return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == EKAuthorizationStatusAuthorized
+    }
+
+    override suspend fun createEvent(event: NewCalendarEvent): String? {
+        val ek = eventStore() ?: return null
+        val calendar = ek.defaultCalendarForNewEvents
+        if (calendar == null) {
+            logger.e { "No default calendar for new events" }
+            return null
+        }
+        val ekEvent = EKEvent.eventWithEventStore(ek)
+        ekEvent.title = event.title
+        ekEvent.startDate = event.startTime.toNSDate()
+        ekEvent.endDate = event.endTime.toNSDate()
+        ekEvent.location = event.location
+        ekEvent.notes = event.description
+        ekEvent.calendar = calendar
+        return try {
+            // Pass null for the error pointer; rely on the Boolean return for success.
+            val saved = ek.saveEvent(ekEvent, EKSpan.EKSpanThisEvent, null)
+            if (saved) {
+                logger.d { "Created calendar event -> ${ekEvent.eventIdentifier}" }
+                ekEvent.eventIdentifier
+            } else {
+                logger.e { "Failed to save calendar event" }
+                null
+            }
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to save calendar event" }
+            null
+        }
     }
 
     override fun supportsPinActions(): Boolean = false

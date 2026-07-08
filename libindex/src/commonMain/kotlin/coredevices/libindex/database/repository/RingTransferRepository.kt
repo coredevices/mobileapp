@@ -103,6 +103,16 @@ class RingTransferRepository(
         return transfers.filter { it.status == RingTransferStatus.Started }
     }
 
+    /**
+     * Fail any current-iteration transfers below [index] still stuck in [RingTransferStatus.Started].
+     * (MOB-8727)
+     */
+    suspend fun failOrphanedStartedTransfersBelow(index: Int): List<RingTransfer> {
+        val orphaned = ringTransferDao.getStartedTransfersBelowIndex(index)
+        orphaned.forEach { ringTransferDao.updateStatus(it.id, RingTransferStatus.Failed) }
+        return orphaned
+    }
+
     suspend fun markTransfersAsPreviousIndexIteration() {
         ringTransferDao.markTransfersAsPreviousIndexIteration()
     }

@@ -3,6 +3,8 @@ package coredevices
 
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import coredevices.ring.agent.integrations.obsidian.IosObsidianVault
+import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.RingDelegate
 import coredevices.util.integrations.IntegrationTokenStorage
@@ -62,4 +64,5 @@ actual val platformRingModule = module {
     singleOf(::BackgroundRingService)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
     single { EncryptionKeyManager() }
+    single<ObsidianVault> { IosObsidianVault() }
 }

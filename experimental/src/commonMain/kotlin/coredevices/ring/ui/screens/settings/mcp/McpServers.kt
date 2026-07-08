@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -37,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
@@ -256,7 +260,17 @@ private fun HttpServerEditDialog(
     var authHeader by remember { mutableStateOf(initialServer?.authHeader ?: "") }
     var showAuthSection by remember { mutableStateOf(initialServer?.authHeader?.isNotBlank() == true) }
     var cachedTitle by remember { mutableStateOf(initialServer?.cachedTitle ?: "") }
+    // The endpoint (url, protocol, auth) that `cachedTitle` was fetched for. A title only
+    // describes that exact endpoint, so if these fields change we must not keep it.
+    var titleEndpoint by remember {
+        mutableStateOf(
+            initialServer?.let { Triple(it.url, it.streamable, it.authHeader ?: "") }
+        )
+    }
     var isFetchingTitle by remember { mutableStateOf(false) }
+    var serverContactable by remember { mutableStateOf<Boolean?>(null) }
+    // The reason the server couldn't be reached, surfaced to the user (null when reachable/unknown).
+    var fetchError by remember { mutableStateOf<String?>(null) }
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
@@ -267,6 +281,8 @@ private fun HttpServerEditDialog(
         if (url.isBlank()) {
             cachedTitle = ""
             availablePrompts = emptyList()
+            serverContactable = null
+            fetchError = null
             return@LaunchedEffect
         }
         delay(500) // Debounce
@@ -282,22 +298,36 @@ private fun HttpServerEditDialog(
             )
             integration.connect()
             cachedTitle = integration.title ?: ""
+            titleEndpoint = Triple(url, streamable, authHeader)
             availablePrompts = integration.listPrompts()
             integration.close()
+            serverContactable = true
+            fetchError = null
         } catch (e: Exception) {
             Logger.withTag("HttpServerEditDialog").w("Failed to fetch MCP server title", e)
-            cachedTitle = ""
+            // Keep the cached title only if the endpoint is unchanged (server just momentarily
+            // unreachable); if the user edited url/protocol/auth, the old title is stale for the
+            // new endpoint and must not be shown or saved.
+            if (Triple(url, streamable, authHeader) != titleEndpoint) {
+                cachedTitle = ""
+            }
             availablePrompts = emptyList()
+            serverContactable = false
+            fetchError = e.message ?: e::class.simpleName ?: "Unknown error"
         } finally {
             isFetchingTitle = false
         }
     }
 
     val isEditing = initialServer != null
-    val canSave = name.isNotBlank() && url.isNotBlank() && cachedTitle.isNotBlank()
+    // Only Name and URL are required. Contactability is advisory (surfaced as an error below)
+    // but must not gate saving: a server may be momentarily down, need auth entered here, or
+    // simply not respond to the title probe while still being a valid entry to create.
+    val canSave = name.isNotBlank() && url.isNotBlank()
 
     M3Dialog(
         onDismissRequest = onDismiss,
+        scrollableContent = true,
         title = {
             Text(if (isEditing) "Edit HTTP MCP Server" else "Add HTTP MCP Server")
         },
@@ -334,11 +364,16 @@ private fun HttpServerEditDialog(
         }
     ) {
         Column {
+            // Resolved inside the dialog: dialogs have their own focus manager.
+            val focusManager = LocalFocusManager.current
+            val dismissKeyboard = KeyboardActions(onDone = { focusManager.clearFocus() })
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = dismissKeyboard,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(4.dp))
@@ -346,14 +381,24 @@ private fun HttpServerEditDialog(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("URL") },
-                supportingText = if (isFetchingTitle) {
-                    { Text("Fetching server info...") }
-                } else if (cachedTitle.isNotBlank()) {
-                    { Text("Server: $cachedTitle") }
-                } else {
-                    { Text("") }
+                isError = serverContactable == false,
+                supportingText = when {
+                    isFetchingTitle -> {
+                        { Text("Fetching server info...") }
+                    }
+                    serverContactable == false -> {
+                        { Text("Couldn't reach server: ${fetchError ?: "unknown error"}") }
+                    }
+                    cachedTitle.isNotBlank() -> {
+                        { Text("Server: $cachedTitle") }
+                    }
+                    else -> {
+                        { Text("") }
+                    }
                 },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = dismissKeyboard,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -417,6 +462,8 @@ private fun HttpServerEditDialog(
                         label = { Text("Authorization Header") },
                         placeholder = { Text("Bearer token123...") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = dismissKeyboard,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -506,7 +553,8 @@ fun McpServerEntryItem(
             Text(
                 when (entry) {
                     is McpServerEntry.BuiltinMcpEntry -> entry.builtinMcpName
-                    is McpServerEntry.HttpServerEntry -> entry.server.cachedTitle
+                    is McpServerEntry.HttpServerEntry ->
+                        entry.server.cachedTitle.ifBlank { entry.server.name }
                 }
             )
         },

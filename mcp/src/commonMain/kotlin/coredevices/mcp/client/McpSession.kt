@@ -2,6 +2,7 @@ package coredevices.mcp.client
 
 import co.touchlab.kermit.Logger
 import coredevices.mcp.McpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import kotlinx.coroutines.CoroutineScope
@@ -56,14 +57,14 @@ class McpSession(
             .flatten()
     }
 
-    suspend fun getExtraContext(includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
+    suspend fun getExtraContext(context: SessionContext?, includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
         return integrations
             .map {
                 scope.async {
                     val includePrompts = includePromptsFrom[it.name]
                     when (it) {
-                        is PromptProvider -> it.getExtraContext(includePrompts)
-                        else -> it.getExtraContext()
+                        is PromptProvider -> it.getExtraContext(context, includePrompts)
+                        else -> it.getExtraContext(context)
                     }
                 }
             }
@@ -79,6 +80,7 @@ class McpSession(
      * @param integrationName The name of the integration.
      * @param toolName The name of the tool to call.
      * @param jsonInput The JSON input parameters for the tool.
+     * @param context The session context shared with the tool.
      * @param requireExists If true, throws an exception if the integration is not found.
      * @return ToolCallResult indicating success or failure of the tool call.
      */
@@ -86,6 +88,7 @@ class McpSession(
         integrationName: String,
         toolName: String,
         jsonInput: Map<String, JsonElement>,
+        context: SessionContext,
         requireExists: Boolean = false
     ): ToolCallResult {
         val integration = integrationLookup[integrationName]
@@ -97,7 +100,7 @@ class McpSession(
                     SemanticResult.GenericFailure("Invalid tool call")
                 )
             }
-        return integration.callTool(toolName, jsonInput)
+        return integration.callTool(toolName, jsonInput, context)
     }
 }
 

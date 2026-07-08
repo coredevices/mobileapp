@@ -86,7 +86,7 @@ class NotionIntegration(
         }
     }
 
-    override suspend fun createNote(content: String): String {
+    override suspend fun createNote(content: String, source: ItemSource?): String {
         val user = usersDao.user.firstOrNull()
             ?: throw IntegrationAuthException("User not authenticated with Notion")
         val pageId = findPage()

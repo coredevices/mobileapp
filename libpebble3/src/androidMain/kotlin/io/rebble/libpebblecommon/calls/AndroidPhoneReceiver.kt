@@ -119,13 +119,12 @@ class AndroidPhoneReceiver(
                             }
                             return@collect
                         }
-                        // Get the latest decline action for hangup
-                        val declineAction = callDetector.declineAction
                         currentCall.value = Call.ActiveCall(
                             contactName = existingCall.contactName,
                             contactNumber = existingCall.contactNumber,
                             cookie = existingCall.cookie,
                             onCallEnd = {
+                                val declineAction = callDetector.declineAction
                                 if (declineAction != null) {
                                     logger.v { "Ending call via notification action" }
                                     try {
@@ -189,6 +188,7 @@ class AndroidPhoneReceiver(
             contactNumber = contactNumber,
             cookie = cookie,
             onCallAnswer = {
+                val answerAction = callDetector.answerAction
                 if (answerAction != null) {
                     logger.v { "Answering call via notification action" }
                     try {
@@ -201,6 +201,7 @@ class AndroidPhoneReceiver(
                 }
             },
             onCallEnd = {
+                val declineAction = callDetector.declineAction
                 if (declineAction != null) {
                     logger.v { "Declining call via notification action" }
                     try {

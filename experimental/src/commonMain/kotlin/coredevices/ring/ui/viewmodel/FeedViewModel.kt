@@ -17,6 +17,7 @@ import coredevices.ring.agent.integrations.UIEmailIntegration
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -38,6 +39,7 @@ class FeedViewModel(
     private val contextualActionPredictor: ContextualActionPredictor,
     private val ringTransferDao: RingTransferDao,
     private val recordingProcessingQueue: RecordingProcessingQueue,
+    private val appScope: LibIndexCoroutineScope,
 ): ViewModel() {
     companion object {
         private val logger = Logger.withTag(FeedViewModel::class.simpleName!!)
@@ -130,7 +132,9 @@ class FeedViewModel(
 
     fun retryFeedItem(item: RecordingFeedItem) {
         val entry = item.entry ?: return
-        viewModelScope.launch {
+        // appScope: the retry enqueue must land even if the user navigates
+        // away before it commits.
+        appScope.launch {
             val transfers = withContext(Dispatchers.IO) { ringTransferDao.getByRecordingId(item.id) }
             val transfer = transfers.firstOrNull()
             if (transfer != null) {

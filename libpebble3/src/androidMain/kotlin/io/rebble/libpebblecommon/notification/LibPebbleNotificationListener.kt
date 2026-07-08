@@ -258,4 +258,15 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
             null
         }
     }
+
+    fun isBindingAlive(): Boolean = try {
+        getActiveNotifications()
+        true
+    } catch (e: SecurityException) {
+        logger.w(e) { "Notification listener binding appears dead (getActiveNotifications threw)" }
+        false
+    } catch (e: Exception) {
+        logger.e(e) { "Unexpected error probing notification listener binding; assuming alive" }
+        true
+    }
 }

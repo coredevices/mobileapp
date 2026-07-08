@@ -3,6 +3,7 @@ package coredevices.ring.agent.builtin_servlets.clock
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -48,7 +49,7 @@ class SetAlarmTool : BuiltInMcpTool(
     companion object {
         private val logger = Logger.withTag(SetAlarmTool::class.simpleName!!)
         const val TOOL_NAME = "set_alarm"
-        const val TOOL_DESCRIPTION = "Set an alarm for a specified time"
+        const val TOOL_DESCRIPTION = "Set an alarm for a specific clock time like 8am or 16:30."
     }
 
     @Serializable
@@ -60,7 +61,7 @@ class SetAlarmTool : BuiltInMcpTool(
         val label: String? = null
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val setAlarmArgs = JsonSnake.decodeFromString<SetAlarmArgs>(jsonInput)
         return try {
             setAlarm(setAlarmArgs.timeHours, setAlarmArgs.timeMinutes, setAlarmArgs.label)

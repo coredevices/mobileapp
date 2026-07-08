@@ -84,7 +84,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 30,
+    version = 32,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -115,6 +115,10 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 27, to = 28, Migrate27To28::class),
         AutoMigration(from = 28, to = 29, Migrate27To28::class),
         AutoMigration(from = 29, to = 30),
+        // 30→31: adds CachedItem.locked / CachedList.locked (encrypted-without-key rows).
+        AutoMigration(from = 30, to = 31),
+        // 31→32: adds LocalReminderData.notifyBeforeMillis (early heads-up notification lead time).
+        AutoMigration(from = 31, to = 32),
     ]
 )
 @TypeConverters(Converters::class)

@@ -665,11 +665,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "Show foreground service notification to keep app alive in background",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
-                    checked = coreConfig.androidForegroundServiceForWatchConnection,
+                    checked = coreConfig.androidForegroundServiceForWatchConnectionV2,
                     onCheckChanged = {
                         coreConfigHolder.update(
                             coreConfig.copy(
-                                androidForegroundServiceForWatchConnection = it,
+                                androidForegroundServiceForWatchConnectionV2 = it,
                             )
                         )
                     },
@@ -884,12 +884,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Use reversed PPoG",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Connectivity,
-                    checked = libPebbleConfig.bleConfig.reversedPPoG,
+                    checked = libPebbleConfig.bleConfig.legacyReversedPPoG,
                     onCheckChanged = {
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 bleConfig = libPebbleConfig.bleConfig.copy(
-                                    reversedPPoG = it
+                                    legacyReversedPPoG = it
                                 )
                             )
                         )

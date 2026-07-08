@@ -3,6 +3,7 @@ package coredevices.ring.agent.builtin_servlets.js
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -82,7 +83,7 @@ class EvaluateJSTool : BuiltInMcpTool(
         val consoleOutput: String
     )
 
-    override suspend fun call(jsonInput: String): ToolCallResult {
+    override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val evaluateJSArgs = JsonSnake.decodeFromString<EvaluateJSArgs>(jsonInput)
         val obfuscate = get<CoreConfigFlow>().value.obfuscateSensitiveLogs
         logger.v { "Evaluating JavaScript: ${if (obfuscate) "[${evaluateJSArgs.js.length} chars redacted]" else evaluateJSArgs.js}" }

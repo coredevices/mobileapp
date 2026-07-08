@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.di
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
-import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
-import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
@@ -57,10 +55,10 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.BatteryWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectionParams
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.Mtu
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.PPoGReset
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleBle
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebblePairing
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogClient
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogPacketSenderProxy
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PpogServer
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PreConnectScanner
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoG
@@ -97,10 +95,12 @@ import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.RealBlobDbDatabaseManager
+import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.RealWatchPrefs
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
+import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
 import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
@@ -503,12 +503,7 @@ fun initKoin(
                     scoped { PPoGStream() }
                     scopedOf(::PpogClient)
                     scopedOf(::PpogServer)
-                    scoped<PPoGPacketSender> {
-                        when (get<BleConfigFlow>().value.reversedPPoG) {
-                            true -> get<PpogClient>()
-                            false -> get<PpogServer>()
-                        }
-                    }
+                    scopedOf(::PpogPacketSenderProxy) bind PPoGPacketSender::class
                     scopedOf(::ConnectionParams)
                     scopedOf(::Mtu)
                     scopedOf(::ConnectivityWatcher)
@@ -516,7 +511,6 @@ fun initKoin(
                     scopedOf(::PebblePairing)
                     scopedOf(::RealPebbleProtocolHandler) bind PebbleProtocolHandler::class
                     scopedOf(::PreConnectScanner)
-                    scopedOf(::PPoGReset)
 
                     // Services
                     scopedOf(::SystemService)

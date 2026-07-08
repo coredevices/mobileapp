@@ -1,5 +1,6 @@
 package coredevices.ring.util
 
+import co.touchlab.kermit.Logger
 import coredevices.util.AudioEncoding
 import kotlinx.cinterop.ObjCObjectVar
 import kotlinx.cinterop.addressOf
@@ -12,10 +13,12 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.refTo
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -73,8 +76,15 @@ fun AudioEncoding.toAVAudioFormat(sampleRate: Int, channels: Int = 1) = when (th
 }
 
 actual class AudioPlayer actual constructor() : AutoCloseable {
+    private val logger = Logger.withTag(AudioPlayer::class.simpleName!!)
     actual val playbackState: MutableStateFlow<PlaybackState> = MutableStateFlow(PlaybackState.Stopped)
-    private val scope = CoroutineScope(Dispatchers.IO)
+    // Reading the playback Source can throw (e.g. a closed/unreadable Source). Without a handler
+    // that would escape the launched coroutine and crash the whole app, so swallow it here.
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        logger.e(throwable) { "Playback failed" }
+        playbackState.value = PlaybackState.Stopped
+    }
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
     private var playJob: Job? = null
 
     actual fun playRaw(

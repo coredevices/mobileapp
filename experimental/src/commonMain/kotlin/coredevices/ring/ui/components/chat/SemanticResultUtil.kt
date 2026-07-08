@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.Note
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Replay
@@ -68,6 +69,7 @@ fun SemanticResultIcon(
         is SemanticResult.SupportingData -> Icons.Outlined.IntegrationInstructions
         is SemanticResult.Response -> Icons.AutoMirrored.Outlined.Chat
         is SemanticResult.ActionLogged -> Icons.Default.Code
+        is SemanticResult.CalendarEventCreation -> Icons.Default.DateRange
     }
     Icon(
         imageVector = icon,
@@ -95,6 +97,7 @@ fun SemanticResult.hasExpandedDetails(): Boolean {
         is SemanticResult.TimerCreation,
         is SemanticResult.TaskCreation,
         is SemanticResult.ListItemCreation,
+        is SemanticResult.CalendarEventCreation,
         is SemanticResult.Response -> true
         is SemanticResult.SupportingData if this.summary != null -> true
         is SemanticResult.GenericFailure if this.userErrorMessage != null -> true
@@ -196,6 +199,24 @@ fun SemanticResultDetails(
         is SemanticResult.ListItemCreation -> {
             Text(text = result.content, modifier = modifier, fontSize = 15.sp)
         }
+        is SemanticResult.CalendarEventCreation -> {
+            Column(modifier) {
+                val dateTime = remember { result.startTime.toLocalDateTime(TimeZone.currentSystemDefault()) }
+                val humanDate = remember {
+                    runBlocking(Dispatchers.Default) { UITimeUtil.humanDate(dateTime.date) }
+                }
+                val humanTime = remember {
+                    runBlocking(Dispatchers.Default) { dateTime.time.format(UITimeUtil.timeFormat()) }
+                }
+                SemanticResultOverline("$humanDate, $humanTime")
+                Row(modifier = Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = result.title)
+                }
+                result.location?.takeIf { it.isNotBlank() }?.let {
+                    Text(text = it, fontSize = 15.sp)
+                }
+            }
+        }
         is SemanticResult.SupportingData -> {
             result.summary?.let {
                 Text(text = it, modifier = modifier)
@@ -241,5 +262,6 @@ suspend fun SemanticResult.actionText(): String {
         is SemanticResult.SupportingData -> "Gathered info"
         is SemanticResult.Response -> "Replied"
         is SemanticResult.ActionLogged -> this.title
+        is SemanticResult.CalendarEventCreation -> "Added to calendar"
     }
 }

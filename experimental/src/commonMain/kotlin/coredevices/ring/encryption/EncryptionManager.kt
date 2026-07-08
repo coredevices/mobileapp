@@ -94,8 +94,12 @@ class EncryptionManager(
 
     /** Bumped after the local key store changes (generate/restore). The
      *  local key is a suspend one-shot, not a flow, so this re-drives
-     *  [keyStorageStatus] to re-read it. */
-    private val keyStoreRevision = MutableStateFlow(0)
+     *  [keyStorageStatus] to re-read it. Exposed via [keyStoreRevision] so
+     *  observers can react to a key being *replaced* (e.g. a wrong key
+     *  swapped for the right one), which leaves [keyStorageStatus]
+     *  unchanged at [KeyStorageStatus.KeyLocallyAvailable]. */
+    private val _keyStoreRevision = MutableStateFlow(0)
+    val keyStoreRevision: StateFlow<Int> = _keyStoreRevision.asStateFlow()
 
     /** Derived from account email, recorded fingerprints (prefs +
      *  Firestore) and local key presence, so it can't go stale. */
@@ -167,7 +171,7 @@ class EncryptionManager(
             preferences.setEncryptionKeyFingerprint(keyResult.fingerprint)
         }
 
-        keyStoreRevision.value++
+        _keyStoreRevision.value++
         logger.i { "Key generated, fingerprint=${keyResult.fingerprint}, backup=$backupLocation" }
         return keyResult.keyBase64
     }
@@ -183,7 +187,7 @@ class EncryptionManager(
             withContext(Dispatchers.IO) {
                 encryptionKeyManager.saveKeyLocally(key, email)
             }
-            keyStoreRevision.value++
+            _keyStoreRevision.value++
             logger.i { "Key restored from cloud keychain" }
             return true
         }
@@ -218,7 +222,7 @@ class EncryptionManager(
         withContext(Dispatchers.IO) {
             encryptionKeyManager.saveKeyLocally(key, email)
         }
-        keyStoreRevision.value++
+        _keyStoreRevision.value++
         logger.i { "Key restored from pasted string, fingerprint=$fingerprint" }
         return true
     }
@@ -261,7 +265,7 @@ class EncryptionManager(
             encryptionKeyManager.getLocalKey(Firebase.auth.currentUser?.email)
         }
         if (localKey == null) {
-            keyStoreRevision.value++
+            _keyStoreRevision.value++
             logger.w { "Refusing to enable encryption: no local key in key manager" }
             return EnableEncryptionResult.NoLocalKey
         }

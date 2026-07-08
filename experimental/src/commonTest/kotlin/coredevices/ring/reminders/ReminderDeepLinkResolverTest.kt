@@ -71,6 +71,8 @@ private class FakeLocalReminderDao(private val reminder: LocalReminderData?) : L
     override suspend fun getAllRemindersInRange(start: kotlin.time.Instant, end: kotlin.time.Instant): List<LocalReminderData> = error("unused")
     override fun getAllRemindersFlow(): Flow<List<LocalReminderData>> = error("unused")
     override suspend fun setRecordingId(id: Int, recordingId: String) = error("unused")
+    override suspend fun clearNotifyBefore(id: Int) = error("unused")
+
     override suspend fun deleteReminder(id: Int) = error("unused")
 }
 
@@ -89,4 +91,5 @@ private class FakeCachedItemDao(private val items: List<CachedItem>) : CachedIte
     override suspend fun deleteById(id: String) = error("unused")
     override suspend fun deleteAll() = error("unused")
     override suspend fun getAllIds(): List<String> = error("unused")
+    override suspend fun countLocked(): Int = error("unused")
 }

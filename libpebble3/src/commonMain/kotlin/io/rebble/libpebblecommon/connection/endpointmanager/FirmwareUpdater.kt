@@ -308,8 +308,8 @@ class RealFirmwareUpdater(
         }
     }
 
-    override fun checkforFirmwareUpdate() {
-        firmwareUpdateManager.checkForUpdates()
+    override fun checkforFirmwareUpdate(force: Boolean) {
+        firmwareUpdateManager.checkForUpdates(force)
     }
 
     private val startMutex = Mutex()

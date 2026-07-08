@@ -254,7 +254,9 @@ private fun FaqTourPage(entry: FaqEntry, coreNav: CoreNav) {
         if (entry.image != null) {
             // Pages with a labeled photo (e.g. mic location) get a larger square
             // tile. PNG has a white background, so we fill the pink container
-            // first and draw the image with BlendMode.Multiply.
+            // first and draw the image with BlendMode.Multiply. Multiply needs a
+            // light base or the whole photo goes dark, so always use the light
+            // container color even in dark mode (MOB-8710).
             val bitmap = imageResource(entry.image)
             Box(
                 modifier = Modifier
@@ -263,7 +265,7 @@ private fun FaqTourPage(entry: FaqEntry, coreNav: CoreNav) {
                     .aspectRatio(1f),
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRect(color = palette.primaryContainer)
+                    drawRect(color = LightPalette.primaryContainer)
                     val srcW = bitmap.width.toFloat()
                     val srcH = bitmap.height.toFloat()
                     val maxW = size.width * 0.92f

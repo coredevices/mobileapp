@@ -47,6 +47,11 @@ data class CachedItem(
     @ColumnInfo(defaultValue = "{\"type\":\"note\"}")
     val metadata: ItemDocument.ItemMetadata = ItemDocument.ItemMetadata.Note,
     @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    /**
+     * True when this row was synced from an encrypted Firestore doc that this
+     * device has no key to decrypt.
+    */
+    @ColumnInfo(defaultValue = "0") val locked: Boolean = false,
 ) {
     fun parentListIds(): List<String> =
         if (parentListIdsCsv.isBlank()) emptyList() else parentListIdsCsv.split(",")
@@ -66,7 +71,7 @@ data class CachedItem(
     )
 
     companion object {
-        fun fromDocument(firestoreId: String, doc: ItemDocument): CachedItem = CachedItem(
+        fun fromDocument(firestoreId: String, doc: ItemDocument, locked: Boolean = false): CachedItem = CachedItem(
             firestoreId = firestoreId,
             createdAt = doc.createdAt,
             updatedAt = doc.updatedAt,
@@ -79,6 +84,7 @@ data class CachedItem(
             sourceToolCallId = doc.sourceToolCallId,
             metadata = doc.metadata,
             deleted = doc.deleted,
+            locked = locked,
         )
     }
 }

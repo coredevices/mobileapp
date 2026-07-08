@@ -48,4 +48,16 @@ class AudioPlayerTest {
         delay(5.seconds) // playRaw does not suspend during playback
         player.close()
     }
+
+    // A closed/unreadable Source must not crash the app via an unhandled coroutine exception
+    // (MOB-8062 / MOB-8021: "IllegalStateException: Source is closed").
+    @Test
+    fun testClosedSourceDoesNotCrash() = runBlocking {
+        val player = AudioPlayer()
+        val source = context.assets.open("test-22050-pcm16.wav").asSource().buffered()
+        source.close()
+        player.playRaw(source, 22050, AudioEncoding.PCM_16BIT)
+        delay(1.seconds) // give the playback coroutine time to hit the closed source
+        player.close()
+    }
 }

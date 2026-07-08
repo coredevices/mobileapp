@@ -4,6 +4,7 @@ import coredevices.util.integrations.IntegrationAuthException
 import coredevices.ring.api.GoogleTasksApi
 import coredevices.ring.data.IntegrationDefinition
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 class GTasksIntegration(
@@ -22,10 +23,15 @@ class GTasksIntegration(
     override suspend fun createReminder(
         title: String,
         deadline: Instant?,
-        listId: String?
-    ): String? {
+        listId: String?,
+        // The Google Tasks API exposes only a due date — there is no per-task notification lead
+        // time — so [notifyBefore] cannot be honoured.
+        notifyBefore: Duration?,
+        source: ItemSource?,
+    ): String {
         val token = tokenForScopes() ?: throw IntegrationAuthException("Google Tasks not authorized")
         return googleTasksApi.createTask(token, title, deadline, listId).id
+            ?: throw Exception("Failed to create reminder in Google Tasks")
     }
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> {

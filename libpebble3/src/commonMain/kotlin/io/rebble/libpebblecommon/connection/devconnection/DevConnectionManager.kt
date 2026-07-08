@@ -37,16 +37,24 @@ class DevConnectionManager(
         val inboundPKJSLogs = companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() }
         job.value = scope.launch {
             var last: DevConnectionTransport? = null
-            transport.onCompletion {
-                last?.stop()
-            }.collectLatest {
-                last?.stop()
-                it.start(identifier, inboundPKJSLogs, protocolHandler.rawInboundMessages) { message ->
-                    protocolHandler.send(
-                        message
-                    )
+            try {
+                transport.onCompletion {
+                    last?.stop()
+                }.collectLatest {
+                    last?.stop()
+                    // Assign before start(): start() suspends until cancelled, so the finally
+                    // below would otherwise always see `last` as null.
+                    last = it
+                    it.start(identifier, inboundPKJSLogs, protocolHandler.rawInboundMessages) { message ->
+                        protocolHandler.send(
+                            message
+                        )
+                    }
                 }
-                last = it
+            } finally {
+                // The LAN server is a process-wide singleton; coroutine cancellation alone won't
+                // release its socket, so stop() explicitly to free port 9000.
+                last?.stop()
             }
         }.apply {
             invokeOnCompletion {

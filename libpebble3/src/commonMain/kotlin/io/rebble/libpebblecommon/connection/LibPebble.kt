@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
 import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.LibPebbleConfigHolder
+import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.calendar.PhoneCalendarSyncer
 import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
@@ -20,13 +21,12 @@ import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimel
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
-import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.ContactWithCount
+import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
+import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.dao.WatchPreference
-import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
-import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.MuteState
@@ -34,7 +34,6 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
-import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -53,6 +52,7 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.performPlatformSpecificInit
+import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
@@ -104,7 +104,7 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     // ....
 
     fun doStuffAfterPermissionsGranted()
-    fun checkForFirmwareUpdates()
+    fun checkForFirmwareUpdates(force: Boolean)
     suspend fun updateTimeIfNeeded()
 }
 
@@ -236,7 +236,7 @@ interface Watches {
 interface WebServices {
     suspend fun fetchLocker(): LockerModelWrapper?
     suspend fun removeFromLocker(id: Uuid): Boolean
-    suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult
+    suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult
     fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo)
     fun uploadAnalyticsHeartbeat(payload: ByteArray, watchInfo: WatchInfo)
 }
@@ -267,6 +267,9 @@ sealed class FirmwareUpdateCheckResult {
 interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>
     fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
+
+    /** Create an event in the device's primary/default calendar. Returns the new event id, or null. */
+    suspend fun createEvent(event: NewCalendarEvent): String?
 }
 
 fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
@@ -473,8 +476,8 @@ class LibPebble3(
         watchManager.seedBondedWatchesIfNeeded()
     }
 
-    override fun checkForFirmwareUpdates() {
-        forEachConnectedWatchInAnyState { checkforFirmwareUpdate() }
+    override fun checkForFirmwareUpdates(force: Boolean) {
+        forEachConnectedWatchInAnyState { checkforFirmwareUpdate(force) }
     }
 
     override suspend fun updateTimeIfNeeded() {

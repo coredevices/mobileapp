@@ -203,7 +203,6 @@ enum class BoolWatchPref(
     Backlight("lightEnabled", "Backlight", true),
     AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
     BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
-    DynamicBacklightIntensity("lightDynamicIntensity", "Dynamic Backlight Intensity", true, description = "Adjust backlight intensity automatically to match environment (using light sensor)"),
     LanguageEnglish("langEnglish", "Language: English", false),
     TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
     QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
@@ -363,6 +362,26 @@ enum class BacklightTouchWakeMode(override val code: UByte, override val display
     Off(2u, "Off"),
 }
 
+// Matches BacklightDynamicMode in pebble-firmware:src/fw/shell/prefs.h. Off disables dynamic
+// scaling; the other modes select how bright the environment must get before the backlight
+// ramps to max intensity (Bright ramps up earliest, Dim latest).
+enum class BacklightDynamicMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    Bright(1u, "Bright"),
+    Standard(2u, "Standard"),
+    Dim(3u, "Dim"),
+}
+
+// Matches BacklightPreset in pebble-firmware:src/fw/shell/prefs.h. Each preset bundles the
+// ambient sensor, dynamic mode, intensity and timeout settings; Advanced leaves them to be set
+// individually.
+enum class BacklightPresetMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    MaxBrightness(0u, "Max Brightness"),
+    Standard(1u, "Standard"),
+    BatterySaver(2u, "Battery Saver"),
+    Advanced(3u, "Advanced"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -448,12 +467,26 @@ enum class EnumWatchPref(
         options = MotionSensitivityLevel.entries,
         isDebugSetting = true,
     ),
+    BacklightPreset(
+        id = "lightPreset",
+        displayName = "Backlight Preset",
+        description = "Bundles the ambient sensor, dynamic backlight, brightness and timeout into one mode. Choose Advanced to configure them individually.",
+        defaultValue = BacklightPresetMode.Standard,
+        options = BacklightPresetMode.entries,
+    ),
     BacklightIntensity(
         id = "lightIntensity",
         displayName = "Backlight Intensity",
         defaultValue = BacklightIntensityLevel.Medium,
         options = BacklightIntensityLevel.entries,
         description = "Maximum backlight brightness when on",
+    ),
+    DynamicBacklightMode(
+        id = "lightDynamicMode",
+        displayName = "Dynamic Backlight",
+        description = "Automatically adjust backlight brightness to match your environment (using light sensor). Dimmer modes stay dimmer in bright light.",
+        defaultValue = BacklightDynamicMode.Standard,
+        options = BacklightDynamicMode.entries,
     ),
     BacklightTouch(
         id = "lightTouch",
@@ -504,17 +537,6 @@ enum class NumberWatchPref(
         unit = "",
         isDebugSetting = true,
     ),
-    DynamicBacklightMinThreshold(
-        id = "dynBacklightMinThreshold",
-        displayName = "Dynamic Backlight Min Threshold",
-        description = "Controls how ambient light sensor controls backlight intensity (if using Dynamic Backlight Intensity)",
-        defaultValue = 5,
-        type = WatchPrefType.TypeUInt32,
-        min = 0,
-        max = 4096,
-        unit = "",
-        isDebugSetting = true,
-    ),
     TimelineQuickViewMinsBefore(
         id = "timelineQuickViewBeforeTimeMin",
         displayName = "Timeline Quick View - minutes before event",
@@ -544,7 +566,7 @@ data class RgbColorPreset(val rgb: UInt, val displayName: String)
 
 // LED_WARM_WHITE in pebble-firmware:src/fw/drivers/led_controller.h — also the firmware
 // backlight default on color-backlight boards.
-private val LED_WARM_WHITE_RGB: UInt = 0x00F0D0B0u
+private val LED_WARM_WHITE_RGB: UInt = 0x00FFBFA2u
 
 // Quick-pick presets shown above the RGB color picker. The wire value is a free-form 24-bit
 // RGB UInt — the user can also dial in any custom color via the sliders or hex field.

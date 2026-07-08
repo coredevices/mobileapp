@@ -41,4 +41,7 @@ interface CachedListDao {
 
     @Query("DELETE FROM CachedList")
     suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM CachedList WHERE locked = 1")
+    suspend fun countLocked(): Int
 }

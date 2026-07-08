@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.messaging.BeeperAPI
 import coredevices.ring.database.Preferences
@@ -27,6 +28,7 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     private val context: Context by inject()
     private val contentResolver: ContentResolver by lazy { context.contentResolver }
     private val prefs: Preferences by inject()
+    private val appScope: LibIndexCoroutineScope by inject()
 
     private val _hasPermission = MutableStateFlow(checkBeeperPermission())
     actual val hasPermission: StateFlow<Boolean> = _hasPermission.asStateFlow()
@@ -196,7 +198,9 @@ actual class SettingsBeeperContactsDialogViewModel actual constructor() : ViewMo
     }
 
     actual fun persist() {
-        viewModelScope.launch {
+        // appScope: dialog dismissal clears this ViewModel; the contacts
+        // save must still land.
+        appScope.launch {
             // Start from the saved contacts as the base to preserve entries
             // that Beeper didn't resolve this session
             val savedByRoom = prefs.approvedBeeperContacts.value.associateBy { it.roomId }

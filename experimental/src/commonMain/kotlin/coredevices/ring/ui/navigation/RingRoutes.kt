@@ -13,7 +13,6 @@ import coredevices.ring.ui.screens.indexfeed.AllAnswers
 import coredevices.ring.ui.screens.indexfeed.AllLists
 import coredevices.ring.ui.screens.indexfeed.FullFeed
 import coredevices.ring.ui.screens.indexfeed.ObjectDetail
-import coredevices.ring.ui.screens.notes.ReminderDetails
 import coredevices.ring.ui.screens.recording.RecordingDetails
 import coredevices.ring.ui.screens.settings.NotionOAuthResult
 import coredevices.ring.ui.screens.settings.IndexSettings
@@ -32,8 +31,6 @@ interface RingRoute : CoreRoute
 object RingRoutes {
     @Serializable
     class RecordingDetails(val recordingId: Long) : RingRoute
-    @Serializable
-    class ReminderDetails(val reminderId: Int) : RingRoute
     /** Detail page for an item (`note`/`reminder`/`scheduled`/`message`/
      *  `answer`/`action_log`) or a list. The id is the Firestore doc id.
      *  When [startEditing] is true and the object is a list, the screen
@@ -76,10 +73,6 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     composable<RingRoutes.RecordingDetails> {
         val route: RingRoutes.RecordingDetails = it.toRoute()
         RecordingDetails(route.recordingId, coreNav)
-    }
-    composable<RingRoutes.ReminderDetails> {
-        val route: RingRoutes.ReminderDetails = it.toRoute()
-        ReminderDetails(coreNav, route.reminderId)
     }
     composable<RingRoutes.ObjectDetails> {
         val route: RingRoutes.ObjectDetails = it.toRoute()

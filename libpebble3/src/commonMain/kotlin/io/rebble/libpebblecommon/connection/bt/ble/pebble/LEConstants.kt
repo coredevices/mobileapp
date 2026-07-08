@@ -16,10 +16,23 @@ object LEConstants {
         val META_CHARACTERISTIC_SERVER = Uuid.parse("10000002-328E-0FBB-C642-1AA6699BDADA")
         val APPLAUNCH_CHARACTERISTIC = Uuid.parse("20000001-328E-0FBB-C642-1AA6699BDADA")
 
+        // "Reversed" PPoG V1 — shipped on Pebble 2 / silk (Dialog DA1468x).
+        // Watch hosts the service, phone is the GATT client. No meta
+        // characteristic; legacy firmware accepts data writes on either the
+        // READ or WRITE characteristic (the original phone code wrote to READ).
         val PPOGATT_DEVICE_SERVICE_UUID_CLIENT = Uuid.parse("30000003-328E-0FBB-C642-1AA6699BDADA")
-        val PPOGATT_DEVICE_SERVICE_UUID_SERVER = Uuid.parse("10000000-328E-0FBB-C642-1AA6699BDADA")
         val PPOGATT_DEVICE_CHARACTERISTIC_READ = Uuid.parse("30000004-328E-0FBB-C642-1AA6699BDADA")
         val PPOGATT_DEVICE_CHARACTERISTIC_WRITE = Uuid.parse("30000006-328e-0fbb-c642-1aa6699bdada")
+
+        // "Reversed" PPoG V2 — NimBLE-based watches (asterix / SiFli).
+        // Watch hosts the service, phone is the GATT client. Phone sends the
+        // first ResetRequest after the phone subscribes; no meta characteristic.
+        val PPOGATT_WATCH_SERVER_V2_SERVICE = Uuid.parse("40000000-328E-0FBB-C642-1AA6699BDADA")
+        val PPOGATT_WATCH_SERVER_V2_DATA = Uuid.parse("40000001-328E-0FBB-C642-1AA6699BDADA")
+        val PPOGATT_WATCH_SERVER_V2_DATA_WR = Uuid.parse("40000003-328E-0FBB-C642-1AA6699BDADA")
+
+        // "Forward" PPoG — phone hosts the GATT service, watch is the client.
+        val PPOGATT_DEVICE_SERVICE_UUID_SERVER = Uuid.parse("10000000-328E-0FBB-C642-1AA6699BDADA")
         val PPOGATT_DEVICE_CHARACTERISTIC_SERVER = Uuid.parse("10000001-328E-0FBB-C642-1AA6699BDADA")
 
         val CONNECTION_PARAMETERS_CHARACTERISTIC = Uuid.parse("00000005-328E-0FBB-C642-1AA6699BDADA")

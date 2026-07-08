@@ -3,8 +3,6 @@ package io.rebble.libpebblecommon.connection.bt.ble.ppog
 import io.ktor.utils.io.availableForRead
 import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.BleConfig
-import io.rebble.libpebblecommon.BleConfigFlow
-import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.ConnectionException
 import io.rebble.libpebblecommon.connection.PebbleProtocolStreams
@@ -38,7 +36,7 @@ class PPoGTest {
         }
     }
     val bleConfig = BleConfig(
-        reversedPPoG = false,
+        legacyReversedPPoG = false,
     )
     val blePlatformConfig = BlePlatformConfig(
         initialMtu = 23,

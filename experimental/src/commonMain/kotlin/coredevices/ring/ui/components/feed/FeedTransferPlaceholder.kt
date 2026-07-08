@@ -27,7 +27,7 @@ fun FeedTransferPlaceholder(
                 .padding(start = 50.dp)
         ) {
             when (transfer.status) {
-                RingTransferStatus.Started, RingTransferStatus.Discarded -> Text("Transferring...")
+                RingTransferStatus.Started, RingTransferStatus.Saving, RingTransferStatus.Discarded -> Text("Transferring...")
                 RingTransferStatus.Failed -> Text("Transfer Failed")
                 RingTransferStatus.Completed -> AnimatedAudioBars()
             }

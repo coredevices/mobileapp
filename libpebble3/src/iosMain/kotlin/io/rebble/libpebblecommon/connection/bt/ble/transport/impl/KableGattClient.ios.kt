@@ -54,3 +54,9 @@ private fun peripheralFromUuid(uuid: Uuid): Peripheral? = try {
 actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     throw IllegalStateException("not supported")
 }
+
+// iOS's CoreBluetooth cache is managed per-app-launch by the framework itself;
+// there's no equivalent to Android's BluetoothGatt#refresh(). Returning false
+// lets the caller skip its refresh-then-rediscover step and fall through to
+// the normal discovery path.
+actual suspend fun Peripheral.refreshServicesNative(): Boolean = false

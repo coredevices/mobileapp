@@ -52,6 +52,11 @@ class RecordingRepository(
     suspend fun getMostRecentTimestamp(): LocalRecording? =
         localRecordingDao.getMostRecentTimestamp()
 
+    /** Most recent [limit] recordings, newest first. Used by the bug report
+     *  flow to bundle recent recording history as a debug attachment. */
+    suspend fun getRecentRecordings(limit: Int): List<LocalRecording> =
+        localRecordingDao.getRecentRecordings(limit)
+
     fun getAllRecordingsAfter(timestamp: Instant) =
         localRecordingDao.getAllRecordingsAfter(timestamp)
 

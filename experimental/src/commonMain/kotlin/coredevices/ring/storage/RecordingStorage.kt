@@ -48,9 +48,10 @@ interface RecordingStorage {
     /**
      * Export a recording to a WAV file
      * @param id unique identifier for the recording
+     * @param useOriginalAudio export the original raw capture instead of the processed version
      * @return path to the exported file
      */
-    suspend fun exportRecording(id: String): Path
+    suspend fun exportRecording(id: String, useOriginalAudio: Boolean = false): Path
 
     /**
      * Open a sink for writing recording data, storing temporarily in cache
@@ -167,9 +168,10 @@ class RealRecordingStorage(
 
     override fun getCacheDirectory(): Path = getRecordingsCacheDirectory()
 
-    override suspend fun exportRecording(id: String): Path = withContext(Dispatchers.IO) {
-        val (source, meta) = openRecordingSource(id)
-        val path = Path(getRecordingsCacheDirectory(), "share-$id.wav")
+    override suspend fun exportRecording(id: String, useOriginalAudio: Boolean): Path = withContext(Dispatchers.IO) {
+        val (source, meta) = openRecordingSource(id, useOriginalAudio)
+        val suffix = if (useOriginalAudio) "-original" else ""
+        val path = Path(getRecordingsCacheDirectory(), "share-$id$suffix.wav")
         source.use {
             SystemFileSystem.sink(path).buffered().use { sink ->
                 sink.writeWavHeader(meta.cachedMetadata.sampleRate, meta.size.toInt())

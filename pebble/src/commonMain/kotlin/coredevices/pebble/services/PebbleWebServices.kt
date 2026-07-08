@@ -359,8 +359,8 @@ class RealPebbleWebServices(
         return delete({ locker.removeEndpoint.replace("\$\$app_uuid\$\$", id.toString()) }, auth = HttpClientAuthType.Pebble)
     }
 
-    override suspend fun checkForFirmwareUpdate(watch: WatchInfo): FirmwareUpdateCheckResult =
-        firmwareUpdateCheck.checkForUpdates(watch)
+    override suspend fun checkForFirmwareUpdate(watch: WatchInfo, force: Boolean): FirmwareUpdateCheckResult =
+        firmwareUpdateCheck.checkForUpdates(watch, force)
 
     override fun uploadMemfaultChunk(chunk: ByteArray, watchInfo: WatchInfo) {
         memfaultChunkQueue.enqueue(watchInfo.serialForMemfault(), chunk)

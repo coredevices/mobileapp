@@ -38,17 +38,26 @@ class PPoG(
     private var mtu: Int = blePlatformConfig.initialMtu
     private var closed = false
 
-    fun run(requestedPpogResetViaCharacteristic: Boolean) {
+    fun run(reversed: Boolean = false) {
         scope.launch {
-            val params = withTimeoutOrNull(12.seconds) {
-                initWaitingForResetRequest()
-            } ?: withTimeoutOrNull(5.seconds) {
-                if (blePlatformConfig.fallbackToResetRequest && !requestedPpogResetViaCharacteristic) {
-                    initWithResetRequest()
-                } else {
-                    null
-                }
-            } ?: throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
+            val params = if (reversed) {
+                // Reversed PPoG: the watch is server-side and, once the phone
+                // subscribes to the notify characteristic, sits in
+                // AwaitingResetRequest waiting for us to initiate. Skip the
+                // initWaitingForResetRequest phase entirely.
+                withTimeoutOrNull(12.seconds) { initWithResetRequest() }
+                    ?: throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
+            } else {
+                withTimeoutOrNull(12.seconds) {
+                    initWaitingForResetRequest()
+                } ?: withTimeoutOrNull(5.seconds) {
+                    if (blePlatformConfig.fallbackToResetRequest) {
+                        initWithResetRequest()
+                    } else {
+                        null
+                    }
+                } ?: throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
+            }
             runConnection(params)
         }
     }

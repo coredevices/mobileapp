@@ -2,7 +2,6 @@ package coredevices.pebble.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,14 +33,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +59,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -100,8 +95,8 @@ import coredevices.pebble.services.SearchPagingSource
 import coredevices.pebble.services.StoreCategory
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.AppContext
-import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -123,7 +118,6 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import rememberOpenDocumentLauncher
 import theme.coreDarkGreen
-import theme.coreOrange
 import kotlin.uuid.Uuid
 
 const val REBBLE_LOGIN_URI = "https://boot.rebble.io"
@@ -245,7 +239,7 @@ fun LockerScreen(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
 ) {
-    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+    Box(modifier = Modifier.background(MaterialTheme.colorScheme.background).imePadding()) {
         val viewModel = koinViewModel<LockerViewModel>()
         val sharedViewModel: SharedLockerViewModel = koinInject()
         sharedViewModel.Init()

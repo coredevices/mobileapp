@@ -6,6 +6,7 @@ import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
@@ -13,6 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
@@ -26,27 +28,55 @@ class ItemFactoryCreateFromSemanticResultTest {
     private fun map(result: SemanticResult) =
         factory.createFromSemanticResult(result, recordingId, createdAt, toolCallId)
 
+    // reminderItem/noteItem are called by the builtin integrations (LocalNoteClient,
+    // BuiltInReminderFeedItems) rather than mapped from semantic results, so they are
+    // exercised directly here.
+
     @Test
-    fun taskCreationMapsToReminderWithToolCallId() {
+    fun reminderItemRoutesToTodosWithReminderMetadata() {
         val due = createdAt + 5.minutes
-        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = due, localReminderId = 42))!!
+        val item = factory.reminderItem(recordingId, createdAt, "Call mom", due, toolCallId = null, localReminderId = 42)
 
         assertEquals("Call mom", item.title)
         assertEquals(due, item.dueAt)
         assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
         assertEquals(recordingId, item.sourceRecordingId)
-        assertEquals(toolCallId, item.sourceToolCallId)
+        assertNull(item.sourceToolCallId)
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.Reminder)
         assertEquals(42, meta.localReminderId)
     }
 
     @Test
-    fun taskCreationWithoutLocalReminderIdLeavesItNull() {
-        val item = map(SemanticResult.TaskCreation(title = "Call mom", deadline = null))!!
+    fun reminderItemWithoutLocalReminderIdLeavesItNull() {
+        val item = factory.reminderItem(recordingId, createdAt, "Call mom", dueAt = null, toolCallId = null)
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.Reminder)
         assertNull(meta.localReminderId)
+    }
+
+    @Test
+    fun reminderItemCarriesNotifyBeforeIntoReminderMetadata() {
+        val item = factory.reminderItem(
+            recordingId,
+            createdAt,
+            "Leave for airport",
+            createdAt + 5.minutes,
+            toolCallId = null,
+            localReminderId = 7,
+            notifyBeforeMillis = 2.hours.inWholeMilliseconds,
+        )
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertEquals(2.hours.inWholeMilliseconds, meta.notifyBeforeMillis)
+    }
+
+    @Test
+    fun reminderItemWithoutNotifyBeforeLeavesItNull() {
+        val item = factory.reminderItem(recordingId, createdAt, "Call mom", createdAt + 5.minutes, toolCallId = null)
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.Reminder)
+        assertNull(meta.notifyBeforeMillis)
     }
 
     @Test
@@ -59,21 +89,41 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun listItemCreationMapsToNoteRoutedByResolvedListId() {
-        val item = map(
-            SemanticResult.ListItemCreation(content = "Milk", listUsed = "Shopping", resolvedListId = "list_custom")
-        )!!
+    fun noteItemRoutesToResolvedList() {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Milk", listHint = null, toolCallId = null, resolvedListId = "list_custom",
+        )
 
         assertEquals("Milk", item.title)
         assertEquals(listOf("list_custom"), item.parentListIds)
-        assertEquals(toolCallId, item.sourceToolCallId)
+        assertNull(item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Note)
     }
 
     @Test
-    fun listItemCreationWithoutListFallsBackToNotesList() {
-        val item = map(SemanticResult.ListItemCreation(content = "Idea"))!!
+    fun noteItemWithoutListFallsBackToNotesList() {
+        val item = factory.noteItem(recordingId, createdAt, "Idea", listHint = null, toolCallId = null)
         assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
+    }
+
+    @Test
+    fun noteItemRoutedToShoppingBecomesChecklist() {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Milk", listHint = "Shopping", toolCallId = null, resolvedListId = LIST_SHOPPING_ID,
+        )
+
+        assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
+    fun noteItemRoutedToShoppingByHintBecomesChecklist() {
+        // No resolvedListId: pickNoteList sends "shopping"/"grocery" hints to the
+        // shopping list, and those items should be checklist items too.
+        val item = factory.noteItem(recordingId, createdAt, "Eggs", listHint = "grocery", toolCallId = null)
+
+        assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
     }
 
     @Test
@@ -84,6 +134,8 @@ class ItemFactoryCreateFromSemanticResultTest {
         assertEquals(ItemMetadata.Scheduled.FireKind.Alarm, meta.fireKind)
         assertEquals(LocalTime(7, 0), meta.fireTime)
         assertEquals(toolCallId, item.sourceToolCallId)
+        // Owned by the system clock app — must not appear in the Reminders list.
+        assertEquals(emptyList(), item.parentListIds)
     }
 
     @Test
@@ -95,6 +147,32 @@ class ItemFactoryCreateFromSemanticResultTest {
         assertEquals(ItemMetadata.Scheduled.FireKind.Timer, meta.fireKind)
         assertEquals(fireAt, item.dueAt)
         assertEquals(toolCallId, item.sourceToolCallId)
+        // Owned by the system clock app — must not appear in the Reminders list.
+        assertEquals(emptyList(), item.parentListIds)
+    }
+
+    @Test
+    fun calendarEventCreationMapsToCalendarEventItem() {
+        val start = createdAt + 30.minutes
+        val end = createdAt + 90.minutes
+        val item = map(
+            SemanticResult.CalendarEventCreation(
+                title = "Lunch with Sam",
+                startTime = start,
+                endTime = end,
+                location = "Cafe",
+            )
+        )!!
+        assertEquals("Lunch with Sam", item.title)
+        assertEquals("Cafe", item.body)
+        assertEquals(start, item.dueAt)
+        assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
+        assertEquals(toolCallId, item.sourceToolCallId)
+        val meta = item.metadata
+        assertTrue(meta is ItemMetadata.CalendarEvent)
+        assertEquals(start, meta.startTime)
+        assertEquals(end, meta.endTime)
+        assertEquals("Cafe", meta.location)
     }
 
     @Test
@@ -139,6 +217,9 @@ class ItemFactoryCreateFromSemanticResultTest {
 
     @Test
     fun nonItemResultsMapToNull() {
+        // Notes and reminders are created by the owning integration, never centrally.
+        assertNull(map(SemanticResult.TaskCreation(title = "Call mom", deadline = createdAt + 5.minutes)))
+        assertNull(map(SemanticResult.ListItemCreation(content = "Milk", resolvedListId = "list_custom")))
         assertNull(map(SemanticResult.SupportingData("info", assistiveOnly = true)))
         assertNull(map(SemanticResult.Response("hello there")))
         assertNull(map(SemanticResult.GenericSuccess))

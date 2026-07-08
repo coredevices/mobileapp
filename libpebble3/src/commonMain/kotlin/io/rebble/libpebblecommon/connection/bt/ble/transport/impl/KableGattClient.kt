@@ -80,6 +80,11 @@ class KableGattConnector(
         return try {
             attemptedConnection.value = true
             peripheral.connect()
+            scope.launch {
+                peripheral.services.collect {
+                    logger.d { "services = $it (size = ${it?.size})" }
+                }
+            }
             GattConnectionResult.Success(KableConnectedGattClient(identifier, peripheral))
         } catch (e: CancellationException) {
             throw e
@@ -134,6 +139,23 @@ private fun Status?.asFailureReason(): ConnectionFailureReason = when (this) {
 
 expect suspend fun Peripheral.requestMtuNative(mtu: Int): Int
 
+/**
+ * Force a fresh GATT service rediscovery on the current connection. On Android
+ * this (a) invalidates the per-app service cache via `BluetoothGatt#refresh()`,
+ * (b) tickles Kable's own `onServiceChanged` channel so Kable re-runs its
+ * `discoverServices()` internally, and (c) suspends until Kable's `services`
+ * StateFlow re-emits (or a timeout fires). After success, `peripheral.services.value`
+ * reflects the fresh list — no manual pipeline needed on the caller side.
+ *
+ * All three steps use reflection into Kable internals (`connection`, `gatt`,
+ * `callback`, `onServiceChanged`) and Android's hidden `refresh()` method. If
+ * any step fails, returns false and the caller falls back to whatever cache
+ * Android + Kable already have.
+ *
+ * Returns false on platforms without an equivalent mechanism (iOS, JVM stub).
+ */
+expect suspend fun Peripheral.refreshServicesNative(): Boolean
+
 class KableConnectedGattClient(
     val identifier: PebbleBleIdentifier,
     val peripheral: Peripheral,
@@ -150,13 +172,18 @@ class KableConnectedGattClient(
     override fun subscribeToCharacteristic(
         serviceUuid: Uuid,
         characteristicUuid: Uuid,
+        onSubscription: (suspend () -> Unit)?,
     ): Flow<ByteArray>? {
         val c = findCharacteristic(serviceUuid, characteristicUuid)
         if (c == null) {
             logger.e("couldn't find characteristic: $characteristicUuid")
             return null
         }
-        return peripheral.observe(c)
+        return if (onSubscription != null) {
+            peripheral.observe(c) { onSubscription() }
+        } else {
+            peripheral.observe(c)
+        }
     }
 
     override suspend fun isBonded(): Boolean {
@@ -203,7 +230,11 @@ class KableConnectedGattClient(
         return peripheral.read(c)
     }
 
-    override val services: List<GattService>? = mapServices()
+    // Computed each time so post-connect updates to Kable's services flow (e.g.
+    // via refreshServicesNative or a Service Changed indication that Kable
+    // observed) are reflected here without needing a reconnect.
+    override val services: List<GattService>?
+        get() = mapServices()
 
     override suspend fun requestMtu(mtu: Int): Int {
         return peripheral.requestMtuNative(mtu)
@@ -211,6 +242,10 @@ class KableConnectedGattClient(
 
     override suspend fun getMtu(): Int {
         return peripheral.maximumWriteValueLengthForType(WriteType.WithoutResponse) + MTU_OVERHEAD
+    }
+
+    override suspend fun refreshServicesNative(): Boolean {
+        return peripheral.refreshServicesNative()
     }
 
     override fun close() {

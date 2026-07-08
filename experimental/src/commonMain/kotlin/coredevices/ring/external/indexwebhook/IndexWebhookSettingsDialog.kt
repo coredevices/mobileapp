@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -38,7 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import coredevices.ui.dismissKeyboardOnTapOutside
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,10 +63,14 @@ fun IndexWebhookSettingsDialog(
         Surface(
             // Cap the height so a long list of headers stays on screen; the
             // title and action buttons stay fixed while the body scrolls.
-            modifier = Modifier.wrapContentWidth().heightIn(max = 600.dp),
+            modifier = Modifier.wrapContentWidth().heightIn(max = 600.dp)
+                .dismissKeyboardOnTapOutside(),
             shape = MaterialTheme.shapes.large,
             tonalElevation = AlertDialogDefaults.TonalElevation
         ) {
+            // Resolved inside the dialog: dialogs have their own focus manager.
+            val focusManager = LocalFocusManager.current
+            val dismissKeyboard = KeyboardActions(onDone = { focusManager.clearFocus() })
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     "Webhook Configuration",
@@ -88,6 +97,8 @@ fun IndexWebhookSettingsDialog(
                     singleLine = true,
                     label = { Text("Webhook URL") },
                     placeholder = { Text("https://example.com/webhook") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = dismissKeyboard,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -108,6 +119,8 @@ fun IndexWebhookSettingsDialog(
                             onValueChange = { viewModel.updateHeaderName(index, it) },
                             singleLine = true,
                             label = { Text("Name") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = dismissKeyboard,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -116,6 +129,8 @@ fun IndexWebhookSettingsDialog(
                             onValueChange = { viewModel.updateHeaderValue(index, it) },
                             singleLine = true,
                             label = { Text("Value") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = dismissKeyboard,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { viewModel.removeHeader(index) }) {

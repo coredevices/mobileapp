@@ -17,15 +17,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,6 +45,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -58,6 +62,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +110,10 @@ fun ObjectDetail(coreNav: CoreNav, objectId: String, startEditing: Boolean = fal
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = colors.surface,
+            // Include the IME so the content shrinks above the keyboard —
+            // otherwise editing the last row in a long list leaves the
+            // focused field hidden behind the keyboard (MOB-9093).
+            contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
         ) { insets ->
             Box(modifier = Modifier.padding(insets).fillMaxSize().background(colors.surface)) {
                 when (val s = state) {
@@ -183,6 +192,7 @@ internal fun ListSearchTopBar(
     val colors = IndexTheme.colors
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     androidx.compose.runtime.LaunchedEffect(Unit) {
         focusRequester.requestFocus()
         keyboard?.show()
@@ -211,6 +221,10 @@ internal fun ListSearchTopBar(
                 textStyle = TextStyle(color = colors.onSurface, fontSize = 15.sp).indexTextEntryStyle(),
                 cursorBrush = SolidColor(colors.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                }),
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
                         Text("Search…", color = colors.onSurfaceVariant, fontSize = 15.sp)
@@ -234,9 +248,11 @@ internal fun ListSearchTopBar(
     }
 }
 
-/** Outlined sort pill that cycles through three states:
+/** Outlined sort pill that cycles through sort states:
  *  - `Newest`: ↓ icon, "Newest" label (createdAt desc)
  *  - `Oldest`: ↑ icon, "Oldest" label (createdAt asc)
+ *  - `AtoZ`: ↓ icon, "A–Z" label (title ascending)
+ *  - `ZtoA`: ↑ icon, "Z–A" label (title descending)
  *  - `DueDate`: clock icon, "Due date" label (most-overdue / soonest-due first) */
 @Composable
 internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit) {
@@ -244,6 +260,8 @@ internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit)
     val (icon, label) = when (sort) {
         ObjectDetailViewModel.ListSort.Newest -> Icons.Default.ArrowDownward to "Newest"
         ObjectDetailViewModel.ListSort.Oldest -> Icons.Default.ArrowUpward to "Oldest"
+        ObjectDetailViewModel.ListSort.AtoZ -> Icons.Default.ArrowDownward to "A–Z"
+        ObjectDetailViewModel.ListSort.ZtoA -> Icons.Default.ArrowUpward to "Z–A"
         ObjectDetailViewModel.ListSort.DueDate -> Icons.Outlined.AccessTime to "Due date"
     }
     Row(

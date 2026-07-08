@@ -162,7 +162,7 @@ object ConnectedPebble {
     interface FirmwareUpdate {
         fun sideloadFirmware(path: Path)
         fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate)
-        fun checkforFirmwareUpdate()
+        fun checkforFirmwareUpdate(force: Boolean)
     }
 
     interface FirmwareStatus {

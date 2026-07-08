@@ -10,7 +10,7 @@ import org.koin.core.component.inject
 
 class UIEmailIntegration: NoteIntegration, KoinComponent {
     private val platform: Platform by inject()
-    override suspend fun createNote(content: String): String {
+    override suspend fun createNote(content: String, source: ItemSource?): String {
         val userEmail = Firebase.auth.currentUser?.email
         val uri = Uri.Builder()
             .scheme("mailto")

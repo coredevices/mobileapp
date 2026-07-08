@@ -1,5 +1,6 @@
 package coredevices.ring.api
 
+import co.touchlab.kermit.Logger
 import coredevices.api.ApiClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
@@ -7,6 +8,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
@@ -50,6 +52,7 @@ class GoogleTasksApi(config: ApiConfig) : ApiClient(config.version) {
             contentType(ContentType.Application.Json)
             setBody(body)
         }
+        Logger.withTag("GoogleTasksApi").d { "Create task response: ${res.bodyAsText()}" }
         if (!res.status.isSuccess()) {
             error("Failed to create Google Task: ${res.status}")
         }

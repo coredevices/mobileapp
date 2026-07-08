@@ -97,18 +97,18 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.Backlight -> Section.Display
     BoolWatchPref.AmbientLightSensor -> Section.Display
     BoolWatchPref.BacklightMotion -> Section.Display
-    BoolWatchPref.DynamicBacklightIntensity -> Section.Display
     BoolWatchPref.LanguageEnglish -> Section.Other
 //    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
 //    ColorWatchPref.AppMenuHighlightColor -> Section.Display
     EnumWatchPref.TextSize -> Section.Notifications
     EnumWatchPref.MotionSensitivity -> Section.Display
+    EnumWatchPref.BacklightPreset -> Section.Display
     EnumWatchPref.BacklightIntensity -> Section.Display
+    EnumWatchPref.DynamicBacklightMode -> Section.Display
     EnumWatchPref.BacklightTouch -> Section.Display
     RgbColorWatchPref.BacklightColor -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
-    NumberWatchPref.DynamicBacklightMinThreshold -> Section.Display
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch

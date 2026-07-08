@@ -7,7 +7,10 @@ import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
@@ -93,7 +96,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 39,
+    version = 40,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -160,9 +163,16 @@ expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {
     override fun initialize(): Database
 }
 
+// Force re-sync of all app metadata after fixing SDK version selection
+val MIGRATION_39_40 = object : Migration(39, 40) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("UPDATE LockerEntrySyncEntity SET watchSynchHashcode = watchSynchHashcode + 1")
+    }
+}
+
 fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
-        //.addMigrations()
+        .addMigrations(MIGRATION_39_40)
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
         // V7 required a full re-create.
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)

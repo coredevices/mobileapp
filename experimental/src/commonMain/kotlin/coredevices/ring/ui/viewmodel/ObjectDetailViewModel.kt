@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
@@ -14,8 +15,12 @@ import coredevices.ring.data.entity.room.indexfeed.metadataForKind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +51,9 @@ class ObjectDetailViewModel(
     private val itemRepo: ItemRepository,
     private val listRepo: ListRepository,
     private val recordingRepo: RecordingRepository,
+    private val builtInReminders: BuiltInReminderIntegration,
     private val snackbarHostState: SnackbarHostState,
+    private val appScope: LibIndexCoroutineScope,
 ) : ViewModel() {
 
     /** Local search/sort/done-toggle state for list views. */
@@ -61,7 +68,7 @@ class ObjectDetailViewModel(
     )
     val showDone = MutableStateFlow(false)
 
-    enum class ListSort { Newest, Oldest, DueDate }
+    enum class ListSort { Newest, Oldest, AtoZ, ZtoA, DueDate }
 
     /** Child item ids that were just toggled to done and should linger
      *  with strikethrough + faded opacity in the *active* bucket of the
@@ -96,7 +103,7 @@ class ObjectDetailViewModel(
                         listSort,
                         showDone,
                     ) { lists, children, q, sort, done ->
-                        val allChildren = children.filter { !it.deleted }
+                        val allChildren = children.filter { !it.deleted && !it.locked }
                         UiState.ListView(
                             list = list,
                             allLists = lists.filter { !it.deleted },
@@ -108,6 +115,8 @@ class ObjectDetailViewModel(
                                     when (sort) {
                                         ListSort.Newest -> filtered.sortedByDescending { it.createdAt }
                                         ListSort.Oldest -> filtered.sortedBy { it.createdAt }
+                                        ListSort.AtoZ -> filtered.sortedBy { it.title.lowercase() }
+                                        ListSort.ZtoA -> filtered.sortedByDescending { it.title.lowercase() }
                                         // Due-date sort mirrors the home
                                         // Todos preview: overdue / due
                                         // within 24h, then undated, then
@@ -172,12 +181,30 @@ class ObjectDetailViewModel(
     fun toggleDone() {
         val s = state.value as? UiState.ItemView ?: return
         val it = s.item
-        viewModelScope.launch {
+        // appScope: back-navigation right after the tap must not cancel the write.
+        appScope.launch {
             val updated = it.toDocument().copy(
                 done = !it.done,
                 updatedAt = Clock.System.now(),
             )
             itemRepo.setItem(it.firestoreId, updated)
+        }
+    }
+
+    /** Cancels the reminder's extra early notification and clears it from the item metadata.
+     *  Only meaningful for built-in reminders (which carry a localReminderId). */
+    fun removeExtraNotification() {
+        val s = state.value as? UiState.ItemView ?: return
+        val item = s.item
+        val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
+        if (meta.notifyBeforeMillis == null) return
+        appScope.launch {
+            meta.localReminderId?.let { runCatching { builtInReminders.cancelExtraNotification(it) } }
+            val updated = item.toDocument().copy(
+                metadata = meta.copy(notifyBeforeMillis = null),
+                updatedAt = Clock.System.now(),
+            )
+            itemRepo.setItem(item.firestoreId, updated)
         }
     }
 
@@ -194,7 +221,7 @@ class ObjectDetailViewModel(
             animatingDoneJobs.remove(id)?.cancel()
             animatingDoneIds.value = animatingDoneIds.value - id
         }
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val updated = child.toDocument().copy(
                 done = !child.done,
                 updatedAt = Clock.System.now(),
@@ -216,11 +243,13 @@ class ObjectDetailViewModel(
 
     fun setListQuery(q: String) { listSearch.value = q }
     fun setListSort(sort: ListSort) { listSort.value = sort }
-    /** Cycle Newest → Oldest → DueDate → Newest. */
+    /** Cycle Newest → Oldest → A–Z → Z–A → DueDate → Newest. */
     fun toggleSort() {
         listSort.value = when (listSort.value) {
             ListSort.Newest -> ListSort.Oldest
-            ListSort.Oldest -> ListSort.DueDate
+            ListSort.Oldest -> ListSort.AtoZ
+            ListSort.AtoZ -> ListSort.ZtoA
+            ListSort.ZtoA -> ListSort.DueDate
             ListSort.DueDate -> ListSort.Newest
         }
     }
@@ -230,12 +259,16 @@ class ObjectDetailViewModel(
         viewModelScope.launch {
             when (val s = state.value) {
                 is UiState.ItemView -> {
-                    itemRepo.softDelete(s.item.firestoreId)
-                    onAfter()
+                    appScope.launch(Dispatchers.IO) {
+                        itemRepo.softDelete(s.item.firestoreId)
+                        onAfter()
+                    }
                 }
                 is UiState.ListView -> {
-                    listRepo.softDelete(s.list.firestoreId)
-                    onAfter()
+                    appScope.launch(Dispatchers.IO) {
+                        listRepo.softDelete(s.list.firestoreId)
+                        onAfter()
+                    }
                 }
                 else -> return@launch
             }
@@ -244,7 +277,7 @@ class ObjectDetailViewModel(
 
     fun deleteListAndChildren(onAfter: () -> Unit) {
         val s = state.value as? UiState.ListView ?: return
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val now = Clock.System.now()
             val children = itemRepo.getByList(s.list.firestoreId)
             children.forEach { child ->
@@ -269,7 +302,7 @@ class ObjectDetailViewModel(
     fun deleteListMovingChildren(targetListId: String, onAfter: () -> Unit) {
         val s = state.value as? UiState.ListView ?: return
         if (targetListId == s.list.firestoreId) return
-        viewModelScope.launch {
+        appScope.launch(Dispatchers.IO) {
             val now = Clock.System.now()
             val children = itemRepo.getByList(s.list.firestoreId)
             children.forEach { child ->
@@ -292,7 +325,10 @@ class ObjectDetailViewModel(
     fun renameList(newTitle: String, newIcon: String? = null) {
         val s = state.value as? UiState.ListView ?: return
         val title = newTitle.trim().ifBlank { return }
-        viewModelScope.launch {
+        // appScope, not viewModelScope: this is flushed from onDispose when the
+        // screen leaves, which is the same moment viewModelScope is cancelled —
+        // launching the write there would lose it. See [patchItem].
+        appScope.launch {
             val updated = s.list.toDocument().copy(
                 title = title,
                 icon = newIcon?.trim() ?: s.list.icon,
@@ -317,7 +353,13 @@ class ObjectDetailViewModel(
     ) {
         val s = state.value as? UiState.ItemView ?: return
         val it = s.item
-        viewModelScope.launch {
+        // appScope, not viewModelScope: patchItem is the always-edit auto-save,
+        // flushed from the screen's onDispose when the user navigates back. That
+        // dispose coincides with this per-screen ViewModel being cleared and
+        // viewModelScope cancelled, so a write launched there would be cancelled
+        // before it commits and the edit would be silently lost. appScope is the
+        // app-lifetime LibIndex scope, so the write always completes.
+        appScope.launch {
             val nextKind = kind ?: it.kind
             val nextDueAt = when (dueAt) {
                 DueAtChange.NoChange -> it.dueAt
@@ -342,7 +384,9 @@ class ObjectDetailViewModel(
     }
 
     fun patchChildItem(childId: String, title: String?, body: String? = null, kind: String? = null) {
-        viewModelScope.launch {
+        // appScope: flushed from the inline note row's onDispose on navigate-away
+        // (same scope-cancellation race as [patchItem]).
+        appScope.launch {
             val existing = itemRepo.getById(childId) ?: return@launch
             val trimmed = title?.trim()
             if (trimmed != null && trimmed.isBlank()) return@launch
@@ -369,29 +413,34 @@ class ObjectDetailViewModel(
     ) {
         val s = state.value as? UiState.ListView ?: return
         val cleanTitle = title.trim().ifBlank { return }
+        // New items added to the Shopping list are checklist items so they get a
+        // tickable circle and can be checked off (MOB-8946).
+        val effectiveKind = if (s.list.firestoreId == LIST_SHOPPING_ID) "checklist" else kind
         viewModelScope.launch {
             val now = Clock.System.now()
             val id = "local-item-${Uuid.random()}"
-            itemRepo.setItem(
-                id,
-                ItemDocument(
-                    createdAt = now,
-                    updatedAt = now,
-                    metadata = metadataForKind(kind),
-                    title = cleanTitle,
-                    parentListIds = normalizeParentLists(
-                        kind = kind,
-                        requestedParents = listOf(s.list.firestoreId),
-                        currentParents = emptyList(),
+            appScope.launch(Dispatchers.IO) {
+                itemRepo.setItem(
+                    id,
+                    ItemDocument(
+                        createdAt = now,
+                        updatedAt = now,
+                        metadata = metadataForKind(effectiveKind),
+                        title = cleanTitle,
+                        parentListIds = normalizeParentLists(
+                            kind = effectiveKind,
+                            requestedParents = listOf(s.list.firestoreId),
+                            currentParents = emptyList(),
+                        ),
                     ),
-                ),
-            )
-            onCreated(id)
+                )
+                onCreated(id)
+            }
         }
     }
 
     fun deleteChildItem(childId: String) {
-        viewModelScope.launch {
+        appScope.launch {
             itemRepo.softDelete(childId)
         }
     }
@@ -430,22 +479,31 @@ internal fun kindLabel(kind: String): String = when (kind) {
     "answer" -> "Answer"
     "message" -> "Message"
     "action_log" -> "Action"
+    "calendar_event" -> "Event"
+    "delegated" -> "Sent"
     "list" -> "List"
     else -> kind.replaceFirstChar { it.uppercase() }
 }
 
-private fun normalizeParentLists(
+internal fun normalizeParentLists(
     kind: String,
     requestedParents: List<String>?,
     currentParents: List<String>,
 ): List<String> {
-    if (kind == "reminder" || kind == "scheduled") return listOf(LIST_TODOS_ID)
+    if (kind == "reminder") return listOf(LIST_TODOS_ID)
+    // Scheduled (timer/alarm) items are owned by the system clock app and stay
+    // out of the Reminders list; an edit must not re-parent them into it.
+    if (kind == "scheduled") return currentParents
 
-    val source = requestedParents ?: currentParents
-    val nonTodoParents = source
+    // No explicit membership change → preserve current lists as-is. Stripping
+    // Todos / defaulting to Notes here would silently relocate items that
+    // legitimately live in Todos (e.g. calendar_event) on a text-only edit.
+    val requested = requestedParents ?: return currentParents
+
+    return requested
         .filter { it != LIST_TODOS_ID }
         .distinct()
-    return nonTodoParents.ifEmpty { listOf(LIST_NOTES_SELF_ID) }
+        .ifEmpty { listOf(LIST_NOTES_SELF_ID) }
 }
 
 private fun todoComparator(): Comparator<CachedItem> {
@@ -454,15 +512,21 @@ private fun todoComparator(): Comparator<CachedItem> {
     return compareBy<CachedItem> { task ->
         val dueMs = task.dueAt?.toEpochMilliseconds()
         when {
-            dueMs != null && dueMs <= urgentCutoffMs -> 0
-            dueMs == null -> 1
-            else -> 2
+            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
+            dueMs != null && dueMs <= nowMs -> 1
+            dueMs == null -> 2
+            else -> 3
         }
     }
         .thenBy { task ->
             val dueMs = task.dueAt?.toEpochMilliseconds()
-            if (dueMs != null && dueMs <= urgentCutoffMs) dueMs else Long.MAX_VALUE
+            when {
+                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
+                dueMs != null && dueMs <= nowMs -> -dueMs
+                dueMs == null -> Long.MAX_VALUE
+                else -> dueMs
+            }
         }
-        .thenByDescending { it.createdAt.toEpochMilliseconds() }
+        .thenBy { it.createdAt.toEpochMilliseconds() }
         .thenBy { it.title.lowercase() }
 }

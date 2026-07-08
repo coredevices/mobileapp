@@ -32,6 +32,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStor
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -306,26 +307,34 @@ class WebViewJsRunner(
     override suspend fun stop() {
         //TODO: Close config screens
         _readyState.value = false
-        withContext(Dispatchers.Main) {
-            // Save final state of localStorage to our scoped storage, to catch any
-            // property-accessor changes (not caught by our shim).
-            // Skip if restoreLocalStorage() never completed: window.localStorage is
-            // still empty and persisting it would clear the user's stored settings
-            // (saveState() does a clear() first). MOB-6881.
-            if (restoreCompleted) {
-                persistLocalStorage()
-            } else {
-                logger.d { "Skipping persistLocalStorage: restore did not complete" }
+        // Run teardown as NonCancellable. stop() is frequently invoked from an already-cancelled
+        // connection scope — e.g. on watch disconnect.
+        withContext(NonCancellable + Dispatchers.Main) {
+            try {
+                // Save final state of localStorage to our scoped storage, to catch any
+                // property-accessor changes (not caught by our shim).
+                // Skip if restoreLocalStorage() never completed: window.localStorage is
+                // still empty and persisting it would clear the user's stored settings
+                // (saveState() does a clear() first). MOB-6881.
+                if (restoreCompleted) {
+                    persistLocalStorage()
+                } else {
+                    logger.d { "Skipping persistLocalStorage: restore did not complete" }
+                }
+                interfaces.forEach { (namespace, _) ->
+                    webView?.removeJavascriptInterface(namespace)
+                }
+                webView?.loadUrl("about:blank")
+                webView?.stopLoading()
+                webView?.clearHistory()
+                webView?.removeAllViews()
+                webView?.clearCache(true)
+            } catch (e: Exception) {
+                logger.e(e) { "Error during WebView teardown; destroying anyway" }
+            } finally {
+                // destroy() must always run, even if the pre-destroy teardown fails
+                webView?.destroy()
             }
-            interfaces.forEach { (namespace, _) ->
-                webView?.removeJavascriptInterface(namespace)
-            }
-            webView?.loadUrl("about:blank")
-            webView?.stopLoading()
-            webView?.clearHistory()
-            webView?.removeAllViews()
-            webView?.clearCache(true)
-            webView?.destroy()
         }
         synchronized(initializedLock) {
             webView = null

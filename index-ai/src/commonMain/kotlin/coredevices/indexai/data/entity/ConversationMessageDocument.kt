@@ -31,6 +31,7 @@ data class ConversationMessageDocument(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val tool_call_id: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @Serializable(with = TolerantSemanticResultSerializer::class)
     val semantic_result: SemanticResult? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val language_model_used: String? = null,
@@ -39,6 +40,7 @@ data class ConversationMessageDocument(
     val is_forced_tool: Boolean = false
 )
 
+@Serializable
 @Entity(
     foreignKeys = [
         ForeignKey(
@@ -56,6 +58,7 @@ data class ConversationMessageDocument(
 data class ConversationMessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val recordingId: Long,
+    @Serializable(with = TolerantInstantSerializer::class)
     val timestamp: Instant = Clock.System.now(),
     @Embedded
     val document: ConversationMessageDocument

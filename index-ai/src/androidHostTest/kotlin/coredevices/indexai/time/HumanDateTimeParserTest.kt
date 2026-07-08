@@ -692,6 +692,41 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteDateMonthDayWordSingle() {
+        val result = parser.parse("august twenty")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 8, 20), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayWordOnes() {
+        val result = parser.parse("march five")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 3, 5), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayWordCompound() {
+        val result = parser.parse("august twenty one")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 8, 21), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayWordCompoundHyphenated() {
+        val result = parser.parse("august twenty-one")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 8, 21), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeMonthDayWordAtTime() {
+        val result = parser.parse("august twenty at 3pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 8, 20, 15, 0), result.dateTime)
+    }
+
+    @Test
     fun testAbsoluteDateWithExplicitYearDoesNotRollForward() {
         // January 10, 2025 is in the past but year is explicit — respect it
         val result = parser.parse("january 10, 2025")
@@ -1165,6 +1200,37 @@ class HumanDateTimeParserTest {
     @Test
     fun testBareNumberWithoutAmPmReturnsNull() {
         val result = parser.parse("3")
+        assertNull(result)
+    }
+
+    @Test
+    fun testAtBareHourParsesAsAmbiguousTime() {
+        // "at 5" is unambiguously a time. The hour is taken as-is (am); the caller resolves it to
+        // the next upcoming 5 o'clock using amPmExplicit.
+        val result = parser.parse("at 5")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(5, 0), result.time)
+        assertEquals(false, result.amPmExplicit)
+    }
+
+    @Test
+    fun testAtBareHour24Hour() {
+        // A bare hour above 12 is treated as 24-hour, no am/pm ambiguity.
+        val result = parser.parse("at 17")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(17, 0), result.time)
+    }
+
+    @Test
+    fun testAtBareHourOutOfRangeReturnsNull() {
+        val result = parser.parse("at 25")
+        assertNull(result)
+    }
+
+    @Test
+    fun testAtBareHourWithUnitIsNotATime() {
+        // "at 5 minutes" must not be misread as the time 5:00.
+        val result = parser.parse("at 5 minutes")
         assertNull(result)
     }
 

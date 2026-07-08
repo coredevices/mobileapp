@@ -1,17 +1,18 @@
 package coredevices.ring.reminders
 
 import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.builtin_servlets.reminders.AndroidBuiltInReminderIntegration
 import coredevices.ring.database.room.dao.LocalReminderDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -45,18 +46,13 @@ class ReminderBootReceiver : BroadcastReceiver(), KoinComponent {
                 val reminders = localReminderDao.getAllReminders()
                 for (reminder in reminders) {
                     val time = reminder.time ?: continue
-                    if (time <= now) continue
-                    val alarmIntent = Intent(context, ReminderReceiver::class.java).apply {
-                        putExtra(ReminderReceiver.EXTRA_REMINDER_ID, reminder.id)
+                    if (time > now) {
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, time, isPreNotification = false)
                     }
-                    val pendingIntent = PendingIntent.getBroadcast(
-                        context,
-                        reminder.id,
-                        alarmIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    val info = AlarmManager.AlarmClockInfo(time.toEpochMilliseconds(), pendingIntent)
-                    alarmManager.setAlarmClock(info, pendingIntent)
+                    val preTime = reminder.notifyBeforeMillis?.let { time - it.milliseconds }
+                    if (preTime != null && preTime > now) {
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, preTime, isPreNotification = true)
+                    }
                 }
                 logger.d { "Re-scheduled ${reminders.size} reminder(s) after boot" }
             } catch (t: Throwable) {

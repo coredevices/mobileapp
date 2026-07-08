@@ -8,6 +8,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioRecorder
@@ -43,6 +44,7 @@ fun IndexComposeBarHost(
 ) {
     val scope = rememberCoroutineScope()
     val koin = getKoin()
+    val appScope = koinInject<LibIndexCoroutineScope>()
     val recordingStorage = koinInject<RecordingStorage>()
     val recordingQueue = koinInject<RecordingProcessingQueue>()
     val permissionRequester = koinInject<PermissionRequester>()
@@ -97,7 +99,9 @@ fun IndexComposeBarHost(
     }
 
     fun stopAndProcess() {
-        scope.launch {
+        // appScope: once the user taps stop, saving + queueing the finished
+        // recording must survive this composable leaving composition.
+        appScope.launch {
             val fileId = currentFileId ?: return@launch
             currentRecorder?.stopRecording()
             recordingJob?.join()

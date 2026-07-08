@@ -1,6 +1,7 @@
 package coredevices.indexai.agent
 
 import coredevices.indexai.data.entity.ConversationMessageDocument
+import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,12 +16,14 @@ interface Agent {
      * Send input to the agent for processing.
      * @param input The transcribed text to process
      * @param mcpSession The MCP session to use for tool calls
+     * @param sessionContext The session context passed along with each tool call
      * @param includePromptsFromMcps A map of MCP integration names to sets of prompt names to include as context
      * @param skipToolExecution If true, the agent will not execute any tools, only generate responses (useful for testing)
      */
     suspend fun send(
         input: String,
         mcpSession: McpSession,
+        sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>> = emptyMap(),
         skipToolExecution: Boolean = false
     )

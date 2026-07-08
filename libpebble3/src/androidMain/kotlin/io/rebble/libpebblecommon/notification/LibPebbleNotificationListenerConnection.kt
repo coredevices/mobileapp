@@ -70,6 +70,23 @@ class AndroidPebbleNotificationListenerConnection(
         }
     }
 
+    /**
+     * Recovers a binding that is nominally alive (service reference non-null) but no longer
+     * delivering.
+     */
+    private suspend fun recoverStalledBinding(service: LibPebbleNotificationListener) {
+        logger.w { "Notification listener bound but not delivering; unbinding then rebinding" }
+        try {
+            service.requestUnbind()
+        } catch (e: Exception) {
+            logger.e(e) { "requestUnbind failed; requesting rebind anyway" }
+        }
+        // Let the unbind land so requestRebind's precondition is satisfied, then drive the rebind
+        // directly instead of depending on the onListenerDisconnected callback firing.
+        delay(REBIND_DEBOUNCE)
+        requestRebindIfNeeded("watchdog: binding not delivering")
+    }
+
     private fun hasNotificationAccess(): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
@@ -102,13 +119,18 @@ class AndroidPebbleNotificationListenerConnection(
             libPebble.markNotificationRead(it)
         }.launchIn(libPebbleCoroutineScope)
 
-        // Watchdog: catches cases where the binding is lost without an onListenerDisconnected
-        // callback (e.g. process restarted but the OS never rebound). If access is granted but we
-        // have no service, ask the OS to rebind. Never disturbs a healthy binding.
+        // Watchdog: catches cases where delivery is lost without an onListenerDisconnected callback
+        // (e.g. process restarted but the OS never rebound, or an aggressive OEM ROM silently severs
+        // delivery while leaving our service reference in place). If access is granted but we either
+        // have no service or the binding no longer delivers, ask the OS to rebind.
         libPebbleCoroutineScope.launch {
             while (true) {
                 delay(REBIND_WATCHDOG_INTERVAL)
-                if (listenerService == null) requestRebindIfNeeded("watchdog")
+                val service = listenerService
+                when {
+                    service == null -> requestRebindIfNeeded("watchdog: no service")
+                    !service.isBindingAlive() -> recoverStalledBinding(service)
+                }
             }
         }
     }

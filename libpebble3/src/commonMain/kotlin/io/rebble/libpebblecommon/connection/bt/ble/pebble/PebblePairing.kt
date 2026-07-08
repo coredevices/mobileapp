@@ -24,7 +24,6 @@ import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
 
@@ -67,7 +66,7 @@ class PebblePairing(
                 val pairValue = makePairingTriggerValue(
                     noSecurityRequest = needsExplicitBond,
                     autoAcceptFuturePairing = false,
-                    watchAsGattServer = bleConfig.reversedPPoG,
+                    watchAsGattServer = bleConfig.legacyReversedPPoG,
                     pinAddress = blePlatformConfig.pinAddress,
                 )
                 val writeRes = device.writeCharacteristic(

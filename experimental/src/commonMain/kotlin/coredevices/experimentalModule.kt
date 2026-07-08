@@ -22,7 +22,11 @@ import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderFactory
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
+import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
+import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
+import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.UIEmailIntegration
 import coredevices.ring.api.ApiConfig
@@ -47,6 +51,7 @@ import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.ring.service.FirestoreRingDebugDelegate
@@ -157,7 +162,10 @@ val experimentalModule = module {
         RingTransferRepository(get(), get<RingDatabase>())
     }
     singleOf(::RecordingProcessingTaskRepository)
-    singleOf(::ItemRepository)
+    single {
+        val builtInReminders = get<BuiltInReminderIntegration>()
+        ItemRepository(get()) { builtInReminders.cancelReminder(it) }
+    }
     singleOf(::ListRepository)
     singleOf(::DefaultListsBootstrap)
     singleOf(::IndexFeedSyncService)
@@ -183,6 +191,7 @@ val experimentalModule = module {
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
+    singleOf(::ObsidianPreferences)
     single {
         IndexWebhookApiImpl(
             get(),
@@ -223,7 +232,10 @@ val experimentalModule = module {
 
     factoryOf(::GTasksIntegration)
     factoryOf(::UIEmailIntegration)
-    singleOf(::ReminderFactory)
+    single { createBuiltInReminderIntegration() }
+    singleOf(::BuiltInReminderFeedItems)
+    singleOf(::DelegatedIntegrationItems)
+    singleOf(::ReminderIntegrationFactory)
     singleOf(::ContextualActionPredictor)
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)

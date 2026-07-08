@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.service.RingEvent
 import coredevices.ring.service.RingSync
@@ -67,6 +68,7 @@ fun FeedTabContents(
 ) {
     val scope = rememberCoroutineScope()
     val koin = getKoin()
+    val appScope = koinInject<LibIndexCoroutineScope>()
     val recordingStorage = koinInject<RecordingStorage>()
     val recordingQueue = koinInject<RecordingProcessingQueue>()
     val permissionRequester = koinInject<PermissionRequester>()
@@ -115,7 +117,9 @@ fun FeedTabContents(
     }
 
     fun stopAndProcess() {
-        scope.launch {
+        // appScope: once the user taps stop, saving + queueing the finished
+        // recording must survive this composable leaving composition.
+        appScope.launch {
             val fileId = currentFileId ?: return@launch
             currentRecorder?.stopRecording()
             recordingJob?.join()

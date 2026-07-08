@@ -6,6 +6,7 @@ import android.net.Uri
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
+import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.database.Preferences
@@ -23,7 +24,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
     extraContext = "If the user explicitly requests sending a message, use the messaging " +
             "tools."
 ), KoinComponent {
-    private val context: Context by inject()
+    private val androidContext: Context by inject()
     private val prefs: Preferences by inject()
 
     companion object {
@@ -38,7 +39,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             .sortedByDescending { it.second }
     }
 
-    actual override suspend fun call(jsonInput: String): ToolCallResult {
+    actual override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         return try {
             val (contactName, text) = JsonSnake.decodeFromString<SendBeeperMessageArgs>(jsonInput)
 
@@ -58,7 +59,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
             val uri =
                 "content://com.beeper.api/messages?roomId=${encodedId}&text=$encodedText".toUri()
 
-            val resultUri = context.contentResolver.insert(uri, ContentValues())
+            val resultUri = androidContext.contentResolver.insert(uri, ContentValues())
 
             if (resultUri?.getQueryParameter("messageId") != null) {
                 val displayName = contact.nickname ?: contact.name

@@ -162,11 +162,6 @@ class GattServerCallback(
         value: ByteArray?,
     ) {
         verboseLog { "onDescriptorWriteRequest: ${device.address} / ${descriptor.characteristic.uuid}" }
-        val registeredDevice = registeredDevices[device.address]
-        if (registeredDevice == null) {
-            logger.e("onDescriptorWriteRequest device not registered!")
-            return
-        }
         val gattServer = server
         if (gattServer == null) {
             logger.e("onDescriptorWriteRequest no server!!")
@@ -174,6 +169,11 @@ class GattServerCallback(
         }
         if (!gattServer.sendResponse(device, requestId, GATT_SUCCESS, offset, value)) {
             logger.e("onDescriptorWriteRequest failed to respond")
+            return
+        }
+        val registeredDevice = registeredDevices[device.address]
+        if (registeredDevice == null) {
+            verboseLog { "onDescriptorWriteRequest: device not registered (reversed PPoG?), CCCD ACKed anyway" }
             return
         }
         registeredDevices[device.address] = registeredDevice.copy(notificationsEnabled = true)

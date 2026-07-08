@@ -201,7 +201,7 @@ fun IndexFeedScreen(
                 if (state.todosPreview.isNotEmpty() || (!state.searching && state.totalTodos == 0)) {
                     item("todos-header") {
                         FeedSectionHeader(
-                            left = "Todos",
+                            left = "Reminders",
                             right = state.totalTodos.toString(),
                             onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(LIST_TODOS_ID)) },
                             topPad = 14.dp,

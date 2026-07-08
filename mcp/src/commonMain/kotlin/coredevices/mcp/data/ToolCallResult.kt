@@ -32,6 +32,9 @@ sealed class SemanticResult {
          *  link the produced feed item back to the local reminder. Null for old
          *  records / non-reminder tasks. */
         val localReminderId: Int? = null,
+        /** Lead time (ms) before [deadline] at which an extra early notification was
+         *  requested, or null for none. */
+        val notifyBeforeMillis: Long? = null,
     ): SemanticResult()
     /**
      * Tool call resulted in a list item creation action (e.g. generic note, list)
@@ -45,6 +48,17 @@ sealed class SemanticResult {
     @Serializable
     @SerialName("AlarmCreation")
     data class AlarmCreation(val fireTime: LocalTime): SemanticResult()
+    /**
+     * Tool call created an event in the user's calendar
+     */
+    @Serializable
+    @SerialName("CalendarEventCreation")
+    data class CalendarEventCreation(
+        val title: String,
+        val startTime: Instant,
+        val endTime: Instant,
+        val location: String? = null,
+    ): SemanticResult()
     /**
      * Tool call resulted in a timer creation action
      * @param requestedDuration The relative duration requested by the user, if any
