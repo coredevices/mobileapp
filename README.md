@@ -72,9 +72,19 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    sudo ln -s /opt/homebrew/bin/pod /usr/local/bin/pod
    ```
 
-3. **Setup GitHub token for speex module**
+3. **Install Android Studio**
 
-    Create a `local.properties` file in the project root with your GitHub credentials.
+   The Gradle build needs an Android SDK even when only building for iOS
+   (several modules apply the Android Gradle plugin). Install
+   [Android Studio](https://developer.android.com/studio) and let its
+   setup wizard install the SDK at the default location
+   (`~/Library/Android/sdk`).
+
+   Then create a `local.properties` file in the project root pointing at it:
+
+   ```properties
+   sdk.dir=/Users/<you>/Library/Android/sdk
+   ```
 
 #### Configuration
 
