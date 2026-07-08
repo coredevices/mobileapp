@@ -165,6 +165,14 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    > - Ran `pod install` successfully
    > - Cleaned the build folder (`Product → Clean Build Folder`)
 
+   > **Known issue**: simulator builds currently fail to link with
+   > `ld: building for 'iOS-simulator', but linking in object file (...libspeex.a...) built for 'iOS'`.
+   > The published `io.github.coredevices.speex` simulator artifact ships a
+   > device-built `libspeex.a` inside its iosSimulatorArm64 klib (every
+   > version on Maven Central is affected) and needs to be republished.
+   > Until then, run on a physical device. Note the simulator has no
+   > Bluetooth in any case, so connecting a watch requires a device.
+
 
 
 
