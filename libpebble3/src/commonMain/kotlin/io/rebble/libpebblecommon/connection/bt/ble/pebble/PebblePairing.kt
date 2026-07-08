@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 class PebblePairing(
     private val context: AppContext,
@@ -117,6 +119,70 @@ class PebblePairing(
         return null
     }
 
+    /**
+     * The watch reports an existing bond but the link hasn't encrypted. Either the phone still
+     * has the keys and encryption is about to be (or can be) restored, or the user forgot the
+     * pairing on the phone and it can never encrypt — on iOS we can't tell the difference,
+     * because [isBonded] has no real backing API there and always returns true, so the
+     * needs-pairing check in PebbleBle can't catch it.
+     *
+     * Write the pairing trigger with forceSecurityRequest: the watch sends an SM security
+     * request, and the phone either silently re-encrypts (keys present) or starts a fresh
+     * pairing (keys lost, which also makes the watch drop its stale bond). Without this, the
+     * connection sits unencrypted until PPoG times out and we reconnect in a loop.
+     */
+    suspend fun requestEncryption(
+        device: ConnectedGattClient,
+        connectivity: Flow<ConnectivityStatus>,
+    ): ConnectionFailureReason? {
+        // Encryption restore is normally quick; don't poke the watch if it's already underway.
+        val restored = withTimeoutOrNull(ENCRYPTION_RESTORE_GRACE) {
+            connectivity.first { it.encrypted }
+        }
+        if (restored != null) return null
+
+        Logger.i("bonded but link not encrypted; forcing security request")
+        val pairingTriggerCharacteristic = device.services
+            ?.firstOrNull { it.uuid == PAIRING_SERVICE_UUID }
+            ?.characteristics?.firstOrNull { it.uuid == PAIRING_TRIGGER_CHARACTERISTIC }
+        if (pairingTriggerCharacteristic == null) {
+            Logger.e("Pairing trigger characteristic not found")
+            return ConnectionFailureReason.EncryptionFailed
+        }
+        if (pairingTriggerCharacteristic.properties and PROPERTY_WRITE != 0) {
+            val pairValue = makePairingTriggerValue(
+                noSecurityRequest = false,
+                autoAcceptFuturePairing = false,
+                watchAsGattServer = config.value.legacyReversedPPoG,
+                pinAddress = blePlatformConfig.pinAddress,
+            )
+            val writeRes = device.writeCharacteristic(
+                PAIRING_SERVICE_UUID,
+                PAIRING_TRIGGER_CHARACTERISTIC,
+                pairValue,
+                GattWriteType.WithResponse,
+            )
+            if (!writeRes) {
+                Logger.e("Failed to write to pairing trigger")
+            }
+        } else {
+            // Reading the trigger on an unencrypted link also makes the watch initiate security.
+            device.readCharacteristic(PAIRING_SERVICE_UUID, PAIRING_TRIGGER_CHARACTERISTIC)
+        }
+
+        return try {
+            // Re-pairing needs user interaction on both devices, so needs a longer timeout.
+            withTimeout(PENDING_BOND_TIMEOUT) {
+                connectivity.first { it.encrypted }
+            }
+            Logger.d("link encrypted")
+            null
+        } catch (e: TimeoutCancellationException) {
+            Logger.e("Failed to encrypt in time")
+            ConnectionFailureReason.EncryptionFailed
+        }
+    }
+
     suspend fun requestClassicPairing(
         identifier: PebbleBtClassicIdentifier,
     ): ConnectionFailureReason? {
@@ -165,6 +231,7 @@ class PebblePairing(
     companion object {
         private val PENDING_BOND_TIMEOUT =
             60000L // Requires user interaction, so needs a longer timeout
+        private val ENCRYPTION_RESTORE_GRACE = 2.seconds
     }
 }
 

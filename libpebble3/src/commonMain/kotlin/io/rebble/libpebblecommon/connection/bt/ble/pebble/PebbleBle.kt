@@ -155,6 +155,15 @@ class PebbleBle(
             if (pairingResult != null) {
                 return PebbleConnectionResult.Failed(pairingResult)
             }
+        } else if (!connectionStatus.encrypted) {
+            // "Already paired" can be a false positive: the watch reports its stored bond, but
+            // the phone may have forgotten the keys (undetectable on iOS, where isBonded() is
+            // hardcoded true). An unencrypted link would stall PPoG and loop reconnecting, so
+            // make the watch drive encryption (or fresh pairing) before going further.
+            val encryptionResult = pairing.requestEncryption(device, connectivity.status)
+            if (encryptionResult != null) {
+                return PebbleConnectionResult.Failed(encryptionResult)
+            }
         }
 
         if (reversedConfig != null) {

@@ -61,6 +61,7 @@ enum class ConnectionFailureReason {
     ReadPairingTrigger,
     CreateBondFailed,
     PairingTimedOut,
+    EncryptionFailed,
     NotAnError_NeverAttmpedConnection,
     TimeoutInitializingPpog,
     ClassicConnectionFailed,
