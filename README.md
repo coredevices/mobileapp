@@ -86,9 +86,21 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    sdk.dir=/Users/<you>/Library/Android/sdk
    ```
 
+4. **Install the iOS platform for Xcode**
+
+   Recent Xcode versions ship without the iOS platform (SDK device
+   support and simulator runtime). Without it, any iOS build fails with
+   "iOS X.Y is not installed". Download it with:
+
+   ```bash
+   xcodebuild -downloadPlatform iOS
+   ```
+
+   (This is the same ~8 GB download as Xcode → Settings → Components.)
+
 #### Configuration
 
-4. **Configure Entitlements**
+5. **Configure Entitlements**
 
    Set `iosApp/iosApp/iosApp.entitlements` to:
 
@@ -103,7 +115,7 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    </plist>
    ```
 
-5. **Install CocoaPods dependencies**
+6. **Install CocoaPods dependencies**
 
    ```bash
    ./gradlew podInstall
@@ -111,21 +123,21 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
 
    This will create `Podfile.lock` and set up all required dependencies.
 
-6. **Configure Bundle ID and Signing**
+7. **Configure Bundle ID and Signing**
 
    - Open `iosApp/iosApp.xcworkspace` in Xcode (⚠️ **Important**: use `.xcworkspace`, not `.xcodeproj`)
    - Go to the target `iosApp` → **Signing & Capabilities**
    - Set your **Team** (your Apple Developer account)
    - Set **Bundle Identifier** to your own (e.g., `com.yourname.coredevices.coreapp`)
 
-7. **Configure Firebase**
+8. **Configure Firebase**
 
    - Create a free Firebase account at https://console.firebase.google.com
    - Create a new iOS app with the same Bundle ID you set above
    - Download `GoogleService-Info.plist` and place it in `iosApp/iosApp/`
    - The file should be named exactly `GoogleService-Info.plist`
 
-8. **Create a git tag for app version**
+9. **Create a git tag for app version**
 
    Create a git tag that will be used as the version of the app:
 
@@ -135,7 +147,7 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
 
 #### Build and Run
 
-9. **Build and run in Xcode**
+10. **Build and run in Xcode**
 
    - Open `iosApp/iosApp.xcworkspace` in Xcode
    - Select your target device or simulator and run.
