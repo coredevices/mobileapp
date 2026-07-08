@@ -119,7 +119,7 @@ kotlin {
                 linkerOpts(
                     "-framework", "LibPebbleSwift", "-F"+dir.absolutePath,
                     "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
                 )
             }
         }
