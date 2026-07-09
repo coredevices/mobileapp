@@ -16,6 +16,8 @@ import coredevices.ring.service.indexfeed.ItemFactory
 import io.ktor.http.isSuccess
 import kotlinx.io.IOException
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import kotlin.time.Clock
 
 /**
  * Online agent backed by the Nenya Search model. A single inference produces an
@@ -32,6 +34,8 @@ class SearchAgentNenya(
     override val label = "Nenya"
 
     override val logger: Logger = Logger.withTag("SearchAgentNenya")
+
+    private val LLMLocationProvider: LLMLocationProvider by inject()
 
     companion object {
         private val AGENT_CONTEXT = """
@@ -54,11 +58,14 @@ class SearchAgentNenya(
         skipToolExecution: Boolean,
     ) {
         emit(ConversationMessageDocument(role = MessageRole.user, content = input))
+        val locationLine = LLMLocationProvider.currentLocationContext()
         val resp = try {
             nenyaClient.run(
                 conversationHistory = currentConversation(),
                 toolSpecs = emptyList(),
-                additionalContext = AGENT_CONTEXT,
+                additionalContext = AGENT_CONTEXT + "\n\n" +
+                    currentTimeContext(sessionContext.timeBase ?: Clock.System.now()) +
+                    (locationLine?.let { "\n\n" + it } ?: ""),
                 model = NenyaModel.Search
             )
         } catch (e: IOException) {

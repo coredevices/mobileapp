@@ -509,6 +509,8 @@ class RecordingProcessingQueue(
         trace.markEvent("handling_audio_task_end", TraceEventData.HandlingAudioTask(transferId))
     }
 
+    fun isTypedQuestion(text: String): Boolean = text.trim().endsWith("?")
+
     private suspend fun handleChat(
         handle: TaskHandle,
         task: ProcessingTask.TextRecording
@@ -530,7 +532,8 @@ class RecordingProcessingQueue(
         val operation = recordingOperationFactory.createTextOnlyOperation(
             recordingId = recordingId,
             text = transcription,
-            forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) }
+            forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) },
+            isQuestion = isTypedQuestion(transcription),
         )
         operation.run(handle)
     }

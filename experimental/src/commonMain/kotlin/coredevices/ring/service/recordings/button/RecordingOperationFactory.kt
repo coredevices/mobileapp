@@ -1,6 +1,5 @@
 package coredevices.ring.service.recordings.button
 
-import coredevices.indexai.agent.Agent
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
@@ -96,16 +95,19 @@ class RecordingOperationFactory(
     fun createTextOnlyOperation(
         recordingId: Long,
         text: String,
-        forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult),
-        agent: Agent = agentFactory.createForChatMode(ChatMode.Normal),
+        forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
+        isQuestion: Boolean = false,
     ): RecordingOperation {
+        // A typed question routes to the search/answer agent (the text-input equivalent of the
+        // ring's double-click-hold "question" gesture) and forces no note, mirroring the Search path.
+        val agent = agentFactory.createForChatMode(if (isQuestion) ChatMode.Search else ChatMode.Normal)
         return TextOnlyRecordingOperation(
             mcpSandboxRepository = mcpSandboxRepository,
             mcpSessionFactory = mcpSessionFactory,
             recordingId = recordingId,
             chatAgent = agent,
             text = text,
-            forcedTool = forcedTool
+            forcedTool = if (isQuestion) null else forcedTool,
         )
     }
 

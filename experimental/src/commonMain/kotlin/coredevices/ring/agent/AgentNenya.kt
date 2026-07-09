@@ -26,6 +26,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import kotlin.time.Clock
 
 /**
  * Online agent backed by the Nenya HTTP API. Iterative: tool results are fed
@@ -41,6 +43,20 @@ open class AgentNenya(
     override val label = "Nenya"
 
     override val logger: Logger = Logger.withTag("AgentNenya")
+
+    private val LLMLocationProvider: LLMLocationProvider by inject()
+
+    // Fetched at most once per run — runInference is called on every tool round, but the
+    // user's location won't meaningfully change mid-conversation and GPS I/O is expensive.
+    private var locationLine: String? = null
+    private var locationFetched = false
+    private suspend fun locationLine(): String? {
+        if (!locationFetched) {
+            locationLine = LLMLocationProvider.currentLocationContext()
+            locationFetched = true
+        }
+        return locationLine
+    }
 
     /**
      * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
@@ -126,7 +142,9 @@ open class AgentNenya(
             nenyaClient.run(
                 conversationHistory = history,
                 toolSpecs = tools,
-                additionalContext = context + "\n" + mcpSession.getExtraContext(sessionContext, includePromptsFromMcps).orEmpty(),
+                additionalContext = context + "\n" + currentTimeContext(Clock.System.now()) +
+                    (locationLine()?.let { "\n" + it } ?: "") + "\n" +
+                    mcpSession.getExtraContext(sessionContext, includePromptsFromMcps).orEmpty(),
                 model = model
             )
         } catch (e: IOException) {
