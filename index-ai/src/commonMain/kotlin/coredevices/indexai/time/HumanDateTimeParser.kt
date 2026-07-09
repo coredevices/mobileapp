@@ -264,6 +264,11 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDate(parseWeekend(nextWeek))
         }
 
+        // "next week" resolves to the start of that week; the caller defaults a bare date to 9am.
+        if (nextWeekPattern.matches(input)) {
+            return InterpretedDateTime.AbsoluteDate(nextDayOfWeek(DayOfWeek.MONDAY))
+        }
+
         dayWordOnlyPattern.find(input)?.let { match ->
             val date = parseDayWord(match.groupValues[1]) ?: return null
             return InterpretedDateTime.AbsoluteDate(date)
@@ -362,12 +367,13 @@ class HumanDateTimeParser(
             "saturday" -> DayOfWeek.SATURDAY
             else -> return null
         }
+        return nextDayOfWeek(targetDay)
+    }
 
-        val currentDay = currentDateTime.dayOfWeek
-        val daysUntil = (targetDay.ordinal - currentDay.ordinal + 7) % 7
-        val adjustedDays = if (daysUntil == 0) 7 else daysUntil // If same day, go to next week
-
-        return currentDateTime.date + DatePeriod(days = adjustedDays)
+    /** Next [targetDay] strictly after today, so the same weekday resolves a week out. */
+    private fun nextDayOfWeek(targetDay: DayOfWeek): LocalDate {
+        val daysUntil = (targetDay.ordinal - currentDateTime.dayOfWeek.ordinal + 7) % 7
+        return currentDateTime.date + DatePeriod(days = if (daysUntil == 0) 7 else daysUntil)
     }
 
     /**
@@ -521,6 +527,7 @@ class HumanDateTimeParser(
 
         // Absolute date patterns
         private val weekendPattern = Regex("""^(?:(this|the|next|coming|this\s+coming)\s+)?weekend$""")
+        private val nextWeekPattern = Regex("""^next\s+week$""")
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
         private val dayOfWeekPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
         private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?$""")
@@ -557,6 +564,8 @@ class HumanDateTimeParser(
             // are captured too so the candidate fails parse() and is skipped, rather than silently
             // matching the bare "weekend" token. (Lookbehind is avoided for Kotlin/Native support.)
             Regex("""\b(?:(?:last|every|past|this\s+past|this\s+coming|this|the|next|coming)\s+)?weekend\b"""),
+            // The trailing \b keeps this off "next weekend", handled by the pattern above.
+            Regex("""\bnext\s+week\b"""),
             // Bare time (e.g. "3pm")
             Regex("""\b$TIME_EXPR"""),
         )

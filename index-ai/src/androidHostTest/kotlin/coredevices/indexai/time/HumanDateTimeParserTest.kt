@@ -22,10 +22,10 @@ class HumanDateTimeParserTest {
 
     // Fixed reference time: Wednesday, January 15, 2025 at 10:30 AM
     private val referenceDateTime = LocalDateTime(2025, 1, 15, 10, 30)
-    private val parser = HumanDateTimeParser(object : Clock {
-        override fun now(): kotlin.time.Instant {
-            return referenceDateTime.toInstant(TimeZone.UTC)
-        }
+    private val parser = parserAt(referenceDateTime)
+
+    private fun parserAt(reference: LocalDateTime) = HumanDateTimeParser(object : Clock {
+        override fun now(): kotlin.time.Instant = reference.toInstant(TimeZone.UTC)
     }, TimeZone.UTC)
 
     // ===== RELATIVE DURATION TESTS =====
@@ -776,10 +776,7 @@ class HumanDateTimeParserTest {
     @Test
     fun testWeekendOnSaturdayBefore9amResolvesToSameDay() {
         // Today is Saturday and the default 9am reminder slot hasn't passed yet, so it stays today.
-        val saturdayReference = LocalDateTime(2025, 1, 18, 7, 30)
-        val saturdayParser = HumanDateTimeParser(object : Clock {
-            override fun now(): kotlin.time.Instant = saturdayReference.toInstant(TimeZone.UTC)
-        }, TimeZone.UTC)
+        val saturdayParser = parserAt(LocalDateTime(2025, 1, 18, 7, 30))
         val result = saturdayParser.parse("this weekend")
         assertIs<InterpretedDateTime.AbsoluteDate>(result)
         assertEquals(LocalDate(2025, 1, 18), result.date)
@@ -789,10 +786,7 @@ class HumanDateTimeParserTest {
     fun testWeekendOnSaturdayAfter9amResolvesToNextSaturday() {
         // Today is Saturday and the default 9am slot has passed; resolving to today would yield a
         // past 9am the scheduler rejects, so it rolls to the next Saturday (Jan 25).
-        val saturdayReference = LocalDateTime(2025, 1, 18, 10, 30)
-        val saturdayParser = HumanDateTimeParser(object : Clock {
-            override fun now(): kotlin.time.Instant = saturdayReference.toInstant(TimeZone.UTC)
-        }, TimeZone.UTC)
+        val saturdayParser = parserAt(LocalDateTime(2025, 1, 18, 10, 30))
         val result = saturdayParser.parse("this weekend")
         assertIs<InterpretedDateTime.AbsoluteDate>(result)
         assertEquals(LocalDate(2025, 1, 25), result.date)
@@ -825,6 +819,50 @@ class HumanDateTimeParserTest {
         // "this past weekend" is in the past — must not be extracted
         val result = parser.parseFromMessage("we went camping this past weekend")
         assertNull(result)
+    }
+
+    // ===== NEXT WEEK TESTS =====
+
+    @Test
+    fun testNextWeekResolvesToComingMonday() {
+        // Reference is Wednesday Jan 15, 2025, so the coming Monday is Jan 20
+        val result = parser.parse("next week")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 20), result.date)
+    }
+
+    @Test
+    fun testNextWeekOnSundayResolvesToTheFollowingDay() {
+        val sundayParser = parserAt(LocalDateTime(2025, 1, 19, 10, 30))
+        val result = sundayParser.parse("next week")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 20), result.date)
+    }
+
+    @Test
+    fun testNextWeekOnMondayResolvesToTheMondayAfter() {
+        // Today is already Monday, so "next week" means the Monday a week out, not today
+        val mondayParser = parserAt(LocalDateTime(2025, 1, 20, 10, 30))
+        val result = mondayParser.parse("next week")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 1, 27), result.date)
+    }
+
+    @Test
+    fun testParseFromMessageExtractsNextWeek() {
+        val result = parser.parseFromMessage("remind me to renew my passport next week")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result?.dateTime)
+        assertEquals(LocalDate(2025, 1, 20), (result?.dateTime as InterpretedDateTime.AbsoluteDate).date)
+        assertEquals("next week", result.matchedText.lowercase())
+    }
+
+    @Test
+    fun testParseFromMessageNextWeekendStillResolvesToSaturday() {
+        // "next weekend" must not be shortened to a "next week" match
+        val result = parser.parseFromMessage("let's go camping next weekend")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result?.dateTime)
+        assertEquals(LocalDate(2025, 1, 25), (result?.dateTime as InterpretedDateTime.AbsoluteDate).date)
+        assertEquals("next weekend", result.matchedText.lowercase())
     }
 
     // ===== ABSOLUTE DATETIME TESTS =====
