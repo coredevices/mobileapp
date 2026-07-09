@@ -109,7 +109,10 @@ abstract class ToolCallingAgent(
     ): Boolean {
         val results = toolCalls.map { call ->
             val r = mcpSession.callTool(
-                call.integrationName, call.toolName, call.arguments, sessionContext,
+                call.integrationName,
+                call.toolName,
+                call.arguments,
+                sessionContext.copy(toolCallId = call.id),
                 requireExists = false
             )
             ConversationMessageDocument(

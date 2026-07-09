@@ -91,14 +91,14 @@ class BuiltInReminderFeedItemsTest {
             deadline = null,
             listId = "list_custom",
             notifyBefore = null,
-            source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now),
+            source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now, toolCallId = "call-note"),
         )
         val item = itemDao.items.values.single().toDocument()
         assertEquals("Umbrella", item.title)
         assertEquals(listOf("list_custom"), item.parentListIds)
         assertEquals("rec-1", item.sourceRecordingId)
         assertEquals(now, item.createdAt)
-        assertNull(item.sourceToolCallId)
+        assertEquals("call-note", item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Note)
     }
 
@@ -112,13 +112,14 @@ class BuiltInReminderFeedItemsTest {
             deadline = deadline,
             listId = null,
             notifyBefore = 2.hours,
-            source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now),
+            source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now, toolCallId = "call-reminder"),
         )
         val item = itemDao.items.values.single().toDocument()
         assertEquals("Call mom", item.title)
         assertEquals(deadline, item.dueAt)
         assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
         assertEquals("rec-1", item.sourceRecordingId)
+        assertEquals("call-reminder", item.sourceToolCallId)
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.Reminder)
         assertEquals(42, meta.localReminderId)
@@ -138,6 +139,7 @@ class BuiltInReminderFeedItemsTest {
         )
         val item = itemDao.items.values.single().toDocument()
         assertNull(item.sourceRecordingId)
+        assertNull(item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Reminder)
     }
 

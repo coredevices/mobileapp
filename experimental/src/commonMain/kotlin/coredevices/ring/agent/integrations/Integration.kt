@@ -45,7 +45,8 @@ interface NoteIntegration : Integration {
 data class ItemSource(
     val recordingFirestoreId: String?,
     val createdAt: Instant?,
+    val toolCallId: String?,
 )
 
 fun SessionContext.itemSource(): ItemSource =
-    ItemSource(recordingFirestoreId, timeBase)
+    ItemSource(recordingFirestoreId, timeBase, toolCallId)

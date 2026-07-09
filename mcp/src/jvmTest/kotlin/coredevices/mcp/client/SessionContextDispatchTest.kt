@@ -43,6 +43,7 @@ class SessionContextDispatchTest {
         val context = SessionContext(
             timeBase = Instant.fromEpochMilliseconds(1234567890L),
             userMessageText = CompletableDeferred("Hello, world!"),
+            toolCallId = "tc-1",
         )
         session.callTool("builtin", "capture", emptyMap(), context)
         assertEquals(context, tool.receivedContext)

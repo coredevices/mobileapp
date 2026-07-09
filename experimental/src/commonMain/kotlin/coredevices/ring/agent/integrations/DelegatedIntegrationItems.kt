@@ -23,7 +23,7 @@ class DelegatedIntegrationItems(
             createdAt = source?.createdAt ?: Clock.System.now(),
             title = title,
             integrationName = integrationTitle,
-            toolCallId = null,
+            toolCallId = source?.toolCallId,
         )
         runCatching { itemRepository.setItem(itemFactory.simpleUid(), item) }
             .onFailure { logger.e(it) { "Failed to persist delegated item for $integrationTitle" } }

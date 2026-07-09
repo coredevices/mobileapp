@@ -51,14 +51,17 @@ class LocalNoteClientTest {
         val (client, itemDao) = fixture()
         val createdAt = Clock.System.now()
 
-        val id = client.createNote("Remember the milk", ItemSource(recordingFirestoreId = "rec-1", createdAt = createdAt))
+        val id = client.createNote(
+            "Remember the milk",
+            ItemSource(recordingFirestoreId = "rec-1", createdAt = createdAt, toolCallId = "call-1"),
+        )
 
         val item = itemDao.items.getValue(id).toDocument()
         assertEquals("Remember the milk", item.title)
         assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
         assertEquals("rec-1", item.sourceRecordingId)
         assertEquals(createdAt, item.createdAt)
-        assertNull(item.sourceToolCallId)
+        assertEquals("call-1", item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Note)
     }
 

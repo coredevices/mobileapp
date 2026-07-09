@@ -26,6 +26,7 @@ class IterativeAgentTest {
     private class FakeIntegration : McpIntegration {
         override val name = "fake"
         val calls = mutableListOf<Pair<String, Map<String, JsonElement>>>()
+        val contexts = mutableListOf<SessionContext>()
         override suspend fun resetCache() {}
         override suspend fun connect() {}
         override suspend fun close() {}
@@ -36,6 +37,7 @@ class IterativeAgentTest {
             context: SessionContext
         ): ToolCallResult {
             calls += toolName to json
+            contexts += context
             return ToolCallResult("""{"success":true}""", null)
         }
         override suspend fun getExtraContext(sessionContext: SessionContext?): String? = null
@@ -160,6 +162,22 @@ class IterativeAgentTest {
         val duplicateResponse = agent.conversation.first().first { it.tool_call_id == "c2" }
         assertContains(assertNotNull(duplicateResponse.content), "Not executed")
         assertNoDanglingToolCalls(agent)
+    }
+
+    @Test
+    fun eachCallGetsItsOwnToolCallIdInSessionContext() = runTest {
+        val integration = FakeIntegration()
+        val agent = ScriptedAgent(
+            mutableListOf(
+                listOf(
+                    toolCall("c1", args = """{"message":"Buy milk"}"""),
+                    toolCall("c2", name = "fake__create_note", args = """{"text":"note"}"""),
+                ),
+            )
+        )
+        agent.send("input", McpSession(listOf(integration), this), sessionContext())
+
+        assertEquals(listOf("c1", "c2"), integration.contexts.map { it.toolCallId })
     }
 
     @Test
