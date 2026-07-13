@@ -50,8 +50,9 @@ class DataLoggingService(
                     val tag = it.tag.get()
                     val applicationUuid = it.applicationUUID.get()
                     val itemSize = it.dataItemSize.get()
+                    val timestamp = it.timestamp.get()
                     logger.d { "Session opened: $id tag: $tag (accepted: $acceptSessions)" }
-                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize)
+                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize, timestamp)
                     datalogging.openSession(id, tag, applicationUuid, itemSize)
                     sendAckNack(id)
                 }
@@ -77,6 +78,7 @@ class DataLoggingService(
                         watchInfo = info,
                         itemSize = session.itemSize,
                         itemsLeft = it.itemsLeftAfterThis.get(),
+                        timestamp = session.timestamp,
                     )
                 }
 
@@ -85,7 +87,7 @@ class DataLoggingService(
                     val session = sessions[id]
                     logger.d { "Session closed: $id" }
                     if (session != null) {
-                        datalogging.closeSession(id, session.tag)
+                        datalogging.closeSession(id, session.tag, session.uuid, session.timestamp)
                     }
                     sessions.remove(id)
                     sendAckNack(id)
@@ -100,4 +102,5 @@ data class DataLoggingSession(
     val tag: UInt,
     val uuid: Uuid,
     val itemSize: UShort,
+    val timestamp: UInt = 0u,   // session start epoch, from OpenSession
 )

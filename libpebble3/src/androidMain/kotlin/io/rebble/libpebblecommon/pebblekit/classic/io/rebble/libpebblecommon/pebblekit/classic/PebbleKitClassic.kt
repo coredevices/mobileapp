@@ -6,6 +6,7 @@ import android.content.IntentFilter
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.datalogging.Datalogging
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.js.CompanionAppDevice
@@ -21,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -45,6 +47,7 @@ class PebbleKitClassic(
     private var runningScope: CoroutineScope? = null
 
     private val context: Context = getKoin().get()
+    private val datalogging: Datalogging = getKoin().get()
 
     private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(1000) {
@@ -76,6 +79,40 @@ class PebbleKitClassic(
         }.catch {
             logger.e(it) { "Error receiving app message: ${it.message}" }
         }.launchIn(scope)
+    }
+
+    // Deliver a watchapp's DataLogging (offline flash spool) to this companion on reconnect,
+    // mirroring the app.RECEIVE path.
+    private fun launchDataloggingHandler(scope: CoroutineScope) {
+        datalogging.thirdPartyData
+            .filter { it.uuid == uuid }
+            .onEach { record ->
+                val intent = Intent(INTENT_DATALOG_RECEIVE).apply {
+                    putExtra(APP_UUID, record.uuid.toJavaUuid())
+                    putExtra(DATALOG_TIMESTAMP, record.timestamp.toLong())   // session start epoch = stable session id
+                    putExtra(DATALOG_TAG, record.tag.toInt())
+                    putExtra(DATALOG_ITEM_SIZE, record.itemSize.toInt())
+                    putExtra(DATALOG_ITEMS_LEFT, record.itemsLeft.toLong())
+                    putExtra(DATALOG_DATA, record.data)
+                }
+                context.sendOrderedBroadcast(intent, null)
+            }.catch {
+                logger.e(it) { "Error delivering datalog for $uuid: ${it.message}" }
+            }.launchIn(scope)
+
+        // Session close → FINISH_SESSION.
+        datalogging.thirdPartyFinished
+            .filter { it.uuid == uuid }
+            .onEach { fin ->
+                val intent = Intent(INTENT_DATALOG_FINISH).apply {
+                    putExtra(APP_UUID, fin.uuid.toJavaUuid())
+                    putExtra(DATALOG_TIMESTAMP, fin.timestamp.toLong())
+                    putExtra(DATALOG_TAG, fin.tag.toInt())
+                }
+                context.sendOrderedBroadcast(intent, null)
+            }.catch {
+                logger.e(it) { "Error delivering datalog finish for $uuid: ${it.message}" }
+            }.launchIn(scope)
     }
 
     // TODO app start and stop intents
@@ -135,6 +172,7 @@ class PebbleKitClassic(
         runningScope = scope
         launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandlers(device, scope)
+        launchDataloggingHandler(scope)
     }
 
     override suspend fun stop() {
@@ -231,3 +269,12 @@ private const val APP_UUID = "uuid"
  * The bundle-key used to store a message's JSON payload send-to or received-from the watch.
  */
 private const val MSG_DATA = "msg_data"
+
+/** Broadcasts delivering a watchapp's DataLogging (offline flash spool) to companion apps, mirroring the app.* intents. */
+private const val INTENT_DATALOG_RECEIVE = "com.getpebble.action.datalogging.RECEIVE_DATA"
+private const val INTENT_DATALOG_FINISH = "com.getpebble.action.datalogging.FINISH_SESSION"
+private const val DATALOG_TIMESTAMP = "data_log_timestamp"   // session start epoch = session id
+private const val DATALOG_TAG = "data_log_tag"
+private const val DATALOG_ITEM_SIZE = "data_item_size"
+private const val DATALOG_ITEMS_LEFT = "data_items_left"
+private const val DATALOG_DATA = "data"

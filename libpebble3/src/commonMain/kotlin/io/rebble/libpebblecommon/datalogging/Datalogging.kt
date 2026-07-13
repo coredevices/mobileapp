@@ -9,6 +9,9 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.uuid.Uuid
 
 class Datalogging(
@@ -16,6 +19,15 @@ class Datalogging(
     private val healthDataProcessor: HealthDataProcessor,
 ) {
     private val logger = Logger.withTag("Datalogging")
+
+    // Non-health, non-system datalogging, exposed for PebbleKit to deliver to companion apps
+    // (was dropped). Parity with legacy PebbleDataLogReceiver.
+    private val _thirdPartyData = MutableSharedFlow<ThirdPartyDatalogRecord>(extraBufferCapacity = 128)
+    val thirdPartyData: SharedFlow<ThirdPartyDatalogRecord> = _thirdPartyData.asSharedFlow()
+
+    // Third-party session close, so companions can finalize a recording (legacy FINISH_SESSION).
+    private val _thirdPartyFinished = MutableSharedFlow<ThirdPartyDatalogFinish>(extraBufferCapacity = 16)
+    val thirdPartyFinished: SharedFlow<ThirdPartyDatalogFinish> = _thirdPartyFinished.asSharedFlow()
 
     fun logData(
         sessionId: UByte,
@@ -25,6 +37,7 @@ class Datalogging(
         watchInfo: WatchInfo,
         itemSize: UShort,
         itemsLeft: UInt,
+        timestamp: UInt = 0u,
     ) {
         // Handle health tags
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
@@ -63,6 +76,12 @@ class Datalogging(
                     }
                 }
             }
+            return
+        }
+
+        // Third-party app data — deliver to companion apps instead of dropping it.
+        if (!_thirdPartyData.tryEmit(ThirdPartyDatalogRecord(uuid, tag, timestamp, itemSize, itemsLeft, data))) {
+            logger.w { "third-party datalog buffer full; dropped ${data.size} B for $uuid" }
         }
     }
 
@@ -72,10 +91,14 @@ class Datalogging(
         }
     }
 
-    fun closeSession(sessionId: UByte, tag: UInt) {
+    fun closeSession(sessionId: UByte, tag: UInt, uuid: Uuid = Uuid.NIL, timestamp: UInt = 0u) {
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSessionClose(sessionId)
+            return
         }
+        if (uuid == SYSTEM_APP_UUID) return
+        // Third-party session finished — let companion apps finalize the recording.
+        _thirdPartyFinished.tryEmit(ThirdPartyDatalogFinish(uuid, tag, timestamp))
     }
 
     companion object {
@@ -83,6 +106,23 @@ class Datalogging(
         private val ANALYTICS_HEARTBEAT_TAG: UInt = 87u
     }
 }
+
+/** A batch of datalogging items from a third-party watchapp, for delivery to companion apps. */
+data class ThirdPartyDatalogRecord(
+    val uuid: Uuid,
+    val tag: UInt,
+    val timestamp: UInt,   // session start epoch — stable session id
+    val itemSize: UShort,
+    val itemsLeft: UInt,
+    val data: ByteArray,
+)
+
+/** A third-party datalogging session closing (watch called data_logging_finish). */
+data class ThirdPartyDatalogFinish(
+    val uuid: Uuid,
+    val tag: UInt,
+    val timestamp: UInt,
+)
 
 class MemfaultChunk : StructMappable() {
     val chunkSize: SUInt = SUInt(m, 0u, Endian.Little)
