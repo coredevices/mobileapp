@@ -2,16 +2,21 @@ package coredevices.pebble.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,6 +43,8 @@ import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.isPebbleFeed
+import coredevices.pebble.services.isRebbleFeed
 import coredevices.ui.M3Dialog
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
@@ -95,7 +102,9 @@ class AppstoreSettingsScreenViewModel(
         viewModelScope.launch {
             val source = AppstoreSource(
                 title = title,
-                url = url
+                // Store the feed URL in the same canonical form as the built-in feeds: it is
+                // string-concatenated into request URLs and compared for equality elsewhere.
+                url = url.trim().trimEnd('/')
             )
             sourceDao.insertSource(source)
         }
@@ -159,7 +168,7 @@ fun AppstoreSettingsScreen(
 ) {
     var createSourceOpen by remember { mutableStateOf(false) }
     Scaffold(
-        /*floatingActionButton = {
+        floatingActionButton = {
             FloatingActionButton(
                 onClick = {
                     createSourceOpen = true
@@ -167,7 +176,7 @@ fun AppstoreSettingsScreen(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add Source")
             }
-        }*/
+        }
     ) { insets ->
         if (createSourceOpen) {
             CreateAppstoreSourceDialog(
@@ -213,19 +222,25 @@ fun AppstoreSourceItem(
                 Text(text = source.url)
             },
             trailingContent = {
-                Checkbox(
-                    checked = source.enabled,
-                    onCheckedChange = {
-                        onEnableChange(source.id, it)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = source.enabled,
+                        onCheckedChange = {
+                            onEnableChange(source.id, it)
+                        }
+                    )
+                    // Built-in feeds can't be removed: deleting them either strands the user
+                    // (Rebble is never re-added) or trips re-init, which wipes user-added sources.
+                    if (!source.isPebbleFeed() && !source.isRebbleFeed()) {
+                        IconButton(
+                            onClick = {
+                                onRemove(source.id)
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Source")
+                        }
                     }
-                )
-                /*IconButton(
-                    onClick = {
-                        onRemove(source.id)
-                    }
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Source")
-                }*/
+                }
             },
             modifier = Modifier.clickable {
                 onEnableChange(source.id, !source.enabled)
