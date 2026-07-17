@@ -142,9 +142,11 @@ class PebbleService: Service(), KoinComponent {
                     0
                 }
             )
-        } catch (e: SecurityException) {
-            // Couldn't foreground (e.g. missing connectedDevice prerequisites on 14+); must stop
-            // before the FGS timeout or the system throws ForegroundServiceDidNotStartInTimeException
+        } catch (e: Exception) {
+            // Couldn't foreground: SecurityException (missing connectedDevice prerequisites on
+            // 14+) or ForegroundServiceStartNotAllowedException (sticky restart while app is
+            // backgrounded). Must stop before the FGS timeout or the system throws
+            // ForegroundServiceDidNotStartInTimeException
             logger.w(e) { "Error starting FG service" }
             stopSelf(startId)
             return START_NOT_STICKY
