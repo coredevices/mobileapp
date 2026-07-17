@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
@@ -50,6 +51,7 @@ import coredevices.ui.PebbleWebviewUrlInterceptor
 import coredevices.util.emailOrNull
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
+import io.ktor.http.Url
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -70,13 +72,19 @@ fun ViewBugReportScreen(
         var requestedMoreLogs by remember { mutableStateOf(false) }
         val bugReportProcessor = koinInject<BugReportProcessor>()
 
-        val interceptor = remember {
+        val uriHandler = LocalUriHandler.current
+        val interceptor = remember(uriHandler) {
             object : PebbleWebviewUrlInterceptor {
                 override var navigator: PebbleWebviewNavigator? = null
 
                 override fun onIntercept(url: String, navigator: PebbleWebviewNavigator): Boolean {
-                    // Allow all URLs to load
-                    return true
+                    if (!shouldOpenBugReportLinkExternally(url)) return true
+                    try {
+                        uriHandler.openUri(url)
+                    } catch (e: Exception) {
+                        logger.w(e) { "Couldn't open $url in browser" }
+                    }
+                    return false
                 }
             }
         }
@@ -298,4 +306,26 @@ fun ViewBugReportScreen(
             }
         }
     }
+}
+
+/**
+ * The webview should only host the bug-report conversation pages themselves
+ * (dash.repebble.com/bugreports and, for legacy Atlas reports, the embedded
+ * Atlas widget). Links in messages (Linear, log viewer, attachments...) open
+ * in the system browser instead (MOB-9826).
+ */
+internal fun shouldOpenBugReportLinkExternally(url: String): Boolean {
+    if (url.startsWith("mailto:", ignoreCase = true)) return true
+    val isHttp = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+    // about:blank, data:, blob:, relative URLs, etc. — leave to the webview
+    if (!isHttp) return false
+    val parsed = try {
+        Url(url)
+    } catch (e: Exception) {
+        return false
+    }
+    val host = parsed.host.lowercase()
+    val isWebviewPage = (host == "dash.repebble.com" && parsed.encodedPath.startsWith("/bugreports")) ||
+        host == "atlas.so" || host.endsWith(".atlas.so")
+    return !isWebviewPage
 }
