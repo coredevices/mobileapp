@@ -609,9 +609,11 @@ class RecordingProcessingQueue(
             recordingEntryId = recordingEntryId,
             recordingEntityId = recordingId,
         )
+        val persistedButtonSequence = buttonSequence
+            ?: queueTaskRepository.getLatestButtonSequenceForTransfer(transferId)
         val task = ProcessingTask.AudioRecording(
             transferId = transferId,
-            buttonSequence = buttonSequence,
+            buttonSequence = persistedButtonSequence,
         )
         scheduleTask(
             RecordingProcessingTask(

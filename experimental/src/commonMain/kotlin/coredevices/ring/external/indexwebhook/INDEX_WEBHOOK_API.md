@@ -17,6 +17,7 @@ POST <your webhook URL>
 Content-Type: multipart/form-data; boundary=<uuid>
 <each user-configured header>
 X-Audio-Size: <byte count>  (when audio is included)
+X-Index-Trigger: single-click-hold | double-click-hold  (when known)
 ```
 
 ## Multipart Fields
@@ -57,6 +58,8 @@ Headers are fully user-configurable in the webhook settings — add as many name
 
 `X-Audio-Size` is still added automatically when audio is included (it carries the audio byte count) and cannot be overridden.
 
+`X-Index-Trigger` is added automatically to identify the ring gesture that started the recording. Its value is either `single-click-hold` or `double-click-hold`, allowing receivers to route the two actions differently. The gesture is persisted with the processing task and preserved when a failed recording is retried. For legacy tasks where the gesture is unknown, the header is omitted instead of defaulting to `single-click-hold`. It cannot be overridden by a user-configured header.
+
 > Migration note: users who previously configured an auth token have it automatically carried over as an `X-Widget-Token` header, preserving existing behaviour.
 
 ## Authentication
@@ -79,6 +82,7 @@ def receive():
     audio = request.files.get('audio')
     transcription = request.form.get('transcription')
     recorded_at = request.form.get('recordedAt')
+    trigger = request.headers.get('X-Index-Trigger')
 
     if audio:
         audio.save(f'/tmp/{audio.filename}')
@@ -88,6 +92,7 @@ def receive():
         print(f'Transcription: {transcription}')
 
     print(f'Recorded at: {recorded_at}')
+    print(f'Trigger: {trigger}')
     return 'OK', 200
 ```
 

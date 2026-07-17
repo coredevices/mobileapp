@@ -6,6 +6,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import kotlinx.coroutines.sync.Mutex
@@ -29,7 +30,8 @@ class IndexWebhookUploadRecordingOperation(
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String,
-    private val recordingId: Long
+    private val recordingId: Long,
+    private val trigger: IndexWebhookRecordingTrigger?,
 ): RecordingOperation, KoinComponent {
 
     companion object {
@@ -77,6 +79,6 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt)
+        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt, trigger)
     }
 }

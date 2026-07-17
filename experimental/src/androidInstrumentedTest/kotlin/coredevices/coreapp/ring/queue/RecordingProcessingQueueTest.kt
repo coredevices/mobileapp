@@ -241,7 +241,14 @@ class RecordingProcessingQueueTest {
 
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
+                override fun uploadIfEnabled(
+                    samples: ShortArray?,
+                    sampleRate: Int,
+                    recordingId: String,
+                    transcription: String?,
+                    recordedAt: Instant,
+                    trigger: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger?,
+                ) {}
                 override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
             }
         } bind IndexWebhookApi::class
