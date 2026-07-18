@@ -16,7 +16,7 @@ import io.rebble.libpebblecommon.metadata.supportsBtClassic
  * Runs at app boot, gated by a Settings flag so it only executes once. Safe to call before
  * `BondedWatchSeeder` since either an existing row stays as-is (BLE) or gets re-keyed (Classic).
  */
-class LegacyBtClassicMigrator(
+internal class LegacyBtClassicMigrator(
     private val knownWatchDao: KnownWatchDao,
     private val settings: Settings,
     private val blePlatformConfig: BlePlatformConfig,

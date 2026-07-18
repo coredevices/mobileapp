@@ -149,7 +149,7 @@ private data class CombinedState(
     val btstate: BluetoothState,
 )
 
-class WatchManager(
+class WatchManager internal constructor(
     private val knownWatchDao: KnownWatchDao,
     private val pebbleDeviceFactory: PebbleDeviceFactory,
     private val createPlatformIdentifier: CreatePlatformIdentifier,
