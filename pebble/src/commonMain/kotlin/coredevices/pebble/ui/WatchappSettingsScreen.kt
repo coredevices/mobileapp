@@ -147,7 +147,7 @@ fun WatchappSettingsScreen(
         }
         val navigator = rememberWebViewNavigator(requestInterceptor = interceptor)
         LaunchedEffect(state.loadingState) {
-            if (state.loadingState is LoadingState.Loading) {
+            if (state.loadingState is LoadingState.Finished) {
                 logger.d { "Page load finished, applying shims" }
                 val nativeWebView = runCatching { state.nativeWebView }.getOrNull() ?: return@LaunchedEffect
                 restoreLocalStorage(nativeWebView)

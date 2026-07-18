@@ -1,8 +1,7 @@
 package coredevices.pebble.config.bridge
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.request.header
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.CloseReason
@@ -22,7 +21,7 @@ import kotlinx.coroutines.launch
  * Messages are forwarded in both directions. The native app owns TLS validation,
  * so self-signed/user-CA certificates trusted at the OS level work automatically.
  */
-class BridgeWebSocket {
+class BridgeWebSocket(private val client: HttpClient) {
 
     interface JsListener {
         fun onOpen()
@@ -31,22 +30,13 @@ class BridgeWebSocket {
         fun onFailure(t: Throwable)
     }
 
-    private val client = HttpClient(OkHttp) {
-        install(WebSockets)
-        engine {
-            config {
-                followRedirects(true)
-                retryOnConnectionFailure(true)
-            }
-        }
-    }
-
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun connect(url: String, protocols: List<String>, listener: JsListener): WebSocketSession {
         val session = client.webSocketSession(url) {
-            // Ktor OkHttp engine will send the subprotocol if requested.
-            // Note: protocols handling depends on engine support.
+            if (protocols.isNotEmpty()) {
+                header(io.ktor.http.HttpHeaders.SecWebSocketProtocol, protocols.joinToString(", "))
+            }
         }
 
         scope.launch {

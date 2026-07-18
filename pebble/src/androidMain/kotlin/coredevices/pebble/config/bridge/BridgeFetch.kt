@@ -1,8 +1,6 @@
 package coredevices.pebble.config.bridge
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.headers
 import io.ktor.client.request.request
@@ -18,17 +16,7 @@ import io.ktor.util.flattenEntries
  * Performs HTTP requests through Ktor/OkHttp so the config page is not subject to
  * WebView CORS or mixed-content restrictions.
  */
-class BridgeFetch {
-
-    private val client = HttpClient(OkHttp) {
-        install(HttpTimeout)
-        engine {
-            config {
-                followRedirects(true)
-                retryOnConnectionFailure(true)
-            }
-        }
-    }
+class BridgeFetch(private val client: HttpClient) {
 
     suspend fun execute(request: FetchRequest): FetchResponse {
         val response: HttpResponse = client.request(request.url) {

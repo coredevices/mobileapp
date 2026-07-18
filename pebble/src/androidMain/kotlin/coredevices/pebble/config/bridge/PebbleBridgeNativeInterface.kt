@@ -7,9 +7,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
-import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -56,7 +56,7 @@ class PebbleBridgeNativeInterface(
                 throw e
             } catch (t: Throwable) {
                 logger.e(t) { "fetch failed: ${t.message}" }
-                emit(callbackId, "reject", JSONObject.quote(t.message ?: "network error"))
+                emit(callbackId, "reject", quoteJsString(t.message ?: "network error"))
             }
         }
     }
@@ -64,7 +64,7 @@ class PebbleBridgeNativeInterface(
     @JavascriptInterface
     fun storageGet(key: String, callbackId: String) {
         val value = storage.get(key)
-        emit(callbackId, "resolve", if (value == null) "null" else JSONObject.quote(value))
+        emit(callbackId, "resolve", if (value == null) "null" else quoteJsString(value))
     }
 
     @JavascriptInterface
@@ -86,7 +86,7 @@ class PebbleBridgeNativeInterface(
             bridgeJson.decodeFromString(ListSerializer(String.serializer()), protocolsJson)
         } catch (t: Throwable) {
             logger.e(t) { "Failed to parse protocols" }
-            emitSocket(socketId, "error", JSONObject.quote("invalid protocols"))
+            emitSocket(socketId, "error", quoteJsString("invalid protocols"))
             return
         }
 
@@ -98,23 +98,24 @@ class PebbleBridgeNativeInterface(
                     }
 
                     override fun onMessage(text: String) {
-                        emitSocket(socketId, "message", JSONObject.quote(text))
+                        emitSocket(socketId, "message", quoteJsString(text))
                     }
 
                     override fun onClosing(code: Short, reason: String) {
-                        emitSocket(socketId, "close", """{"code":$code,"reason":"${escapeJson(reason)}"}""")
+                        val payload = bridgeJson.encodeToString(WebSocketCloseEvent.serializer(), WebSocketCloseEvent(code, reason))
+                        emitSocket(socketId, "close", payload)
                         webSockets.remove(socketId)
                     }
 
                     override fun onFailure(t: Throwable) {
                         logger.e(t) { "websocket error: ${t.message}" }
-                        emitSocket(socketId, "error", JSONObject.quote(t.message ?: "websocket error"))
+                        emitSocket(socketId, "error", quoteJsString(t.message ?: "websocket error"))
                     }
                 })
                 webSockets[socketId] = session
             } catch (t: Throwable) {
                 logger.e(t) { "websocket connect failed: ${t.message}" }
-                emitSocket(socketId, "error", JSONObject.quote(t.message ?: "websocket connect failed"))
+                emitSocket(socketId, "error", quoteJsString(t.message ?: "websocket connect failed"))
             }
         }
     }
@@ -145,6 +146,19 @@ class PebbleBridgeNativeInterface(
 
     @JavascriptInterface
     fun close(returnValueJson: String) {
+        closeResources()
+        onClose(returnValueJson)
+    }
+
+    /**
+     * Tears down sockets and marks the bridge inactive without invoking the close callback.
+     * Used when the containing screen is disposed without an explicit JS close() call.
+     */
+    fun dispose() {
+        closeResources()
+    }
+
+    private fun closeResources() {
         active = false
         scope.launch(Dispatchers.IO) {
             webSockets.values.forEach { session ->
@@ -155,7 +169,6 @@ class PebbleBridgeNativeInterface(
             webSockets.clear()
             webSocketFactory.dispose()
         }
-        onClose(returnValueJson)
     }
 
     private fun emit(callbackId: String, method: String, payload: String) {
@@ -168,15 +181,11 @@ class PebbleBridgeNativeInterface(
         evaluateJavascript(js)
     }
 
-    private fun escapeJson(text: String): String {
-        return text
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\b", "\\b")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
-    }
+    private fun quoteJsString(text: String): String =
+        bridgeJson.encodeToString(String.serializer(), text)
+
+    @Serializable
+    private data class WebSocketCloseEvent(val code: Short, val reason: String)
 
     companion object {
         const val VERSION = "1.0.0"

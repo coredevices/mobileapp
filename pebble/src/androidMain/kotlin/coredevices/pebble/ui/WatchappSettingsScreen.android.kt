@@ -1,5 +1,7 @@
 package coredevices.pebble.ui
 
+import android.os.Handler
+import android.os.Looper
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.web.NativeWebView
 import com.multiplatform.webview.web.WebViewFactoryParam
@@ -8,7 +10,6 @@ import coredevices.pebble.config.bridge.PebbleBridgeManager
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.io.path.Path
 import kotlin.uuid.Uuid
@@ -25,12 +26,9 @@ internal actual fun webViewFactory(
     logger.d { "webViewFactory called uuid=$uuid bridgeEnabled=$bridgeEnabled configKeys=${bridgeConfig.keys}" }
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false
-    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) {
-        runBlocking(Dispatchers.Main) {
-            evaluateJavascript(
-                it,
-                null
-            )
+    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) { script ->
+        Handler(Looper.getMainLooper()).post {
+            evaluateJavascript(script, null)
         }
     }
     addJavascriptInterface(localStorageInterface, "_localStorage")
@@ -64,7 +62,7 @@ internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
 }
 
 internal actual fun persistLocalStorage(webView: NativeWebView) {
-    runBlocking(Dispatchers.Main) {
+    Handler(Looper.getMainLooper()).post {
         webView.evaluateJavascript("""
             (function() {
                 const data = {};

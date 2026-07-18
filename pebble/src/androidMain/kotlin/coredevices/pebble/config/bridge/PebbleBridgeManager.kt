@@ -1,7 +1,13 @@
 package coredevices.pebble.config.bridge
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebView
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,7 +24,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * val bridge = PebbleBridgeManager(
  *     context = webView.context,
  *     appUuid = uuid.toString(),
- *     config = mapOf("ha_url" to "...", "token" to "..."),
+ *     config = mapOf("ha_url" to "...", "token" to ""),
  *     onClose = { returnValueJson ->
  *         // forward to PKJS session triggerOnWebviewClosed(returnValueJson)
  *     }
@@ -27,7 +33,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * ```
  */
 class PebbleBridgeManager(
-    context: Context,
+    private val context: Context,
     appUuid: String,
     config: Map<String, String>,
     private val onClose: (String) -> Unit,
@@ -35,15 +41,31 @@ class PebbleBridgeManager(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val storage = BridgeStorage(context, appUuid)
-    private val fetcher = BridgeFetch()
-    private val webSocketFactory = BridgeWebSocket()
+
+    /**
+     * Single Ktor/OkHttp client shared by fetch and WebSocket. Both plugins are
+     * installed once so redirects, timeouts, and TLS are configured in one place.
+     */
+    private val httpClient = HttpClient(OkHttp) {
+        install(HttpTimeout)
+        install(WebSockets)
+        engine {
+            config {
+                followRedirects(true)
+                retryOnConnectionFailure(true)
+            }
+        }
+    }
+
+    private val fetcher = BridgeFetch(httpClient)
+    private val webSocketFactory = BridgeWebSocket(httpClient)
 
     private val configJson = buildConfigJson(config)
 
     private val evaluateJavascript: (String) -> Unit = { script ->
         // Posts to the main thread; the caller must call this only when the WebView
         // is attached to a window. The attach() helper below handles that safely.
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
+        Handler(Looper.getMainLooper()).post {
             currentWebView?.evaluateJavascript(script, null)
         }
     }
@@ -63,142 +85,14 @@ class PebbleBridgeManager(
         fun parseConfigFromUrlHash(url: String): Map<String, String> =
             parseBridgeConfigFromUrlHash(url)
 
-        /**
-         * JavaScript shim that turns the native string bridge into the Promise-based
-         * `window.pebbleBridge` API expected by config pages.
-         */
-        val bridgeJsShim: String = """
-(function() {
-    if (window.pebbleBridge) return;
-
-    function makeCallback(resolve, reject) {
-        const id = 'cb_' + Math.random().toString(36).slice(2);
-        window.__pebbleBridgeCallbacks = window.__pebbleBridgeCallbacks || {};
-        window.__pebbleBridgeCallbacks[id] = {
-            resolve: function(v) {
-                delete window.__pebbleBridgeCallbacks[id];
-                resolve(v);
-            },
-            reject: function(e) {
-                delete window.__pebbleBridgeCallbacks[id];
-                reject(new Error(e));
-            }
-        };
-        return id;
-    }
-
-    function BridgeResponse(raw) {
-        const data = (typeof raw === 'string') ? JSON.parse(raw) : raw;
-        this.ok = data.ok;
-        this.status = data.status;
-        this.statusText = data.statusText;
-        this.headers = data.headers || {};
-        this._body = data.body || '';
-    }
-    BridgeResponse.prototype.text = function() {
-        return Promise.resolve(typeof this._body === 'string' ? this._body : JSON.stringify(this._body));
-    };
-    BridgeResponse.prototype.json = function() {
-        if (typeof this._body === 'string') {
-            return Promise.resolve(JSON.parse(this._body));
-        }
-        return Promise.resolve(this._body);
-    };
-
-    function BridgeWebSocket(url, protocols) {
-        const self = this;
-        protocols = protocols || [];
-        this.url = url;
-        this.readyState = 0;
-        this.id = 'ws_' + Math.random().toString(36).slice(2);
-        window.__pebbleBridgeWebSockets = window.__pebbleBridgeWebSockets || {};
-        window.__pebbleBridgeWebSockets[this.id] = this;
-        this.onopen = null;
-        this.onmessage = null;
-        this.onerror = null;
-        this.onclose = null;
-
-        // Native bridge emits events by calling these methods on the socket object.
-        this.open = function() {
-            self.readyState = BridgeWebSocket.OPEN;
-            if (self.onopen) self.onopen();
-        };
-        this.message = function(data) {
-            if (self.onmessage) self.onmessage({ data: data });
-        };
-        this.error = function(msg) {
-            if (self.onerror) self.onerror(new Error(msg));
-        };
-        // Native emits close event with {code, reason}; user calls close(code, reason).
-        this.close = function(arg1, arg2) {
-            if (arg1 && typeof arg1 === 'object' && 'code' in arg1) {
-                self.readyState = BridgeWebSocket.CLOSED;
-                if (self.onclose) self.onclose({ code: arg1.code, reason: arg1.reason || '', wasClean: arg1.code === 1000 });
-            } else {
-                self.readyState = BridgeWebSocket.CLOSING;
-                window.PebbleBridgeNative.webSocketClose(self.id, arg1 || 1000, arg2 || '');
-            }
-        };
-
-        window.PebbleBridgeNative.webSocketConnect(this.id, url, JSON.stringify(protocols));
-
-        this.send = function(data) {
-            window.PebbleBridgeNative.webSocketSend(self.id, data);
-        };
-    }
-    BridgeWebSocket.CONNECTING = 0;
-    BridgeWebSocket.OPEN = 1;
-    BridgeWebSocket.CLOSING = 2;
-    BridgeWebSocket.CLOSED = 3;
-
-    window.pebbleBridge = {
-        version: window.PebbleBridgeNative.version(),
-        config: JSON.parse(window.PebbleBridgeNative.getConfig()),
-        fetch: function(url, options) {
-            options = options || {};
-            return new Promise(function(resolve, reject) {
-                const req = {
-                    url: url,
-                    method: options.method || 'GET',
-                    headers: options.headers || {},
-                    body: options.body || null,
-                    timeout: options.timeout || 30000
-                };
-                window.PebbleBridgeNative.fetch(
-                    JSON.stringify(req),
-                    makeCallback(function(raw) { resolve(new BridgeResponse(raw)); }, reject)
-                );
-            });
-        },
-        WebSocket: BridgeWebSocket,
-        storage: {
-            get: function(key) {
-                return new Promise(function(resolve, reject) {
-                    window.PebbleBridgeNative.storageGet(key, makeCallback(resolve, reject));
-                });
-            },
-            set: function(key, value) {
-                return new Promise(function(resolve, reject) {
-                    window.PebbleBridgeNative.storageSet(key, value, makeCallback(resolve, reject));
-                });
-            },
-            remove: function(key) {
-                return new Promise(function(resolve, reject) {
-                    window.PebbleBridgeNative.storageRemove(key, makeCallback(resolve, reject));
-                });
-            }
-        },
-        close: function(returnValue) {
-            window.PebbleBridgeNative.close(JSON.stringify(returnValue || {}));
-        }
-    };
-})();
-        """.trimIndent()
-
         private fun buildConfigJson(config: Map<String, String>): String {
             val json = JsonObject(config.mapValues { JsonPrimitive(it.value) })
             return bridgeJson.encodeToString(JsonObject.serializer(), json)
         }
+    }
+
+    private val bridgeJsShim: String by lazy {
+        context.assets.open("bridge-shim.js").bufferedReader().use { it.readText() }
     }
 
     val nativeInterface = PebbleBridgeNativeInterface(
@@ -231,7 +125,8 @@ class PebbleBridgeManager(
     }
 
     fun dispose() {
-        nativeInterface.close("{}")
+        nativeInterface.dispose()
+        httpClient.close()
         scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 }
