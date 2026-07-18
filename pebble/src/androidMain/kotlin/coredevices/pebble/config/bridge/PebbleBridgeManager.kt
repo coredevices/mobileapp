@@ -88,15 +88,22 @@ class PebbleBridgeManager(
     }
 
     function BridgeResponse(raw) {
-        const data = JSON.parse(raw);
+        const data = (typeof raw === 'string') ? JSON.parse(raw) : raw;
         this.ok = data.ok;
         this.status = data.status;
         this.statusText = data.statusText;
         this.headers = data.headers || {};
         this._body = data.body || '';
     }
-    BridgeResponse.prototype.text = function() { return Promise.resolve(this._body); };
-    BridgeResponse.prototype.json = function() { return Promise.resolve(JSON.parse(this._body)); };
+    BridgeResponse.prototype.text = function() {
+        return Promise.resolve(typeof this._body === 'string' ? this._body : JSON.stringify(this._body));
+    };
+    BridgeResponse.prototype.json = function() {
+        if (typeof this._body === 'string') {
+            return Promise.resolve(JSON.parse(this._body));
+        }
+        return Promise.resolve(this._body);
+    };
 
     function BridgeWebSocket(url, protocols) {
         const self = this;
@@ -111,13 +118,32 @@ class PebbleBridgeManager(
         this.onerror = null;
         this.onclose = null;
 
+        // Native bridge emits events by calling these methods on the socket object.
+        this.open = function() {
+            self.readyState = BridgeWebSocket.OPEN;
+            if (self.onopen) self.onopen();
+        };
+        this.message = function(data) {
+            if (self.onmessage) self.onmessage({ data: data });
+        };
+        this.error = function(msg) {
+            if (self.onerror) self.onerror(new Error(msg));
+        };
+        // Native emits close event with {code, reason}; user calls close(code, reason).
+        this.close = function(arg1, arg2) {
+            if (arg1 && typeof arg1 === 'object' && 'code' in arg1) {
+                self.readyState = BridgeWebSocket.CLOSED;
+                if (self.onclose) self.onclose({ code: arg1.code, reason: arg1.reason || '', wasClean: arg1.code === 1000 });
+            } else {
+                self.readyState = BridgeWebSocket.CLOSING;
+                window.PebbleBridgeNative.webSocketClose(self.id, arg1 || 1000, arg2 || '');
+            }
+        };
+
         window.PebbleBridgeNative.webSocketConnect(this.id, url, JSON.stringify(protocols));
 
         this.send = function(data) {
             window.PebbleBridgeNative.webSocketSend(self.id, data);
-        };
-        this.close = function(code, reason) {
-            window.PebbleBridgeNative.webSocketClose(self.id, code || 1000, reason || '');
         };
     }
     BridgeWebSocket.CONNECTING = 0;

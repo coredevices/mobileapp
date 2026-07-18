@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import co.touchlab.kermit.Logger
 import com.multiplatform.webview.web.NativeWebView
 import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.defaultWebViewFactory
@@ -12,6 +13,8 @@ import kotlinx.coroutines.withContext
 import kotlin.io.path.Path
 import kotlin.uuid.Uuid
 
+private val logger = Logger.withTag("WatchappSettingsBridge")
+
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid,
@@ -19,6 +22,7 @@ internal actual fun webViewFactory(
     bridgeConfig: Map<String, String>,
     onBridgeClose: (String) -> Unit,
 ): NativeWebView = defaultWebViewFactory(params).apply {
+    logger.d { "webViewFactory called uuid=$uuid bridgeEnabled=$bridgeEnabled configKeys=${bridgeConfig.keys}" }
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false
     val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) {
