@@ -39,6 +39,7 @@ play-update = "2.1.0"
 crashkios = "0.9.0"
 androidx-lifecycle = "2.9.6"
 androidx-navigation = "2.9.2"
+androidx-security-crypto = "1.1.0-alpha06"
 firebase-kotlin = "2.4.0"
 # Deliberately ahead of the BOM firebase-kotlin imports (33.15.0): its firebase-auth 23.2.1 has an
 # acknowledged regression that randomly signs users out (firebase-android-sdk#7111). We avoid the
@@ -143,6 +144,7 @@ crashkios = { module = "co.touchlab.crashkios:crashlytics", version.ref = "crash
 androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-navigation-compose = { group = "org.jetbrains.androidx.navigation", name = "navigation-compose", version.ref = "androidx-navigation" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidx-security-crypto" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
 firebase-auth = { group = "dev.gitlive", name = "firebase-auth", version.ref = "firebase-kotlin" }
 firebase-firestore = { group = "dev.gitlive", name = "firebase-firestore", version.ref = "firebase-kotlin" }

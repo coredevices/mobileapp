@@ -31,6 +31,7 @@ object PebbleRoutes {
     data class WatchappSettingsRoute(
         val watchIdentifier: String,
         val title: String,
+        val bridgeEnabled: Boolean = false,
     ) : CoreRoute
 
     @Serializable
@@ -298,6 +299,7 @@ fun NavGraphBuilder.addPebbleRoutes(
             coreNav = coreNav,
             watchIdentifier = route.watchIdentifier,
             title = route.title,
+            bridgeEnabled = route.bridgeEnabled,
         )
     }
     composable<PebbleRoutes.ContactDeveloperRoute> {

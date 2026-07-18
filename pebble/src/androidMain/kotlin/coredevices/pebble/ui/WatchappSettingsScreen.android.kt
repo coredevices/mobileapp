@@ -3,6 +3,7 @@ package coredevices.pebble.ui
 import com.multiplatform.webview.web.NativeWebView
 import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.defaultWebViewFactory
+import coredevices.pebble.config.bridge.PebbleBridgeManager
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +14,10 @@ import kotlin.uuid.Uuid
 
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
-    uuid: Uuid
+    uuid: Uuid,
+    bridgeEnabled: Boolean,
+    bridgeConfig: Map<String, String>,
+    onBridgeClose: (String) -> Unit,
 ): NativeWebView = defaultWebViewFactory(params).apply {
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false
@@ -28,6 +32,16 @@ internal actual fun webViewFactory(
     addJavascriptInterface(localStorageInterface, "_localStorage")
     settings.domStorageEnabled = true
     settings.databasePath = Path(context.filesDir.path, "watchapp_settings/$uuid").toString()
+
+    if (bridgeEnabled) {
+        val bridge = PebbleBridgeManager(
+            context = context,
+            appUuid = uuid.toString(),
+            config = bridgeConfig,
+            onClose = onBridgeClose,
+        )
+        bridge.attach(this)
+    }
 }
 
 internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {

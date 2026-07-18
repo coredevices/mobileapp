@@ -21,6 +21,7 @@ enum class AppCapability(val code: String) {
     Health("health"),
     Location("location"),
     Timeline("timeline"),
+    NetworkBridge("config_network_bridge"),
     // Not included: "configurable" (separate field in database, doesn't require permission grant)
     ;
 

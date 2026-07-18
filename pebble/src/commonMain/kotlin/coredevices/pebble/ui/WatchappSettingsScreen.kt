@@ -21,9 +21,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
+import coredevices.pebble.config.bridge.parseBridgeConfigFromUrlHash
 import com.multiplatform.webview.request.RequestInterceptor
 import com.multiplatform.webview.request.WebRequest
 import com.multiplatform.webview.request.WebRequestInterceptResult
@@ -65,7 +67,10 @@ internal object WatchappSettingsUrlCache {
 }
 internal expect fun webViewFactory(
     params: WebViewFactoryParam,
-    uuid: Uuid
+    uuid: Uuid,
+    bridgeEnabled: Boolean,
+    bridgeConfig: Map<String, String>,
+    onBridgeClose: (String) -> Unit,
 ): NativeWebView
 
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
@@ -79,14 +84,17 @@ fun WatchappSettingsScreen(
     coreNav: CoreNav,
     watchIdentifier: String,
     title: String,
+    bridgeEnabled: Boolean,
 ) {
     val url = remember(watchIdentifier) {
         normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(watchIdentifier) ?: "")
     }
+    val bridgeConfig = remember(url) { parseBridgeConfigFromUrlHash(url) }
     DisposableEffect(watchIdentifier) {
         onDispose { WatchappSettingsUrlCache.remove(watchIdentifier) }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        val scope = rememberCoroutineScope()
         val libPebble = rememberLibPebble()
         val pkjsSessionFlow = remember(watchIdentifier) {
             libPebble.watches
@@ -169,11 +177,23 @@ fun WatchappSettingsScreen(
             }
         ) { paddingValues ->
             pkjsSession?.uuid?.let { uuid ->
+                val onBridgeClose = remember(pkjsSession) {
+                    { returnValueJson: String ->
+                        runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
+                        pkjsSession?.triggerOnWebviewClosed(returnValueJson) ?: run {
+                            logger.w { "No PKJS session found for $watchIdentifier, cannot handle bridge close" }
+                        }
+                        scope.launch {
+                            coreNav.goBack()
+                        }
+                        Unit
+                    }
+                }
                 WebView(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     navigator = navigator,
-                    factory = { webViewFactory(it, uuid) }
+                    factory = { webViewFactory(it, uuid, bridgeEnabled, bridgeConfig, onBridgeClose) }
                 )
             }
         }

@@ -14,7 +14,13 @@ import platform.WebKit.WKWebsiteDataStore
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun webViewFactory(params: WebViewFactoryParam, uuid: Uuid): NativeWebView =
+internal actual fun webViewFactory(
+    params: WebViewFactoryParam,
+    uuid: Uuid,
+    bridgeEnabled: Boolean,
+    bridgeConfig: Map<String, String>,
+    onBridgeClose: (String) -> Unit,
+): NativeWebView =
     defaultWebViewFactory(params).apply {
         if (available(OS.Ios to OSVersion(17))) {
             configuration.websiteDataStore =
