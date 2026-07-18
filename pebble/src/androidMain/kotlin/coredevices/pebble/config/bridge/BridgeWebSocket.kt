@@ -71,6 +71,5 @@ class BridgeWebSocket(private val client: HttpClient) {
 
     fun dispose() {
         scope.cancel()
-        client.close()
     }
 }
