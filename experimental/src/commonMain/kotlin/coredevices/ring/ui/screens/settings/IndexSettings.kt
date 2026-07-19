@@ -98,8 +98,10 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.encryption.EncryptionSetupState
 import coredevices.ring.encryption.KeyStorageStatus
+import coredevices.ring.external.indexwebhook.IndexWebhookGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsDialog
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
+import coredevices.ring.external.indexwebhook.displayName
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.components.QrCodeImage
 import coredevices.ring.ui.components.SectionHeader
@@ -147,9 +149,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val platform = koinInject<Platform>()
-    val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
-    val webhookIsLinked = !webhookUrl.isNullOrBlank()
-    val webhookDialogOpen by webhookViewModel.dialogOpen.collectAsState()
+    val editingWebhookGesture by webhookViewModel.editingGesture.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
@@ -218,7 +218,7 @@ fun IndexSettings(coreNav: CoreNav) {
             }
         )
     }
-    if (webhookDialogOpen) {
+    if (editingWebhookGesture != null) {
         IndexWebhookSettingsDialog(webhookViewModel)
     }
     if (showBackupDialog) {
@@ -502,13 +502,14 @@ fun IndexSettings(coreNav: CoreNav) {
                     }
                 )
             }
-            item {
+            items(IndexWebhookGesture.entries) { gesture ->
+                val webhookConfig by webhookViewModel.config(gesture).collectAsState()
                 ListItem(
-                    modifier = Modifier.clickable(onClick = webhookViewModel::openDialog),
-                    headlineContent = { Text("Webhook") },
+                    modifier = Modifier.clickable { webhookViewModel.openDialog(gesture) },
+                    headlineContent = { Text("Webhook (${gesture.displayName().lowercase()})") },
                     supportingContent = {
                         Text(
-                            if (webhookIsLinked) "Configured, tap to modify"
+                            if (webhookConfig.isConfigured) "Configured, tap to modify"
                             else "Not Linked"
                         )
                     }

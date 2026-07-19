@@ -295,7 +295,7 @@ enum class SecondaryMode(val id: Int) {
 
     companion object {
         // id=2 was the legacy IndexWebhook value, now controlled by the
-        // webhook trigger preference; map it to Disabled on load.
+        // per-gesture webhook configuration; map it to Disabled on load.
         fun fromId(id: Int): SecondaryMode {
             return entries.firstOrNull { it.id == id } ?: Disabled
         }

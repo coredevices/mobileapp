@@ -3,8 +3,8 @@ package coredevices.ring.external.indexwebhook
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /** A single editable webhook header row. */
@@ -14,11 +14,9 @@ class IndexWebhookSettingsViewModel(
     private val webhookPreferences: IndexWebhookPreferences
 ) : ViewModel() {
 
-    private val _webhookUrl = MutableStateFlow<String?>(null)
-    val webhookUrl = _webhookUrl.asStateFlow()
-
-    private val _dialogOpen = MutableStateFlow(false)
-    val dialogOpen = _dialogOpen.asStateFlow()
+    // The gesture whose config the dialog is editing; null while the dialog is closed.
+    private val _editingGesture = MutableStateFlow<IndexWebhookGesture?>(null)
+    val editingGesture = _editingGesture.asStateFlow()
 
     private val _urlInput = MutableStateFlow("")
     val urlInput = _urlInput.asStateFlow()
@@ -29,33 +27,26 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
-    private val _triggerInput = MutableStateFlow(IndexWebhookTrigger.DoubleClickHold)
-    val triggerInput = _triggerInput.asStateFlow()
+    fun config(gesture: IndexWebhookGesture): StateFlow<IndexWebhookConfig> =
+        webhookPreferences.config(gesture)
 
     val isLinked: Boolean
-        get() = !_webhookUrl.value.isNullOrBlank()
+        get() = _editingGesture.value
+            ?.let { webhookPreferences.config(it).value.isConfigured } == true
 
-    init {
-        viewModelScope.launch {
-            webhookPreferences.webhookUrl.collectLatest { url ->
-                _webhookUrl.value = url?.ifBlank { null }
-            }
-        }
-    }
-
-    fun openDialog() {
-        _urlInput.value = _webhookUrl.value ?: ""
+    fun openDialog(gesture: IndexWebhookGesture) {
+        val config = webhookPreferences.config(gesture).value
+        _urlInput.value = config.url ?: ""
         // Show existing headers, or a single empty row to start from.
-        _headerInputs.value = webhookPreferences.headers.value
+        _headerInputs.value = config.headers
             .map { WebhookHeaderInput(it.key, it.value) }
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
-        _payloadModeInput.value = webhookPreferences.payloadMode.value
-        _triggerInput.value = webhookPreferences.trigger.value
-        _dialogOpen.value = true
+        _payloadModeInput.value = config.payloadMode
+        _editingGesture.value = gesture
     }
 
     fun closeDialog() {
-        _dialogOpen.value = false
+        _editingGesture.value = null
     }
 
     fun updateUrlInput(url: String) {
@@ -86,11 +77,8 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
-    fun updateTrigger(trigger: IndexWebhookTrigger) {
-        _triggerInput.value = trigger
-    }
-
     fun save() {
+        val gesture = _editingGesture.value ?: return
         viewModelScope.launch {
             val url = _urlInput.value.ifBlank { null }?.trim()
             // Drop rows with a blank name; later rows win on duplicate names.
@@ -98,17 +86,17 @@ class IndexWebhookSettingsViewModel(
                 .map { it.name.trim() to it.value.trim() }
                 .filter { it.first.isNotEmpty() }
                 .toMap()
-            webhookPreferences.setWebhookUrl(url)
-            webhookPreferences.setHeaders(headers)
-            webhookPreferences.setPayloadMode(_payloadModeInput.value)
-            webhookPreferences.setTrigger(_triggerInput.value)
+            webhookPreferences.setWebhookUrl(gesture, url)
+            webhookPreferences.setHeaders(gesture, headers)
+            webhookPreferences.setPayloadMode(gesture, _payloadModeInput.value)
             closeDialog()
         }
     }
 
-    fun clearAll() {
+    fun clear() {
+        val gesture = _editingGesture.value ?: return
         viewModelScope.launch {
-            webhookPreferences.clearAll()
+            webhookPreferences.clear(gesture)
             closeDialog()
         }
     }

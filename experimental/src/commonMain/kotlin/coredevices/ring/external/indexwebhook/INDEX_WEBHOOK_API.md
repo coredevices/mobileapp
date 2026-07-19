@@ -4,11 +4,13 @@ Send Index ring recording data to any HTTP endpoint.
 
 ## Setup
 
-1. In Index Settings, tap **Webhook**
+Each recording gesture (single click & hold, double click & hold) has its own independent
+webhook configuration — you can point them at different endpoints, or configure just one.
+
+1. In Index Settings, tap **Webhook (single click & hold)** or **Webhook (double click & hold)**
 2. Enter your webhook URL
 3. Add any request headers you need (e.g. an auth header)
 4. Choose what to send: Recording only, Transcription only, or Both
-5. Set **Double click and hold** action to "Webhook"
 
 ## Request Format
 

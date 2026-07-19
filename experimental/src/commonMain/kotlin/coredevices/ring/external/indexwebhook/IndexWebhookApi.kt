@@ -12,9 +12,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -22,23 +19,24 @@ import kotlin.uuid.Uuid
 
 interface IndexWebhookApi {
     /**
-     * Upload recording data to the configured webhook endpoint.
+     * Upload recording data to the given webhook config's endpoint.
      * Runs asynchronously and does not block the caller.
      *
+     * @param config The webhook config resolved for the triggering gesture
      * @param samples PCM audio samples (16-bit signed, mono). Null when TranscriptionOnly mode.
      * @param sampleRate Sample rate of the audio in Hz
      * @param recordingId Unique identifier for the recording (used in filename)
      * @param transcription Transcription text. Null when RecordingOnly mode.
      * @param recordedAt When the recording was actually made
      */
-    fun uploadIfEnabled(
+    fun upload(
+        config: IndexWebhookConfig,
         samples: ShortArray?,
         sampleRate: Int,
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
     )
-    val isEnabled: StateFlow<Boolean>
 }
 
 /**
@@ -49,7 +47,6 @@ interface IndexWebhookApi {
 class IndexWebhookApiImpl(
     config: ApiConfig,
     private val m4aEncoder: M4aEncoder,
-    private val webhookPreferences: IndexWebhookPreferences,
     private val scope: CoroutineScope,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes) {
 
@@ -58,52 +55,37 @@ class IndexWebhookApiImpl(
         private const val AUDIO_SIZE_HEADER = "X-Audio-Size"
     }
 
-    private val _isEnabled = MutableStateFlow(false)
-    override val isEnabled = _isEnabled.asStateFlow()
-
-    init {
-        scope.launch {
-            webhookPreferences.webhookUrl.collect { url ->
-                val enabled = !url.isNullOrBlank()
-                _isEnabled.value = enabled
-                logger.d { "Index webhook enabled: $enabled" }
-            }
-        }
-    }
-
-    override fun uploadIfEnabled(
+    override fun upload(
+        config: IndexWebhookConfig,
         samples: ShortArray?,
         sampleRate: Int,
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
     ) {
-        val url = webhookPreferences.webhookUrl.value
+        val url = config.url
         if (url.isNullOrBlank()) return
-
-        val headers = webhookPreferences.headers.value
-        val payloadMode = webhookPreferences.payloadMode.value
 
         scope.launch {
             try {
-                logger.d { "Starting webhook upload for recording $recordingId (mode=$payloadMode)" }
+                logger.d { "Starting webhook upload for recording $recordingId (mode=${config.payloadMode})" }
 
                 // Encode audio to M4A if needed
                 val m4aData: ByteArray? = if (
                     samples != null &&
-                    payloadMode != IndexWebhookPayloadMode.TranscriptionOnly
+                    config.payloadMode != IndexWebhookPayloadMode.TranscriptionOnly
                 ) {
                     m4aEncoder.encode(samples, sampleRate)
                 } else null
 
                 // Determine transcription to send
                 val transcriptionToSend: String? = if (
-                    payloadMode != IndexWebhookPayloadMode.RecordingOnly
+                    config.payloadMode != IndexWebhookPayloadMode.RecordingOnly
                 ) transcription else null
 
                 val result = upload(
                     url = url,
-                    headers = headers,
+                    headers = config.headers,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
                     transcription = transcriptionToSend,

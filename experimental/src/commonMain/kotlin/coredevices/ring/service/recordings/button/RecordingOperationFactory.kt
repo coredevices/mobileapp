@@ -12,7 +12,7 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
+import coredevices.ring.external.indexwebhook.IndexWebhookGesture
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.storage.RecordingStorage
@@ -74,17 +74,16 @@ class RecordingOperationFactory(
         isDoubleClickHold: Boolean,
         inner: RecordingOperation,
     ): RecordingOperation {
-        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank()
-        if (!configured) return inner
-        val matchesTrigger = when (indexWebhookPreferences.trigger.value) {
-            IndexWebhookTrigger.SingleClick -> !isDoubleClickHold
-            IndexWebhookTrigger.DoubleClickHold -> isDoubleClickHold
-            IndexWebhookTrigger.Both -> true
+        val gesture = if (isDoubleClickHold) {
+            IndexWebhookGesture.DoubleClickHold
+        } else {
+            IndexWebhookGesture.SingleClickHold
         }
-        if (!matchesTrigger) return inner
+        if (!indexWebhookPreferences.config(gesture).value.isConfigured) return inner
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
+            gesture = gesture,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,

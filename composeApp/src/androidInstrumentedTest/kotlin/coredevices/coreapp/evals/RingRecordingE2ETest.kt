@@ -33,6 +33,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -650,8 +651,7 @@ class RingRecordingE2ETest {
         // Webhook (disabled)
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
-                override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+                override fun upload(config: IndexWebhookConfig, samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
             }
         } bind IndexWebhookApi::class
         single<com.russhwolf.settings.Settings> {
