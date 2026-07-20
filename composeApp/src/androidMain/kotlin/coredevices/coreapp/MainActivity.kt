@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity() {
         val themeRes = when (theme) {
             CoreAppTheme.Light -> light
             CoreAppTheme.Dark -> dark
+            CoreAppTheme.Black -> R.style.Theme_CoreApp_Black
             CoreAppTheme.System -> if (isNightMode(this)) {
                 dark
             } else {
