@@ -86,7 +86,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -204,9 +203,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.dsl.module
-import theme.CoreAppColorScheme
 import theme.coreOrange
-import theme.currentColorScheme
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -1235,7 +1232,6 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
     val showConfirmResetIntoPrfDialog = remember { mutableStateOf(false) }
     val showConfirmFactoryResetDialog = remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val currentColorScheme = currentColorScheme()
 
     Box {
         IconButton(onClick = { showMenu = !showMenu }) {
@@ -1244,20 +1240,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
-            modifier = Modifier.widthIn(min = 250.dp).then(
-                if (currentColorScheme == CoreAppColorScheme.Grey) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(4.dp)
-                    )
-                } else Modifier
-            ),
-            containerColor = if (currentColorScheme == CoreAppColorScheme.Grey) {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            } else {
-                MenuDefaults.containerColor
-            },
+            modifier = Modifier.widthIn(min = 250.dp),
         ) {
             val firmwareVersion = when {
                 watch is KnownPebbleDevice -> watch.runningFwVersion

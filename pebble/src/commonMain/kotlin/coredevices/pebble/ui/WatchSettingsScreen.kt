@@ -169,7 +169,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import theme.CoreAppColorScheme
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import theme.currentColorScheme
@@ -1465,7 +1464,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Speech,
                     keywords = "",
                     item = {
-                        val logo = if (currentColorScheme() == CoreAppColorScheme.Grey) {
+                        val logo = if (currentColorScheme().isDark) {
                             Res.drawable.wispr_flow_logo_white
                         } else {
                             Res.drawable.wispr_flow_logo_black

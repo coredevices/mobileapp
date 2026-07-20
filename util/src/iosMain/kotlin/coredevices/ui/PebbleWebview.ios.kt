@@ -24,7 +24,6 @@ import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.javaScriptEnabled
 import platform.darwin.NSObject
-import theme.CoreAppColorScheme
 import theme.currentColorScheme
 
 private val logger = Logger.withTag("PebbleWebview")
@@ -146,9 +145,10 @@ actual fun PebbleWebview(
     // matches the app's App Theme setting, not the OS setting.
     val colorScheme = currentColorScheme()
     LaunchedEffect(colorScheme) {
-        webView.overrideUserInterfaceStyle = when (colorScheme) {
-            CoreAppColorScheme.Grey -> UIUserInterfaceStyle.UIUserInterfaceStyleDark
-            CoreAppColorScheme.Light -> UIUserInterfaceStyle.UIUserInterfaceStyleLight
+        webView.overrideUserInterfaceStyle = if (colorScheme.isDark) {
+            UIUserInterfaceStyle.UIUserInterfaceStyleDark
+        } else {
+            UIUserInterfaceStyle.UIUserInterfaceStyleLight
         }
     }
 
