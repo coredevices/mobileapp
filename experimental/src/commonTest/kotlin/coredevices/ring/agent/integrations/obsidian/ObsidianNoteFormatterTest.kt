@@ -29,6 +29,42 @@ class ObsidianNoteFormatterTest {
     }
 
     @Test
+    fun timestampedFileIncludesCustomTagAfterIndexTag() {
+        val cfg = config(ObsidianMode.TIMESTAMPED_FILES, subfolder = "Index Inbox", customTag = "fleeting")
+        val write = ObsidianNoteFormatter.plan(cfg, "buy milk", y, mo, d, h, mi) as ObsidianWrite.NewFile
+        assertEquals(
+            "---\ncreated: 2026-06-18T14:05\ntags: [index, fleeting]\n---\n\nbuy milk\n",
+            write.content,
+        )
+    }
+
+    @Test
+    fun timestampedFileSanitizesCustomTag() {
+        val cfg = config(ObsidianMode.TIMESTAMPED_FILES, customTag = "#my notes")
+        val write = ObsidianNoteFormatter.plan(cfg, "x", y, mo, d, h, mi) as ObsidianWrite.NewFile
+        assertTrue(write.content.contains("tags: [index, my-notes]"))
+    }
+
+    @Test
+    fun blankCustomTagLeavesFrontmatterUnchanged() {
+        val cfg = config(ObsidianMode.TIMESTAMPED_FILES, customTag = "  ")
+        val write = ObsidianNoteFormatter.plan(cfg, "x", y, mo, d, h, mi) as ObsidianWrite.NewFile
+        assertTrue(write.content.contains("tags: [index]"))
+    }
+
+    @Test
+    fun sanitizeTagNormalisesUserInput() {
+        assertEquals("fleeting", ObsidianNoteFormatter.sanitizeTag("#fleeting"))
+        assertEquals("fleeting", ObsidianNoteFormatter.sanitizeTag("  fleeting  "))
+        assertEquals("my-tag", ObsidianNoteFormatter.sanitizeTag("my tag"))
+        assertEquals("inbox/fleeting", ObsidianNoteFormatter.sanitizeTag("inbox/fleeting"))
+        // YAML/list-breaking characters can never reach the frontmatter.
+        assertEquals("a-b", ObsidianNoteFormatter.sanitizeTag("a], [b"))
+        assertEquals("", ObsidianNoteFormatter.sanitizeTag("#"))
+        assertEquals("", ObsidianNoteFormatter.sanitizeTag(""))
+    }
+
+    @Test
     fun emptySubfolderWritesToVaultRoot() {
         val cfg = config(ObsidianMode.TIMESTAMPED_FILES, subfolder = "  ")
         val write = ObsidianNoteFormatter.plan(cfg, "x", y, mo, d, h, mi) as ObsidianWrite.NewFile
@@ -105,5 +141,6 @@ class ObsidianNoteFormatterTest {
         mode: ObsidianMode,
         targetNote: String = "",
         subfolder: String = "Index Inbox",
-    ) = ObsidianConfig(mode = mode, targetNote = targetNote, subfolder = subfolder)
+        customTag: String = "",
+    ) = ObsidianConfig(mode = mode, targetNote = targetNote, subfolder = subfolder, customTag = customTag)
 }

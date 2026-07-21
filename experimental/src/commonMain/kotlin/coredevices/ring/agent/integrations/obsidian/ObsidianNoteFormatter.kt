@@ -5,6 +5,8 @@ data class ObsidianConfig(
     val mode: ObsidianMode,
     val targetNote: String,
     val subfolder: String,
+    /** Extra frontmatter tag for timestamped files, e.g. "fleeting". Blank = just "index". */
+    val customTag: String = "",
 )
 
 /** A concrete filesystem action for one note. [fileName] may contain one subfolder segment. */
@@ -32,7 +34,7 @@ object ObsidianNoteFormatter {
                 val name = "$date $compactTime.md"
                 val sub = sanitizeSubfolder(config.subfolder)
                 val fileName = if (sub.isEmpty()) name else "$sub/$name"
-                ObsidianWrite.NewFile(fileName, timestampedContent(isoMinute, content))
+                ObsidianWrite.NewFile(fileName, timestampedContent(isoMinute, content, sanitizeTag(config.customTag)))
             }
             ObsidianMode.MAIN_NOTE ->
                 ObsidianWrite.Append(MAIN_NOTE_NAME, appendBlock(date, hour, minute, content))
@@ -41,8 +43,10 @@ object ObsidianNoteFormatter {
         }
     }
 
-    private fun timestampedContent(isoMinute: String, content: String): String =
-        "---\ncreated: $isoMinute\ntags: [index]\n---\n\n${content.trimEnd()}\n"
+    private fun timestampedContent(isoMinute: String, content: String, customTag: String): String {
+        val tags = if (customTag.isEmpty()) "index" else "index, $customTag"
+        return "---\ncreated: $isoMinute\ntags: [$tags]\n---\n\n${content.trimEnd()}\n"
+    }
 
     private fun appendBlock(date: String, hour: Int, minute: Int, content: String): String =
         "## $date ${pad2(hour)}:${pad2(minute)}\n\n${content.trimEnd()}\n"
@@ -77,6 +81,16 @@ object ObsidianNoteFormatter {
             .map { it.trim() }
             .filter { it.isNotEmpty() && it != "." && it != ".." }
             .joinToString("/")
+
+    /**
+     * Normalises a user-entered tag to something Obsidian accepts in frontmatter: strips leading
+     * '#', turns inner whitespace into '-', and drops anything outside Obsidian's tag charset
+     * (letters, digits, '-', '_', '/') so the YAML list can never be malformed. "" = no tag.
+     */
+    fun sanitizeTag(raw: String): String =
+        raw.trim().removePrefix("#")
+            .replace(Regex("\\s+"), "-")
+            .filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '/' }
 
     private fun withMdExtension(name: String): String =
         if (name.endsWith(".md", ignoreCase = true)) name else "$name.md"

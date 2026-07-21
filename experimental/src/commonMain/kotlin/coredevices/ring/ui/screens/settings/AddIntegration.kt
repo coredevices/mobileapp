@@ -409,6 +409,7 @@ fun ObsidianDialog(
 
     var mode by remember { mutableStateOf(if (alreadyConfigured) integration.currentMode() else ObsidianMode.TIMESTAMPED_FILES) }
     var subfolder by remember { mutableStateOf(if (alreadyConfigured) integration.currentSubfolder().ifEmpty { ObsidianPreferences.DEFAULT_SUBFOLDER } else ObsidianPreferences.DEFAULT_SUBFOLDER) }
+    var customTag by remember { mutableStateOf(if (alreadyConfigured) integration.currentCustomTag() else "") }
     var notes by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedNote by remember { mutableStateOf(if (alreadyConfigured) integration.currentTargetNote().ifEmpty { null } else null) }
 
@@ -454,6 +455,7 @@ fun ObsidianDialog(
                                 mode = mode,
                                 targetNote = selectedNote ?: "",
                                 subfolder = subfolder,
+                                customTag = customTag,
                             )
                             preferences.setNoteProvider(NoteProvider.Obsidian)
                             onDismiss()
@@ -500,6 +502,8 @@ fun ObsidianDialog(
                     onModeChange = { mode = it },
                     subfolder = subfolder,
                     onSubfolderChange = { subfolder = it },
+                    customTag = customTag,
+                    onCustomTagChange = { customTag = it },
                     notes = notes,
                     selectedNote = selectedNote,
                     onSelectNote = { selectedNote = it },
@@ -523,6 +527,8 @@ private fun ObsidianModeSelector(
     onModeChange: (ObsidianMode) -> Unit,
     subfolder: String,
     onSubfolderChange: (String) -> Unit,
+    customTag: String,
+    onCustomTagChange: (String) -> Unit,
     notes: List<String>,
     selectedNote: String?,
     onSelectNote: (String) -> Unit,
@@ -554,6 +560,16 @@ private fun ObsidianModeSelector(
                     label = { Text("Subfolder") },
                     placeholder = { Text(ObsidianPreferences.DEFAULT_SUBFOLDER) },
                     supportingText = { Text("A folder inside your vault. Created if it doesn't exist.") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customTag,
+                    onValueChange = onCustomTagChange,
+                    label = { Text("Extra tag (optional)") },
+                    placeholder = { Text("fleeting") },
+                    supportingText = { Text("Added to each new note's frontmatter alongside #index.") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )

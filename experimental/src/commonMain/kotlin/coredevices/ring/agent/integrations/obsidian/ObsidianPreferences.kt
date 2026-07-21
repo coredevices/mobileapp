@@ -18,6 +18,7 @@ class ObsidianPreferences(private val settings: Settings) {
         private const val MODE_KEY = "obsidian_mode"
         private const val TARGET_NOTE_KEY = "obsidian_target_note"
         private const val SUBFOLDER_KEY = "obsidian_subfolder"
+        private const val CUSTOM_TAG_KEY = "obsidian_custom_tag"
     }
 
     private val _vaultHandle = MutableStateFlow(settings.getStringOrNull(HANDLE_KEY))
@@ -36,6 +37,9 @@ class ObsidianPreferences(private val settings: Settings) {
 
     private val _subfolder = MutableStateFlow(settings.getStringOrNull(SUBFOLDER_KEY) ?: DEFAULT_SUBFOLDER)
     val subfolder = _subfolder.asStateFlow()
+
+    private val _customTag = MutableStateFlow(settings.getStringOrNull(CUSTOM_TAG_KEY) ?: "")
+    val customTag = _customTag.asStateFlow()
 
     fun setVault(handle: String, name: String) {
         settings.putString(HANDLE_KEY, handle)
@@ -59,16 +63,23 @@ class ObsidianPreferences(private val settings: Settings) {
         _subfolder.value = subfolder
     }
 
+    fun setCustomTag(tag: String) {
+        settings.putString(CUSTOM_TAG_KEY, tag)
+        _customTag.value = tag
+    }
+
     fun clear() {
         settings.remove(HANDLE_KEY)
         settings.remove(NAME_KEY)
         settings.remove(MODE_KEY)
         settings.remove(TARGET_NOTE_KEY)
         settings.remove(SUBFOLDER_KEY)
+        settings.remove(CUSTOM_TAG_KEY)
         _vaultHandle.value = null
         _vaultName.value = null
         _mode.value = ObsidianMode.TIMESTAMPED_FILES
         _targetNote.value = ""
         _subfolder.value = DEFAULT_SUBFOLDER
+        _customTag.value = ""
     }
 }
