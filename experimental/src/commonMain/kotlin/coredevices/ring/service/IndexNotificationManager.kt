@@ -51,6 +51,7 @@ import kotlinx.datetime.format
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
@@ -62,8 +63,16 @@ data class GenericNotification(
     val inProgress: NotificationProgress? = null,
     val localOnly: Boolean = false,
     val deepLink: String? = null,
-    val actions: List<NotificationAction> = emptyList()
+    val actions: List<NotificationAction> = emptyList(),
+    val channel: IndexNotificationChannel = IndexNotificationChannel.Default,
+    val timeoutAfter: Duration? = null
 )
+
+enum class IndexNotificationChannel {
+    Default,
+    /** Notifications showing the action taken for a recording (e.g. "Noted"). */
+    IndexAction
+}
 
 data class NotificationAction(
     val title: String,
@@ -94,6 +103,7 @@ class IndexNotificationManager(
         private const val DEEP_LINK_URI = "pebble://navbar/index"
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
+        private val ACTION_NOTIFICATION_TIMEOUT = 5.minutes
     }
     private val mapMutex = Mutex() // Guards the three mutable maps below
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
@@ -397,6 +407,12 @@ class IndexNotificationManager(
                                     inProgress = null,
                                     localOnly = false,
                                     deepLink = RingRoutes.recordingDeepLink(notification.recordingId),
+                                    channel = IndexNotificationChannel.IndexAction,
+                                    timeoutAfter = if (prefs.autoDismissActionNotifications.value) {
+                                        ACTION_NOTIFICATION_TIMEOUT
+                                    } else {
+                                        null
+                                    },
                                     actions = listOf(
                                         notification.shortcutAction.let { action ->
                                             when (action) {

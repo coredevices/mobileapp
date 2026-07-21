@@ -28,6 +28,7 @@ interface IndexWebhookApi {
      * @param recordingId Unique identifier for the recording (used in filename)
      * @param transcription Transcription text. Null when RecordingOnly mode.
      * @param recordedAt When the recording was actually made
+     * @param gesture Button gesture that started the recording, or null when unknown (header omitted)
      */
     fun upload(
         config: IndexWebhookConfig,
@@ -36,6 +37,7 @@ interface IndexWebhookApi {
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
+        gesture: IndexWebhookGesture?,
     )
 }
 
@@ -62,6 +64,7 @@ class IndexWebhookApiImpl(
         recordingId: String,
         transcription: String?,
         recordedAt: Instant,
+        gesture: IndexWebhookGesture?,
     ) {
         val url = config.url
         if (url.isNullOrBlank()) return
@@ -89,7 +92,8 @@ class IndexWebhookApiImpl(
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
                     transcription = transcriptionToSend,
-                    recordedAt = recordedAt
+                    recordedAt = recordedAt,
+                    gesture = gesture,
                 )
 
                 result.fold(
@@ -108,7 +112,8 @@ class IndexWebhookApiImpl(
         audioData: ByteArray?,
         filename: String,
         transcription: String?,
-        recordedAt: Instant
+        recordedAt: Instant,
+        gesture: IndexWebhookGesture?,
     ): Result<Unit> {
         return try {
             val boundary = Uuid.random().toString()
@@ -124,7 +129,10 @@ class IndexWebhookApiImpl(
             )
 
             val response = client.post(url) {
-                headers.forEach { (name, value) -> header(name, value) }
+                headers
+                    .filterKeys { !it.equals(IndexWebhookGesture.HEADER_NAME, ignoreCase = true) }
+                    .forEach { (name, value) -> header(name, value) }
+                gesture?.let { header(IndexWebhookGesture.HEADER_NAME, it.headerValue) }
                 if (audioData != null) {
                     header(AUDIO_SIZE_HEADER, audioData.size.toString())
                 }

@@ -71,7 +71,11 @@ class WatchManagerTest {
     }
     private val pebbleDeviceFactory = PebbleDeviceFactory()
     private val createPlatformIdentifier = object : CreatePlatformIdentifier {
-        override fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier {
+        override fun identifier(
+            identifier: PebbleIdentifier,
+            name: String,
+            lastAttemptFailed: Boolean,
+        ): PlatformIdentifier {
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }
@@ -110,8 +114,8 @@ class WatchManagerTest {
             _disconnected.complete(ConnectionFailureReason.FailedToConnect)
         }
 
-        override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
-            lastPreviouslyConnected = previouslyConnected
+        override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
+            lastPreviouslyConnected = knownWatchProperties?.lastConnected != null
             activeConnections++
             totalConnections++
             if (activeConnections > 1) {

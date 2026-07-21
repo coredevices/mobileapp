@@ -1,28 +1,9 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
-import com.juul.kable.Peripheral
-import com.juul.kable.State
-import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
-import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
-import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
-import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.kableGattConnector
-import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
-
-//expect fun libpebbleGattConnector(scannedPebbleDevice: ScannedPebbleDevice, appContext: AppContext): GattConnector
-
-fun gattConnector(
-    identifier: PebbleBleIdentifier,
-    name: String,
-    appContext: AppContext,
-    scope: ConnectionCoroutineScope,
-    blePlatformConfig: BlePlatformConfig,
-): GattConnector?
-// = libpebbleGattConnector(scannedPebbleDevice, appContext)
-        = kableGattConnector(identifier = identifier, scope = scope, name = name, blePlatformConfig = blePlatformConfig)
 
 sealed class GattConnectionResult {
     data class Success(val client: ConnectedGattClient) : GattConnectionResult()

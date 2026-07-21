@@ -34,6 +34,7 @@ import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
+import coredevices.ring.external.indexwebhook.IndexWebhookGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -651,7 +652,7 @@ class RingRecordingE2ETest {
         // Webhook (disabled)
         single {
             object : IndexWebhookApi {
-                override fun upload(config: IndexWebhookConfig, samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant) {}
+                override fun upload(config: IndexWebhookConfig, samples: ShortArray?, sampleRate: Int, recordingId: String, transcription: String?, recordedAt: Instant, gesture: IndexWebhookGesture?) {}
             }
         } bind IndexWebhookApi::class
         single<com.russhwolf.settings.Settings> {
@@ -681,6 +682,7 @@ private class E2EPreferences : Preferences {
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
     override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
+    override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
@@ -701,6 +703,7 @@ private class E2EPreferences : Preferences {
     override fun setReminderProvider(provider: ReminderProvider) {}
     override fun setNoteProvider(provider: NoteProvider) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
+    override fun setAutoDismissActionNotifications(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}

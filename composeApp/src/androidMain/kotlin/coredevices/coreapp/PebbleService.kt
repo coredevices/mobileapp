@@ -15,6 +15,8 @@ import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.IndexNotificationManager
+import coredevices.ring.service.INDEX_ACTION_NOTIFICATION_CHANNEL_ID
+import coredevices.ring.service.INDEX_ACTION_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
 import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.RecordingBackgroundScope
@@ -75,6 +77,12 @@ class PebbleService: Service(), KoinComponent {
                 .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
                 .build()
             notificationManagerCompat.createNotificationChannel(notificationChannel)
+            val actionChannel = NotificationChannelCompat.Builder(
+                INDEX_ACTION_NOTIFICATION_CHANNEL_ID,
+                NotificationManager.IMPORTANCE_DEFAULT)
+                .setName(INDEX_ACTION_NOTIFICATION_CHANNEL_NAME)
+                .build()
+            notificationManagerCompat.createNotificationChannel(actionChannel)
 
             indexNotificationManager.startNotificationProcessingJob(scope)
         }

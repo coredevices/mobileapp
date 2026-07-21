@@ -20,6 +20,7 @@ data class BlePlatformConfig(
     val closeGattServerWhenBtDisabled: Boolean = true,
     val supportsBtClassic: Boolean = false,
     val supportsPpogResetCharacteristic: Boolean = false,
+    val supportsGattAutoConnect: Boolean = false,
     /** iOS bluetoothd can stall the write-without-response readiness signal for
      *  ~5s (MOB-9394), wedging Kable's write() before any bytes are dispatched.
      *  When set, WithoutResponse writes time out after this and re-issue. */

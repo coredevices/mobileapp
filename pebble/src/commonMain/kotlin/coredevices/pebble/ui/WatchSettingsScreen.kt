@@ -169,7 +169,6 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import theme.CoreAppColorScheme
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import theme.currentColorScheme
@@ -1465,7 +1464,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Speech,
                     keywords = "",
                     item = {
-                        val logo = if (currentColorScheme() == CoreAppColorScheme.Grey) {
+                        val logo = if (currentColorScheme().isDark) {
                             Res.drawable.wispr_flow_logo_white
                         } else {
                             Res.drawable.wispr_flow_logo_black
@@ -1629,6 +1628,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                     show = { pebbleFeatures.supportsRestartingGattServerAfterBtPowerOn() }
+                ),
+                basicSettingsToggleItem(
+                    title = "Passive reconnection mode",
+                    description = "After a failed connection, wait for the watch to become available instead of retrying repeatedly",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Connectivity,
+                    checked = libPebbleConfig.bleConfig.autoConnectAfterFailure,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                bleConfig = libPebbleConfig.bleConfig.copy(
+                                    autoConnectAfterFailure = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsBleAutoConnect() },
                 ),
                 basicSettingsActionItem(
                     title = "Post test notification",

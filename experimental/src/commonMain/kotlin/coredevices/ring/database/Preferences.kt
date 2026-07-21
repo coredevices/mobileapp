@@ -29,6 +29,7 @@ interface Preferences: BasePreferences {
     val reminderProvider: StateFlow<ReminderProvider>
     val noteProvider: StateFlow<NoteProvider>
     val noteShortcut: StateFlow<NoteShortcutType>
+    val autoDismissActionNotifications: StateFlow<Boolean>
     val backupEnabled: StateFlow<Boolean>
     val useEncryption: StateFlow<Boolean>
     val encryptionKeyFingerprint: StateFlow<String?>
@@ -49,6 +50,7 @@ interface Preferences: BasePreferences {
     fun setReminderProvider(provider: ReminderProvider)
     fun setNoteProvider(provider: NoteProvider)
     fun setNoteShortcut(shortcut: NoteShortcutType)
+    fun setAutoDismissActionNotifications(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
     fun setUseEncryption(enabled: Boolean)
     fun setEncryptionKeyFingerprint(fingerprint: String?)
@@ -130,6 +132,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     private val _noteShortcut = MutableStateFlow<NoteShortcutType>(settings.getStringOrNull("note_shortcut")
         ?.let { Json.decodeFromString(it) } ?: NoteShortcutType.SendToMe)
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
+    private val _autoDismissActionNotifications = MutableStateFlow(settings.getBoolean("auto_dismiss_action_notifications", true))
+    override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
     private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
     override val backupEnabled = _backupEnabled.asStateFlow()
     private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
@@ -236,6 +240,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         val json = Json.encodeToString(shortcut)
         settings.putString("note_shortcut", json)
         _noteShortcut.value = shortcut
+    }
+
+    override fun setAutoDismissActionNotifications(enabled: Boolean) {
+        settings.putBoolean("auto_dismiss_action_notifications", enabled)
+        _autoDismissActionNotifications.value = enabled
     }
 
     override fun setBackupEnabled(enabled: Boolean) {

@@ -110,6 +110,11 @@ data class BleConfig(
      * returns to PoweredOn following a state restoration.
      */
     val republishGattServicesOnRestore: Boolean = false,
+    /**
+     * Android only. After a failed connection attempt, use GATT autoConnect for subsequent
+     * attempts, so that the OS waits for the watch to appear instead of us retrying in a loop.
+     */
+    val autoConnectAfterFailure: Boolean = true,
 )
 
 class BleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

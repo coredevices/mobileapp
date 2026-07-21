@@ -39,7 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coredevices.ui.dismissKeyboardOnTapOutside
 import org.koin.compose.viewmodel.koinViewModel
@@ -87,6 +91,21 @@ fun IndexWebhookSettingsDialog(
                     "Send Index recording data to an HTTP endpoint on each " +
                         "${gesture.displayName().lowercase()} recording.",
                     style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                val mono = SpanStyle(fontFamily = FontFamily.Monospace)
+                Text(
+                    buildAnnotatedString {
+                        append("When both gestures share a Webhook URL, the ")
+                        withStyle(mono) { append(IndexWebhookGesture.HEADER_NAME) }
+                        append(" header (")
+                        withStyle(mono) { append(IndexWebhookGesture.SingleClickHold.headerValue) }
+                        append(" / ")
+                        withStyle(mono) { append(IndexWebhookGesture.DoubleClickHold.headerValue) }
+                        append(") disambiguates them.")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 

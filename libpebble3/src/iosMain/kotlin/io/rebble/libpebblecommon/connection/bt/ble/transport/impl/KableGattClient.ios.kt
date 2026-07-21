@@ -10,7 +10,11 @@ import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBPeripheral
 import kotlin.uuid.Uuid
 
-actual fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral? {
+actual fun peripheralFromIdentifier(
+    identifier: PebbleBleIdentifier,
+    name: String,
+    autoConnect: Boolean,
+): Peripheral? {
     val peripheral = peripheralFromUuid(identifier.uuid)
     if (peripheral != null) {
         return peripheral

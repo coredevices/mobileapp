@@ -372,6 +372,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsFwUpdateAcrossDisconnection(21),
     SupportsBlobDbVersion(22),
     SupportsSettingsSync(23),
+    SupportsWeatherDbV4(24),
     ;
 
     companion object {

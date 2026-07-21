@@ -11,8 +11,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 
-actual fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral?
- = Peripheral(identifier.macAddress)
+actual fun peripheralFromIdentifier(
+    identifier: PebbleBleIdentifier,
+    name: String,
+    autoConnect: Boolean,
+): Peripheral? = Peripheral(identifier.macAddress) {
+    autoConnectIf { autoConnect }
+}
 
 actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     if (this is AndroidPeripheral) {

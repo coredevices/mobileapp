@@ -460,7 +460,7 @@ fun initKoin(
                     scoped { get<ConnectionScopeProperties>().identifier as PebbleBleIdentifier }
                     scoped { get<ConnectionScopeProperties>().identifier as PebbleBtClassicIdentifier }
                     scoped { get<ConnectionScopeProperties>().identifier as PebbleSocketIdentifier }
-                    scoped { (get<ConnectionScopeProperties>().platformIdentifier as PlatformIdentifier.BlePlatformIdentifier).peripheral }
+                    scoped { get<ConnectionScopeProperties>().platformIdentifier as PlatformIdentifier.BlePlatformIdentifier }
 
                     // Connection
                     scopedOf(::KableGattConnector)

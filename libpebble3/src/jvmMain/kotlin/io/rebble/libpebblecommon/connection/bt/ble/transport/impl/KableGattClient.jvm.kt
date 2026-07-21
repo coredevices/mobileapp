@@ -3,7 +3,11 @@ package io.rebble.libpebblecommon.connection.bt.ble.transport.impl
 import com.juul.kable.Peripheral
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 
-actual fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral? {
+actual fun peripheralFromIdentifier(
+    identifier: PebbleBleIdentifier,
+    name: String,
+    autoConnect: Boolean,
+): Peripheral? {
     TODO("Not yet implemented")
 }
 

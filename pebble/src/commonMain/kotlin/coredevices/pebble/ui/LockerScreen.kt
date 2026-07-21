@@ -25,10 +25,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -168,6 +168,11 @@ class LockerViewModel(
         private set
     private var lastSearchParams: SearchParams? = null
     val searchState = SearchState()
+    // Held here, not remembered in the composable: the screen is disposed when navigating into an
+    // app's detail page, which would otherwise discard the scroll position.
+    val mainListState = LazyListState()
+    val searchListState = LazyListState()
+    val searchGridState = LazyGridState()
     val type = mutableStateOf(AppType.Watchface)
     var storeIsRefreshing by mutableStateOf(false)
     var lockerIsRefreshing by mutableStateOf(false)
@@ -267,8 +272,6 @@ fun LockerScreen(
         }
         val platform: Platform = koinInject()
         val title = stringResource(Res.string.apps)
-        val mainListState = rememberLazyListState()
-        val searchListState = rememberLazyListState()
         val collectionsDao: AppstoreCollectionDao = koinInject()
         val collections by collectionsDao.getAllCollectionsFlow().collectAsState(null)
         if (collections == null) {
@@ -310,9 +313,9 @@ fun LockerScreen(
             launch {
                 topBarParams.scrollToTop.collect {
                     val listState = if (viewModel.searchState.query.isNotEmpty()) {
-                        searchListState
+                        viewModel.searchListState
                     } else {
-                        mainListState
+                        viewModel.mainListState
                     }
                     if (listState.firstVisibleItemIndex > 0) {
                         listState.animateScrollToItem(0)
@@ -386,7 +389,8 @@ fun LockerScreen(
                             hasUnfilteredStoreResults = hasUnfilteredStoreResults,
                             navBarNav = navBarNav,
                             topBarParams = topBarParams,
-                            lazyListState = searchListState,
+                            lazyListState = viewModel.searchListState,
+                            lazyGridState = viewModel.searchGridState,
                             modifier = Modifier.weight(1f),
                             appType = viewModel.type.value,
                             sharedViewModel = sharedViewModel,
@@ -423,7 +427,7 @@ fun LockerScreen(
 
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(),
-                            state = mainListState,
+                            state = viewModel.mainListState,
                         ) {
                             @Composable
                             fun Carousel(
@@ -694,6 +698,7 @@ fun SearchResultsList(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     lazyListState: LazyListState,
+    lazyGridState: LazyGridState,
     modifier: Modifier = Modifier,
     appType: AppType,
     sharedViewModel: SharedLockerViewModel,
@@ -701,35 +706,36 @@ fun SearchResultsList(
     val scope = rememberCoroutineScope()
     val isLoadingFirstPage = storeResults == null || (storeResults.loadState.refresh is LoadState.Loading && storeResults.itemCount == 0)
     if (appType == AppType.Watchface) {
-        LazyVerticalGrid(
-            columns = GridCells.FixedSize(120.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            if (lockerEntries.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
-                items(
-                    items = lockerEntries,
-                    key = { "locker_${it.storeId}-${it.uuid}" },
-                ) { entry ->
-                    NativeWatchfaceCard(
-                        entry,
-                        navBarNav,
-                        width = 120.dp,
-                        topBarParams = topBarParams,
-                        highlightInLocker = false,
-                    )
-                }
+        if (isLoadingFirstPage) {
+            // Composing the grid before the store results land would measure it with only the
+            // locker entries, clamping any restored scroll position to the top.
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-            item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
-            if (isLoadingFirstPage) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.FixedSize(120.dp),
+                state = lazyGridState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                if (lockerEntries.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From my watchfaces") }
+                    items(
+                        items = lockerEntries,
+                        key = { "locker_${it.storeId}-${it.uuid}" },
+                    ) { entry ->
+                        NativeWatchfaceCard(
+                            entry,
+                            navBarNav,
+                            width = 120.dp,
+                            topBarParams = topBarParams,
+                            highlightInLocker = false,
+                        )
                     }
                 }
-            } else {
+                item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("From the store") }
                 items(
                     count = storeResults.itemCount,
                     key = storeResults.itemKey { "store_${it.storeId}-${it.uuid}" },

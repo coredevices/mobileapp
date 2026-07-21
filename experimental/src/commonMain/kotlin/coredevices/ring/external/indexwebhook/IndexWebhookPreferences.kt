@@ -27,9 +27,13 @@ enum class IndexWebhookPayloadMode(val id: Int) {
  * Recording button gesture a webhook config is bound to. Each gesture has its own
  * independent webhook configuration.
  */
-enum class IndexWebhookGesture(val keySuffix: String) {
-    SingleClickHold("single_click_hold"),
-    DoubleClickHold("double_click_hold"),
+enum class IndexWebhookGesture(val keySuffix: String, val headerValue: String) {
+    SingleClickHold("single_click_hold", "single-click-hold"),
+    DoubleClickHold("double_click_hold", "double-click-hold");
+
+    companion object {
+        const val HEADER_NAME = "X-Index-Trigger"
+    }
 }
 
 /**

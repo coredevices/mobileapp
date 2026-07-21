@@ -143,6 +143,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val noteShortcut: StateFlow<NoteShortcutType>
         get() = TODO("Not yet implemented")
+    override val autoDismissActionNotifications: StateFlow<Boolean>
+        get() = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean>
         get() = MutableStateFlow(true)
     override val useEncryption: StateFlow<Boolean>
@@ -209,6 +211,8 @@ private object PreferencesTestImpl: Preferences {
     override fun setNoteShortcut(shortcut: NoteShortcutType) {
         TODO("Not yet implemented")
     }
+
+    override fun setAutoDismissActionNotifications(enabled: Boolean) {}
 
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}

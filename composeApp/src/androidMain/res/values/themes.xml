@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<resources>
+    <!-- Window background is painted before Compose composes; the platform dark theme's grey
+         would flash before the black scheme takes over. -->
+    <style name="Theme.CoreApp.Black" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

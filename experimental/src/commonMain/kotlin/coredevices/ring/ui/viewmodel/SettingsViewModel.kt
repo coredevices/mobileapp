@@ -138,6 +138,7 @@ class SettingsViewModel(
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
+    val autoDismissActionNotifications = preferences.autoDismissActionNotifications
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
@@ -260,6 +261,10 @@ class SettingsViewModel(
             val newValue = !debugDetailsEnabled.value
             preferences.setDebugDetailsEnabled(newValue)
         }
+    }
+
+    fun toggleAutoDismissActionNotifications() {
+        preferences.setAutoDismissActionNotifications(!autoDismissActionNotifications.value)
     }
 
     fun showNoteShortcutDialog() {

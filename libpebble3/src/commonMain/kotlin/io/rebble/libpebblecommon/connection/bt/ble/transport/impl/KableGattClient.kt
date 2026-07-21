@@ -9,6 +9,7 @@ import com.juul.kable.State.Disconnected.Status
 import com.juul.kable.WriteType
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.PlatformIdentifier
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattCharacteristic
@@ -35,26 +36,21 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
-fun kableGattConnector(
+expect fun peripheralFromIdentifier(
     identifier: PebbleBleIdentifier,
-    scope: ConnectionCoroutineScope,
     name: String,
-    blePlatformConfig: BlePlatformConfig,
-): GattConnector? {
-    val peripheral = peripheralFromIdentifier(identifier, name)
-    if (peripheral == null) return null
-    return KableGattConnector(identifier, peripheral, scope, blePlatformConfig)
-}
-
-expect fun peripheralFromIdentifier(identifier: PebbleBleIdentifier, name: String): Peripheral?
+    autoConnect: Boolean,
+): Peripheral?
 
 class KableGattConnector(
     private val identifier: PebbleBleIdentifier,
-    private val peripheral: Peripheral,
+    platformIdentifier: PlatformIdentifier.BlePlatformIdentifier,
     private val scope: ConnectionCoroutineScope,
     private val blePlatformConfig: BlePlatformConfig,
 ) : GattConnector {
     private val logger = Logger.withTag("KableGattConnector/${identifier.asString}")
+    private val peripheral = platformIdentifier.peripheral
+    private val autoConnect = platformIdentifier.autoConnect
 
     private val _disconnected = CompletableDeferred<ConnectionFailureReason>()
     override val disconnected: Deferred<ConnectionFailureReason> = _disconnected
@@ -75,7 +71,9 @@ class KableGattConnector(
             _disconnected.complete(disconnected.status.asFailureReason())
         }
         var timedOut = false
-        val connectTimeoutJob = scope.launch {
+        // With autoConnect the OS waits (indefinitely) for the watch to show up; timing out would
+        // put us back to retrying in a loop, which is the thing autoConnect exists to avoid.
+        val connectTimeoutJob = if (autoConnect) null else scope.launch {
             delay(CONNECT_TIMEOUT)
             timedOut = true
             logger.w { "Connect timeout — force-disconnecting peripheral" }
@@ -101,7 +99,7 @@ class KableGattConnector(
                 GattConnectionResult.Failure(disconnectReason ?: ConnectionFailureReason.FailedToConnect)
             }
         } finally {
-            connectTimeoutJob.cancel()
+            connectTimeoutJob?.cancel()
         }
     }
 

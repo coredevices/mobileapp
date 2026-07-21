@@ -75,7 +75,7 @@ sealed class PebbleConnectionResult {
 }
 
 interface TransportConnector {
-    suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult
+    suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?): PebbleConnectionResult
     suspend fun disconnect()
     val disconnected: Deferred<ConnectionFailureReason>
 }
@@ -121,7 +121,7 @@ fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
 }
 
 interface PebbleConnector {
-    suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason? = null)
+    suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason? = null)
     fun disconnect()
     val disconnected: WasDisconnected
     val state: StateFlow<ConnectingPebbleState>
@@ -165,10 +165,10 @@ class RealPebbleConnector(
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     override val disconnected = WasDisconnected(transportConnector.disconnected)
 
-    override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
+    override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
         _state.value = Connecting(identifier)
 
-        val result = transportConnector.connect(lastError)
+        val result = transportConnector.connect(knownWatchProperties, lastError)
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 logger.e("failed to connect: $result")
@@ -179,7 +179,7 @@ class RealPebbleConnector(
             is PebbleConnectionResult.Success -> {
                 logger.d("$result")
                 val negotiationJob = scope.async {
-                    doAfterConnection(previouslyConnected, result.reversePpogVersion)
+                    doAfterConnection(knownWatchProperties, result.reversePpogVersion)
                 }
                 val disconnectedJob = scope.launch {
                     transportConnector.disconnected.await()
@@ -197,7 +197,7 @@ class RealPebbleConnector(
         }
     }
 
-    private suspend fun doAfterConnection(previouslyConnected: Boolean, reversePpogVersion: ReversePpogVersion?) {
+    private suspend fun doAfterConnection(knownWatchProperties: KnownWatchProperties?, reversePpogVersion: ReversePpogVersion?) {
         _state.value = Negotiating(identifier, reversePpogVersion)
         scope.launch {
             pebbleProtocolRunner.run()
@@ -255,6 +255,7 @@ class RealPebbleConnector(
             )
             return
         }
+        val previouslyConnected = knownWatchProperties?.lastConnected != null
 
         blobDB.init(
             watchType = watchInfo.platform.watchType,

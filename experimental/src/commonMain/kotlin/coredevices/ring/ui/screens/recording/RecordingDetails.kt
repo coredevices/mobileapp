@@ -114,6 +114,7 @@ import coreapp.util.generated.resources.Res as UtilRes
 fun RecordingDetails(id: Long, coreNav: CoreNav) {
     Firebase.crashlytics.setCustomKey("recording_details_recording_id", id)
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val uiContext = rememberUiContext()
     if (uiContext == null) {
         Logger.e("RecordingDetails") { "uiContext is null" }
@@ -239,6 +240,7 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                             onOpenObject = { id ->
                                 coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.ObjectDetails(id))
                             },
+                            onCopied = { scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") } },
                         )
                     }
                 }
@@ -357,6 +359,7 @@ private fun RecordingDetailsContents(
     showTraceTimeline: Boolean,
     onRetry: () -> Unit,
     onOpenObject: (String) -> Unit,
+    onCopied: () -> Unit,
 ) {
     val transcription = entries.firstOrNull()?.transcription.orEmpty()
     val firstEntry = entries.firstOrNull()
@@ -420,6 +423,7 @@ private fun RecordingDetailsContents(
                     toolResultsByCallId = toolResultsByCallId,
                     allLists = allLists,
                     onOpenObject = onOpenObject,
+                    onCopied = onCopied,
                 )
             }
         } else if (transcription.isNotBlank()) {
@@ -427,7 +431,7 @@ private fun RecordingDetailsContents(
             // persisted: show the raw transcription as the user bubble.
             item("bubble") {
                 Spacer(Modifier.height(16.dp))
-                TranscriptionBubble(transcription)
+                TranscriptionBubble(transcription, onCopied)
             }
         }
 
@@ -448,6 +452,7 @@ private fun RecordingDetailsContents(
                     items = trailingItems,
                     allLists = allLists,
                     onOpenObject = onOpenObject,
+                    onCopied = onCopied,
                 )
             }
         }
@@ -574,7 +579,7 @@ private fun WaveformBars(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TranscriptionBubble(text: String) {
+private fun TranscriptionBubble(text: String, onCopied: () -> Unit) {
     val colors = IndexTheme.colors
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -587,15 +592,12 @@ private fun TranscriptionBubble(text: String) {
                 .foundationFillMaxWidth(0.85f)
                 .clip(RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp))
                 .background(colors.primary)
-                // Long-press copies the transcription to the clipboard.
-                // We can't surface a snackbar here without threading the
-                // SnackbarHostState through, so the haptic doubles as
-                // the visual ack — same UX as iOS Notes.
                 .combinedClickable(
                     onClick = {},
                     onLongClick = {
                         clipboard.setText(androidx.compose.ui.text.AnnotatedString(text))
                         haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onCopied()
                     },
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -620,6 +622,7 @@ private fun ConversationMessage(
     toolResultsByCallId: Map<String, SemanticResult>,
     allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
     onOpenObject: (String) -> Unit,
+    onCopied: () -> Unit,
 ) {
     val doc = message.document
     when (doc.role) {
@@ -627,7 +630,7 @@ private fun ConversationMessage(
             val text = doc.content?.trim().orEmpty()
             if (text.isNotBlank()) {
                 Spacer(Modifier.height(16.dp))
-                TranscriptionBubble(text)
+                TranscriptionBubble(text, onCopied)
             }
         }
         MessageRole.assistant -> {
@@ -642,6 +645,7 @@ private fun ConversationMessage(
                     toolResultsByCallId = toolResultsByCallId,
                     allLists = allLists,
                     onOpenObject = onOpenObject,
+                    onCopied = onCopied,
                 )
             }
         }
@@ -659,6 +663,7 @@ private fun AssistantTurn(
     toolResultsByCallId: Map<String, SemanticResult>,
     allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
     onOpenObject: (String) -> Unit,
+    onCopied: () -> Unit,
 ) {
     // Don't render empty assistant turns
     when {
@@ -691,12 +696,12 @@ private fun AssistantTurn(
             modifier = Modifier.foundationFillMaxWidth(0.85f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (replyText.isNotBlank()) ReplyBubble(replyText)
-            answerItems.forEach { ReplyBubble(it.body) }
+            if (replyText.isNotBlank()) ReplyBubble(replyText, onCopied)
+            answerItems.forEach { ReplyBubble(it.body, onCopied) }
             if (chipCalls.isNotEmpty()) {
                 chipCalls.map { toolResultsByCallId[it.id] }.filterIsInstance<SemanticResult.GenericFailure>().forEach { result ->
                     result.userErrorMessage?.let {
-                        ReplyBubble(it)
+                        ReplyBubble(it, onCopied)
                     }
                 }
                 FlowRow(
@@ -756,7 +761,7 @@ private fun AssistantTurn(
 /** Index reply bubble (left-aligned, rounded). Long-press copies the text. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ReplyBubble(text: String) {
+private fun ReplyBubble(text: String, onCopied: () -> Unit) {
     val sanitized = text.replace(Regex("<[^>]*>"), "").trim()
     val colors = IndexTheme.colors
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -770,6 +775,7 @@ private fun ReplyBubble(text: String) {
                 onLongClick = {
                     clipboard.setText(androidx.compose.ui.text.AnnotatedString(sanitized))
                     haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onCopied()
                 },
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -853,6 +859,7 @@ private fun TrailingItemChips(
     items: List<coredevices.ring.data.entity.room.indexfeed.CachedItem>,
     allLists: List<coredevices.ring.data.entity.room.indexfeed.CachedList>,
     onOpenObject: (String) -> Unit,
+    onCopied: () -> Unit,
 ) {
     val colors = IndexTheme.colors
     Row(
@@ -877,7 +884,7 @@ private fun TrailingItemChips(
             modifier = Modifier.foundationFillMaxWidth(0.85f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            answerItems.forEach { ReplyBubble(it.body) }
+            answerItems.forEach { ReplyBubble(it.body, onCopied) }
             if (chipItems.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

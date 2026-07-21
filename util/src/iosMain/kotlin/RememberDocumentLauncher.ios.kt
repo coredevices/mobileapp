@@ -27,8 +27,9 @@ import platform.UIKit.UIDocumentPickerMode
 import platform.UIKit.UIDocumentPickerViewController
 import platform.UniformTypeIdentifiers.UTType
 import platform.UniformTypeIdentifiers.UTTypeJPEG
-import platform.UniformTypeIdentifiers.UTTypeMPEG4Movie
+import platform.UniformTypeIdentifiers.UTTypeMovie
 import platform.UniformTypeIdentifiers.UTTypePNG
+import platform.UniformTypeIdentifiers.conformsToType
 import platform.UniformTypeIdentifiers.loadDataRepresentationForContentType
 import platform.UniformTypeIdentifiers.registeredContentTypes
 import platform.darwin.NSObject
@@ -104,11 +105,11 @@ actual fun rememberOpenPhotoLauncher(onResult: (List<DocumentAttachment>?) -> Un
                     val provider = it.itemProvider
                     scope.async {
                         suspendCancellableCoroutine { cont ->
+                            val registeredTypes = provider.registeredContentTypes().filterIsInstance<UTType>()
                             val type = when {
-                                provider.registeredContentTypes().contains(UTTypePNG) -> UTTypePNG
-                                provider.registeredContentTypes().contains(UTTypeJPEG) -> UTTypeJPEG
-                                provider.registeredContentTypes().contains(UTTypeMPEG4Movie) -> UTTypeMPEG4Movie
-                                else -> null
+                                registeredTypes.contains(UTTypePNG) -> UTTypePNG
+                                registeredTypes.contains(UTTypeJPEG) -> UTTypeJPEG
+                                else -> registeredTypes.firstOrNull { it.conformsToType(UTTypeMovie) }
                             }
                             if (type == null) {
                                 cont.resume(null)

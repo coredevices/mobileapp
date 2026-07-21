@@ -3,6 +3,10 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.runBlocking
 import platform.UIKit.UIApplication
+import platform.darwin.DISPATCH_TIME_NOW
+import platform.darwin.dispatch_after
+import platform.darwin.dispatch_get_main_queue
+import platform.darwin.dispatch_time
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotification
 import platform.UserNotifications.UNNotificationAction
@@ -90,6 +94,16 @@ actual class PlatformIndexNotificationManager {
         userNotificationCenter.addNotificationRequest(request) { error ->
             if (error != null) {
                 println("Error posting notification: ${error.localizedDescription}")
+            }
+        }
+        // ponytail: best-effort — iOS has no OS-level notification timeout, so this
+        // only fires while the app is alive (timer suspends in background until resume)
+        notification.timeoutAfter?.let { timeout ->
+            dispatch_after(
+                dispatch_time(DISPATCH_TIME_NOW, timeout.inWholeNanoseconds),
+                dispatch_get_main_queue()
+            ) {
+                userNotificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(id))
             }
         }
     }

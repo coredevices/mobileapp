@@ -41,6 +41,11 @@ class RecordingOperationFactory(
         sequence: List<ButtonPress>?
     ): RecordingOperation {
         val isDoubleClickHold = sequence == secondaryOperationSequence
+        val observedGesture = when {
+            isDoubleClickHold -> IndexWebhookGesture.DoubleClickHold
+            sequence != null -> IndexWebhookGesture.SingleClickHold
+            else -> null
+        }
         val inner = if (isDoubleClickHold) {
             createSecondaryOperation(
                 recordingId = recordingId,
@@ -64,6 +69,7 @@ class RecordingOperationFactory(
             recordingId = recordingId,
             fileId = fileId,
             isDoubleClickHold = isDoubleClickHold,
+            observedGesture = observedGesture,
             inner = inner,
         )
     }
@@ -72,18 +78,20 @@ class RecordingOperationFactory(
         recordingId: Long,
         fileId: String,
         isDoubleClickHold: Boolean,
+        observedGesture: IndexWebhookGesture?,
         inner: RecordingOperation,
     ): RecordingOperation {
-        val gesture = if (isDoubleClickHold) {
+        val configGesture = if (isDoubleClickHold) {
             IndexWebhookGesture.DoubleClickHold
         } else {
             IndexWebhookGesture.SingleClickHold
         }
-        if (!indexWebhookPreferences.config(gesture).value.isConfigured) return inner
+        if (!indexWebhookPreferences.config(configGesture).value.isConfigured) return inner
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
-            gesture = gesture,
+            configGesture = configGesture,
+            observedGesture = observedGesture,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,

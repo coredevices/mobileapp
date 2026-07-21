@@ -27,11 +27,12 @@ import kotlin.time.Clock
 class IndexWebhookUploadRecordingOperation(
     private val webhookApi: IndexWebhookApi,
     private val webhookPreferences: IndexWebhookPreferences,
-    private val gesture: IndexWebhookGesture,
+    private val configGesture: IndexWebhookGesture,
+    private val observedGesture: IndexWebhookGesture?,
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String,
-    private val recordingId: Long
+    private val recordingId: Long,
 ): RecordingOperation, KoinComponent {
 
     companion object {
@@ -53,9 +54,9 @@ class IndexWebhookUploadRecordingOperation(
         }
 
         // Re-read after the inner operation: the user may have unlinked the webhook while it ran.
-        val config = webhookPreferences.config(gesture).value
+        val config = webhookPreferences.config(configGesture).value
         if (!config.isConfigured) {
-            logger.d { "Webhook no longer configured for $gesture, skipping upload for $fileId" }
+            logger.d { "Webhook no longer configured for $configGesture, skipping upload for $fileId" }
             return
         }
         val payloadMode = config.payloadMode
@@ -85,6 +86,6 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.upload(config, samples, sampleRate, fileId, transcription, recordedAt)
+        webhookApi.upload(config, samples, sampleRate, fileId, transcription, recordedAt, observedGesture)
     }
 }

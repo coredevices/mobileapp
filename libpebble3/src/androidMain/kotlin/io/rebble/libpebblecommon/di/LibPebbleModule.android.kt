@@ -83,6 +83,7 @@ actual val platformModule: Module = module {
         delayBleConnectionsAfterAppStart = true,
         delayBleDisconnections = true,
         supportsBtClassic = true,
+        supportsGattAutoConnect = true,
     ) }
 
     scope<ConnectionScope> {

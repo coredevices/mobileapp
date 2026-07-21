@@ -470,7 +470,11 @@ fun WatchHomeScreen(
                     }
                     if (showSearch) {
                         LaunchedEffect(focusRequester) {
-                            focusRequester.requestFocus()
+                            // Only grab focus for a freshly-opened search bar; returning here with
+                            // a live query must not re-open the keyboard.
+                            if (params.searchState?.query.isNullOrEmpty()) {
+                                focusRequester.requestFocus()
+                            }
                         }
                         TopSearchBar(
                             state = rememberSearchBarState(),

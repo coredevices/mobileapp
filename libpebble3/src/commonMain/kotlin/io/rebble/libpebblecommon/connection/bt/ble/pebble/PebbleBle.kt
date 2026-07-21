@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection.bt.ble.pebble
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
+import io.rebble.libpebblecommon.connection.KnownWatchProperties
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleConnectionResult
 import io.rebble.libpebblecommon.connection.TransportConnector
@@ -19,6 +20,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnectionResul
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattConnector
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -42,12 +45,12 @@ class PebbleBle(
 ) : TransportConnector {
     private val logger = Logger.withTag("PebbleBle/${identifier.asString}")
 
-    override suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult {
+    override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?): PebbleConnectionResult {
         if (lastError == ConnectionFailureReason.GattErrorUnknown147) {
             // Try scanning before connecting (this seems to magically allow android to connect,
             // when otherwise it can't).
             try {
-                preConnectScanner.scanBeforeConnect(identifier)
+                preConnectScanner.scanBeforeConnect(knownWatchProperties, identifier)
             } catch (e: IllegalStateException) {
                 logger.e(e) { "Pre-connect scan failed, proceeding with direct connect" }
             }
@@ -211,7 +214,10 @@ class PreConnectScanner(
 ) {
     private val logger = Logger.withTag("PreConnectScanner")
 
-    suspend fun scanBeforeConnect(identifier: PebbleBleIdentifier) {
+    suspend fun scanBeforeConnect(knownWatchProperties: KnownWatchProperties?, identifier: PebbleBleIdentifier) {
+        if (!knownWatchProperties?.watchType.advertisesWhenNotConnected()) {
+            return
+        }
         logger.d { "scanBeforeConnect(): $identifier" }
         val scanResults = bleScanner.scan()
         val found = withTimeoutOrNull(SCAN_TIMEOUT_MS) {
@@ -225,6 +231,17 @@ class PreConnectScanner(
     companion object {
         private val SCAN_TIMEOUT_MS = 10.seconds
     }
+}
+
+fun WatchHardwarePlatform?.advertisesWhenNotConnected(): Boolean = when (this?.watchType) {
+    WatchType.APLITE -> true
+    WatchType.BASALT -> true
+    WatchType.CHALK -> true
+    WatchType.DIORITE -> true
+    WatchType.EMERY -> false
+    WatchType.FLINT -> false
+    WatchType.GABBRO -> false
+    null -> false
 }
 
 expect val SERVER_META_RESPONSE: ByteArray

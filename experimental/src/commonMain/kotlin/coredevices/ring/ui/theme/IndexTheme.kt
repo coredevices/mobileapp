@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import theme.CoreAppColorScheme
 import theme.currentColorScheme
 
 /**
@@ -126,7 +125,7 @@ fun IndexThemeHost(
     forceDark: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
-    val dark = forceDark ?: (currentColorScheme() == CoreAppColorScheme.Grey)
+    val dark = forceDark ?: currentColorScheme().isDark
     val colors = if (dark) IndexColors.Dark else IndexColors.Light
     androidx.compose.runtime.CompositionLocalProvider(
         LocalIndexColors provides colors,

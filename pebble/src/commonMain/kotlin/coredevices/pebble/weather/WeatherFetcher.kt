@@ -18,8 +18,11 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
+import io.rebble.libpebblecommon.weather.WeatherDailyForecast
+import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherType
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
@@ -158,6 +161,34 @@ class WeatherFetcher(
             logger.w { "Couldn't find forcast for tomorrow" }
             return null
         }
+        val today = weather.fcstdaily7.data.forecasts.firstOrNull()
+        // v4-only extras; ignored by v3 firmware. Daily uses the day icon, falling back to
+        // the night icon once the day forecast has dropped off (e.g. late evening). Day 0 takes
+        // wind and feels-like from the current observation, which the watch expects to match the
+        // today_* fields; later days use the backend's per-day forecast.
+        val daily = weather.fcstdaily7.data.forecasts.mapIndexed { index, forecast ->
+            val isToday = index == 0
+            WeatherDailyForecast(
+                highTemp = forecast.maxTemp?.toShort() ?: TEMP_NO_VALUE,
+                lowTemp = forecast.minTemp.toShort(),
+                weatherType = (forecast.day?.iconCode ?: forecast.night.iconCode).toWeatherType(),
+                precipProbability = forecast.pop?.toShort(),
+                windSpeedMph = (if (isToday) current.windSpeed else forecast.windSpeed).toMph(units),
+                uvIndexX10 = forecast.uvIndex?.let { (it * 10).roundToInt().toShort() },
+                feelsLikeTemp = (if (isToday) currentTemps.feelsLike else forecast.feelsLike)?.toShort(),
+                windDirectionDeg = if (isToday) current.windDirection else forecast.windDirection,
+                wmoCode = forecast.wmoCode,
+                humidityPct = forecast.humidityPct,
+                visibilityM = forecast.visibilityM,
+                precipSumMm = forecast.precipMm?.roundToInt(),
+            )
+        }
+        val hourly = weather.fcsthourly?.data?.hours.orEmpty().map { hour ->
+            WeatherHourlyForecast(
+                weatherType = hour.iconCode.toWeatherType(),
+                temp = (hour.temp ?: 0).coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt()).toByte(),
+            )
+        }
         return WeatherLocationData.WeatherLocationDataPopulated(
             key = location.key,
             currentTemp = currentTemps.temp.toShort(),
@@ -171,6 +202,16 @@ class WeatherFetcher(
             isCurrentLocation = location.currentLocation,
             locationName = location.name,
             forecastShort = current.phrase32Char,
+            todayFeelsLikeTemp = currentTemps.feelsLike.toShort(),
+            latitude = location.latitude,
+            longitude = location.longitude,
+            dailyForecast = daily,
+            todayUvIndexX10 = today?.uvIndex?.let { (it * 10).roundToInt().toShort() },
+            todayPrecipProbability = today?.pop?.toShort(),
+            todayWindSpeed = current.windSpeed.toMph(units),
+            todayWindDirection = current.windDirection,
+            todayHourly = hourly,
+            locationUtcOffsetMin = today?.sunriseRaw?.utcOffsetMinutes(),
         )
     }
 
@@ -356,6 +397,8 @@ fun WeatherType.toWeatherIcon(): TimelineIcon = when (this) {
 data class WeatherResponse(
     val fcstdaily7: DailyForecasts,
     val conditions: Conditions,
+    // v4-only; older backend responses omit it.
+    val fcsthourly: HourlyForecasts? = null,
 )
 
 @Serializable
@@ -388,6 +431,11 @@ data class ConditionsObservation(
     @SerialName("icon_code")
     val iconCode: Int,
     val obs_time: Long,
+    // v4-only extras. Wind speed is in the requested unit (mph/kmh); direction in degrees.
+    @SerialName("wspd")
+    val windSpeed: Int? = null,
+    @SerialName("wdir")
+    val windDirection: Int? = null,
 )
 
 fun ConditionsObservation.tempsFor(units: WeatherUnit): ConditionTemps? = when (units) {
@@ -429,11 +477,51 @@ data class DailyForecast(
     @SerialName("min_temp")
     val minTemp: Int,
     val dow: String,
+    // v4-only extras. uv_index is a plain index (e.g. 5.4); pop is precip probability %.
+    @SerialName("uv_index")
+    val uvIndex: Double? = null,
+    val pop: Int? = null,
+    // Per-day extras. Wind speed and feels-like are in the requested display unit;
+    // visibility is always metres and precipitation always mm.
+    @SerialName("wmo_code")
+    val wmoCode: Int? = null,
+    @SerialName("feels_like")
+    val feelsLike: Int? = null,
+    @SerialName("wspd")
+    val windSpeed: Int? = null,
+    @SerialName("wdir")
+    val windDirection: Int? = null,
+    @SerialName("rh")
+    val humidityPct: Int? = null,
+    @SerialName("vis_m")
+    val visibilityM: Int? = null,
+    @SerialName("precip_mm")
+    val precipMm: Double? = null,
 )
 
 private fun String.asInstantFromIso8601(): Instant {
     val sanitized = substring(0, length - 2) + ":" + substring(length - 2)
     return Instant.parse(sanitized)
+}
+
+/** Minutes east of UTC from an ISO-8601 timestamp ending in a colon-less offset (e.g. `-0700`). */
+internal fun String.utcOffsetMinutes(): Int? {
+    if (length < 5) return null
+    val sign = when (this[length - 5]) {
+        '+' -> 1
+        '-' -> -1
+        else -> return null
+    }
+    val hours = substring(length - 4, length - 2).toIntOrNull() ?: return null
+    val minutes = substring(length - 2).toIntOrNull() ?: return null
+    return sign * (hours * 60 + minutes)
+}
+
+/** The watch prints wind as "mph" literally, so metric responses (km/h) must be converted. */
+internal fun Int?.toMph(units: WeatherUnit): Int? = when {
+    this == null -> null
+    units == WeatherUnit.Metric -> (this * 0.621371).roundToInt()
+    else -> this
 }
 
 
@@ -454,4 +542,21 @@ data class DailyDayNight(
     val phrase22Char: String,
     @SerialName("phrase_32char")
     val phrase32Char: String,
+)
+
+@Serializable
+data class HourlyForecasts(
+    val data: HourlyForecastData,
+)
+
+@Serializable
+data class HourlyForecastData(
+    val hours: List<HourlyForecast>,
+)
+
+@Serializable
+data class HourlyForecast(
+    @SerialName("icon_code")
+    val iconCode: Int,
+    val temp: Int? = null,
 )

@@ -148,6 +148,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
+    val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
     val platform = koinInject<Platform>()
     val editingWebhookGesture by webhookViewModel.editingGesture.collectAsState()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
@@ -438,6 +439,21 @@ fun IndexSettings(coreNav: CoreNav) {
                                 is NoteShortcutType.SendToNoteProvider -> (noteShortcut as NoteShortcutType.SendToNoteProvider).provider.title
                                 is NoteShortcutType.SendToReminderProvider -> (noteShortcut as NoteShortcutType.SendToReminderProvider).provider.title
                             }
+                        )
+                    }
+                )
+            }
+            item {
+                ListItem(
+                    modifier = Modifier.clickable { viewModel.toggleAutoDismissActionNotifications() },
+                    headlineContent = { Text("Auto-dismiss Notifications") },
+                    supportingContent = {
+                        Text("Dismiss recording action notifications after 5 minutes")
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = autoDismissActionNotifications,
+                            onCheckedChange = { viewModel.toggleAutoDismissActionNotifications() }
                         )
                     }
                 )
