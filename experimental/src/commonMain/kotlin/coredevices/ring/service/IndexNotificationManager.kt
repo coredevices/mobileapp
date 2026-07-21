@@ -362,7 +362,7 @@ class IndexNotificationManager(
                                                     )
                                                     val humanDate = UITimeUtil.humanDate(dateTime.date)
                                                     val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
-                                                    appendLine("Event added for ${humanDate}, ${humanTime}")
+                                                    appendLine("Added to calendar for ${humanDate}, ${humanTime}")
                                                     appendLine()
                                                     appendLine(lastAction.title)
                                                 }

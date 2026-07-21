@@ -98,6 +98,7 @@ class FakePreferences : Preferences {
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+    override val phoneCalendarEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
@@ -119,6 +120,7 @@ class FakePreferences : Preferences {
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
+    override fun setPhoneCalendarEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}

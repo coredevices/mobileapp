@@ -31,6 +31,9 @@ interface Preferences: BasePreferences {
     val noteShortcut: StateFlow<NoteShortcutType>
     val autoDismissActionNotifications: StateFlow<Boolean>
     val backupEnabled: StateFlow<Boolean>
+    /** Whether the user has connected the Phone Calendar integration (Accounts → Add integration).
+     *  The calendar tool stays unavailable until this is enabled AND calendar permission is granted. */
+    val phoneCalendarEnabled: StateFlow<Boolean>
     val useEncryption: StateFlow<Boolean>
     val encryptionKeyFingerprint: StateFlow<String?>
     val lastWipedRing: StateFlow<String?>
@@ -52,6 +55,7 @@ interface Preferences: BasePreferences {
     fun setNoteShortcut(shortcut: NoteShortcutType)
     fun setAutoDismissActionNotifications(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
+    fun setPhoneCalendarEnabled(enabled: Boolean)
     fun setUseEncryption(enabled: Boolean)
     fun setEncryptionKeyFingerprint(fingerprint: String?)
     fun setLastWipedRing(id: String?)
@@ -136,6 +140,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
     private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
     override val backupEnabled = _backupEnabled.asStateFlow()
+    private val _phoneCalendarEnabled = MutableStateFlow(settings.getBoolean("phone_calendar_enabled", false))
+    override val phoneCalendarEnabled = _phoneCalendarEnabled.asStateFlow()
     private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
     override val useEncryption = _useEncryption.asStateFlow()
     private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
@@ -250,6 +256,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setBackupEnabled(enabled: Boolean) {
         settings.putBoolean("backup_enabled", enabled)
         _backupEnabled.value = enabled
+    }
+
+    override fun setPhoneCalendarEnabled(enabled: Boolean) {
+        settings.putBoolean("phone_calendar_enabled", enabled)
+        _phoneCalendarEnabled.value = enabled
     }
 
     override fun setUseEncryption(enabled: Boolean) {

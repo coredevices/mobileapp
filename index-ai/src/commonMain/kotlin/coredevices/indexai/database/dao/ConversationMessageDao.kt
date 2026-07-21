@@ -1,11 +1,13 @@
 package coredevices.indexai.database.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.mcp.data.SemanticResult
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -54,4 +56,21 @@ interface ConversationMessageDao {
      *  children when Firestore has a newer version of the recording. */
     @Query("DELETE FROM ConversationMessageEntity WHERE recordingId = :recordingId")
     suspend fun deleteAllForRecording(recordingId: Long)
+
+    /** Each recording's latest non-null tool-message semantic result. */
+    @Query("""
+        SELECT recordingId, semantic_result FROM ConversationMessageEntity AS cm
+        WHERE id = (
+            SELECT id FROM ConversationMessageEntity
+            WHERE recordingId = cm.recordingId AND role = 'tool' AND semantic_result IS NOT NULL
+            ORDER BY timestamp DESC, id DESC LIMIT 1
+        )
+    """)
+    fun getLatestToolSemanticResults(): Flow<List<RecordingSemanticResult>>
 }
+
+data class RecordingSemanticResult(
+    val recordingId: Long,
+    @ColumnInfo(name = "semantic_result")
+    val semanticResult: SemanticResult?,
+)

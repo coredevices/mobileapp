@@ -1576,12 +1576,13 @@ fun AuthorizedIntegrations(preferences: Preferences) {
 
     val platform = koinInject<Platform>()
 
-    // Calendar (Built-in only): the dot reflects whether calendar permission is granted; tapping
-    // it requests the permission. Permission is the "connection" for the built-in calendar account.
+    // Phone Calendar is an opt-in integration (Add integration → Phone Calendar). Its dot
+    // reflects whether calendar permission is granted; tapping re-requests a missing permission.
     val permissionRequester = koinInject<PermissionRequester>()
     val uiContext = rememberUiContext()
     val scope = rememberCoroutineScope()
     val calendarGranted by permissionRequester.granted(Permission.Calendar).collectAsState(false)
+    val phoneCalendarEnabled by preferences.phoneCalendarEnabled.collectAsState()
 
     Column(modifier = Modifier.fillMaxWidth()) {
         IntegrationItem(
@@ -1592,15 +1593,34 @@ fun AuthorizedIntegrations(preferences: Preferences) {
             selectedNoteProvider = currentNoteProvider == NoteProvider.Builtin,
             onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.BuiltIn) },
             onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Builtin) },
-            hasCalendar = true,
-            calendarGranted = calendarGranted,
-            onToggleCalendar = {
-                if (!calendarGranted) {
-                    val ctx = uiContext ?: return@IntegrationItem
-                    scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
-                }
-            },
         )
+        if (phoneCalendarEnabled) {
+            var showPhoneCalendarConfig by remember { mutableStateOf(false) }
+            if (showPhoneCalendarConfig) {
+                PhoneCalendarConfigDialog(
+                    preferences = preferences,
+                    onDismiss = { showPhoneCalendarConfig = false }
+                )
+            }
+            IntegrationItem(
+                title = PHONE_CALENDAR_TITLE,
+                hasReminder = false,
+                hasNotes = false,
+                selectedReminderProvider = false,
+                selectedNoteProvider = false,
+                onSelectReminderProvider = {},
+                onSelectNoteProvider = {},
+                onConfigure = { showPhoneCalendarConfig = true },
+                hasCalendar = true,
+                calendarGranted = calendarGranted,
+                onToggleCalendar = {
+                    if (!calendarGranted) {
+                        val ctx = uiContext ?: return@IntegrationItem
+                        scope.launch { permissionRequester.requestPermission(Permission.Calendar, ctx) }
+                    }
+                },
+            )
+        }
         if (platform.isIOS) {
             IntegrationItem(
                 title = "iOS Reminders",
@@ -1677,6 +1697,27 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Tasker) }
             )
         }
+    }
+}
+
+/** Manage dialog for the opt-in Phone Calendar integration: disconnecting hides the row and
+ *  disables the agent's calendar tool. (The system permission itself stays granted.) */
+@Composable
+private fun PhoneCalendarConfigDialog(preferences: Preferences, onDismiss: () -> Unit) {
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text(PHONE_CALENDAR_TITLE) },
+        buttons = {
+            TextButton(
+                onClick = {
+                    preferences.setPhoneCalendarEnabled(false)
+                    onDismiss()
+                }
+            ) { Text("Disconnect") }
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    ) {
+        Text("Index can add events to your phone's calendar when you explicitly ask for a calendar event.")
     }
 }
 

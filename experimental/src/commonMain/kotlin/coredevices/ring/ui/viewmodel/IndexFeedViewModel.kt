@@ -10,6 +10,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.di.LibIndexCoroutineScope
+import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.fields
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -84,11 +87,15 @@ class IndexFeedViewModel(
         ) { recordings, items, lists, entries, q ->
             Quintuple(recordings, items, lists, entries, q)
         },
+        recordingRepo.getLatestToolSemanticResults()
+            .map { results -> results.associate { it.recordingId to it.semanticResult } }
+            .distinctUntilChanged(),
         animatingDoneIds,
-    ) { tuple, animating ->
+    ) { tuple, semanticResults, animating ->
         compute(
             tuple.recordings, tuple.items, tuple.lists, tuple.entries,
             tuple.query.trim(), animating,
+            semanticResults = semanticResults,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -261,6 +268,10 @@ class IndexFeedViewModel(
             entries: List<RecordingEntryEntity>,
             query: String,
             animatingDoneIds: Set<String> = emptySet(),
+            /** Latest tool-call semantic result per recording id, for labelling actions
+             *  that don't produce a feed item (calendar events live only in the phone
+             *  calendar). */
+            semanticResults: Map<Long, SemanticResult?> = emptyMap(),
         ): UiState {
             val isSearching = query.isNotEmpty()
             val q = query.lowercase()
@@ -289,12 +300,17 @@ class IndexFeedViewModel(
                         .lastOrNull()
                     val retryEntry = latestEntry
                         ?.takeIf { it.status == RecordingEntryStatus.transcription_error }
+                    // A calendar event takes an action but creates no feed item — fall back to
+                    // the recording's semantic result so the peek doesn't read "No action taken".
+                    val calendarAction = semanticResults[rec.id] as? SemanticResult.CalendarEventCreation
                     UiState.RecordingPeek(
                         recording = rec,
                         transcription = transcriptionByRec[rec.id].orEmpty(),
-                        primaryChip = primary?.let { chipLabel(it, lists) } ?: "No action taken",
+                        primaryChip = primary?.let { chipLabel(it, lists) }
+                            ?: calendarAction?.let { "Added to calendar" }
+                            ?: "No action taken",
                         primaryChipUrl = (primary?.metadata as? ItemMetadata.DelegatedToIntegration)?.url,
-                        orphan = primary == null,
+                        orphan = primary == null && calendarAction == null,
                         retryEntry = retryEntry,
                     )
                 }
@@ -447,7 +463,6 @@ class IndexFeedViewModel(
                     "Added to $parentName"
                 }
                 "answer" -> "Answered"
-                "calendar_event" -> item.title.ifBlank { "Event" }
                 "message" -> {
                     val raw = strField("recipientName") ?: strField("contact")
                     val name = raw?.let { messageRecipientLabel(it) }

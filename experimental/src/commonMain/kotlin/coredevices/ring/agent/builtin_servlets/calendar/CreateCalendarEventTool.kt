@@ -9,6 +9,7 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
+import coredevices.ring.database.Preferences
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -16,6 +17,7 @@ import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import io.rebble.libpebblecommon.calendar.NewCalendarEvent
 import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.CancellationException
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -74,32 +76,50 @@ class CreateCalendarEventTool : BuiltInMcpTool(
         )
     ),
     extraContext = """
-        'create_calendar_event' is ONLY for explicit calendar events — meetings, appointments, or
-        bookings the user wants placed on their calendar. It is NOT a reminder tool. Decision rules:
-        - Only use it when the user explicitly asks for a calendar event, e.g. "create an event",
-          "add to my calendar", "put X on my calendar", "schedule a meeting/appointment".
+        'create_calendar_event' is ONLY for requests where the user literally says the word
+        "calendar" or "event" while asking to create one, e.g. "add an event to my calendar",
+        "create a calendar event", "put an event on my calendar for Friday at 3pm". Decision rules:
+        - The words "schedule", "create", "book", "meeting", "appointment" or "time" on their own
+          NEVER trigger this tool. "schedule time with X", "schedule a meeting", "book an
+          appointment" are NOT calendar requests — handle them with the reminder or note tools.
         - If the user says "remind me", wants a nudge/to-do, or is setting a timer/alarm, use the
           reminder/timer/alarm tools instead — never this one.
         - When a request is on the edge between a reminder and a calendar event, ALWAYS prefer the
           reminder tool.
-        - A calendar event requires a clear, specific date and time. If the time is vague or
-          ambiguous, do NOT create a calendar event — create a note instead.
+        - A calendar event requires a clear, specific date and time SPOKEN BY THE USER. Never
+          invent or guess a time. If the time is vague, ambiguous, or missing, do NOT create a
+          calendar event — create a note instead.
         - Provide times in the user's local timezone. Use 'duration_human' for a stated duration,
           or 'end_date_time_human' for an explicit end time; omit both for a default 1-hour event.
+        The tool itself rejects calls where the user's message does not contain "calendar" or
+        "event" — do not attempt it for other phrasings.
     """.trimIndent()
 ), KoinComponent {
     private val libPebble: LibPebble by inject()
     private val permissionRequester: PermissionRequester by inject()
+    private val preferences: Preferences by inject()
 
     companion object {
         const val TOOL_NAME = "create_calendar_event"
-        const val TOOL_DESCRIPTION = "Add an event to the user's calendar at a specific date and time. " +
-            "Use ONLY when the user explicitly asks to create a calendar event (e.g. 'create an event', " +
-            "'add to my calendar', 'schedule a meeting/appointment'). Do NOT use for reminders, to-dos, " +
-            "timers, or alarms — use the reminder/timer/alarm tools for those. If it's unclear whether the " +
-            "user wants a reminder or a calendar event, prefer the reminder tool. Requires a clear date and time."
+        const val TOOL_DESCRIPTION = "Add an event to the user's phone calendar at a specific date and time. " +
+            "Use ONLY when the user literally says 'calendar' or 'event' while asking to create one " +
+            "(e.g. 'add an event to my calendar', 'create a calendar event'). Words like 'schedule', " +
+            "'create', 'book', 'meeting', 'appointment' or 'time' alone must NOT trigger this tool — " +
+            "use the reminder/note tools for those. Do NOT use for reminders, to-dos, timers, or alarms. " +
+            "Requires a clear date and time spoken by the user; never invent one."
         private val logger = Logger.withTag("CreateCalendarEventTool")
         val DEFAULT_DURATION = 1.hours
+
+        /**
+         * Deterministic trigger guard: the tool only runs when the user's message literally
+         * contains "calendar" or "event(s)" (the LLM steering says the same, but mis-transcribed
+         * or paraphrased requests were still slipping through — MOB-8701). Word-bounded so e.g.
+         * "eventually" doesn't count. Fails closed when the message is null/blank — a request
+         * we can't verify must not write to the user's calendar; the agent falls back to a note.
+         */
+        private val TRIGGER_WORDS = Regex("""\b(calendar|events?)\b""", RegexOption.IGNORE_CASE)
+        fun mentionsCalendarOrEvent(userMessage: String?): Boolean =
+            userMessage != null && TRIGGER_WORDS.containsMatchIn(userMessage)
 
         /** Parses a human date/time string to an absolute instant, reusing the shared timer resolution. */
         private fun parse(human: String, tz: TimeZone, now: Instant): Instant? {
@@ -163,16 +183,51 @@ class CreateCalendarEventTool : BuiltInMcpTool(
     )
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
-        val args = JsonSnake.decodeFromString<CreateEventArgs>(jsonInput)
-
-        // Defense in depth: the servlet hides this tool when calendar access is missing, but a stale
-        // or forced tool call could still reach here — bail before touching the calendar (which on iOS
-        // would otherwise pop a permission prompt from the background agent). Not LLM-recoverable.
-        if (!permissionRequester.grantedPermissions.value.contains(Permission.Calendar)) {
+        // Defense in depth: the servlet hides this tool when the Phone Calendar integration is
+        // disconnected or calendar access is missing, but a stale or forced tool call could still
+        // reach here — bail before touching the calendar (which on iOS would otherwise pop a
+        // permission prompt from the background agent). Not LLM-recoverable.
+        if (!preferences.phoneCalendarEnabled.value ||
+            !permissionRequester.grantedPermissions.value.contains(Permission.Calendar)
+        ) {
             return ToolCallResult(
-                JsonSnake.encodeToString(CreateEventResult(success = false, errorMessage = "Calendar access is not granted")),
-                SemanticResult.GenericFailure("Calendar access is not granted", llmRecoverable = false)
+                JsonSnake.encodeToString(CreateEventResult(success = false, errorMessage = "The Phone Calendar integration is not connected")),
+                SemanticResult.GenericFailure("The Phone Calendar integration is not connected", llmRecoverable = false)
             )
+        }
+
+        // Trigger guard (MOB-8701): only act when the user literally said "calendar" or "event".
+        // Anything else ("schedule time with Lincoln") belongs to the reminder/note tools.
+        val userMessage = try {
+            context.userMessageText.await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to resolve user message text for trigger guard" }
+            null
+        }
+        if (!mentionsCalendarOrEvent(userMessage)) {
+            return ToolCallResult(
+                JsonSnake.encodeToString(
+                    CreateEventResult(
+                        success = false,
+                        errorMessage = "The user did not explicitly ask for a calendar event " +
+                            "(no mention of 'calendar' or 'event'). Use the reminder or note tools instead."
+                    )
+                ),
+                SemanticResult.GenericFailure(
+                    "User did not explicitly ask for a calendar event; use a reminder or note instead",
+                    llmRecoverable = true
+                )
+            )
+        }
+
+        // Decode args only after the guards: a stale/forced call with malformed args must still
+        // get the controlled failures above rather than a decode exception.
+        val args = try {
+            JsonSnake.decodeFromString<CreateEventArgs>(jsonInput)
+        } catch (e: Exception) {
+            return failure("Invalid arguments for create_calendar_event: ${e.message}")
         }
 
         val tz = TimeZone.currentSystemDefault()

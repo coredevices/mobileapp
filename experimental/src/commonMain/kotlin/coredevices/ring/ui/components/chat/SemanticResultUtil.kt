@@ -262,6 +262,11 @@ suspend fun SemanticResult.actionText(): String {
         is SemanticResult.SupportingData -> "Gathered info"
         is SemanticResult.Response -> "Replied"
         is SemanticResult.ActionLogged -> this.title
-        is SemanticResult.CalendarEventCreation -> "Added to calendar"
+        is SemanticResult.CalendarEventCreation -> {
+            val dateTime = startTime.toLocalDateTime(TimeZone.currentSystemDefault())
+            val humanDate = UITimeUtil.humanDate(dateTime.date)
+            val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
+            "Added $title at $humanDate, $humanTime to calendar"
+        }
     }
 }

@@ -87,6 +87,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.util.openSystemCalendarAt
 import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.ui.openSystemClockApp
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
@@ -737,6 +738,13 @@ private fun AssistantTurn(
                                     }),
                                 )
                             }
+                            // Calendar events live only in the phone calendar (no feed item):
+                            // the chip deep-links to the system calendar at the event's time.
+                            result is SemanticResult.CalendarEventCreation -> ActionChip(
+                                glyph = "📅",
+                                label = resultActionText ?: "Added to calendar",
+                                onClick = { openSystemCalendarAt(result.startTime) },
+                            )
                             // Otherwise collapse the call + its result into one
                             // chip showing the result.
                             resultActionText != null -> ActionChip(

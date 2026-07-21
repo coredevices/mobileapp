@@ -71,4 +71,26 @@ class CreateCalendarEventToolTest {
         assertFalse(CreateCalendarEventTool.isDateOnly("in 2 hours", tz))
     }
 
+    @Test
+    fun triggerGuardRequiresCalendarOrEventWord() {
+        // Explicit mentions pass, in any case, singular or plural.
+        assertTrue(CreateCalendarEventTool.mentionsCalendarOrEvent("add an event to my calendar for 3pm"))
+        assertTrue(CreateCalendarEventTool.mentionsCalendarOrEvent("Create a CALENDAR entry"))
+        assertTrue(CreateCalendarEventTool.mentionsCalendarOrEvent("put two events on Friday"))
+        // MOB-8701: "schedule"/"create"/"time" phrasings must NOT trigger the tool.
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("schedule time with Lincoln"))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("time at Lincoln"))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("schedule a meeting with Sam tomorrow"))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("create an appointment at 3pm"))
+        // Substrings don't count ("eventually" is not "event").
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("I'll eventually get to it"))
+    }
+
+    @Test
+    fun triggerGuardFailsClosedWhenTranscriptUnavailable() {
+        // A request we can't verify must not write to the calendar (agent falls back to a note).
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent(null))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent(""))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("   "))
+    }
 }

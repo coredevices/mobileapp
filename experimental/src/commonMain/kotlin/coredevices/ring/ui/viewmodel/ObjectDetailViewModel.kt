@@ -499,8 +499,8 @@ internal fun normalizeParentLists(
     if (kind == "scheduled") return currentParents
 
     // No explicit membership change → preserve current lists as-is. Stripping
-    // Todos / defaulting to Notes here would silently relocate items that
-    // legitimately live in Todos (e.g. calendar_event) on a text-only edit.
+    // Todos / defaulting to Notes here would silently relocate items on a
+    // text-only edit.
     val requested = requestedParents ?: return currentParents
 
     return requested

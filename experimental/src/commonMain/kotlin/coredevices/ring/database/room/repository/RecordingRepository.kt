@@ -102,6 +102,11 @@ class RecordingRepository(
     fun getPaginatedFeedItems() =
         localRecordingDao.getPaginatedFeedItems()
 
+    /** Each recording's latest tool-call semantic result. Lets the home feed label
+     *  actions that don't produce a feed item, e.g. calendar events. */
+    fun getLatestToolSemanticResults() =
+        db.conversationMessageDao().getLatestToolSemanticResults()
+
     suspend fun getAllFirestoreIds(): Set<String> =
         localRecordingDao.getAllFirestoreIds().toHashSet()
 
