@@ -2,6 +2,7 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.database.room.repository.ListRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -44,6 +45,12 @@ class ReminderServlet(
             }.take(30).forEach { list ->
                 appendLine("- ${list.title}")
             }
+            appendLine(
+                "If the user's message starts with or names one of these lists, use " +
+                    "${ListTool.TOOL_NAME} with that list, not ${CreateNoteTool.TOOL_NAME}. " +
+                    "For example 'Work list review budget' means add 'review budget' to the " +
+                    "'Work list' list."
+            )
         }
     }
 }
