@@ -6,7 +6,6 @@ import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.service.recordings.PebbleWatchappDictationSink
 import coredevices.util.models.CactusSTTMode
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
@@ -156,7 +155,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             ?.split(",")
             ?.mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }
             ?.toSet()
-            ?: setOf(PebbleWatchappDictationSink.TARGET_WATCHAPP_UUID) // seed: preserves Phase 1 behavior on upgrade
+            ?: emptySet()
     )
     override val indexFeedWatchappUuids = _indexFeedWatchappUuids.asStateFlow()
 
@@ -298,8 +297,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     }
 
     override fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) {
-        if (uuids.isEmpty()) settings.remove("index_feed_watchapp_uuids")
-        else settings.putString("index_feed_watchapp_uuids", uuids.joinToString(",") { it.toString() })
+        if (uuids.isEmpty()) {
+            settings.remove("index_feed_watchapp_uuids")
+        } else {
+            settings.putString("index_feed_watchapp_uuids", uuids.joinToString(",") { it.toString() })
+        }
         _indexFeedWatchappUuids.value = uuids
     }
 }

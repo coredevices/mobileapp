@@ -287,7 +287,9 @@ class SettingsViewModel(
         preferences.setNoteShortcut(shortcut)
     }
 
-    fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) = preferences.setIndexFeedWatchappUuids(uuids)
+    fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) {
+        preferences.setIndexFeedWatchappUuids(uuids)
+    }
 
     fun showIndexFeedWatchappsDialog() {
         _showIndexFeedWatchappsDialog.value = true

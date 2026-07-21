@@ -927,7 +927,7 @@ fun NoteShortcutDialog(
 }
 
 @Composable
-private fun IndexFeedWatchappsDialog(
+fun IndexFeedWatchappsDialog(
     selectedUuids: Set<Uuid>,
     onSelectionChanged: (Set<Uuid>) -> Unit,
     onDismissRequest: () -> Unit,

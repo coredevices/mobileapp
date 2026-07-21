@@ -12,16 +12,11 @@ interface TranscriptionProvider {
     ): TranscriptionResult
     suspend fun canServeSession(): Boolean
 
-    /**
-     * [appUuid]-aware overloads, defaulting to the app-agnostic behavior above. Implementations
-     * that need to special-case a specific originating watchapp (e.g. diverting its audio away
-     * from ASR entirely) override these instead.
-     */
     suspend fun transcribe(
         encoderInfo: VoiceEncoderInfo,
         audioFrames: Flow<UByteArray>,
         isNotificationReply: Boolean,
-        appUuid: Uuid,
+        appUuid: Uuid
     ): TranscriptionResult = transcribe(encoderInfo, audioFrames, isNotificationReply)
 
     suspend fun canServeSession(appUuid: Uuid): Boolean = canServeSession()

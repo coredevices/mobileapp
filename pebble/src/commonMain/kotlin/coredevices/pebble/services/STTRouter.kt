@@ -27,10 +27,9 @@ import kotlin.uuid.Uuid
  * for `RebbleFirst`/`RebbleFallback` modes (which buffer Speex frames so they can be replayed
  * across both backends).
  *
- * When [dictationSink] is set and matches a session's `appUuid`, that session is diverted away
- * from ASR entirely: its Speex audio is decoded (reusing [decodeSpeex]) and handed to the sink
- * instead of being transcribed, and this class reports [TranscriptionResult.Success] with no
- * words so the watch gets its normal end-of-session ack with no transcript.
+ * When [dictationSink] matches a session's `appUuid`, [transcribe] reports
+ * [TranscriptionResult.Success] with no words instead of transcribing, so the watch still gets
+ * its normal end-of-session ack with no transcript.
  */
 class STTRouter(
     private val cactus: HybridTranscription,
@@ -74,7 +73,12 @@ class STTRouter(
             require(encoderInfo is VoiceEncoderInfo.Speex) {
                 "Pebble dictation intercept only supports Speex encoding, got ${encoderInfo::class.simpleName}"
             }
-            val pcm = decodeSpeex(encoderInfo, audioFrames.toList())
+            val frames = audioFrames.toList()
+            if (frames.isEmpty()) {
+                return TranscriptionResult.Success(emptyList())
+            }
+            val pcm = decodeSpeex(encoderInfo, frames)
+            logger.i { "Diverting dictation for app $appUuid to ring feed (${pcm.size} PCM bytes @ ${encoderInfo.sampleRate}Hz)" }
             dictationSink.ingest(appUuid, pcm, encoderInfo.sampleRate.toInt())
             return TranscriptionResult.Success(emptyList())
         }
