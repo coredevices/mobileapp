@@ -32,12 +32,17 @@ import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.io.Buffer
@@ -129,6 +134,10 @@ class BugReportProcessor(
     private val companionDevice: CompanionDevice,
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
+
+    companion object {
+        private const val MAX_CONCURRENT_UPLOADS = 4
+    }
 
     private fun getPKJSSummary(): String {
         return try {
@@ -612,54 +621,49 @@ class BugReportProcessor(
                 return@withContext Result.failure(Exception("Unable to prepare file uploads. Please try again later."))
             }
 
-            // Step 3: Upload each file to R2
-            val uploadedFileKeys = mutableListOf<String>()
-            var uploadedCount = 0
+            // Step 3: Upload files to R2 concurrently (bounded), shrinking the window
+            // in which an iOS suspension can strand in-flight transfers. Each file is
+            // registered via /upload/complete as soon as its PUT lands, so a suspension
+            // mid-run keeps whatever already finished rather than dropping everything.
+            val semaphore = Semaphore(MAX_CONCURRENT_UPLOADS)
+            val uploadedCount = coroutineScope {
+                attachments.mapIndexed { index, attachment ->
+                    async {
+                        val uploadInfo = presignedResponse.uploads[index]
+                        logger.d { "Uploading ${attachment.fileName} to R2 (${attachment.size} bytes)" }
+                        semaphore.withPermit {
+                            val uploadResult = withStrikes {
+                                bugApi.uploadToPresignedUrl(
+                                    presignedUrl = uploadInfo.uploadUrl,
+                                    data = attachment.source,
+                                    contentType = attachment.mimeType ?: "application/octet-stream",
+                                    size = attachment.size,
+                                )
+                            }
+                            if (uploadResult.isFailure) {
+                                logger.e { "Failed to upload ${attachment.fileName}: ${uploadResult.exceptionOrNull()}" }
+                                return@withPermit false
+                            }
+                            val fileKey = uploadInfo.fileUrl.split("/").let { parts ->
+                                val bucketIndex = parts.indexOf("eng-dash-temp-logs-attachments")
+                                parts.subList(bucketIndex + 1, parts.size).joinToString("/")
+                            }
+                            logger.d { "Successfully uploaded ${attachment.fileName}, key: $fileKey" }
 
-            attachments.forEachIndexed { index, attachment ->
-                val uploadInfo = presignedResponse.uploads[index]
-                logger.d { "Uploading ${attachment.fileName} to R2 (${attachment.size} bytes)" }
-
-                // Upload to presigned URL using pre-read data
-                val uploadResult = withStrikes {
-                    bugApi.uploadToPresignedUrl(
-                        presignedUrl = uploadInfo.uploadUrl,
-                        data = attachment.source,
-                        contentType = attachment.mimeType ?: "application/octet-stream",
-                        size = attachment.size,
-                    )
-                }
-
-                if (uploadResult.isSuccess) {
-                    // Extract file key from URL (exact pattern from test script)
-                    val fileKey = uploadInfo.fileUrl.split("/").let { parts ->
-                        val bucketIndex = parts.indexOf("eng-dash-temp-logs-attachments")
-                        parts.subList(bucketIndex + 1, parts.size).joinToString("/")
-                    }
-                    uploadedFileKeys.add(fileKey)
-                    uploadedCount++
-                    logger.d { "Successfully uploaded ${attachment.fileName}, key: $fileKey" }
-
-                    // Call upload complete immediately for this file
-                    try {
-                        val completeResult = withStrikes {
-                            bugApi.completeUpload(
-                                fileKey = fileKey,
-                                bugReportId = bugReportId,
-                                googleIdToken = googleIdToken
-                            )
+                            val completeResult = withStrikes {
+                                bugApi.completeUpload(
+                                    fileKey = fileKey,
+                                    bugReportId = bugReportId,
+                                    googleIdToken = googleIdToken
+                                )
+                            }
+                            if (completeResult.isFailure) {
+                                logger.e { "Failed to complete upload for ${attachment.fileName}: ${completeResult.exceptionOrNull()}" }
+                            }
+                            true
                         }
-                        if (completeResult.isFailure) {
-                            logger.e { "Failed to complete upload for ${attachment.fileName}: ${completeResult.exceptionOrNull()}" }
-                            // Don't fail the whole process, just log the error
-                        }
-                    } catch (e: Exception) {
-                        logger.e(e) { "Error calling upload complete for ${attachment.fileName}" }
-                        // Continue with other files
                     }
-                } else {
-                    logger.e { "Failed to upload ${attachment.fileName}: ${uploadResult.exceptionOrNull()}" }
-                }
+                }.awaitAll().count { it }
             }
 
             logger.d { "Upload complete: $uploadedCount/${attachments.size} files uploaded successfully" }
