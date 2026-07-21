@@ -68,6 +68,7 @@ import coredevices.ring.api.NenyaModel
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.RingPairing
 import coredevices.ring.service.RingSync
+import coredevices.ring.service.recordings.PebbleWatchappDictationSink
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -82,6 +83,7 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.PermissionRequester
+import coredevices.util.dictation.PebbleDictationSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -212,6 +214,7 @@ val experimentalModule = module {
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
+    single { PebbleWatchappDictationSink(get(), get(), get()) } bind PebbleDictationSink::class
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)

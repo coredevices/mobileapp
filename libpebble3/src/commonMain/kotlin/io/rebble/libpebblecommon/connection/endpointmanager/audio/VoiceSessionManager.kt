@@ -120,7 +120,7 @@ class VoiceSessionManager(
                     ))
                     return@collectLatest
                 }
-                if (transcriptionProvider.canServeSession()) {
+                if (transcriptionProvider.canServeSession(setupRequest.appUuid)) {
                     voiceService.send(makeSetupResult(
                         sessionType = setupRequest.sessionType,
                         result = Result.Success,
@@ -143,7 +143,8 @@ class VoiceSessionManager(
                     transcriptionProvider.transcribe(
                         setupRequest.encoderInfo,
                         audioFrameFlow,
-                        isNotificationReply = setupRequest.appUuid == Uuid.NIL || setupRequest.appUuid == SystemAppIDs.NOTIFICATIONS_APP_UUID
+                        isNotificationReply = setupRequest.appUuid == Uuid.NIL || setupRequest.appUuid == SystemAppIDs.NOTIFICATIONS_APP_UUID,
+                        appUuid = setupRequest.appUuid,
                     )
                 } catch (e: CancellationException) {
                     logger.d { "Voice session cancelled" }

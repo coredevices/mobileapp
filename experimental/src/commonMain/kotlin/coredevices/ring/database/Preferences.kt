@@ -6,7 +6,9 @@ import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
+import coredevices.ring.service.recordings.PebbleWatchappDictationSink
 import coredevices.util.models.CactusSTTMode
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +40,8 @@ interface Preferences: BasePreferences {
      *  manual sync.
      */
     val lastBackupCount: StateFlow<Int?>
+    /** User-editable set of watchapp UUIDs accepted for dictation ingestion. */
+    val indexFeedWatchappUuids: StateFlow<Set<Uuid>>
 
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
@@ -56,6 +60,7 @@ interface Preferences: BasePreferences {
     fun setEncryptionKeyFingerprint(fingerprint: String?)
     fun setLastWipedRing(id: String?)
     fun setLastBackupCount(count: Int?)
+    fun setIndexFeedWatchappUuids(uuids: Set<Uuid>)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -146,6 +151,14 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         if (settings.hasKey("last_backup_count")) settings.getInt("last_backup_count", 0) else null
     )
     override val lastBackupCount = _lastBackupCount.asStateFlow()
+    private val _indexFeedWatchappUuids = MutableStateFlow(
+        settings.getStringOrNull("index_feed_watchapp_uuids")
+            ?.split(",")
+            ?.mapNotNull { runCatching { Uuid.parse(it) }.getOrNull() }
+            ?.toSet()
+            ?: setOf(PebbleWatchappDictationSink.TARGET_WATCHAPP_UUID) // seed: preserves Phase 1 behavior on upgrade
+    )
+    override val indexFeedWatchappUuids = _indexFeedWatchappUuids.asStateFlow()
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -282,6 +295,12 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.remove("last_backup_count")
         }
         _lastBackupCount.value = count
+    }
+
+    override fun setIndexFeedWatchappUuids(uuids: Set<Uuid>) {
+        if (uuids.isEmpty()) settings.remove("index_feed_watchapp_uuids")
+        else settings.putString("index_feed_watchapp_uuids", uuids.joinToString(",") { it.toString() })
+        _indexFeedWatchappUuids.value = uuids
     }
 }
 

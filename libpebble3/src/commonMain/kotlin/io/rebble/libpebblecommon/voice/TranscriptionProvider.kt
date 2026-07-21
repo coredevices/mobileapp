@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.voice
 
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 interface TranscriptionProvider {
     suspend fun transcribe(
@@ -10,6 +11,20 @@ interface TranscriptionProvider {
         isNotificationReply: Boolean
     ): TranscriptionResult
     suspend fun canServeSession(): Boolean
+
+    /**
+     * [appUuid]-aware overloads, defaulting to the app-agnostic behavior above. Implementations
+     * that need to special-case a specific originating watchapp (e.g. diverting its audio away
+     * from ASR entirely) override these instead.
+     */
+    suspend fun transcribe(
+        encoderInfo: VoiceEncoderInfo,
+        audioFrames: Flow<UByteArray>,
+        isNotificationReply: Boolean,
+        appUuid: Uuid,
+    ): TranscriptionResult = transcribe(encoderInfo, audioFrames, isNotificationReply)
+
+    suspend fun canServeSession(appUuid: Uuid): Boolean = canServeSession()
 }
 
 /**
