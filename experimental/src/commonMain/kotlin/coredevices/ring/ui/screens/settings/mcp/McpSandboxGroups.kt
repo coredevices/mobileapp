@@ -401,7 +401,10 @@ fun McpSandboxGroupItem(
                                     Text(modelTypeDescription(SandboxModelType.IndexAgent), style = MaterialTheme.typography.bodySmall)
                                 }
                             },
-                            onClick = {}
+                            onClick = {
+                                onUpdateModelType(SandboxModelType.IndexAgent)
+                                expanded = false
+                            }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         DropdownMenuItem(
