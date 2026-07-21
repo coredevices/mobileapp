@@ -934,8 +934,8 @@ fun IndexFeedWatchappsDialog(
 ) {
     val libPebble = koinInject<LibPebble>()
     val locker by libPebble.getLocker(AppType.Watchapp, null, 200).collectAsState(emptyList())
-    // Seed from the full passed-in selection (not filtered to the current locker
-    // snapshot) so a UUID for a temporarily-uninstalled app survives a round-trip.
+    // Seeding from the stored selection - rather than the locker snapshot - lets a
+    // temporarily-uninstalled app's UUID survive a round-trip through this dialog.
     var target by remember { mutableStateOf(selectedUuids) }
 
     M3Dialog(
