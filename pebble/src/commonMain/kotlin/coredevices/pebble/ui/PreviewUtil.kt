@@ -342,6 +342,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override val requestIndexCompanion: StateFlow<Boolean> = MutableStateFlow(false)
         override fun consumeRequestIndexCompanion() {}
         override fun handle(uri: Uri?): Boolean = true
+        override fun navigateToTab(route: NavBarRoute) {}
     }
     single { initialLockerSync } bind PebbleDeepLinkHandler::class
     single { object : PermissionRequester(requiredPermissions, get<AppResumed>()) {
