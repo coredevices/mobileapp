@@ -119,28 +119,25 @@ class PPoG(
             logger.e("error sending reset request", e)
         }
 
-        val resetComplete = waitForPacket<PPoGPacket.ResetComplete>()
-        logger.d("got $resetComplete")
+        // The watch gives up on our reset request after a few seconds and starts its own. Answer
+        // that instead of waiting for a ResetComplete that is never coming.
+        while (true) {
+            val packet = pPoGStream.inboundPPoGBytesChannel.receive().asPPoGPacket()
+            when (packet) {
+                is PPoGPacket.ResetComplete -> {
+                    logger.d("got $packet")
+                    sendResetComplete(ppogVersion)
+                    return connectionParams(packet, ppogVersion)
+                }
 
-        val ourRxWindow =
-            min(min(resetComplete.txWindow, blePlatformConfig.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE)
-        val ourTxWindow =
-            min(min(resetComplete.rxWindow, blePlatformConfig.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE)
+                is PPoGPacket.ResetRequest -> {
+                    logger.d("got $packet while waiting for ResetComplete; responding")
+                    return respondToResetRequest(packet)
+                }
 
-        sendPacketImmediately(
-            packet = PPoGPacket.ResetComplete(
-                sequence = 0,
-                rxWindow = min(blePlatformConfig.desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
-                txWindow = min(blePlatformConfig.desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
-            ),
-            version = ppogVersion,
-        )
-
-        return PPoGConnectionParams(
-            rxWindow = ourRxWindow,
-            txWindow = ourTxWindow,
-            pPoGversion = ppogVersion,
-        )
+                else -> logger.w("unexpected packet $packet waiting for ResetComplete")
+            }
+        }
     }
 
     // Negotiate connection
@@ -149,28 +146,38 @@ class PPoG(
 
         val resetRequest = waitForPacket<PPoGPacket.ResetRequest>()
         logger.d("got $resetRequest")
+        return respondToResetRequest(resetRequest)
+    }
 
-        // Send reset complete
+    private suspend fun respondToResetRequest(resetRequest: PPoGPacket.ResetRequest): PPoGConnectionParams {
+        sendResetComplete(resetRequest.ppogVersion)
+
+        // Wait for reset complete confirmation
+        val resetComplete = waitForPacket<PPoGPacket.ResetComplete>()
+        logger.d("got $resetComplete")
+
+        return connectionParams(resetComplete, resetRequest.ppogVersion)
+    }
+
+    private suspend fun sendResetComplete(version: PPoGVersion) {
         sendPacketImmediately(
             packet = PPoGPacket.ResetComplete(
                 sequence = 0,
                 rxWindow = min(blePlatformConfig.desiredRxWindow, MAX_SUPPORTED_WINDOW_SIZE),
                 txWindow = min(blePlatformConfig.desiredTxWindow, MAX_SUPPORTED_WINDOW_SIZE),
             ),
-            version = resetRequest.ppogVersion
-        )
-
-        // Wait for reset complete confirmation
-        val resetComplete = pPoGStream.inboundPPoGBytesChannel.receive().asPPoGPacket()
-        if (resetComplete !is PPoGPacket.ResetComplete) throw IllegalStateException("expected ResetComplete got $resetComplete")
-        logger.d("got $resetComplete")
-
-        return PPoGConnectionParams(
-            rxWindow = min(min(resetComplete.txWindow, blePlatformConfig.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE),
-            txWindow = min(min(resetComplete.rxWindow, blePlatformConfig.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE),
-            pPoGversion = resetRequest.ppogVersion,
+            version = version,
         )
     }
+
+    private fun connectionParams(
+        resetComplete: PPoGPacket.ResetComplete,
+        version: PPoGVersion,
+    ) = PPoGConnectionParams(
+        rxWindow = min(min(resetComplete.txWindow, blePlatformConfig.desiredTxWindow), MAX_SUPPORTED_WINDOW_SIZE),
+        txWindow = min(min(resetComplete.rxWindow, blePlatformConfig.desiredRxWindow), MAX_SUPPORTED_WINDOW_SIZE),
+        pPoGversion = version,
+    )
 
     // No need for any locking - state is only accessed/mutated within this method (except for mtu
     // which can only increase).
