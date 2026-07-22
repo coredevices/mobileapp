@@ -3,16 +3,16 @@ package coredevices.ring.external.indexwebhook
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class IndexWebhookRecordingTriggerTest {
+class IndexWebhookGestureTest {
     @Test
     fun triggerHeaderValuesAreStable() {
         assertEquals(
             "single-click-hold",
-            IndexWebhookRecordingTrigger.SingleClickHold.headerValue,
+            IndexWebhookGesture.SingleClickHold.headerValue,
         )
         assertEquals(
             "double-click-hold",
-            IndexWebhookRecordingTrigger.DoubleClickHold.headerValue,
+            IndexWebhookGesture.DoubleClickHold.headerValue,
         )
     }
 }
