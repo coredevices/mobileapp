@@ -8,6 +8,7 @@ import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.libindex.device.REQUEST_URI_HOST
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.REBBLE_FEED_URL
 import coredevices.pebble.ui.NavBarRoute
 import coredevices.pebble.ui.PebbleNavBarRoutes
 import io.rebble.libpebblecommon.connection.AppContext
@@ -78,7 +79,10 @@ class RealPebbleDeepLinkHandler(
             uri.scheme == "pebble" -> {
                 when (uri.host) {
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
-                    STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
+                    STORE_URL -> handleAppstore(
+                        uri.getQueryParameter(STORE_SOURCE_PARAM) ?: REBBLE_FEED_URL,
+                        uri.path,
+                    )
                     NAVBAR_URL -> handleNavbar(uri.path)
                     REGISTER_INDEX_COMPANION_HOST -> handleRegisterIndexCompanion()
                     SHOW_WATCHES_HOST -> handleShowWatches(uri.path)
@@ -269,6 +273,7 @@ class RealPebbleDeepLinkHandler(
     companion object {
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
+        private const val STORE_SOURCE_PARAM: String = "source"
         private const val NAVBAR_URL: String = "navbar"
         private val SHOW_WATCHES_HOST = "show-watches"
 //        private val UPDATE_WATCH_NOW_HOST = "update-watch-now"
