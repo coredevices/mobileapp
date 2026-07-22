@@ -175,7 +175,9 @@ val watchModule = module {
     factoryOf(::RealBootConfigProvider) bind BootConfigProvider::class
     factoryOf(::RealPebbleWebServices) binds arrayOf(WebServices::class, PebbleWebServices::class)
     singleOf(::RealPebbleDeepLinkHandler) bind PebbleDeepLinkHandler::class
-    factoryOf(::PebbleHttpClient) bind PebbleBootConfigService::class
+    factory {
+        PebbleHttpClient(pebbleAccount = get(), httpClient = get(), libPebble = lazy { get() })
+    } bind PebbleBootConfigService::class
     factoryOf(::LibPebbleConfig)
     singleOf(::Memfault)
     singleOf(::MemfaultChunkQueue)
