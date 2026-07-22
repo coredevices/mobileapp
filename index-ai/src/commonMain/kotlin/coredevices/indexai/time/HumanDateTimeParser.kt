@@ -174,7 +174,21 @@ class HumanDateTimeParser(
             val dayWord = match.groupValues[1].let { if (it == "this") "today" else it }
             val timeOfDay = match.groupValues[2]
             val date = parseDayWord(dayWord) ?: return null
-            val time = parseTimeOfDay(timeOfDay) ?: return null
+            val atClause = atTimePattern.find(input.removeRange(match.range))
+                ?.takeIf { it.groupValues[1].any { c -> c.isDigit() } }
+            val time = if (atClause != null) {
+                // A numeric "at" clause is an explicit time; if it can't parse, fail rather than
+                // silently falling back to the vague time-of-day default the user overrode.
+                val parsed = parseTimeString(atClause.groupValues[1], allowBareHour = true) ?: return null
+                val amPmMissing = !amPmPattern.containsMatchIn(atClause.groupValues[1])
+                if (amPmMissing && parsed.hour in 1..11 && timeOfDay != "morning") {
+                    LocalTime(parsed.hour + 12, parsed.minute)
+                } else {
+                    parsed
+                }
+            } else {
+                parseTimeOfDay(timeOfDay) ?: return null
+            }
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
@@ -579,7 +593,10 @@ class HumanDateTimeParser(
             Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
             Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            // Date + time-of-day combinations
+            // Date + time-of-day combinations. Explicit-time variants first so they aren't
+            // truncated to the vague form; bare hour is allowed since "at" anchors it as a time.
+            Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
+            Regex("""at\s+\d{1,2}\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             // Relative durations
             Regex("""(?:in\s+)?half\s+an?\s+hour(?:\s+from\s+now)?"""),
