@@ -16,6 +16,7 @@ import platform.Foundation.NSError
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLErrorCancelled
 import platform.Foundation.NSURLRequest
+import platform.UIKit.UIScrollViewContentInsetAdjustmentBehavior
 import platform.UIKit.UIUserInterfaceStyle
 import platform.WebKit.WKNavigationAction
 import platform.WebKit.WKNavigationActionPolicy
@@ -138,6 +139,9 @@ actual fun PebbleWebview(
         }
         WKWebView(frame = CGRectZero.readValue(), configuration = configuration).apply {
             this.navigationDelegate = navigationDelegate
+            // WKWebView's default inset adjustment fights Compose's IME insets and breaks scrolling.
+            scrollView.contentInsetAdjustmentBehavior =
+                UIScrollViewContentInsetAdjustmentBehavior.UIScrollViewContentInsetAdjustmentNever
         }
     }
 
