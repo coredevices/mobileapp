@@ -87,6 +87,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDbDaos
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.RealTimeProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
+import io.rebble.libpebblecommon.connection.endpointmanager.findmyphone.FindMyPhoneManager
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.putbytes.PutBytesSession
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
@@ -484,16 +485,16 @@ fun initKoin(
                     scoped {
                         // We ran out of helper function overloads with enough params...
                         RealPebbleConnector(
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(),
-                            get(), get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(),
+                        get(), get(), get(), get(), get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -541,6 +542,7 @@ fun initKoin(
                     scopedOf(::CompanionAppLifecycleManager)
                     scopedOf(::BlobDB)
                     scopedOf(::PhoneControlManager)
+                    scopedOf(::FindMyPhoneManager)
                     scopedOf(::MusicControlManager)
                     scopedOf(::AppOrderManager)
                     scopedOf(::RealLanguagePackInstaller) bind LanguagePackInstaller::class

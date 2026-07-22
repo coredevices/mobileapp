@@ -18,6 +18,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInst
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.VoiceSessionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.BlobDB
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicControlManager
+import io.rebble.libpebblecommon.connection.endpointmanager.findmyphone.FindMyPhoneManager
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -149,6 +150,7 @@ class RealPebbleConnector(
     private val logDumpService: LogDumpService,
     private val getBytesService: GetBytesService,
     private val phoneControlManager: PhoneControlManager,
+    private val findMyPhoneManager: FindMyPhoneManager,
     private val musicService: MusicService,
     private val musicControlManager: MusicControlManager,
     private val firmwareUpdateManager: FirmwareUpdateManager,
@@ -270,6 +272,7 @@ class RealPebbleConnector(
         appMessageService.init()
         companionAppLifecycleManager.init(identifier, watchInfo)
         phoneControlManager.init()
+        findMyPhoneManager.init()
         musicControlManager.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
