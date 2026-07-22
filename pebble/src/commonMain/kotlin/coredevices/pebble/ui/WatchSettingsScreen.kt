@@ -151,6 +151,8 @@ import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -703,7 +705,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Respect Phone Do Not Disturb",
-                    description = "Notifications won't be sent to watch if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings)",
+                    description = "When your phone is in Do Not Disturb / Focus, notifications it silences won't alert your watch (unless configured for that app/person in phone settings)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
                     checked = libPebbleConfig.notificationConfig.respectDoNotDisturb,
@@ -715,8 +717,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                 )
                             )
                         )
+                        // Mirror to the synced firmware pref (iOS enforces via ANCS).
+                        libPebble.setWatchPref(WatchPreference(BoolWatchPref.RespectPhoneDnd, it))
                     },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                    show = { true },
                 ),
                 SettingsItem(
                     title = "Vibration Pattern",
