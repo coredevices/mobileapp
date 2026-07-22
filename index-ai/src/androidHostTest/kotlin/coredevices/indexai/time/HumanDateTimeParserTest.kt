@@ -727,6 +727,67 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteDateMonthDayOrdinalWord() {
+        val result = parser.parse("december twentieth")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 12, 20), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordOnes() {
+        val result = parser.parse("march first")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 3, 1), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordTeen() {
+        val result = parser.parse("june twelfth")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 6, 12), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordCompound() {
+        val result = parser.parse("august twenty third")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 8, 23), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordCompoundHyphenated() {
+        val result = parser.parse("december thirty-first")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2025, 12, 31), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordWithYear() {
+        val result = parser.parse("march first, 2026")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result)
+        assertEquals(LocalDate(2026, 3, 1), result.date)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeMonthDayOrdinalWordAtTime() {
+        val result = parser.parse("december twentieth at 3pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 12, 20, 15, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeTimeBeforeMonthDayOrdinalWord() {
+        val result = parser.parse("at 7pm on august twenty-first")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 8, 21, 19, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateMonthDayOrdinalWordInvalidCompound() {
+        assertNull(parser.parse("august twenty twentieth"))
+    }
+
+    @Test
     fun testAbsoluteDateWithExplicitYearDoesNotRollForward() {
         // January 10, 2025 is in the past but year is explicit — respect it
         val result = parser.parse("january 10, 2025")
@@ -1061,6 +1122,21 @@ class HumanDateTimeParserTest {
         val result = parser.parseFromMessage("the party is on february 14")
         assertIs<InterpretedDateTime.AbsoluteDate>(result?.dateTime)
         assertEquals(LocalDate(2025, 2, 14), (result?.dateTime as InterpretedDateTime.AbsoluteDate).date)
+    }
+
+    @Test
+    fun testParseFromMessageExtractsMonthDayOrdinalWord() {
+        val result = parser.parseFromMessage("remind me on december twentieth to renew my passport")
+        assertIs<InterpretedDateTime.AbsoluteDate>(result?.dateTime)
+        assertEquals(LocalDate(2025, 12, 20), (result?.dateTime as InterpretedDateTime.AbsoluteDate).date)
+        assertEquals("on december twentieth", result.matchedText)
+    }
+
+    @Test
+    fun testParseFromMessageExtractsMonthDayOrdinalWordWithTime() {
+        val result = parser.parseFromMessage("dinner reservation february fourteenth at 7pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result?.dateTime)
+        assertEquals(LocalDateTime(2025, 2, 14, 19, 0), (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime)
     }
 
     @Test

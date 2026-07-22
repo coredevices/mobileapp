@@ -396,8 +396,9 @@ class HumanDateTimeParser(
     }
 
     /**
-     * Day-of-month token that may be numeric ("5", "21st") or written out ("twenty",
-     * "twenty one"). Range validation (1..31) stays in parseMonthDay.
+     * Day-of-month token that may be numeric ("5", "21st") or written out as a cardinal
+     * ("twenty", "twenty one") or ordinal ("twentieth", "twenty-first"). Range validation
+     * (1..31) stays in parseMonthDay.
      */
     private fun parseDayOfMonth(raw: String): Int? {
         val token = raw.trim().lowercase()
@@ -406,12 +407,41 @@ class HumanDateTimeParser(
         }
         val parts = token.split(' ', '-').filter { it.isNotBlank() }
         return when (parts.size) {
-            1 -> wordToNumber(parts[0])?.toInt()
+            1 -> dayWordToNumber(parts[0])?.toInt()
             2 -> {
                 val tens = wordToNumber(parts[0]) ?: return null
-                val ones = wordToNumber(parts[1]) ?: return null
+                val ones = dayWordToNumber(parts[1]) ?: return null
                 if ((tens == 20L || tens == 30L) && ones in 1L..9L) (tens + ones).toInt() else null
             }
+            else -> null
+        }
+    }
+
+    private fun dayWordToNumber(word: String): Long? = wordToNumber(word) ?: ordinalWordToNumber(word)
+
+    private fun ordinalWordToNumber(word: String): Long? {
+        return when (word) {
+            "first" -> 1L
+            "second" -> 2L
+            "third" -> 3L
+            "fourth" -> 4L
+            "fifth" -> 5L
+            "sixth" -> 6L
+            "seventh" -> 7L
+            "eighth" -> 8L
+            "ninth" -> 9L
+            "tenth" -> 10L
+            "eleventh" -> 11L
+            "twelfth" -> 12L
+            "thirteenth" -> 13L
+            "fourteenth" -> 14L
+            "fifteenth" -> 15L
+            "sixteenth" -> 16L
+            "seventeenth" -> 17L
+            "eighteenth" -> 18L
+            "nineteenth" -> 19L
+            "twentieth" -> 20L
+            "thirtieth" -> 30L
             else -> null
         }
     }
@@ -487,12 +517,18 @@ class HumanDateTimeParser(
         private const val TIME_OF_DAY_EXPR = """(?:morning|afternoon|evening|night)"""
         private const val NUMBER_WORDS_EXPR = """two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty"""
 
-        // Spelled-out day-of-month numbers (cardinals 1–31). Compound forms first so
-        // "twenty one" matches before the bare "twenty".
+        // Spelled-out day-of-month numbers, cardinal ("twenty one") or ordinal ("twenty-first").
+        // Compound forms come first so "twenty one" matches before the bare "twenty", and each
+        // ordinal precedes the cardinal it starts with so "tenth" doesn't match as "ten".
         private const val DAY_NUM_WORD_EXPR =
-            """(?:twenty|thirty)[\s-](?:one|two|three|four|five|six|seven|eight|nine)""" +
+            """(?:twenty|thirty)[\s-](?:one|two|three|four|five|six|seven|eight|nine""" +
+            """|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)""" +
+            """|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth""" +
+            """|eighteenth|nineteenth|twentieth|thirtieth""" +
             """|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen""" +
+            """|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth""" +
             """|twenty|thirty|one|two|three|four|five|six|seven|eight|nine"""
+        private const val DAY_OF_MONTH_EXPR = """\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR"""
         private const val QUANTIFIER_EXPR = """(?:\d+|a|an|one|$NUMBER_WORDS_EXPR|a\s+couple(?:\s+of)?|a\s+few|couple(?:\s+of)?|few|several)"""
         private const val QUANTIFIER_CAPTURE = """(\d+|a|an|one|$NUMBER_WORDS_EXPR|a\s+couple(?:\s+of)?|a\s+few|couple(?:\s+of)?|few|several)"""
         private const val UNIT_EXPR = """(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)"""
@@ -516,8 +552,8 @@ class HumanDateTimeParser(
         private val timeDayWordPattern = Regex("""(?:at\s+)?(.+?)\s+(today|tomorrow)""")
         private val dayOfWeekTimePattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(.+)""")
         private val timeDayOfWeekPattern = Regex("""(?:at\s+)?(.+?)\s+(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
-        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?\s+at\s+(.+)""")
-        private val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?""")
+        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?\s+at\s+(.+)""")
+        private val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?""")
         private val numericDateTimePattern = Regex("""(\d{1,2})/(\d{1,2})\s+at\s+(.+)""")
 
         // Absolute time patterns
@@ -530,7 +566,7 @@ class HumanDateTimeParser(
         private val nextWeekPattern = Regex("""^next\s+week$""")
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
         private val dayOfWeekPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
-        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2}(?:st|nd|rd|th)?|$DAY_NUM_WORD_EXPR)(?:,?\s+(\d{4}))?$""")
+        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?$""")
         private val numericDatePattern = Regex("""^(\d{1,2})/(\d{1,2})$""")
 
         // Patterns for parseFromMessage, ordered by specificity (most specific first)
@@ -540,8 +576,8 @@ class HumanDateTimeParser(
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
             Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
-            Regex("""(?:on\s+)?$MONTH_EXPR\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?"""),
+            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
+            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
             Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
             // Date + time-of-day combinations
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
@@ -556,7 +592,7 @@ class HumanDateTimeParser(
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
             // Date patterns
             Regex("""(?:next|on)\s+$DAY_OF_WEEK_EXPR"""),
-            Regex("""(?:on\s+)?$MONTH_EXPR\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?"""),
+            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
             Regex("""\b\d{1,2}/\d{1,2}\b"""),
             Regex("""\b(?:$DAY_WORD_EXPR)\b"""),
             Regex("""\b$DAY_OF_WEEK_EXPR\b"""),
