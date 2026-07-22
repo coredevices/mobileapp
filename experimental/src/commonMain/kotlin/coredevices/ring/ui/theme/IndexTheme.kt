@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import theme.CoreAppColorScheme
 import theme.currentColorScheme
 
 /**
@@ -103,6 +104,18 @@ data class IndexColors(
             errorContainer = Color(0xFF8C1D18),
             onErrorContainer = Color(0xFFF9DEDC),
         )
+
+        // Container values mirror blackScheme in util's Theme.kt.
+        val Black = Dark.copy(
+            surface = Color(0xFF000000),
+            surfaceDim = Color(0xFF000000),
+            surfaceContainerLowest = Color(0xFF000000),
+            surfaceContainerLow = Color(0xFF0D0D0D),
+            surfaceContainer = Color(0xFF141414),
+            surfaceContainerHigh = Color(0xFF1F1F1F),
+            surfaceContainerHighest = Color(0xFF2B2930),
+            outlineVariant = Color(0xFF1F1F1F),
+        )
     }
 }
 
@@ -125,8 +138,16 @@ fun IndexThemeHost(
     forceDark: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
-    val dark = forceDark ?: currentColorScheme().isDark
-    val colors = if (dark) IndexColors.Dark else IndexColors.Light
+    val scheme = currentColorScheme()
+    val colors = when (forceDark) {
+        true -> IndexColors.Dark
+        false -> IndexColors.Light
+        null -> when (scheme) {
+            CoreAppColorScheme.Light -> IndexColors.Light
+            CoreAppColorScheme.Grey -> IndexColors.Dark
+            CoreAppColorScheme.Black -> IndexColors.Black
+        }
+    }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalIndexColors provides colors,
         content = content,
