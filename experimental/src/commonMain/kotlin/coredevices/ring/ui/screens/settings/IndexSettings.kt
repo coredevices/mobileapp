@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -117,6 +119,8 @@ import coredevices.util.granted
 import coredevices.util.isAndroid
 import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.imageResource
@@ -124,6 +128,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.uuid.Uuid
 import coreapp.util.generated.resources.Res as UtilRes
 
 // openUri throws if nothing can handle the link (no browser, DPC policy);
@@ -147,6 +152,8 @@ fun IndexSettings(coreNav: CoreNav) {
     val showSecondaryModeDialog by viewModel.showSecondaryModeDialog.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
+    val showIndexFeedWatchappsDialog by viewModel.showIndexFeedWatchappsDialog.collectAsState()
+    val indexFeedWatchappUuids by viewModel.indexFeedWatchappUuids.collectAsState()
     val platform = koinInject<Platform>()
     val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
     val webhookIsLinked = !webhookUrl.isNullOrBlank()
@@ -217,6 +224,13 @@ fun IndexSettings(coreNav: CoreNav) {
             onDismissRequest = {
                 viewModel.closeNoteShortcutDialog()
             }
+        )
+    }
+    if (showIndexFeedWatchappsDialog) {
+        IndexFeedWatchappsDialog(
+            selectedUuids = indexFeedWatchappUuids,
+            onSelectionChanged = viewModel::setIndexFeedWatchappUuids,
+            onDismissRequest = viewModel::closeIndexFeedWatchappsDialog,
         )
     }
     if (webhookDialogOpen) {
@@ -587,6 +601,23 @@ fun IndexSettings(coreNav: CoreNav) {
                         headlineContent = { Text("Ring Sync Inspector") }
                     )
                 }
+                item {
+                    ListItem(
+                        modifier = Modifier.clickable {
+                            viewModel.showIndexFeedWatchappsDialog()
+                        },
+                        headlineContent = { Text("Index Feed Watchapps") },
+                        supportingContent = {
+                            Text(
+                                when (indexFeedWatchappUuids.size) {
+                                    0 -> "None selected"
+                                    1 -> "1 watchapp"
+                                    else -> "${indexFeedWatchappUuids.size} watchapps"
+                                }
+                            )
+                        }
+                    )
+                }
             }
             item {
                 Spacer(Modifier.height(32.dp))
@@ -889,6 +920,69 @@ fun NoteShortcutDialog(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(label)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun IndexFeedWatchappsDialog(
+    selectedUuids: Set<Uuid>,
+    onSelectionChanged: (Set<Uuid>) -> Unit,
+    onDismissRequest: () -> Unit,
+) {
+    val libPebble = koinInject<LibPebble>()
+    val locker by libPebble.getLocker(AppType.Watchapp, null, 200).collectAsState(emptyList())
+    // Seeding from the stored selection - rather than the locker snapshot - lets a
+    // temporarily-uninstalled app's UUID survive a round-trip through this dialog.
+    var target by remember { mutableStateOf(selectedUuids) }
+
+    M3Dialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Index Feed Watchapps") },
+        buttons = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Cancel")
+            }
+            TextButton(
+                onClick = {
+                    onSelectionChanged(target)
+                    onDismissRequest()
+                }
+            ) {
+                Text("Save")
+            }
+        }
+    ) {
+        if (locker.isEmpty()) {
+            Text("Connect a watch to see installed apps")
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 400.dp)
+            ) {
+                items(locker, key = { it.properties.id }) { entry ->
+                    val checked = entry.properties.id in target
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                target = if (checked) {
+                                    target - entry.properties.id
+                                } else {
+                                    target + entry.properties.id
+                                }
+                            }
+                    ) {
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = null
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(entry.properties.title)
+                    }
                 }
             }
         }
