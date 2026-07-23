@@ -17,7 +17,6 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
-import coredevices.ring.agent.integrations.TickTickIntegration
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.Preferences
@@ -98,7 +97,6 @@ class SettingsViewModel(
     private val encryptionManager: EncryptionManager,
     private val noteIntegrationFactory: NoteIntegrationFactory,
     private val gTasksIntegration: GTasksIntegration,
-    private val tickTickIntegration: TickTickIntegration,
     private val indexDeviceManager: IndexDeviceManager,
     private val itemRepository: coredevices.ring.database.room.repository.ItemRepository,
     private val listRepository: coredevices.ring.database.room.repository.ListRepository,
@@ -192,9 +190,6 @@ class SettingsViewModel(
             }
             if (gTasksIntegration.isAuthorized()) {
                 add(ReminderProvider.GoogleTasks)
-            }
-            if (tickTickIntegration.isAuthorized()) {
-                add(ReminderProvider.TickTick)
             }
             // Tasker shares one opt-in across notes & reminders; reuse the note client's auth check.
             if (platform.isAndroid &&

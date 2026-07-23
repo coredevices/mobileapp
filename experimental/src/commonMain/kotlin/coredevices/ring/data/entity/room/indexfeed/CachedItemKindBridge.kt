@@ -95,7 +95,6 @@ private fun ItemMetadata.toFieldsJsonObject(): JsonObject {
         }
         is ItemMetadata.DelegatedToIntegration -> buildJsonObject {
             put("integration", integration)
-            url?.let { put("url", it) }
         }
         ItemMetadata.Note -> JsonObject(emptyMap())
         ItemMetadata.Checklist -> JsonObject(emptyMap())

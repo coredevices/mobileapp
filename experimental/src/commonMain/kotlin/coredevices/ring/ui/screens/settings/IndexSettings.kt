@@ -90,7 +90,6 @@ import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
-import coredevices.ring.agent.integrations.TickTickIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
@@ -1563,11 +1562,9 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val notion = koinInject<NotionIntegration>()
     val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
     val obsidian = koinInject<ObsidianIntegration>()
-    val tickTick = koinInject<TickTickIntegration>()
     val obsidianAuth by flow { emit(obsidian.isAuthorized()) }.collectAsState(false)
     val gTasksAuth by flow { emit(gTasks.isAuthorized()) }.collectAsState(false)
     val notionAuth by flow { emit(notion.isAuthorized()) }.collectAsState(false)
-    val tickTickAuth by flow { emit(tickTick.isAuthorized()) }.collectAsState(false)
     val taskerAuth by flow {
         emit(noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized())
     }.collectAsState(false)
@@ -1640,17 +1637,6 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 selectedReminderProvider = currentReminderProvider == ReminderProvider.GoogleTasks,
                 selectedNoteProvider = false,
                 onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.GoogleTasks) },
-                onSelectNoteProvider = {}
-            )
-        }
-        if (tickTickAuth) {
-            IntegrationItem(
-                title = TickTickIntegration.DEFINITION.title,
-                hasReminder = true,
-                hasNotes = false,
-                selectedReminderProvider = currentReminderProvider == ReminderProvider.TickTick,
-                selectedNoteProvider = false,
-                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.TickTick) },
                 onSelectNoteProvider = {}
             )
         }

@@ -123,13 +123,9 @@ data class ItemDocument(
          * Marker for a note/reminder handed to an external integration rather than stored
          * locally — the real object lives in that service. [integration] is the provider's
          * display name (e.g. "Notion", "Google Tasks") so the feed can say "Sent to X".
-         * [url] links to the object in the external service, when the provider has one.
          */
         @Serializable
         @SerialName("delegated")
-        data class DelegatedToIntegration(
-            val integration: String,
-            val url: String? = null,
-        ) : ItemMetadata
+        data class DelegatedToIntegration(val integration: String) : ItemMetadata
     }
 }

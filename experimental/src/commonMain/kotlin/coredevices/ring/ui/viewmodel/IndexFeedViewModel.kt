@@ -4,7 +4,6 @@ package coredevices.ring.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
@@ -229,8 +228,6 @@ class IndexFeedViewModel(
              *  "Added to Notes to self", "Reminder · take out the trash",
              *  "Alarm · 09:00", or "No action taken" when nothing was made. */
             val primaryChip: String,
-            /** External link for the primary item ("Sent to X" → the task in that service). */
-            val primaryChipUrl: String? = null,
             val orphan: Boolean,
             /** Latest entry when its transcription failed and can be retried.
              *  Non-null → the peek card shows "Transcription error" + a retry
@@ -309,7 +306,6 @@ class IndexFeedViewModel(
                         primaryChip = primary?.let { chipLabel(it, lists) }
                             ?: calendarAction?.let { "Added to calendar" }
                             ?: "No action taken",
-                        primaryChipUrl = (primary?.metadata as? ItemMetadata.DelegatedToIntegration)?.url,
                         orphan = primary == null && calendarAction == null,
                         retryEntry = retryEntry,
                     )

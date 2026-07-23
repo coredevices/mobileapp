@@ -70,7 +70,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -101,7 +100,6 @@ import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.data.entity.room.indexfeed.displayTitle
 import coredevices.ring.service.RingSync
-import coredevices.util.Platform
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
@@ -490,19 +488,8 @@ internal fun PeekCard(
                 )
             }
         } else {
-            // "Sent to X" chips with an external link open that service instead of the recording.
-            val chipUrl = peek.primaryChipUrl
-            val platform = koinInject<Platform>()
-            val scope = rememberCoroutineScope()
             Row(
-                modifier = Modifier
-                    .height(16.dp)
-                    .let { m ->
-                        if (chipUrl != null) {
-                            m.clip(RoundedCornerShape(percent = 50))
-                                .clickable { scope.launch { platform.openUrl(chipUrl) } }
-                        } else m
-                    },
+                modifier = Modifier.height(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(modifier = Modifier.size(14.dp), contentAlignment = Alignment.Center) {

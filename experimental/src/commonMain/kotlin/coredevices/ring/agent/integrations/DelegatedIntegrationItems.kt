@@ -17,14 +17,13 @@ class DelegatedIntegrationItems(
     private val itemRepository: ItemRepository,
 ) {
     /** Failures are logged, not thrown — the external create already succeeded. */
-    suspend fun record(integrationTitle: String, title: String, source: ItemSource?, url: String? = null) {
+    suspend fun record(integrationTitle: String, title: String, source: ItemSource?) {
         val item = itemFactory.delegatedItem(
             sourceRecordingId = source?.recordingFirestoreId,
             createdAt = source?.createdAt ?: Clock.System.now(),
             title = title,
             integrationName = integrationTitle,
             toolCallId = source?.toolCallId,
-            url = url,
         )
         runCatching { itemRepository.setItem(itemFactory.simpleUid(), item) }
             .onFailure { logger.e(it) { "Failed to persist delegated item for $integrationTitle" } }
@@ -63,7 +62,7 @@ class DelegatingReminderIntegration(
         source: ItemSource?,
     ): String {
         val id = delegate.createReminder(title, deadline, listId, notifyBefore, source)
-        items.record(integrationTitle, title, source, url = delegate.reminderUrl(id, listId))
+        items.record(integrationTitle, title, source)
         return id
     }
 }

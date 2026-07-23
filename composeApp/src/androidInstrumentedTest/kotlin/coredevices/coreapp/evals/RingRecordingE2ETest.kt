@@ -543,7 +543,6 @@ class RingRecordingE2ETest {
                 nenyaUrl = "https://nenya-staging-460977838956.us-west1.run.app",
                 notionOAuthBackendUrl = "",
                 notionApiUrl = "",
-                tickTickOAuthBackendUrl = "",
                 bugUrl = CBK.BUG_URL,
                 version = CBK.USER_AGENT_VERSION,
                 tokenUrl = CBK.TOKEN_URL,

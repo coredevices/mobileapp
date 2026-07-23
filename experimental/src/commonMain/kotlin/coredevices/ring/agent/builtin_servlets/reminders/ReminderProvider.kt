@@ -15,8 +15,7 @@ enum class ReminderProvider(val id: Int, val title: String) {
     /** The native iOS Reminders app (EventKit). iOS-only. */
     IOSReminders(3, "iPhone Reminders"),
     /** Routes reminders to the Tasker automation app via an intent. Android-only. */
-    Tasker(4, "Tasker"),
-    TickTick(5, "TickTick");
+    Tasker(4, "Tasker");
 
     companion object {
         fun fromId(id: Int): ReminderProvider? = entries.find { it.id == id }

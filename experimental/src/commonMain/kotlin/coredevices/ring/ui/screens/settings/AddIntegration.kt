@@ -50,7 +50,6 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
-import coredevices.ring.agent.integrations.TickTickIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianMode
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
@@ -107,16 +106,6 @@ fun AddIntegration(coreNav: CoreNav) {
                 Item(def) {
                     dialog = {
                         GTasksDialog(
-                            onDismiss = { dialog = null }
-                        )
-                    }
-                }
-            }
-            item {
-                val def = remember { TickTickIntegration.DEFINITION }
-                Item(def) {
-                    dialog = {
-                        TickTickDialog(
                             onDismiss = { dialog = null }
                         )
                     }
@@ -322,72 +311,6 @@ fun GTasksDialog(
         when (val s = state) {
             is SignInState.Idle -> {
                 Text("Sign in with Google to sync reminders to Google Tasks.")
-            }
-            is SignInState.SigningIn -> {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            is SignInState.Success -> {
-                Text("Successfully signed in.")
-            }
-            is SignInState.Error -> {
-                Text(
-                    "Error signing in: ${s.message}",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun TickTickDialog(
-    onDismiss: () -> Unit
-) {
-    val uiContext = rememberUiContext()!!
-    val integration = koinInject<TickTickIntegration>()
-    var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
-    val scope = rememberCoroutineScope()
-
-    M3Dialog(
-        onDismissRequest = onDismiss,
-        title = { Text("TickTick") },
-        buttons = {
-            TextButton(onClick = onDismiss) {
-                Text(if (state is SignInState.Success) "Done" else "Cancel")
-            }
-            if (state !is SignInState.Success) {
-                Spacer(Modifier.width(8.dp))
-                TextButton(
-                    enabled = state !is SignInState.SigningIn,
-                    onClick = {
-                        state = SignInState.SigningIn
-                        scope.launch {
-                            state = try {
-                                if (integration.signIn(uiContext)) {
-                                    SignInState.Success
-                                } else {
-                                    SignInState.Error("Sign in was cancelled.")
-                                }
-                            } catch (e: Throwable) {
-                                Logger.w("AddIntegration", e) { "Error during TickTick sign in: ${e.message}" }
-                                SignInState.Error(e.message ?: "Unknown error")
-                            }
-                        }
-                    }
-                ) {
-                    Text("Sign In")
-                }
-            }
-        }
-    ) {
-        when (val s = state) {
-            is SignInState.Idle -> {
-                Text("Sign in with TickTick to sync reminders to TickTick.")
             }
             is SignInState.SigningIn -> {
                 Box(

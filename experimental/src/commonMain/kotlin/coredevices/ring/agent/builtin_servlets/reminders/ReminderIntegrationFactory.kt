@@ -4,7 +4,6 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.agent.integrations.DelegatingReminderIntegration
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.ReminderIntegration
-import coredevices.ring.agent.integrations.TickTickIntegration
 import coredevices.ring.database.Preferences
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -25,7 +24,6 @@ class ReminderIntegrationFactory(
             ReminderProvider.GoogleTasks -> delegated(get<GTasksIntegration>(), provider)
             ReminderProvider.IOSReminders -> delegated(createRemindersAppIntegration(), provider)
             ReminderProvider.Tasker -> delegated(createTaskerReminderIntegration(), provider)
-            ReminderProvider.TickTick -> delegated(get<TickTickIntegration>(), provider)
         }
     }
 
