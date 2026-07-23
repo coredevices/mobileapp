@@ -59,4 +59,6 @@ class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
 
     override suspend fun isAuthorized(): Boolean =
         TaskerEndpoint.isInstalled() && tokenStorage.getToken(TaskerEndpoint.TOKEN_STORAGE_KEY) != null
+
+    override suspend fun getAllLists(): List<ReminderListEntry> = emptyList()
 }

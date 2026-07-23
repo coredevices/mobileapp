@@ -6,7 +6,9 @@ import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toNSDate
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -41,6 +43,7 @@ import kotlin.time.Instant
 class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
+    private val listRepository: ListRepository by inject()
     private val notificationCenter get() = UNUserNotificationCenter.currentNotificationCenter()
 
     private suspend fun requestAuthorization(): Boolean = suspendCoroutine { continuation ->
@@ -139,6 +142,11 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
         db.localReminderDao().clearNotifyBefore(reminderId)
+    }
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val lists = listRepository.getAllFlow().first()
+        return lists.map { ReminderListEntry(it.firestoreId, it.title) }
     }
 
     // Built-in reminders need no account; notification permission is requested when scheduling.

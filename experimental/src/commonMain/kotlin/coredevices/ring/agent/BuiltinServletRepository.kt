@@ -65,7 +65,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             )
             ClockServlet.name -> ClockServlet
             JsServlet.name -> JsServlet
-            ReminderServlet.NAME -> ReminderServlet(get())
+            ReminderServlet.NAME -> ReminderServlet(get(), get())
             CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> {
                 require(platform.isAndroid) { "Messaging servlet is only available on Android" }

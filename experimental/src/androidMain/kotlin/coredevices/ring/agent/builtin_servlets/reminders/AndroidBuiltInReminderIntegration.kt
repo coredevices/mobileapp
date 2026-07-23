@@ -14,8 +14,10 @@ import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.reminders.ReminderReceiver
 import coredevices.util.AndroidPlatform
+import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -26,6 +28,7 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
     private val context: Context by inject()
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
+    private val listRepository: ListRepository by inject()
 
     override suspend fun createReminder(
         title: String,
@@ -105,6 +108,11 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(ReminderReceiver.preNotificationId(reminderId))
         db.localReminderDao().clearNotifyBefore(reminderId)
+    }
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val lists = listRepository.getAllFlow().first()
+        return lists.map { ReminderListEntry(it.firestoreId, it.title) }
     }
 
     // Built-in reminders need no account; permissions are checked when scheduling.

@@ -48,6 +48,17 @@ class GTasksIntegration(
             }
         }
     }
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val token = tokenForScopes() ?: throw IntegrationAuthException("Google Tasks not authorized")
+        return googleTasksApi.getTaskLists(token).mapNotNull {
+            if (it.id != null && it.title != null) {
+                ReminderListEntry(it.id, it.title)
+            } else {
+                null
+            }
+        }
+    }
 }
 
 /**

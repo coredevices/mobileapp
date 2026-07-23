@@ -100,6 +100,14 @@ class IOSRemindersIntegration : ReminderIntegration {
             .map { ReminderListEntry(id = it.calendarIdentifier, title = it.title) }
     }
 
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val eventStore = EKEventStore()
+        check(requestAccess(eventStore)) { "Reminder permission not granted" }
+        @Suppress("UNCHECKED_CAST")
+        return (eventStore.calendarsForEntityType(EKEntityType.EKEntityTypeReminder) as List<EKCalendar>)
+            .map { ReminderListEntry(id = it.calendarIdentifier, title = it.title) }
+    }
+
     override suspend fun signIn(uiContext: PlatformUiContext): Boolean = requestAccess(EKEventStore())
     override suspend fun unlink() {}
     override suspend fun isAuthorized(): Boolean =
