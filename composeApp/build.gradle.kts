@@ -102,12 +102,6 @@ kotlin {
         framework {
             baseName = "ComposeApp"
             linkerOpts("-framework", "Accelerate")
-            val osName = when (target.name) {
-                "iosArm64" -> "iphoneos"
-                "iosX64", "iosSimulatorArm64" -> "iphonesimulator"
-                else -> error("Unknown target ${target.name}")
-            }
-            val dir = project.file("../libpebble3/build/libpebble-swift/$osName")
             val xcodeExists = providers.exec {
                 isIgnoreExitValue = true
                 commandLine("which", "xcode-select")
@@ -117,7 +111,6 @@ kotlin {
                     commandLine("xcode-select", "-p")
                 }.standardOutput.asText.get().trim()
                 linkerOpts(
-                    "-framework", "LibPebbleSwift", "-F"+dir.absolutePath,
                     "-weak_framework", "CoreML",
                     "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
                 )

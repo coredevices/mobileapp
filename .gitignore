@@ -5,8 +5,6 @@
 **.DS_Store
 /.kotlin
 **/build/
-/libpebble3/libpebble-swift/LibPebbleSwift.xcodeproj/project.xcworkspace/xcuserdata
-/libpebble3/libpebble-swift/LibPebbleSwift.xcodeproj/xcuserdata
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/

@@ -55,11 +55,6 @@ android {
     }
 }
 
-tasks.register("buildFrameworkLibPebbleSwift", BuildSwiftFramework::class) {
-    group = "build"
-    description = "Builds the Swift framework for libpebble-swift"
-}
-
 // Non-mac machines cannot build iOS targets, so disable them
 val enableIosTarget = System.getProperty("os.name").contains("mac", ignoreCase = true)
 
@@ -83,49 +78,13 @@ kotlin {
 
     jvm()
 
-    val xcodeExists by lazy { // Define xcodeExists and xcodeDir here to be accessible by iOS targets
-        project.providers.exec {
-            isIgnoreExitValue = true
-            commandLine("which", "xcode-select")
-        }.result.get().exitValue == 0
-    }
-    val xcodeDir by lazy {
-        if (xcodeExists) {
-            project.providers.exec {
-                commandLine("xcode-select", "-p")
-            }.standardOutput.asText.get().trim()
-        } else {
-            ""
-        }
-    }
-
     listOf(
         iosX64(),
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { target ->
-        if (enableIosTarget) {
-            val osName = when (target.name) {
-                "iosX64" -> "iphonesimulator"
-                "iosArm64" -> "iphoneos"
-                "iosSimulatorArm64" -> "iphonesimulator"
-                else -> throw IllegalStateException("Unknown target: ${target.name}")
-            }
-            val dir = tasks.getByName("buildFrameworkLibPebbleSwift").outputs.files.singleFile.resolve(osName)
-            target.binaries.framework {
-                baseName = "libpebble3"
-            }
-            target.compilations.getByName("main") {
-                val libPebbleSwift by cinterops.creating {
-                    compilerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
-                }
-            }
-            target.binaries.all {
-                linkerOpts("-framework", "LibPebbleSwift", "-F" + dir.absolutePath)
-                if (xcodeExists) {
-                    linkerOpts("-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName")
-                }
-            }
+        target.binaries.framework {
+            baseName = "libpebble3"
         }
     }
 
@@ -223,6 +182,7 @@ tasks.withType<KotlinCompilationTask<*>>().all {
         dependsOn("kspCommonMainKotlinMetadata")
     }
 }
+
 afterEvaluate {
     tasks.named("kspDebugKotlinAndroid") {
         dependsOn("kspCommonMainKotlinMetadata")
@@ -240,24 +200,6 @@ afterEvaluate {
         }
         tasks.named("kspKotlinIosSimulatorArm64") {
             dependsOn("kspCommonMainKotlinMetadata")
-        }
-        tasks.named("cinteropLibPebbleSwiftIosArm64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
-        }
-        tasks.named("cinteropLibPebbleSwiftIosX64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
-        }
-        tasks.named("cinteropLibPebbleSwiftIosSimulatorArm64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
-        }
-        tasks.named("compileKotlinIosArm64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
-        }
-        tasks.named("compileKotlinIosX64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
-        }
-        tasks.named("compileKotlinIosSimulatorArm64") {
-            dependsOn("buildFrameworkLibPebbleSwift")
         }
     }
 }
@@ -343,55 +285,6 @@ if (Os.isFamily(Os.FAMILY_MAC)) {
         }
     }
 }*/
-
-abstract class BuildSwiftFramework : DefaultTask() {
-    @Inject
-    abstract fun getExecOperations(): ExecOperations
-
-    @get:InputFiles
-    val inputFiles = project.objects.fileCollection().from(project.fileTree("libpebble-swift") {
-        include("LibPebbleSwift.xcodeproj/project.pbxproj")
-        include("LibPebbleSwift/*.swift")
-        include("LibPebbleSwift/*.h")
-        include("LibPebbleSwift/*.m")
-    })
-
-    @get:OutputDirectory
-    val outputDir =
-        project.objects.directoryProperty().convention(project.layout.buildDirectory.dir("libpebble-swift/"))
-
-    @TaskAction
-    fun buildSwiftFramework() {
-        logging.captureStandardOutput(LogLevel.INFO)
-        logging.captureStandardError(LogLevel.ERROR)
-        getExecOperations().exec {
-            commandLine(
-                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",
-                "-scheme", "LibPebbleSwift",
-                "-configuration", "Release",
-                "-sdk", "iphoneos",
-                "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.resolve("iphoneos/").absolutePath}",
-                "ARCHS=arm64",
-                "SUPPORTS_MACCATALYST=NO",
-            )
-            workingDir = project.file("libpebble-swift")
-            standardOutput = System.out
-            errorOutput = System.err
-        }
-        getExecOperations().exec {
-            commandLine(
-                "xcodebuild", "-project", "LibPebbleSwift.xcodeproj",
-                "-scheme", "LibPebbleSwift",
-                "-configuration", "Release",
-                "-sdk", "iphonesimulator",
-                "CONFIGURATION_BUILD_DIR=${outputDir.get().asFile.resolve("iphonesimulator/").absolutePath}",
-            )
-            workingDir = project.file("libpebble-swift")
-            standardOutput = System.out
-            errorOutput = System.err
-        }
-    }
-}
 
 abstract class PlatformFatFramework : DefaultTask() {
     @get:Input
