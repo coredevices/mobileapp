@@ -7,7 +7,8 @@ enum class CactusSTTMode(val id: Int) {
     LocalFirst(3),
     RebbleOnly(4),
     RebbleFirst(5),
-    RebbleFallback(6);
+    RebbleFallback(6),
+    Disabled(7);
 
     companion object {
         fun fromId(id: Int): CactusSTTMode {

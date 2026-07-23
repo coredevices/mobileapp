@@ -43,6 +43,7 @@ class STTRouter(
     override suspend fun canServeSession(): Boolean {
         val mode = coreConfigFlow.value.sttConfig.mode
         return when (mode) {
+            CactusSTTMode.Disabled -> false
             CactusSTTMode.RebbleOnly -> rebble.isAvailable()
             CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback ->
                 rebble.isAvailable() || cactus.canServeSession()

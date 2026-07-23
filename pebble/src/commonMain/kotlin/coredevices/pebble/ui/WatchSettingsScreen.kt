@@ -1375,7 +1375,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                 it == CactusSTTMode.LocalFirst ||
                                 it == CactusSTTMode.RebbleFirst ||
                                 it == CactusSTTMode.RebbleFallback
-                        if (isRebble && !rebbleVoiceAvailable) {
+                        if (it == CactusSTTMode.Disabled) {
+                            coreConfigHolder.update(
+                                coreConfig.copy(
+                                    sttConfig = coreConfig.sttConfig.copy(mode = it)
+                                )
+                            )
+                        } else if (isRebble && !rebbleVoiceAvailable) {
                             snackbarDisplay.showSnackbar("Rebble speech recognition requires a Rebble subscription")
                             showSignInDialog = true
                         } else if (it != CactusSTTMode.RemoteOnly && !cactusSupported) {
@@ -1404,6 +1410,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             CactusSTTMode.RebbleOnly -> "Rebble Only"
                             CactusSTTMode.RebbleFirst -> "Rebble (with Local Fallback)"
                             CactusSTTMode.RebbleFallback -> "Local (with Rebble Fallback)"
+                            CactusSTTMode.Disabled -> "Disabled"
                         }
                     },
                     extraSupportingContent = {
