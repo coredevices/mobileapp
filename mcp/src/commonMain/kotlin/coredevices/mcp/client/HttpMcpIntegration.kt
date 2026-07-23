@@ -88,6 +88,7 @@ class HttpMcpIntegration(
     @OptIn(ExperimentalAtomicApi::class)
     private var connectionLocks = AtomicInt(0)
     val title get() = client.serverVersion?.title ?: client.serverVersion?.name
+    private val supportsPrompts get() = client.serverCapabilities?.prompts != null
 
     @OptIn(ExperimentalAtomicApi::class)
     override suspend fun connect() {
@@ -120,6 +121,7 @@ class HttpMcpIntegration(
     }
 
     override suspend fun listPrompts(): List<McpPrompt> {
+        if (!supportsPrompts) return emptyList()
         return client.listPrompts().prompts.filter {
             it.arguments == null // We don't support prompts with arguments yet
         }.map {
@@ -215,7 +217,7 @@ class HttpMcpIntegration(
     }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?, includePromptsFrom: Set<String>?): String? {
-        val promptContext = includePromptsFrom?.mapNotNull { promptName ->
+        val promptContext = includePromptsFrom?.takeIf { supportsPrompts }?.mapNotNull { promptName ->
             try {
                 getPromptContent(promptName)
             } catch (e: Exception) {

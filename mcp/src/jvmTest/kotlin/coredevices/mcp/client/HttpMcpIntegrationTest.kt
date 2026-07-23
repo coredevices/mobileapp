@@ -51,4 +51,34 @@ class HttpMcpIntegrationTest {
             server.stop(100, 300)
         }
     }
+
+    // The test server advertises only the tools capability, so it stands in for any MCP
+    // server that doesn't support prompts: listPrompts must return empty, not throw.
+    @Ignore
+    @Test
+    fun listPromptsEmptyWhenServerLacksPromptsCapability() {
+        var port = initialPort
+        val server = try {
+            runSseMcpServer(port = port, wait = false)
+        } catch (e: IOException) {
+            port += 1
+            runSseMcpServer(port = port, wait = false)
+        }
+
+        try {
+            val integration = HttpMcpIntegration(
+                "test",
+                impl,
+                buildUrl(port, true),
+                HttpMcpProtocol.Sse
+            )
+            val prompts = runBlocking(Dispatchers.IO) {
+                integration.connect()
+                integration.listPrompts()
+            }
+            assert(prompts.isEmpty())
+        } finally {
+            server.stop(100, 300)
+        }
+    }
 }
