@@ -1,33 +1,49 @@
 package coredevices.pebble.ui
 
+import android.os.Handler
+import android.os.Looper
+import co.touchlab.kermit.Logger
 import com.multiplatform.webview.web.NativeWebView
 import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.defaultWebViewFactory
+import coredevices.pebble.config.bridge.PebbleBridgeManager
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.io.path.Path
 import kotlin.uuid.Uuid
 
+private val logger = Logger.withTag("WatchappSettingsBridge")
+
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
-    uuid: Uuid
+    uuid: Uuid,
+    bridgeEnabled: Boolean,
+    bridgeConfig: Map<String, String>,
+    onBridgeClose: (String) -> Unit,
 ): NativeWebView = defaultWebViewFactory(params).apply {
+    logger.d { "webViewFactory called uuid=$uuid bridgeEnabled=$bridgeEnabled configKeys=${bridgeConfig.keys}" }
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false
-    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) {
-        runBlocking(Dispatchers.Main) {
-            evaluateJavascript(
-                it,
-                null
-            )
+    val localStorageInterface = WebViewJSLocalStorageInterface("$uuid-config", AppContext(context)) { script ->
+        Handler(Looper.getMainLooper()).post {
+            evaluateJavascript(script, null)
         }
     }
     addJavascriptInterface(localStorageInterface, "_localStorage")
     settings.domStorageEnabled = true
     settings.databasePath = Path(context.filesDir.path, "watchapp_settings/$uuid").toString()
+
+    if (bridgeEnabled) {
+        val bridge = PebbleBridgeManager(
+            context = context,
+            appUuid = uuid.toString(),
+            config = bridgeConfig,
+            onClose = onBridgeClose,
+        )
+        bridge.attach(this)
+    }
 }
 
 internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
@@ -46,7 +62,7 @@ internal actual suspend fun restoreLocalStorage(webView: NativeWebView) {
 }
 
 internal actual fun persistLocalStorage(webView: NativeWebView) {
-    runBlocking(Dispatchers.Main) {
+    Handler(Looper.getMainLooper()).post {
         webView.evaluateJavascript("""
             (function() {
                 const data = {};

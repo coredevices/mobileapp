@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
@@ -901,18 +902,21 @@ fun AppCapability.icon(): ImageVector = when (this) {
     AppCapability.Health -> Icons.Default.HealthAndSafety
     AppCapability.Location -> Icons.Default.LocationSearching
     AppCapability.Timeline -> Icons.Default.LocationOn
+    AppCapability.NetworkBridge -> Icons.Default.Wifi
 }
 
 fun AppCapability.name(): String = when (this) {
     AppCapability.Health -> "Health"
     AppCapability.Location -> "Location"
     AppCapability.Timeline -> "Timeline"
+    AppCapability.NetworkBridge -> "Network Bridge"
 }
 
 fun AppCapability.description(): String = when (this) {
     AppCapability.Health -> "Can access health data"
     AppCapability.Location -> "Can access location"
     AppCapability.Timeline -> "Can create timeline pins"
+    AppCapability.NetworkBridge -> "Can make network requests from the config page"
 }
 
 suspend fun LibPebble.launchApp(
@@ -1005,6 +1009,7 @@ suspend fun CommonApp.showSettings(
                     PebbleRoutes.WatchappSettingsRoute(
                         watchIdentifier = watch.identifier.asString,
                         title = title,
+                        bridgeEnabled = capabilities.contains(AppCapability.NetworkBridge),
                     )
                 )
             }

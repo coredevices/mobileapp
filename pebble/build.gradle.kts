@@ -107,6 +107,7 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.client.serialization.json)
+                implementation(libs.ktor.websockets)
                 implementation(libs.coil)
                 implementation(libs.coil.ktor)
                 implementation(libs.webview)
@@ -139,6 +140,8 @@ kotlin {
                 // commonMain by default and will correctly pull the Android artifacts of any KMP
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.androidx.security.crypto)
             }
         }
 
