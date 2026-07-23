@@ -3,11 +3,11 @@ package coredevices.pebble
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import coredevices.analytics.CoreAnalytics
-import coredevices.database.AppstoreSourceDao
 import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.libindex.device.REQUEST_URI_HOST
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.ui.NavBarRoute
 import coredevices.pebble.ui.PebbleNavBarRoutes
 import io.rebble.libpebblecommon.connection.AppContext
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 
@@ -50,7 +49,7 @@ class RealPebbleDeepLinkHandler(
     private val libPebble: LibPebble,
     private val analytics: CoreAnalytics,
     private val context: AppContext,
-    private val appstoreSourceDao: AppstoreSourceDao,
+    private val pebbleWebServices: PebbleWebServices,
     private val firmwareUpdateUiTracker: FirmwareUpdateUiTracker,
 ) : PebbleDeepLinkHandler {
     private val logger = Logger.withTag("PebbleDeepLinkHandler")
@@ -78,7 +77,7 @@ class RealPebbleDeepLinkHandler(
             uri.scheme == "pebble" -> {
                 when (uri.host) {
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
-                    STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
+                    STORE_URL -> handleAppstore(uri.path, uri.getQueryParameter(SOURCE_QUERY_PARAM))
                     NAVBAR_URL -> handleNavbar(uri.path)
                     REGISTER_INDEX_COMPANION_HOST -> handleRegisterIndexCompanion()
                     SHOW_WATCHES_HOST -> handleShowWatches(uri.path)
@@ -200,24 +199,22 @@ class RealPebbleDeepLinkHandler(
         return true
     }
 
-    private fun handleAppstore(storeUrl: String, path: String?): Boolean {
+    private fun handleAppstore(path: String?, sourceHint: String?): Boolean {
         if (path == null) {
             return false
         }
         logger.v { "handleAppstore: $path" }
         GlobalScope.launch {
             val appId = path.removePrefix("/").removeSuffix("/")
-            val store = appstoreSourceDao.getAllEnabledSourcesFlow().firstOrNull()?.find {
-                it.url == storeUrl
-            }
-            if (store == null) {
-                _snackBarMessages.tryEmit("Failed to find app in enabled feeds")
+            val resolved = pebbleWebServices.resolveAppstoreDeepLink(appId, sourceHint)
+            if (resolved == null) {
+                _snackBarMessages.tryEmit("App not found in appstore sources")
                 return@launch
             }
             val route = PebbleNavBarRoutes.LockerAppRoute(
                 uuid = null,
                 storedId = appId,
-                storeSource = store.id,
+                storeSource = resolved.source.id,
             )
             _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
         }
@@ -269,10 +266,11 @@ class RealPebbleDeepLinkHandler(
     companion object {
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
+        private const val SOURCE_QUERY_PARAM: String = "source"
         private const val NAVBAR_URL: String = "navbar"
         private val SHOW_WATCHES_HOST = "show-watches"
 //        private val UPDATE_WATCH_NOW_HOST = "update-watch-now"
-        private val REGISTER_INDEX_COMPANION_HOST = IndexPlatformBluetoothAssociations.REQUEST_URI_HOST
+        private val REGISTER_INDEX_COMPANION_HOST = IndexPlatformBluetoothAssociations.Companion.REQUEST_URI_HOST
         val NOTIFICATION_INTENT_URI_SHOW_WATCHES = Uri.parse("pebble://${SHOW_WATCHES_HOST}")
         val NOTIFICATION_INTENT_URI_REGISTER_INDEX_COMPANION = Uri.parse("pebble://${REGISTER_INDEX_COMPANION_HOST}")
 //        val NOTIFICATION_INTENT_URI_UPDATE_NOW = Uri.parse("pebble://${UPDATE_WATCH_NOW_HOST}")
