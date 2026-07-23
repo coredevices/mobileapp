@@ -1447,16 +1447,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
                 ) },
-                basicSettingsActionItem(
-                    title = "Spoken Language",
-                    description = coreConfig.sttConfig.spokenLanguage
-                        ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
-                        ?: "Automatic",
-                    keywords = "language stt speech recognition locale iso",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Speech,
-                    action = { showSpokenLanguageDialog = true },
-                ),
                 SettingsItem(
                     title = "Cloud Recognition Provider",
                     isDebugSetting = false,
@@ -1481,6 +1471,18 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             shadowElevation = ELEVATION,
                         )
                     }
+                ),
+                basicSettingsActionItem(
+                    title = "Cloud Spoken Language",
+                    description = "${
+                        coreConfig.sttConfig.spokenLanguage
+                            ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
+                            ?: "Automatic"
+                    }. Only used for cloud transcription; the on-device model detects language automatically.",
+                    keywords = "language stt speech recognition locale iso cloud wispr provider",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    action = { showSpokenLanguageDialog = true },
                 ),
                 basicSettingsToggleItem(
                     title = "Ignore other Pebble apps",
@@ -2643,7 +2645,7 @@ fun SpokenLanguagePickerDialog(
     M3Dialog(
         onDismissRequest = onDismissRequest,
         icon = { Icon(Icons.Default.Language, contentDescription = null) },
-        title = { Text("Spoken Language") },
+        title = { Text("Cloud Spoken Language") },
         buttons = {
             TextButton(onClick = onDismissRequest) { Text("Cancel") }
         },
@@ -2677,7 +2679,7 @@ fun SpokenLanguagePickerDialog(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Note: Selecting a language may improve accuracy for that language but not all languages on this list are guaranteed to be supported.",
+                "This language is only used for cloud transcription. On-device (local) transcription always detects the language automatically and ignores this setting. Choosing a language may improve cloud accuracy, though not every language listed is guaranteed to be supported.",
                 fontSize = 11.sp,
             )
         }
