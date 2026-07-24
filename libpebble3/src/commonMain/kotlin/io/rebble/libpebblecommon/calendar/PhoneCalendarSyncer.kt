@@ -211,12 +211,12 @@ class PhoneCalendarSyncer(
         }
 
         remindersToDelete += existingReminders.filter { er ->
-            desiredReminders.none { dr -> dr.content.timestamp.instant == er.content.timestamp.instant }
+            desiredReminders.none { dr -> dr.content.timestamp == er.content.timestamp }
         }.map { it.itemId }
 
         remindersToInsert += desiredReminders.mapNotNull { dr ->
             val existing = existingReminders.find {
-                it.content.timestamp.instant == dr.content.timestamp.instant
+                it.content.timestamp == dr.content.timestamp
             }
             when {
                 existing == null -> dr
