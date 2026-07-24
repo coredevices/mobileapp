@@ -1,12 +1,14 @@
 package coredevices.util.models
 
 import co.touchlab.kermit.Logger
+import coredevices.util.CommonBuildKonfig
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.io.buffered
 import kotlinx.io.files.Path as IoPath
 import kotlinx.io.files.SystemFileSystem
 import okio.FileSystem
@@ -120,32 +122,43 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
         val fileManager = NSFileManager.defaultManager
         val outputDir = modelsDirectory().toPath() / slug.toPath()
 
-        fileManager.removeItemAtPath(outputDir.toString(), null)
-        fileManager.createDirectoryAtPath(outputDir.toString(), withIntermediateDirectories = true, attributes = null, error = null)
+        try {
+            fileManager.removeItemAtPath(outputDir.toString(), null)
+            fileManager.createDirectoryAtPath(outputDir.toString(), withIntermediateDirectories = true, attributes = null, error = null)
 
-        //Extract the file from the temporary location to the destination
-        FileSystem.SYSTEM.openZip(didFinishDownloadingToURL.path!!.toPath()).use { zipFs ->
-            val paths = zipFs.listRecursively("/".toPath())
-                .filter { zipFs.metadata(it).isRegularFile }
-                .toList()
+            //Extract the file from the temporary location to the destination
+            FileSystem.SYSTEM.openZip(didFinishDownloadingToURL.path!!.toPath()).use { zipFs ->
+                val paths = zipFs.listRecursively("/".toPath())
+                    .filter { zipFs.metadata(it).isRegularFile }
+                    .toList()
 
-            paths.forEach { zipEntryPath ->
-                zipFs.source(zipEntryPath).buffer().use { source ->
-                    val fullPath = zipEntryPath.toString().trimStart('/')
+                paths.forEach { zipEntryPath ->
+                    zipFs.source(zipEntryPath).buffer().use { source ->
+                        val fullPath = zipEntryPath.toString().trimStart('/')
 
-                    val relativeFilePath = fullPath
+                        val relativeFilePath = fullPath
 
-                    val fileToWrite = outputDir.resolve(relativeFilePath)
-                    fileToWrite.createParentDirectories()
-                    FileSystem.SYSTEM.sink(fileToWrite).buffer().use { sink ->
-                        val bytes = sink.writeAll(source)
-                        logger.d {"Wrote $bytes bytes to $fileToWrite"}
+                        val fileToWrite = outputDir.resolve(relativeFilePath)
+                        fileToWrite.createParentDirectories()
+                        FileSystem.SYSTEM.sink(fileToWrite).buffer().use { sink ->
+                            val bytes = sink.writeAll(source)
+                            logger.d {"Wrote $bytes bytes to $fileToWrite"}
+                        }
                     }
                 }
             }
+            val outputDirIo = IoPath(outputDir.toString())
+            promoteSingleRootDir(outputDirIo)
+            SystemFileSystem.sink(IoPath(outputDirIo, ".cactus_version")).buffered().use {
+                it.write(CommonBuildKonfig.CACTUS_WEIGHTS_VERSION.encodeToByteArray())
+            }
+            logger.i {"Model $slug downloaded and extracted to $outputDir"}
+            manager.updateDownloadStatus(ModelDownloadStatus.Idle)
+        } catch (e: Throwable) {
+            logger.e(e) {"Failed to extract model $slug"}
+            fileManager.removeItemAtPath(outputDir.toString(), null)
+            manager.updateDownloadStatus(ModelDownloadStatus.Failed(slug, "Failed to extract model"))
         }
-        logger.i {"Model $slug downloaded and extracted to $outputDir"}
-        manager.updateDownloadStatus(ModelDownloadStatus.Idle)
     }
 
     override fun URLSession(

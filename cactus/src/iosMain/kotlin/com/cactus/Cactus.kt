@@ -2,8 +2,11 @@ package com.cactus
 
 import cactus.*
 import kotlinx.cinterop.*
+import platform.posix.size_tVar
 
 actual fun isCactusSupported(): Boolean = true
+
+actual fun cactusSetBackend(backend: String): Int = cactus_set_backend(backend)
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun cactusInit(modelPath: String, corpusDir: String?, cacheIndex: Boolean): Long {
@@ -13,40 +16,28 @@ actual fun cactusInit(modelPath: String, corpusDir: String?, cacheIndex: Boolean
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusDestroy(model: Long) {
-    cactus_destroy(model.toCPointer())
+actual fun cactusDestroy(handle: Long) {
+    cactus_destroy(handle.toCPointer())
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusReset(model: Long) { cactus_reset(model.toCPointer()) }
+actual fun cactusReset(handle: Long) { cactus_reset(handle.toCPointer()) }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusStop(model: Long) { cactus_stop(model.toCPointer()) }
-
-actual fun cactusGetLastError(): String = cactus_get_last_error()?.toKString() ?: ""
-
-actual fun cactusSetTelemetryEnvironment(cacheDir: String) {
-    cactus_set_telemetry_environment(null, cacheDir, null)
-}
-
-actual fun cactusSetAppId(appId: String) { cactus_set_app_id(appId) }
-
-actual fun cactusTelemetryFlush() { cactus_telemetry_flush() }
-
-actual fun cactusTelemetryShutdown() { cactus_telemetry_shutdown() }
+actual fun cactusStop(handle: Long) { cactus_stop(handle.toCPointer()) }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusComplete(model: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String {
+actual fun cactusComplete(handle: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String {
     memScoped {
-        val buffer = allocArray<ByteVar>(65536)
+        val buffer = allocArray<ByteVar>(1048576)
         val callbackRef = callback?.let { StableRef.create(it) }
         val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
         try {
             val result = cactus_complete(
-                model.toCPointer(),
+                handle.toCPointer(),
                 messagesJson,
                 buffer,
-                65536u,
+                1048576u,
                 optionsJson,
                 toolsJson,
                 callbackRef?.let {
@@ -60,10 +51,7 @@ actual fun cactusComplete(model: Long, messagesJson: String, optionsJson: String
                 pcmPtr?.reinterpret(),
                 pcmData?.size?.toULong() ?: 0u
             )
-            if (result < 0) {
-                val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-                throw RuntimeException(error)
-            }
+            if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
             return buffer.toKString()
         } finally {
             callbackRef?.dispose()
@@ -72,41 +60,65 @@ actual fun cactusComplete(model: Long, messagesJson: String, optionsJson: String
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusPrefill(model: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, pcmData: ByteArray?): String {
+actual fun cactusPrefill(handle: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, pcmData: ByteArray?): String {
     memScoped {
-        val buffer = allocArray<ByteVar>(65536)
+        val buffer = allocArray<ByteVar>(1048576)
         val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
         val result = cactus_prefill(
-            model.toCPointer(),
+            handle.toCPointer(),
             messagesJson,
             buffer,
-            65536u,
+            1048576u,
             optionsJson,
             toolsJson,
             pcmPtr?.reinterpret(),
             pcmData?.size?.toULong() ?: 0u
         )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
         return buffer.toKString()
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusTranscribe(model: Long, audioPath: String?, prompt: String?, optionsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String {
+actual fun cactusTokenize(handle: Long, text: String): IntArray {
     memScoped {
-        val buffer = allocArray<ByteVar>(65536)
+        val buffer = allocArray<UIntVar>(8192)
+        val tokenLen = alloc<ULongVar>()
+        val result = cactus_tokenize(handle.toCPointer(), text, buffer, 8192u, tokenLen.ptr)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return IntArray(tokenLen.value.toInt()) { buffer[it].toInt() }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusScoreWindow(handle: Long, tokens: IntArray, start: Long, end: Long, context: Long): String {
+    memScoped {
+        val buffer = allocArray<ByteVar>(1048576)
+        val tokenBuffer = allocArray<UIntVar>(tokens.size)
+        tokens.forEachIndexed { i, v -> tokenBuffer[i] = v.toUInt() }
+        val result = cactus_score_window(
+            handle.toCPointer(), tokenBuffer, tokens.size.toULong(),
+            start.toULong(), end.toULong(), context.toULong(),
+            buffer, 1048576u
+        )
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return buffer.toKString()
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusTranscribe(handle: Long, audioPath: String?, prompt: String, optionsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String {
+    memScoped {
+        val buffer = allocArray<ByteVar>(1048576)
         val callbackRef = callback?.let { StableRef.create(it) }
         val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
         try {
             val result = cactus_transcribe(
-                model.toCPointer(),
+                handle.toCPointer(),
                 audioPath,
                 prompt,
                 buffer,
-                65536u,
+                1048576u,
                 optionsJson,
                 callbackRef?.let {
                     staticCFunction<CPointer<ByteVar>?, UInt, COpaquePointer?, Unit> { token, tokenId, userData ->
@@ -119,10 +131,7 @@ actual fun cactusTranscribe(model: Long, audioPath: String?, prompt: String?, op
                 pcmPtr?.reinterpret(),
                 pcmData?.size?.toULong() ?: 0u
             )
-            if (result < 0) {
-                val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-                throw RuntimeException(error)
-            }
+            if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
             return buffer.toKString()
         } finally {
             callbackRef?.dispose()
@@ -131,129 +140,25 @@ actual fun cactusTranscribe(model: Long, audioPath: String?, prompt: String?, op
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusEmbed(model: Long, text: String, normalize: Boolean): FloatArray {
-    memScoped {
-        val buffer = allocArray<FloatVar>(4096)
-        val dimPtr = alloc<ULongVar>()
-        val result = cactus_embed(model.toCPointer(), text, buffer, 4096u, dimPtr.ptr, normalize)
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
-    }
+actual fun cactusStreamTranscribeStart(handle: Long, optionsJson: String?): Long {
+    val stream = cactus_stream_transcribe_start(handle.toCPointer(), optionsJson)
+        ?: throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Failed to start streaming transcription")
+    return stream.rawValue.toLong()
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusImageEmbed(model: Long, imagePath: String): FloatArray {
-    memScoped {
-        val buffer = allocArray<FloatVar>(4096)
-        val dimPtr = alloc<ULongVar>()
-        val result = cactus_image_embed(model.toCPointer(), imagePath, buffer, 4096u, dimPtr.ptr)
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusAudioEmbed(model: Long, audioPath: String): FloatArray {
-    memScoped {
-        val buffer = allocArray<FloatVar>(4096)
-        val dimPtr = alloc<ULongVar>()
-        val result = cactus_audio_embed(model.toCPointer(), audioPath, buffer, 4096u, dimPtr.ptr)
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusVad(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String {
+actual fun cactusStreamTranscribeProcess(stream: Long, pcmData: ByteArray?): String {
     memScoped {
         val buffer = allocArray<ByteVar>(65536)
         val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
-        val result = cactus_vad(
-            model.toCPointer(), audioPath, buffer, 65536u, optionsJson,
-            pcmPtr?.reinterpret(), pcmData?.size?.toULong() ?: 0u
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusRagQuery(model: Long, query: String, topK: Int): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val result = cactus_rag_query(model.toCPointer(), query, buffer, 65536u, topK.toULong())
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusTokenize(model: Long, text: String): IntArray {
-    memScoped {
-        val buffer = allocArray<UIntVar>(8192)
-        val tokenLen = alloc<ULongVar>()
-        val result = cactus_tokenize(model.toCPointer(), text, buffer, 8192u, tokenLen.ptr)
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return IntArray(tokenLen.value.toInt()) { buffer[it].toInt() }
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusScoreWindow(model: Long, tokens: IntArray, start: Int, end: Int, context: Int): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val tokenBuffer = allocArray<UIntVar>(tokens.size)
-        tokens.forEachIndexed { i, v -> tokenBuffer[i] = v.toUInt() }
-        val result = cactus_score_window(
-            model.toCPointer(), tokenBuffer, tokens.size.toULong(),
-            start.toULong(), end.toULong(), context.toULong(),
-            buffer, 65536u
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusStreamTranscribeStart(model: Long, optionsJson: String?): Long {
-    val ptr = cactus_stream_transcribe_start(model.toCPointer(), optionsJson)
-        ?: throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Failed to create stream transcriber")
-    return ptr.rawValue.toLong()
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusStreamTranscribeProcess(stream: Long, pcmData: ByteArray): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val pcmPtr = pcmData.refTo(0).getPointer(this)
         val result = cactus_stream_transcribe_process(
-            stream.toCPointer(), pcmPtr.reinterpret(), pcmData.size.toULong(), buffer, 65536u
+            stream.toCPointer(),
+            pcmPtr?.reinterpret(),
+            pcmData?.size?.toULong() ?: 0u,
+            buffer,
+            65536u
         )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
         return buffer.toKString()
     }
 }
@@ -263,23 +168,63 @@ actual fun cactusStreamTranscribeStop(stream: Long): String {
     memScoped {
         val buffer = allocArray<ByteVar>(65536)
         val result = cactus_stream_transcribe_stop(stream.toCPointer(), buffer, 65536u)
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
         return buffer.toKString()
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexInit(indexDir: String, embeddingDim: Int): Long {
+actual fun cactusEmbed(handle: Long, text: String, normalize: Boolean): FloatArray {
+    memScoped {
+        val buffer = allocArray<FloatVar>(4096)
+        val dimPtr = alloc<ULongVar>()
+        val result = cactus_embed(handle.toCPointer(), text, buffer, 4096u, dimPtr.ptr, normalize)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusImageEmbed(handle: Long, imagePath: String): FloatArray {
+    memScoped {
+        val buffer = allocArray<FloatVar>(4096)
+        val dimPtr = alloc<ULongVar>()
+        val result = cactus_image_embed(handle.toCPointer(), imagePath, buffer, 4096u, dimPtr.ptr)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusAudioEmbed(handle: Long, audioPath: String): FloatArray {
+    memScoped {
+        val buffer = allocArray<FloatVar>(4096)
+        val dimPtr = alloc<ULongVar>()
+        val result = cactus_audio_embed(handle.toCPointer(), audioPath, buffer, 4096u, dimPtr.ptr)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return FloatArray(dimPtr.value.toInt()) { buffer[it] }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusRagQuery(handle: Long, query: String, topK: Long): String {
+    memScoped {
+        val buffer = allocArray<ByteVar>(1048576)
+        val result = cactus_rag_query(handle.toCPointer(), query, buffer, 1048576u, topK.toULong())
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return buffer.toKString()
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusIndexInit(indexDir: String, embeddingDim: Long): Long {
     val ptr = cactus_index_init(indexDir, embeddingDim.toULong())
         ?: throw RuntimeException("Failed to initialize index")
     return ptr.rawValue.toLong()
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexAdd(index: Long, ids: IntArray, documents: Array<String>, embeddings: Array<FloatArray>, metadatas: Array<String>?): Int {
+actual fun cactusIndexAdd(handle: Long, ids: IntArray, documents: Array<String>, metadatas: Array<String>?, embeddings: Array<FloatArray>, embeddingDim: Long): Int {
     memScoped {
         val idPtr = allocArray<IntVar>(ids.size)
         ids.forEachIndexed { i, v -> idPtr[i] = v }
@@ -297,196 +242,91 @@ actual fun cactusIndexAdd(index: Long, ids: IntArray, documents: Array<String>, 
             embPtrs[i] = embArr
         }
         val result = cactus_index_add(
-            index.toCPointer(), idPtr, docPtrs, metaPtrs, embPtrs,
-            ids.size.toULong(), embeddings[0].size.toULong()
+            handle.toCPointer(), idPtr, docPtrs, metaPtrs, embPtrs,
+            ids.size.toULong(), embeddingDim.toULong()
         )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
         return result
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexDelete(index: Long, ids: IntArray): Int {
+actual fun cactusIndexDelete(handle: Long, ids: IntArray): Int {
     memScoped {
         val idPtr = allocArray<IntVar>(ids.size)
         ids.forEachIndexed { i, v -> idPtr[i] = v }
-        val result = cactus_index_delete(index.toCPointer(), idPtr, ids.size.toULong())
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
+        val result = cactus_index_delete(handle.toCPointer(), idPtr, ids.size.toULong())
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
         return result
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexGet(index: Long, ids: IntArray): String {
+actual fun cactusIndexGet(handle: Long, ids: IntArray): String {
     memScoped {
         val count = ids.size
         val idPtr = allocArray<IntVar>(count)
         ids.forEachIndexed { i, v -> idPtr[i] = v }
-
-        val docBufSize = 4096
-        val embBufSize = 4096
-
-        val docRaw = Array(count) { allocArray<ByteVar>(docBufSize) }
-        val metaRaw = Array(count) { allocArray<ByteVar>(docBufSize) }
-        val embRaw = Array(count) { allocArray<FloatVar>(embBufSize) }
-
-        val docBuffers = allocArray<CPointerVar<ByteVar>>(count)
-        val docBufferSizes = allocArray<ULongVar>(count)
-        val metaBuffers = allocArray<CPointerVar<ByteVar>>(count)
-        val metaBufferSizes = allocArray<ULongVar>(count)
-        val embBuffers = allocArray<CPointerVar<FloatVar>>(count)
-        val embBufferSizes = allocArray<ULongVar>(count)
-
+        val docBufs = allocArray<CPointerVar<ByteVar>>(count)
+        val docSizes = allocArray<size_tVar>(count)
+        val metaBufs = allocArray<CPointerVar<ByteVar>>(count)
+        val metaSizes = allocArray<size_tVar>(count)
+        val embBufs = allocArray<CPointerVar<FloatVar>>(count)
+        val embSizes = allocArray<size_tVar>(count)
+        val docAllocs = (0 until count).map { allocArray<ByteVar>(4096) }
+        val metaAllocs = (0 until count).map { allocArray<ByteVar>(4096) }
+        val embAllocs = (0 until count).map { allocArray<FloatVar>(4096) }
         for (i in 0 until count) {
-            docBuffers[i] = docRaw[i]
-            docBufferSizes[i] = docBufSize.toULong()
-            metaBuffers[i] = metaRaw[i]
-            metaBufferSizes[i] = docBufSize.toULong()
-            embBuffers[i] = embRaw[i]
-            embBufferSizes[i] = embBufSize.toULong()
+            docBufs[i] = docAllocs[i]; docSizes[i] = 4096u
+            metaBufs[i] = metaAllocs[i]; metaSizes[i] = 4096u
+            embBufs[i] = embAllocs[i]; embSizes[i] = 4096u
         }
-
-        val result = cactus_index_get(
-            index.toCPointer(), idPtr, count.toULong(),
-            docBuffers, docBufferSizes, metaBuffers, metaBufferSizes,
-            embBuffers, embBufferSizes
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        val sb = StringBuilder("{\"results\":[")
-        for (i in 0 until count) {
-            if (i > 0) sb.append(",")
-            sb.append("{\"document\":\"${docRaw[i].toKString()}\"")
-            val meta = metaRaw[i].toKString()
-            if (meta.isNotEmpty()) sb.append(",\"metadata\":\"$meta\"") else sb.append(",\"metadata\":null")
-            sb.append(",\"embedding\":[")
-            val embDim = embBufferSizes[i].toInt()
-            for (j in 0 until embDim) {
-                if (j > 0) sb.append(",")
-                sb.append(embRaw[i][j])
+        val result = cactus_index_get(handle.toCPointer(), idPtr, count.toULong(), docBufs, docSizes, metaBufs, metaSizes, embBufs, embSizes)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return encodeIndexEntries(
+            (0 until count).map { i ->
+                IndexEntry(docAllocs[i].toKString(), metaAllocs[i].toKString())
             }
-            sb.append("]}")
-        }
-        sb.append("]}")
-        return sb.toString()
+        )
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexQuery(index: Long, embedding: FloatArray, optionsJson: String?): String {
-    val topK = 1000L
+actual fun cactusIndexQuery(handle: Long, embedding: FloatArray, optionsJson: String?): String {
     memScoped {
         val embArr = allocArray<FloatVar>(embedding.size)
         embedding.forEachIndexed { i, v -> embArr[i] = v }
-        val embPtr = alloc<CPointerVar<FloatVar>>()
-        embPtr.value = embArr
-        val idBuffer = allocArray<IntVar>(topK)
-        val scoreBuffer = allocArray<FloatVar>(topK)
-        val idBufferSize = alloc<ULongVar>()
-        val scoreBufferSize = alloc<ULongVar>()
-        idBufferSize.value = topK.toULong()
-        scoreBufferSize.value = topK.toULong()
-        val idPtrPtr = alloc<CPointerVar<IntVar>>()
-        idPtrPtr.value = idBuffer
-        val scorePtrPtr = alloc<CPointerVar<FloatVar>>()
-        scorePtrPtr.value = scoreBuffer
-        val result = cactus_index_query(
-            index.toCPointer(), embPtr.ptr, 1u, embedding.size.toULong(), optionsJson,
-            idPtrPtr.ptr, idBufferSize.ptr, scorePtrPtr.ptr, scoreBufferSize.ptr
+        val embPtrs = allocArray<CPointerVar<FloatVar>>(1)
+        embPtrs[0] = embArr
+        val idBuf = allocArray<IntVar>(1000)
+        val idPtrs = allocArray<CPointerVar<IntVar>>(1)
+        idPtrs[0] = idBuf
+        val idSizes = allocArray<size_tVar>(1); idSizes[0] = 1000u
+        val scoreBuf = allocArray<FloatVar>(1000)
+        val scorePtrs = allocArray<CPointerVar<FloatVar>>(1)
+        scorePtrs[0] = scoreBuf
+        val scoreSizes = allocArray<size_tVar>(1); scoreSizes[0] = 1000u
+        val result = cactus_index_query(handle.toCPointer(), embPtrs, 1u, embedding.size.toULong(), optionsJson, idPtrs, idSizes, scorePtrs, scoreSizes)
+        if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
+        return encodeIndexMatches(
+            (0 until idSizes[0].toInt()).map { i -> IndexMatch(idBuf[i], scoreBuf[i]) }
         )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        val sb = StringBuilder("{\"results\":[")
-        for (i in 0 until idBufferSize.value.toInt()) {
-            if (i > 0) sb.append(",")
-            sb.append("{\"id\":${idBuffer[i]},\"score\":${scoreBuffer[i]}}")
-        }
-        sb.append("]}")
-        return sb.toString()
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexCompact(index: Long): Int {
-    val result = cactus_index_compact(index.toCPointer())
-    if (result < 0) {
-        val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-        throw RuntimeException(error)
-    }
+actual fun cactusIndexCompact(handle: Long): Int {
+    val result = cactus_index_compact(handle.toCPointer())
+    if (result < 0) throw RuntimeException(cactus_get_last_error()?.toKString() ?: "Unknown error")
     return result
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun cactusIndexDestroy(index: Long) {
-    cactus_index_destroy(index.toCPointer())
+actual fun cactusIndexDestroy(handle: Long) {
+    cactus_index_destroy(handle.toCPointer())
 }
 
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusDetectLanguage(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
-        val result = cactus_detect_language(
-            model.toCPointer(), audioPath, buffer, 65536u, optionsJson,
-            pcmPtr?.reinterpret(), pcmData?.size?.toULong() ?: 0u
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusDiarize(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
-        val result = cactus_diarize(
-            model.toCPointer(), audioPath, buffer, 65536u, optionsJson,
-            pcmPtr?.reinterpret(), pcmData?.size?.toULong() ?: 0u
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-actual fun cactusEmbedSpeaker(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?, maskWeights: FloatArray?): String {
-    memScoped {
-        val buffer = allocArray<ByteVar>(65536)
-        val pcmPtr = pcmData?.refTo(0)?.getPointer(this)
-        val maskPtr = maskWeights?.let {
-            val arr = allocArray<FloatVar>(it.size)
-            it.forEachIndexed { i, v -> arr[i] = v }
-            arr
-        }
-        val result = cactus_embed_speaker(
-            model.toCPointer(), audioPath, buffer, 65536u, optionsJson,
-            pcmPtr?.reinterpret(), pcmData?.size?.toULong() ?: 0u,
-            maskPtr, maskWeights?.size?.toULong() ?: 0u
-        )
-        if (result < 0) {
-            val error = cactus_get_last_error()?.toKString() ?: "Unknown error"
-            throw RuntimeException(error)
-        }
-        return buffer.toKString()
-    }
-}
+actual fun cactusGetLastError(): String = cactus_get_last_error()?.toKString() ?: ""
 
 actual fun cactusLogSetLevel(level: Int) {
     cactus_log_set_level(level)
@@ -500,20 +340,23 @@ actual fun cactusLogSetCallback(callback: CactusLogCallback?) {
     _logCallbackRef = null
     if (callback == null) {
         cactus_log_set_callback(null, null)
-    } else {
-        val callbackRef = StableRef.create(callback)
-        _logCallbackRef = callbackRef
-        cactus_log_set_callback(
-            staticCFunction<Int, CPointer<ByteVar>?, CPointer<ByteVar>?, COpaquePointer?, Unit> { level, component, message, userData ->
-                if (userData != null) {
-                    userData.asStableRef<CactusLogCallback>().get().onLog(
-                        level,
-                        component?.toKString() ?: "",
-                        message?.toKString() ?: ""
-                    )
-                }
-            },
-            callbackRef.asCPointer()
-        )
+        return
     }
+    val ref = StableRef.create(callback)
+    _logCallbackRef = ref
+    cactus_log_set_callback(staticCFunction { level, component, message, userData ->
+        val cb = userData!!.asStableRef<CactusLogCallback>().get()
+        cb.onLog(level, component?.toKString() ?: "", message?.toKString() ?: "")
+    }, ref.asCPointer())
 }
+
+@OptIn(ExperimentalForeignApi::class)
+actual fun cactusSetTelemetryEnvironment(framework: String?, cacheLocation: String?, version: String?) {
+    cactus_set_telemetry_environment(framework, cacheLocation, version)
+}
+
+actual fun cactusSetAppId(appId: String) { cactus_set_app_id(appId) }
+
+actual fun cactusTelemetryFlush() { cactus_telemetry_flush() }
+
+actual fun cactusTelemetryShutdown() { cactus_telemetry_shutdown() }

@@ -12,7 +12,7 @@
 		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
 		670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */ = {isa = PBXBuildFile; fileRef = 670755B32DC121B600DA5904 /* XMLHTTPRequest.js */; };
 		6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */; };
-		671C01502FFC4F2E00E76758 /* needle-pebble-ft-int4.zip in Resources */ = {isa = PBXBuildFile; fileRef = 671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */; };
+		671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */ = {isa = PBXBuildFile; fileRef = 671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */; };
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
@@ -31,7 +31,7 @@
 		2EB31172B477C48B1FE18840 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		670755B32DC121B600DA5904 /* XMLHTTPRequest.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = XMLHTTPRequest.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/XMLHTTPRequest.js; sourceTree = SOURCE_ROOT; };
 		6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "needle-pebble-ft-int4.zip"; sourceTree = "<group>"; };
+		671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "needle-pebble-ft-cq4.zip"; sourceTree = "<group>"; };
 		67555A952E0212D1006BB488 /* JSTimeout.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = JSTimeout.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/JSTimeout.js; sourceTree = SOURCE_ROOT; };
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
@@ -99,7 +99,7 @@
 		671C014F2FFC4F2E00E76758 /* models */ = {
 			isa = PBXGroup;
 			children = (
-				671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */,
+				671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */,
 			);
 			name = models;
 			path = ../models;
@@ -218,7 +218,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */,
-				671C01502FFC4F2E00E76758 /* needle-pebble-ft-int4.zip in Resources */,
+				671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */,
 				67555A962E0212D1006BB488 /* JSTimeout.js in Resources */,
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
 				670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */,

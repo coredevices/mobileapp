@@ -4,6 +4,8 @@ import android.content.Context
 import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.promoteSingleRootDir
+import kotlinx.io.files.Path
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.koin.mp.KoinPlatform
@@ -25,8 +27,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     companion object {
         private val logger = Logger.withTag("CactusModelProvider")
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val STT_QUANTIZATION = "int8"
-        private const val LM_QUANTIZATION = "int4"
+        private const val QUANTIZATION = "cq4"
         private const val DOWNLOAD_BUFFER_SIZE = 256 * 1024
 
         // One mutex per model so an in-progress STT download doesn't head-of-line
@@ -41,12 +42,12 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override suspend fun getSTTModelPath(): String = withContext(Dispatchers.IO) {
         val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
+        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
     }
 
     actual override suspend fun getLMModelPath(): String = withContext(Dispatchers.IO) {
         val modelName = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION)
+        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
     }
 
     actual override fun isModelDownloaded(modelName: String): Boolean {
@@ -63,8 +64,19 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun getIncompatibleModels(): List<String> {
         val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
-        return getDownloadedModels().filter { it !in compatible }
+        return getDownloadedModels().filter { name ->
+            modelNeedsReplacement(name, compatible, versionMatches(name), isBundled(name))
+        }
     }
+
+    private fun versionMatches(modelName: String): Boolean {
+        val versionFile = modelsDir.resolve(modelName).resolve(".cactus_version")
+        return versionFile.exists() &&
+            versionFile.readText().trim() == CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+    }
+
+    private fun isBundled(modelName: String): Boolean =
+        context.assets.list("models")?.contains("${modelName.lowercase()}-$QUANTIZATION.zip") == true
 
     actual override fun deleteModel(modelName: String) {
         modelsDir.resolve(modelName).deleteRecursively()
@@ -79,14 +91,14 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         val modelDir = modelsDir.resolve(modelName)
         val versionFile = modelDir.resolve(".cactus_version")
 
-        val currentVersion = version
         val needsDownload = !modelDir.exists()
             || !modelDir.resolve("config.txt").exists()
-            || (versionFile.exists() && versionFile.readText().trim() != currentVersion)
+            || !versionFile.exists()
+            || versionFile.readText().trim() != version
 
         if (needsDownload) {
             downloadAndExtract(modelName, modelDir, version)
-            versionFile.writeText(currentVersion)
+            versionFile.writeText(version)
         }
 
         logger.d { "Model '$modelName' at: ${modelDir.absolutePath}" }
@@ -94,9 +106,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     private suspend fun downloadAndExtract(modelName: String, targetDir: File, version: String) = withContext(Dispatchers.IO) {
-        val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
-        val zipName = "${modelName.lowercase()}-$quantization.zip"
+        val zipName = "${modelName.lowercase()}-$QUANTIZATION.zip"
 
         val tempZip = if (context.assets.list("models")?.contains(zipName) == true) {
             logger.i { "Found included model zip in assets: $zipName, extracting..." }
@@ -110,7 +120,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             }
             tempZip
         } else {
-            val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
+            val url = "$HF_BASE/$modelName/resolve/$version/$zipName"
             logger.i { "Downloading model: $url" }
 
             val tempZip = File(context.cacheDir, "cactus_download_$modelName.zip")
@@ -203,6 +213,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
                     entry = zis.nextEntry
                 }
             }
+            promoteSingleRootDir(Path(targetDir.absolutePath))
             logger.i { "Extraction complete to ${targetDir.absolutePath}" }
         } catch (e: CancellationException) {
             logger.i { "Model download cancelled for $modelName" }
@@ -230,7 +241,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
         try {
-            cactusSetTelemetryEnvironment(cacheDir.absolutePath)
+            cactusSetTelemetryEnvironment("kotlin", cacheDir.absolutePath, null)
             logger.d { "Telemetry environment set to ${cacheDir.absolutePath}" }
         } catch (e: Throwable) {
             logger.e(e) { "Failed to initialize telemetry environment" }

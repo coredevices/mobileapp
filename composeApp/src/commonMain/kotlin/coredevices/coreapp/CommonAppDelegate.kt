@@ -19,6 +19,7 @@ import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
@@ -39,6 +40,9 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
+
+internal const val STT_UPDATE_NOTIFIED_VERSION_KEY = "stt_update_notified_version"
+internal const val STT_MODE_BEFORE_UPDATE_KEY = "stt_mode_before_update"
 
 class CommonAppDelegate(
     private val pushMessaging: PushMessaging,
@@ -78,7 +82,11 @@ class CommonAppDelegate(
         try {
             val incompatible = modelProvider.getIncompatibleModels()
             if (incompatible.isNotEmpty()) {
-                logger.d { "Incompatible models found, deleting and notifying user to migrate" }
+                logger.d { "Incompatible models found: $incompatible" }
+                val currentMode = coreConfigHolder.config.value.sttConfig.mode
+                if (currentMode != CactusSTTMode.RemoteOnly && !settings.hasKey(STT_MODE_BEFORE_UPDATE_KEY)) {
+                    settings.putInt(STT_MODE_BEFORE_UPDATE_KEY, currentMode.id)
+                }
                 coreConfigHolder.update(
                     coreConfigHolder.config.value.copy(
                         sttConfig = coreConfigHolder.config.value.sttConfig.copy(
@@ -87,17 +95,33 @@ class CommonAppDelegate(
                         )
                     )
                 )
-                incompatible.forEach {
+                incompatible.filter { it != CommonBuildKonfig.CACTUS_STT_MODEL }.forEach {
                     try {
                         modelProvider.deleteModel(it)
                     } catch (e: Exception) {
                         logger.w(e) { "Failed to delete incompatible model $it" }
                     }
                 }
-                NotifierManager.getLocalNotifier().notify(
-                    "Offline voice recognition",
-                    "We've made improvements to our offline voice recognition. Please open the app to download the new model from settings."
-                )
+                if (settings.getStringOrNull(STT_UPDATE_NOTIFIED_VERSION_KEY) != CommonBuildKonfig.CACTUS_WEIGHTS_VERSION) {
+                    settings.putString(STT_UPDATE_NOTIFIED_VERSION_KEY, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+                    NotifierManager.getLocalNotifier().notify(
+                        "Offline voice recognition",
+                        "We've improved offline voice recognition. Open the app to update the model."
+                    )
+                }
+            } else if (settings.hasKey(STT_MODE_BEFORE_UPDATE_KEY)) {
+                val saved = CactusSTTMode.fromId(settings.getInt(STT_MODE_BEFORE_UPDATE_KEY, CactusSTTMode.RemoteOnly.id))
+                settings.remove(STT_MODE_BEFORE_UPDATE_KEY)
+                if (coreConfigHolder.config.value.sttConfig.mode == CactusSTTMode.RemoteOnly) {
+                    coreConfigHolder.update(
+                        coreConfigHolder.config.value.copy(
+                            sttConfig = coreConfigHolder.config.value.sttConfig.copy(
+                                mode = saved,
+                                modelName = CommonBuildKonfig.CACTUS_STT_MODEL,
+                            )
+                        )
+                    )
+                }
             }
         } catch (e: Exception) {
             logger.w(e) { "Cactus incompatible model check skipped" }

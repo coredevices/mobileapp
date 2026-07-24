@@ -39,7 +39,7 @@ class ModelManager(
 
     suspend fun getAvailableSTTModels(): List<ModelInfo> {
         val sttModel = CommonBuildKonfig.CACTUS_STT_MODEL
-        val sttVersion = CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION
+        val version = CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
         val sttSizeMB = modelPathProvider?.let {
             val onDisk = (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
             if (onDisk > 0) onDisk else KNOWN_STT_SIZE_MB
@@ -48,7 +48,7 @@ class ModelManager(
         val currentModel = ModelInfo(
             slug = sttModel,
             sizeInMB = sttSizeMB,
-            url = "$HF_BASE/$sttModel/resolve/$sttVersion/weights/${sttModel.lowercase()}-$STT_QUANTIZATION.zip"
+            url = "$HF_BASE/$sttModel/resolve/$version/${sttModel.lowercase()}-$QUANTIZATION.zip"
         )
 
         // Include old downloaded models (e.g. whisper) so they can be deleted
@@ -65,7 +65,7 @@ class ModelManager(
 
     suspend fun getAvailableLanguageModels(): List<ModelInfo> {
         val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        val lmVersion = CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION
+        val version = CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
         val lmSizeMB = modelPathProvider?.let {
             val onDisk = (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
             if (onDisk > 0) onDisk else KNOWN_LM_SIZE_MB
@@ -74,15 +74,14 @@ class ModelManager(
         return listOf(ModelInfo(
             slug = lmModel,
             sizeInMB = lmSizeMB,
-            url = "$HF_BASE/$lmModel/resolve/$lmVersion/weights/${lmModel.lowercase()}-$LM_QUANTIZATION.zip"
+            url = "$HF_BASE/$lmModel/resolve/$version/${lmModel.lowercase()}-$QUANTIZATION.zip"
         ))
     }
 
     companion object {
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val STT_QUANTIZATION = "int8"
-        private const val LM_QUANTIZATION = "int4"
-        private const val KNOWN_STT_SIZE_MB = 670
+        private const val QUANTIZATION = "cq4"
+        private const val KNOWN_STT_SIZE_MB = 406
         private const val KNOWN_LM_SIZE_MB = 530
     }
 

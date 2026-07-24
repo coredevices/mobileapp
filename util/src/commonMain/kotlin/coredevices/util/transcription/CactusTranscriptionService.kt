@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.cactus.cactusDestroy
 import com.cactus.cactusGetLastError
 import com.cactus.cactusInit
+import com.cactus.cactusSetBackend
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
@@ -107,7 +108,7 @@ class CactusTranscriptionService(
     }
 
     private var lastTranscriptionAt: TimeMark? = null
-    private val warmupMutex = Mutex()
+    private val modelMutex = Mutex()
     private val silentPcm = ByteArray(32_000) // 1s, 16kHz, int16 mono
 
     /**
@@ -143,7 +144,7 @@ class CactusTranscriptionService(
             throw TranscriptionException.NotEnoughMemory(modelUsed = sttConfig.value.modelName)
         }
         return withCactusStopOnCancel(handle) {
-            parseTranscriptionText(cactusTranscribe(handle, audioPath, null, null, null, null)).also { text ->
+            parseTranscriptionText(cactusTranscribe(handle, audioPath, "", null, null, null)).also { text ->
                 if (text.isBlank()) {
                     logger.w { "cactusTranscribe returned blank result, native lastError='${cactusGetLastError()}'" }
                 }
@@ -183,16 +184,26 @@ class CactusTranscriptionService(
             return
         }
         lastTranscriptionAt = TimeSource.Monotonic.markNow()
-        warmupMutex.withLock {
+        if (!modelMutex.tryLock()) {
+            logger.d { "Skipping warmup, transcription in progress" }
+            return
+        }
+        try {
             val handle = modelHandle
             if (handle == 0L) return
             withHighPriorityThread {
-                withTimeout(2.seconds) {
-                    withCactusStopOnCancel(handle) {
-                        cactusTranscribe(handle, null, null, null, null, silentPcm)
+                try {
+                    withTimeout(2.seconds) {
+                        withCactusStopOnCancel(handle) {
+                            cactusTranscribe(handle, null, "", null, null, silentPcm)
+                        }
                     }
+                } catch (e: TimeoutCancellationException) {
+                    logger.w { "Cactus STT warmup timed out" }
                 }
             }
+        } finally {
+            modelMutex.unlock()
         }
     }
 
@@ -201,8 +212,10 @@ class CactusTranscriptionService(
         if (config.mode == CactusSTTMode.RemoteOnly) return
         if (!isCactusSupported()) return
         val sttModelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        if (!modelProvider.isModelDownloaded(sttModelName)) {
-            logger.w { "STT model '$sttModelName' not downloaded, skipping init" }
+        if (!modelProvider.isModelDownloaded(sttModelName) ||
+            sttModelName in modelProvider.getIncompatibleModels()
+        ) {
+            logger.w { "STT model '$sttModelName' unavailable or needs update, skipping init" }
             return
         }
         val start = Clock.System.now()
@@ -214,6 +227,7 @@ class CactusTranscriptionService(
         }
         if (modelHandle == 0L) {
             val modelPath = modelProvider.getSTTModelPath()
+            cactusSetBackend("cpu")
             modelHandle = cactusInit(modelPath, null, false)
             lastInitedModel = config.modelName
             val initDuration = Clock.System.now() - start
@@ -330,7 +344,7 @@ class CactusTranscriptionService(
                 }
             }
             try {
-                runLocalTranscribe(path, timeout)
+                modelMutex.withLock { runLocalTranscribe(path, timeout) }
             } finally {
                 try { SystemFileSystem.delete(path) } catch (e: Exception) {
                     logger.w(e) { "Failed to delete temp file $path" }

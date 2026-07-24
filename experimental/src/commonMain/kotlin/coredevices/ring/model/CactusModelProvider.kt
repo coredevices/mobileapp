@@ -22,3 +22,10 @@ expect class CactusModelProvider() : CactusModelPathProvider {
     fun setCloudApiKey(key: String)
     override fun initTelemetry()
 }
+
+internal fun modelNeedsReplacement(
+    name: String,
+    compatibleNames: Set<String>,
+    versionMatches: Boolean,
+    bundledInApp: Boolean,
+): Boolean = name !in compatibleNames || (!versionMatches && !bundledInApp)

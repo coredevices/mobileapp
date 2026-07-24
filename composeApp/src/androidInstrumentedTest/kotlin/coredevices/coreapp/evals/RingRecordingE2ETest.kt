@@ -589,7 +589,7 @@ class RingRecordingE2ETest {
         singleOf(::McpSessionFactory)
         factory { coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool(get()) }
         factory { coredevices.ring.agent.integrations.NotionIntegration(get(), get(), get()) }
-        factory { coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient() }
+        factory { coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient(get(), get()) }
         single { coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory(get(), get()) }
         single<coredevices.firestore.UsersDao> {
             object : coredevices.firestore.UsersDao {

@@ -41,6 +41,7 @@ fun App() {
         }
         Box(Modifier.fillMaxSize().dismissKeyboardOnTapOutside()) {
             AppNavHost(navHostController, startDestination)
+            SttModelUpdatePrompt()
         }
     }
 }

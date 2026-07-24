@@ -3,6 +3,7 @@ package coredevices.ring.agent
 import co.touchlab.kermit.Logger
 import com.cactus.cactusComplete
 import com.cactus.cactusInit
+import com.cactus.cactusSetBackend
 import com.cactus.isCactusSupported
 import coredevices.indexai.agent.AgentToolCall
 import coredevices.indexai.agent.ToolCallingAgent
@@ -55,6 +56,7 @@ class IndexAgentCactus(
                 logger.d { "Initializing CactusAgent for the first time..." }
                 val initStart = Clock.System.now()
                 val modelPath = modelProvider.getLMModelPath()
+                cactusSetBackend("cpu")
                 modelHandle = cactusInit(modelPath, null, false)
                 val initDuration = Clock.System.now() - initStart
                 logger.i { "CactusAgent model initialized: $modelPath in $initDuration" }
