@@ -41,6 +41,8 @@ interface Preferences: BasePreferences {
      *  manual sync.
      */
     val lastBackupCount: StateFlow<Int?>
+    /** One-shot: onboarding already auto-defaulted STT to the platform engine, don't do it again. */
+    val platformSttDefaulted: Boolean
 
     suspend fun setUseCactusAgent(useCactus: Boolean)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
@@ -60,6 +62,7 @@ interface Preferences: BasePreferences {
     fun setEncryptionKeyFingerprint(fingerprint: String?)
     fun setLastWipedRing(id: String?)
     fun setLastBackupCount(count: Int?)
+    fun setPlatformSttDefaulted()
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -152,6 +155,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         if (settings.hasKey("last_backup_count")) settings.getInt("last_backup_count", 0) else null
     )
     override val lastBackupCount = _lastBackupCount.asStateFlow()
+    override val platformSttDefaulted: Boolean
+        get() = settings.getBoolean("platform_stt_defaulted", false)
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -293,6 +298,10 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.remove("last_backup_count")
         }
         _lastBackupCount.value = count
+    }
+
+    override fun setPlatformSttDefaulted() {
+        settings.putBoolean("platform_stt_defaulted", true)
     }
 }
 

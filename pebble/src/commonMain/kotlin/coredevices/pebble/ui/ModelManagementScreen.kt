@@ -132,7 +132,7 @@ class ModelManagementScreenViewModel(
         // With no STT models left, local speech recognition can't run, so fall
         // back to cloud-only and let the user know.
         if (modelManager.getDownloadedSTTModelSlugs().isEmpty() &&
-            coreConfigHolder.config.value.sttConfig.mode != CactusSTTMode.RemoteOnly
+            coreConfigHolder.config.value.sttConfig.mode.usesLocalCactus()
         ) {
             coreConfigHolder.update(
                 coreConfigHolder.config.value.copy(

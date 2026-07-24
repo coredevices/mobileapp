@@ -51,7 +51,7 @@ fun Permission.description(): String = when (this) {
     Permission.ReadPhoneState -> "To show phone calls on the watch"
     Permission.ReadNotifications -> "To display notifications on the watch"
     Permission.RecordAudio -> "To record manual local notes"
-    Permission.SpeechRecognizer -> "To record voice notes"
+    Permission.SpeechRecognizer -> "To transcribe recordings on this device"
     Permission.ExternalStorage -> "To store recordings"
     Permission.SetAlarms -> "To notify when a reminder is triggered"
     Permission.BatteryOptimization -> "To handle recordings in the background"

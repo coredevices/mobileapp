@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
 import kotlin.coroutines.cancellation.CancellationException
@@ -34,6 +35,7 @@ class HybridTranscriptionService(
     private val wisprFlow: WisprFlowRESTTranscriptionService,
     private val kirinki: KirinkiTranscriptionService,
     private val analytics: CoreAnalytics,
+    private val platform: PlatformSpeechRecognizer,
 ) : TranscriptionService {
     companion object {
         private val logger = Logger.withTag("HybridTranscriptionService")
@@ -48,13 +50,14 @@ class HybridTranscriptionService(
     private var lastWisprError = Instant.DISTANT_PAST
 
     private var _lastSuccessfulMode: CactusSTTMode? = null
+    private var _lastModelUsed: String? = null
 
     // Diagnostics consumed by the bug report STT summary.
     val configuredMode get() = sttConfig.mode
     val configuredModel get() = sttConfig.modelName
     val configuredLanguage get() = sttConfig.spokenLanguage
     val lastSuccessfulMode get() = _lastSuccessfulMode
-    val lastModelUsed get() = cactus.lastModelUsed
+    val lastModelUsed get() = _lastModelUsed ?: cactus.lastModelUsed
     val isModelReady get() = cactus.isModelReady
 
     override val onInitialized: Channel<Boolean> get() = cactus.onInitialized
@@ -71,6 +74,9 @@ class HybridTranscriptionService(
             CactusSTTMode.LocalOnly -> cactus.isLocalAvailable()
             CactusSTTMode.RemoteFirst, CactusSTTMode.LocalFirst ->
                 wisprFlow.isAvailable() || kirinki.isAvailable() || cactus.isModelReady
+            CactusSTTMode.PlatformOnly ->
+                (platform.isAvailable() && platform.isAuthorized()) ||
+                    wisprFlow.isAvailable() || kirinki.isAvailable()
             // Rebble modes are dispatched by STTRouter and never reach this service.
             CactusSTTMode.RebbleOnly,
             CactusSTTMode.RebbleFirst,
@@ -198,6 +204,49 @@ class HybridTranscriptionService(
                 val text = cactus.transcribeLocal(audio, sampleRate)
                 RoutedResult(text, sttMode, configuredModel)
             }
+            CactusSTTMode.PlatformOnly -> {
+                val languageTag = ((language as? STTLanguage.Specific)?.languageCodes?.firstOrNull()
+                    ?: sttConfig.spokenLanguage)?.let { toBcp47(it, null) }
+                // The mode syncs across devices; fall back to cloud where the platform
+                // engine isn't available (Android, iOS < 26), hasn't been granted the speech
+                // recognition permission, or can't transcribe the requested language. The
+                // engine publishes its locale list asynchronously shortly after launch — an
+                // empty list means "unknown yet", not unsupported, so wait briefly and try
+                // the platform engine rather than silently sending on-device-mode audio to
+                // the cloud.
+                if (!platform.isAvailable() || !platform.isAuthorized()) {
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+                val tags = if (languageTag == null) {
+                    emptyList()
+                } else {
+                    withTimeoutOrNull(2.seconds) {
+                        platform.supportedLanguageTags.first { it.isNotEmpty() }
+                    }.orEmpty()
+                }
+                val languageSupported =
+                    languageTag == null || tags.isEmpty() || tags.coversLanguage(languageTag)
+                if (!languageSupported) {
+                    val result = remote(willFallbackLocal = false)
+                    return RoutedResult(result.text, CactusSTTMode.RemoteOnly, result.modelUsed)
+                }
+                val text = try {
+                    platform.transcribe(audio, sampleRate, languageTag).also {
+                        analytics.logTranscriptionSuccess("platform")
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val expected = e is TranscriptionException.NoSpeechDetected ||
+                        e is TranscriptionException.TranscriptionInProgress
+                    if (!expected) {
+                        analytics.logTranscriptionFailure("platform", transcriptionFailureReason(e), e.message)
+                    }
+                    throw e
+                }
+                RoutedResult(text, sttMode, PLATFORM_STT_MODEL_NAME)
+            }
             CactusSTTMode.RemoteFirst -> {
                 try {
                     val result = remote(willFallbackLocal = true)
@@ -285,7 +334,10 @@ class HybridTranscriptionService(
             logger.d { "Transcription completed in $duration" }
 
             validateContainsSpeech(text, modelUsed)
-            if (text != null) _lastSuccessfulMode = modeUsed
+            if (text != null) {
+                _lastSuccessfulMode = modeUsed
+                _lastModelUsed = modelUsed
+            }
 
             if (!coreConfigFlow.value.obfuscateSensitiveLogs) {
                 logger.d { "Transcription text: '$text' (${text?.length} chars), used $modelUsed" }

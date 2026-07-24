@@ -2,6 +2,8 @@ package coredevices.util.transcription
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class Bcp47Test {
     @Test
@@ -28,5 +30,20 @@ class Bcp47Test {
     fun leavesAlreadyQualifiedCodeUntouched() {
         assertEquals("zh-Hans", toBcp47("zh-Hans", "US"))
         assertEquals("pt_BR", toBcp47("pt_BR", "US"))
+    }
+
+    @Test
+    fun coversLanguageMatchesOnPrimarySubtagOnly() {
+        val tags = listOf("en-GB", "es-ES", "zh-Hans-CN")
+        assertTrue(tags.coversLanguage("en-US"))
+        assertTrue(tags.coversLanguage("en"))
+        assertTrue(tags.coversLanguage("zh-Hant-TW"))
+        assertFalse(tags.coversLanguage("fr-FR"))
+    }
+
+    @Test
+    fun coversLanguageIgnoresCaseAndEmptyTagList() {
+        assertTrue(listOf("EN-gb").coversLanguage("en-US"))
+        assertFalse(emptyList<String>().coversLanguage("en-US"))
     }
 }

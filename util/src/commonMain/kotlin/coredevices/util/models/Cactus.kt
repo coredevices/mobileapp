@@ -19,7 +19,10 @@ enum class CactusSTTMode(val id: Int) {
     LocalFirst(3),
     RebbleOnly(4),
     RebbleFirst(5),
-    RebbleFallback(6);
+    RebbleFallback(6),
+
+    /** OS-native on-device engine: Apple SpeechAnalyzer (iOS 26+) / ML Kit GenAI (Android). */
+    PlatformOnly(7);
 
     companion object {
         fun fromId(id: Int): CactusSTTMode {

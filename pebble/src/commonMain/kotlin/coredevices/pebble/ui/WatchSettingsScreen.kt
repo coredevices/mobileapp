@@ -134,6 +134,7 @@ import coredevices.ui.M3Dialog
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
+import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
 import coredevices.util.WeatherUnit
@@ -144,6 +145,7 @@ import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
+import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.SpokenLanguageOptions
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -458,6 +460,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         }
     }
     val cactusSupported = remember { isCactusSupported() }
+    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
+    val platformSttAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
+    }
     val bootConfigProvider: BootConfigProvider = koinInject()
     val rebbleVoiceAvailable by produceState(false, loggedIn) {
         value = withContext(Dispatchers.Default) {
@@ -496,6 +502,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             loggedIn,
             watchPrefs,
             rebbleVoiceAvailable,
+            platformSttAvailable,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -1363,6 +1370,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             CactusSTTMode.RebbleOnly,
                             CactusSTTMode.RebbleFirst,
                             CactusSTTMode.RebbleFallback -> rebbleVoiceAvailable
+                            CactusSTTMode.PlatformOnly -> platformSttAvailable
                             else -> true
                         }
                     },
@@ -1371,6 +1379,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         val isRebble = it == CactusSTTMode.RebbleOnly ||
                                 it == CactusSTTMode.RebbleFirst ||
                                 it == CactusSTTMode.RebbleFallback
+                        val isPlatform = it == CactusSTTMode.PlatformOnly
                         val needsLocal = it == CactusSTTMode.LocalOnly ||
                                 it == CactusSTTMode.LocalFirst ||
                                 it == CactusSTTMode.RebbleFirst ||
@@ -1378,9 +1387,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         if (isRebble && !rebbleVoiceAvailable) {
                             snackbarDisplay.showSnackbar("Rebble speech recognition requires a Rebble subscription")
                             showSignInDialog = true
-                        } else if (it != CactusSTTMode.RemoteOnly && !cactusSupported) {
+                        } else if (isPlatform && !platformSttAvailable) {
+                            snackbarDisplay.showSnackbar("This device doesn't support system speech recognition")
+                        } else if (it != CactusSTTMode.RemoteOnly && !isPlatform && !cactusSupported) {
                             snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
-                        } else if (it != CactusSTTMode.LocalOnly && !isRebble && coreUser == null) {
+                        } else if (it != CactusSTTMode.LocalOnly && !isPlatform && !isRebble && coreUser == null) {
                             snackbarDisplay.showSnackbar("You need to be signed in to use cloud speech recognition")
                             showSignInDialog = true
                         } else if (needsLocal && !hasOfflineModels) {
@@ -1393,6 +1404,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                     )
                                 )
                             )
+                            if (isPlatform && uiContext != null) {
+                                scope.launch {
+                                    permissionRequester.requestPermission(
+                                        Permission.SpeechRecognizer,
+                                        uiContext,
+                                    )
+                                }
+                            }
                         }
                     },
                     itemText = { mode ->
@@ -1404,6 +1423,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             CactusSTTMode.RebbleOnly -> "Rebble Only"
                             CactusSTTMode.RebbleFirst -> "Rebble (with Local Fallback)"
                             CactusSTTMode.RebbleFallback -> "Local (with Rebble Fallback)"
+                            CactusSTTMode.PlatformOnly -> "System (On-Device)"
                         }
                     },
                     extraSupportingContent = {
@@ -1441,6 +1461,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         coreConfig.sttConfig.mode !in setOf(
                             CactusSTTMode.RemoteOnly,
                             CactusSTTMode.RebbleOnly,
+                            CactusSTTMode.PlatformOnly,
                         ) || hasOfflineModels
                     },
                     action = {

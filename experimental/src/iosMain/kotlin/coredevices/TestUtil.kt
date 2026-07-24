@@ -157,6 +157,7 @@ private object PreferencesTestImpl: Preferences {
         get() = MutableStateFlow(null)
     override val lastBackupCount: StateFlow<Int?>
         get() = MutableStateFlow(null)
+    override val platformSttDefaulted: Boolean = false
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {
         TODO("Not yet implemented")
@@ -222,6 +223,7 @@ private object PreferencesTestImpl: Preferences {
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
     override fun setLastBackupCount(count: Int?) {}
+    override fun setPlatformSttDefaulted() {}
 }
 
 private object UsersDaoTestImpl: UsersDao {

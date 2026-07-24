@@ -50,6 +50,7 @@ import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
+import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -581,7 +582,7 @@ class RingRecordingE2ETest {
             CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
         }
         single {
-            HybridTranscriptionService(get(), get(), get(), get(), get())
+            HybridTranscriptionService(get(), get(), get(), get(), get(), PlatformSpeechRecognizer())
         } bind TranscriptionService::class
 
         // MCP tools
@@ -694,6 +695,7 @@ private class E2EPreferences : Preferences {
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
+    override val platformSttDefaulted: Boolean = false
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -716,4 +718,5 @@ private class E2EPreferences : Preferences {
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
     override fun setLastBackupCount(count: Int?) {}
+    override fun setPlatformSttDefaulted() {}
 }

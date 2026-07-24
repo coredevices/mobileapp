@@ -90,7 +90,8 @@ class CommonAppDelegate(
                 coreConfigHolder.update(
                     coreConfigHolder.config.value.copy(
                         sttConfig = coreConfigHolder.config.value.sttConfig.copy(
-                            mode = CactusSTTMode.RemoteOnly,
+                            mode = coreConfigHolder.config.value.sttConfig.mode
+                                .takeUnless { it.usesLocalCactus() } ?: CactusSTTMode.RemoteOnly,
                             modelName = null,
                         )
                     )

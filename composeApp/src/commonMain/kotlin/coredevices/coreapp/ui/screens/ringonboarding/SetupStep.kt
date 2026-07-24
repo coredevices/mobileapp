@@ -22,14 +22,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +70,8 @@ import coredevices.ring.ui.screens.settings.NotionDialog
 import coredevices.ring.ui.viewmodel.SettingsViewModel
 import coredevices.ui.SignInDialog
 import coredevices.util.CoreConfigHolder
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
 import coredevices.util.emailOrNull
 import coredevices.util.integrations.Integration
@@ -73,6 +80,10 @@ import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
 import coredevices.util.rememberUiContext
+import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.transcription.SpokenLanguageOptions
+import coredevices.util.transcription.coversLanguage
+import androidx.compose.ui.text.intl.Locale
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
@@ -163,8 +174,72 @@ internal fun SetupStep(
         }
     }
     val cactusSupported = remember { isCactusSupported() }
+    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
+    val platformSttAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
+    }
+    val deviceLanguage = Locale.current.language
+    val platformLanguageTags by platformSpeechRecognizer.supportedLanguageTags.collectAsState()
+    val platformSupportsDeviceLanguage = platformLanguageTags.coversLanguage(deviceLanguage)
+    val permissionRequester: PermissionRequester = koinInject()
+    val uiContext = rememberUiContext()
+    // The permission is also nagged for while this mode is configured; asking here means the
+    // engine is usable straight away rather than falling back to cloud until the nag is answered.
+    val selectPlatformStt: () -> Unit = {
+        coreConfigHolder.update(
+            coreConfig.copy(sttConfig = coreConfig.sttConfig.copy(mode = CactusSTTMode.PlatformOnly))
+        )
+        uiContext?.let { context ->
+            scope.launch {
+                permissionRequester.requestPermission(Permission.SpeechRecognizer, context)
+            }
+        }
+    }
+    // Default to the free on-device system engine when this phone supports it (iOS 26+)
+    // and can transcribe the phone's language; otherwise keep the cloud default. One-shot
+    // (persisted) so re-entering onboarding never overrides a deliberate cloud choice.
+    LaunchedEffect(platformSttAvailable, platformSupportsDeviceLanguage) {
+        if (platformSttAvailable && platformSupportsDeviceLanguage &&
+            !preferences.platformSttDefaulted &&
+            coreConfig.sttConfig.mode == CactusSTTMode.RemoteOnly
+        ) {
+            preferences.setPlatformSttDefaulted()
+            selectPlatformStt()
+        }
+    }
+    var showPlatformInfoDialog by remember { mutableStateOf(false) }
+    if (showPlatformInfoDialog) {
+        val languages = remember(platformLanguageTags) {
+            platformLanguageTags
+                .map { it.substringBefore('-').lowercase() }.distinct()
+                .mapNotNull { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second }
+                .sorted()
+        }
+        AlertDialog(
+            onDismissRequest = { showPlatformInfoDialog = false },
+            title = { Text("On-device speech recognition") },
+            text = {
+                Text(
+                    "Uses Apple's built-in speech recognition. Audio stays on your phone " +
+                        "and no download is needed. Recordings in unsupported languages fall " +
+                        "back to cloud transcription." +
+                        if (languages.isEmpty()) {
+                            ""
+                        } else {
+                            "\n\nSupported languages:\n" + languages.joinToString(", ")
+                        }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlatformInfoDialog = false }) { Text("OK") }
+            },
+        )
+    }
     val selectSpeechMode: (CactusSTTMode) -> Unit = { mode ->
+        // An explicit choice disables the one-shot auto-default, even if it hasn't fired yet.
+        preferences.setPlatformSttDefaulted()
         when {
+            mode == CactusSTTMode.PlatformOnly -> selectPlatformStt()
             mode != CactusSTTMode.RemoteOnly && !cactusSupported -> {
                 snackbarDisplay.showSnackbar("This device doesn't support local speech recognition")
             }
@@ -207,6 +282,8 @@ internal fun SetupStep(
                 SpeechModeChoice(
                     mode = coreConfig.sttConfig.mode,
                     onChange = selectSpeechMode,
+                    showPlatformOption = platformSttAvailable,
+                    onPlatformInfo = { showPlatformInfoDialog = true },
                 )
             }
         }
@@ -532,8 +609,12 @@ private fun CardContainer(content: @Composable () -> Unit) {
 internal fun SpeechModeChoice(
     mode: CactusSTTMode,
     onChange: (CactusSTTMode) -> Unit,
+    showPlatformOption: Boolean = false,
+    onPlatformInfo: (() -> Unit)? = null,
 ) {
-    val options = listOf(
+    val options = listOfNotNull(
+        Triple(CactusSTTMode.PlatformOnly, "On-device", "Recommended — private, stays on this iPhone")
+            .takeIf { showPlatformOption },
         Triple(CactusSTTMode.RemoteOnly, "Cloud only", "Best performance, requires connection"),
         Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 670MB download"),
         Triple(CactusSTTMode.LocalFirst, "Local, cloud fallback", "670MB download"),
@@ -546,6 +627,7 @@ internal fun SpeechModeChoice(
                 sub = sub,
                 selected = mode == m,
                 onClick = { onChange(m) },
+                onInfo = onPlatformInfo.takeIf { m == CactusSTTMode.PlatformOnly },
             )
         }
     }
@@ -557,6 +639,7 @@ private fun SpeechRadioCard(
     sub: String,
     selected: Boolean,
     onClick: () -> Unit,
+    onInfo: (() -> Unit)? = null,
 ) {
     val palette = LocalPalette.current
     Surface(
@@ -596,6 +679,16 @@ private fun SpeechRadioCard(
                     fontSize = 12.sp,
                     color = palette.onSurfaceVariant,
                 )
+            }
+            if (onInfo != null) {
+                IconButton(onClick = onInfo, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = "Supported languages",
+                        tint = palette.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }

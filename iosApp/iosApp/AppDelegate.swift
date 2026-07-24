@@ -36,6 +36,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 mixpanel.optOutTracking()
             }
         })
+        SpeechAnalyzerBridge.register()
         UNUserNotificationCenter.current().delegate = self
         return res
     }

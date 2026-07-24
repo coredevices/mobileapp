@@ -35,6 +35,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
+import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +83,20 @@ object IOSDelegate : KoinComponent {
     private val experimentalDevices: ExperimentalDevices by inject()
     private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
     private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    fun registerNativeSpeechAnalyzer(
+        isSupported: () -> Boolean,
+        cancelTranscription: () -> Unit,
+        transcribeWavFile: (String, String?, (String?, String?) -> Unit) -> Unit,
+    ) {
+        NativeSpeechAnalyzerBridge.isSupported = isSupported
+        NativeSpeechAnalyzerBridge.cancelTranscription = cancelTranscription
+        NativeSpeechAnalyzerBridge.transcribeWavFile = transcribeWavFile
+    }
+
+    fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {
+        NativeSpeechAnalyzerBridge.supportedLanguageTags.value = tags
+    }
 
     fun handleOpenUrl(url: NSURL): Boolean {
         val uri = url.toUri()

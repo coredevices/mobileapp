@@ -103,6 +103,7 @@ class FakePreferences : Preferences {
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
+    override val platformSttDefaulted: Boolean = false
 
     override suspend fun setUseCactusAgent(useCactus: Boolean) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -127,6 +128,7 @@ class FakePreferences : Preferences {
     override fun setLastBackupCount(count: Int?) {
         TODO("Not yet implemented")
     }
+    override fun setPlatformSttDefaulted() {}
 }
 
 class FakeServletRepository : ServletRepository {
