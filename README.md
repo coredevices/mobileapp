@@ -72,13 +72,35 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    sudo ln -s /opt/homebrew/bin/pod /usr/local/bin/pod
    ```
 
-3. **Setup GitHub token for speex module**
+3. **Install Android Studio**
 
-    Create a `local.properties` file in the project root with your GitHub credentials.
+   The Gradle build needs an Android SDK even when only building for iOS
+   (several modules apply the Android Gradle plugin). Install
+   [Android Studio](https://developer.android.com/studio) and let its
+   setup wizard install the SDK at the default location
+   (`~/Library/Android/sdk`).
+
+   Then create a `local.properties` file in the project root pointing at it:
+
+   ```properties
+   sdk.dir=/Users/<you>/Library/Android/sdk
+   ```
+
+4. **Install the iOS platform for Xcode**
+
+   Recent Xcode versions ship without the iOS platform (SDK device
+   support and simulator runtime). Without it, any iOS build fails with
+   "iOS X.Y is not installed". Download it with:
+
+   ```bash
+   xcodebuild -downloadPlatform iOS
+   ```
+
+   (This is the same ~8 GB download as Xcode → Settings → Components.)
 
 #### Configuration
 
-4. **Configure Entitlements**
+5. **Configure Entitlements**
 
    Set `iosApp/iosApp/iosApp.entitlements` to:
 
@@ -93,7 +115,7 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    </plist>
    ```
 
-5. **Install CocoaPods dependencies**
+6. **Install CocoaPods dependencies**
 
    ```bash
    ./gradlew podInstall
@@ -101,21 +123,29 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
 
    This will create `Podfile.lock` and set up all required dependencies.
 
-6. **Configure Bundle ID and Signing**
+7. **Configure Bundle ID and Signing**
 
    - Open `iosApp/iosApp.xcworkspace` in Xcode (⚠️ **Important**: use `.xcworkspace`, not `.xcodeproj`)
    - Go to the target `iosApp` → **Signing & Capabilities**
    - Set your **Team** (your Apple Developer account)
    - Set **Bundle Identifier** to your own (e.g., `com.yourname.coredevices.coreapp`)
 
-7. **Configure Firebase**
+8. **Configure Firebase**
 
    - Create a free Firebase account at https://console.firebase.google.com
    - Create a new iOS app with the same Bundle ID you set above
    - Download `GoogleService-Info.plist` and place it in `iosApp/iosApp/`
    - The file should be named exactly `GoogleService-Info.plist`
 
-8. **Create a git tag for app version**
+   If you don't need any Firebase-dependent features, you can skip the
+   Firebase account and use the provided dummy config instead (same as
+   `google-services-dummy.json` on Android):
+
+   ```bash
+   cp iosApp/iosApp/GoogleService-Info-dummy.plist iosApp/iosApp/GoogleService-Info.plist
+   ```
+
+9. **Create a git tag for app version**
 
    Create a git tag that will be used as the version of the app:
 
@@ -125,7 +155,7 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
 
 #### Build and Run
 
-9. **Build and run in Xcode**
+10. **Build and run in Xcode**
 
    - Open `iosApp/iosApp.xcworkspace` in Xcode
    - Select your target device or simulator and run.
@@ -134,6 +164,14 @@ Several features (e.g. bug reporting, google login, memfault, online transcripti
    > - Opened the `.xcworkspace` file (not `.xcodeproj`)
    > - Ran `pod install` successfully
    > - Cleaned the build folder (`Product → Clean Build Folder`)
+
+   > **Known issue**: simulator builds currently fail to link with
+   > `ld: building for 'iOS-simulator', but linking in object file (...libspeex.a...) built for 'iOS'`.
+   > The published `io.github.coredevices.speex` simulator artifact ships a
+   > device-built `libspeex.a` inside its iosSimulatorArm64 klib (every
+   > version on Maven Central is affected) and needs to be republished.
+   > Until then, run on a physical device. Note the simulator has no
+   > Bluetooth in any case, so connecting a watch requires a device.
 
 
 
