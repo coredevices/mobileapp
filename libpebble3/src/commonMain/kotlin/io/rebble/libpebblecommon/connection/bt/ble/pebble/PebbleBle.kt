@@ -138,8 +138,20 @@ class PebbleBle(
 
         val needToPair = if (connectionStatus.paired) {
             if (device.isBonded()) {
-                logger.d("already paired")
-                false
+                // isBonded() is always true on iOS, so a bond the phone forgot still looks
+                // paired - an unencrypted link is the only tell. Encryption can lag connection
+                // setup, so give it a moment.
+                val encrypted = connectionStatus.encrypted || withTimeoutOrNull(ENCRYPTION_RESTORE_GRACE) {
+                    logger.d { "waiting for encryption..." }
+                    connectivity.status.first { it.encrypted }
+                } != null
+                if (encrypted) {
+                    logger.d("already paired")
+                    false
+                } else {
+                    logger.d("watch says paired but link didn't encrypt; re-pairing")
+                    true
+                }
             } else {
                 logger.d("watch thinks it is paired, phone does not")
                 true
@@ -205,6 +217,7 @@ class PebbleBle(
 
     companion object {
         private val CONNECTIVITY_UPDATE_TIMEOUT = 10.seconds
+        private val ENCRYPTION_RESTORE_GRACE = 5.seconds
     }
 }
 
