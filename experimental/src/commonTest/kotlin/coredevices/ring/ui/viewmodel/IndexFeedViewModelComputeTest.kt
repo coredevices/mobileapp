@@ -7,6 +7,7 @@ import coredevices.mcp.data.SemanticResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
@@ -34,6 +35,40 @@ class IndexFeedViewModelComputeTest {
         val peek = state.recordings.single()
         assertEquals("Added to calendar", peek.primaryChip)
         assertFalse(peek.orphan)
+    }
+
+    @Test
+    fun failedActionSurfacesItsErrorMessage() {
+        val state = IndexFeedViewModel.compute(
+            recordings = listOf(recording),
+            items = emptyList(),
+            lists = emptyList(),
+            entries = emptyList(),
+            query = "",
+            semanticResults = mapOf(
+                1L to SemanticResult.GenericFailure(
+                    "Failed to create reminder: Notification permission not granted."
+                )
+            ),
+        )
+        val peek = state.recordings.single()
+        assertEquals(
+            "Failed to create reminder: Notification permission not granted.",
+            peek.actionError,
+        )
+    }
+
+    @Test
+    fun failureWithoutMessageLeavesNoActionError() {
+        val state = IndexFeedViewModel.compute(
+            recordings = listOf(recording),
+            items = emptyList(),
+            lists = emptyList(),
+            entries = emptyList(),
+            query = "",
+            semanticResults = mapOf(1L to SemanticResult.GenericFailure(null)),
+        )
+        assertNull(state.recordings.single().actionError)
     }
 
     @Test

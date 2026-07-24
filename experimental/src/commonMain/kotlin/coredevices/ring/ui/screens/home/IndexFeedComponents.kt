@@ -487,6 +487,23 @@ internal fun PeekCard(
                         .padding(horizontal = 6.dp, vertical = 1.dp),
                 )
             }
+        } else if (peek.actionError != null) {
+            // One line keeps the fixed-height card stable; the full message is
+            // on the feed row and the recording details.
+            Row(
+                modifier = Modifier.height(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    peek.actionError,
+                    color = colors.error,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         } else {
             Row(
                 modifier = Modifier.height(16.dp),

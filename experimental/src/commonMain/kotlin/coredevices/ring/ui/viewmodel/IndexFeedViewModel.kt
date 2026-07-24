@@ -233,6 +233,10 @@ class IndexFeedViewModel(
              *  Non-null → the peek card shows "Transcription error" + a retry
              *  button instead of the primary action chip. */
             val retryEntry: RecordingEntryEntity? = null,
+            /** Message from a failed action (e.g. a missing permission), shown
+             *  in place of the action chip so the failure is actionable
+             *  without opening the recording. */
+            val actionError: String? = null,
         )
 
         companion object {
@@ -300,6 +304,7 @@ class IndexFeedViewModel(
                     // A calendar event takes an action but creates no feed item — fall back to
                     // the recording's semantic result so the peek doesn't read "No action taken".
                     val calendarAction = semanticResults[rec.id] as? SemanticResult.CalendarEventCreation
+                    val failure = semanticResults[rec.id] as? SemanticResult.GenericFailure
                     UiState.RecordingPeek(
                         recording = rec,
                         transcription = transcriptionByRec[rec.id].orEmpty(),
@@ -308,6 +313,11 @@ class IndexFeedViewModel(
                             ?: "No action taken",
                         orphan = primary == null && calendarAction == null,
                         retryEntry = retryEntry,
+                        // A retryable transcription failure means the agent
+                        // never ran this time round; any stored failure is from
+                        // an earlier attempt, so don't surface it.
+                        actionError = failure?.userErrorMessage
+                            ?.takeIf { it.isNotBlank() && retryEntry == null },
                     )
                 }
 

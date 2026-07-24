@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,13 +54,23 @@ class FullFeedViewModel(
     val query = MutableStateFlow("")
 
     val state: StateFlow<UiState> = combine(
-        recordingRepo.getAllRecordings(),
-        itemRepo.getAllFlow(),
-        listRepo.getAllFlow(),
-        recordingRepo.getAllEntriesFlow(),
-        query,
-    ) { recs, items, lists, entries, q ->
-        compute(recs, items, lists, entries, q.trim())
+        combine(
+            recordingRepo.getAllRecordings(),
+            itemRepo.getAllFlow(),
+            listRepo.getAllFlow(),
+            recordingRepo.getAllEntriesFlow(),
+            query,
+        ) { recs, items, lists, entries, q ->
+            Inputs(recs, items, lists, entries, q)
+        },
+        recordingRepo.getLatestToolSemanticResults()
+            .map { results -> results.associate { it.recordingId to it.semanticResult } }
+            .distinctUntilChanged(),
+    ) { inputs, semanticResults ->
+        compute(
+            inputs.recordings, inputs.items, inputs.lists, inputs.entries,
+            inputs.query.trim(), semanticResults,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -97,6 +110,14 @@ class FullFeedViewModel(
         }
     }
 
+    private data class Inputs(
+        val recordings: List<LocalRecording>,
+        val items: List<CachedItem>,
+        val lists: List<CachedList>,
+        val entries: List<RecordingEntryEntity>,
+        val query: String,
+    )
+
     data class UiState(val entries: List<Entry>) {
         companion object { fun empty() = UiState(emptyList()) }
     }
@@ -114,6 +135,10 @@ class FullFeedViewModel(
             val retryEntry: RecordingEntryEntity?,
             val assistantReply: String?,
             val chips: List<Chip>,
+            /** Message from a failed action (e.g. a missing permission).
+             *  Failures produce no item, so without this the assistant side
+             *  of the row would be empty. */
+            val actionError: String? = null,
         ) : Entry() {
             override val uniqueKey: String get() = "rec-${recording.id}"
         }
@@ -132,6 +157,9 @@ class FullFeedViewModel(
             lists: List<CachedList>,
             entries: List<RecordingEntryEntity>,
             query: String,
+            /** Latest tool-call semantic result per recording id, used to surface
+             *  failures — they create no item, so there's no chip to render. */
+            semanticResults: Map<Long, SemanticResult?> = emptyMap(),
         ): UiState {
             val q = query.lowercase()
             fun match(text: String?) = q.isEmpty() || (text ?: "").lowercase().contains(q)
@@ -183,6 +211,11 @@ class FullFeedViewModel(
                             glyph = if (item.locked) "" else chipGlyph(item.kind),
                         )
                     },
+                    // A retryable transcription failure means the agent never ran
+                    // this time round; any stored failure is from an earlier
+                    // attempt, so don't surface it.
+                    actionError = (semanticResults[r.id] as? SemanticResult.GenericFailure)
+                        ?.userErrorMessage?.takeIf { it.isNotBlank() && retryEntry == null },
                 )
             }
             return UiState(entries = out)

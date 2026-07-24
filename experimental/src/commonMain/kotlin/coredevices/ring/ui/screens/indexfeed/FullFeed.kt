@@ -214,6 +214,7 @@ fun FullFeed(coreNav: CoreNav) {
                                 retryEntry = entry.retryEntry,
                                 assistantReply = entry.assistantReply,
                                 chips = entry.chips,
+                                actionError = entry.actionError,
                                 timestampRevealState = timestampRevealState,
                                 onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(entry.recording.id)) },
                                 onRetryRecording = { retryEntry ->
@@ -374,6 +375,7 @@ private fun ImessageRecordingRow(
     retryEntry: coredevices.indexai.data.entity.RecordingEntryEntity?,
     assistantReply: String?,
     chips: List<FullFeedViewModel.Chip>,
+    actionError: String?,
     timestampRevealState: RecordingTimestampRevealState,
     onOpenRecording: () -> Unit,
     onRetryRecording: (coredevices.indexai.data.entity.RecordingEntryEntity) -> Unit,
@@ -420,7 +422,45 @@ private fun ImessageRecordingRow(
             }
         }
 
-        // 3. Optional assistant reply bubble (left-aligned, after chips).
+        // 3. Failed action — the failure creates no item, so without this the
+        // assistant side of the row would be blank.
+        if (!actionError.isNullOrBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+                if (chips.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(colors.redSurface),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RingGlyph(sizeDp = 13, color = colors.primary)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                } else {
+                    Spacer(Modifier.width(32.dp))
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .clip(RoundedCornerShape(18.dp, 18.dp, 18.dp, 5.dp))
+                        .background(colors.errorContainer)
+                        .clickable { onOpenRecording() }
+                        .padding(horizontal = 13.dp, vertical = 9.dp),
+                ) {
+                    Text(
+                        actionError,
+                        color = colors.onErrorContainer,
+                        fontSize = 13.5.sp,
+                        lineHeight = 18.sp,
+                    )
+                }
+            }
+        }
+
+        // 4. Optional assistant reply bubble (left-aligned, after chips).
         if (!assistantReply.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
