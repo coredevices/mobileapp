@@ -23,7 +23,7 @@ class PutBytesService(
     private val protocolHandler: PebbleProtocolHandler,
     private val scope: ConnectionCoroutineScope,
 ) : ProtocolService {
-    val receivedMessages = Channel<PutBytesResponse>(Channel.RENDEZVOUS)
+    val receivedMessages = Channel<PutBytesResponse>(Channel.BUFFERED)
     val progressUpdates = Channel<PutBytesProgress>(Channel.BUFFERED)
 
     private val logger = Logger.withTag("PutBytesService")
@@ -39,7 +39,10 @@ class PutBytesService(
         scope.launch {
             protocolHandler.inboundMessages.collect {
                 if (it is PutBytesResponse) {
-                    receivedMessages.trySend(it)
+                    val result = receivedMessages.trySend(it)
+                    if (result.isFailure) {
+                        logger.w("dropped PutBytesResponse (buffer full): $it")
+                    }
                 }
             }
         }
@@ -88,6 +91,9 @@ class PutBytesService(
 
     private suspend fun sendAndAwaitAck(packet: PutBytesOutgoingPacket, timeout: Duration = 20.seconds): PutBytesResponse =
         withTimeout(timeout) {
+            while (receivedMessages.tryReceive().isSuccess) {
+                logger.w("discarded stale PutBytesResponse")
+            }
             send(packet)
             awaitAck()
         }
