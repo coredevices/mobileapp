@@ -4,9 +4,9 @@ import co.touchlab.kermit.Logger
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import kotlinx.coroutines.sync.Mutex
@@ -27,11 +27,12 @@ import kotlin.time.Clock
 class IndexWebhookUploadRecordingOperation(
     private val webhookApi: IndexWebhookApi,
     private val webhookPreferences: IndexWebhookPreferences,
+    private val configGesture: IndexWebhookGesture,
+    private val observedGesture: IndexWebhookGesture?,
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String,
     private val recordingId: Long,
-    private val trigger: IndexWebhookRecordingTrigger?,
 ): RecordingOperation, KoinComponent {
 
     companion object {
@@ -52,7 +53,13 @@ class IndexWebhookUploadRecordingOperation(
             return
         }
 
-        val payloadMode = webhookPreferences.payloadMode.value
+        // Re-read after the inner operation: the user may have unlinked the webhook while it ran.
+        val config = webhookPreferences.config(configGesture).value
+        if (!config.isConfigured) {
+            logger.d { "Webhook no longer configured for $configGesture, skipping upload for $fileId" }
+            return
+        }
+        val payloadMode = config.payloadMode
 
         // Read audio samples if needed
         val samples: ShortArray?
@@ -79,6 +86,6 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt, trigger)
+        webhookApi.upload(config, samples, sampleRate, fileId, transcription, recordedAt, observedGesture)
     }
 }

@@ -4,11 +4,13 @@ Send Index ring recording data to any HTTP endpoint.
 
 ## Setup
 
-1. In Index Settings, tap **Webhook**
+Each recording gesture (single click & hold, double click & hold) has its own independent
+webhook configuration — you can point them at different endpoints, or configure just one.
+
+1. In Index Settings, tap **Webhook (single click & hold)** or **Webhook (double click & hold)**
 2. Enter your webhook URL
 3. Add any request headers you need (e.g. an auth header)
 4. Choose what to send: Recording only, Transcription only, or Both
-5. Set **Double click and hold** action to "Webhook"
 
 ## Request Format
 
@@ -17,7 +19,7 @@ POST <your webhook URL>
 Content-Type: multipart/form-data; boundary=<uuid>
 <each user-configured header>
 X-Audio-Size: <byte count>  (when audio is included)
-X-Index-Trigger: single-click-hold | double-click-hold  (when known)
+X-Index-Trigger: single-click-hold | double-click-hold  (when the gesture is known)
 ```
 
 ## Multipart Fields
@@ -58,7 +60,7 @@ Headers are fully user-configurable in the webhook settings — add as many name
 
 `X-Audio-Size` is still added automatically when audio is included (it carries the audio byte count) and cannot be overridden.
 
-`X-Index-Trigger` is added automatically to identify the ring gesture that started the recording. Its value is either `single-click-hold` or `double-click-hold`, allowing receivers to route the two actions differently. The gesture is persisted with the processing task and preserved when a failed recording is retried. For legacy tasks where the gesture is unknown, the header is omitted instead of defaulting to `single-click-hold`. It cannot be overridden by a user-configured header.
+`X-Index-Trigger` identifies the ring gesture that started the recording. Its value is either `single-click-hold` or `double-click-hold`. Each gesture has its own webhook config, so this header is redundant when the two gestures point at different URLs — but if you point both at the same URL, it is how a receiver tells them apart. The gesture is persisted with the processing task and preserved when a failed recording is retried. For a recording with no recognizable gesture — a local (phone-mic) recording, or a legacy retry whose gesture cannot be recovered — the header is omitted rather than guessed, so receivers should treat its absence as "unknown". It cannot be overridden by a user-configured header.
 
 > Migration note: users who previously configured an auth token have it automatically carried over as an `X-Widget-Token` header, preserving existing behaviour.
 

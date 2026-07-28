@@ -12,8 +12,7 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
-import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
+import coredevices.ring.external.indexwebhook.IndexWebhookGesture
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.storage.RecordingStorage
@@ -42,9 +41,9 @@ class RecordingOperationFactory(
         sequence: List<ButtonPress>?
     ): RecordingOperation {
         val isDoubleClickHold = sequence == secondaryOperationSequence
-        val webhookTrigger = when {
-            isDoubleClickHold -> IndexWebhookRecordingTrigger.DoubleClickHold
-            sequence != null -> IndexWebhookRecordingTrigger.SingleClickHold
+        val observedGesture = when {
+            isDoubleClickHold -> IndexWebhookGesture.DoubleClickHold
+            sequence != null -> IndexWebhookGesture.SingleClickHold
             else -> null
         }
         val inner = if (isDoubleClickHold) {
@@ -70,7 +69,7 @@ class RecordingOperationFactory(
             recordingId = recordingId,
             fileId = fileId,
             isDoubleClickHold = isDoubleClickHold,
-            trigger = webhookTrigger,
+            observedGesture = observedGesture,
             inner = inner,
         )
     }
@@ -79,24 +78,23 @@ class RecordingOperationFactory(
         recordingId: Long,
         fileId: String,
         isDoubleClickHold: Boolean,
-        trigger: IndexWebhookRecordingTrigger?,
+        observedGesture: IndexWebhookGesture?,
         inner: RecordingOperation,
     ): RecordingOperation {
-        val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank()
-        if (!configured) return inner
-        val matchesTrigger = when (indexWebhookPreferences.trigger.value) {
-            IndexWebhookTrigger.SingleClick -> !isDoubleClickHold
-            IndexWebhookTrigger.DoubleClickHold -> isDoubleClickHold
-            IndexWebhookTrigger.Both -> true
+        val configGesture = if (isDoubleClickHold) {
+            IndexWebhookGesture.DoubleClickHold
+        } else {
+            IndexWebhookGesture.SingleClickHold
         }
-        if (!matchesTrigger) return inner
+        if (!indexWebhookPreferences.config(configGesture).value.isConfigured) return inner
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
+            configGesture = configGesture,
+            observedGesture = observedGesture,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
-            trigger = trigger,
             decorated = inner,
         )
     }
