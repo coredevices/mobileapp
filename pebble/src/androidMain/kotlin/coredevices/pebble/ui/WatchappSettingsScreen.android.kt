@@ -74,13 +74,14 @@ internal actual fun rememberWebViewFileChooserParams(): PlatformWebViewParams? {
                     filePathCallback: ValueCallback<Array<Uri>>?,
                     fileChooserParams: FileChooserParams?
                 ): Boolean {
-                    pending.getAndSet(filePathCallback)?.onReceiveValue(null)
                     val intent = fileChooserParams?.createIntent() ?: return false
                     return try {
                         launcher.launch(intent)
+                        // Returning false leaves the callback to the webview, so only take
+                        // ownership of it once the chooser is actually up.
+                        pending.getAndSet(filePathCallback)?.onReceiveValue(null)
                         true
-                    } catch (e: ActivityNotFoundException) {
-                        pending.getAndSet(null)?.onReceiveValue(null)
+                    } catch (_: ActivityNotFoundException) {
                         false
                     }
                 }
