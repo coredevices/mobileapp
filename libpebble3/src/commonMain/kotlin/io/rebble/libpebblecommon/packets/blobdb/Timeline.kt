@@ -204,6 +204,13 @@ class TimelineItem(
         PERSIST_QUICK_VIEW(5),
 
         /**
+         * Firmware delivers the notification quietly (no popup/vibration/backlight) but still
+         * stores and lists it. Intended to carry the phone's Do Not Disturb / Focus state;
+         * nothing sets it yet (the emit path is a maintainer decision, see the PR).
+         */
+        SILENT(6),
+
+        /**
          * Marks a notification as read (dismisses if visible, and removes actions).
          */
         STATE_READ(12),

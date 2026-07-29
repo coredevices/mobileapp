@@ -177,6 +177,9 @@ sealed interface WatchPref<T> {
     fun castParent(parent: WatchPreference<*>): WatchPreference<T> = parent as WatchPreference<T>
     val isDebugSetting: Boolean
 
+    // Syncable but not rendered as its own settings row (e.g. driven by another toggle).
+    val userVisible: Boolean get() = true
+
     companion object {
         fun enumeratePrefs(): List<WatchPref<*>> = BoolWatchPref.entries
             .plus(QuicklaunchWatchPref.entries)
@@ -195,6 +198,7 @@ enum class BoolWatchPref(
     override val defaultValue: Boolean,
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
+    override val userVisible: Boolean = true,
 ) : WatchPref<Boolean> {
     TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
     Clock24h("clock24h", "24h clock", false),
@@ -209,6 +213,8 @@ enum class BoolWatchPref(
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    // Synced firmware pref; the phone-side toggle is the UI control (userVisible = false).
+    RespectPhoneDnd("notifRespectPhoneSilence", "Respect Phone Do Not Disturb", false, userVisible = false),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
     QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),

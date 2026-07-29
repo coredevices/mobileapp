@@ -50,7 +50,7 @@ fun watchPrefs(): List<SettingsItem> {
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val mapped = remember(settings, quickLaunchOptions) {
-        settings.map { item ->
+        settings.filter { it.pref.userVisible }.map { item ->
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
@@ -67,7 +67,7 @@ fun watchPrefs(): List<SettingsItem> {
         title = "Reset To Defaults?",
         text = "Reset all settings to defaults",
         onConfirm = {
-            settings.forEach { setting ->
+            settings.filter { it.pref.userVisible }.forEach { setting ->
                 if (setting.value != setting.pref.defaultValue) {
                     @Suppress("UNCHECKED_CAST")
                     val pref = setting.pref as WatchPref<Any?>
@@ -131,6 +131,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.AlternativeNotificationStyle -> Section.Notifications
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
+    BoolWatchPref.RespectPhoneDnd -> Section.Notifications
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
     BoolWatchPref.MenuScrollWrapAround -> Section.Display
     EnumWatchPref.MenuScrollVibe -> Section.Display
