@@ -10,10 +10,12 @@ import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.js.TimelineLayoutJson
 import io.rebble.libpebblecommon.js.TimelinePinJson
+import io.rebble.libpebblecommon.js.TimelineReminderJson
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.pebblekit2.common.model.PebbleDictionary
+import io.rebble.pebblekit2.common.model.TimelineLayout
 import io.rebble.pebblekit2.common.model.TimelinePin
 import io.rebble.pebblekit2.common.model.TimelineResult
 import io.rebble.pebblekit2.common.model.TransmissionResult
@@ -168,20 +170,24 @@ private fun TimelinePin.toPinJson(): TimelinePinJson {
         id,
         startTime,
         duration?.inWholeMinutes?.toInt(),
-        layout = TimelineLayoutJson(
-            type  = layout.type.code,
-            title = layout.title,
-            subtitle = layout.subtitle,
-            body = layout.body,
-            tinyIcon = layout.tinyIcon,
-            smallIcon = layout.smallIcon,
-            largeIcon = layout.largeIcon,
-            primaryColor = layout.primaryColor,
-            secondaryColor = layout.secondaryColor,
-            backgroundColor = layout.backgroundColor,
-            headings = layout.headings,
-            paragraphs = layout.paragraphs,
-            lastUpdated = layout.lastUpdated,
-        )
+        layout = layout.toLayoutJson(),
+        reminders = reminders.takeIf { it.isNotEmpty() }
+            ?.map { TimelineReminderJson(layout = it.layout.toLayoutJson(), time = it.time) },
     )
 }
+
+private fun TimelineLayout.toLayoutJson(): TimelineLayoutJson = TimelineLayoutJson(
+    type = type.code,
+    title = title,
+    subtitle = subtitle,
+    body = body,
+    tinyIcon = tinyIcon,
+    smallIcon = smallIcon,
+    largeIcon = largeIcon,
+    primaryColor = primaryColor,
+    secondaryColor = secondaryColor,
+    backgroundColor = backgroundColor,
+    headings = headings,
+    paragraphs = paragraphs,
+    lastUpdated = lastUpdated,
+)
