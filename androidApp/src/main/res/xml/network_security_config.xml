@@ -5,9 +5,13 @@
   default, so PKJS apps connecting to self-hosted servers with a self-signed or
   private-CA cert (e.g. Home Assistant over wss://) fail to connect even after
   the user installs and trusts the cert on their device.
+
+  Keep the manifest's existing cleartext behavior for user-configured HTTP
+  endpoints. On Android 7.0 and later, once a Network Security Config is
+  present, Android ignores android:usesCleartextTraffic on the application.
 -->
 <network-security-config>
-    <base-config>
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
