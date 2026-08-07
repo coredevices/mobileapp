@@ -40,6 +40,7 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.AppstoreDeepLinkResolution
 import coredevices.pebble.services.CoreUsersMe
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.StoreAppResponse
@@ -244,6 +245,11 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             page: Int,
             pageSize: Int
         ): List<Pair<AppstoreSource, StoreSearchResult>> = emptyList()
+
+        override suspend fun resolveAppstoreDeepLink(
+            appId: String,
+            sourceHint: String?
+        ): AppstoreDeepLinkResolution? = null
 
         override suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse? = null
 
