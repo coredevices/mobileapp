@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Duration.Companion.seconds
 
 expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
@@ -69,6 +70,7 @@ class RealPebbleDeepLinkHandler(
     override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
     private val _requestIndexCompanion = MutableStateFlow(false)
     override val requestIndexCompanion: StateFlow<Boolean> = _requestIndexCompanion.asStateFlow()
+    private var reservedSideloadCount = 0
 
     override fun consumeRequestIndexCompanion() {
         _requestIndexCompanion.value = false
@@ -175,8 +177,34 @@ class RealPebbleDeepLinkHandler(
             _snackBarMessages.tryEmit("Failed to read firmware file")
             return false
         }
-        sideloadFirmware(file)
+        sideloadFirmware(reserveSideloadCopy(file))
         return true
+    }
+
+    private fun reserveSideloadCopy(shared: Path): Path {
+        val directory = shared.parent ?: return shared
+        if (reservedSideloadCount == 0) {
+            sweepStaleSideloadCopies(directory)
+        }
+        val reserved = Path(directory, "$RESERVED_SIDELOAD_PREFIX${reservedSideloadCount++}.pbz")
+        return try {
+            SystemFileSystem.delete(reserved, mustExist = false)
+            SystemFileSystem.atomicMove(shared, reserved)
+            reserved
+        } catch (e: Exception) {
+            logger.w(e) { "reserveSideloadCopy: falling back to the shared path" }
+            shared
+        }
+    }
+
+    private fun sweepStaleSideloadCopies(directory: Path) {
+        try {
+            SystemFileSystem.list(directory)
+                .filter { it.name.startsWith(RESERVED_SIDELOAD_PREFIX) }
+                .forEach { SystemFileSystem.delete(it, mustExist = false) }
+        } catch (e: Exception) {
+            logger.w(e) { "sweepStaleSideloadCopies failed" }
+        }
     }
 
     private fun sideloadFirmware(file: Path) {
@@ -299,6 +327,7 @@ class RealPebbleDeepLinkHandler(
 
     companion object {
         private val CONNECTED_WATCH_TIMEOUT = 60.seconds
+        private const val RESERVED_SIDELOAD_PREFIX = "pending_sideload_"
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
         private const val NAVBAR_URL: String = "navbar"
