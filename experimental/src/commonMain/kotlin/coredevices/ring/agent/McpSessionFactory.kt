@@ -36,19 +36,42 @@ class McpSessionFactory(
 
     suspend fun createForSandboxGroup(groupId: Long, scope: CoroutineScope): McpSession {
         val group = mcpSandboxRepository.getGroupById(groupId) ?: throw IllegalArgumentException("MCP Sandbox group with id $groupId not found")
-        if (group.modelType == SandboxModelType.IndexAgent) {
-            return createForNeedleAgent(scope)
+        return if (group.modelType == SandboxModelType.IndexAgent) {
+            createForNeedleAgent(scope)
         } else {
-            val integrations =
-                mcpSandboxRepository.getMcpServerEntriesForGroup(groupId).first().mapNotNull {
-                    when (it) {
-                        is McpServerEntry.BuiltinMcpEntry -> builtinServletRepository.resolveName(it.builtinMcpName)
-                        is McpServerEntry.HttpServerEntry -> it.server.toMcpIntegration()
-                    }
-                }
-            return McpSession(integrations, scope)
+            McpSession(groupIntegrations(groupId), scope)
         }
     }
+
+    /**
+     * Session for invoking a tool the caller has already named, with no model in the loop.
+     *
+     * Deliberately ignores the group's model type: the Needle restriction exists because that
+     * model can only emit tool names it was trained on, which says nothing about what can be
+     * dispatched directly. Gating this on it would hide HTTP MCP servers from callers that
+     * never ask a model to choose.
+     *
+     * [onlyIntegration] narrows the session to a single integration. Opening a session connects
+     * every integration in it, so a caller that already knows which one it needs should say so
+     * rather than pay a network round trip per unrelated HTTP server.
+     */
+    suspend fun createForDirectToolCall(
+        groupId: Long,
+        scope: CoroutineScope,
+        onlyIntegration: String? = null,
+    ): McpSession {
+        val integrations = groupIntegrations(groupId)
+            .filter { onlyIntegration == null || it.name == onlyIntegration }
+        return McpSession(integrations, scope)
+    }
+
+    private suspend fun groupIntegrations(groupId: Long) =
+        mcpSandboxRepository.getMcpServerEntriesForGroup(groupId).first().mapNotNull {
+            when (it) {
+                is McpServerEntry.BuiltinMcpEntry -> builtinServletRepository.resolveName(it.builtinMcpName)
+                is McpServerEntry.HttpServerEntry -> it.server.toMcpIntegration()
+            }
+        }
 }
 
 private fun HttpMcpServerEntity.toMcpIntegration(): HttpMcpIntegration {

@@ -35,6 +35,10 @@ class McpSandboxRepository(
         return groupDao.getAllFlow().first().first().id
     }
 
+    /** Null when every group has been deleted, which the groups screen permits. */
+    suspend fun getDefaultGroupIdOrNull(): Long? =
+        groupDao.getAllFlow().first().firstOrNull()?.id
+
     suspend fun updateGroupModelType(groupId: Long, modelType: SandboxModelType) {
         groupDao.updateModelType(groupId, modelType)
     }

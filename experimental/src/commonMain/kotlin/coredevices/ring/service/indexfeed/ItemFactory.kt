@@ -186,7 +186,7 @@ class ItemFactory {
     )
 
     fun actionLogItem(
-        sourceRecordingId: String,
+        sourceRecordingId: String?,
         createdAt: Instant,
         title: String,
         toolName: String,

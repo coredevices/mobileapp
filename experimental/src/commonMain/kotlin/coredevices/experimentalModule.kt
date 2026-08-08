@@ -59,6 +59,7 @@ import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.ring.service.FirestoreRingDebugDelegate
 import coredevices.ring.service.ClickActionExecutor
+import coredevices.ring.service.ClickActionToolCatalog
 import coredevices.ring.service.IndexButtonActionHandler
 import coredevices.ring.service.IndexButtonSequenceRecorder
 import coredevices.ring.service.IndexNotificationManager
@@ -240,6 +241,7 @@ val experimentalModule = module {
     singleOf(::RecordingProcessor)
     singleOf(::ClickActionRepository)
     singleOf(::ClickActionExecutor)
+    singleOf(::ClickActionToolCatalog)
     singleOf(::IndexButtonActionHandler)
     singleOf(::IndexButtonSequenceRecorder)
     singleOf(::FirestoreRingDebugDelegate) bind KMPHaversineDebugDelegate::class

@@ -5,6 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /**
  * A user-configured binding from a run of short clicks on the ring to an action.
@@ -41,6 +42,19 @@ sealed interface ClickAction {
     @Serializable
     @SerialName("agent_text")
     data class AgentText(val text: String) : ClickAction
+
+    /**
+     * Calls a single MCP tool directly with fixed [arguments]. No model is involved, so the
+     * outcome is deterministic. Covers both built-in servlets and HTTP MCP servers — they are
+     * the same dispatch path.
+     */
+    @Serializable
+    @SerialName("tool_call")
+    data class ToolCall(
+        val integrationName: String,
+        val toolName: String,
+        val arguments: JsonObject = JsonObject(emptyMap()),
+    ) : ClickAction
 
     /**
      * A stored action this build can't decode — typically written by a newer version, or by a

@@ -6,12 +6,21 @@ import coredevices.ring.data.entity.room.ClickActionBinding
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.reservedClickCounts
 import coredevices.ring.database.room.repository.ClickActionRepository
+import coredevices.ring.service.CatalogTool
+import coredevices.ring.service.ClickActionToolCatalog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+sealed interface ToolCatalogState {
+    data object Idle : ToolCatalogState
+    data object Loading : ToolCatalogState
+    data class Loaded(val tools: List<CatalogTool>) : ToolCatalogState
+    data class Failed(val message: String) : ToolCatalogState
+}
 
 enum class ClickCountAvailability {
     Available,
@@ -48,6 +57,7 @@ fun List<ClickCountOption>.firstSelectable(): Int? =
 
 class ClickActionsViewModel(
     private val repository: ClickActionRepository,
+    private val toolCatalog: ClickActionToolCatalog,
     preferences: Preferences,
 ) : ViewModel() {
 
@@ -63,8 +73,24 @@ class ClickActionsViewModel(
         initialValue = emptySet(),
     )
 
+    private val _catalog = MutableStateFlow<ToolCatalogState>(ToolCatalogState.Idle)
+    val catalog = _catalog.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    /** Connecting to HTTP MCP servers is a network round trip, so this is explicitly triggered. */
+    fun loadTools(force: Boolean = false) {
+        if (!force && _catalog.value is ToolCatalogState.Loaded) return
+        _catalog.value = ToolCatalogState.Loading
+        viewModelScope.launch {
+            _catalog.value = try {
+                ToolCatalogState.Loaded(toolCatalog.availableTools())
+            } catch (e: Exception) {
+                ToolCatalogState.Failed(e.message ?: "Couldn't load tools")
+            }
+        }
+    }
 
     fun save(binding: ClickActionBinding, onSaved: () -> Unit) {
         viewModelScope.launch {
