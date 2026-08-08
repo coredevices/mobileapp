@@ -22,9 +22,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
+import kotlin.time.Duration.Companion.seconds
 
 expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
 
@@ -168,12 +172,32 @@ class RealPebbleDeepLinkHandler(
         val file = writeFile(context, uri)
         if (file == null) {
             logger.w { "handleFirmware: couldn't write file" }
+            _snackBarMessages.tryEmit("Failed to read firmware file")
             return false
         }
-        libPebble.watches.value.filterIsInstance<ConnectedPebble.Firmware>().forEach {
-            it.sideloadFirmware(file)
-        }
+        sideloadFirmware(file)
         return true
+    }
+
+    private fun sideloadFirmware(file: Path) {
+        GlobalScope.launch {
+            val watches = withTimeoutOrNull(CONNECTED_WATCH_TIMEOUT) {
+                libPebble.watches
+                    .map { it.filterIsInstance<ConnectedPebble.Firmware>() }
+                    .first { it.isNotEmpty() }
+            }
+            if (watches == null) {
+                logger.w { "sideloadFirmware: no connected watch after $CONNECTED_WATCH_TIMEOUT" }
+                _snackBarMessages.tryEmit("Failed to sideload firmware: no connected watch")
+                return@launch
+            }
+            logger.i { "sideloadFirmware: sideloading to ${watches.size} watch(es)" }
+            navigateToTab(PebbleNavBarRoutes.WatchesRoute)
+            _snackBarMessages.tryEmit("Sideloading firmware...")
+            watches.forEach {
+                it.sideloadFirmware(file)
+            }
+        }
     }
 
     private fun handleApp(uri: Uri): Boolean {
@@ -274,6 +298,7 @@ class RealPebbleDeepLinkHandler(
     }
 
     companion object {
+        private val CONNECTED_WATCH_TIMEOUT = 60.seconds
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
         private const val NAVBAR_URL: String = "navbar"
