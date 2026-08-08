@@ -51,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -74,6 +75,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
@@ -84,6 +88,7 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.viewmodel.IndexFeedViewModel
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
@@ -113,6 +118,27 @@ fun IndexFeedScreen(
 
         val colors = IndexTheme.colors
         val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
+        var relativeTimeNow by remember { mutableStateOf(Clock.System.now()) }
+        val lifecycleOwner = LocalLifecycleOwner.current
+
+        // Relative labels are derived from wall-clock time, which is not Compose state.
+        // Refresh immediately when the app returns to the foreground, then once a minute
+        // while this screen remains composed.
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    relativeTimeNow = Clock.System.now()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(1.minutes)
+                relativeTimeNow = Clock.System.now()
+            }
+        }
 
         // Re-tap of the bottom-nav Index tab fires `scrollToTop` — bring
         // the home back to the top + close any open search. Initial scroll
@@ -143,6 +169,7 @@ fun IndexFeedScreen(
                 onStartSearch = { searching = true },
                 onCancelSearch = { searching = false; vm.clearQuery() },
                 trailingActions = headerActions,
+                relativeTimeNow = relativeTimeNow,
             )
 
             LazyColumn(
@@ -194,6 +221,7 @@ fun IndexFeedScreen(
                             peeks = state.recordings.take(8),
                             onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(it.id)) },
                             onRetryRecording = { rec, entry -> vm.retryRecording(rec.id, entry) },
+                            relativeTimeNow = relativeTimeNow,
                         )
                     }
                 }
@@ -221,6 +249,7 @@ fun IndexFeedScreen(
                         todos = state.todosPreview,
                         onToggle = { task -> vm.toggleDoneById(task.firestoreId) },
                         onOpen = { task -> coreNav.navigateTo(RingRoutes.ObjectDetails(task.firestoreId)) },
+                        relativeTimeNow = relativeTimeNow,
                     )
                 }
 
@@ -284,8 +313,8 @@ fun IndexFeedScreen(
     }
 }
 
-internal fun formatDue(at: Instant): String {
-    val diffMs = at.toEpochMilliseconds() - Clock.System.now().toEpochMilliseconds()
+internal fun formatDue(at: Instant, now: Instant = Clock.System.now()): String {
+    val diffMs = at.toEpochMilliseconds() - now.toEpochMilliseconds()
     if (diffMs < 0) return "Overdue"
     val m = (diffMs / 60_000L)
     if (m < 60) return "in ${m}m"
