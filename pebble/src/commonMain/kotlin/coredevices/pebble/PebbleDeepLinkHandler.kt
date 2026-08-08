@@ -51,6 +51,8 @@ interface PebbleDeepLinkHandler {
     fun consumeRequestIndexCompanion()
     fun confirmPendingFirmwareSideload()
     fun dismissPendingFirmwareSideload()
+    fun sideloadFirmware(file: Path)
+    fun showMessage(message: String)
     fun handle(uri: Uri?): Boolean
 
     /** Show a navbar tab on the watch home screen (same mechanism as pebble://navbar links). */
@@ -233,7 +235,11 @@ class RealPebbleDeepLinkHandler(
         SystemFileSystem.delete(pending.file, mustExist = false)
     }
 
-    private fun sideloadFirmware(file: Path) {
+    override fun showMessage(message: String) {
+        _snackBarMessages.tryEmit(message)
+    }
+
+    override fun sideloadFirmware(file: Path) {
         GlobalScope.launch {
             val watches = withTimeoutOrNull(CONNECTED_WATCH_TIMEOUT) {
                 libPebble.watches

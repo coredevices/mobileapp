@@ -76,6 +76,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
 import org.koin.core.module.Module
@@ -346,6 +347,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override fun consumeRequestIndexCompanion() {}
         override fun confirmPendingFirmwareSideload() {}
         override fun dismissPendingFirmwareSideload() {}
+        override fun sideloadFirmware(file: Path) {}
+        override fun showMessage(message: String) {}
         override fun handle(uri: Uri?): Boolean = true
         override fun navigateToTab(route: NavBarRoute) {}
     }
