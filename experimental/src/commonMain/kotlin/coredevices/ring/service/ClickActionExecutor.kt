@@ -8,6 +8,8 @@ import coredevices.ring.data.entity.room.ClickAction
 import coredevices.ring.data.entity.room.ClickActionBinding
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import kotlinx.coroutines.CompletableDeferred
@@ -28,6 +30,7 @@ class ClickActionExecutor(
     private val mcpSessionFactory: McpSessionFactory,
     private val mcpSandboxRepository: McpSandboxRepository,
     private val recordingProcessingQueue: RecordingProcessingQueue,
+    private val webhookApi: IndexWebhookApi,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
 ) {
@@ -42,6 +45,16 @@ class ClickActionExecutor(
             is ClickAction.ToolCall -> runTool(action, binding.clickCount)
             ClickAction.Unsupported ->
                 logger.w { "${binding.clickCount} clicks is bound to an unreadable action; ignoring" }
+            // No trigger check here: unlike a recording, the binding itself is the user's
+            // explicit opt-in, so IndexWebhookPreferences.trigger doesn't apply.
+            ClickAction.Webhook -> webhookApi.uploadIfEnabled(
+                samples = null,
+                sampleRate = RingSync.TARGET_SAMPLE_RATE,
+                recordingId = "clicks-${binding.clickCount}-${Clock.System.now()}",
+                transcription = null,
+                recordedAt = Clock.System.now(),
+                trigger = IndexWebhookRecordingTrigger.Clicks(binding.clickCount),
+            )
         }
     }
 

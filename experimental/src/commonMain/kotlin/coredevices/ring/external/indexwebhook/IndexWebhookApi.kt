@@ -43,9 +43,21 @@ interface IndexWebhookApi {
     val isEnabled: StateFlow<Boolean>
 }
 
-enum class IndexWebhookRecordingTrigger(val headerValue: String) {
-    SingleClickHold("single-click-hold"),
-    DoubleClickHold("double-click-hold"),
+sealed interface IndexWebhookRecordingTrigger {
+    val headerValue: String
+
+    data object SingleClickHold : IndexWebhookRecordingTrigger {
+        override val headerValue = "single-click-hold"
+    }
+
+    data object DoubleClickHold : IndexWebhookRecordingTrigger {
+        override val headerValue = "double-click-hold"
+    }
+
+    /** Fired by a custom click-count binding rather than a recording gesture. */
+    data class Clicks(val count: Int) : IndexWebhookRecordingTrigger {
+        override val headerValue = "$count-clicks"
+    }
 }
 
 /**

@@ -6,6 +6,7 @@ import coredevices.ring.data.entity.room.ClickActionBinding
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.reservedClickCounts
 import coredevices.ring.database.room.repository.ClickActionRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.CatalogTool
 import coredevices.ring.service.ClickActionToolCatalog
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +60,7 @@ class ClickActionsViewModel(
     private val repository: ClickActionRepository,
     private val toolCatalog: ClickActionToolCatalog,
     preferences: Preferences,
+    webhookPreferences: IndexWebhookPreferences,
 ) : ViewModel() {
 
     val bindings = repository.bindingsFlow().stateIn(
@@ -71,6 +73,12 @@ class ClickActionsViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptySet(),
+    )
+
+    val webhookConfigured = webhookPreferences.webhookUrl.map { !it.isNullOrBlank() }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = false,
     )
 
     private val _catalog = MutableStateFlow<ToolCatalogState>(ToolCatalogState.Idle)

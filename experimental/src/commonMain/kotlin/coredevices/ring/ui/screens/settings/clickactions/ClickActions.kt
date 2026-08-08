@@ -62,6 +62,7 @@ fun ClickActions(coreNav: CoreNav) {
     val viewModel = koinViewModel<ClickActionsViewModel>()
     val bindings by viewModel.bindings.collectAsState()
     val reserved by viewModel.reservedClickCounts.collectAsState()
+    val webhookConfigured by viewModel.webhookConfigured.collectAsState()
     val catalog by viewModel.catalog.collectAsState()
     val error by viewModel.error.collectAsState()
 
@@ -134,6 +135,7 @@ fun ClickActions(coreNav: CoreNav) {
             binding = target,
             clickCountOptions = clickCountOptions(bindings, reserved, editingId = target.id),
             catalog = catalog,
+            webhookConfigured = webhookConfigured,
             onRetryTools = { viewModel.loadTools(force = true) },
             onDismiss = { editing = null },
             onSave = { updated -> viewModel.save(updated) { editing = null } },
@@ -215,14 +217,16 @@ private fun BindingCard(
 private fun ClickAction.summary(): String = when (this) {
     is ClickAction.AgentText -> "Ask the agent · \"$text\""
     is ClickAction.ToolCall -> "Run tool · $integrationName/$toolName"
+    ClickAction.Webhook -> "Call webhook"
     ClickAction.Unsupported -> "Unreadable — open to replace it"
 }
 
-private enum class ActionKind { Agent, Tool }
+private enum class ActionKind { Agent, Tool, Webhook }
 
 private fun ClickAction.kind(): ActionKind = when (this) {
     is ClickAction.AgentText -> ActionKind.Agent
     is ClickAction.ToolCall -> ActionKind.Tool
+    ClickAction.Webhook -> ActionKind.Webhook
     // Nothing to restore, so open on the simplest form and make the user re-pick.
     ClickAction.Unsupported -> ActionKind.Agent
 }
@@ -232,6 +236,7 @@ private fun ClickActionEditorDialog(
     binding: ClickActionBinding,
     clickCountOptions: List<ClickCountOption>,
     catalog: ToolCatalogState,
+    webhookConfigured: Boolean,
     onRetryTools: () -> Unit,
     onDismiss: () -> Unit,
     onSave: (ClickActionBinding) -> Unit,
@@ -266,6 +271,7 @@ private fun ClickActionEditorDialog(
     val canSave = when (kind) {
         ActionKind.Agent -> agentText.isNotBlank()
         ActionKind.Tool -> selectedTool != null && missing.isEmpty() && badJson.isEmpty()
+        ActionKind.Webhook -> true
     } && clickCountOptions.any { it.count == clickCount && it.selectable }
 
     M3Dialog(
@@ -287,6 +293,7 @@ private fun ClickActionEditorDialog(
                                 arguments = buildArguments(fields, paramValues),
                             )
                         }
+                        ActionKind.Webhook -> ClickAction.Webhook
                     }
                     onSave(binding.copy(clickCount = clickCount, action = action, enabled = enabled))
                 },
@@ -323,6 +330,7 @@ private fun ClickActionEditorDialog(
                         when (option) {
                             ActionKind.Agent -> "Ask the agent"
                             ActionKind.Tool -> "Run a tool"
+                            ActionKind.Webhook -> "Call webhook"
                         }
                     )
                 }
@@ -367,6 +375,22 @@ private fun ClickActionEditorDialog(
                             )
                         }
                     }
+                }
+                ActionKind.Webhook -> {
+                    Text(
+                        if (webhookConfigured) {
+                            "Sends a request with no audio or transcript. The " +
+                                "X-Index-Trigger header will read \"$clickCount-clicks\"."
+                        } else {
+                            "No webhook URL is configured yet — set one in Index settings first."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (webhookConfigured) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
                 }
             }
 

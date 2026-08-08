@@ -56,6 +56,11 @@ sealed interface ClickAction {
         val arguments: JsonObject = JsonObject(emptyMap()),
     ) : ClickAction
 
+    /** Pings the configured Index webhook. Carries no audio or transcript. */
+    @Serializable
+    @SerialName("webhook")
+    data object Webhook : ClickAction
+
     /**
      * A stored action this build can't decode — typically written by a newer version, or by a
      * variant that has since been renamed. Kept as a value rather than failing the read so one
