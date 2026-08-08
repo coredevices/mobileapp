@@ -28,6 +28,7 @@ import coredevices.firestore.UsersDao
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
+import coredevices.pebble.PendingFirmwareSideload
 import coredevices.pebble.Platform
 import coredevices.pebble.RealPebbleDeepLinkHandler
 import coredevices.pebble.account.BootConfig
@@ -340,7 +341,11 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override val snackBarMessages: SharedFlow<String> = MutableSharedFlow()
         override val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?> = MutableStateFlow(null)
         override val requestIndexCompanion: StateFlow<Boolean> = MutableStateFlow(false)
+        override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
+            MutableStateFlow(null)
         override fun consumeRequestIndexCompanion() {}
+        override fun confirmPendingFirmwareSideload() {}
+        override fun dismissPendingFirmwareSideload() {}
         override fun handle(uri: Uri?): Boolean = true
         override fun navigateToTab(route: NavBarRoute) {}
     }

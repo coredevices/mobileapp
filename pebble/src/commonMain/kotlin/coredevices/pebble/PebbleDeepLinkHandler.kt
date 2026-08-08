@@ -46,12 +46,18 @@ interface PebbleDeepLinkHandler {
      * (which needs a foreground Activity), then calls [consumeRequestIndexCompanion].
      */
     val requestIndexCompanion: StateFlow<Boolean>
+
+    val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?>
     fun consumeRequestIndexCompanion()
+    fun confirmPendingFirmwareSideload()
+    fun dismissPendingFirmwareSideload()
     fun handle(uri: Uri?): Boolean
 
     /** Show a navbar tab on the watch home screen (same mechanism as pebble://navbar links). */
     fun navigateToTab(route: NavBarRoute)
 }
+
+data class PendingFirmwareSideload(val file: Path, val fileName: String)
 
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
@@ -70,6 +76,9 @@ class RealPebbleDeepLinkHandler(
     override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
     private val _requestIndexCompanion = MutableStateFlow(false)
     override val requestIndexCompanion: StateFlow<Boolean> = _requestIndexCompanion.asStateFlow()
+    private val _pendingFirmwareSideload = MutableStateFlow<PendingFirmwareSideload?>(null)
+    override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
+        _pendingFirmwareSideload.asStateFlow()
     private var reservedSideloadCount = 0
 
     override fun consumeRequestIndexCompanion() {
@@ -126,7 +135,7 @@ class RealPebbleDeepLinkHandler(
             }
 
             uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleLanguagePack(uri, uri.lastPathSegment!!)
-            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri)
+            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri, uri.lastPathSegment!!)
             uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleApp(uri)
             uri.scheme == "content" -> handleContentFallback(uri)
             else -> false
@@ -143,7 +152,7 @@ class RealPebbleDeepLinkHandler(
         logger.d { "filename: $name" }
         return when {
             name.endsWith(".pbl") -> handleLanguagePack(uri, name)
-            name.endsWith(".pbz") -> handleFirmware(uri)
+            name.endsWith(".pbz") -> handleFirmware(uri, name)
             name.endsWith(".pbw") -> handleApp(uri)
             else -> false
         }
@@ -169,7 +178,7 @@ class RealPebbleDeepLinkHandler(
         return true
     }
 
-    private fun handleFirmware(uri: Uri): Boolean {
+    private fun handleFirmware(uri: Uri, fileName: String): Boolean {
         logger.v { "handleFirmware() $uri" }
         val file = writeFile(context, uri)
         if (file == null) {
@@ -177,7 +186,12 @@ class RealPebbleDeepLinkHandler(
             _snackBarMessages.tryEmit("Failed to read firmware file")
             return false
         }
-        sideloadFirmware(reserveSideloadCopy(file))
+        val previous = _pendingFirmwareSideload.value
+        val reserved = reserveSideloadCopy(file)
+        _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName)
+        previous?.takeIf { it.file != reserved }
+            ?.let { SystemFileSystem.delete(it.file, mustExist = false) }
+        navigateToTab(PebbleNavBarRoutes.WatchesRoute)
         return true
     }
 
@@ -205,6 +219,18 @@ class RealPebbleDeepLinkHandler(
         } catch (e: Exception) {
             logger.w(e) { "sweepStaleSideloadCopies failed" }
         }
+    }
+
+    override fun confirmPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        sideloadFirmware(pending.file)
+    }
+
+    override fun dismissPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        SystemFileSystem.delete(pending.file, mustExist = false)
     }
 
     private fun sideloadFirmware(file: Path) {
