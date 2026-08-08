@@ -182,7 +182,13 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
-        return json.decodeFromString(value)
+        val known = ProtocolCapsFlag.entries.associateBy { it.name }
+        return json.decodeFromString<List<String>>(value).mapNotNull { name ->
+            known[name] ?: run {
+                logger.w { "Ignoring unknown watch capability: $name" }
+                null
+            }
+        }.toSet()
     }
 
     @TypeConverter
