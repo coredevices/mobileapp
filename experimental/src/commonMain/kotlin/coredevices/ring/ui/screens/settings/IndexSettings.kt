@@ -417,6 +417,24 @@ fun IndexSettings(coreNav: CoreNav) {
                     }
                 )
             }
+            item {
+                val clickActions by viewModel.clickActionBindings.collectAsState()
+                ListItem(
+                    modifier = Modifier.clickable {
+                        coreNav.navigateTo(RingRoutes.ClickActions)
+                    },
+                    headlineContent = { Text("Custom click actions") },
+                    supportingContent = {
+                        Text(
+                            if (clickActions.isEmpty()) {
+                                "None"
+                            } else {
+                                clickActions.joinToString(" · ") { "${it.clickCount} clicks" }
+                            }
+                        )
+                    }
+                )
+            }
 
             // --- Accounts section ---
             item {

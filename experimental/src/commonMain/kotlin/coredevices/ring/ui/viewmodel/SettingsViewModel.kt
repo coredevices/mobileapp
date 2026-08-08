@@ -107,6 +107,7 @@ class SettingsViewModel(
     private val ringDelegate: RingDelegate,
     private val cactusModelProvider: CactusModelProvider,
     private val appScope: LibIndexCoroutineScope,
+    clickActionRepository: coredevices.ring.database.room.repository.ClickActionRepository,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -115,6 +116,8 @@ class SettingsViewModel(
     val userId = Firebase.auth.authStateChanged
         .map { it?.uid }
         .stateIn(viewModelScope, SharingStarted.Lazily, Firebase.auth.currentUser?.uid)
+    val clickActionBindings = clickActionRepository.bindingsFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val llmMode = preferences.llmMode
     private val _showLlmModeDialog = MutableStateFlow(false)
     val showLlmModeDialog = _showLlmModeDialog.asStateFlow()

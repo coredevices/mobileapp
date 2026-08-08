@@ -328,6 +328,18 @@ enum class MusicControlMode(val id: Int) {
     }
 }
 
+/**
+ * Click counts media control already consumes in this mode. A custom click binding on one of
+ * these can never fire, so the dispatcher skips them and the settings UI blocks them.
+ * Must stay in step with the action map in
+ * [coredevices.ring.service.IndexButtonActionHandler].
+ */
+fun MusicControlMode.reservedClickCounts(): Set<Int> = when (this) {
+    MusicControlMode.Disabled -> emptySet()
+    MusicControlMode.SingleClick -> setOf(1, 2)
+    MusicControlMode.DoubleClick -> setOf(2, 3)
+}
+
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
     Search(1),

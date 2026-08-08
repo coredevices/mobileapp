@@ -19,6 +19,7 @@ import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
+import coredevices.ring.ui.screens.settings.clickactions.ClickActions
 import coredevices.ring.ui.screens.settings.mcp.McpSandboxGroups
 
 /** Marker for routes that belong to the Index/Ring feature. The
@@ -57,6 +58,9 @@ object RingRoutes {
     data object McpSandboxGroups : RingRoute
     @Serializable
     data object AddIntegration : RingRoute
+    /** Custom short-click gesture bindings. */
+    @Serializable
+    data object ClickActions : RingRoute
 
     /** Deep link that opens the [ObjectDetails] screen for an index item by
      *  its Firestore id. Used by the platform reminder notification so
@@ -115,6 +119,9 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     }
     composable<RingRoutes.RingSyncInspector> {
         RingSyncInspectorScreen(coreNav)
+    }
+    composable<RingRoutes.ClickActions> {
+        ClickActions(coreNav)
     }
     composable<RingRoutes.McpSandboxGroups> {
         McpSandboxGroups(coreNav)

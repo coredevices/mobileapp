@@ -34,6 +34,8 @@ import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
+import coredevices.ring.data.entity.room.ClickAction
+import coredevices.ring.data.entity.room.ClickActionBinding
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -45,6 +47,7 @@ import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
+import coredevices.ring.database.room.dao.ClickActionBindingDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
@@ -79,12 +82,13 @@ import kotlin.uuid.Uuid
         TraceEntryEntity::class,
         CachedItem::class,
         CachedList::class,
+        ClickActionBinding::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 32,
+    version = 33,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -119,6 +123,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 30, to = 31),
         // 31→32: adds LocalReminderData.notifyBeforeMillis (early heads-up notification lead time).
         AutoMigration(from = 31, to = 32),
+        // 32→33: adds ClickActionBinding (custom short-click gesture bindings).
+        AutoMigration(from = 32, to = 33),
     ]
 )
 @TypeConverters(Converters::class)
@@ -140,6 +146,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun traceEntryDao(): TraceEntryDao
     abstract fun cachedItemDao(): CachedItemDao
     abstract fun cachedListDao(): CachedListDao
+    abstract fun clickActionBindingDao(): ClickActionBindingDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -259,6 +266,20 @@ class Converters {
     @TypeConverter
     fun StringToStringList(string: String?) = string?.let {
         JsonSnake.decodeFromString<List<String>>(it)
+    }
+
+    @TypeConverter
+    fun ClickActionToString(action: ClickAction?): String? =
+        action?.let { JsonSnake.encodeToString<ClickAction>(it) }
+
+    @TypeConverter
+    fun StringToClickAction(string: String?): ClickAction? = string?.let {
+        try {
+            JsonSnake.decodeFromString<ClickAction>(it)
+        } catch (e: SerializationException) {
+            Logger.w(e) { "Failed to deserialize ClickAction, marking unsupported: $string" }
+            ClickAction.Unsupported
+        }
     }
 
     @TypeConverter
