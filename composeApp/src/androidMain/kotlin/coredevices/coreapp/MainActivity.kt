@@ -56,8 +56,9 @@ class MainActivity : ComponentActivity() {
                 setTheme(it)
             }
         }
-        // Handle initial intent that launches the app
-        handleIntent(intent)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
