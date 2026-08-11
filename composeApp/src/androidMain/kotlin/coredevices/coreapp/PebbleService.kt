@@ -132,7 +132,7 @@ class PebbleService: Service(), KoinComponent {
             .setContentTitle("Pebble")
             .setContentText("Keeping Pebble connection alive")
             .setOngoing(true)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(contentIntent)
             .build()
         try {

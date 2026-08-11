@@ -133,7 +133,7 @@ class AndroidAppUpdate(
 
         context.createChannel()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Pebble App Update Available")
             .setContentText("Please update the Pebble app!")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

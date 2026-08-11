@@ -22,7 +22,7 @@ actual fun postWatchFullyChargedNotification(appContext: AppContext, watchName: 
         PendingIntent.FLAG_IMMUTABLE
     )
     val builder = NotificationCompat.Builder(context, BATTERY_CHANNEL_ID)
-        .setSmallIcon(R.mipmap.ic_launcher)
+        .setSmallIcon(R.drawable.ic_notification)
         .setContentTitle("Watch Fully Charged")
         .setContentText("$watchName is fully charged")
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
