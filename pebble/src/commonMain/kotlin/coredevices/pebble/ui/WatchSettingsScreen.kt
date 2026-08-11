@@ -352,6 +352,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val showFakeHealthDataDialog = remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
+    var autoSaveWatchLogsEnabled by remember { mutableStateOf(settings.autoSaveWatchLogs()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
@@ -1399,6 +1400,18 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         settings.set(SHOW_DEBUG_OPTIONS_SETTINGS_KEY, it)
                         debugOptionsEnabled = it
                     },
+                ),
+                basicSettingsToggleItem(
+                    title = "Auto-save watch logs",
+                    description = "Once a day, save the connected watch's logs to this phone's Downloads folder. For firmware debugging.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = autoSaveWatchLogsEnabled,
+                    onCheckChanged = {
+                        settings.setAutoSaveWatchLogs(it)
+                        autoSaveWatchLogsEnabled = it
+                    },
+                    isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
                     title = "PKJS Debugger",
@@ -2678,8 +2691,14 @@ fun <T> basicSettingsDropdownItem(
 )
 
 private const val SHOW_DEBUG_OPTIONS_SETTINGS_KEY = "showDebugOptions"
+private const val AUTO_SAVE_WATCH_LOGS_SETTINGS_KEY = "autoSaveWatchLogs"
 
 fun Settings.showDebugOptions() = getBoolean(SHOW_DEBUG_OPTIONS_SETTINGS_KEY, false)
+
+fun Settings.autoSaveWatchLogs() = getBoolean(AUTO_SAVE_WATCH_LOGS_SETTINGS_KEY, false)
+
+fun Settings.setAutoSaveWatchLogs(enabled: Boolean) =
+    putBoolean(AUTO_SAVE_WATCH_LOGS_SETTINGS_KEY, enabled)
 
 @Composable
 fun PKJSCopyTokenDialog(onDismissRequest: () -> Unit) {
