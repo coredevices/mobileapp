@@ -166,6 +166,7 @@
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
 		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>

@@ -122,4 +122,5 @@ class WebViewPrivatePKJSInterface(
     override fun deleteTimelinePin(id: String) {
         super.deleteTimelinePin(id)
     }
+
 }

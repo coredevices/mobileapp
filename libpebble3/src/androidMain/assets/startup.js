@@ -395,7 +395,6 @@ navigator.geolocation.clearWatch = (id) => {
     global.Pebble.appGlanceReload = PebbleAPI.appGlanceReload;
     global.Pebble.insertTimelinePin = PebbleAPI.insertTimelinePin;
     global.Pebble.deleteTimelinePin = PebbleAPI.deleteTimelinePin;
-
     // Enable intercepting XHR calls (on Android - this doesn't work on iOS so we don't add
     // shouldIntercept to the PKJS interface there).
     XMLHttpRequest.prototype.originalOpen = XMLHttpRequest.prototype.open;
