@@ -7,12 +7,14 @@ import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.di.LibIndexCoroutineScope
+import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
@@ -56,7 +58,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
@@ -114,8 +115,19 @@ class SettingsViewModel(
     val userId = Firebase.auth.authStateChanged
         .map { it?.uid }
         .stateIn(viewModelScope, SharingStarted.Lazily, Firebase.auth.currentUser?.uid)
-    private val _useCactusAgent = MutableStateFlow(false)
-    val useCactusAgent = _useCactusAgent.asStateFlow()
+    val llmMode = preferences.llmMode
+    private val _showLlmModeDialog = MutableStateFlow(false)
+    val showLlmModeDialog = _showLlmModeDialog.asStateFlow()
+
+    /** The on-device agent can't drive a sandbox group's model, so the local LLM modes are
+     *  only offered while the default group runs the Index Agent. */
+    val localLlmSupported = mcpSandboxRepository.getDefaultGroupFlow()
+        .map { it?.modelType == SandboxModelType.IndexAgent }
+        .stateIn(
+            viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = preferences.llmMode.value.usesLocalCactus()
+        )
     private val _showModelDownloadDialog = MutableStateFlow<ModelType?>(null)
     val showModelDownloadDialog = _showModelDownloadDialog.asStateFlow()
     private val _showMusicControlDialog = MutableStateFlow(false)
@@ -136,12 +148,11 @@ class SettingsViewModel(
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
+    val autoDismissActionNotifications = preferences.autoDismissActionNotifications
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
     val ringPaired = preferences.ringPaired
-    private val _panicPending = MutableStateFlow(false)
-    val panicPending = _panicPending.asStateFlow()
     val currentRingFirmware = currentRing
         .mapNotNull { (it as? InterviewedIndexDevice)?.firmwareVersion }
         .stateIn(
@@ -164,11 +175,6 @@ class SettingsViewModel(
     val availableReminderProviders = _availableReminderProviders.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            preferences.useCactusAgent.collectLatest { useCactus ->
-                _useCactusAgent.value = useCactus
-            }
-        }
         viewModelScope.launch {
             updateAvailableNoteProviders()
             updateAvailableReminderProviders()
@@ -205,21 +211,27 @@ class SettingsViewModel(
         // appScope: pref write must land even if the user leaves Settings.
         appScope.launch {
             when (wasDownloading) {
-                is ModelType.Agent -> preferences.setUseCactusAgent(success)
+                is ModelType.Agent -> if (!success) preferences.setLlmMode(LlmMode.RemoteOnly)
                 is ModelType.STT -> preferences.setUseCactusTranscription(success)
             }
         }
     }
 
-    fun toggleCactusAgent() {
+    fun showLlmModeDialog() {
+        _showLlmModeDialog.value = true
+    }
+
+    fun closeLlmModeDialog() {
+        _showLlmModeDialog.value = false
+    }
+
+    fun setLlmMode(mode: LlmMode) {
         appScope.launch {
-            if (!_useCactusAgent.value) {
+            if (mode.usesLocalCactus()) {
                 // Trigger LM model extraction, should be already integrated into assets so no DL
                 cactusModelProvider.getLMModelPath()
-                preferences.setUseCactusAgent(true)
-            } else {
-                preferences.setUseCactusAgent(false)
             }
+            preferences.setLlmMode(mode)
         }
     }
 
@@ -257,6 +269,10 @@ class SettingsViewModel(
         }
     }
 
+    fun toggleAutoDismissActionNotifications() {
+        preferences.setAutoDismissActionNotifications(!autoDismissActionNotifications.value)
+    }
+
     fun showNoteShortcutDialog() {
         viewModelScope.launch {
             updateAvailableNoteProviders()
@@ -285,20 +301,6 @@ class SettingsViewModel(
     val syncingFeedHistory = _syncingFeedHistory.asStateFlow()
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
-
-
-    fun panicRing() {
-        _panicPending.value = true
-        viewModelScope.launch {
-            try {
-                ringSync.lastRing.value?.panic()
-            } catch (e: Exception) {
-                Logger.withTag("Settings").e(e) { "Failed to panic ring: ${e.message}" }
-            } finally {
-                _panicPending.value = false
-            }
-        }
-    }
 
     fun restartPreemptiveTransfer() {
         ringDelegate.restartPreemptiveTransfer()
@@ -391,7 +393,7 @@ class SettingsViewModel(
                 val count = withContext(Dispatchers.IO) {
                     firestoreRecordingsDao.getCount()
                 }
-                preferences.setLastBackupCount(count)
+                preferences.setLastBackupCount(count.toInt())
             } catch (e: Exception) {
                 Logger.withTag("Backup").w(e) { "Failed to refresh backup count" }
                 // Don't surface as an error in the UI — the cached value

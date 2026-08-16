@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.dao.VibePatternDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
@@ -16,6 +17,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,6 +37,7 @@ class PhoneCalendarSyncer(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val timelineReminderDao: TimelineReminderRealDao,
     private val watchConfig: WatchConfigFlow,
+    private val vibePatternDao: VibePatternDao,
 ) : Calendar {
     private val logger = Logger.withTag("PhoneCalendarSyncer")
     private val syncTrigger = MutableSharedFlow<Unit>()
@@ -52,20 +57,20 @@ class PhoneCalendarSyncer(
             requestSync()
             tryStartListeningForChanges()
             libPebbleCoroutineScope.launch {
-                var previousPinsEnabled = watchConfig.value.calendarPins
-                var previousRemindersEnabled = watchConfig.value.calendarReminders
-                var previousShowDeclinedEvents = watchConfig.value.calendarShowDeclinedEvents
-                watchConfig.flow.collect {
-                    if (it.watchConfig.calendarPins != previousPinsEnabled ||
-                        it.watchConfig.calendarShowDeclinedEvents != previousShowDeclinedEvents ||
-                        it.watchConfig.calendarReminders != previousRemindersEnabled
-                    ) {
-                        requestSync()
-                        previousPinsEnabled = it.watchConfig.calendarPins
-                        previousRemindersEnabled = it.watchConfig.calendarReminders
-                        previousShowDeclinedEvents = it.watchConfig.calendarShowDeclinedEvents
+                watchConfig.flow
+                    .map {
+                        with(it.watchConfig) {
+                            listOf(
+                                calendarPins,
+                                calendarReminders,
+                                calendarShowDeclinedEvents,
+                                overrideCalendarVibePattern,
+                            )
+                        }
                     }
-                }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { requestSync() }
             }
         }
     }
@@ -103,6 +108,9 @@ class PhoneCalendarSyncer(
         val existingCalendars = calendarDao.getAll()
         val calendars = systemCalendar.getCalendars()
         logger.d("Got ${calendars.size} calendars from device, syncing... (${existingCalendars.size} existing)")
+        val removedCalendars = existingCalendars.filter { existing ->
+            calendars.none { it.platformId == existing.platformId }
+        }
         existingCalendars.forEach { existingCalendar ->
             val matchingCalendar = calendars.find { it.platformId == existingCalendar.platformId }
             if (matchingCalendar != null) {
@@ -122,7 +130,7 @@ class PhoneCalendarSyncer(
         }
         calendars.forEach { newCalendar ->
             if (existingCalendars.none { it.platformId == newCalendar.platformId }) {
-                calendarDao.insertOrReplace(newCalendar)
+                calendarDao.insertOrReplace(newCalendar.inheritEnabledFrom(removedCalendars))
             }
         }
 
@@ -130,6 +138,8 @@ class PhoneCalendarSyncer(
         val existingPins = timelinePinDao.getPinsForWatchapp(CALENDAR_APP_UUID)
         val startDate = timeProvider.now() - 1.days
         val endDate = (startDate + 7.days)
+        val calendarVibePattern = watchConfig.value.overrideCalendarVibePattern
+            ?.let { vibePatternDao.getVibePattern(it)?.pattern }
         val newPins = allCalendars.flatMap { calendar ->
             if (!calendar.enabled || !pinsEnabled) {
                 return@flatMap emptyList()
@@ -154,6 +164,7 @@ class PhoneCalendarSyncer(
                 remindersEnabled = remindersEnabled,
                 event = new.event,
                 pinId = existingPin?.itemId ?: newPin.itemId,
+                vibePattern = calendarVibePattern,
                 remindersToInsert = remindersToInsert,
                 remindersToDelete = remindersToDelete,
             )
@@ -198,25 +209,30 @@ class PhoneCalendarSyncer(
         remindersEnabled: Boolean,
         event: CalendarEvent,
         pinId: Uuid,
+        vibePattern: List<UInt>?,
         remindersToInsert: MutableList<TimelineReminder>,
         remindersToDelete: MutableList<Uuid>,
     ) {
         val existingReminders = timelineReminderDao.getRemindersForPin(pinId)
         val desiredReminders = if (remindersEnabled) {
             event.reminders.map { reminder ->
-                event.toTimelineReminder(event.startTime - reminder.minutesBefore.minutes, pinId)
+                event.toTimelineReminder(
+                    event.startTime - reminder.minutesBefore.minutes,
+                    pinId,
+                    vibePattern,
+                )
             }
         } else {
             emptyList()
         }
 
         remindersToDelete += existingReminders.filter { er ->
-            desiredReminders.none { dr -> dr.content.timestamp.instant == er.content.timestamp.instant }
+            desiredReminders.none { dr -> dr.content.timestamp == er.content.timestamp }
         }.map { it.itemId }
 
         remindersToInsert += desiredReminders.mapNotNull { dr ->
             val existing = existingReminders.find {
-                it.content.timestamp.instant == dr.content.timestamp.instant
+                it.content.timestamp == dr.content.timestamp
             }
             when {
                 existing == null -> dr
@@ -246,3 +262,13 @@ class PhoneCalendarSyncer(
 }
 
 data class EventAndPin(val event: CalendarEvent, val pin: TimelinePin)
+
+/**
+ * `platformId` is not stable - iOS may hand back a new `calendarIdentifier` for the same calendar
+ * (re-subscribe, account resync), which drops the old row and re-adds it enabled. Carry the user's
+ * choice over to the replacement.
+ */
+internal fun CalendarEntity.inheritEnabledFrom(removed: List<CalendarEntity>): CalendarEntity {
+    val previous = removed.find { it.ownerId == ownerId && it.name == name } ?: return this
+    return copy(enabled = previous.enabled)
+}

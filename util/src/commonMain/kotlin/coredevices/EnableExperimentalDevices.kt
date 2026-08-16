@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -25,7 +27,7 @@ class EnableExperimentalDevices(
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
     init {
-        Firebase.auth.authStateChanged
+        flow { emitAll(Firebase.auth.authStateChanged) }
             .map {
                 it?.uid?.let { uid -> userConfigDao.getUserConfig(uid).experimentalDevices } ?: false
             }

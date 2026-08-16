@@ -90,7 +90,7 @@ class RealIndexPairing(
 
     }
     override suspend fun pairDevice(device: DiscoveredIndexDevice): IndexPairingResult {
-        check(!device.isFailsafe) { "Failsafe rings cannot be paired" }
+        check(device.currentImage == IndexImage.Primary) { "Failsafe rings cannot be paired" }
         deviceRepo.update(
             deviceFactory.create(
                 identifier = device.identifier,
@@ -99,7 +99,7 @@ class RealIndexPairing(
                     identifier = device.identifier,
                     name = device.name,
                     rssi = device.rssi,
-                    isFailsafe = device.isFailsafe
+                    currentImage = device.currentImage
                 ),
                 isPaired = false,
                 pairingState = IndexPairingState.Pairing
@@ -116,7 +116,7 @@ class RealIndexPairing(
                             identifier = device.identifier,
                             name = device.name,
                             rssi = device.rssi,
-                            isFailsafe = device.isFailsafe
+                            currentImage = device.currentImage
                         ),
                         isPaired = false,
                         pairingState = IndexPairingState.Error(IndexPairingResult.PairingFailure(result))

@@ -1,6 +1,7 @@
 package coredevices.coreapp
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -14,6 +15,8 @@ import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.IndexNotificationManager
+import coredevices.ring.service.INDEX_ACTION_NOTIFICATION_CHANNEL_ID
+import coredevices.ring.service.INDEX_ACTION_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
 import coredevices.ring.service.INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME
 import coredevices.ring.service.RecordingBackgroundScope
@@ -22,13 +25,11 @@ import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.util.R
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -74,6 +75,12 @@ class PebbleService: Service(), KoinComponent {
                 .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
                 .build()
             notificationManagerCompat.createNotificationChannel(notificationChannel)
+            val actionChannel = NotificationChannelCompat.Builder(
+                INDEX_ACTION_NOTIFICATION_CHANNEL_ID,
+                NotificationManager.IMPORTANCE_DEFAULT)
+                .setName(INDEX_ACTION_NOTIFICATION_CHANNEL_NAME)
+                .build()
+            notificationManagerCompat.createNotificationChannel(actionChannel)
 
             indexNotificationManager.startNotificationProcessingJob(scope)
         }
@@ -95,13 +102,11 @@ class PebbleService: Service(), KoinComponent {
     }
 
     private fun stopRingJobs() {
-        runBlocking {
-            recordingDebugNotificationJob?.cancelAndJoin()
-            recordingDebugNotificationJob = null
-            ringSync.stop()
-            ringSyncJob?.cancelAndJoin()
-            ringSyncJob = null
-        }
+        recordingDebugNotificationJob?.cancel()
+        recordingDebugNotificationJob = null
+        ringSync.stop()
+        ringSyncJob?.cancel()
+        ringSyncJob = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -116,11 +121,19 @@ class PebbleService: Service(), KoinComponent {
         .build()
         notificationManagerCompat.createNotificationChannel(notificationChannel)
 
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Pebble")
             .setContentText("Keeping Pebble connection alive")
             .setOngoing(true)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(contentIntent)
             .build()
         try {
             ServiceCompat.startForeground(
@@ -133,8 +146,14 @@ class PebbleService: Service(), KoinComponent {
                     0
                 }
             )
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
+            // Couldn't foreground: SecurityException (missing connectedDevice prerequisites on
+            // 14+) or ForegroundServiceStartNotAllowedException (sticky restart while app is
+            // backgrounded). Must stop before the FGS timeout or the system throws
+            // ForegroundServiceDidNotStartInTimeException
             logger.w(e) { "Error starting FG service" }
+            stopSelf(startId)
+            return START_NOT_STICKY
         }
         startRingSyncJob()
         startRecordingDebugNotificationJob()

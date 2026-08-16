@@ -177,14 +177,6 @@ class Memfault(
         return result
     }
 
-    private fun ensureVersionPrefix(version: String): String {
-        return if (version.startsWith("v")) {
-            version
-        } else {
-            "v$version"
-        }
-    }
-
     /**
      * Memfault signals rate-limiting via `Memfault-Reason: rate-limited`
      * (confirmed by Memfault support). We need this to disambiguate a
@@ -205,6 +197,14 @@ class Memfault(
             "XXXXXXXXXXXX" -> "XXXX${partialMacAddress()}"
             else -> serial
         }
+    }
+}
+
+internal fun ensureVersionPrefix(version: String): String {
+    return if (version.startsWith("v")) {
+        version
+    } else {
+        "v$version"
     }
 }
 

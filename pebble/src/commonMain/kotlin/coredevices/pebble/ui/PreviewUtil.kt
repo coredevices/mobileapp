@@ -28,6 +28,7 @@ import coredevices.firestore.UsersDao
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
+import coredevices.pebble.PendingFirmwareSideload
 import coredevices.pebble.Platform
 import coredevices.pebble.RealPebbleDeepLinkHandler
 import coredevices.pebble.account.BootConfig
@@ -75,6 +76,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import org.koin.compose.KoinApplication
 import org.koin.core.module.Module
@@ -340,8 +342,15 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override val snackBarMessages: SharedFlow<String> = MutableSharedFlow()
         override val navigateToPebbleDeepLink: StateFlow<RealPebbleDeepLinkHandler.PebbleDeepLink?> = MutableStateFlow(null)
         override val requestIndexCompanion: StateFlow<Boolean> = MutableStateFlow(false)
+        override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
+            MutableStateFlow(null)
         override fun consumeRequestIndexCompanion() {}
+        override fun confirmPendingFirmwareSideload() {}
+        override fun dismissPendingFirmwareSideload() {}
+        override fun sideloadFirmware(file: Path) {}
+        override fun showMessage(message: String) {}
         override fun handle(uri: Uri?): Boolean = true
+        override fun navigateToTab(route: NavBarRoute) {}
     }
     single { initialLockerSync } bind PebbleDeepLinkHandler::class
     single { object : PermissionRequester(requiredPermissions, get<AppResumed>()) {

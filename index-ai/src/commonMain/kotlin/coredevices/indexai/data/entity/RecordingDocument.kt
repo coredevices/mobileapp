@@ -87,6 +87,8 @@ data class RecordingEntryEntity(
     @ColumnInfo(defaultValue = "NULL")
     val transcribedUsingModel: String? = null,
     val error: String? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val errorType: RecordingEntryErrorType? = null,
     val ringTransferInfo: RingTransferInfo? = null,
     val userMessageId: Long? = null
 )
@@ -144,6 +146,7 @@ data class RecordingEntry(
     val transcription: String? = null,
     val transcribedUsingModel: String? = null,
     val error: String? = null,
+    val errorType: RecordingEntryErrorType? = null,
     val ringTransferInfo: RingTransferInfo? = null,
     val userMessageId: Long? = null,
 )
@@ -163,4 +166,15 @@ enum class RecordingEntryStatus {
     agent_error;
 
     fun isError(): Boolean = this == transcription_error || this == agent_error
+}
+
+/** Machine-readable companion to [RecordingEntryEntity.error], so callers can branch
+ *  on the kind of failure without matching on the error message text. */
+@Suppress("EnumEntryName")
+enum class RecordingEntryErrorType {
+    no_speech,
+    transcription_network,
+    transcription_failed,
+    login_required,
+    agent_failed,
 }

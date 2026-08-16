@@ -22,6 +22,7 @@ import kotlin.time.Instant
 import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 
 private val FW_TEST = FirmwareVersion(
     stringVersion = "v0.0.0",
@@ -174,5 +175,23 @@ class NotificationAppsDbTest {
         )
         val decoded = write.asNotificationAppItem()
         assertEquals(item, decoded)
+    }
+
+    @Test
+    fun rulesUpdatedChangesRecordHashCode() {
+        val item = NotificationAppItem(
+            packageName = PACKAGE_NAME,
+            name = APP_NAME,
+            muteState = MUTE_STATE,
+            channelGroups = emptyList(),
+            stateUpdated = TIMESTAMP.asMillisecond(),
+            lastNotified = TIMESTAMP.asMillisecond(),
+            vibePatternName = null,
+            colorName = null,
+            iconCode = null,
+        )
+        val bumped = item.copy(rulesUpdated = TIMESTAMP.asMillisecond()) // default rulesUpdated is epoch 0
+        assertNotEquals(item, bumped)
+        assertNotEquals(item.recordHashCode(), bumped.recordHashCode())
     }
 }

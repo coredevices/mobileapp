@@ -178,7 +178,11 @@ interface DbTimelineItem : BlobDbItem {
     val content: TimelineItemFields
     fun type(): TimelineItem.Type
 
-    override fun recordHashCode(): Int = content.hashCode()
+    // LastUpdated is a display-only freshness stamp; excluding it avoids re-syncing an
+    // otherwise-unchanged item (weather sets it to now on every fetch).
+    override fun recordHashCode(): Int =
+        content.copy(attributes = content.attributes.filterNot { it.attribute == TimelineAttribute.LastUpdated })
+            .hashCode()
     override fun key(): UByteArray = SUUID(StructMapper(), itemId).toBytes()
     override fun value(params: ValueParams): UByteArray? {
         val item = TimelineItem(

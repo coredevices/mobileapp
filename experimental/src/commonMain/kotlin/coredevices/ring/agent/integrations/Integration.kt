@@ -26,12 +26,55 @@ interface ReminderIntegration : Integration {
     ): String
 
     suspend fun searchForList(listName: String): List<ReminderListEntry>
+
+    suspend fun getAllLists(): List<ReminderListEntry> = emptyList()
 }
 
 data class ReminderListEntry(
     val id: String,
     val title: String
 )
+
+private fun cleanUpTitle(title: String): String {
+    //Remove 'list' from start or end of title, and trim whitespace
+    return title.replace(Regex("(?i)^list\\s+|\\s+list$"), "").trim()
+}
+
+/**
+ * Filters a list of [ReminderListEntry]s by a search string, returning only those whose
+ * title matches the search string, ordered by descending relevance. A title also matches when it
+ * appears as a whole phrase inside a longer query ("my grocery list" -> "Grocery list").
+ */
+internal fun List<ReminderListEntry>.fuzzyFilter(query: String): List<ReminderListEntry> {
+    val q = cleanUpTitle(query).lowercase()
+    return this.mapNotNull { entry ->
+        val t = cleanUpTitle(entry.title).lowercase()
+        val idx = t.indexOf(q)
+        val score = when {
+            t == q -> 0                                        // exact
+            idx == 0 -> 1                                      // prefix
+            idx > 0 && t[idx - 1] == ' ' -> 2          // word-start
+            q.containsPhrase(t) -> 3                          // title contained in a longer query
+            else -> return@mapNotNull null                    // no match, or mid-word (discard)
+        }
+        // A contained title consumes more of the query the longer it is, so it ranks the other way.
+        Triple(entry, score, if (score == 3) -t.length else t.length)
+    }.sortedWith(compareBy({ it.second }, { it.third }))
+    .map { it.first }
+}
+
+/** True when [phrase] occurs in this string bounded by spaces or its ends. */
+private fun String.containsPhrase(phrase: String): Boolean {
+    if (phrase.isEmpty()) return false
+    var from = 0
+    while (true) {
+        val i = indexOf(phrase, from)
+        if (i < 0) return false
+        val end = i + phrase.length
+        if ((i == 0 || this[i - 1] == ' ') && (end == length || this[end] == ' ')) return true
+        from = i + 1
+    }
+}
 
 interface NoteIntegration : Integration {
     suspend fun createNote(content: String, source: ItemSource? = null): String?
@@ -45,7 +88,8 @@ interface NoteIntegration : Integration {
 data class ItemSource(
     val recordingFirestoreId: String?,
     val createdAt: Instant?,
+    val toolCallId: String?,
 )
 
 fun SessionContext.itemSource(): ItemSource =
-    ItemSource(recordingFirestoreId, timeBase)
+    ItemSource(recordingFirestoreId, timeBase, toolCallId)

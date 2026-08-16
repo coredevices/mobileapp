@@ -36,6 +36,11 @@ interface CachedItemDao {
     @Query("SELECT * FROM CachedItem WHERE sourceRecordingId = :recordingId AND deleted = 0")
     suspend fun getByRecording(recordingId: String): List<CachedItem>
 
+    /** All non-deleted items. Used to resolve a reminder back to its feed item by
+     *  `metadata.localReminderId` when there's no source recording to query by. */
+    @Query("SELECT * FROM CachedItem WHERE deleted = 0")
+    suspend fun getAllActive(): List<CachedItem>
+
     /**
      * Items whose `parentListIdsCsv` contains [listId]. Uses LIKE matching with
      * boundary commas so we don't accidentally match `list_foo` when querying

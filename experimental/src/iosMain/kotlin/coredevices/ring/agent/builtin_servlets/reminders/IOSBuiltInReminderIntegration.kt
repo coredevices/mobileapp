@@ -6,7 +6,9 @@ import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toNSDate
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -22,6 +24,8 @@ import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotificationAction
+import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
@@ -29,6 +33,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
@@ -39,6 +44,7 @@ import kotlin.time.Instant
 class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent {
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
+    private val listRepository: ListRepository by inject()
     private val notificationCenter get() = UNUserNotificationCenter.currentNotificationCenter()
 
     private suspend fun requestAuthorization(): Boolean = suspendCoroutine { continuation ->
@@ -108,6 +114,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             setBody(message)
             setSound(UNNotificationSound.defaultSound)
             setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to reminderId.toString()))
+            setCategoryIdentifier(REMINDER_CATEGORY_ID)
         }
         val components = NSCalendar.currentCalendar.components(
             NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay
@@ -130,12 +137,36 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         db.localReminderDao().deleteReminder(reminderId)
     }
 
+    override suspend fun rescheduleReminder(reminderId: Int, expectedRecordingId: String?, newTime: Instant?) {
+        val reminder = db.localReminderDao().getReminder(reminderId) ?: return
+        if (reminder.recordingId != expectedRecordingId) return
+        val identifiers = listOf(notificationId(reminderId), preNotificationId(reminderId))
+        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
+        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+
+        db.localReminderDao().setTime(reminderId, newTime)
+
+        if (newTime == null || newTime <= Clock.System.now()) return
+        scheduleNotification(reminderId, reminder.message, newTime, notificationId(reminderId), notificationTitle = "Reminder")
+        reminder.notifyBeforeMillis?.let { lead ->
+            val preTime = newTime - lead.milliseconds
+            if (preTime > Clock.System.now()) {
+                scheduleNotification(reminderId, reminder.message, preTime, preNotificationId(reminderId), notificationTitle = "Upcoming reminder")
+            }
+        }
+    }
+
     override suspend fun cancelExtraNotification(reminderId: Int) {
         db.localReminderDao().getReminder(reminderId) ?: return
         val identifiers = listOf(preNotificationId(reminderId))
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
         db.localReminderDao().clearNotifyBefore(reminderId)
+    }
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val lists = listRepository.getAllFlow().first()
+        return lists.map { ReminderListEntry(it.firestoreId, it.title) }
     }
 
     // Built-in reminders need no account; notification permission is requested when scheduling.
@@ -146,7 +177,42 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
     companion object {
         private val logger = Logger.withTag("IOSBuiltInReminderIntegration")
 
+        /** Notification category id whose actions include the "Done" button (MOB-8439). */
+        const val REMINDER_CATEGORY_ID = "ring-reminder-actions"
+
+        /** Action id for the "Done" button; matched in the notification-response handler. */
+        const val REMINDER_ACTION_DONE = "ring-reminder-done"
+
         private fun notificationId(reminderId: Int) = "ring-reminder-$reminderId"
         private fun preNotificationId(reminderId: Int) = "ring-reminder-pre-$reminderId"
+
+        /** Registers the reminder notification category carrying the "Done" action (MOB-8439), once.
+         *  Merges with any already-registered categories so we don't clobber other notification
+         *  categories (e.g. the Index agent-complete actions). */
+        suspend fun ensureCategoryRegistered() {
+            val notificationCenter = UNUserNotificationCenter.currentNotificationCenter()
+            val existing: Set<*> = suspendCoroutine { continuation ->
+                notificationCenter.getNotificationCategoriesWithCompletionHandler { categories ->
+                    @Suppress("UNCHECKED_CAST")
+                    continuation.resume(categories as Set<*>? ?: emptySet<Any>())
+                }
+            }
+            val alreadyRegistered = existing.any {
+                (it as? UNNotificationCategory)?.identifier == REMINDER_CATEGORY_ID
+            }
+            if (alreadyRegistered) return
+            val doneAction = UNNotificationAction.actionWithIdentifier(
+                identifier = REMINDER_ACTION_DONE,
+                title = "Done",
+                options = 0u, // background action: marks done without bringing the app to the foreground
+            )
+            val category = UNNotificationCategory.categoryWithIdentifier(
+                identifier = REMINDER_CATEGORY_ID,
+                actions = listOf(doneAction),
+                intentIdentifiers = emptyList<String>(),
+                options = 0u,
+            )
+            notificationCenter.setNotificationCategories(existing + setOf(category))
+        }
     }
 }

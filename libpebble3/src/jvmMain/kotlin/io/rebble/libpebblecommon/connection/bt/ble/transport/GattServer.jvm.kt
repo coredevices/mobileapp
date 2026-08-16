@@ -16,6 +16,9 @@ actual class GattServer {
     actual suspend fun addServices() {
     }
 
+    actual suspend fun removeServices() {
+    }
+
     actual suspend fun closeServer() {
     }
 

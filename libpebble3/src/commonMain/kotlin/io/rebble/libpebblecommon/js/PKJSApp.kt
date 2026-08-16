@@ -62,6 +62,7 @@ class PKJSApp(
 ): LibPebbleKoinComponent, CompanionApp {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
+        private val CONFIGURATION_URL_TIMEOUT = 10.seconds
     }
     val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
@@ -174,7 +175,12 @@ class PKJSApp(
             logger.e(e) { "Error signalling show configuration" }
             return null
         }
-        return url.await()
+        // Apps can declare "configurable" and never call Pebble.openURL(), so this must be bounded.
+        return withTimeoutOrNull(CONFIGURATION_URL_TIMEOUT) { url.await() } ?: run {
+            url.cancel()
+            logger.e { "Timed out waiting for configuration URL" }
+            null
+        }
     }
 
     private fun injectJsRunner(scope: CoroutineScope): JsRunner =

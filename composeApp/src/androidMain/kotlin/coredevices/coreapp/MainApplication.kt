@@ -35,6 +35,7 @@ import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
+import coredevices.coreapp.util.registerBluetoothPairingDebugLogger
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.watchModule
@@ -61,7 +62,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG) {
+        if (isDebuggableBuild) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
         }
         startKoin {
@@ -77,7 +78,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
             )
         }
         initLogging()
-        logger.i { "onCreate() version = ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${BuildConfig.BUILD_TYPE}" }
+        logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (isDebuggableBuild) "debug" else "release"}" }
         dumpPreviousExitInfo()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         registerReceiver(object : BroadcastReceiver() {
@@ -85,6 +86,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
                 logger.i { "Power state changed: isPowerSaveMode=${powerManager.isPowerSaveMode}" }
             }
         }, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        registerBluetoothPairingDebugLogger(this)
         setupExceptionHandler()
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
@@ -138,7 +140,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
     }
 
     private fun configureStrictMode() {
-        if (BuildConfig.DEBUG) {
+        if (isDebuggableBuild) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy.Builder()
                     .detectDiskReads()

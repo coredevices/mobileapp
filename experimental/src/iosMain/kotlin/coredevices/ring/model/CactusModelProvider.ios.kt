@@ -3,6 +3,8 @@ package coredevices.ring.model
 import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.modelsDirectory
+import coredevices.util.models.promoteSingleRootDir
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
@@ -14,7 +16,6 @@ import okio.Path.Companion.toPath
 import okio.SYSTEM
 import okio.buffer
 import okio.openZip
-import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSBundle
 import platform.Foundation.NSCachesDirectory
 import platform.Foundation.NSData
@@ -22,7 +23,6 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
-import platform.Foundation.NSURLIsExcludedFromBackupKey
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.writeToFile
@@ -31,8 +31,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     companion object {
         private val logger = Logger.withTag("CactusModelProvider")
         private const val HF_BASE = "https://huggingface.co/Cactus-Compute"
-        private const val STT_QUANTIZATION = "int8"
-        private const val LM_QUANTIZATION = "int4"
+        private const val QUANTIZATION = "cq4"
         private val downloadMutex = Mutex()
     }
 
@@ -41,42 +40,16 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             NSCachesDirectory, NSUserDomainMask, true
         ).first() as String
 
-    private val modelsDir: String by lazy {
-        val appSupport = NSSearchPathForDirectoriesInDomains(
-            NSApplicationSupportDirectory, NSUserDomainMask, true
-        ).first() as String
-        val dir = "$appSupport/models"
-        val fileManager = NSFileManager.defaultManager
-
-        if (!SystemFileSystem.exists(Path(dir))) {
-            // Application Support isn't guaranteed to exist; create it before moving into it.
-            fileManager.createDirectoryAtPath(
-                appSupport, withIntermediateDirectories = true, attributes = null, error = null
-            )
-            // One-time migration: models used to live in Caches. Move an existing download
-            // over rather than re-fetching the (large) weights.
-            val legacyDir = "$cachesDir/models"
-            if (fileManager.fileExistsAtPath(legacyDir)) {
-                fileManager.moveItemAtPath(legacyDir, toPath = dir, error = null)
-            }
-            if (!SystemFileSystem.exists(Path(dir))) {
-                SystemFileSystem.createDirectories(Path(dir))
-            }
-        }
-        NSURL.fileURLWithPath(dir).setResourceValue(
-            true, forKey = NSURLIsExcludedFromBackupKey, error = null
-        )
-        dir
-    }
+    private val modelsDir: String by lazy { modelsDirectory() }
 
     actual override suspend fun getSTTModelPath(): String {
         val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION)
+        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
     }
 
     actual override suspend fun getLMModelPath(): String {
         val modelName = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION)
+        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
     }
 
     actual override fun isModelDownloaded(modelName: String): Boolean {
@@ -94,8 +67,20 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun getIncompatibleModels(): List<String> {
         val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
-        return getDownloadedModels().filter { it !in compatible }
+        return getDownloadedModels().filter { name ->
+            modelNeedsReplacement(name, compatible, versionMatches(name), isBundled(name))
+        }
     }
+
+    private fun versionMatches(modelName: String): Boolean {
+        val versionPath = Path("$modelsDir/$modelName/.cactus_version")
+        if (!SystemFileSystem.exists(versionPath)) return false
+        val onDisk = SystemFileSystem.source(versionPath).buffered().use { it.readString() }.trim()
+        return onDisk == CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+    }
+
+    private fun isBundled(modelName: String): Boolean =
+        NSBundle.mainBundle.pathForResource("${modelName.lowercase()}-$QUANTIZATION", ofType = "zip") != null
 
     actual override fun deleteModel(modelName: String) {
         val fileManager = NSFileManager.defaultManager
@@ -133,7 +118,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         } else null
 
         val needsDownload = !SystemFileSystem.exists(configPath)
-                || (currentVersion != null && currentVersion != version)
+                || currentVersion != version
 
         if (needsDownload) {
             downloadAndExtract(modelName, modelPath, version)
@@ -147,9 +132,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     private suspend fun downloadAndExtract(modelName: String, targetDir: String, version: String) {
-        val isLM = modelName == CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        val quantization = if (isLM) LM_QUANTIZATION else STT_QUANTIZATION
-        val zipName = "${modelName.lowercase()}-$quantization.zip"
+        val zipName = "${modelName.lowercase()}-$QUANTIZATION.zip"
 
         val tempZipPath = "${NSTemporaryDirectory()}cactus_download_$modelName.zip"
         val fileManager = NSFileManager.defaultManager
@@ -161,7 +144,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             logger.i { "Found bundled model zip: $zipName, extracting..." }
             bundledZipPath
         } else {
-            val url = "$HF_BASE/$modelName/resolve/$version/weights/$zipName"
+            val url = "$HF_BASE/$modelName/resolve/$version/$zipName"
             logger.i { "Downloading model: $url" }
             downloadToFile(url, tempZipPath)
             logger.i { "Download complete: $tempZipPath" }
@@ -179,6 +162,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
             )
 
             extractZip(sourceZipPath, targetDir)
+            promoteSingleRootDir(Path(targetDir))
             logger.i { "Extraction complete to $targetDir" }
         } catch (e: Exception) {
             logger.e(e) { "Model download/extract failed for $modelName" }
@@ -258,7 +242,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     actual override fun initTelemetry() {
         val cacheDir = getCactusCacheDir()
-        cactusSetTelemetryEnvironment(cacheDir)
+        cactusSetTelemetryEnvironment("kotlin", cacheDir, null)
         logger.d { "Telemetry environment set to $cacheDir" }
     }
 

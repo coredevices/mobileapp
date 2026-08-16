@@ -109,6 +109,26 @@ class IosObsidianVault : ObsidianVault {
         } ?: emptyList()
     }
 
+    override suspend fun listMarkdownFilesRecursive(handle: String): List<String> = withContext(Dispatchers.Default) {
+        withVault(handle) { vaultDir ->
+            val basePath = vaultDir.URLByStandardizingPath?.path ?: return@withVault emptyList<String>()
+            val enumerator = NSFileManager.defaultManager.enumeratorAtURL(
+                vaultDir,
+                includingPropertiesForKeys = null,
+                options = NSDirectoryEnumerationSkipsHiddenFiles,
+                errorHandler = null,
+            ) ?: return@withVault emptyList<String>()
+            val out = mutableListOf<String>()
+            while (true) {
+                val url = enumerator.nextObject() as? NSURL ?: break
+                val path = url.URLByStandardizingPath?.path ?: continue
+                if (!path.endsWith(".md", ignoreCase = true)) continue
+                out += path.removePrefix(basePath).trimStart('/')
+            }
+            out.sorted()
+        } ?: emptyList()
+    }
+
     override suspend fun releaseAccess(handle: String) {
         // Security-scoped bookmarks need no explicit release.
     }

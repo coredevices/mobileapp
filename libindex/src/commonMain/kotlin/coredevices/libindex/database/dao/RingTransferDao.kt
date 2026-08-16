@@ -139,6 +139,7 @@ data class TransferInfoUpdate(
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
             RF.error AS feedItem_error,
+            RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,
             RF.userMessageId AS feedItem_userMessageId
 
@@ -171,6 +172,7 @@ data class TransferInfoUpdate(
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
             RF.error AS feedItem_error,
+            RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,
             RF.userMessageId AS feedItem_userMessageId
             

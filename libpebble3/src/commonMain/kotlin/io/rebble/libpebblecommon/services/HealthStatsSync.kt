@@ -34,6 +34,11 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToLong
+import kotlin.math.sin
 
 private val logger = Logger.withTag("HealthStatsSync")
 
@@ -76,6 +81,12 @@ internal suspend fun updateHealthStatsInDatabase(
         payload = encodeUInt(averages.averageSleepSecondsPerDay.coerceAtLeast(0).toUInt()).toByteArray()
     ))
 
+    // Per-weekday typical sleep values (consumed by firmware activity_insights for the
+    // sleep summary card's typical-bedtime/wake display and the sleep notification's
+    // "X% above/below your typical" comparison). Computed once and looked up per weekday
+    // inside the loop below.
+    val sleepTypicals = computeAllWeekdayTypicalSleep(healthDao, today, timeZone)
+
     // Compute weekly movement and sleep data (excluding today)
     val oldestDate = today.minus(DatePeriod(days = MOVEMENT_HISTORY_DAYS - 1))
     val rangeStart = oldestDate.startOfDayEpochSeconds(timeZone)
@@ -109,11 +120,35 @@ internal suspend fun updateHealthStatsInDatabase(
             dailySleep?.totalSleep?.toInt() ?: 0,
             dailySleep?.deepSleep?.toInt() ?: 0,
             dailySleep?.firstStart?.toInt() ?: 0,
-            dailySleep?.lastEnd?.toInt() ?: 0
+            dailySleep?.lastEnd?.toInt() ?: 0,
+            typicals = sleepTypicals[day.dayOfWeek],
         )
         stats.add(HealthStat(
             key = sleepKey,
             payload = sleepPayloadData.toByteArray()
+        ))
+    }
+
+    // The loop above skips today's weekday by design (incomplete current-day daily fields
+    // shouldn't overwrite the watch's accelerometer-tracked values). But today's weekday's
+    // _sleepData blob is exactly what the firmware reads for "today's typical sleep" on the
+    // sleep summary card, so without this extra write its typicals stay stale for a day.
+    // Send a typicals-only blob with last_processed_timestamp=0; firmware's
+    // prv_notify_health_listeners gates the in-memory daily-metric update on a valid
+    // timestamp and bails out, so the daily fields=0 don't corrupt today's tracked values.
+    // health_db_insert still stores the blob, so the typicals are readable.
+    SLEEP_KEYS[today.dayOfWeek]?.let { todaySleepKey ->
+        val todaySleepPayloadData = sleepPayload(
+            dayStartEpochSec = 0L,
+            sleepDuration = 0,
+            deepSleepDuration = 0,
+            fallAsleepTime = 0,
+            wakeupTime = 0,
+            typicals = sleepTypicals[today.dayOfWeek],
+        )
+        stats.add(HealthStat(
+            key = todaySleepKey,
+            payload = todaySleepPayloadData.toByteArray()
         ))
     }
 
@@ -142,7 +177,8 @@ private fun sleepPayload(
     sleepDuration: Int,
     deepSleepDuration: Int,
     fallAsleepTime: Int,
-    wakeupTime: Int
+    wakeupTime: Int,
+    typicals: WeekdaySleepTypicals? = null,
 ): UByteArray {
     val buffer = DataBuffer(SLEEP_PAYLOAD_SIZE).apply { setEndian(Endian.Little) }
 
@@ -152,14 +188,15 @@ private fun sleepPayload(
     buffer.putUInt(deepSleepDuration.toUInt()) // deep_sleep_duration
     buffer.putUInt(fallAsleepTime.toUInt()) // fall_asleep_time
     buffer.putUInt(wakeupTime.toUInt()) // wakeup_time
-    buffer.putUInt(0u) // typical_sleep_duration (we don't calculate this yet)
-    buffer.putUInt(0u) // typical_deep_sleep_duration
-    buffer.putUInt(0u) // typical_fall_asleep_time
-    buffer.putUInt(0u) // typical_wakeup_time
+    buffer.putUInt((typicals?.sleepDurationSeconds ?: 0).toUInt()) // typical_sleep_duration
+    buffer.putUInt((typicals?.deepSleepDurationSeconds ?: 0).toUInt()) // typical_deep_sleep_duration
+    buffer.putUInt((typicals?.fallAsleepSecondsOfDay ?: 0).toUInt()) // typical_fall_asleep_time
+    buffer.putUInt((typicals?.wakeupSecondsOfDay ?: 0).toUInt()) // typical_wakeup_time
 
     logger.d {
         "HEALTH_STATS: Sleep payload - version=$HEALTH_STATS_VERSION, timestamp=$dayStartEpochSec, " +
-                "sleepDuration=$sleepDuration, deepSleep=$deepSleepDuration, fallAsleep=$fallAsleepTime, wakeup=$wakeupTime"
+                "sleepDuration=$sleepDuration, deepSleep=$deepSleepDuration, fallAsleep=$fallAsleepTime, wakeup=$wakeupTime, " +
+                "typicals=${typicals ?: "absent"}"
     }
 
     return buffer.array()
@@ -284,6 +321,107 @@ internal suspend fun computeAllWeekdayTypicalSteps(
     return buildWeekdayTypicalsFromData(allData, timeZone)
 }
 
+/**
+ * Reduces per-day sleep summaries into per-weekday typical-sleep values.
+ *
+ * For each weekday with at least MIN_DAYS_FOR_TYPICAL_SLEEP days that have at least one
+ * sleep session ≥ MIN_SLEEP_SESSION_SECONDS, emits a WeekdaySleepTypicals containing:
+ *  - arithmetic-mean total/deep sleep durations (seconds)
+ *  - circular-mean fall-asleep and wakeup seconds-of-local-day (0..86399)
+ *
+ * Below-threshold weekdays are omitted from the result.
+ */
+internal fun buildWeekdaySleepTypicalsFromData(
+    dailySleepByDate: Map<LocalDate, DailySleep?>,
+    timeZone: TimeZone,
+): Map<DayOfWeek, WeekdaySleepTypicals> {
+    if (dailySleepByDate.isEmpty()) return emptyMap()
+
+    data class NightStats(
+        val totalSec: Int,
+        val deepSec: Int,
+        val startSecOfDay: Int,
+        val endSecOfDay: Int,
+    )
+
+    val perWeekday = mutableMapOf<DayOfWeek, MutableList<NightStats>>()
+    for ((date, dailySleep) in dailySleepByDate) {
+        if (dailySleep == null) continue
+        val qualifying = dailySleep.sessions.filter { it.totalSleep >= MIN_SLEEP_SESSION_SECONDS }
+        if (qualifying.isEmpty()) continue
+        val totalSec = qualifying.sumOf { it.totalSleep }.toInt()
+        val deepSec = qualifying.sumOf { it.deepSleep }.toInt()
+        val startSecOfDay = secondsOfDay(qualifying.first().start, timeZone)
+        val endSecOfDay = secondsOfDay(qualifying.last().end, timeZone)
+        perWeekday
+            .getOrPut(date.dayOfWeek) { mutableListOf() }
+            .add(NightStats(totalSec, deepSec, startSecOfDay, endSecOfDay))
+    }
+
+    val result = mutableMapOf<DayOfWeek, WeekdaySleepTypicals>()
+    for ((wd, nights) in perWeekday) {
+        if (nights.size < MIN_DAYS_FOR_TYPICAL_SLEEP) continue
+        val sleepMean = (nights.sumOf { it.totalSec.toLong() } / nights.size).toInt()
+        val deepMean = (nights.sumOf { it.deepSec.toLong() } / nights.size).toInt()
+        val fallAsleepMean = circularMeanSecondsOfDay(nights.map { it.startSecOfDay })
+        val wakeupMean = circularMeanSecondsOfDay(nights.map { it.endSecOfDay })
+        result[wd] = WeekdaySleepTypicals(sleepMean, deepMean, fallAsleepMean, wakeupMean)
+    }
+    return result
+}
+
+private fun secondsOfDay(epochSec: Long, timeZone: TimeZone): Int {
+    val ldt = kotlinx.datetime.Instant.fromEpochSeconds(epochSec).toLocalDateTime(timeZone)
+    return ldt.hour * 3600 + ldt.minute * 60 + ldt.second
+}
+
+private fun circularMeanSecondsOfDay(values: List<Int>): Int {
+    if (values.isEmpty()) return 0
+    val twoPi = 2 * PI
+    val secondsPerDay = SECONDS_PER_DAY.toDouble()
+    var sumX = 0.0
+    var sumY = 0.0
+    for (v in values) {
+        val angle = v / secondsPerDay * twoPi
+        sumX += cos(angle)
+        sumY += sin(angle)
+    }
+    val meanAngle = atan2(sumY, sumX)  // returns [-π, π]
+    val secs = (meanAngle / twoPi * secondsPerDay).roundToLong()
+    return (((secs % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY).toInt()
+}
+
+/**
+ * Pulls the last [TYPICAL_SLEEP_HISTORY_WEEKS] weeks of same-weekday DailySleep
+ * (via [fetchAndGroupDailySleep] per past matching date) and reduces them via
+ * [buildWeekdaySleepTypicalsFromData].
+ *
+ * Returns one entry per weekday with at least [MIN_DAYS_FOR_TYPICAL_SLEEP] qualifying days.
+ * Empty map when no weekday clears the threshold.
+ *
+ * Issues 49 DAO queries (7 weekdays × 7 weeks); each is a single ~32h `getOverlayEntries`.
+ * Runs once daily as part of [updateHealthStatsInDatabase].
+ */
+internal suspend fun computeAllWeekdayTypicalSleep(
+    healthDao: HealthDao,
+    today: LocalDate,
+    timeZone: TimeZone,
+): Map<DayOfWeek, WeekdaySleepTypicals> {
+    val dailySleepByDate = mutableMapOf<LocalDate, DailySleep?>()
+    for (wd in DayOfWeek.entries) {
+        var ref = today.minus(DatePeriod(days = 1))
+        while (ref.dayOfWeek != wd) {
+            ref = ref.minus(DatePeriod(days = 1))
+        }
+        for (weeksAgo in 0 until TYPICAL_SLEEP_HISTORY_WEEKS) {
+            val pastDate = ref.minus(DatePeriod(days = 7 * weeksAgo))
+            val dayStart = pastDate.atStartOfDayIn(timeZone).epochSeconds
+            dailySleepByDate[pastDate] = fetchAndGroupDailySleep(healthDao, dayStart, timeZone)
+        }
+    }
+    return buildWeekdaySleepTypicalsFromData(dailySleepByDate, timeZone)
+}
+
 // Extension functions
 private fun Long.kilocalories(): Long = this / 1000L
 
@@ -354,3 +492,15 @@ private val STEP_TYPICAL_KEYS = mapOf(
     DayOfWeek.SATURDAY to "saturday_steps",
     DayOfWeek.SUNDAY to "sunday_steps",
 )
+
+data class WeekdaySleepTypicals(
+    val sleepDurationSeconds: Int,
+    val deepSleepDurationSeconds: Int,
+    val fallAsleepSecondsOfDay: Int,
+    val wakeupSecondsOfDay: Int,
+)
+
+private const val MIN_DAYS_FOR_TYPICAL_SLEEP = 2
+private const val TYPICAL_SLEEP_HISTORY_WEEKS = 7
+private const val MIN_SLEEP_SESSION_SECONDS = 1800L
+private const val SECONDS_PER_DAY = 86_400

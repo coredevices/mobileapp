@@ -40,6 +40,7 @@ import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.consumeAsFlow
@@ -47,6 +48,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class NotificationHandler(
@@ -68,13 +70,20 @@ class NotificationHandler(
     private val inflightNotifications = ConcurrentHashMap<String, LibPebbleNotification>()
     val notificationSendQueue = Channel<LibPebbleNotification>(Channel.BUFFERED)
     val notificationDeleteQueue = Channel<Uuid>(Channel.BUFFERED)
-    private val notificationsToProcess = Channel<StatusBarNotification>(Channel.BUFFERED)
+    private val notificationsToProcess = Channel<NotificationToProcess>(Channel.BUFFERED)
     private val _notificationServiceBound = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val notificationServiceBound = _notificationServiceBound.asSharedFlow()
+    private var activeNotifications: () -> List<StatusBarNotification>? = { null }
 
-    fun init() {
+    private data class NotificationToProcess(
+        val sbn: StatusBarNotification,
+        val isSummaryRecheck: Boolean = false,
+    )
+
+    fun init(activeNotifications: () -> List<StatusBarNotification>?) {
+        this.activeNotifications = activeNotifications
         notificationsToProcess.consumeAsFlow().onEach {
-            val notification = processNotification(it) ?: return@onEach
+            val notification = processNotification(it.sbn, it.isSummaryRecheck) ?: return@onEach
             sendNotification(notification)
         }.launchIn(libPebbleCoroutineScope)
     }
@@ -116,19 +125,49 @@ class NotificationHandler(
         return channelGroups.flatMap { it.channels }.find { it.id == channelId }
     }
 
-    private suspend fun processNotification(sbn: StatusBarNotification): LibPebbleNotification? {
-        // Don't even check (or persist) ongoing/group summary notifications
+    private suspend fun processNotification(
+        sbn: StatusBarNotification,
+        isSummaryRecheck: Boolean,
+    ): LibPebbleNotification? {
+        // Don't even check (or persist) ongoing notifications
         if (sbn.isOngoing) {
             verboseLog {
                 "Ignoring ongoing notification from ${sbn.packageName.obfuscate(privateLogger)}"
             }
             return null
         }
+        // Group summaries are usually redundant, but some apps only post a summary. Park the
+        // summary, then send it only if the group still has no non-summary notifications (children
+        // may be posted after the summary, so this can't be checked at arrival time).
         if (sbn.notification.isGroupSummary()) {
-            verboseLog {
-                "Ignoring group summary notification from ${sbn.packageName.obfuscate(privateLogger)}"
+            if (!isSummaryRecheck) {
+                verboseLog {
+                    "Parking group summary from ${sbn.packageName.obfuscate(privateLogger)} pending recheck"
+                }
+                libPebbleCoroutineScope.launch {
+                    delay(GROUP_SUMMARY_RECHECK_DELAY)
+                    notificationsToProcess.trySend(NotificationToProcess(sbn, isSummaryRecheck = true)).also {
+                        if (it.isFailure) {
+                            logger.w { "Couldn't write summary recheck to processing queue" }
+                        }
+                    }
+                }
+                return null
             }
-            return null
+            val sendSummary = summaryStillNeeded(
+                summaryKey = sbn.key,
+                summaryGroupKey = sbn.groupKey,
+                active = activeNotifications()?.map { it.toActiveInfo() },
+            )
+            if (!sendSummary) {
+                verboseLog {
+                    "Ignoring group summary notification from ${sbn.packageName.obfuscate(privateLogger)}"
+                }
+                return null
+            }
+            verboseLog {
+                "Group summary from ${sbn.packageName.obfuscate(privateLogger)} has no children; processing it"
+            }
         }
         val appEntry = notificationAppDao.getEntry(sbn.packageName) ?: run {
             // Likely an app from another profile which we can now insert
@@ -313,7 +352,7 @@ class NotificationHandler(
 
     fun handleNotificationPosted(sbn: StatusBarNotification) {
         logger.d { "onNotificationPosted(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
-        notificationsToProcess.trySend(sbn).also {
+        notificationsToProcess.trySend(NotificationToProcess(sbn)).also {
             if (it.isFailure) {
                 logger.w { "Couldn't write notification to processing queue" }
             }
@@ -472,6 +511,29 @@ private val EXTRA_KEYS_NON_STRING_SENSITIVE =
 // Keys whose values are large binary objects (bitmaps, icons) — skip get() entirely to avoid OOM
 private val EXTRA_KEYS_SKIP_VALUE =
     setOf("android.largeIcon", "android.picture", "android.backgroundImage", "android.icon", "android.smallIcon")
+
+private val GROUP_SUMMARY_RECHECK_DELAY = 0.5.seconds
+
+internal data class ActiveNotificationInfo(
+    val key: String,
+    val groupKey: String,
+    val isGroupSummary: Boolean,
+)
+
+private fun StatusBarNotification.toActiveInfo() =
+    ActiveNotificationInfo(key, groupKey, notification.isGroupSummary())
+
+internal fun summaryStillNeeded(
+    summaryKey: String,
+    summaryGroupKey: String,
+    active: List<ActiveNotificationInfo>?,
+): Boolean {
+    if (active == null) return false
+    // This summary is gone
+    if (active.none { it.key == summaryKey }) return false
+    // Check for non-summary notifications in same group
+    return active.none { it.groupKey == summaryGroupKey && !it.isGroupSummary }
+}
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0

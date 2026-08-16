@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection.bt.ble.transport
 
+import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.BleScanResult
 import io.rebble.libpebblecommon.connection.WatchManager
@@ -8,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 //expect fun libpebbleBleScanner(): BleScanner
 
-fun bleScanner(): BleScanner
- = kableBleScanner()
+fun bleScanner(bleConfigFlow: BleConfigFlow): BleScanner
+ = kableBleScanner(bleConfigFlow)
 // = libpebbleBleScanner()
 
 interface BleScanner {

@@ -8,6 +8,7 @@ import coredevices.analytics.heartbeatWatchConnectedName
 import coredevices.database.WeatherLocationDao
 import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.firestore.UsersDao
+import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
@@ -58,6 +59,7 @@ class PebbleAppDelegate(
     private val memfaultChunkQueue: MemfaultChunkQueue,
     private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
     private val pebbleWebServices: PebbleWebServices,
+    private val batteryChargedNotifier: BatteryChargedNotifier,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -138,6 +140,11 @@ class PebbleAppDelegate(
                         }
                         if (watch is CommonConnectedDevice) {
                             usersDao.updateLastConnectedWatch(watch.serial)
+                            batteryChargedNotifier.onBatteryLevel(
+                                watch.identifier,
+                                watch.name,
+                                watch.batteryLevel,
+                            )
                         }
                     }
                     watches.groupBy { it.watchType() }.forEach { (watchType, watches) ->

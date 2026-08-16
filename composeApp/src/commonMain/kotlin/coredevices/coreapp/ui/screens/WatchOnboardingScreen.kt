@@ -93,7 +93,9 @@ import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallS
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.metadata.supportsHrm
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -289,9 +291,11 @@ fun WatchOnboardingScreen(
 
                             settings.Show(BoolWatchPref.Clock24h.id)
                             settings.Show(EnableHealthTracking)
-                            settings.Show(HrmEnabled)
-                            settings.Show(HrmMeasurementInterval)
-                            settings.Show(HrmActivityTracking)
+                            if (connectedWatch.color?.supportsHrm() == true) {
+                                settings.Show(HrmEnabled)
+                                settings.Show(HrmMeasurementInterval)
+                                settings.Show(HrmActivityTracking)
+                            }
                             settings.Show(EnableActivityInsights)
                             settings.Show(EnableSleepInsights)
                             settings.Show(HealthImperialUnits)

@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
@@ -89,6 +90,9 @@ open class DefaultRecordingOperation(
         val entryId = withContext(Dispatchers.IO) {
             if (handle?.stage is RecordingProcessingStage.RecordingEntryCreated) {
                 val id = (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
+                // Reused entries from the auth-failure path may predate fileName
+                // being captured there — backfill so playback/export work.
+                recordingEntryDao.backfillRecordingEntryFileName(id, fileId)
                 trace.markEvent(
                     "recording_entry_reused",
                     TraceEventData.RecordingEntryInfo(id, recordingId, transferId ?: -1)
@@ -191,7 +195,8 @@ open class DefaultRecordingOperation(
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.transcription_error,
-                    error = "Network error during transcription: ${e.message}"
+                    error = "Network error during transcription: ${e.message}",
+                    errorType = e.errorType
                 )
                 recordingEntryDao.updateRecordingEntryTranscription(
                     entryId,
@@ -225,7 +230,9 @@ open class DefaultRecordingOperation(
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.transcription_error,
-                    error = e.message
+                    error = e.message,
+                    errorType = (e as? TranscriptionException)?.errorType
+                        ?: RecordingEntryErrorType.transcription_failed
                 )
                 if (e is TranscriptionException) {
                     recordingEntryDao.updateRecordingEntryTranscription(
@@ -278,7 +285,8 @@ open class DefaultRecordingOperation(
                 recordingEntryDao.updateRecordingEntryStatus(
                     entryId,
                     status = RecordingEntryStatus.agent_error,
-                    error = e.message
+                    error = e.message,
+                    errorType = RecordingEntryErrorType.agent_failed
                 )
                 throw e
             } finally {

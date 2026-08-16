@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.juul.kable.Scanner
 import coredevices.haversine.KMPHaversineAdvertisement
 import coredevices.haversine.fingerprintMatchesFailsafe
+import coredevices.haversine.fingerprintMatchesPTF
 import coredevices.libindex.Scanning
 import io.rebble.libpebblecommon.connection.BleScanResult
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.asPebbleBleIdentifier
@@ -72,13 +73,18 @@ class RealScanning(
                         logger.w { "No fingerprint found in advertisement from ${it.identifier.asString}, ignoring advertisement" }
                         return@collect
                     }
-                    val isFailsafe = fingerprintMatchesFailsafe(fingerprint)
+                    val currentImage = when {
+                        fingerprintMatchesFailsafe(fingerprint) -> IndexImage.Failsafe
+                        fingerprintMatchesPTF(fingerprint) -> IndexImage.ProductionTest
+                        else -> IndexImage.Primary
+                    }
+                    logger.d { "Found index device: ${it.identifier.asString}, name=${it.name}, rssi=${it.rssi}, currentImage=$currentImage, fingerprint=$fingerprint" }
                     indexDeviceManager.addScanResult(
                         IndexScanResult(
                             identifier = IndexIdentifier.fromPlatformAddress(it.identifier.asString),
                             name = it.name,
                             rssi = it.rssi,
-                            isFailsafe = isFailsafe,
+                            currentImage = currentImage,
                         )
                     )
                 }

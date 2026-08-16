@@ -27,6 +27,9 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
         /** Distinguishes the early heads-up alarm/notification from the due-time one. */
         const val ACTION_PRE_NOTIFICATION = "coredevices.ring.reminders.PRE_NOTIFICATION"
 
+        /** Broadcast action fired by the notification's "Done" button (MOB-8439). */
+        const val ACTION_MARK_DONE = "coredevices.ring.reminders.ACTION_MARK_DONE"
+
         /** Notification id for the early heads-up; kept disjoint from the due notification's id. */
         fun preNotificationId(reminderId: Int) =
             AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER_PRE + reminderId
@@ -37,6 +40,7 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
     private val scope = CoroutineScope(Dispatchers.Default)
     private val localReminderDao: LocalReminderDao by inject()
     private val deepLinkResolver: ReminderDeepLinkResolver by inject()
+    private val reminderCompleter: ReminderCompleter by inject()
 
     private fun makeNotification(context: Context, data: LocalReminderData, deepLink: String, isPreNotification: Boolean) =
         NotificationCompat.Builder(context, "reminders")
@@ -47,7 +51,22 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
             .setGroup("reminders")
             .setAutoCancel(true)
             .setContentIntent(makeContentIntent(context, notificationId(data.id, isPreNotification), deepLink))
+            .addAction(0, "Done", makeMarkDonePendingIntent(context, data.id))
             .build()
+
+    private fun makeMarkDonePendingIntent(context: Context, reminderId: Int): PendingIntent? {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = ACTION_MARK_DONE
+            putExtra(EXTRA_REMINDER_ID, reminderId)
+        }
+        return PendingIntentCompat.getBroadcast(
+            context,
+            reminderId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
+    }
 
     private fun makeContentIntent(context: Context, requestCode: Int, deepLink: String): PendingIntent? {
         val intent = Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
@@ -78,13 +97,17 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val isPreNotification = intent.action == ACTION_PRE_NOTIFICATION
-        logger.d { "Received reminder alarm broadcast (pre=$isPreNotification)" }
         val reminderId = intent.getIntExtra(EXTRA_REMINDER_ID, -1)
         if (reminderId == -1) {
             logger.e("Reminder ID not found in input data")
             return
         }
+        if (intent.action == ACTION_MARK_DONE) {
+            handleMarkDone(context, reminderId)
+            return
+        }
+        val isPreNotification = intent.action == ACTION_PRE_NOTIFICATION
+        logger.d { "Received reminder alarm broadcast (pre=$isPreNotification)" }
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannelCreated(notificationManager)
         scope.launch {
@@ -97,6 +120,26 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
             val notification = makeNotification(context, reminder, deepLinkResolver.resolveDeepLink(reminder.id), isPreNotification)
             withContext(Dispatchers.Main) {
                 notificationManager.notify(notificationId(reminderId, isPreNotification), notification)
+            }
+        }
+    }
+
+    /** Handle the "Done" action: complete the backing feed item (which cancels the reminder and
+     *  dismisses its notifications) and, as a fallback, dismiss them even when there is no linked
+     *  item to complete. Uses [goAsync] so the work survives the receiver returning. */
+    private fun handleMarkDone(context: Context, reminderId: Int) {
+        logger.d { "Received reminder mark-done broadcast for $reminderId" }
+        val pendingResult = goAsync()
+        scope.launch {
+            try {
+                runCatching { reminderCompleter.markDone(reminderId) }
+                    .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                val notificationManager =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(notificationId(reminderId, isPreNotification = false))
+                notificationManager.cancel(notificationId(reminderId, isPreNotification = true))
+            } finally {
+                pendingResult.finish()
             }
         }
     }

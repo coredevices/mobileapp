@@ -8,13 +8,13 @@ import kotlin.test.assertEquals
 class NormalizeParentListsTest {
 
     @Test
-    fun textOnlyEditKeepsCalendarEventInTodos() {
+    fun textOnlyEditKeepsItemInTodos() {
         // requestedParents = null (text-only edit) must preserve membership,
         // not strip Todos and relocate to Notes-to-Self.
         assertEquals(
             listOf(LIST_TODOS_ID),
             normalizeParentLists(
-                kind = "calendar_event",
+                kind = "checklist",
                 requestedParents = null,
                 currentParents = listOf(LIST_TODOS_ID),
             ),

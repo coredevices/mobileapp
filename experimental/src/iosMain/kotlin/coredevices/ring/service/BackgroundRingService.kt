@@ -50,6 +50,7 @@ class BackgroundRingService(
     }
 
     fun restartPreemptiveTransfer() {
+        logger.i { "Restarting preemptive transfer" }
         satelliteManager.restartPreemptiveTransfer()
     }
 

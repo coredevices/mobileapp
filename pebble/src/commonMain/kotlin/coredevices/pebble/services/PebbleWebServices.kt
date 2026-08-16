@@ -40,6 +40,7 @@ import io.ktor.http.isSuccess
 import io.ktor.http.path
 import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -111,6 +112,7 @@ private fun HttpClientAuthType.requiresToken(): Boolean = when (this) {
 class PebbleHttpClient(
     private val pebbleAccount: PebbleAccountProvider,
     httpClient: HttpClient = HttpClient(),
+    private val libPebble: Lazy<LibPebble>,
 ) : PebbleBootConfigService {
     private val httpClient = httpClient.config {
         install(HttpCache)
@@ -201,7 +203,7 @@ class PebbleHttpClient(
             auth: HttpClientAuthType,
             parameters: Map<String, String> = emptyMap(),
         ): T? {
-            logger.v("get: ${url.sanitizeUrl()} auth=$auth")
+            logger.v("get: ${url.sanitizeUrl(libPebble.value)} auth=$auth")
             val token = authFor(auth)
             if (auth.requiresToken() && token == null) {
                 logger.i("not logged in")
@@ -241,9 +243,12 @@ class PebbleHttpClient(
 
 private val COORDINATE_REGEX = Regex("""/(-?\d+\.\d+)/(-?\d+\.\d+)""")
 
-private fun String.sanitizeUrl(): String {
-    // Replaces /37.756/-122.419 with /xx.xxxxxx/yy.yyyyyy
-    return this.replace(COORDINATE_REGEX, "/xx.xxxxxx/yy.yyyyyy")
+private fun String.sanitizeUrl(libPebble: LibPebble): String {
+    if (libPebble.config.value.notificationConfig.obfuscateContent) {
+        // Replaces /37.756/-122.419 with /xx.xxxxxx/yy.yyyyyy
+        return this.replace(COORDINATE_REGEX, "/xx.xxxxxx/yy.yyyyyy")
+    }
+    return this
 }
 
 interface PebbleWebServices {

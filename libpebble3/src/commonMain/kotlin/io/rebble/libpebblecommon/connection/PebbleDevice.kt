@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
@@ -28,6 +29,7 @@ import kotlin.uuid.Uuid
 interface ActiveDevice {
     fun disconnect()
     val usingBtClassic: Boolean
+    val reversePpogVersion: ReversePpogVersion?
 }
 
 data class ConnectionFailureInfo(

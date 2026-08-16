@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- See backup_rules.xml (the API 26-30 equivalent) for why these are excluded. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+        <exclude
+            domain="sharedpref"
+            path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -29,6 +29,7 @@ import com.multiplatform.webview.request.WebRequest
 import com.multiplatform.webview.request.WebRequestInterceptResult
 import com.multiplatform.webview.web.LoadingState
 import com.multiplatform.webview.web.NativeWebView
+import com.multiplatform.webview.web.PlatformWebViewParams
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.WebViewNavigator
@@ -70,6 +71,9 @@ internal expect fun webViewFactory(
 
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
 internal expect fun persistLocalStorage(webView: NativeWebView)
+
+@Composable
+internal expect fun rememberWebViewFileChooserParams(): PlatformWebViewParams?
 
 private val logger = Logger.withTag("WatchappSettingsScreen")
 
@@ -114,6 +118,7 @@ fun WatchappSettingsScreen(
                 }
             }
         }
+        val fileChooserParams = rememberWebViewFileChooserParams()
         val state = rememberWebViewState(url) {
             androidWebSettings.domStorageEnabled = true
             iOSWebSettings.isInspectable = true
@@ -173,6 +178,7 @@ fun WatchappSettingsScreen(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     navigator = navigator,
+                    platformWebViewParams = fileChooserParams,
                     factory = { webViewFactory(it, uuid) }
                 )
             }

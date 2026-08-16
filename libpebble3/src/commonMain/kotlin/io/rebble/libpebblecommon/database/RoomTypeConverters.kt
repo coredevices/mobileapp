@@ -11,6 +11,8 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchColor.Companion.fromProtocolNumber
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.weather.WeatherDailyForecast
+import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import kotlinx.serialization.SerializationException
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
@@ -71,6 +73,22 @@ class RoomTypeConverters {
     fun ChannelGroupListToString(list: List<ChannelGroup>): String {
         return json.encodeToString(list)
     }
+
+    @TypeConverter
+    fun StringToWeatherDailyForecastList(value: String?): List<WeatherDailyForecast>? =
+        value?.let { json.decodeFromString(it) }
+
+    @TypeConverter
+    fun WeatherDailyForecastListToString(list: List<WeatherDailyForecast>?): String? =
+        list?.let { json.encodeToString(it) }
+
+    @TypeConverter
+    fun StringToWeatherHourlyForecastList(value: String?): List<WeatherHourlyForecast>? =
+        value?.let { json.decodeFromString(it) }
+
+    @TypeConverter
+    fun WeatherHourlyForecastListToString(list: List<WeatherHourlyForecast>?): String? =
+        list?.let { json.encodeToString(it) }
 
     @TypeConverter
     fun LongToMillisecondInstant(value: Long): MillisecondInstant = MillisecondInstant(Instant.fromEpochMilliseconds(value))

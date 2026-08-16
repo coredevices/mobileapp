@@ -67,6 +67,13 @@ object RingRoutes {
     const val OBJECT_DEEP_LINK_ID_PARAM = "id"
     fun objectDeepLink(objectId: String) =
         "pebblecore://$OBJECT_DEEP_LINK_HOST/$OBJECT_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$objectId"
+
+    /** Deep link that opens the [RecordingDetails] screen for a local recording.
+     *  Used by the Index notifications so tapping e.g. a completed-answer
+     *  notification opens that recording. Parsed by `CoreDeepLinkHandler`. */
+    const val RECORDING_DEEP_LINK_PATH = "recording"
+    fun recordingDeepLink(recordingId: Long) =
+        "pebblecore://$OBJECT_DEEP_LINK_HOST/$RECORDING_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$recordingId"
 }
 
 fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {

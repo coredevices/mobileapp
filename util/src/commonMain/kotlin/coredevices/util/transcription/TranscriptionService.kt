@@ -77,6 +77,14 @@ internal fun toBcp47(languageCode: String, region: String?): String {
     return if (resolved != null) "$languageCode-${resolved.uppercase()}" else languageCode
 }
 
+/**
+ * Whether a set of engine locale tags covers [languageTag], comparing only the primary subtag —
+ * an engine offering "en-GB" can transcribe an "en-US" request.
+ */
+fun List<String>.coversLanguage(languageTag: String): Boolean = any {
+    it.substringBefore('-').equals(languageTag.substringBefore('-'), ignoreCase = true)
+}
+
 /** The canonical (most common) region for an ISO 639-1 language, or null if unknown. */
 internal fun canonicalRegionForLanguage(languageCode: String): String? =
     canonicalRegions[languageCode.lowercase()]

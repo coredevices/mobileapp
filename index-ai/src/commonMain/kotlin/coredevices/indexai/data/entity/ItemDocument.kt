@@ -94,16 +94,6 @@ data class ItemDocument(
         }
 
         @Serializable
-        @SerialName("calendar_event")
-        data class CalendarEvent(
-            @Serializable(with = InstantComponentSerializer::class)
-            val startTime: Instant,
-            @Serializable(with = InstantComponentSerializer::class)
-            val endTime: Instant,
-            val location: String? = null,
-        ) : ItemMetadata
-
-        @Serializable
         @SerialName("answer")
         data class Answer(val question: String) : ItemMetadata
 

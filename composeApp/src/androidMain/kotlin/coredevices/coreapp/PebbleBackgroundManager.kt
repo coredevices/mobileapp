@@ -8,6 +8,8 @@ import androidx.core.content.ContextCompat
 import co.touchlab.kermit.Logger
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.DiscoveredIndexDevice
+import coredevices.libindex.device.IndexImage
+import coredevices.libindex.device.isFailsafe
 import coredevices.ring.database.Preferences
 import coredevices.util.AndroidCompanionDevice
 import coredevices.util.CoreConfigFlow

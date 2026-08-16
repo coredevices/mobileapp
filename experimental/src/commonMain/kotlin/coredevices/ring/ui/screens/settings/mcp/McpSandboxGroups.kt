@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -49,6 +51,8 @@ import coreapp.util.generated.resources.back
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
+import coredevices.ring.agent.LlmMode
+import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.McpServerEntry
 import coredevices.ring.ui.PreviewWrapper
@@ -63,9 +67,12 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 class McpSandboxGroupsViewModel(
-    val mcpSandboxRepository: McpSandboxRepository
+    val mcpSandboxRepository: McpSandboxRepository,
+    private val preferences: Preferences,
+    private val snackbarHostState: SnackbarHostState,
 ): ViewModel() {
     val sandboxGroups = mcpSandboxRepository.getAllGroupsFlow().stateIn(
         scope = viewModelScope,
@@ -86,6 +93,13 @@ class McpSandboxGroupsViewModel(
     fun updateModelType(groupId: Long, modelType: SandboxModelType) {
         viewModelScope.launch {
             mcpSandboxRepository.updateGroupModelType(groupId, modelType)
+            if (modelType == SandboxModelType.IndexAgent) return@launch
+            if (groupId != mcpSandboxRepository.getDefaultGroupId()) return@launch
+            if (!preferences.llmMode.value.usesLocalCactus()) return@launch
+            preferences.setLlmMode(LlmMode.RemoteOnly)
+            snackbarHostState.showSnackbar(
+                "Assistant model set to Cloud Only. The offline model doesn't support MCP sandboxes"
+            )
         }
     }
 
@@ -131,7 +145,8 @@ private const val SERVERS_TAB = 1
 
 @Composable
 fun McpSandboxGroups(coreNav: CoreNav) {
-    val vm = koinViewModel<McpSandboxGroupsViewModel>()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val vm = koinViewModel<McpSandboxGroupsViewModel> { parametersOf(snackbarHostState) }
     val defaultGroupId by vm.defaultGroupId.collectAsState()
     var selectedTab by remember { mutableStateOf(GROUPS_TAB) }
     var showAddGroupDialog by remember { mutableStateOf(false) }
@@ -164,6 +179,7 @@ fun McpSandboxGroups(coreNav: CoreNav) {
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
@@ -401,7 +417,10 @@ fun McpSandboxGroupItem(
                                     Text(modelTypeDescription(SandboxModelType.IndexAgent), style = MaterialTheme.typography.bodySmall)
                                 }
                             },
-                            onClick = {}
+                            onClick = {
+                                onUpdateModelType(SandboxModelType.IndexAgent)
+                                expanded = false
+                            }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         DropdownMenuItem(

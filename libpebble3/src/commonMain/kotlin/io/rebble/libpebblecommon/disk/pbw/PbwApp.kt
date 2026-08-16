@@ -1,6 +1,5 @@
 package io.rebble.libpebblecommon.disk.pbw
 
-import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
@@ -58,11 +57,8 @@ fun PbwApp.bestVariantFor(watchType: WatchType): WatchType? =
 
 fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
-    val platforms = info.targetPlatforms.mapNotNull {
-        val watchType = WatchType.fromCodename(it) ?: run {
-            Logger.w { "Unknown watch type in pbw while processing sideload request: $it" }
-            return@mapNotNull null
-        }
+    // Built from the variants actually in the pbw; appinfo targetPlatforms can be wrong (see [bestVariantFor])
+    val platforms = WatchType.entries.mapNotNull { watchType ->
         val header = getBinaryHeaderFor(watchType) ?: return@mapNotNull null
         LockerEntryPlatform(
             lockerEntryId = uuid,

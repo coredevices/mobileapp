@@ -1,67 +1,70 @@
 [versions]
-android-compileSdk = "36"
+android-compileSdk = "37"
 android-minSdk = "26"
-android-targetSdk = "35"
-agp = "8.13.2"
-kotlin = "2.3.10"
+android-targetSdk = "36"
+agp = "9.3.1"
+kotlin = "2.4.10"
 jvm-toolchain = "17"
-ktor = "3.4.0"
-coroutine = "1.10.2"
-serialization = "1.10.0"
-sqlite = "2.6.2"
-kermit = "2.0.8"
+ktor = "3.5.1"
+coroutine = "1.11.0"
+serialization = "1.11.0"
+sqlite = "2.7.0"
+kermit = "2.1.0"
 ksp = "2.3.5"
 # We had some weird problems with BlobDb sync on room 2.8.0
 room = "2.8.4"
-okio = "3.16.4"
-kotlinx-io = "0.8.2"
-kotlinx-datetime = "0.7.1"
-koin = "4.1.1"
-atomicfu = "0.29.0"
-compose-multiplatform = "1.10.1"
+okio = "3.18.0"
+kotlinx-io = "0.9.1"
+kotlinx-datetime = "0.8.0"
+koin = "4.2.2"
+atomicfu = "0.33.0"
+compose-multiplatform = "1.11.1"
 pebblekit = "1.1.0"
 settings = "1.3.0"
-kable = "0.42.0"
+kable = "0.43.1"
 kmpio = "0.3.0"
-androidx-core = "1.17.0"
+androidx-core = "1.19.0"
 monitorVersion = "1.8.0"
 androidXTestVersion = "1.7.0"
 androidXRulesVersion = "1.7.0"
-googleServices = "4.4.4"
-firebase-crashlytics-plugin = "3.0.6"
-androidVersion = "2.4.0"
-androidx-activityCompose = "1.12.4"
-androidx-credentials = "1.5.0"
-gms-auth = "21.5.0"
-googleId = "1.1.1"
+googleServices = "4.5.0"
+firebase-crashlytics-plugin = "3.0.7"
+androidx-activityCompose = "1.13.0"
+androidx-credentials = "1.6.0"
+gms-auth = "21.6.0"
+googleId = "1.2.0"
 androidxWork = "2.11.2"
 play-update = "2.1.0"
 crashkios = "0.9.0"
-androidx-lifecycle = "2.9.6"
+androidx-lifecycle = "2.11.0"
 androidx-navigation = "2.9.2"
-firebase-kotlin = "2.4.0"
-# Fixed because of firebase-kotlin
-firebase-bom = "33.15.0"
+firebase-kotlin = "2.5.0"
+# Deliberately ahead of the BOM firebase-kotlin imports (33.15.0): its firebase-auth 23.2.1 has an
+# acknowledged regression that randomly signs users out (firebase-android-sdk#7111). We avoid the
+# APIs auth 24.x removed (updateEmail/fetchSignInMethodsForEmail), so forcing the newer BOM is safe.
+# NEVER downgrade below 34.x - older versions can't read the newer auth persistence, signing everyone out.
+firebase-bom = "34.16.0"
 kmpnotifier = "1.6.1"
-mixpanel-android = "8.3.0"
-buildkonfig = "0.17.1"
+mixpanel-android = "8.9.0"
+buildkonfig = "0.22.0"
 webview = "2.0.3"
-coil = "3.3.0"
+coil = "3.5.0"
 uri = "0.0.21"
-algolia = "3.38.0"
-coredevices-speex = "1946c84"
-mcp = "0.8.3"
+algolia = "3.46.0"
+coredevices-speex = "c61d18a"
+mcp = "0.15.0"
 glance = "1.1.1"
 #noinspection GradleDependency
-coredevices-haversine = "f15bb00"
+coredevices-haversine = "9f9f3ba"
 #noinspection GradleDependency
 coredevices-krisp = "811c72e"
 junit-ext = "1.3.0"
-paging = "3.4.0-alpha04"
-reorderable = "3.0.0"
-zxing = "3.5.3"
-compass = "2.4.1"
+paging = "3.5.0"
+reorderable = "3.1.0"
+zxing = "3.5.4"
+compass = "3.2.0"
 health-kmp = "1.4.0"
+documentfile = "1.1.0"
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
@@ -77,7 +80,6 @@ kotlinx-atomicfu = { id = "org.jetbrains.kotlinx.atomicfu", version.ref = "atomi
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebase-crashlytics-plugin" }
-androidVersion = { id = "de.nanogiants.android-versioning", version.ref = "androidVersion" }
 buildKonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
 androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 androidLint = { id = "com.android.lint", version.ref = "agp" }
@@ -86,6 +88,7 @@ androidLint = { id = "com.android.lint", version.ref = "agp" }
 # We need 1.10.x for floating action menu. 1.11.x alpha seems to be broken (search doesn't bring up keyboard)
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version = "1.10.0-alpha05" }
 backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "compose-multiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
 coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutine" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutine" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutine" }
@@ -97,6 +100,7 @@ ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
+ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 ktor-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
@@ -116,6 +120,7 @@ okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.ref = "kotlinx-io" }
 koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }
+koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-compose = { group = "io.insert-koin", name = "koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel", version.ref = "koin" }
 pebblekit = { module = "io.rebble.pebblekit2:server", version.ref = "pebblekit" }
@@ -133,7 +138,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
 identity-google = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleId" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
-androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version = "1.0.1" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 play-update = { group = "com.google.android.play", name = "app-update", version.ref = "play-update" }
 play-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "play-update" }
 crashkios = { module = "co.touchlab.crashkios:crashlytics", version.ref = "crashkios" }

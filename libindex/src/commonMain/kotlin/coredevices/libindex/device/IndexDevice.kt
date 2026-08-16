@@ -1,7 +1,6 @@
 package coredevices.libindex.device
 
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 sealed interface IndexDevice {
     val identifier: IndexIdentifier
@@ -36,6 +35,12 @@ class IndexIdentifier(
     }
 }
 
+enum class IndexImage {
+    Primary, // Normal firmware
+    Failsafe, // Recovery
+    ProductionTest // Factory QA - overwritten by normal fw
+}
+
 interface KnownIndexDevice: IndexDevice {
     fun remove()
 }
@@ -49,8 +54,18 @@ sealed interface IndexPairingState {
 interface DiscoveredIndexDevice: IndexDevice {
     val rssi: Int
     val pairingState: IndexPairingState
-    val isFailsafe: Boolean
+    val currentImage: IndexImage
     suspend fun pair(): IndexPairingResult
+}
+
+interface RepairableIndexDevice: IndexDevice {
+    /**
+     * Attempts to force failsafe (invalidate primary image) to repair a device in e.g. production
+     * test firmware.
+     *
+     * Requires a working bond when on [IndexImage.Primary].
+     */
+    suspend fun forceFailsafe()
 }
 
 interface InterviewedIndexDevice: KnownIndexDevice {
@@ -59,3 +74,5 @@ interface InterviewedIndexDevice: KnownIndexDevice {
     val mac: String
     val updating: Boolean
 }
+
+val DiscoveredIndexDevice.isFailsafe: Boolean get() = currentImage == IndexImage.Failsafe

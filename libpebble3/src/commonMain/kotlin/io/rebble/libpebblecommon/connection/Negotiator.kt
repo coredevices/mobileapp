@@ -15,11 +15,14 @@ class Negotiator() {
     suspend fun negotiate(
         systemService: SystemService,
         appRunStateService: AppRunStateService,
+        awaitAppVersionRequest: Boolean,
     ): WatchInfo? = try {
         Logger.d("negotiate()")
         withTimeout(20.seconds) {
-            val appVersionRequest = systemService.appVersionRequest.await()
-            logger.d("appVersionRequest = $appVersionRequest")
+            if (awaitAppVersionRequest) {
+                val appVersionRequest = systemService.appVersionRequest.await()
+                logger.d("appVersionRequest = $appVersionRequest")
+            }
             systemService.sendPhoneVersionResponse()
             logger.d("sent watch version request")
             val watchInfo = systemService.requestWatchVersion()

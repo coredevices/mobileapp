@@ -1,12 +1,15 @@
 package io.rebble.libpebblecommon.disk.pbw
 
+import io.rebble.libpebblecommon.database.entity.asMetadata
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.io.files.Path
 import org.junit.Test
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.time.Instant
 
 class PbwAppVariantTest {
 
@@ -57,6 +60,52 @@ class PbwAppVariantTest {
     fun chalkOnlyPbwStillInstallsOnChalk() {
         val app = PbwApp(loadPbw("variant_chalk_only.pbw"))
         assertEquals(WatchType.CHALK, app.bestVariantFor(WatchType.CHALK))
+    }
+
+    /**
+     * The locker entry drives the BlobDB app metadata, which is what actually gates the install.
+     * It must agree with [bestVariantFor]: a root (aplite) build undeclared in targetPlatforms
+     * still has to yield emery-compatible metadata, or the app silently never syncs to the watch.
+     */
+    @Test
+    fun lockerEntryIncludesRootApliteBuildNotDeclaredInTargetPlatforms() {
+        val app = PbwApp(loadPbw("variant_root_and_chalk.pbw"))
+
+        val entry = app.toLockerEntry(Instant.fromEpochSeconds(0), orderIndex = 0)
+
+        assertEquals(
+            setOf(WatchType.APLITE.codename, WatchType.CHALK.codename),
+            entry.platforms.map { it.name }.toSet(),
+        )
+        // Icon 11 is the root build's, 22 the chalk one — proving emery resolved to the root build.
+        assertEquals(11u, entry.asMetadata(WatchType.EMERY)?.icon?.get())
+    }
+
+    @Test
+    fun lockerEntryForChalkOnlyPbwHasNoEmeryMetadata() {
+        val app = PbwApp(loadPbw("variant_chalk_only.pbw"))
+
+        val entry = app.toLockerEntry(Instant.fromEpochSeconds(0), orderIndex = 0)
+
+        assertEquals(listOf(WatchType.CHALK.codename), entry.platforms.map { it.name })
+        assertNull(entry.asMetadata(WatchType.EMERY))
+        assertNotNull(entry.asMetadata(WatchType.CHALK))
+    }
+
+    /**
+     * appinfo.json with no targetPlatforms defaults to aplite, but chalk has no aplite fallback,
+     * so trusting that default made every such app "incompatible" on round watches (MOB-11410).
+     */
+    @Test
+    fun lockerEntryUsesShippedBuildsWhenTargetPlatformsIsAbsent() {
+        val app = PbwApp(loadPbw("variant_no_target_platforms.pbw"))
+
+        assertEquals(listOf(WatchType.APLITE.codename), app.info.targetPlatforms)
+
+        val entry = app.toLockerEntry(Instant.fromEpochSeconds(0), orderIndex = 0)
+
+        // Icon 32 is the chalk build's, 31 the aplite one.
+        assertEquals(32u, entry.asMetadata(WatchType.CHALK)?.icon?.get())
     }
 
     private fun loadPbw(resourceName: String): Path {

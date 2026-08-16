@@ -27,12 +27,16 @@ import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
+import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.watchModule
+import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
+import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
+import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +46,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.Platform
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -54,6 +60,7 @@ import org.koin.dsl.module
 import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
+import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSData
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSProcessInfo
@@ -64,13 +71,9 @@ import platform.Foundation.NSUserActivityTypeBrowsingWeb
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.isLowPowerModeEnabled
 import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationState
 import platform.UIKit.UIBackgroundFetchResult
-import platform.UIKit.UIUserNotificationSettings
-import platform.UIKit.UIUserNotificationTypeAlert
-import platform.UIKit.UIUserNotificationTypeBadge
-import platform.UIKit.UIUserNotificationTypeSound
 import platform.UIKit.registerForRemoteNotifications
-import platform.UIKit.registerUserNotificationSettings
 import platform.UserNotifications.UNNotificationResponse
 import kotlin.time.Clock
 
@@ -86,6 +89,20 @@ object IOSDelegate : KoinComponent {
     private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
     private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    fun registerNativeSpeechAnalyzer(
+        isSupported: () -> Boolean,
+        cancelTranscription: () -> Unit,
+        transcribeWavFile: (String, String?, (String?, String?) -> Unit) -> Unit,
+    ) {
+        NativeSpeechAnalyzerBridge.isSupported = isSupported
+        NativeSpeechAnalyzerBridge.cancelTranscription = cancelTranscription
+        NativeSpeechAnalyzerBridge.transcribeWavFile = transcribeWavFile
+    }
+
+    fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {
+        NativeSpeechAnalyzerBridge.supportedLanguageTags.value = tags
+    }
+
     fun handleOpenUrl(url: NSURL): Boolean {
         val uri = url.toUri()
         if (!oAuthRedirectHandler.handleOAuthRedirect(uri)) {
@@ -99,6 +116,17 @@ object IOSDelegate : KoinComponent {
         } else {
             return true
         }
+    }
+
+    /**
+     * Attaches a QEMU emulator watch at "host:port", for automated testing. Reachable only via a
+     * launch argument (see [didFinishLaunching]), which nothing but simctl/Xcode can set, so it is
+     * safe to keep in release builds for CI.
+     */
+    fun addQemuWatch(address: String) {
+        logger.i("adding QEMU watch at $address")
+        val libPebble: LibPebble = get()
+        libPebble.addQemuWatch(address, connect = true)
     }
 
     private fun initPebble() {
@@ -203,7 +231,13 @@ object IOSDelegate : KoinComponent {
         requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
-        logger.i { "didFinishLaunching() appVersion=$appVersion appVersionShort=$appVersionShort" }
+        // launchState=background means iOS started us on its own (BLE, background refresh, push)
+        // rather than the user opening the app.
+        logger.i {
+            "didFinishLaunching() appVersion=$appVersion appVersionShort=$appVersionShort " +
+                    "launchState=${application.applicationState.stateName()}"
+        }
+        reportPreviousRunOutcome()
         // Can only use Koin after this point
 
         // Initialize NotifierManager early to prevent crashes when PushMessaging tries to use it
@@ -220,12 +254,6 @@ object IOSDelegate : KoinComponent {
             doneInitialOnboarding.doneInitialOnboarding.await()
 
             logger.d { "registering for push notifications.." }
-            application.registerUserNotificationSettings(
-                UIUserNotificationSettings.settingsForTypes(
-                    UIUserNotificationTypeAlert or UIUserNotificationTypeBadge or UIUserNotificationTypeSound,
-                    null
-                )
-            )
             application.registerForRemoteNotifications()
         }
         commonAppDelegate.init()
@@ -254,6 +282,17 @@ object IOSDelegate : KoinComponent {
         // isn't linked when the notification is scheduled, so resolve it now (at tap time).
         val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
         if (reminderId != null) {
+            // "Done" button (MOB-8439): mark the backing item complete in the background without
+            // opening the app. Completing it cancels the reminder and dismisses the notification.
+            if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
+                val completer: ReminderCompleter = get()
+                bgTaskScope.launch {
+                    runCatching { completer.markDone(reminderId) }
+                        .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                    withContext(Dispatchers.Main) { completionHandler() }
+                }
+                return
+            }
             val resolver: ReminderDeepLinkResolver = get()
             bgTaskScope.launch {
                 val link = resolver.resolveDeepLink(reminderId)
@@ -277,13 +316,43 @@ object IOSDelegate : KoinComponent {
         completionHandler()
     }
 
+    @OptIn(ExperimentalNativeApi::class)
     private fun setupCrashlytics() {
+        // Debug builds never upload their dSYMs, so their crashes can't be symbolicated.
+        if (Platform.isDebugBinary) {
+            Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
+            return
+        }
         enableCrashlytics()
         setCrashlyticsUnhandledExceptionHook()
     }
 
     fun applicationWillTerminate() {
+        NSUserDefaults.standardUserDefaults.setBool(true, RUN_EXITED_CLEANLY_KEY)
         fileLogWriter.logBlockingAndFlush(Severity.Info, "applicationWillTerminate", "IOSDelegate", null)
+    }
+
+    /**
+     * iOS doesn't tell us why the previous run ended. We set a flag at launch and only clear it in
+     * [applicationWillTerminate], so anything else — jetsam, crash, or the user swiping the app
+     * away — shows up here as an unclean exit. [RUN_LAST_STATE_KEY] narrows it down: "background"
+     * means we were killed while backgrounded, which is the case that leaves the watch stranded.
+     */
+    private fun reportPreviousRunOutcome() {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val hadPreviousRun = defaults.objectForKey(RUN_EXITED_CLEANLY_KEY) != null
+        val exitedCleanly = defaults.boolForKey(RUN_EXITED_CLEANLY_KEY)
+        val lastState = defaults.stringForKey(RUN_LAST_STATE_KEY) ?: "unknown"
+        if (hadPreviousRun && !exitedCleanly) {
+            logger.w { "previous run ended without applicationWillTerminate (lastState=$lastState)" }
+        } else if (hadPreviousRun) {
+            logger.i { "previous run exited cleanly" }
+        }
+        defaults.setBool(false, RUN_EXITED_CLEANLY_KEY)
+    }
+
+    private fun recordAppState(state: String) {
+        NSUserDefaults.standardUserDefaults.setObject(state, RUN_LAST_STATE_KEY)
     }
 
     fun sceneDidBecomeActive() {
@@ -305,10 +374,12 @@ object IOSDelegate : KoinComponent {
 
     fun sceneWillEnterForeground() {
         logger.v { "sceneWillEnterForeground" }
+        recordAppState("foreground")
     }
 
     fun sceneDidEnterBackground() {
         logger.v { "sceneDidEnterBackground" }
+        recordAppState("background")
     }
 
     fun applicationDidReceiveMemoryWarning() {
@@ -361,6 +432,14 @@ object IOSDelegate : KoinComponent {
 }
 
 private const val REFRESH_TASK_IDENTIFIER = "coredevices.coreapp.sync"
+private const val RUN_EXITED_CLEANLY_KEY = "coreapp.runExitedCleanly"
+private const val RUN_LAST_STATE_KEY = "coreapp.runLastState"
+
+private fun UIApplicationState.stateName(): String = when (this) {
+    UIApplicationState.UIApplicationStateActive -> "active"
+    UIApplicationState.UIApplicationStateInactive -> "inactive"
+    UIApplicationState.UIApplicationStateBackground -> "background"
+}
 
 fun requestBgRefresh(force: Boolean, coreConfig: CoreConfig) {
     val interval = coreConfig.weatherSyncInterval

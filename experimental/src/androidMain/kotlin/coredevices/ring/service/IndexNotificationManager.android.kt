@@ -11,13 +11,20 @@ import kotlin.math.roundToInt
 
 const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID = "index_transfer"
 const val INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME = "Index Recordings"
+const val INDEX_ACTION_NOTIFICATION_CHANNEL_ID = "index_action"
+const val INDEX_ACTION_NOTIFICATION_CHANNEL_NAME = "Index Action"
+
+private fun IndexNotificationChannel.channelId() = when (this) {
+    IndexNotificationChannel.Default -> INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID
+    IndexNotificationChannel.IndexAction -> INDEX_ACTION_NOTIFICATION_CHANNEL_ID
+}
 
 actual class PlatformIndexNotificationManager(
     private val context: Context,
 ) {
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private fun buildDebugNotification() =
-        NotificationCompat.Builder(context, INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID)
+    private fun buildDebugNotification(channelId: String) =
+        NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setGroup("index_transfer")
             .setCategory(NotificationCompat.CATEGORY_STATUS)
@@ -29,10 +36,11 @@ actual class PlatformIndexNotificationManager(
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
         }
-        val notif = buildDebugNotification()
+        val notif = buildDebugNotification(notification.channel.channelId())
             .setContentTitle(notification.title)
             .setContentText(notification.contentText)
             .apply {
+                notification.timeoutAfter?.let { setTimeoutAfter(it.inWholeMilliseconds) }
                 if (notification.contentText?.contains("\n") == true) {
                     setStyle(NotificationCompat.BigTextStyle())
                 }

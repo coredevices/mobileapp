@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.util
 
+import kotlinx.io.Source
+
 /**
  * CRC32 hash Calculator that is compatible with hardware CRC32 on the STM chips.
  */
@@ -60,4 +62,20 @@ class Crc32Calculator {
 
 private fun UByteArray.padZerosLeft(amount: Int): UByteArray {
     return UByteArray(amount) { 0u } + this
+}
+
+/**
+ * CRC of the first [length] bytes of this source, or null if it has fewer than [length] bytes.
+ */
+fun Source.crc32(length: Long): UInt? {
+    val calculator = Crc32Calculator()
+    val buffer = ByteArray(8192)
+    var remaining = length
+    while (remaining > 0) {
+        val read = readAtMostTo(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
+        if (read <= 0) return null
+        calculator.addBytes(buffer.asUByteArray().copyOfRange(0, read))
+        remaining -= read
+    }
+    return calculator.finalize()
 }

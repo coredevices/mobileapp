@@ -3,10 +3,11 @@ package coredevices.coreapp.di
 import CoreAppVersion
 import PlatformContext
 import PlatformShareLauncher
+import android.content.Context
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import coredevices.analytics.createAndroidAnalytics
-import coredevices.coreapp.BuildConfig
 import coredevices.coreapp.PebbleBackgroundManager
+import coredevices.coreapp.appVersionName
 import coredevices.coreapp.auth.RealAppleAuthUtil
 import coredevices.coreapp.auth.RealGithubAuthUtil
 import coredevices.coreapp.auth.RealGoogleAuthUtil
@@ -25,6 +26,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.AndroidOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
@@ -34,12 +36,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
 val androidDefaultModule = module {
-    singleOf(::RealGoogleAuthUtil) bind GoogleAuthUtil::class
+    singleOf(::RealGoogleAuthUtil) binds arrayOf(GoogleAuthUtil::class, SilentSignIn::class)
     singleOf(::RealAppleAuthUtil) bind AppleAuthUtil::class
     singleOf(::RealGithubAuthUtil) bind GitHubAuthUtil::class
     factory { params ->
@@ -52,7 +55,7 @@ val androidDefaultModule = module {
     singleOf(::PlatformShareLauncher)
     singleOf(::AndroidPlatform) bind Platform::class
     singleOf(::AndroidOAuthLauncher) bind OAuthLauncher::class
-    single { CoreAppVersion(BuildConfig.VERSION_NAME) }
+    single { CoreAppVersion(get<Context>().appVersionName) }
     factory { AppUpdateManagerFactory.create(get()) }
     singleOf(::PlatformContext)
     singleOf(::AndroidPermissionRequester) bind PermissionRequester::class

@@ -81,6 +81,10 @@ class RawOverlayRecord : StructMappable() {
  * [weekdayTypicalSteps] carries the per-weekday typical-step totals computed for the
  * `<weekday>_steps` BlobDB rows; absent keys are weekdays where the user has insufficient
  * same-weekday history (we don't write a row for them, so the watch shows no comparison).
+ *
+ * [weekdayTypicalSleep] carries the four typical sleep values per weekday written into the
+ * tail of each `<weekday>_sleepData` BlobDB row; absent keys are weekdays below the same
+ * minimum-history threshold.
  */
 data class HealthDebugStats(
     val totalSteps30Days: Long,
@@ -92,4 +96,5 @@ data class HealthDebugStats(
     val latestDataTimestamp: Long?,
     val daysOfData: Int,
     val weekdayTypicalSteps: Map<kotlinx.datetime.DayOfWeek, Int> = emptyMap(),
+    val weekdayTypicalSleep: Map<kotlinx.datetime.DayOfWeek, io.rebble.libpebblecommon.services.WeekdaySleepTypicals> = emptyMap(),
 )

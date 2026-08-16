@@ -33,6 +33,7 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import kotlin.time.Duration.Companion.seconds
 
 actual val platformModule: Module = module {
     single {
@@ -68,6 +69,7 @@ actual val platformModule: Module = module {
         closeGattServerWhenBtDisabled = false,
         delayBleConnectionsAfterAppStart = true,
         supportsPpogResetCharacteristic = true,
+        writeWithoutResponseStallTimeout = 5.seconds,
     ) }
     singleOf(::IosClassicScanner) bind ClassicScanner::class
 }

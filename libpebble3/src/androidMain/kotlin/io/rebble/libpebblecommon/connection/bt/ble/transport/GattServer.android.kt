@@ -222,6 +222,15 @@ actual class GattServer(
 
 //    actual val connectionState = callback.connectionState.filterNotNull()
 
+    actual suspend fun removeServices() {
+        logger.d("removeServices")
+        try {
+            server.clearServices()
+        } catch (e: SecurityException) {
+            logger.d("error clearing gatt services", e)
+        }
+    }
+
     actual suspend fun closeServer() {
         try {
             server.clearServices()

@@ -4,7 +4,9 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import androidx.compose.ui.text.intl.Locale
-import coredevices.coreapp.BuildConfig
+import coredevices.coreapp.appVersionCode
+import coredevices.coreapp.appVersionName
+import coredevices.coreapp.isDebuggableBuild
 import kotlinx.datetime.TimeZone
 import org.koin.mp.KoinPlatform
 
@@ -34,7 +36,7 @@ actual fun generateDeviceSummaryPlatformDetails(): String {
         null
     }
     return buildString {
-        appendLine("Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${BuildConfig.BUILD_TYPE}")
+        appendLine("Version: ${context.appVersionName} (${context.appVersionCode}) ${if (context.isDebuggableBuild) "debug" else "release"}")
         appendLine("Device Summary")
         appendLine("Model: ${Build.MODEL}")
         appendLine("Brand: ${Build.BRAND}")

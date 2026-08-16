@@ -31,18 +31,28 @@ class PutBytesResponse : PebblePacket(ProtocolEndpoint.PUT_BYTES) {
 }
 
 /**
- * Send to init non-app related file transfer
+ * Send to init non-app related file transfer.
+ *
+ * [objectSize] is the number of bytes that will be sent in this session — when resuming, that is
+ * the total object size minus [resumeOffset].
  */
 class PutBytesInit(
     objectSize: UInt,
     objectType: ObjectType,
     bank: UByte,
-    filename: String
+    filename: String,
+    resumeOffset: UInt? = null,
 ) : PutBytesOutgoingPacket(PutBytesCommand.INIT) {
     val objectSize = SUInt(m, objectSize)
     val objectType = SUByte(m, objectType.value)
     val bank = SUByte(m, bank)
     val filename = SOptional(m, SNullTerminatedString(StructMapper(), filename), filename.isNotEmpty())
+    val resumeMagic = SOptional(m, SUInt(StructMapper(), RESUME_MAGIC), resumeOffset != null)
+    val resumeOffset = SOptional(m, SUInt(StructMapper(), resumeOffset ?: 0u), resumeOffset != null)
+
+    companion object {
+        const val RESUME_MAGIC: UInt = 0xBE4354EFu
+    }
 }
 
 /**

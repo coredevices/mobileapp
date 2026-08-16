@@ -66,7 +66,7 @@ private fun transformDescription(rawDescription: String): String {
     return rawDescription.replace(regex, "").trimWithEllipsis(300)
 }
 
-fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid): TimelineReminder =
+fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid, vibePattern: List<UInt>? = null): TimelineReminder =
     buildTimelineReminder(
         parentId = pinUuid,
         timestamp = timestamp,
@@ -77,6 +77,7 @@ fun CalendarEvent.toTimelineReminder(timestamp: Instant, pinUuid: Uuid): Timelin
                 location { location }
             }
             tinyIcon { TimelineIcon.NotificationReminder }
+            vibePattern?.let { vibrationPattern { it } }
             // TODO attendees
         }
         flags {

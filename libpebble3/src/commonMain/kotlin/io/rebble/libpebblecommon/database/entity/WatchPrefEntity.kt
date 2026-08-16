@@ -203,7 +203,6 @@ enum class BoolWatchPref(
     Backlight("lightEnabled", "Backlight", true),
     AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
     BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
-    LanguageEnglish("langEnglish", "Language: English", false),
     TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
     QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
     CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
@@ -212,6 +211,7 @@ enum class BoolWatchPref(
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
+    QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     ;
@@ -382,6 +382,23 @@ enum class BacklightPresetMode(override val code: UByte, override val displayNam
     Advanced(3u, "Advanced"),
 }
 
+// Built-in firmware languages. Codes MUST match the ShellLanguage enum in
+// pebble-firmware:src/fw/shell/prefs.h. "Custom" (0) means the watch uses whatever language pack
+// was uploaded via PutBytes (see LanguagePackInstaller); the rest are baked into the firmware.
+// Labels mirror the on-watch Settings > Display > Language menu.
+enum class WatchLanguage(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Custom(0u, "Custom (Language Pack)"),
+    English(1u, "English"),
+    Catalan(2u, "Català"),
+    German(3u, "Deutsch"),
+    Spanish(4u, "Español"),
+    French(5u, "Français"),
+    Italian(6u, "Italiano"),
+    Dutch(7u, "Nederlands"),
+    Portuguese(8u, "Português"),
+    Polish(9u, "Polski"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -495,6 +512,13 @@ enum class EnumWatchPref(
         defaultValue = BacklightTouchWakeMode.DoubleTap,
         options = BacklightTouchWakeMode.entries,
     ),
+    Language(
+        id = "language",
+        displayName = "Language",
+        description = "Built-in firmware language. Choose Custom to use an uploaded language pack.",
+        defaultValue = WatchLanguage.Custom,
+        options = WatchLanguage.entries,
+    ),
     ;
 
     override val type = WatchPrefType.TypeUInt8
@@ -530,7 +554,7 @@ enum class NumberWatchPref(
         id = "lightAmbientThreshold",
         displayName = "Ambient Light Threshold",
         description = "Controls how low ambient light needs to be to enable backlight (if using Ambient Light Sensor)",
-        defaultValue = 150,
+        defaultValue = 800,
         type = WatchPrefType.TypeUInt32,
         min = 1,
         max = 4096,

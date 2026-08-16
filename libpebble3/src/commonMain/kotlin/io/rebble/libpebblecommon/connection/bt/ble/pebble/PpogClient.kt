@@ -6,14 +6,23 @@ import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGStream
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattWriteType
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+
+enum class ReversePpogVersion {
+    V1,
+    V2,
+}
 
 data class PpogClientConfig(
     val serviceUuid: Uuid,
     val notifyCharacteristic: Uuid,
     val writeCharacteristic: Uuid,
+    val version: ReversePpogVersion,
 )
 
 class PpogClient(
@@ -43,11 +52,39 @@ class PpogClient(
             return
         }
         scope.launch {
-            flow.collect {
-                pPoGStream.inboundPPoGBytesChannel.send(it)
+            try {
+                flow.collect {
+                    pPoGStream.inboundPPoGBytesChannel.send(it)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Kable throws in the flow when the CCCD write fails — this
+                // happens on iOS when CoreBluetooth's GATT cache still lists a
+                // reversed-PPoG service that no longer exists on the watch
+                // ("The handle is invalid"). Propagate to init()'s awaiter so
+                // PebbleBle can fall back to forward. If the deferred was
+                // already completed (subscription succeeded and this is a
+                // later runtime failure), rethrow so the connection scope's
+                // exceptionHandler picks it up normally.
+                if (!cccdWritten.completeExceptionally(e)) {
+                    throw e
+                } else {
+                    Logger.w("PpogClient reversed subscribe failed", e)
+                }
             }
         }
-        cccdWritten.await()
+        // Belt-and-braces: if Kable somehow routes the setNotify error via a
+        // path that doesn't hit our flow.collect (has happened on iOS —
+        // Observers wraps exceptions through an ObservationExceptionHandler),
+        // fall through after a short timeout rather than blocking forever.
+        val subscribed = withTimeoutOrNull(SUBSCRIBE_TIMEOUT) {
+            cccdWritten.await()
+            true
+        } == true
+        if (!subscribed) {
+            throw IllegalStateException("reversed PPoG CCCD subscribe timed out")
+        }
         Logger.d("PpogClient subscribed")
     }
 
@@ -61,4 +98,8 @@ class PpogClient(
     }
 
     override fun wasRestoredWithSubscribedCentral(): Boolean = false
+
+    companion object {
+        private val SUBSCRIBE_TIMEOUT = 5.seconds
+    }
 }

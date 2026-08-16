@@ -21,7 +21,7 @@ class LocalNoteClient(
                 createdAt = source?.createdAt ?: Clock.System.now(),
                 title = content,
                 listHint = null,
-                toolCallId = null,
+                toolCallId = source?.toolCallId,
             ),
         )
         return id

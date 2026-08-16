@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MobileOff
-import androidx.compose.material.icons.filled.Shower
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Icon
@@ -75,16 +74,6 @@ private val FaqEntries: List<FaqEntry> = listOf(
         ),
     ),
     FaqEntry(
-        "shower", Icons.Default.Shower,
-        "Can I wear it in the shower?",
-        ann(
-            "We don't recommend it. Index 01 is splash resistant but not waterproof " +
-                    "especially in hot or soapy water.\n\n" +
-                    "Water or soap may block the microphone hole, which reduces the " +
-                    "volume of recordings."
-        ),
-    ),
-    FaqEntry(
         "listen", Icons.Default.Bluetooth,
         "Is it always listening?",
         ann(
@@ -98,7 +87,7 @@ private val FaqEntries: List<FaqEntry> = listOf(
         ann(
             "Jot down notes, add a reminder or todo, set timers and alarms, or whatever else " +
                     "you need to remember! Double-click-and-hold to ask quick questions and get " +
-                    "the answer in a notification."
+                    "the answer* in a notification.\n\n*Included free for now; pricing may change."
         ),
     ),
     FaqEntry(

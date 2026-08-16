@@ -22,8 +22,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.setUser
+import coredevices.firestore.KEY_LAST_SIGN_IN_PROVIDERS
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.auth.AppleAuthUtil
 import coredevices.util.auth.GitHubAuthUtil
@@ -68,6 +71,7 @@ private fun SignInButton(
     modifier: Modifier = Modifier,
 ) {
     val analyticsBackend: AnalyticsBackend = koinInject()
+    val settings: Settings = koinInject()
     val context = rememberUiContext()
     var pendingSwitchCredential by remember { mutableStateOf<AuthCredential?>(null) }
     PebbleElevatedButton(
@@ -85,12 +89,12 @@ private fun SignInButton(
                 }
                 try {
                     signInWithCredential(credential)
-                    completeSignIn(analyticsBackend, credential, onSuccess)
+                    completeSignIn(analyticsBackend, settings, credential, onSuccess)
                 } catch (e: AccountSwitchRequiredException) {
                     if (skipAccountSwitchConfirmation) {
                         try {
                             forceSignInWithCredential(e.credential)
-                            completeSignIn(analyticsBackend, e.credential, onSuccess)
+                            completeSignIn(analyticsBackend, settings, e.credential, onSuccess)
                         } catch (e2: Exception) {
                             Logger.e(e2) { "Error during forced account switch: ${e2.message}" }
                             onError("Network error during sign in")
@@ -117,7 +121,7 @@ private fun SignInButton(
                 GlobalScope.launch(Dispatchers.Main) {
                     try {
                         forceSignInWithCredential(credential)
-                        completeSignIn(analyticsBackend, credential, onSuccess)
+                        completeSignIn(analyticsBackend, settings, credential, onSuccess)
                     } catch (e: Exception) {
                         Logger.e(e) { "Error completing forced account switch: ${e.message}" }
                         onError("Network error during sign in")
@@ -131,9 +135,13 @@ private fun SignInButton(
 
 private fun completeSignIn(
     analyticsBackend: AnalyticsBackend,
+    settings: Settings,
     credential: AuthCredential,
     onSuccess: () -> Unit,
 ) {
+    // Silent re-auth needs this even if the session is lost before any auth-state emission
+    // reaches UsersDao, which is the case it exists to recover from.
+    settings[KEY_LAST_SIGN_IN_PROVIDERS] = credential.providerId
     Firebase.auth.currentUser?.emailOrNull?.let {
         analyticsBackend.setUser(email = it)
     }

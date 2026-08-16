@@ -293,7 +293,8 @@ class ExperimentalDevices(
                 append(it)
                 append("\n")
             }
-            append("Cactus agent enabled: ${preferences.useCactusAgent.value}")
+            append("Index Debug enabled: ${preferences.debugDetailsEnabled.value}\n")
+            append("LLM mode: ${preferences.llmMode.value}")
         }
     }
 }

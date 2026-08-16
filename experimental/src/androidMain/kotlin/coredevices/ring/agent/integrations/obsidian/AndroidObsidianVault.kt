@@ -79,6 +79,25 @@ class AndroidObsidianVault(private val context: Context) : ObsidianVault {
             .sorted()
     }
 
+    override suspend fun listMarkdownFilesRecursive(handle: String): List<String> = withContext(Dispatchers.IO) {
+        val root = treeRoot(handle) ?: return@withContext emptyList()
+        val out = mutableListOf<String>()
+        // ponytail: depth cap 4, SAF listing is slow on huge vaults; raise if users complain.
+        fun walk(dir: DocumentFile, prefix: String, depth: Int) {
+            if (depth > 4) return
+            for (child in dir.listFiles()) {
+                val name = child.name ?: continue
+                if (name.startsWith(".")) continue
+                when {
+                    child.isDirectory -> walk(child, "$prefix$name/", depth + 1)
+                    child.isFile && name.endsWith(".md", ignoreCase = true) -> out += "$prefix$name"
+                }
+            }
+        }
+        walk(root, "", 0)
+        out.sorted()
+    }
+
     override suspend fun releaseAccess(handle: String) = withContext(Dispatchers.IO) {
         runCatching {
             context.contentResolver.releasePersistableUriPermission(

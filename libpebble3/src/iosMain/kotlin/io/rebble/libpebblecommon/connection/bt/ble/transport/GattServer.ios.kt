@@ -198,6 +198,16 @@ actual class GattServer(
         logger.d("/addService: $serviceUuid")
     }
 
+    actual suspend fun removeServices() {
+        addServicesMutex.withLock {
+            logger.d("removeServices")
+            registeredServices.values.forEach { service ->
+                peripheralManager.removeService(service)
+            }
+            registeredServices.clear()
+        }
+    }
+
     actual suspend fun closeServer() {
     }
 
@@ -349,7 +359,10 @@ actual class GattServer(
                 peripheralManager.respondToRequest(request, CBATTErrorRequestNotSupported)
                 return@forEach
             }
-            device.dataChannel.trySend(value.toByteArray())
+            val result = device.dataChannel.trySend(value.toByteArray())
+            if (result.isFailure) {
+                logger.e("didReceiveWriteRequests error writing to channel: $result")
+            }
             peripheralManager.respondToRequest(request, CBATTErrorSuccess)
         }
     }

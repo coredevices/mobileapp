@@ -31,6 +31,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
 import kotlin.concurrent.atomics.AtomicReference
@@ -62,6 +63,8 @@ class SystemService(
     private var watchVersionCallback: CompletableDeferred<WatchVersionResponse>? = null
     private var watchModelCallback: CompletableDeferred<UByteArray>? = null
     private var firmwareUpdateStartResponseCallback: CompletableDeferred<SystemMessage.FirmwareUpdateStartResponse>? =
+        null
+    private var firmwareUpdateStatusResponseCallback: CompletableDeferred<SystemMessage.FirmwareUpdateStatusResponse>? =
         null
     private var pongCallback: CompletableDeferred<PingPong.Pong>? = null
 
@@ -129,6 +132,17 @@ class SystemService(
         protocolHandler.send(SystemMessage.FirmwareUpdateComplete())
     }
 
+    /**
+     * Ask the watch how much of a previous firmware update it already has, so the transfer can be
+     * resumed. Returns null on timeout (e.g. firmware which doesn't support this).
+     */
+    suspend fun requestFirmwareUpdateStatus(): SystemMessage.FirmwareUpdateStatusResponse? {
+        val callback = CompletableDeferred<SystemMessage.FirmwareUpdateStatusResponse>()
+        firmwareUpdateStatusResponseCallback = callback
+        protocolHandler.send(SystemMessage.FirmwareUpdateStatusRequest())
+        return withTimeoutOrNull(FIRMWARE_UPDATE_STATUS_TIMEOUT) { callback.await() }
+    }
+
     override suspend fun sendPing(cookie: UInt): UInt {
         // TODO can just read the inbound messages directly in these
         val pong = CompletableDeferred<PingPong.Pong>()
@@ -189,6 +203,11 @@ class SystemService(
                         firmwareUpdateStartResponseCallback = null
                     }
 
+                    is SystemMessage.FirmwareUpdateStatusResponse -> {
+                        firmwareUpdateStatusResponseCallback?.complete(packet)
+                        firmwareUpdateStatusResponseCallback = null
+                    }
+
                     is PingPong.Pong -> {
                         pongCallback?.complete(packet)
                         pongCallback = null
@@ -233,6 +252,8 @@ class SystemService(
     }
 
 }
+
+private val FIRMWARE_UPDATE_STATUS_TIMEOUT = 15.seconds
 
 private val FIRMWARE_VERSION_REGEX = Regex("v?([0-9]+)\\.([0-9]+)(?:\\.([0-9]+))?(?:-(.*))?")
 

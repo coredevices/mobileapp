@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Connecting
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Failed
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Inactive
 import io.rebble.libpebblecommon.connection.ConnectingPebbleState.Negotiating
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
@@ -65,16 +66,18 @@ enum class ConnectionFailureReason {
     TimeoutInitializingPpog,
     ClassicConnectionFailed,
     ClassicDisconnected,
+    SocketConnectionFailed,
+    SocketDisconnected,
 }
 
 sealed class PebbleConnectionResult {
-    data object Success : PebbleConnectionResult()
+    data class Success(val reversePpogVersion: ReversePpogVersion?) : PebbleConnectionResult()
 
     data class Failed(val reason: ConnectionFailureReason) : PebbleConnectionResult()
 }
 
 interface TransportConnector {
-    suspend fun connect(lastError: ConnectionFailureReason?): PebbleConnectionResult
+    suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?): PebbleConnectionResult
     suspend fun disconnect()
     val disconnected: Deferred<ConnectionFailureReason>
 }
@@ -87,7 +90,7 @@ sealed class ConnectingPebbleState {
     data class Inactive(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     data class Connecting(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
     data class Failed(override val identifier: PebbleIdentifier, val reason: ConnectionFailureReason) : ConnectingPebbleState()
-    data class Negotiating(override val identifier: PebbleIdentifier) : ConnectingPebbleState()
+    data class Negotiating(override val identifier: PebbleIdentifier, val reversePpogVersion: ReversePpogVersion?) : ConnectingPebbleState()
     sealed class Connected : ConnectingPebbleState() {
         abstract val watchInfo: WatchInfo
 
@@ -95,14 +98,23 @@ sealed class ConnectingPebbleState {
             override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.PrfServices,
+            val reversePpogVersion: ReversePpogVersion?,
         ) : Connected()
 
         data class ConnectedNotInPrf(
             override val identifier: PebbleIdentifier,
             override val watchInfo: WatchInfo,
             val services: ConnectedPebble.Services,
+            val reversePpogVersion: ReversePpogVersion?,
         ) : Connected()
     }
+}
+
+fun ConnectingPebbleState?.reversePpogVersion(): ReversePpogVersion? = when (this) {
+    is ConnectingPebbleState.Connected.ConnectedInPrf -> reversePpogVersion
+    is ConnectingPebbleState.Connected.ConnectedNotInPrf -> reversePpogVersion
+    is ConnectingPebbleState.Negotiating -> reversePpogVersion
+    else -> null
 }
 
 fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
@@ -111,7 +123,7 @@ fun ConnectingPebbleState?.isActive(): Boolean = when (this) {
 }
 
 interface PebbleConnector {
-    suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason? = null)
+    suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason? = null)
     fun disconnect()
     val disconnected: WasDisconnected
     val state: StateFlow<ConnectingPebbleState>
@@ -155,10 +167,10 @@ class RealPebbleConnector(
     override val state: StateFlow<ConnectingPebbleState> = _state.asStateFlow()
     override val disconnected = WasDisconnected(transportConnector.disconnected)
 
-    override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
+    override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
         _state.value = Connecting(identifier)
 
-        val result = transportConnector.connect(lastError)
+        val result = transportConnector.connect(knownWatchProperties, lastError)
         when (result) {
             is PebbleConnectionResult.Failed -> {
                 logger.e("failed to connect: $result")
@@ -169,7 +181,7 @@ class RealPebbleConnector(
             is PebbleConnectionResult.Success -> {
                 logger.d("$result")
                 val negotiationJob = scope.async {
-                    doAfterConnection(previouslyConnected)
+                    doAfterConnection(knownWatchProperties, result.reversePpogVersion)
                 }
                 val disconnectedJob = scope.launch {
                     transportConnector.disconnected.await()
@@ -187,8 +199,8 @@ class RealPebbleConnector(
         }
     }
 
-    private suspend fun doAfterConnection(previouslyConnected: Boolean) {
-        _state.value = Negotiating(identifier)
+    private suspend fun doAfterConnection(knownWatchProperties: KnownWatchProperties?, reversePpogVersion: ReversePpogVersion?) {
+        _state.value = Negotiating(identifier, reversePpogVersion)
         scope.launch {
             pebbleProtocolRunner.run()
         }
@@ -199,7 +211,11 @@ class RealPebbleConnector(
         // Allow the service to buffer up writeback sync messages
         blobDBService.init()
 
-        val watchInfo = negotiator.negotiate(systemService, appRunStateService)
+        val watchInfo = negotiator.negotiate(
+            systemService,
+            appRunStateService,
+            awaitAppVersionRequest = identifier.sendsAppVersionRequest(),
+        )
         if (watchInfo == null) {
             logger.w("negotiation failed: disconnecting")
             transportConnector.disconnect()
@@ -211,11 +227,14 @@ class RealPebbleConnector(
         firmwareUpdater.init(
             watchPlatform = watchInfo.platform,
             runningSlot = watchInfo.runningFwVersion.slot(),
+            supportsResume = watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsFwUpdateAcrossDisconnection),
+            runningFwVersion = watchInfo.runningFwVersion,
         )
         firmwareUpdateManager.init(watchInfo)
         logDumpService.init(watchInfo.capabilities.contains(ProtocolCapsFlag.SupportsInfiniteLogDump))
 
-        val ignoreMissingPrfOnThisDevice = watchConfig.value.ignoreMissingPrf
+        val ignoreMissingPrfOnThisDevice =
+            watchConfig.value.ignoreMissingPrf || !identifier.canHaveRecoveryFirmware()
         val recoveryMode = when {
             watchInfo.runningFwVersion.isRecovery -> true.also {
                 logger.i("PRF running; going into recovery mode")
@@ -239,11 +258,13 @@ class RealPebbleConnector(
                     firmware = firmwareUpdater,
                     logs = logDumpService,
                     coreDump = getBytesService,
-                    devConnection = devConnectionManager
+                    devConnection = devConnectionManager,
                 ),
+                reversePpogVersion = reversePpogVersion,
             )
             return
         }
+        val previouslyConnected = knownWatchProperties?.lastConnected != null
 
         blobDB.init(
             watchType = watchInfo.platform.watchType,
@@ -282,7 +303,8 @@ class RealPebbleConnector(
                 screenshot = screenshotService,
                 language = languagePackInstaller,
                 health = healthService,
-            )
+            ),
+            reversePpogVersion = reversePpogVersion,
         )
     }
 }

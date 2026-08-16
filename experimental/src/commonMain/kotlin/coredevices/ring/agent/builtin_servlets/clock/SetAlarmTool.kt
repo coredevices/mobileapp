@@ -43,7 +43,10 @@ class SetAlarmTool : BuiltInMcpTool(
             ),
             required = listOf("time_hours", "time_minutes")
         )
-    )
+    ),
+    extraContext = """
+        Only call 'set_alarm' with a time the user actually said. If the alarm time is missing from the request, do not call this tool and do not guess a time.
+    """.trimIndent()
 ) {
 
     companion object {

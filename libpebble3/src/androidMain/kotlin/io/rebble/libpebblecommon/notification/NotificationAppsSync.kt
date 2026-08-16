@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.asMillisecond
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
+import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
@@ -123,10 +124,7 @@ class AndroidNotificationAppsSync(
                             channels =
                                 group.channels.map { ch ->
                                     ch.copy(
-                                        muteState = existing.findChannel(
-                                            group.id,
-                                            ch.id
-                                        )?.muteState ?: MuteState.Never
+                                        muteState = existing.carriedOverMuteState(group, ch)
                                     )
                                 })
                     },
@@ -176,9 +174,23 @@ class AndroidNotificationAppsSync(
     }
 }
 
+// Some apps (e.g. Snapchat, Signal) recreate channels with new IDs; fall back to
+// group+channel name so a muted channel stays muted.
+internal fun NotificationAppItem.carriedOverMuteState(
+    group: ChannelGroup,
+    channel: ChannelItem,
+): MuteState = (findChannel(group.id, channel.id)
+    ?: findChannelByName(group.name, channel.name))?.muteState
+    ?: MuteState.Never
+
 private fun NotificationAppItem.findChannel(groupId: String, channelId: String): ChannelItem? {
     return channelGroups.find { it.id == groupId }
         ?.channels?.find { it.id == channelId }
+}
+
+private fun NotificationAppItem.findChannelByName(groupName: String?, channelName: String): ChannelItem? {
+    return channelGroups.find { it.name == groupName }
+        ?.channels?.find { it.name == channelName }
 }
 
 class AndroidPackageChangedReceiver(private val context: Application) {

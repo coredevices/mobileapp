@@ -30,14 +30,17 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -46,6 +49,7 @@ import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
 
 
 class WebViewJsRunner(
@@ -68,10 +72,12 @@ class WebViewJsRunner(
         const val API_NAMESPACE = "Pebble"
         const val PRIVATE_API_NAMESPACE = "_$API_NAMESPACE"
         const val STARTUP_URL = "file:///android_asset/webview_startup.html"
+        private val PAGE_LOAD_TIMEOUT = 15.seconds
         private val logger = Logger.withTag(WebViewJsRunner::class.simpleName!!)
     }
 
     private var webView: WebView? = null
+    private val pageLoaded = CompletableDeferred<Unit>()
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
@@ -104,6 +110,7 @@ class WebViewJsRunner(
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
             logger.d { "Page finished loading: $url" }
+            pageLoaded.complete(Unit)
         }
 
         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -280,9 +287,20 @@ class WebViewJsRunner(
             throw e
         }
         check(webView != null) { "WebView not initialized" }
-        logger.d { "WebView initialized" }
+        logger.d { "WebView initialized (provider=${webViewProvider()})" }
         loadApp(jsPath.toString())
+        scope.launch {
+            if (withTimeoutOrNull(PAGE_LOAD_TIMEOUT) { pageLoaded.await() } == null) {
+                logger.e {
+                    "Startup page never loaded (provider=${webViewProvider()}): PKJS for " +
+                            "${appInfo.longName} will never become ready"
+                }
+            }
+        }
     }
+
+    private fun webViewProvider(): String = WebView.getCurrentWebViewPackage()
+        ?.let { "${it.packageName} ${it.versionName}" } ?: "none"
 
     private suspend fun persistLocalStorage() {
         suspendCancellableCoroutine { cont ->

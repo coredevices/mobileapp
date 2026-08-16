@@ -9,6 +9,8 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.integrations.ReminderListEntry
+import coredevices.ring.agent.integrations.fuzzyFilter
 import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
@@ -51,7 +53,7 @@ class ListTool: BuiltInMcpTool(
                     "reminder_date_time_human" to JsonObject(
                         mapOf(
                             "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format e.g. 'tomorrow at 13:00'"
+                            "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'"
                         ).toJson()
                     ),
                 )
@@ -61,7 +63,10 @@ class ListTool: BuiltInMcpTool(
                 "message"
             )
         )
-    )
+    ),
+    extraContext = """
+        Never guess 'reminder_date_time_human' — only pass a time the user actually said, otherwise omit it.
+    """.trimIndent()
 ), KoinComponent {
     val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
     private val listRepo: ListRepository by inject()
@@ -80,10 +85,13 @@ class ListTool: BuiltInMcpTool(
          * but does match its unchanged seed ("todos").
          */
         fun matchListIdByHint(lists: List<CachedList>, hint: String): String? {
-            val normalized = hint.trim().lowercase()
-            if (normalized.isEmpty()) return null
-            return lists.firstOrNull { it.title.lowercase().contains(normalized) }?.firestoreId
-                ?: lists.firstOrNull { it.seed?.lowercase()?.contains(normalized) == true }?.firestoreId
+            if (hint.isBlank()) return null
+            fun bestMatchOn(key: (CachedList) -> String?): String? = lists
+                .mapNotNull { list -> key(list)?.let { ReminderListEntry(list.firestoreId, it) } }
+                .fuzzyFilter(hint)
+                .firstOrNull()
+                ?.id
+            return bestMatchOn { it.title } ?: bestMatchOn { it.seed }
         }
     }
 
@@ -167,7 +175,10 @@ class ListTool: BuiltInMcpTool(
                         JsonSnake.encodeToString(
                             ListAddResult(
                                 success = false,
-                                errorMessage = "Failed to parse date time: '${listItemArgs.reminder_date_time_human}'"
+                                errorMessage = "Failed to parse date time: '${listItemArgs.reminder_date_time_human}'. " +
+                                        "Retry with the same date/time rephrased in simple English " +
+                                        "like 'on August 20 at 9am' or 'tomorrow at 13:00'. " +
+                                        "If it cannot be expressed that way, create the item without a reminder time."
                             )
                         ),
                         SemanticResult.GenericFailure(

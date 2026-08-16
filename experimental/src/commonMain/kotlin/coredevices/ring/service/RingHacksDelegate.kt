@@ -19,7 +19,9 @@ class RingHacksDelegate(
 ): KMPHaversineHacksDelegate {
     private val logger = Logger.withTag("RingHacksDelegate")
     override fun shouldWipeCollectionsBeforeTransfer(satellite: KMPHaversineSatellite): Boolean {
-        if (satellite.id == prefs.ringPaired.value && prefs.lastWipedRing.value != satellite.id) {
+        if (satellite.id.equals(prefs.ringPaired.value, ignoreCase = true) &&
+            !satellite.id.equals(prefs.lastWipedRing.value, ignoreCase = true)
+        ) {
             logger.i { "First time seeing paired ring ${satellite.id}, erasing collections" }
             return true
         } else {

@@ -17,10 +17,12 @@ class FirestoreKnownWatchesDao(
     }
 
     suspend fun set(watch: FirestoreKnownWatch) {
+        if (watch.serial.isBlank()) return
         collection?.document(watch.serial)?.set(watch)
     }
 
     suspend fun delete(serial: String) {
+        if (serial.isBlank()) return
         collection?.document(serial)?.delete()
     }
 }

@@ -244,6 +244,7 @@ class RecordingProcessor(
             timeBase = timeBase,
             userMessageText = CompletableDeferred(text),
             recordingFirestoreId = firestoreId,
+            toolCallId = null
         )
 
         trace.markEvent("agent_processing_start",

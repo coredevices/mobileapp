@@ -12,8 +12,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
-import kotlin.time.Instant
 
 @Serializable
 data class GoogleTask(
@@ -41,10 +41,11 @@ class GoogleTasksApi(config: ApiConfig) : ApiClient(config.version) {
         val SCOPES = listOf("https://www.googleapis.com/auth/tasks")
     }
 
-    suspend fun createTask(token: String, title: String, due: Instant?, listId: String?): GoogleTask {
+    suspend fun createTask(token: String, title: String, due: LocalDate?, listId: String?): GoogleTask {
         val body = buildMap {
             put("title", title)
-            due?.let { put("due", it.toString()) }
+            // Tasks records only the date; midnight UTC is the form it normalizes `due` to.
+            due?.let { put("due", "${it}T00:00:00.000Z") }
         }
         val list = listId ?: "@default"
         val res = client.post("$baseUrl/lists/$list/tasks") {

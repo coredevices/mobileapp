@@ -8,16 +8,19 @@ import coredevices.util.Permission
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
 
 private const val LAST_UID_CHECKED_KEY = "ring_index_enable_last_uid_checked"
 
 internal fun listenForUserPresent(recordingsDao: FirestoreRecordingsDao, configHolder: CoreConfigHolder, settings: Settings) {
-    Firebase.auth.authStateChanged.stateIn(GlobalScope, SharingStarted.Eagerly, Firebase.auth.currentUser)
+    flow {
+        emit(Firebase.auth.currentUser)
+        emitAll(Firebase.auth.authStateChanged)
+    }
         .distinctUntilChanged { old, new ->
             old?.uid == new?.uid
         }.onEach {

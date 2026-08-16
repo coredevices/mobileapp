@@ -69,6 +69,8 @@ data class NotificationAppItem(
      */
     @ColumnInfo(defaultValue = "0")
     val autoAdded: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val rulesUpdated: MillisecondInstant = Instant.fromEpochSeconds(0).asMillisecond(),
 ) : BlobDbItem {
     override fun key(): UByteArray =
         SFixedString(StructMapper(), packageName.length, packageName).toBytes()

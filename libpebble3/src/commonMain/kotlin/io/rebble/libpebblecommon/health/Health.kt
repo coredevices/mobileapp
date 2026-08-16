@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.calculateHealthAverages
+import io.rebble.libpebblecommon.services.computeAllWeekdayTypicalSleep
 import io.rebble.libpebblecommon.services.computeAllWeekdayTypicalSteps
 import io.rebble.libpebblecommon.services.decodeTypicalStepTotal
 import io.rebble.libpebblecommon.services.groupSleepSessions
@@ -98,6 +99,7 @@ class Health(
 
         val weekdayTypicalSteps = computeAllWeekdayTypicalSteps(healthDao, today, timeZone)
             .mapValues { (_, payload) -> decodeTypicalStepTotal(payload) }
+        val weekdayTypicalSleep = computeAllWeekdayTypicalSleep(healthDao, today, timeZone)
 
         return HealthDebugStats(
             totalSteps30Days = averages.totalSteps,
@@ -109,6 +111,7 @@ class Health(
             latestDataTimestamp = latestTimestamp,
             daysOfData = daysOfData,
             weekdayTypicalSteps = weekdayTypicalSteps,
+            weekdayTypicalSleep = weekdayTypicalSleep,
         )
     }
 

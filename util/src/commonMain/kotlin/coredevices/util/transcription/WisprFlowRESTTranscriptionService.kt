@@ -129,7 +129,7 @@ class WisprFlowRESTTranscriptionService(
         )
 
         try {
-            val text = postTranscribe(request)
+            val text = postTranscribe(request)?.replace(Regex("<[^>]*>"), "")?.trim()
             if (text.isNullOrBlank()) {
                 throw TranscriptionException.NoSpeechDetected("no_transcript", modelUsed = MODEL)
             }

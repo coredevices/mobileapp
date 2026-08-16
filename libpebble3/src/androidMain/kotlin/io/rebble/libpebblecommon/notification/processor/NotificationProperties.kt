@@ -80,6 +80,7 @@ enum class NotificationProperties(
     GooglePhoneDialer(pkgName = "com.google.android.dialer", color = TimelineColor.BlueMoon, icon = TimelineIcon.IncomingPhoneCall),
     Ring(pkgName = "com.ringapp"),
     Zwift(pkgName = "com.zwift.zwiftgame", addShowsUserInterfaceActions = true),
+    Shortwave(pkgName = "com.shortwave.android", addShowsUserInterfaceActions = true),
     ;
 
     companion object {

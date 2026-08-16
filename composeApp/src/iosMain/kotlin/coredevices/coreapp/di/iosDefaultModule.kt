@@ -17,19 +17,22 @@ import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.IOSPlatform
 import coredevices.util.IosCompanionDevice
 import coredevices.util.IosPermissionRequester
+import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
 import coredevices.util.auth.GitHubAuthUtil
+import coredevices.util.auth.NoOpSilentSignIn
+import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.IosOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
+import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadManager
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
 import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -38,6 +41,7 @@ import kotlin.time.DurationUnit
 
 val iosDefaultModule = module {
     singleOf(::RealGoogleAuthUtil) bind GoogleAuthUtil::class
+    single<SilentSignIn> { NoOpSilentSignIn }
     singleOf(::RealAppleAuthUtil) bind AppleAuthUtil::class
     singleOf(::RealGithubAuthUtil) bind GitHubAuthUtil::class
     singleOf(::PlatformShareLauncher)
@@ -63,11 +67,15 @@ val iosDefaultModule = module {
     }
     single {
         val pebbleDelegate = get<PebbleIosDelegate>()
-        val enabledFlow = get<CoreConfigFlow>().flow.map { it.enableIndex }
+        val configFlow = get<CoreConfigFlow>().flow
         val ringDelegate = get<RingDelegate>()
         RequiredPermissions(
-            flow { emit(pebbleDelegate.requiredPermissions()) }.combine(enabledFlow) { permissions, enabled ->
-                permissions + if (enabled) ringDelegate.requiredRuntimePermissions() else emptySet()
+            flow { emit(pebbleDelegate.requiredPermissions()) }.combine(configFlow) { permissions, config ->
+                permissions +
+                        (if (config.enableIndex) ringDelegate.requiredRuntimePermissions() else emptySet()) +
+                        (if (config.sttConfig.mode == CactusSTTMode.PlatformOnly) {
+                            setOf(Permission.SpeechRecognizer)
+                        } else emptySet())
             }
         )
     }

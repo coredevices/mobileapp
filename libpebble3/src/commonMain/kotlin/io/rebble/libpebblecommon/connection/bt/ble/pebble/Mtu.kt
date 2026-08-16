@@ -28,7 +28,7 @@ class Mtu(private val blePlatformConfig: BlePlatformConfig) {
             }
         }
         _mtu.value = gattClient.getMtu()
-        return PebbleConnectionResult.Success
+        return PebbleConnectionResult.Success(null)
     }
 }
 

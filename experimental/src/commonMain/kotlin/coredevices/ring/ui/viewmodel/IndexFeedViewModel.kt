@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.di.LibIndexCoroutineScope
+import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.fields
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,7 +51,7 @@ import kotlin.time.Instant
 class IndexFeedViewModel(
     recordingRepo: RecordingRepository,
     private val itemRepo: ItemRepository,
-    listRepo: ListRepository,
+    private val listRepo: ListRepository,
     private val recordingQueue: RecordingProcessingQueue,
     private val ringTransferDao: RingTransferDao,
     private val appScope: LibIndexCoroutineScope,
@@ -83,11 +86,15 @@ class IndexFeedViewModel(
         ) { recordings, items, lists, entries, q ->
             Quintuple(recordings, items, lists, entries, q)
         },
+        recordingRepo.getLatestToolSemanticResults()
+            .map { results -> results.associate { it.recordingId to it.semanticResult } }
+            .distinctUntilChanged(),
         animatingDoneIds,
-    ) { tuple, animating ->
+    ) { tuple, semanticResults, animating ->
         compute(
             tuple.recordings, tuple.items, tuple.lists, tuple.entries,
             tuple.query.trim(), animating,
+            semanticResults = semanticResults,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -101,6 +108,19 @@ class IndexFeedViewModel(
 
     fun clearQuery() {
         query.value = ""
+    }
+
+    private var newListJob: kotlinx.coroutines.Job? = null
+
+    /** Creates a fresh user list and invokes [onCreated] with the new
+     *  doc id so the screen can navigate into rename mode. Rapid re-taps
+     *  while a creation is in flight are ignored. */
+    fun newList(onCreated: (String) -> Unit) {
+        if (newListJob?.isActive == true) return
+        newListJob = viewModelScope.launch(Dispatchers.IO) {
+            val newId = listRepo.newList()
+            withContext(Dispatchers.Main) { onCreated(newId) }
+        }
     }
 
     /** Submit a typed prompt the same way the legacy chat input did —
@@ -226,6 +246,10 @@ class IndexFeedViewModel(
              *  Non-null → the peek card shows "Transcription error" + a retry
              *  button instead of the primary action chip. */
             val retryEntry: RecordingEntryEntity? = null,
+            /** Message from a failed action (e.g. a missing permission), shown
+             *  in place of the action chip so the failure is actionable
+             *  without opening the recording. */
+            val actionError: String? = null,
         )
 
         companion object {
@@ -258,6 +282,10 @@ class IndexFeedViewModel(
             entries: List<RecordingEntryEntity>,
             query: String,
             animatingDoneIds: Set<String> = emptySet(),
+            /** Latest tool-call semantic result per recording id, for labelling actions
+             *  that don't produce a feed item (calendar events live only in the phone
+             *  calendar). */
+            semanticResults: Map<Long, SemanticResult?> = emptyMap(),
         ): UiState {
             val isSearching = query.isNotEmpty()
             val q = query.lowercase()
@@ -286,12 +314,23 @@ class IndexFeedViewModel(
                         .lastOrNull()
                     val retryEntry = latestEntry
                         ?.takeIf { it.status == RecordingEntryStatus.transcription_error }
+                    // A calendar event takes an action but creates no feed item — fall back to
+                    // the recording's semantic result so the peek doesn't read "No action taken".
+                    val calendarAction = semanticResults[rec.id] as? SemanticResult.CalendarEventCreation
+                    val failure = semanticResults[rec.id] as? SemanticResult.GenericFailure
                     UiState.RecordingPeek(
                         recording = rec,
                         transcription = transcriptionByRec[rec.id].orEmpty(),
-                        primaryChip = primary?.let { chipLabel(it, lists) } ?: "No action taken",
-                        orphan = primary == null,
+                        primaryChip = primary?.let { chipLabel(it, lists) }
+                            ?: calendarAction?.let { "Added to calendar" }
+                            ?: "No action taken",
+                        orphan = primary == null && calendarAction == null,
                         retryEntry = retryEntry,
+                        // A retryable transcription failure means the agent
+                        // never ran this time round; any stored failure is from
+                        // an earlier attempt, so don't surface it.
+                        actionError = failure?.userErrorMessage
+                            ?.takeIf { it.isNotBlank() && retryEntry == null },
                     )
                 }
 
@@ -382,7 +421,9 @@ class IndexFeedViewModel(
                     }
                 }
             } else {
-                allNotesLists
+                // Only the resting grid hides done items; a search must still
+                // match a completed item by name.
+                allNotesLists.map { entry -> entry.copy(items = entry.items.filter { !it.done }) }
             }
 
             val rawAnswers = items
@@ -443,7 +484,6 @@ class IndexFeedViewModel(
                     "Added to $parentName"
                 }
                 "answer" -> "Answered"
-                "calendar_event" -> item.title.ifBlank { "Event" }
                 "message" -> {
                     val raw = strField("recipientName") ?: strField("contact")
                     val name = raw?.let { messageRecipientLabel(it) }

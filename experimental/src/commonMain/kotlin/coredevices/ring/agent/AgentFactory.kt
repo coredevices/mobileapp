@@ -16,22 +16,41 @@ import org.koin.core.parameter.parametersOf
 
 class AgentFactory: KoinComponent {
     private val prefs by inject<Preferences>()
+
+    private val signedIn get() = Firebase.auth.currentUser?.emailOrNull != null
+
+    private fun local(conversation: List<ConversationMessageDocument>): Agent =
+        get<IndexAgentCactus> { parametersOf(conversation) }
+
+    private fun remote(conversation: List<ConversationMessageDocument>): Agent =
+        get<IndexAgentNenya> { parametersOf(conversation) }
+
     fun createForChatMode(
         mode: ChatMode,
         existingConversation: List<ConversationMessageDocument> = emptyList()
     ): Agent {
-        val cactusEnabled = prefs.useCactusAgent.value
         return when (mode) {
             ChatMode.Normal -> {
-                if (cactusEnabled) {
-                    get<IndexAgentCactus> { parametersOf(existingConversation) }
-                } else {
-                    if (Firebase.auth.currentUser?.emailOrNull == null) {
-                        throw AgentAuthenticationException("User must be authenticated to use online LLM agent")
+                when (prefs.llmMode.value) {
+                    LlmMode.LocalOnly -> local(existingConversation)
+                    LlmMode.RemoteOnly -> {
+                        if (!signedIn) {
+                            throw AgentAuthenticationException("User must be authenticated to use online LLM agent")
+                        }
+                        remote(existingConversation)
                     }
-                    get<IndexAgentNenya> { parametersOf(existingConversation) }
+                    LlmMode.RemoteFirst -> if (!signedIn) {
+                        local(existingConversation)
+                    } else {
+                        FallbackAgent(
+                            primary = remote(existingConversation),
+                            fallback = local(existingConversation),
+                            initialConversation = existingConversation,
+                        )
+                    }
                 }
             }
+            // Always online, because, well, search
             ChatMode.Search -> {
                 if (Firebase.auth.currentUser?.emailOrNull == null) {
                     throw AgentAuthenticationException("User must be authenticated to use search mode")
@@ -60,6 +79,19 @@ class AgentFactory: KoinComponent {
 }
 
 class AgentAuthenticationException(message: String): Exception(message)
+
+/** How a [ChatMode.Normal] chat picks between the online (Nenya) and on-device (Cactus) LLM. */
+enum class LlmMode(val id: Int) {
+    RemoteOnly(0),
+    LocalOnly(1),
+    RemoteFirst(2);
+
+    companion object {
+        fun fromId(id: Int): LlmMode = entries.firstOrNull { it.id == id } ?: RemoteOnly
+    }
+
+    fun usesLocalCactus(): Boolean = this == LocalOnly || this == RemoteFirst
+}
 
 sealed interface ChatMode {
     data object Normal : ChatMode

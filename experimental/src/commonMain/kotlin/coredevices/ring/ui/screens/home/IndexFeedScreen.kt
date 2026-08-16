@@ -73,6 +73,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -112,6 +114,7 @@ fun IndexFeedScreen(
         LaunchedEffect(searching) { if (!searching) vm.clearQuery() }
 
         val colors = IndexTheme.colors
+        val lifecycleOwner = LocalLifecycleOwner.current
         val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
 
         // Re-tap of the bottom-nav Index tab fires `scrollToTop` — bring
@@ -231,6 +234,15 @@ fun IndexFeedScreen(
                             right = state.totalNotesLists.toString(),
                             onClick = { coreNav.navigateTo(RingRoutes.AllLists) },
                             topPad = 12.dp,
+                            onAdd = {
+                                vm.newList { newId ->
+                                    // The write is async — if the user already navigated
+                                    // elsewhere, don't yank them to the new list.
+                                    if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                        coreNav.navigateTo(RingRoutes.ObjectDetails(newId, startEditing = true))
+                                    }
+                                }
+                            },
                         )
                     }
                     notesGrid(state.notesLists, onOpen = { l ->

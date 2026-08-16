@@ -142,6 +142,9 @@ actual class M4aDecoder {
                                 frameCapacity = READ_FRAMES_PER_CHUNK.toUInt()
                             )
                                 ?: throw Exception("Failed to create PCM buffer")
+                        // audioBufferList reports mDataByteSize from frameLength, which
+                        // defaults to 0 — leaving ExtAudioFileRead no room and returning 0 frames.
+                        chunkBuffer.setFrameLength(READ_FRAMES_PER_CHUNK.toUInt())
 
                         val frameCountVar = alloc<UIntVar>()
                         while (true) {
@@ -174,6 +177,9 @@ actual class M4aDecoder {
                         ExtAudioFileDispose(extFile)
                     }
                 }
+
+                if (collected.isEmpty())
+                    throw Exception("Decoded 0 samples from ${m4aBytes.size} byte M4A")
 
                 val samples = ShortArray(collected.size) { collected[it] }
                 logger.d { "Decoded to ${samples.size} samples at ${sampleRate}Hz" }

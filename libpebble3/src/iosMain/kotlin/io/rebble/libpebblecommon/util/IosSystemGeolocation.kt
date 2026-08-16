@@ -1,6 +1,6 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.util
 
-import LibPebbleSwift.IOSLocation
+import io.rebble.libpebblecommon.util.IOSLocation
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation

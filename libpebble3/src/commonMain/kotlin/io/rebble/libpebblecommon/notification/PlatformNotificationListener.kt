@@ -133,12 +133,14 @@ class NotificationApi(
     override fun upsertNotificationRule(rule: NotificationRuleEntity) {
         libPebbleCoroutineScope.launch {
             notificationRuleDao.upsert(rule)
+            rule.target?.let { notificationAppDao.bumpRulesFingerprint(it) }
         }
     }
 
     override fun deleteNotificationRule(rule: NotificationRuleEntity) {
         libPebbleCoroutineScope.launch {
             notificationRuleDao.deleteById(rule.id)
+            rule.target?.let { notificationAppDao.bumpRulesFingerprint(it) }
         }
     }
 

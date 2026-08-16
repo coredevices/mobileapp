@@ -2,7 +2,6 @@ package coredevices.ring.ui.screens.settings
 
 import BugReportButton
 import CoreNav
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -27,7 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
@@ -56,6 +54,9 @@ import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.data.IntegrationDefinition
 import coredevices.ring.database.Preferences
 import coredevices.ui.M3Dialog
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import coredevices.util.PermissionResult
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
@@ -128,6 +129,19 @@ fun AddIntegration(coreNav: CoreNav) {
                     }
                 }
             }
+            item {
+                ListItem(
+                    headlineContent = { Text(PHONE_CALENDAR_TITLE) },
+                    supportingContent = { Text("Calendar") },
+                    modifier = Modifier.clickable {
+                        dialog = {
+                            PhoneCalendarDialog(
+                                onDismiss = { dialog = null }
+                            )
+                        }
+                    }
+                )
+            }
             if (platform.isAndroid) {
                 item {
                     val def = remember { TASKER_DEFINITION }
@@ -167,6 +181,88 @@ private sealed class SignInState {
     data object SigningIn : SignInState()
     data object Success : SignInState()
     data class Error(val message: String) : SignInState()
+}
+
+const val PHONE_CALENDAR_TITLE = "Phone Calendar"
+
+/**
+ * Connects the opt-in Phone Calendar integration: "connecting" means granting calendar
+ * permission and flipping [Preferences.phoneCalendarEnabled]. The agent's calendar tool stays
+ * hidden until both are true.
+ */
+@Composable
+fun PhoneCalendarDialog(
+    onDismiss: () -> Unit
+) {
+    val preferences = koinInject<Preferences>()
+    val permissionRequester = koinInject<PermissionRequester>()
+    val uiContext = rememberUiContext()
+    var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
+    val scope = rememberCoroutineScope()
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text(PHONE_CALENDAR_TITLE) },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text(if (state is SignInState.Success) "Done" else "Cancel")
+            }
+            if (state !is SignInState.Success) {
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    enabled = state !is SignInState.SigningIn,
+                    onClick = {
+                        val ctx = uiContext ?: return@TextButton
+                        state = SignInState.SigningIn
+                        scope.launch {
+                            state = when (permissionRequester.requestPermission(Permission.Calendar, ctx)) {
+                                PermissionResult.Granted -> {
+                                    preferences.setPhoneCalendarEnabled(true)
+                                    SignInState.Success
+                                }
+                                PermissionResult.RejectedForever -> {
+                                    // The system won't show the prompt again; send the user to
+                                    // app settings to grant it manually.
+                                    permissionRequester.openPermissionsScreen(ctx)
+                                    SignInState.Error(
+                                        "Calendar access is blocked. Allow calendar access for the app in system settings, then try again."
+                                    )
+                                }
+                                else -> SignInState.Error(
+                                    "Calendar access was not granted. Index can only add events to your calendar with this permission."
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Text("Connect")
+                }
+            }
+        }
+    ) {
+        when (val s = state) {
+            is SignInState.Idle -> {
+                Text(
+                    "Connect your phone's calendar so Index can add events when you ask. " +
+                        "This grants the app calendar access."
+                )
+            }
+            is SignInState.SigningIn -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is SignInState.Success -> {
+                Text("Phone Calendar connected.")
+            }
+            is SignInState.Error -> {
+                Text(s.message, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
 }
 
 @Composable
@@ -332,8 +428,9 @@ fun ObsidianDialog(
 
     var mode by remember { mutableStateOf(if (alreadyConfigured) integration.currentMode() else ObsidianMode.TIMESTAMPED_FILES) }
     var subfolder by remember { mutableStateOf(if (alreadyConfigured) integration.currentSubfolder().ifEmpty { ObsidianPreferences.DEFAULT_SUBFOLDER } else ObsidianPreferences.DEFAULT_SUBFOLDER) }
+    var customTag by remember { mutableStateOf(if (alreadyConfigured) integration.currentCustomTag() else "") }
     var notes by remember { mutableStateOf<List<String>>(emptyList()) }
-    var selectedNote by remember { mutableStateOf(if (alreadyConfigured) integration.currentTargetNote().ifEmpty { null } else null) }
+    var notePath by remember { mutableStateOf(if (alreadyConfigured) integration.currentTargetNote() else "") }
 
     LaunchedEffect(alreadyConfigured) {
         if (alreadyConfigured) {
@@ -348,7 +445,7 @@ fun ObsidianDialog(
                 if (integration.signIn(uiContext)) {
                     vaultName = integration.vaultDisplayName() ?: "Obsidian vault"
                     notes = integration.listNotes()
-                    selectedNote = null
+                    notePath = ""
                 } else {
                     error = "No folder selected."
                 }
@@ -368,15 +465,16 @@ fun ObsidianDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
             if (vaultName != null) {
                 Spacer(Modifier.width(8.dp))
-                val canSave = mode != ObsidianMode.NAMED_NOTE || selectedNote != null
+                val canSave = mode != ObsidianMode.NAMED_NOTE || notePath.isNotBlank()
                 TextButton(
                     enabled = canSave,
                     onClick = {
                         scope.launch {
                             integration.saveConfig(
                                 mode = mode,
-                                targetNote = selectedNote ?: "",
+                                targetNote = notePath,
                                 subfolder = subfolder,
+                                customTag = customTag,
                             )
                             preferences.setNoteProvider(NoteProvider.Obsidian)
                             onDismiss()
@@ -423,9 +521,11 @@ fun ObsidianDialog(
                     onModeChange = { mode = it },
                     subfolder = subfolder,
                     onSubfolderChange = { subfolder = it },
+                    customTag = customTag,
+                    onCustomTagChange = { customTag = it },
                     notes = notes,
-                    selectedNote = selectedNote,
-                    onSelectNote = { selectedNote = it },
+                    notePath = notePath,
+                    onNotePathChange = { notePath = it },
                 )
             }
             if (error != null) {
@@ -446,9 +546,11 @@ private fun ObsidianModeSelector(
     onModeChange: (ObsidianMode) -> Unit,
     subfolder: String,
     onSubfolderChange: (String) -> Unit,
+    customTag: String,
+    onCustomTagChange: (String) -> Unit,
     notes: List<String>,
-    selectedNote: String?,
-    onSelectNote: (String) -> Unit,
+    notePath: String,
+    onNotePathChange: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         ModeOption(
@@ -480,21 +582,23 @@ private fun ObsidianModeSelector(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customTag,
+                    onValueChange = onCustomTagChange,
+                    label = { Text("Extra tag (optional)") },
+                    placeholder = { Text("fleeting") },
+                    supportingText = { Text("Added to each new note's frontmatter alongside #index.") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             ObsidianMode.NAMED_NOTE -> {
-                if (notes.isEmpty()) {
-                    Text(
-                        "No notes found in this vault yet. Create one in Obsidian first, or choose another option.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    NotePickerField(
-                        notes = notes,
-                        selectedNote = selectedNote,
-                        onSelectNote = onSelectNote,
-                    )
-                }
+                NotePathField(
+                    notes = notes,
+                    notePath = notePath,
+                    onNotePathChange = onNotePathChange,
+                )
             }
             ObsidianMode.MAIN_NOTE -> {
                 Text(
@@ -531,57 +635,44 @@ private fun ModeOption(
     }
 }
 
-/** Compact dropdown for choosing which existing note to append to. */
+/** Free-text note path with suggestions from the vault's existing notes. */
 @Composable
-private fun NotePickerField(
+private fun NotePathField(
     notes: List<String>,
-    selectedNote: String?,
-    onSelectNote: (String) -> Unit,
+    notePath: String,
+    onNotePathChange: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            "Note to append to",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val suggestions = remember(notes, notePath) {
+        val q = notePath.trim()
+        if (q.isEmpty()) notes else notes.filter { it.contains(q, ignoreCase = true) && !it.equals(q, ignoreCase = true) }
+    }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = notePath,
+            onValueChange = {
+                onNotePathChange(it)
+                expanded = true
+            },
+            label = { Text("Note to append to") },
+            placeholder = { Text("Inbox/Index notes") },
+            supportingText = { Text("Path inside your vault, subfolders allowed. Created if it doesn't exist.") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(4.dp))
-        Box(Modifier.fillMaxWidth()) {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        selectedNote ?: "Choose a note",
-                        modifier = Modifier.weight(1f),
-                        color = if (selectedNote == null) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                }
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                notes.forEach { note ->
-                    DropdownMenuItem(
-                        text = { Text(note) },
-                        onClick = {
-                            onSelectNote(note)
-                            expanded = false
-                        },
-                    )
-                }
+        DropdownMenu(
+            expanded = expanded && suggestions.isNotEmpty(),
+            onDismissRequest = { expanded = false },
+            properties = PopupProperties(focusable = false),
+        ) {
+            suggestions.take(8).forEach { note ->
+                DropdownMenuItem(
+                    text = { Text(note) },
+                    onClick = {
+                        onNotePathChange(note)
+                        expanded = false
+                    },
+                )
             }
         }
     }

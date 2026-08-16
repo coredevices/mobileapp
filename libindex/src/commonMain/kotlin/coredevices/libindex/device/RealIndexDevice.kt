@@ -23,10 +23,19 @@ class RealDiscoveredIndexDevice(
     override val rssi: Int,
     override val name: String,
     override val pairingState: IndexPairingState,
-    override val isFailsafe: Boolean
+    override val currentImage: IndexImage
 ): IndexDevice by indexDevice, DiscoveredIndexDevice {
     override suspend fun pair(): IndexPairingResult {
         return indexPairing.pairDevice(this)
+    }
+}
+
+class RealRepairableIndexDevice(
+    indexDevice: IndexDevice,
+    private val indexSystem: IndexSystem
+): IndexDevice by indexDevice, RepairableIndexDevice {
+    override suspend fun forceFailsafe() {
+        indexSystem.forceFailsafe(this)
     }
 }
 
@@ -55,6 +64,7 @@ class IndexDeviceFactory(
     private val prefs: BasePreferences
 ): KoinComponent {
     private val indexPairing: IndexPairing by inject()
+    private val indexSystem: IndexSystem by inject()
 
     fun create(
         identifier: IndexIdentifier,
@@ -75,14 +85,20 @@ class IndexDeviceFactory(
 
             known != null -> known
 
-            scanResult != null -> RealDiscoveredIndexDevice(
-                base,
-                indexPairing,
-                scanResult.rssi,
-                name,
-                pairingState,
-                scanResult.isFailsafe
-            )
+            scanResult != null -> when (scanResult.currentImage) {
+                IndexImage.ProductionTest -> RealRepairableIndexDevice(
+                    base,
+                    indexSystem,
+                )
+                else -> RealDiscoveredIndexDevice(
+                    base,
+                    indexPairing,
+                    scanResult.rssi,
+                    name,
+                    pairingState,
+                    scanResult.currentImage
+                )
+            }
 
             else -> base
         }

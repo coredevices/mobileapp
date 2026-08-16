@@ -87,11 +87,15 @@ class AppstoreService(
     private fun supportsBulkFetch(): Boolean = !source.isRebbleFeed()
 
     /**
-     * Cache key parameters for individual `StoreApplication` entries. Hardware-agnostic
-     * so the bulk endpoint (no hardware param) and per-id fetches share cached entries.
+     * Cache key parameters for individual `StoreApplication` entries. Keyed by hardware
+     * so a hardware-specific per-id fetch doesn't read back a hardware-agnostic bulk
+     * entry (whose screenshots come from the server's basalt default).
      */
-    private fun cacheParamsForApp(): Map<String, String> =
-        mapOf("platform" to platform.storeString())
+    private fun cacheParamsForApp(hardwarePlatform: WatchType?): Map<String, String> =
+        buildMap {
+            put("platform", platform.storeString())
+            hardwarePlatform?.let { put("hardware", it.codename) }
+        }
 
     private companion object {
         // How many hearted apps to surface in the home-screen Hearted carousel.
@@ -174,7 +178,7 @@ class AppstoreService(
         useCache: Boolean,
     ): List<StoreApplication>? {
         if (ids.isEmpty()) return emptyList()
-        val cacheParams = cacheParamsForApp()
+        val cacheParams = cacheParamsForApp(hardwarePlatform = null)
         val resolved = mutableMapOf<String, StoreApplication>()
         val toFetch = mutableListOf<String>()
         if (useCache) {
@@ -323,7 +327,7 @@ class AppstoreService(
             //            "firmware_version" to "",
             //            "filter_hardware" to "true",
         }
-        val cacheParams = cacheParamsForApp()
+        val cacheParams = cacheParamsForApp(hardwarePlatform)
 
         if (useCache) {
             val cacheHit = cache.readApp(id, cacheParams, source)

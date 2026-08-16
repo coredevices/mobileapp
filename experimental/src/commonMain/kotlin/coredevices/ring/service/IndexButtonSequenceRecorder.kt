@@ -1,48 +1,33 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.debounce
+import coredevices.haversine.ButtonSequenceDebouncer
+import coredevices.haversine.TransferStatus
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
-class IndexButtonSequenceRecorder {
-    companion object Companion {
-        const val SEQUENCE_SHORT = "short"
-        const val SEQUENCE_LONG = "long"
-        const val EVENT_DEBOUNCE_MS = 700L //TODO: check transfer buffer count as heuristic so we dont need this so high
-    }
-    private val _sequenceEventFlow = MutableSharedFlow<List<ButtonPress>>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-
-    fun recordSequence(sequence: String) {
-        val buttonPresses = sequence.trim().parseAsButtonSequence()
-        if (buttonPresses.isNotEmpty()) {
-            _sequenceEventFlow.tryEmit(buttonPresses)
-        }
+class IndexButtonSequenceRecorder(scope: RecordingBackgroundScope) {
+    companion object {
+        private val logger = Logger.withTag("IndexButtonSequenceRecorder")
     }
 
-    fun recordNoSequence() {
-        _sequenceEventFlow.tryEmit(emptyList())
+    private val debouncer = ButtonSequenceDebouncer(scope)
+
+    fun onTransferStatus(status: TransferStatus) {
+        debouncer.onTransferStatus(status)
     }
 
     /**
      * Returns a flow of button press sequences, debounced to get the
      * final sequence after successive rapid transfers.
      */
-    @OptIn(FlowPreview::class)
-    fun sequenceEvents() =
-        _sequenceEventFlow
-            .asSharedFlow()
-            .onEach { Logger.withTag("IndexButtonSequenceRecorder").d { "Undebounced: $it" } }
-            .debounce(EVENT_DEBOUNCE_MS)
+    fun sequenceEvents(): Flow<List<ButtonPress>> =
+        debouncer.buttonGestures
+            .onEach { logger.d { "Debounced gesture: $it" } }
+            .map { it.sequence.trim().parseAsButtonSequence() }
             .filter { it.isNotEmpty() }
-            .onEach { Logger.withTag("IndexButtonSequenceRecorder").d { "Debounced: $it" } }
 }
 
 enum class ButtonPress {

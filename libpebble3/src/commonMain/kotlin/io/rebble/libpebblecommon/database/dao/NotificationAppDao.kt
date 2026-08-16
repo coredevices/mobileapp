@@ -57,6 +57,18 @@ interface NotificationAppRealDao : NotificationAppItemDao {
         ))
     }
 
+    /**
+     * Marks the app record dirty so BlobDB re-serializes it (picking up the current rules from
+     * NotificationRuleEntity, which value() reads at serialization time). Call after any rule
+     * upsert/delete for this package. No-op if the app row doesn't exist yet — rules are serialized
+     * when the row is first created (e.g. on the app's first notification).
+     */
+    @Transaction
+    suspend fun bumpRulesFingerprint(packageName: String) {
+        val existing = getEntry(packageName) ?: return
+        insertOrReplace(existing.copy(rulesUpdated = Clock.System.now().asMillisecond()))
+    }
+
     @Transaction
     suspend fun updateAppAllowDuplicates(packageName: String, allowDuplicates: Boolean) {
         val existing = getEntry(packageName)
@@ -109,6 +121,8 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 allowDuplicates = existingItem?.allowDuplicates ?: writeItem.allowDuplicates,
                 isSystemApp = existingItem?.isSystemApp ?: writeItem.isSystemApp,
                 autoAdded = existingItem?.autoAdded ?: writeItem.autoAdded,
+                // Phone-owned; the watch never sends it and asNotificationAppItem() doesn't decode it.
+                rulesUpdated = existingItem?.rulesUpdated ?: writeItem.rulesUpdated,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

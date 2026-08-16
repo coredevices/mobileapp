@@ -385,6 +385,7 @@ fun SelectVibePatternOrNone(
     currentPattern: String?,
     onChangePattern: (VibePattern?) -> Unit,
     subtext: String? = null,
+    title: String = "Vibration Pattern",
 ) {
     var showVibePatternChooser by remember { mutableStateOf(false) }
     if (showVibePatternChooser) {
@@ -401,7 +402,7 @@ fun SelectVibePatternOrNone(
     }
     ListItem(
         headlineContent = {
-            Text("Vibration Pattern")
+            Text(title)
         },
         supportingContent = {
             Column {

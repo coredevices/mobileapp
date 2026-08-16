@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -332,6 +333,7 @@ internal fun FeedSectionHeader(
     right: String,
     onClick: (() -> Unit)?,
     topPad: Dp = 12.dp,
+    onAdd: (() -> Unit)? = null,
 ) {
     val colors = IndexTheme.colors
     Row(
@@ -355,6 +357,17 @@ internal fun FeedSectionHeader(
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
         )
+        if (onAdd != null) {
+            Text(
+                "+",
+                color = colors.primary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clickable(role = Role.Button, onClickLabel = "New note") { onAdd() }
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
@@ -485,6 +498,23 @@ internal fun PeekCard(
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable { onRetry() }
                         .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+        } else if (peek.actionError != null) {
+            // One line keeps the fixed-height card stable; the full message is
+            // on the feed row and the recording details.
+            Row(
+                modifier = Modifier.height(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    peek.actionError,
+                    color = colors.error,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         } else {

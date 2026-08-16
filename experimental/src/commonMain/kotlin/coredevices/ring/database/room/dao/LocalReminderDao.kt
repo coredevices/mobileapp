@@ -30,6 +30,9 @@ interface LocalReminderDao {
     @Query("UPDATE LocalReminderData SET notifyBeforeMillis = NULL WHERE id = :id")
     suspend fun clearNotifyBefore(id: Int)
 
+    @Query("UPDATE LocalReminderData SET time = :time WHERE id = :id")
+    suspend fun setTime(id: Int, time: Instant?)
+
     @Query("DELETE FROM LocalReminderData WHERE id = :id")
     suspend fun deleteReminder(id: Int)
 }

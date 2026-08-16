@@ -30,6 +30,9 @@ import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
 
+internal fun hasSpeechRecognitionAuthorization(): Boolean =
+    SFSpeechRecognizer.authorizationStatus() == SFSpeechRecognizerAuthorizationStatus.SFSpeechRecognizerAuthorizationStatusAuthorized
+
 class IosPermissionRequester(
     requiredPermissions: RequiredPermissions,
     appResumed: AppResumed,
@@ -191,8 +194,7 @@ class IosPermissionRequester(
             }
         }
 
-    private fun hasSpeechRecognitionPermission(): Boolean =
-        SFSpeechRecognizer.authorizationStatus() == SFSpeechRecognizerAuthorizationStatus.SFSpeechRecognizerAuthorizationStatusAuthorized
+    private fun hasSpeechRecognitionPermission(): Boolean = hasSpeechRecognitionAuthorization()
 
     private suspend fun requestSpeechRecognitionPermission(): PermissionResult =
         suspendCancellableCoroutine { continuation ->

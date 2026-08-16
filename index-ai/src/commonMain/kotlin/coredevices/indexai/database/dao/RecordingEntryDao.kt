@@ -6,6 +6,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
@@ -56,10 +57,19 @@ interface RecordingEntryDao {
 
     @Query("UPDATE RecordingEntryEntity SET userMessageId = :userMessageId WHERE id = :recordingId")
     suspend fun updateRecordingEntryMessage(recordingId: Long, userMessageId: Long)
-    @Query("UPDATE RecordingEntryEntity SET status = :status, error = :error WHERE id = :recordingId")
-    suspend fun updateRecordingEntryStatus(recordingId: Long, status: RecordingEntryStatus, error: String? = null)
+    @Query("UPDATE RecordingEntryEntity SET status = :status, error = :error, errorType = :errorType WHERE id = :recordingId")
+    @Transaction
+    suspend fun updateRecordingEntryStatus(
+        recordingId: Long,
+        status: RecordingEntryStatus,
+        error: String? = null,
+        errorType: RecordingEntryErrorType? = null
+    )
     @Query("UPDATE RecordingEntryEntity SET transcription = :transcription, transcribedUsingModel = :modelUsed WHERE id = :recordingId")
     suspend fun updateRecordingEntryTranscription(recordingId: Long, transcription: String?, modelUsed: String? = null)
+    /** Entries created by older auth-failure paths have no fileName; only fills when null. */
+    @Query("UPDATE RecordingEntryEntity SET fileName = :fileName WHERE id = :recordingId AND fileName IS NULL")
+    suspend fun backfillRecordingEntryFileName(recordingId: Long, fileName: String)
 
     @Query("SELECT * FROM RecordingEntryEntity WHERE id = :id")
     suspend fun getById(id: Long): RecordingEntryEntity?

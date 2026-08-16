@@ -76,7 +76,10 @@ class IndexDeviceManager(
                                 name = existing.name,
                                 isPaired = true,
                                 satellite = satellite,
-                                satelliteState = satellite.state.value!!,
+                                satelliteState = satellite.state.value ?: run {
+                                    logger.w { "State is stale for ring update, ignoring" }
+                                    return@update prev
+                                },
                                 isUpdating = isUpdating
                                     ?: (existing is InterviewedIndexDevice && (existing as InterviewedIndexDevice).updating)
                             )
@@ -90,33 +93,41 @@ class IndexDeviceManager(
 
     fun init() {
         scope.launch {
-            // Only reconcile the stored paired ring once associations have actually been
-            // loaded. (e.g. after bt enabled/permitted)
-            associations?.associationsReady?.await()
-            val decision = resolvePairedRing(
-                storedPairedId = prefs.ringPaired.value,
-                storedPairedName = prefs.ringPairedName.value,
-                associations = associations?.associations?.value,
-            )
-            when (decision) {
-                PairedRingDecision.Keep -> {}
-                PairedRingDecision.Clear -> {
-                    logger.d { "Paired ring ${prefs.ringPaired.value} not found in loaded bt associations, clearing paired state" }
-                    prefs.setRingPaired(null)
-                    prefs.setRingPairedName(null)
+            // Re-reconcile on every change so the stored ring can't get stuck out of sync
+            // with the platform bond list (e.g. unbonded while BLUETOOTH_CONNECT was denied).
+            var warned = false
+            associations?.associations?.collect { loaded ->
+                val current = StoredPairing(prefs.ringPaired.value, prefs.ringPairedName.value)
+                val decision = resolvePairedRing(
+                    storedPairedId = current.id,
+                    storedPairedName = current.name,
+                    associations = loaded,
+                )
+                when (decision) {
+                    PairedRingDecision.Clear ->
+                        logger.d { "Paired ring ${current.id} not found in loaded bt associations, clearing paired state" }
+                    is PairedRingDecision.Adopt ->
+                        logger.d { "Found candidate ${decision.name} (${decision.identifier}) in bt associations, setting as paired ring" }
+                    else -> {}
                 }
-                is PairedRingDecision.UpdateName -> prefs.setRingPairedName(decision.name)
-                is PairedRingDecision.Adopt -> {
-                    logger.d { "Found candidate ${decision.name} (${decision.identifier}) in bt associations, setting as paired ring" }
-                    prefs.setRingPaired(decision.identifier)
-                    prefs.setRingPairedName(decision.name)
+                val next = current.applyDecision(decision)
+                if (next != current) {
+                    prefs.setRingPaired(next.id)
+                    prefs.setRingPairedName(next.name)
+                }
+                if (decision is PairedRingDecision.Adopt) {
+                    // Runs after the prefs write above, so a later emission resolves to Keep
+                    // instead of wiping again.
                     scope.launch(Dispatchers.IO) {
                         indexStorage.setLastSuccessfulCollectionIndex(null)
                         transferRepo.markTransfersAsPreviousIndexIteration()
                     }
                 }
+                if (loaded != null && !warned) {
+                    warned = true
+                    warnIfNotCompanionAssociated()
+                }
             }
-            warnIfNotCompanionAssociated()
         }
         associations?.bondStateChanges?.onEach { evt ->
             if (evt.state == IndexBondState.NotBonded && evt.identifier.asString == prefs.ringPaired.value) {
@@ -150,22 +161,12 @@ class IndexDeviceManager(
                 }
                 if (new != null) {
                     logger.d { "Adding new to list" }
-                    _rings.update { prev ->
-                        // replace if exists and is a DiscoveredIndexDevice, otherwise add
-                        val existing = prev.indexOfFirst { it.identifier.asString.equals(new, ignoreCase = true) }
-                        val known = deviceFactory.create(
-                            identifier = IndexIdentifier(new),
-                            name = prefs.ringPairedName.value ?: "Index 01",
-                            isPaired = true,
-                        )
-                        if (existing != -1 && prev[existing] is DiscoveredIndexDevice) {
-                            prev
-                                .toMutableList()
-                                .apply { set(existing, known) }
-                        } else {
-                            prev + known
-                        }
-                    }
+                    val known = deviceFactory.create(
+                        identifier = IndexIdentifier(new),
+                        name = prefs.ringPairedName.value ?: "Index 01",
+                        isPaired = true,
+                    )
+                    _rings.update { prev -> prev.upsertRing(known) }
                 }
             }.launchIn(scope)
         satelliteManager.lastRing
@@ -196,43 +197,53 @@ class IndexDeviceManager(
 
     fun addScanResult(result: IndexScanResult) {
         _rings.update { prev ->
-            // Match by identifier, or by name: a ring entering failsafe advertises a
-            // slightly different address/id but the same name, so overwrite the existing
-            // discovered entry rather than showing a duplicate.
-            val existingIdx = prev.indexOfFirst {
-                it.identifier.asString.equals(result.identifier.asString, ignoreCase = true) ||
-                    (it is DiscoveredIndexDevice && it.name == result.name)
-            }
-            val existing = existingIdx.takeIf { it != -1 }?.let { prev[it] }
-            if (existing is DiscoveredIndexDevice) {
-                prev
-                    .toMutableList()
-                    .apply {
-                        set(
-                            existingIdx,
-                            deviceFactory.create(
-                                identifier = result.identifier,
-                                name = result.name,
-                                scanResult = result,
-                                pairingState = existing.pairingState,
-                            )
-                        )
-                    }
-            } else if (existing == null) {
-                prev + deviceFactory.create(
+            val matching = prev.filter { it.isSameRing(result.identifier, result.name) }
+            // A paired ring keeps its entry; a scan result must not turn it back into a
+            // scanned one, nor add a second row for it.
+            if (matching.any { !it.isScanned }) return@update prev
+            prev.upsertRing(
+                deviceFactory.create(
                     identifier = result.identifier,
                     name = result.name,
                     scanResult = result,
+                    pairingState = matching.filterIsInstance<DiscoveredIndexDevice>()
+                        .firstOrNull()?.pairingState ?: IndexPairingState.NotPaired,
                 )
-            } else { // existing is a KnownIndexDevice, ignore scan result
-                prev
-            }
+            )
         }
     }
 
     fun clearScanResults() {
         _rings.update { prev ->
-            prev.filterNot { it is DiscoveredIndexDevice }
+            prev.filterNot { it.isScanned }
+        }
+    }
+}
+
+/** Built from a scan result, so superseded by the next one and dropped when the scan ends. */
+internal val IndexDevice.isScanned: Boolean
+    get() = this is DiscoveredIndexDevice || this is RepairableIndexDevice
+
+/**
+ * A ring entering failsafe advertises a slightly different address but keeps its name, so a
+ * scanned entry also matches on name.
+ */
+internal fun IndexDevice.isSameRing(identifier: IndexIdentifier, name: String): Boolean =
+    this.identifier.asString.equals(identifier.asString, ignoreCase = true) ||
+        (isScanned && this.name == name)
+
+/**
+ * Inserts [device] in place of every entry for the same ring. The devices screen keys its rows by
+ * identifier, so two entries for one ring crash it.
+ */
+internal fun List<IndexDevice>.upsertRing(device: IndexDevice): List<IndexDevice> {
+    val at = indexOfFirst { it.isSameRing(device.identifier, device.name) }
+    if (at == -1) return this + device
+    return mapIndexedNotNull { index, existing ->
+        when {
+            index == at -> device
+            existing.isSameRing(device.identifier, device.name) -> null
+            else -> existing
         }
     }
 }
@@ -241,8 +252,19 @@ data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
-    val isFailsafe: Boolean
+    val currentImage: IndexImage
 )
+
+internal data class StoredPairing(val id: String?, val name: String?)
+
+/** Pure state transition; the caller keeps the side effects (collection wipe, logging). */
+internal fun StoredPairing.applyDecision(decision: PairedRingDecision): StoredPairing =
+    when (decision) {
+        PairedRingDecision.Keep -> this
+        PairedRingDecision.Clear -> StoredPairing(null, null)
+        is PairedRingDecision.UpdateName -> copy(name = decision.name)
+        is PairedRingDecision.Adopt -> StoredPairing(decision.identifier, decision.name)
+    }
 
 internal sealed interface PairedRingDecision {
     data object Keep : PairedRingDecision
@@ -252,10 +274,12 @@ internal sealed interface PairedRingDecision {
 }
 
 /**
- * Pure decision for what to do with the stored paired ring on startup.
+ * Pure decision for what to do with the stored paired ring, re-evaluated whenever the
+ * association list changes.
  *
  * [associations] is null when the platform has no bt association support (iOS) or the
- * list has not been loaded yet (BLUETOOTH_CONNECT not granted / BT off).
+ * list has not been loaded yet (BLUETOOTH_CONNECT not granted / BT off). Must never
+ * resolve to [PairedRingDecision.Clear] in that case.
  */
 internal fun resolvePairedRing(
     storedPairedId: String?,

@@ -53,7 +53,7 @@ class BuiltInReminderFeedItems(
                 createdAt = createdAt,
                 title = title,
                 listHint = null,
-                toolCallId = null,
+                toolCallId = source?.toolCallId,
                 resolvedListId = listId,
             )
         } else {
@@ -62,7 +62,7 @@ class BuiltInReminderFeedItems(
                 createdAt = createdAt,
                 title = title,
                 dueAt = deadline,
-                toolCallId = null,
+                toolCallId = source?.toolCallId,
                 localReminderId = localReminderId,
                 notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
             )

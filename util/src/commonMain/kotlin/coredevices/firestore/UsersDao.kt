@@ -3,12 +3,19 @@ package coredevices.firestore
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coredevices.analytics.AnalyticsBackend
+import coredevices.util.AppResumed
+import coredevices.util.auth.NoOpSilentSignIn
+import coredevices.util.auth.SilentSignIn
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
@@ -17,7 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -45,7 +52,13 @@ data class PebbleUser(
     val user: User,
 )
 
-class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Settings): CollectionDao("users", dbProvider), UsersDao {
+class UsersDaoImpl(
+    dbProvider: () -> FirebaseFirestore,
+    private val settings: Settings,
+    private val silentSignIn: SilentSignIn = NoOpSilentSignIn,
+    private val appResumed: AppResumed? = null,
+    private val analytics: AnalyticsBackend? = null,
+): CollectionDao("users", dbProvider), UsersDao {
     private val userDoc get() = authenticatedId?.let { db.document(it) }
     private val logger = Logger.withTag("UsersDaoImpl")
 
@@ -70,6 +83,12 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
         get() = settings.getBoolean(KEY_HAD_ANONYMOUS_ACCOUNT, false)
         set(value) { settings[KEY_HAD_ANONYMOUS_ACCOUNT] = value }
 
+    // Comma-joined provider ids (e.g. "google.com,password") of the last signed-in user, so
+    // the restoration path knows whether silent Google re-auth is applicable.
+    private var lastSignInProviders: String
+        get() = settings.getString(KEY_LAST_SIGN_IN_PROVIDERS, "")
+        set(value) { settings[KEY_LAST_SIGN_IN_PROVIDERS] = value }
+
     // True only during initial startup, before we've seen the first non-null user.
     // Prevents the long delay from applying on explicit sign-out.
     private var isInitialStartup = true
@@ -78,9 +97,8 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
         GlobalScope.launch {
             Firebase.auth.idTokenChanged
                 .onStart { emit(Firebase.auth.currentUser) }
-                .distinctUntilChanged { old, new ->
-                    old?.uid == new?.uid && old?.isAnonymous == new?.isAnonymous
-                }
+                // Emissions can wrap the same mutated native user; snapshot the key per emission.
+                .distinctUntilChangedBy { it?.uid to it?.isAnonymous }
                 .flatMapLatest { firebaseUser ->
                     val userInfo = firebaseUser?.let { "uid=${it.uid.take(8)} isAnonymous=${it.isAnonymous}" } ?: "null"
                     logger.v { "User changed: $userInfo" }
@@ -91,36 +109,93 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                                 // anonymous user, that would orphan the previous UID's Firestore
                                 // data. Wait for Firebase to restore auth state.
                                 logger.i { "User is null, prior account exists (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), waiting for restoration" }
+                                analytics?.logEvent(
+                                    "auth_loss_detected",
+                                    mapOf("anon" to hadAnonymousAccount, "non_anon" to hadNonAnonymousAccount)
+                                )
                                 _user.emit(null)
-                                var attempt = 0
-                                var retryDelay = AUTH_RESTORE_INITIAL_RETRY_INTERVAL
-                                while (true) {
-                                    delay(retryDelay)
-                                    retryDelay = (retryDelay * 2).coerceAtMost(AUTH_RESTORE_MAX_RETRY_INTERVAL)
-                                    attempt++
-                                    // We rely on idTokenChanged (upstream of this flatMapLatest) firing
-                                    // with the restored user to break out of this wait. Occasionally the
-                                    // SDK repopulates currentUser without emitting a token event (seen after
-                                    // aggressive OS process kills), which would leave us waiting forever.
-                                    // If we can see a currentUser here, actively force a token refresh so
-                                    // idTokenChanged fires and flatMapLatest cancels this wait and processes
-                                    // the real user.
-                                    val restored = Firebase.auth.currentUser
-                                    if (restored != null) {
-                                        logger.i { "currentUser present during auth wait (uid=${restored.uid.take(8)}), forcing token refresh to resume" }
+                                coroutineScope {
+                                    val silentReauthMutex = Mutex()
+                                    var silentAttempts = 0
+                                    suspend fun trySilentReauth(trigger: String) {
+                                        if (!silentReauthMutex.tryLock()) return
                                         try {
-                                            withContext(NonCancellable) { restored.getIdToken(true) }
-                                        } catch (e: Exception) {
-                                            logger.w(e) { "Forced token refresh failed during auth restoration wait" }
+                                            logger.i { "Attempting silent re-auth (trigger=$trigger)" }
+                                            val success = try {
+                                                silentSignIn.attempt()
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                logger.w(e) { "Silent re-auth threw" }
+                                                false
+                                            }
+                                            analytics?.logEvent(
+                                                "auth_silent_reauth",
+                                                mapOf("success" to success, "trigger" to trigger)
+                                            )
+                                            // On success idTokenChanged fires upstream and cancels this wait.
+                                            logger.i { "Silent re-auth ${if (success) "succeeded" else "failed"} (trigger=$trigger)" }
+                                        } finally {
+                                            silentReauthMutex.unlock()
                                         }
-                                    } else {
-                                        logger.w { "Still waiting for auth restoration, attempt=$attempt (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
+                                    }
+                                    val resumeJob = appResumed?.let { resumed ->
+                                        launch {
+                                            resumed.appResumed.collect {
+                                                if (canSilentReauth(lastSignInProviders)) trySilentReauth("app_resumed")
+                                            }
+                                        }
+                                    }
+                                    var attempt = 0
+                                    var retryDelay = AUTH_RESTORE_INITIAL_RETRY_INTERVAL
+                                    while (true) {
+                                        delay(retryDelay)
+                                        retryDelay = (retryDelay * 2).coerceAtMost(AUTH_RESTORE_MAX_RETRY_INTERVAL)
+                                        attempt++
+                                        // We rely on idTokenChanged (upstream of this flatMapLatest) firing
+                                        // with the restored user to break out of this wait. Occasionally the
+                                        // SDK repopulates currentUser without emitting a token event (seen after
+                                        // aggressive OS process kills), which would leave us waiting forever.
+                                        // If we can see a currentUser here, actively force a token refresh so
+                                        // idTokenChanged fires and flatMapLatest cancels this wait and processes
+                                        // the real user.
+                                        val restored = Firebase.auth.currentUser
+                                        if (restored != null) {
+                                            logger.i { "currentUser present during auth wait (uid=${restored.uid.take(8)}), forcing token refresh to resume" }
+                                            try {
+                                                withContext(NonCancellable) { restored.getIdToken(true) }
+                                            } catch (e: Exception) {
+                                                logger.w(e) { "Forced token refresh failed during auth restoration wait" }
+                                            }
+                                        } else {
+                                            logger.w { "Still waiting for auth restoration, attempt=$attempt (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
+                                            if (shouldAttemptSilentReauth(attempt, silentAttempts, lastSignInProviders)) {
+                                                silentAttempts++
+                                                trySilentReauth("startup_wait")
+                                            }
+                                            if (shouldGiveUpWaitingForAuth(attempt, silentAttempts, lastSignInProviders)) {
+                                                resumeJob?.cancel()
+                                                break
+                                            }
+                                        }
                                     }
                                 }
+                                // Firebase doesn't repopulate currentUser later in the process, so a
+                                // session that hasn't arrived by now never will (e.g. auth prefs
+                                // restored from another device, whose keystore keys didn't come with
+                                // them). Concede the prior account so we don't wait again next launch.
+                                logger.w { "Gave up waiting for auth restoration, signing in anonymously" }
+                                analytics?.logEvent(
+                                    "auth_restore_gave_up",
+                                    mapOf("anon" to hadAnonymousAccount, "non_anon" to hadNonAnonymousAccount)
+                                )
+                                hadAnonymousAccount = false
+                                hadNonAnonymousAccount = false
+                            } else {
+                                logger.i { "User is null, no prior account, delay=2s before anonymous sign-in" }
+                                delay(2.seconds)
+                                logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
                             }
-                            logger.i { "User is null, no prior account (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount), delay=2s before anonymous sign-in" }
-                            delay(2.seconds)
-                            logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
                         } else {
                             if (hadNonAnonymousAccount) {
                                 logger.i { "User became null post-startup, hadNonAnonymousAccount: true→false" }
@@ -151,6 +226,7 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
                             }
                             logger.i { "Non-anonymous user restored/signed in, setting hadNonAnonymousAccount=true" }
                             hadNonAnonymousAccount = true
+                            lastSignInProviders = firebaseUser.providerData.joinToString(",") { it.providerId }
                         }
                         val docRef = db.document("users/${firebaseUser.uid}")
                         docRef.snapshots
@@ -244,12 +320,33 @@ class UsersDaoImpl(dbProvider: () -> FirebaseFirestore, private val settings: Se
 
 private const val KEY_HAD_NON_ANONYMOUS_ACCOUNT = "had_non_anonymous_account"
 private const val KEY_HAD_ANONYMOUS_ACCOUNT = "had_anonymous_account"
+internal const val KEY_LAST_SIGN_IN_PROVIDERS = "last_sign_in_providers"
 
 // Poll quickly at first so a silently-restored session is picked up within seconds
 // (the user is looking at a sign-in screen while we wait), backing off to a steady
 // 1-minute cadence to avoid needless wakeups/token refreshes during a long stall.
 private val AUTH_RESTORE_INITIAL_RETRY_INTERVAL = 2.seconds
 private val AUTH_RESTORE_MAX_RETRY_INTERVAL = 1.minutes
+
+internal const val GOOGLE_PROVIDER_ID = "google.com"
+// Give Firebase's own restoration ~6s (attempts 1-2) before trying silent re-auth.
+internal const val SILENT_REAUTH_MIN_WAIT_ATTEMPT = 3
+internal const val SILENT_REAUTH_MAX_ATTEMPTS = 5
+// ~6 minutes of waiting given the 2s-doubling-to-1m backoff.
+internal const val AUTH_RESTORE_MAX_ATTEMPTS = 10
+
+// Silent re-auth only works for Google accounts (Credential Manager can return a stored
+// Google credential without UI; Apple/GitHub have no equivalent).
+internal fun canSilentReauth(providers: String) = providers.contains(GOOGLE_PROVIDER_ID)
+
+internal fun shouldAttemptSilentReauth(attempt: Int, silentAttempts: Int, providers: String): Boolean =
+    attempt >= SILENT_REAUTH_MIN_WAIT_ATTEMPT &&
+        silentAttempts < SILENT_REAUTH_MAX_ATTEMPTS &&
+        canSilentReauth(providers)
+
+internal fun shouldGiveUpWaitingForAuth(attempt: Int, silentAttempts: Int, providers: String): Boolean =
+    attempt >= AUTH_RESTORE_MAX_ATTEMPTS &&
+        !shouldAttemptSilentReauth(attempt, silentAttempts, providers)
 
 fun generateRandomUserToken(): String {
     val charPool = "0123456789abcdef"

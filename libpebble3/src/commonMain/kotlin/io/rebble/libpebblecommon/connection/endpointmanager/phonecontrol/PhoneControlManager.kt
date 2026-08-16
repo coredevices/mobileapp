@@ -31,6 +31,7 @@ class PhoneControlManager(
                 }
                 CallAction.Hangup -> if (call is Call.EndableCall) {
                     call.endCall()
+                    libPebble.currentCall.value = null
                 } else {
                     logger.e { "Watch requested hangup call on unendable call type ${call?.let { it::class.simpleName }}" }
                 }

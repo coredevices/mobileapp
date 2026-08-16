@@ -31,6 +31,8 @@ class ObsidianIntegrationTest {
                 val leaf = if (slash >= 0) full.substring(slash + 1) else full
                 if (dir == subfolder && leaf.endsWith(".md")) leaf else null
             }
+        override suspend fun listMarkdownFilesRecursive(handle: String): List<String> =
+            files.keys.filter { it.endsWith(".md") }.sorted()
         override suspend fun readFile(handle: String, name: String): String? = files[name]
         override suspend fun writeFile(handle: String, name: String, content: String): Boolean {
             files[name] = content; return true
@@ -122,6 +124,26 @@ class ObsidianIntegrationTest {
         }
         integration(vault, prefs).createNote("entry")
         assertTrue(vault.files.containsKey("Daily.md"))
+    }
+
+    @Test
+    fun namedNoteModeAppendsToNoteInSubfolder() = runTest {
+        val vault = FakeVault()
+        vault.files["0 Inbox/Index notes.md"] = "existing"
+        val prefs = ObsidianPreferences(MapSettings()).apply { setVault("h", "vault") }
+        val integration = integration(vault, prefs)
+        integration.saveConfig(ObsidianMode.NAMED_NOTE, "0 Inbox/Index notes", "", "")
+        val id = integration.createNote("entry")
+        assertEquals("0 Inbox/Index notes.md", id)
+        assertEquals("existing\n\n## 2026-06-18 14:05\n\nentry\n", vault.files["0 Inbox/Index notes.md"])
+    }
+
+    @Test
+    fun saveConfigStripsPathTraversalFromTargetNote() = runTest {
+        val prefs = ObsidianPreferences(MapSettings()).apply { setVault("h", "vault") }
+        val integration = integration(FakeVault(), prefs)
+        integration.saveConfig(ObsidianMode.NAMED_NOTE, "../secrets/notes", "", "")
+        assertEquals("secrets/notes", integration.currentTargetNote())
     }
 
     @Test

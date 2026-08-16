@@ -110,6 +110,7 @@ class FirestoreRingDebugDelegate(
         satelliteName = satelliteName,
         satelliteVersion = satelliteVersion,
         satelliteSerial = satelliteSerial,
+        satelliteProgrammedSerial = satelliteProgrammedSerial,
         dump = FirestoreHaversineDebugDump(
             coreDump = dump.coreDump?.let { Base64.encode(it) },
             rebootReasons = dump.rebootReasons.map { reason ->
@@ -130,6 +131,7 @@ private data class FirestoreHaversineDebugInfo(
     val satelliteName: String,
     val satelliteVersion: String,
     val satelliteSerial: String,
+    val satelliteProgrammedSerial: String? = null,
     val dump: FirestoreHaversineDebugDump
 )
 

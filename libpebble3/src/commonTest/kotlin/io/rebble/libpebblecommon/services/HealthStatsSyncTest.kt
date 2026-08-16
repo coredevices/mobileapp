@@ -78,6 +78,208 @@ class HealthStatsSyncTest {
     }
 
     @Test
+    fun buildWeekdaySleepTypicalsFromData_emptyInput_returnsEmptyMap() {
+        val result = buildWeekdaySleepTypicalsFromData(emptyMap(), TimeZone.UTC)
+        assertTrue(result.isEmpty(), "empty input should produce empty map, got keys=${result.keys}")
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_singleMatchingDay_skipsWeekday() {
+        val monday = LocalDate(2026, 1, 5)
+        val mondayStart = monday.atStartOfDayIn(TimeZone.UTC).epochSeconds
+        val sleep = nightSleep(
+            startEpochSec = mondayStart - 3600,    // Sun 23:00
+            endEpochSec = mondayStart + 7 * 3600,  // Mon 07:00
+        )
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(monday to sleep),
+            TimeZone.UTC,
+        )
+
+        assertFalse(
+            result.containsKey(DayOfWeek.MONDAY),
+            "Monday should be absent with only 1 matching day, got keys=${result.keys}",
+        )
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_twoMondays_producesTypicals() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+
+        // Both Mondays: bedtime 23:00 prev day, wake 07:00 Monday, 8h sleep
+        val sleep1 = nightSleep(mon1Start - 3600, mon1Start + 7 * 3600)
+        val sleep2 = nightSleep(mon2Start - 3600, mon2Start + 7 * 3600)
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to sleep1, mon2 to sleep2),
+            tz,
+        )
+
+        val monday = result[DayOfWeek.MONDAY]
+        assertNotNull(monday, "Monday should be present; got keys=${result.keys}")
+        assertEquals(8 * 3600, monday.sleepDurationSeconds, "8h = 28800s")
+        assertEquals(0, monday.deepSleepDurationSeconds, "no deep sleep in fixture")
+        assertEquals(23 * 3600, monday.fallAsleepSecondsOfDay, "bedtime 23:00 = 82800s")
+        assertEquals(7 * 3600, monday.wakeupSecondsOfDay, "wake 07:00 = 25200s")
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_napOnlyDay_filteredOut() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+
+        // mon1: 25-min nap (below threshold). mon2: full 8h night.
+        val nap = nightSleep(
+            startEpochSec = mon1Start + 14 * 3600,
+            endEpochSec = mon1Start + 14 * 3600 + 1500,
+            totalSec = 1500L,
+        )
+        val night = nightSleep(mon2Start - 3600, mon2Start + 7 * 3600)
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to nap, mon2 to night),
+            tz,
+        )
+
+        // mon1's only session is filtered out (<1800s), so only mon2 qualifies — that's 1 < threshold
+        assertFalse(
+            result.containsKey(DayOfWeek.MONDAY),
+            "Monday should be absent; nap-only day filtered, only 1 qualifying day remains. Got keys=${result.keys}",
+        )
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_circularMean_handlesMidnightWrap() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+
+        // Bedtimes 23:00 (1h before Monday) and 01:00 (1h into Monday). Each session is 6h long.
+        val sleep1 = nightSleep(mon1Start - 3600, mon1Start + 5 * 3600)        // 23:00 → 05:00
+        val sleep2 = nightSleep(mon2Start + 3600, mon2Start + 7 * 3600)        // 01:00 → 07:00
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to sleep1, mon2 to sleep2),
+            tz,
+        )
+
+        val monday = result[DayOfWeek.MONDAY]
+        assertNotNull(monday, "Monday should be present; got keys=${result.keys}")
+        // Circular mean of 23:00 (82800s) and 01:00 (3600s) should be ~00:00 (0 or 86400-ε),
+        // NOT the arithmetic mean (43200, noon). Allow ±60s tolerance for FP rounding.
+        val fallAsleep = monday.fallAsleepSecondsOfDay
+        val isNearMidnight = fallAsleep <= 60 || fallAsleep >= 86400 - 60
+        assertTrue(
+            isNearMidnight,
+            "Expected fallAsleep near midnight (~0 or ~86400), got $fallAsleep — circular mean broken?",
+        )
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_perWeekdayIndependence_onlyEligibleWeekdaysReturned() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val tue = LocalDate(2026, 1, 6)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+        val tueStart = tue.atStartOfDayIn(tz).epochSeconds
+
+        val mondaySleep1 = nightSleep(mon1Start - 3600, mon1Start + 7 * 3600)
+        val mondaySleep2 = nightSleep(mon2Start - 3600, mon2Start + 7 * 3600)
+        val tuesdaySleep = nightSleep(tueStart - 3600, tueStart + 7 * 3600)
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to mondaySleep1, mon2 to mondaySleep2, tue to tuesdaySleep),
+            tz,
+        )
+
+        assertTrue(result.containsKey(DayOfWeek.MONDAY), "Monday should be present (2 qualifying days)")
+        assertFalse(
+            result.containsKey(DayOfWeek.TUESDAY),
+            "Tuesday should be absent (only 1 qualifying day, below threshold)",
+        )
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_splitSleep_usesLastSessionEnd() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+
+        // Split-sleep night: first session 23:00 → 06:30 (7.5h). Second 06:45 → 07:30 (45min).
+        // Both >30min; both qualify. last().end is 07:30 = 27000s.
+        fun split(dayStart: Long) = nightSleepMulti(
+            listOf(
+                session(dayStart - 3600, dayStart + 6 * 3600 + 1800),              // 23:00 → 06:30
+                session(dayStart + 6 * 3600 + 2700, dayStart + 7 * 3600 + 1800),    // 06:45 → 07:30
+            )
+        )
+        val mon1Sleep = split(mon1Start)
+        val mon2Sleep = split(mon2Start)
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to mon1Sleep, mon2 to mon2Sleep),
+            tz,
+        )
+
+        val monday = result[DayOfWeek.MONDAY]
+        assertNotNull(monday)
+        assertEquals(
+            7 * 3600 + 1800, monday.wakeupSecondsOfDay,
+            "Wake derives from last qualifying session's end (07:30 = 27000s), not first's",
+        )
+    }
+
+    @Test
+    fun buildWeekdaySleepTypicalsFromData_mixedValidity_filtersShortSession() {
+        val tz = TimeZone.UTC
+        val mon1 = LocalDate(2026, 1, 5)
+        val mon2 = LocalDate(2026, 1, 12)
+        val mon1Start = mon1.atStartOfDayIn(tz).epochSeconds
+        val mon2Start = mon2.atStartOfDayIn(tz).epochSeconds
+
+        // Each Monday has a 6h night PLUS a 25-min nap. Nap is filtered; bedtime/wake derive
+        // from the 6h night session only.
+        // Night: 22:00 → 04:00 (6h, totalSec=21600). Nap: 13:00 → 13:25 (25min, totalSec=1500).
+        // Sessions are chronologically ordered (night starts at dayStart - 2*3600, nap at dayStart + 13*3600).
+        fun mixed(dayStart: Long) = nightSleepMulti(
+            listOf(
+                session(dayStart - 2 * 3600, dayStart + 4 * 3600, totalSec = 6L * 3600),  // 22:00 prev → 04:00 (6h)
+                session(
+                    dayStart + 13 * 3600, dayStart + 13 * 3600 + 1500,
+                    totalSec = 1500L,
+                ),                                                                          // 13:00 → 13:25 nap
+            )
+        )
+        val mon1Sleep = mixed(mon1Start)
+        val mon2Sleep = mixed(mon2Start)
+
+        val result = buildWeekdaySleepTypicalsFromData(
+            mapOf(mon1 to mon1Sleep, mon2 to mon2Sleep),
+            tz,
+        )
+
+        val monday = result[DayOfWeek.MONDAY]
+        assertNotNull(monday)
+        assertEquals(6 * 3600, monday.sleepDurationSeconds, "Only the 6h session contributes (nap filtered)")
+        assertEquals(22 * 3600, monday.fallAsleepSecondsOfDay, "Bedtime 22:00 = 79200s, from 6h session's start")
+        assertEquals(4 * 3600, monday.wakeupSecondsOfDay, "Wake 04:00 = 14400s, from 6h session's end")
+    }
+
+    @Test
     fun buildWeekdayTypicalsFromData_partialSlotCoverage_avgIsPerSlotNotPerDay() {
         // Five Mondays: each contributes 100 steps in slot 60. Two more Mondays exist
         // (with rows in OTHER slots) so they count toward matchingDays but NOT toward
@@ -121,3 +323,30 @@ private fun row(timestamp: Long, steps: Int) = HealthDataEntity(
     activeGramCalories = 0,
     distanceCm = 0,
 )
+
+private fun session(
+    startEpochSec: Long,
+    endEpochSec: Long,
+    totalSec: Long = endEpochSec - startEpochSec,
+    deepSec: Long = 0L,
+): SleepSession = SleepSession(
+    start = startEpochSec,
+    end = endEpochSec,
+    totalSleep = totalSec,
+    deepSleep = deepSec,
+    intervals = mutableListOf(),
+)
+
+private fun nightSleepMulti(sessions: List<SleepSession>): DailySleep =
+    DailySleep(
+        sessions = sessions,
+        totalSleep = sessions.sumOf { it.totalSleep },
+        deepSleep = sessions.sumOf { it.deepSleep },
+    )
+
+private fun nightSleep(
+    startEpochSec: Long,
+    endEpochSec: Long,
+    totalSec: Long = endEpochSec - startEpochSec,
+    deepSec: Long = 0L,
+): DailySleep = nightSleepMulti(listOf(session(startEpochSec, endEpochSec, totalSec, deepSec)))

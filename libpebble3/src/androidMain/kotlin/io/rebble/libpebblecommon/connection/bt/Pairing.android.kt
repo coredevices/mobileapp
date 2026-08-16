@@ -10,7 +10,8 @@ import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleBtClassicIdentifier
 import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.asPebbleBtClassicIdentifier
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityStatus
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.util.asFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
@@ -38,7 +39,8 @@ actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
 actual fun getBluetoothDevicePairEvents(
     context: AppContext,
     identifier: PebbleBleIdentifier,
-    connectivity: Flow<ConnectivityStatus>,
+    connectivityWatcher: ConnectivityWatcher,
+    connectionScope: ConnectionCoroutineScope,
 ): Flow<BluetoothDevicePairEvent> {
     return IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED).asFlow(context.context, exported = true)
         .mapNotNull {

@@ -67,6 +67,17 @@ class RecordingPreprocessor(
         val allSamples = fileSource.use {
             readAllSamples(fileSource, info.size)
         }
+
+        // Run high pass filter first so gain is calculated on the filtered audio
+        // (removes low-frequency noise/pressure noise from handling)
+        val took = measureTime {
+            withContext(Dispatchers.Default) {
+                val highPassFilter = ButterworthHighPassFilter(info.cachedMetadata.sampleRate, 30.0, order = 4)
+                highPassFilter.process(allSamples)
+            }
+        }
+        logger.d { "Applied high-pass filter to file $fileId in ${took.inWholeMilliseconds}ms" }
+
         val frameDurationMs = 20
         // Compute whole-file gain based on average RMS of voiced frames, then apply uniformly (preserving relative dynamics for AI)
         val start = TimeSource.Monotonic.markNow()

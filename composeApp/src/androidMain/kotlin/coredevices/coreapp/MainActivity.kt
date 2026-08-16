@@ -56,8 +56,9 @@ class MainActivity : ComponentActivity() {
                 setTheme(it)
             }
         }
-        // Handle initial intent that launches the app
-        handleIntent(intent)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -102,6 +103,7 @@ class MainActivity : ComponentActivity() {
         val themeRes = when (theme) {
             CoreAppTheme.Light -> light
             CoreAppTheme.Dark -> dark
+            CoreAppTheme.Black -> coredevices.coreapp.shared.R.style.Theme_CoreApp_Black
             CoreAppTheme.System -> if (isNightMode(this)) {
                 dark
             } else {

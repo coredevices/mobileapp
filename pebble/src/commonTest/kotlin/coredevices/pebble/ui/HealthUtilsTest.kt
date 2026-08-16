@@ -323,4 +323,7 @@ class HealthUtilsTest {
 
     @Test
     fun formatHours_zero() = assertEquals("0h 0m", formatHours(0f))
+
+    @Test
+    fun formatHours_nearWholeHourCarriesIntoHours() = assertEquals("3h 0m", formatHours(2.9959f))
 }

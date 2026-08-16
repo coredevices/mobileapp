@@ -12,7 +12,7 @@
 		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
 		670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */ = {isa = PBXBuildFile; fileRef = 670755B32DC121B600DA5904 /* XMLHTTPRequest.js */; };
 		6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */; };
-		671C01502FFC4F2E00E76758 /* needle-pebble-ft-int4.zip in Resources */ = {isa = PBXBuildFile; fileRef = 671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */; };
+		671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */ = {isa = PBXBuildFile; fileRef = 671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */; };
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
@@ -21,6 +21,7 @@
 		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
 		7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */; };
+		7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */; };
 		AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */; };
 /* End PBXBuildFile section */
 
@@ -31,7 +32,7 @@
 		2EB31172B477C48B1FE18840 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		670755B32DC121B600DA5904 /* XMLHTTPRequest.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = XMLHTTPRequest.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/XMLHTTPRequest.js; sourceTree = SOURCE_ROOT; };
 		6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "needle-pebble-ft-int4.zip"; sourceTree = "<group>"; };
+		671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "needle-pebble-ft-cq4.zip"; sourceTree = "<group>"; };
 		67555A952E0212D1006BB488 /* JSTimeout.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = JSTimeout.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/JSTimeout.js; sourceTree = SOURCE_ROOT; };
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
@@ -46,6 +47,7 @@
 		7555FF82242A565900829871 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleShortcuts.swift; sourceTree = "<group>"; };
+		7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBridge.swift; sourceTree = "<group>"; };
 		8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		D4856F81B1A7C6FB5B8CEFA0 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
@@ -99,7 +101,7 @@
 		671C014F2FFC4F2E00E76758 /* models */ = {
 			isa = PBXGroup;
 			children = (
-				671C014E2FFC4F2E00E76758 /* needle-pebble-ft-int4.zip */,
+				671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */,
 			);
 			name = models;
 			path = ../models;
@@ -137,6 +139,7 @@
 				7555FF82242A565900829871 /* ContentView.swift */,
 				7555FF8C242A565B00829871 /* Info.plist */,
 				7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */,
+				7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */,
 				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
@@ -160,7 +163,6 @@
 			buildConfigurationList = 7555FFA5242A565B00829871 /* Build configuration list for PBXNativeTarget "iosApp" */;
 			buildPhases = (
 				4E5D0B38FC08735745E80E4F /* [CP] Check Pods Manifest.lock */,
-				F36B1CEB2AD83DDC00CB74D5 /* Compile Kotlin Framework */,
 				7555FF77242A565900829871 /* Sources */,
 				B92378962B6B1156000C7307 /* Frameworks */,
 				7555FF79242A565900829871 /* Resources */,
@@ -218,7 +220,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */,
-				671C01502FFC4F2E00E76758 /* needle-pebble-ft-int4.zip in Resources */,
+				671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */,
 				67555A962E0212D1006BB488 /* JSTimeout.js in Resources */,
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
 				670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */,
@@ -239,13 +241,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -268,10 +266,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/firebase-desym-uploaded.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${CONFIGURATION}\" != \"Debug\" ]; then\n  ${PODS_ROOT}/FirebaseCrashlytics/upload-symbols -gsp \"${PROJECT_DIR}/iosApp/GoogleService-Info.plist\" -p ios \"${DWARF_DSYM_FOLDER_PATH}\" \"${PROJECT_DIR}/../composeApp/build/cocoapods/framework/ComposeApp.framework.dSYM\" \nfi\n";
+			shellScript = "# Only mark done on success, or a failed upload is never retried.\nif [ \"${CONFIGURATION}\" = \"Debug\" ]; then\n  touch \"${SCRIPT_OUTPUT_FILE_0}\"\n  exit 0\nfi\n${PODS_ROOT}/FirebaseCrashlytics/upload-symbols -gsp \"${PROJECT_DIR}/iosApp/GoogleService-Info.plist\" -p ios \"${DWARF_DSYM_FOLDER_PATH}\" \"${PROJECT_DIR}/../composeApp/build/cocoapods/framework/ComposeApp.framework.dSYM\" && touch \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 		};
 		3D6A68E62E60BEF300FD27DF /* Set versions */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -290,7 +289,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\nset -e\n  \n# Get the most recent tag\nGIT_TAG=$(git describe --tags --abbrev=0)\necho \"GIT_TAG is: ${GIT_TAG}\" # For debugging\n\n# Function to signal an error and exit\nerror_exit() {\n  echo \"ERROR: $1\" >&2 # Print error message to stderr\n  exit 1\n}\n\n# Use parameter expansion and an array (Bash 4+)\nIFS='.' read -r -a tag_parts <<< \"$GIT_TAG\"\nnum_parts=\"${#tag_parts[@]}\"\n\n# Validate the number of parts and their content\nif [ \"$num_parts\" -eq 3 ]; then\n  # Expected X.Y.Z format\n  if [[ ! \"${tag_parts[0]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[1]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[2]}\" =~ ^[0-9]+$ ]]; then\n    error_exit \"GIT_TAG ('${GIT_TAG}') has 3 parts, but they are not all integers (expected X.Y.Z).\"\n  fi\n  CORE_VERSION_STRING=\"${tag_parts[0]}.${tag_parts[1]}.${tag_parts[2]}\"\n  CORE_BUILD_NUM=\"0\" # Default build number for X.Y.Z format\nelif [ \"$num_parts\" -eq 4 ]; then\n  # Expected X.Y.Z.B format\n  if [[ ! \"${tag_parts[0]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[1]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[2]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[3]}\" =~ ^[0-9]+$ ]]; then # Also ensure the 4th part is an integer\n    error_exit \"GIT_TAG ('${GIT_TAG}') has 4 parts, but they are not all integers (expected X.Y.Z.B where B is an integer).\"\n  fi\n  CORE_VERSION_STRING=\"${tag_parts[0]}.${tag_parts[1]}.${tag_parts[2]}\"\n  CORE_BUILD_NUM=\"${tag_parts[3]}\"\nelse\n  error_exit \"GIT_TAG ('${GIT_TAG}') is invalid. Expected format X.Y.Z or X.Y.Z.B (where X, Y, Z, B are integers).\"\nfi\n\necho \"CORE_VERSION_STRING=${CORE_VERSION_STRING}\"\necho \"CORE_BUILD_NUM=${CORE_BUILD_NUM}\"\n    \necho \"${PROJECT_DIR}/iosApp/Info.plist\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleShortVersionString string ${CORE_VERSION_STRING}\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleVersion string ${CORE_BUILD_NUM}\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
+			shellScript = "#!/bin/sh\nset -e\n  \n# Get the most recent tag\nGIT_TAG=$(git describe --tags --abbrev=0)\necho \"GIT_TAG is: ${GIT_TAG}\" # For debugging\n\n# Function to signal an error and exit\nerror_exit() {\n  echo \"ERROR: $1\" >&2 # Print error message to stderr\n  exit 1\n}\n\n# Use parameter expansion and an array (Bash 4+)\nIFS='.' read -r -a tag_parts <<< \"$GIT_TAG\"\nnum_parts=\"${#tag_parts[@]}\"\n\n# Validate the number of parts and their content\nif [ \"$num_parts\" -eq 3 ]; then\n  # Expected X.Y.Z format\n  if [[ ! \"${tag_parts[0]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[1]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[2]}\" =~ ^[0-9]+$ ]]; then\n    error_exit \"GIT_TAG ('${GIT_TAG}') has 3 parts, but they are not all integers (expected X.Y.Z).\"\n  fi\n  CORE_VERSION_STRING=\"${tag_parts[0]}.${tag_parts[1]}.${tag_parts[2]}\"\n  CORE_BUILD_NUM=\"0\" # Default build number for X.Y.Z format\nelif [ \"$num_parts\" -eq 4 ]; then\n  # Expected X.Y.Z.B format\n  if [[ ! \"${tag_parts[0]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[1]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[2]}\" =~ ^[0-9]+$ ]] || \\\n     [[ ! \"${tag_parts[3]}\" =~ ^[0-9]+$ ]]; then # Also ensure the 4th part is an integer\n    error_exit \"GIT_TAG ('${GIT_TAG}') has 4 parts, but they are not all integers (expected X.Y.Z.B where B is an integer).\"\n  fi\n  CORE_VERSION_STRING=\"${tag_parts[0]}.${tag_parts[1]}.${tag_parts[2]}\"\n  CORE_BUILD_NUM=\"${tag_parts[3]}\"\nelse\n  error_exit \"GIT_TAG ('${GIT_TAG}') is invalid. Expected format X.Y.Z or X.Y.Z.B (where X, Y, Z, B are integers).\"\nfi\n\necho \"CORE_VERSION_STRING=${CORE_VERSION_STRING}\"\necho \"CORE_BUILD_NUM=${CORE_BUILD_NUM}\"\n    \n# Only write when changed; touching the built plist forces a re-codesign.\nPLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nCUR_VER=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleShortVersionString\" \"$PLIST\" 2>/dev/null || true)\nCUR_BUILD=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleVersion\" \"$PLIST\" 2>/dev/null || true)\nif [ \"$CUR_VER\" != \"$CORE_VERSION_STRING\" ]; then\n  /usr/libexec/PlistBuddy -c \"Delete :CFBundleShortVersionString\" \"$PLIST\" 2>/dev/null || true\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleShortVersionString string ${CORE_VERSION_STRING}\" \"$PLIST\"\nfi\nif [ \"$CUR_BUILD\" != \"$CORE_BUILD_NUM\" ]; then\n  /usr/libexec/PlistBuddy -c \"Delete :CFBundleVersion\" \"$PLIST\" 2>/dev/null || true\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleVersion string ${CORE_BUILD_NUM}\" \"$PLIST\"\nfi\n";
 		};
 		4E5D0B38FC08735745E80E4F /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -322,36 +321,14 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
-		};
-		F36B1CEB2AD83DDC00CB74D5 /* Compile Kotlin Framework */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Compile Kotlin Framework";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n#./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -363,6 +340,7 @@
 				67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */,
 				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
 				7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */,
+				7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */,
 				7555FF83242A565900829871 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -505,8 +483,6 @@
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
-					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				INFOPLIST_FILE = iosApp/Info.plist;
 				INFOPLIST_PREPROCESS = YES;
@@ -546,8 +522,6 @@
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
-					"$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
 				);
 				INFOPLIST_FILE = iosApp/Info.plist;
 				INFOPLIST_PREPROCESS = YES;

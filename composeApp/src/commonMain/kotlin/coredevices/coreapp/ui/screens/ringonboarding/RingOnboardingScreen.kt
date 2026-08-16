@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.russhwolf.settings.Settings
+import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.pebble.ui.PebbleNavBarRoutes
 import coredevices.pebble.ui.SnackbarDisplay
 import coredevices.pebble.ui.setHasSeenRingOnboarding
 import coredevices.ring.database.Preferences
@@ -86,7 +88,7 @@ fun RingOnboardingScreen(
     var faqInitialPage by remember { mutableStateOf(0) }
     // A real (non-anonymous) account has an email; anonymous guests don't. The
     // sign-in step is required and only shown when the user isn't signed in yet.
-    val userEmail by Firebase.auth.authStateChanged
+    val userEmail by Firebase.auth.idTokenChanged
         .map { it?.emailOrNull }
         .distinctUntilChanged()
         .collectAsState(Firebase.auth.currentUser?.emailOrNull)
@@ -96,6 +98,12 @@ fun RingOnboardingScreen(
     val exit: () -> Unit = {
         settings.setHasSeenRingOnboarding(true)
         coreNav.goBack()
+    }
+    val deepLinkHandler: PebbleDeepLinkHandler = koinInject()
+    // Finishing setup (as opposed to closing early) lands on the Index feed tab.
+    val finishToIndexFeed: () -> Unit = {
+        exit()
+        deepLinkHandler.navigateToTab(PebbleNavBarRoutes.IndexRoute)
     }
 
     val palette = if (isSystemInDarkTheme()) DarkPalette else LightPalette
@@ -140,7 +148,7 @@ fun RingOnboardingScreen(
                                 step = 1
                             },
                             onExit = exit,
-                            onFinish = exit,
+                            onFinish = finishToIndexFeed,
                         )
                     }
                 }

@@ -1,6 +1,8 @@
 package coredevices.coreapp.api
 
+import CommonRoutes
 import co.touchlab.kermit.Logger
+import coredevices.coreapp.ui.navigation.CoreDeepLinkHandler.Companion.asUri
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNUserNotificationCenter
@@ -17,7 +19,11 @@ actual fun createNotification(
     val content = UNMutableNotificationContent().apply {
         setTitle("Pebble Support message")
         setBody(message)
-        setUserInfo(mapOf("conversationId" to conversationId))
+        setUserInfo(
+            mapOf(
+                "notification-deepLink" to CommonRoutes.ViewBugReportRoute(conversationId).asUri().toString()
+            )
+        )
     }
     val request = UNNotificationRequest.requestWithIdentifier(
         Uuid.random().toString(),

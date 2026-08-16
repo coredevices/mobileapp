@@ -47,6 +47,7 @@ class SetTimerTool : BuiltInMcpTool(
     ),
     extraContext = """
         When using the 'set_timer' tool, lean towards setting timers for durations when it's ambiguous, for example a timer for '3:20' should be set for '3 hours and 20 minutes' not 'at 3:20'.
+        Only pass a duration or end time the user actually said. If the request has no duration or end time (e.g. it cuts off like 'start the timer for'), do not call this tool and do not guess a value.
     """.trimIndent()
 ) {
     companion object {

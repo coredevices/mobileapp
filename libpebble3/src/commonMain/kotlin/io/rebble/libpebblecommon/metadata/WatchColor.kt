@@ -50,6 +50,7 @@ enum class WatchColor(val protocolNumber: Int, val jsName: String, val uiDescrip
     PebbleRound2Black(40, "pebble_round_2_black", "Pebble Round 2 - Black", WatchType.GABBRO),
     PebbleRound2Silver(41, "pebble_round_2_silver", "Pebble Round 2 - Silver", WatchType.GABBRO),
     PebbleRound2Gold(42, "pebble_round_2_gold", "Pebble Round 2 - Gold", WatchType.GABBRO),
+    PebbleRound2Silver14(43, "pebble_round_2_silver_14", "Pebble Round 2 - Silver", WatchType.GABBRO),
     Unknown(-1, "unknown_unknown", "Unknown Watch!", WatchType.APLITE);
 
     companion object {

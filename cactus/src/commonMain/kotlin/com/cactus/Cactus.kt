@@ -10,37 +10,34 @@ fun interface CactusLogCallback {
 
 expect fun isCactusSupported(): Boolean
 
+expect fun cactusSetBackend(backend: String): Int
 expect fun cactusInit(modelPath: String, corpusDir: String?, cacheIndex: Boolean): Long
-expect fun cactusDestroy(model: Long)
-expect fun cactusReset(model: Long)
-expect fun cactusStop(model: Long)
+expect fun cactusDestroy(handle: Long)
+expect fun cactusReset(handle: Long)
+expect fun cactusStop(handle: Long)
+expect fun cactusComplete(handle: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray? = null): String
+expect fun cactusPrefill(handle: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, pcmData: ByteArray? = null): String
+expect fun cactusTokenize(handle: Long, text: String): IntArray
+expect fun cactusScoreWindow(handle: Long, tokens: IntArray, start: Long, end: Long, context: Long): String
+expect fun cactusTranscribe(handle: Long, audioPath: String?, prompt: String, optionsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String
+expect fun cactusStreamTranscribeStart(handle: Long, optionsJson: String?): Long
+expect fun cactusStreamTranscribeProcess(stream: Long, pcmData: ByteArray?): String
+expect fun cactusStreamTranscribeStop(stream: Long): String
+expect fun cactusEmbed(handle: Long, text: String, normalize: Boolean): FloatArray
+expect fun cactusImageEmbed(handle: Long, imagePath: String): FloatArray
+expect fun cactusAudioEmbed(handle: Long, audioPath: String): FloatArray
+expect fun cactusRagQuery(handle: Long, query: String, topK: Long): String
+expect fun cactusIndexInit(indexDir: String, embeddingDim: Long): Long
+expect fun cactusIndexAdd(handle: Long, ids: IntArray, documents: Array<String>, metadatas: Array<String>?, embeddings: Array<FloatArray>, embeddingDim: Long): Int
+expect fun cactusIndexDelete(handle: Long, ids: IntArray): Int
+expect fun cactusIndexGet(handle: Long, ids: IntArray): String
+expect fun cactusIndexQuery(handle: Long, embedding: FloatArray, optionsJson: String?): String
+expect fun cactusIndexCompact(handle: Long): Int
+expect fun cactusIndexDestroy(handle: Long)
 expect fun cactusGetLastError(): String
-expect fun cactusSetTelemetryEnvironment(cacheDir: String)
+expect fun cactusLogSetLevel(level: Int)
+expect fun cactusLogSetCallback(callback: CactusLogCallback?)
+expect fun cactusSetTelemetryEnvironment(framework: String?, cacheLocation: String?, version: String?)
 expect fun cactusSetAppId(appId: String)
 expect fun cactusTelemetryFlush()
 expect fun cactusTelemetryShutdown()
-expect fun cactusComplete(model: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray? = null): String
-expect fun cactusPrefill(model: Long, messagesJson: String, optionsJson: String?, toolsJson: String?, pcmData: ByteArray? = null): String
-expect fun cactusTranscribe(model: Long, audioPath: String?, prompt: String?, optionsJson: String?, callback: CactusTokenCallback?, pcmData: ByteArray?): String
-expect fun cactusEmbed(model: Long, text: String, normalize: Boolean): FloatArray
-expect fun cactusImageEmbed(model: Long, imagePath: String): FloatArray
-expect fun cactusAudioEmbed(model: Long, audioPath: String): FloatArray
-expect fun cactusVad(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String
-expect fun cactusRagQuery(model: Long, query: String, topK: Int): String
-expect fun cactusTokenize(model: Long, text: String): IntArray
-expect fun cactusScoreWindow(model: Long, tokens: IntArray, start: Int, end: Int, context: Int): String
-expect fun cactusStreamTranscribeStart(model: Long, optionsJson: String?): Long
-expect fun cactusStreamTranscribeProcess(stream: Long, pcmData: ByteArray): String
-expect fun cactusStreamTranscribeStop(stream: Long): String
-expect fun cactusIndexInit(indexDir: String, embeddingDim: Int): Long
-expect fun cactusIndexAdd(index: Long, ids: IntArray, documents: Array<String>, embeddings: Array<FloatArray>, metadatas: Array<String>?): Int
-expect fun cactusIndexDelete(index: Long, ids: IntArray): Int
-expect fun cactusIndexGet(index: Long, ids: IntArray): String
-expect fun cactusIndexQuery(index: Long, embedding: FloatArray, optionsJson: String?): String
-expect fun cactusIndexCompact(index: Long): Int
-expect fun cactusIndexDestroy(index: Long)
-expect fun cactusDetectLanguage(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String
-expect fun cactusDiarize(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?): String
-expect fun cactusEmbedSpeaker(model: Long, audioPath: String?, optionsJson: String?, pcmData: ByteArray?, maskWeights: FloatArray? = null): String
-expect fun cactusLogSetLevel(level: Int)
-expect fun cactusLogSetCallback(callback: CactusLogCallback?)

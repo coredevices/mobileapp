@@ -32,6 +32,7 @@ class DelegatedIntegrationItemsTest {
         override fun getAllForSyncFlow(): Flow<List<CachedItem>> = flowOf(items.values.toList())
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
+        override suspend fun getAllActive(): List<CachedItem> = items.values.filter { !it.deleted }
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) { items.remove(id) }
@@ -65,10 +66,10 @@ class DelegatedIntegrationItemsTest {
     }
 
     private val now = Clock.System.now()
-    private val source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now)
+    private val source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now, toolCallId = "call-1")
 
     private fun writer(dao: FakeCachedItemDao) =
-        DelegatedIntegrationItems(ItemFactory(), ItemRepository(dao) {})
+        DelegatedIntegrationItems(ItemFactory(), ItemRepository(dao, cancelReminder = {}))
 
     @Test
     fun noteDecoratorRecordsDelegatedItemOnSuccess() = runBlocking {
@@ -81,6 +82,7 @@ class DelegatedIntegrationItemsTest {
         val item = dao.items.values.single().toDocument()
         assertEquals("Remember the milk", item.title)
         assertEquals("rec-1", item.sourceRecordingId)
+        assertEquals("call-1", item.sourceToolCallId)
         assertEquals(now, item.createdAt)
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.DelegatedToIntegration)

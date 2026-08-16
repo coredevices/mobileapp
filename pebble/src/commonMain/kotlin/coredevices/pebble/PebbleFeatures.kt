@@ -8,6 +8,7 @@ class PebbleFeatures(
     fun supportsNotifiedOnlyFilter(): Boolean = platform == Platform.Android
     fun supportsNotificationCountSorting(): Boolean = platform == Platform.Android
     fun supportsNotificationLogging(): Boolean = platform == Platform.Android
+    fun supportsNotificationHints(): Boolean = platform == Platform.Android
     fun supportsPostTestNotification(): Boolean = platform == Platform.Android
     fun supportsDetectingOtherPebbleApps(): Boolean = platform == Platform.Android
     fun supportsBtClassic(): Boolean = platform == Platform.Android
@@ -16,4 +17,6 @@ class PebbleFeatures(
     fun supportsLinkingToOsBtSettings(): Boolean = platform == Platform.Android
     fun supportsForegroundService(): Boolean = platform == Platform.Android
     fun supportsRestartingGattServerAfterBtPowerOn(): Boolean = platform == Platform.IOS
+    fun supportsBleAutoConnect(): Boolean = platform == Platform.Android
+    fun supportsCentralStateRestoration(): Boolean = platform == Platform.IOS
 }

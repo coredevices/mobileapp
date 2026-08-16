@@ -20,6 +20,7 @@ data class SessionContext(
     val timeBase: Instant?,
     val userMessageText: Deferred<String?>,
     val recordingFirestoreId: String? = null,
+    val toolCallId: String? = null
 )
 
 /** A clock frozen at this instant, for resolving relative/ambiguous times against the recording time. */

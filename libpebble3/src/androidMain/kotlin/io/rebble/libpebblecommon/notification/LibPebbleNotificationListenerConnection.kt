@@ -1,6 +1,9 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification
 
 import android.content.Context
+import android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+import android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+import android.content.pm.PackageManager.DONT_KILL_APP
 import android.service.notification.NotificationListenerService
 import androidx.core.app.NotificationManagerCompat
 import co.touchlab.kermit.Logger
@@ -47,44 +50,39 @@ class AndroidPebbleNotificationListenerConnection(
             // Small debounce: the OS often rebinds on its own, and a disconnect can be immediately
             // followed by a reconnect. Only act if we still have no service afterwards.
             delay(REBIND_DEBOUNCE)
-            if (listenerService == null) requestRebindIfNeeded("onListenerDisconnected")
+            if (listenerService == null) forceRebindIfNeeded("onListenerDisconnected")
         }
     }
 
     /**
-     * Ask the OS to re-establish its binding to our [LibPebbleNotificationListener], but only when
-     * the user still grants notification access.
+     * Make the OS re-establish its binding to our [LibPebbleNotificationListener], but only when the
+     * user still grants notification access.
+     *
+     * Toggling the component is the only recovery that covers a binding lost with the process:
+     * [NotificationListenerService.requestRebind] silently does nothing unless we ourselves called
+     * [NotificationListenerService.requestUnbind] first. Keep the two calls adjacent — being killed
+     * between them leaves the listener disabled until reinstall.
      */
-    private fun requestRebindIfNeeded(reason: String) {
+    private fun forceRebindIfNeeded(reason: String) {
         if (!hasNotificationAccess()) {
             logger.d { "Skip listener rebind ($reason): no notification access" }
             return
         }
-        logger.w { "Requesting notification listener rebind ($reason)" }
+        logger.w { "Forcing notification listener rebind ($reason)" }
+        val component = LibPebbleNotificationListener.componentName(context)
         try {
-            NotificationListenerService.requestRebind(
-                LibPebbleNotificationListener.componentName(context)
+            context.packageManager.setComponentEnabledSetting(
+                component, COMPONENT_ENABLED_STATE_DISABLED, DONT_KILL_APP,
             )
+            context.packageManager.setComponentEnabledSetting(
+                component, COMPONENT_ENABLED_STATE_ENABLED, DONT_KILL_APP,
+            )
+            // A component the OS has snoozed is excluded from the rebind the toggle triggers; this
+            // is what un-snoozes it.
+            NotificationListenerService.requestRebind(component)
         } catch (e: Exception) {
-            logger.e(e) { "requestRebind failed" }
+            logger.e(e) { "Failed to toggle notification listener component" }
         }
-    }
-
-    /**
-     * Recovers a binding that is nominally alive (service reference non-null) but no longer
-     * delivering.
-     */
-    private suspend fun recoverStalledBinding(service: LibPebbleNotificationListener) {
-        logger.w { "Notification listener bound but not delivering; unbinding then rebinding" }
-        try {
-            service.requestUnbind()
-        } catch (e: Exception) {
-            logger.e(e) { "requestUnbind failed; requesting rebind anyway" }
-        }
-        // Let the unbind land so requestRebind's precondition is satisfied, then drive the rebind
-        // directly instead of depending on the onListenerDisconnected callback firing.
-        delay(REBIND_DEBOUNCE)
-        requestRebindIfNeeded("watchdog: binding not delivering")
     }
 
     private fun hasNotificationAccess(): Boolean =
@@ -109,7 +107,14 @@ class AndroidPebbleNotificationListenerConnection(
     }
 
     override fun init(libPebble: LibPebble) {
-        notificationHandler.init()
+        notificationHandler.init(activeNotifications = {
+            try {
+                listenerService?.activeNotifications?.toList()
+            } catch (e: Exception) {
+                logger.w(e) { "getActiveNotifications failed" }
+                null
+            }
+        })
         notificationSendQueue.onEach {
             libPebble.sendNotification(
                 it.toTimelineNotification(notificationConfig.value.cannedResponses)
@@ -122,14 +127,14 @@ class AndroidPebbleNotificationListenerConnection(
         // Watchdog: catches cases where delivery is lost without an onListenerDisconnected callback
         // (e.g. process restarted but the OS never rebound, or an aggressive OEM ROM silently severs
         // delivery while leaving our service reference in place). If access is granted but we either
-        // have no service or the binding no longer delivers, ask the OS to rebind.
+        // have no service or the binding no longer delivers, make the OS rebind.
         libPebbleCoroutineScope.launch {
             while (true) {
                 delay(REBIND_WATCHDOG_INTERVAL)
                 val service = listenerService
                 when {
-                    service == null -> requestRebindIfNeeded("watchdog: no service")
-                    !service.isBindingAlive() -> recoverStalledBinding(service)
+                    service == null -> forceRebindIfNeeded("watchdog: no service")
+                    !service.isBindingAlive() -> forceRebindIfNeeded("watchdog: binding not delivering")
                 }
             }
         }

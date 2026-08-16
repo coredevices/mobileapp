@@ -56,7 +56,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /** Everything that is persisted, not including fields that are duplicated elsewhere (e.g. goal) */
-internal data class KnownWatchProperties(
+data class KnownWatchProperties(
     val name: String,
     val nickname: String?,
     val runningFwVersion: String,
@@ -333,6 +333,7 @@ class WatchManager(
             connectionFailureInfo = connectionFailureInfo,
             usingBtClassic = usingBtClassic,
             languagePackInstallState = languagePackInstallState,
+            reversePpogVersion = state.reversePpogVersion(),
         )
 
     fun init() {
@@ -374,7 +375,8 @@ class WatchManager(
                     }
 
                     // Goals
-                    if (device.connectGoal && !hasConnectionAttempt && btState.enabled()) {
+                    val btUsable = btState.enabled() || !identifier.requiresBluetooth()
+                    if (device.connectGoal && !hasConnectionAttempt && btUsable) {
                         if (watchConfig.value.multipleConnectedWatchesSupported) {
                             connectTo(device)
                         } else {
@@ -382,7 +384,7 @@ class WatchManager(
                                 connectTo(device)
                             }
                         }
-                    } else if (hasConnectionAttempt && !btState.enabled()) {
+                    } else if (hasConnectionAttempt && !btUsable) {
                         disconnectFrom(device.identifier)
                         device.activeConnection?.cleanup()
                     } else if (!device.connectGoal && hasConnectionAttempt) {
@@ -566,7 +568,11 @@ class WatchManager(
                     }
                 }
             }
-            val platformIdentifier = createPlatformIdentifier.identifier(identifier, watch.name)
+            val platformIdentifier = createPlatformIdentifier.identifier(
+                identifier = identifier,
+                name = watch.name,
+                lastAttemptFailed = device.connectionFailureInfo != null,
+            )
             if (platformIdentifier == null) {
                 // Probably because it couldn't create the device (ios throws on an unknown peristed
                 // uuid, so we'll need to scan for it using the name/serial?)...
@@ -588,7 +594,7 @@ class WatchManager(
             val coroutineContext =
                 SupervisorJob() + exceptionHandler + CoroutineName("con-$deviceIdString-$thisConnectionNum")
             val connectionScope = ConnectionCoroutineScope(coroutineContext)
-            logger.v("transport.createConnector")
+            logger.v("transport.createConnector: $platformIdentifier")
             val color = watch.color()
             val connectionKoinScope = connectionScopeFactory.createScope(
                 ConnectionScopeProperties(
@@ -616,7 +622,7 @@ class WatchManager(
                         delay(APP_START_WAIT_TO_CONNECT)
                     }
                     pebbleConnector.connect(
-                        previouslyConnected = device.knownWatchProps?.lastConnected != null,
+                        knownWatchProperties = device.knownWatchProps,
                         lastError = device.connectionFailureInfo?.reason,
                     )
                     disconnectDuringConnectionJob.cancel()

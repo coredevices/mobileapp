@@ -1,8 +1,8 @@
 package io.rebble.libpebblecommon.connection
 
-import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
@@ -32,7 +32,9 @@ class PebbleDeviceFactory {
         connectionFailureInfo: ConnectionFailureInfo?,
         usingBtClassic: Boolean,
         languagePackInstallState: LanguagePackInstallState,
+        reversePpogVersion: ReversePpogVersion?,
     ): PebbleDevice {
+        val btUsable = bluetoothState.enabled() || !identifier.requiresBluetooth()
         val pebbleDevice = RealPebbleDevice(
             identifier = identifier,
             name = name,
@@ -52,19 +54,19 @@ class PebbleDeviceFactory {
                 capabilities = knownWatchProperties.capabilities,
             )
         }
-        if (bluetoothState.enabled() && !connectGoal && state.isActive()) {
+        if (btUsable && !connectGoal && state.isActive()) {
             return when (knownDevice) {
                 null -> RealDisconnectingPebbleDevice(pebbleDevice)
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
         }
         return when {
-            bluetoothState.enabled() && !connectGoal && state.isActive() -> when (knownDevice) {
+            btUsable && !connectGoal && state.isActive() -> when (knownDevice) {
                 null -> RealDisconnectingPebbleDevice(pebbleDevice)
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
 
-            bluetoothState.enabled() && state is ConnectingPebbleState.Connected -> {
+            btUsable && state is ConnectingPebbleState.Connected -> {
                 val knownDevice = RealKnownPebbleDevice(
                     runningFwVersion = state.watchInfo.runningFwVersion.stringVersion,
                     serial = state.watchInfo.serial,
@@ -75,7 +77,7 @@ class PebbleDeviceFactory {
                     color = state.watchInfo.color,
                     capabilities = state.watchInfo.capabilities,
                 )
-                val activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic)
+                val activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion)
                 when (state) {
                     is ConnectingPebbleState.Connected.ConnectedInPrf ->
                         RealConnectedPebbleDeviceInRecovery(
@@ -103,21 +105,21 @@ class PebbleDeviceFactory {
                 }
             }
 
-            bluetoothState.enabled() && (state is ConnectingPebbleState.Connecting ||
+            btUsable && (state is ConnectingPebbleState.Connecting ||
                     state is ConnectingPebbleState.Negotiating ||
                     connectGoal) -> when (knownDevice) {
                 null -> RealConnectingPebbleDevice(
                     pebbleDevice = pebbleDevice,
-                    activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic),
+                    activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion),
                     negotiating = state is ConnectingPebbleState.Negotiating,
-                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
+                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState is FirmwareUpdateStatus.WaitingForReboot
                 )
 
                 else -> RealConnectingKnownPebbleDevice(
                     knownDevice = knownDevice,
-                    activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic),
+                    activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion),
                     negotiating = state is ConnectingPebbleState.Negotiating,
-                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState !is FirmwareUpdateStatus.NotInProgress,
+                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState is FirmwareUpdateStatus.WaitingForReboot
                 )
             }
 
@@ -195,6 +197,7 @@ internal class RealActiveDevice(
     private val identifier: PebbleIdentifier,
     private val watchConnector: WatchConnector,
     override val usingBtClassic: Boolean,
+    override val reversePpogVersion: ReversePpogVersion?,
 ) : ActiveDevice {
     override fun disconnect() {
         watchConnector.requestDisconnection(identifier)
@@ -225,7 +228,7 @@ internal class RealConnectingPebbleDevice(
     override val rebootingAfterFirmwareUpdate: Boolean,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
-    override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice"
+    override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice reversePpogVersion=$reversePpogVersion"
 }
 
 internal class RealConnectingKnownPebbleDevice(
@@ -234,7 +237,7 @@ internal class RealConnectingKnownPebbleDevice(
     override val negotiating: Boolean,
     override val rebootingAfterFirmwareUpdate: Boolean,
 ) : ConnectingKnownPebbleDevice, ActiveDevice by activeDevice, KnownPebbleDevice by knownDevice {
-    override fun toString(): String = "ConnectingKnownPebbleDevice: $knownDevice"
+    override fun toString(): String = "ConnectingKnownPebbleDevice: $knownDevice reversePpogVersion=$reversePpogVersion"
 }
 
 internal class RealConnectedPebbleDevice(
@@ -267,7 +270,7 @@ internal class RealConnectedPebbleDevice(
     ConnectedPebble.Health by services.health {
 
     override fun toString(): String =
-        "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value}"
+        "ConnectedPebbleDevice: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable runningApp=${services.appRunState.runningApp.value} reversePpogVersion=$reversePpogVersion"
 }
 
 internal class RealConnectedPebbleDeviceInRecovery(
@@ -287,5 +290,5 @@ internal class RealConnectedPebbleDeviceInRecovery(
     ConnectedPebble.DevConnection by services.devConnection {
 
     override fun toString(): String =
-        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable"
+        "ConnectedPebbleDeviceInRecovery: $knownDevice $watchInfo batteryLevel=$batteryLevel firmwareUpdateState=$firmwareUpdateState firmwareUpdateAvailable=$firmwareUpdateAvailable reversePpogVersion=$reversePpogVersion"
 }

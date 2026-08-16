@@ -4,5 +4,6 @@
     <string name="settings">Settings</string>
     <string name="light">Light</string>
     <string name="dark">Dark</string>
+    <string name="black">Black</string>
     <string name="system">System</string>
 </resources>

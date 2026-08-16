@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * Verifies that completing (MOB-7831) or deleting (MOB-8390) a reminder item cancels its backing
@@ -29,6 +30,7 @@ class ItemRepositoryDoneTransitionTest {
         override fun getAllForSyncFlow(): Flow<List<CachedItem>> = flowOf(items.values.toList())
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
+        override suspend fun getAllActive(): List<CachedItem> = items.values.filter { !it.deleted }
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) { items.remove(id) }
@@ -37,14 +39,28 @@ class ItemRepositoryDoneTransitionTest {
         override suspend fun countLocked(): Int = items.values.count { it.locked }
     }
 
-    private fun fixture(): Pair<ItemRepository, MutableList<Int>> {
+    private data class Fixture(
+        val repo: ItemRepository,
+        val cancelled: MutableList<Int>,
+        val rescheduled: MutableList<Triple<Int, String?, Instant?>>,
+    )
+
+    private fun fixture(): Fixture {
         val cancelled = mutableListOf<Int>()
-        return ItemRepository(FakeCachedItemDao()) { cancelled += it } to cancelled
+        val rescheduled = mutableListOf<Triple<Int, String?, Instant?>>()
+        val repo = ItemRepository(
+            FakeCachedItemDao(),
+            cancelReminder = { cancelled += it },
+            rescheduleReminder = { id, recordingId, time -> rescheduled += Triple(id, recordingId, time) },
+        )
+        return Fixture(repo, cancelled, rescheduled)
     }
 
-    private fun reminderItem(done: Boolean, localReminderId: Int? = 7) = ItemDocument(
+    private fun reminderItem(done: Boolean, localReminderId: Int? = 7, dueAt: Instant? = null) = ItemDocument(
         title = "Call Lee",
         done = done,
+        dueAt = dueAt,
+        sourceRecordingId = "rec-1",
         metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push", localReminderId = localReminderId),
     )
 
@@ -133,6 +149,65 @@ class ItemRepositoryDoneTransitionTest {
         repo.upsertLocal("a", reminderItem(done = false))
         repo.upsertLocal("a", reminderItem(done = true))
         assertEquals(emptyList(), cancelled)
+    }
+
+    @Test
+    fun changingDueDateReschedulesReminder() = runBlocking {
+        val (repo, cancelled, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        val t2 = Instant.fromEpochMilliseconds(2_000_000)
+        repo.setItem("a", reminderItem(done = false, dueAt = t1))
+        repo.setItem("a", reminderItem(done = false, dueAt = t2))
+        assertEquals(listOf(Triple(7, "rec-1" as String?, t2 as Instant?)), rescheduled)
+        assertEquals(emptyList(), cancelled)
+    }
+
+    @Test
+    fun clearingDueDateReschedulesWithNull() = runBlocking {
+        val (repo, _, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        repo.setItem("a", reminderItem(done = false, dueAt = t1))
+        repo.setItem("a", reminderItem(done = false, dueAt = null))
+        assertEquals(listOf(Triple(7, "rec-1" as String?, null as Instant?)), rescheduled)
+    }
+
+    @Test
+    fun unchangedDueDateDoesNotReschedule() = runBlocking {
+        val (repo, _, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        repo.setItem("a", reminderItem(done = false, dueAt = t1))
+        repo.setItem("a", reminderItem(done = false, dueAt = t1))
+        assertEquals(emptyList(), rescheduled)
+    }
+
+    @Test
+    fun completingWithNewDueDateCancelsWithoutRescheduling() = runBlocking {
+        val (repo, cancelled, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        val t2 = Instant.fromEpochMilliseconds(2_000_000)
+        repo.setItem("a", reminderItem(done = false, dueAt = t1))
+        repo.setItem("a", reminderItem(done = true, dueAt = t2))
+        assertEquals(listOf(7), cancelled)
+        assertEquals(emptyList(), rescheduled)
+    }
+
+    @Test
+    fun dueDateChangeOnItemWithoutLinkedReminderDoesNothing() = runBlocking {
+        val (repo, _, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        repo.setItem("a", reminderItem(done = false, localReminderId = null, dueAt = t1))
+        repo.setItem("a", reminderItem(done = false, localReminderId = null, dueAt = null))
+        assertEquals(emptyList(), rescheduled)
+    }
+
+    @Test
+    fun syncDownPathNeverReschedules() = runBlocking {
+        val (repo, _, rescheduled) = fixture()
+        val t1 = Instant.fromEpochMilliseconds(1_000_000)
+        val t2 = Instant.fromEpochMilliseconds(2_000_000)
+        repo.upsertLocal("a", reminderItem(done = false, dueAt = t1))
+        repo.upsertLocal("a", reminderItem(done = false, dueAt = t2))
+        assertEquals(emptyList(), rescheduled)
     }
 
     @Test

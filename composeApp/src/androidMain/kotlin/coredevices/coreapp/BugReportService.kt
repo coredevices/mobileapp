@@ -90,8 +90,8 @@ class BugReportService : Service(), CoroutineScope {
                             0
                         }
                     )
-                } catch (_: SecurityException) {
-                    logger.w { "Failed to start bugreport service in foreground" }
+                } catch (e: Exception) {
+                    logger.w(e) { "Failed to start bugreport service in foreground" }
                 }
             }
             COMMAND_MESSAGE -> {

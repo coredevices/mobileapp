@@ -1,6 +1,5 @@
 package coredevices.ring.service.recordings.button
 
-import coredevices.indexai.agent.Agent
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
@@ -13,6 +12,7 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
 import coredevices.ring.external.indexwebhook.IndexWebhookTrigger
 import coredevices.ring.service.ButtonPress
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -42,6 +42,11 @@ class RecordingOperationFactory(
         sequence: List<ButtonPress>?
     ): RecordingOperation {
         val isDoubleClickHold = sequence == secondaryOperationSequence
+        val webhookTrigger = when {
+            isDoubleClickHold -> IndexWebhookRecordingTrigger.DoubleClickHold
+            sequence != null -> IndexWebhookRecordingTrigger.SingleClickHold
+            else -> null
+        }
         val inner = if (isDoubleClickHold) {
             createSecondaryOperation(
                 recordingId = recordingId,
@@ -65,6 +70,7 @@ class RecordingOperationFactory(
             recordingId = recordingId,
             fileId = fileId,
             isDoubleClickHold = isDoubleClickHold,
+            trigger = webhookTrigger,
             inner = inner,
         )
     }
@@ -73,6 +79,7 @@ class RecordingOperationFactory(
         recordingId: Long,
         fileId: String,
         isDoubleClickHold: Boolean,
+        trigger: IndexWebhookRecordingTrigger?,
         inner: RecordingOperation,
     ): RecordingOperation {
         val configured = !indexWebhookPreferences.webhookUrl.value.isNullOrBlank()
@@ -89,6 +96,7 @@ class RecordingOperationFactory(
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
+            trigger = trigger,
             decorated = inner,
         )
     }
@@ -96,16 +104,19 @@ class RecordingOperationFactory(
     fun createTextOnlyOperation(
         recordingId: Long,
         text: String,
-        forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult),
-        agent: Agent = agentFactory.createForChatMode(ChatMode.Normal),
+        forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
+        isQuestion: Boolean = false,
     ): RecordingOperation {
+        // A typed question routes to the search/answer agent (the text-input equivalent of the
+        // ring's double-click-hold "question" gesture) and forces no note, mirroring the Search path.
+        val agent = agentFactory.createForChatMode(if (isQuestion) ChatMode.Search else ChatMode.Normal)
         return TextOnlyRecordingOperation(
             mcpSandboxRepository = mcpSandboxRepository,
             mcpSessionFactory = mcpSessionFactory,
             recordingId = recordingId,
             chatAgent = agent,
             text = text,
-            forcedTool = forcedTool
+            forcedTool = if (isQuestion) null else forcedTool,
         )
     }
 

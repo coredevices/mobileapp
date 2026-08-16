@@ -84,7 +84,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 32,
+    version = 33,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -119,6 +119,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 30, to = 31),
         // 31→32: adds LocalReminderData.notifyBeforeMillis (early heads-up notification lead time).
         AutoMigration(from = 31, to = 32),
+        // 32→33: adds RecordingEntryEntity.errorType (classification of `error`).
+        AutoMigration(from = 32, to = 33),
     ]
 )
 @TypeConverters(Converters::class)

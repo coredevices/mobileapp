@@ -1,44 +1,29 @@
-
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.googleServices)
-    alias(libs.plugins.firebaseCrashlytics)
-    alias(libs.plugins.androidVersion)
     alias(libs.plugins.nativeCocoaPods)
     alias(libs.plugins.kotlinx.atomicfu)
 }
 
-val properties = Properties().apply {
-    try {
-        load(rootDir.resolve("local.properties").reader())
-    } catch (e: Exception) {
-        println("local.properties file not found")
-    }
-}
-val localReleaseBuild = properties["LOCAL_RELEASE_BUILD"]?.toString()?.toBooleanStrictOrNull() ?: false
-versioning.keepOriginalBundleFile = true
-
-val headSha by lazy {
-    project.providers.exec {
-        commandLine("git", "describe", "--always", "--dirty")
-    }.standardOutput.asText.get().trim()
-}
-
-dependencies {
-    debugImplementation(compose.uiTooling)
-}
-
-
 kotlin {
+    val xcodeExists = providers.exec {
+        isIgnoreExitValue = true
+        commandLine("which", "xcode-select")
+    }.result.get().exitValue == 0
+    val xcodeDir = if (xcodeExists) {
+        providers.exec {
+            commandLine("xcode-select", "-p")
+        }.standardOutput.asText.get().trim()
+    } else {
+        ""
+    }
+
     targets.configureEach {
         compilations.configureEach {
             compileTaskProvider.configure {
@@ -48,20 +33,30 @@ kotlin {
             }
         }
     }
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    android {
+        namespace = "coredevices.coreapp.shared"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
+
+        androidResources {
+            enable = true
+        }
+
+        withHostTestBuilder {}
     }
 
     // Make xcode invoke gradle from the right place
     tasks.register("fixXcodeProject") {
+        val xcodeProjectFile = project.file("../iosApp/Pods/Pods.xcodeproj/project.pbxproj")
+        val rootProjectPath = rootProject.projectDir.absolutePath
         doLast {
-            val xcodeProjectFile = project.file("../iosApp/Pods/Pods.xcodeproj/project.pbxproj")
             if (xcodeProjectFile.exists()) {
                 var content = xcodeProjectFile.readText()
-                content = content.replace("gradlew\\\" -p \\\"\$REPO_ROOT\\\"", "gradlew\\\" -p \\\"${rootProject.projectDir}\\\"")
+                content = content.replace("gradlew\\\" -p \\\"\$REPO_ROOT\\\"", "gradlew\\\" -p \\\"$rootProjectPath\\\"")
                 xcodeProjectFile.writeText(content)
             } else {
                 logger.warn("Xcode project file not found, skipping fix: ${xcodeProjectFile.path}")
@@ -81,12 +76,27 @@ kotlin {
         podfile = project.file("../iosApp/Podfile")
 
         pod("GoogleSignIn", "8.0.0")
-        pod("FirebaseCore")
+        pod("FirebaseCore", "11.10.0")
         pod("FirebaseAuth") {
             linkOnly = true
             extraOpts += listOf("-compiler-option", "-fmodules")
         }
         pod("FirebaseFirestore") {
+            linkOnly = true
+            source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
+                // 11.10.0 — pinned here by commit because the synthetic Podfile's lock lives
+                // under build/ and is never committed
+                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+            }
+        }
+        // The binary FirebaseFirestoreInternal is static, so its C deps must be linked here
+        pod("nanopb") {
+            version = "3.30910.0"
+            linkOnly = true
+        }
+        pod("leveldb-library") {
+            version = "1.22.6"
+            moduleName = "leveldb"
             linkOnly = true
         }
         pod("FirebaseStorage") {
@@ -101,42 +111,47 @@ kotlin {
 
         framework {
             baseName = "ComposeApp"
-            linkerOpts("-framework", "Accelerate")
-            val osName = when (target.name) {
-                "iosArm64" -> "iphoneos"
-                "iosX64", "iosSimulatorArm64" -> "iphonesimulator"
-                else -> error("Unknown target ${target.name}")
-            }
-            val dir = project.file("../libpebble3/build/libpebble-swift/$osName")
-            val xcodeExists = providers.exec {
-                isIgnoreExitValue = true
-                commandLine("which", "xcode-select")
-            }.result.get().exitValue == 0
-            if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
-                linkerOpts(
-                    "-framework", "LibPebbleSwift", "-F"+dir.absolutePath,
-                    "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos"
-                )
-            }
         }
     }
 
     buildList {
-        if (System.getenv("CI_RELEASE") != "true") {
-            add(iosSimulatorArm64())
-        } else {
-            logger.warn("Skipping configuration of iOS simulator targets for CI release build")
-        }
+        // idea.sync.active is set by the IDE during sync only. The simulator target doubles the
+        // pod/cinterop work sync waits on; command-line and Xcode builds still configure it.
+        val ideSync = providers.systemProperty("idea.sync.active").orNull.toBoolean()
+        if (!ideSync) add(iosSimulatorArm64())
         add(iosArm64())
     }.forEach {
         it.binaries.all {
             freeCompilerArgs += listOf(
                 "-Xdisable-phases=DevirtualizationAnalysis,DCEPhase"
             )
+            linkerOpts.addAll(listOf("-framework", "Accelerate"))
+            val osName =
+                if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
+            if (xcodeExists) {
+                linkerOpts.addAll(listOf(
+                    "-weak_framework", "CoreML",
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
+                ))
+            }
+            // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
+            // every binary that pulls in Firestore, not just the pod framework.
+            val grpcSlice = if (target.konanTarget.name.contains("simulator")) {
+                "ios-arm64_x86_64-simulator"
+            } else {
+                "ios-arm64"
+            }
+            listOf(
+                "FirebaseFirestoreGRPCCoreBinary/grpc.xcframework" to "grpc",
+                "FirebaseFirestoreGRPCCPPBinary/grpcpp.xcframework" to "grpcpp",
+                "FirebaseFirestoreGRPCBoringSSLBinary/openssl_grpc.xcframework" to "openssl_grpc",
+                "FirebaseFirestoreAbseilBinary/absl.xcframework" to "absl",
+            ).forEach { (path, fw) ->
+                val sliceDir = layout.buildDirectory
+                    .dir("cocoapods/synthetic/ios/Pods/$path/$grpcSlice")
+                    .get().asFile
+                linkerOpts.addAll(listOf("-F" + sliceDir.absolutePath, "-framework", fw))
+            }
         }
     }
     
@@ -152,8 +167,10 @@ kotlin {
             }
         }
         androidMain.dependencies {
+            implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.crashlytics.ndk)
             implementation(compose.preview)
+            implementation(compose.uiTooling)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)
             implementation(libs.gms.auth)
@@ -166,17 +183,7 @@ kotlin {
             implementation(libs.coil.gif)
             implementation(libs.coredevices.haversine)
         }
-        androidInstrumentedTest.dependencies {
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
-            implementation(project.dependencies.platform(libs.firebase.bom))
-            implementation(libs.ktor.client.okhttp)
-            implementation(project(":experimental"))
-            implementation(project(":util"))
-            implementation(project(":index-ai"))
-            implementation(project(":mcp"))
-        }
-        androidUnitTest.dependencies {
+        getByName("androidHostTest").dependencies {
             implementation(libs.ktor.client.okhttp)
         }
         iosMain.dependencies {
@@ -231,72 +238,8 @@ kotlin {
             implementation(libs.health.kmp)
         }
     }
-    sourceSets.androidInstrumentedTest.dependencies {
-        implementation(kotlin("test"))
-    }
 }
 
 compose.resources {
     packageOfResClass = "coreapp.composeapp.generated.resources"
-}
-
-android {
-    namespace = "coredevices.coreapp"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    buildFeatures {
-        buildConfig = true
-        compose = true
-    }
-
-    if (!localReleaseBuild) {
-        signingConfigs {
-            create("release") {
-                storeFile = file("../keystore.jks")
-                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEYSTORE_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
-            }
-        }
-    }
-
-    defaultConfig {
-        applicationId = "coredevices.coreapp"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        // This uses the number of commits in the git history, so it will always increase on main
-        versionCode = versioning.getVersionCode()
-        versionName = try { versioning.getVersionName() } catch (e: Exception) { "unknown" }
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk {
-            //noinspection ChromeOsAbiSupport
-            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
-        }
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            if (localReleaseBuild) {
-                signingConfig = signingConfigs.getByName("debug")
-            } else {
-                signingConfig = signingConfigs.getByName("release")
-            }
-            isDebuggable = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-        getByName("debug") {
-            isMinifyEnabled = false
-            isDebuggable = true
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 }

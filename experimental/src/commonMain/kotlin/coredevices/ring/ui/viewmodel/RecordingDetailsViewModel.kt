@@ -270,10 +270,10 @@ class RecordingDetailsViewModel(
     fun togglePlayback(recordingEntry: RecordingEntryEntity) {
         viewModelScope.launch {
             when (val currentState = playbackState.value) {
-                is MessagePlaybackState.Playing if currentState.id == (recordingEntry.userMessageId ?: -1) -> {
+                is MessagePlaybackState.Playing if currentState.id == (recordingEntry.userMessageId ?: -1L) -> {
                     stopAudio()
                 }
-                is MessagePlaybackState.Buffering if currentState.id == (recordingEntry.userMessageId ?: -1) -> {
+                is MessagePlaybackState.Buffering if currentState.id == (recordingEntry.userMessageId ?: -1L) -> {
                     stopAudio()
                 }
                 else -> {

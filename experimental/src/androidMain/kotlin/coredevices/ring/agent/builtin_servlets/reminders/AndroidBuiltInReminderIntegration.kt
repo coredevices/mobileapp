@@ -14,10 +14,13 @@ import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.reminders.ReminderReceiver
 import coredevices.util.AndroidPlatform
+import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -26,6 +29,7 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
     private val context: Context by inject()
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
+    private val listRepository: ListRepository by inject()
 
     override suspend fun createReminder(
         title: String,
@@ -98,6 +102,29 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
         db.localReminderDao().deleteReminder(reminderId)
     }
 
+    override suspend fun rescheduleReminder(reminderId: Int, expectedRecordingId: String?, newTime: Instant?) {
+        val reminder = db.localReminderDao().getReminder(reminderId) ?: return
+        if (reminder.recordingId != expectedRecordingId) return
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        cancelAlarm(alarmManager, context, reminderId, isPreNotification = false)
+        cancelAlarm(alarmManager, context, reminderId, isPreNotification = true)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId)
+        notificationManager.cancel(ReminderReceiver.preNotificationId(reminderId))
+
+        db.localReminderDao().setTime(reminderId, newTime)
+
+        if (newTime == null || newTime <= Clock.System.now()) return
+        scheduleAlarm(alarmManager, context, reminderId, newTime, isPreNotification = false)
+        reminder.notifyBeforeMillis?.let { lead ->
+            val preTime = newTime - lead.milliseconds
+            if (preTime > Clock.System.now()) {
+                scheduleAlarm(alarmManager, context, reminderId, preTime, isPreNotification = true)
+            }
+        }
+    }
+
     override suspend fun cancelExtraNotification(reminderId: Int) {
         db.localReminderDao().getReminder(reminderId) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -105,6 +132,11 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(ReminderReceiver.preNotificationId(reminderId))
         db.localReminderDao().clearNotifyBefore(reminderId)
+    }
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
+        val lists = listRepository.getAllFlow().first()
+        return lists.map { ReminderListEntry(it.firestoreId, it.title) }
     }
 
     // Built-in reminders need no account; permissions are checked when scheduling.

@@ -73,6 +73,38 @@ internal class SystemMessageTest {
     }
 
     @Test
+    fun serializeFirmwareUpdateStatusRequest() {
+        val bytes = SystemMessage.FirmwareUpdateStatusRequest().serialize()
+        assertEquals(
+            listOf(0x00u, 0x02u, 0x00u, 0x12u, 0x00u, 0x0Bu).map { it.toUByte() },
+            bytes.toList()
+        )
+    }
+
+    @Test
+    fun deserializeFirmwareUpdateStatusResponse() {
+        val bytes = ubyteArrayOf(
+            0x00u, 0x14u, // length
+            0x00u, 0x12u, // endpoint: system message
+            0x00u, // command
+            0x0Cu, // FirmwareUpdateStatusResponse
+            0x00u, 0x00u, // reserved
+            0x10u, 0x20u, 0x00u, 0x00u, // resources bytes written (LE)
+            0x78u, 0x56u, 0x34u, 0x12u, // resources crc (LE)
+            0x40u, 0x30u, 0x00u, 0x00u, // firmware bytes written (LE)
+            0xEFu, 0xBEu, 0xADu, 0xDEu, // firmware crc (LE)
+        )
+
+        val message = PebblePacket.deserialize(bytes)
+
+        assertIs<SystemMessage.FirmwareUpdateStatusResponse>(message)
+        assertEquals(0x2010u, message.resourcesBytesWritten.get())
+        assertEquals(0x12345678u, message.resourcesCrc.get())
+        assertEquals(0x3040u, message.firmwareBytesWritten.get())
+        assertEquals(0xDEADBEEFu, message.firmwareCrc.get())
+    }
+
+    @Test
     fun serializeDeserializeSetTimeUtcMessage() {
         val originalMessage = TimeMessage.SetUTC(
             12345678u,

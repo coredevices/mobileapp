@@ -710,7 +710,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             value = "$version$sideloadedText$updatedDateText"
                         )
                     }
-                    entry.sourceLink?.let { sourceLink ->
+                    (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
                         PropertyRow(
                             name = "SOURCE CODE",
                             nameModifier = propertyNameModifier,
@@ -981,6 +981,7 @@ suspend fun CommonApp.showSettings(
             //TODO: Handle multiple watches connected, selector?
             if (watch == null) {
                 logger.w("No connected watch found, cannot show settings")
+                topBarParams.showSnackbar("No connected watch")
                 return
             }
             val session = if (watch.currentPKJSSession.value?.uuid == uuid) {
@@ -992,11 +993,13 @@ suspend fun CommonApp.showSettings(
             }
             if (session?.uuid != uuid) {
                 logger.e("PKJS session UUID mismatch: expected $uuid, got ${session?.uuid}")
+                topBarParams.showSnackbar("$title settings failed to open")
             } else {
                 logger.d { "Opening app settings for $uuid" }
                 val url = session.requestConfigurationUrl()
                 url ?: run {
                     logger.e("No configuration URL returned for app $uuid")
+                    topBarParams.showSnackbar("$title settings failed to open")
                     return
                 }
                 logger.d { "Got app settings URL" }

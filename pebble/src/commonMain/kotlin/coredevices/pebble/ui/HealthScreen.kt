@@ -374,7 +374,7 @@ private fun formatDistance(m: Long, imperial: Boolean): String {
     } else { if (m >= 1000) "${(m / 100).toInt() / 10.0} km" else "$m m" }
 }
 
-internal fun formatHours(h: Float): String { val hrs = h.toInt(); val mins = ((h - hrs) * 60).roundToInt(); return "${hrs}h ${mins}m" }
+internal fun formatHours(h: Float): String { val total = (h * 60).roundToInt(); return "${total / 60}h ${total % 60}m" }
 private fun formatSteps(s: Long): String = if (s >= 1000) "${s / 1000}k" else "$s"
 internal fun kotlinx.datetime.DayOfWeek.shortName(): String = name.take(3).lowercase().replaceFirstChar { it.uppercase() }
 internal fun kotlinx.datetime.Month.shortName(): String = name.take(3).lowercase().replaceFirstChar { it.uppercase() }

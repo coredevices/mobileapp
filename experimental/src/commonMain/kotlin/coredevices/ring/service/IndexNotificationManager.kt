@@ -3,6 +3,7 @@ package coredevices.ring.service
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.mcp.data.SemanticResult
@@ -17,6 +18,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.ui.UITimeUtil
 import coredevices.ring.ui.components.chat.actionText
+import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
 import io.ktor.utils.io.CancellationException
@@ -50,6 +52,7 @@ import kotlinx.datetime.format
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
@@ -61,8 +64,16 @@ data class GenericNotification(
     val inProgress: NotificationProgress? = null,
     val localOnly: Boolean = false,
     val deepLink: String? = null,
-    val actions: List<NotificationAction> = emptyList()
+    val actions: List<NotificationAction> = emptyList(),
+    val channel: IndexNotificationChannel = IndexNotificationChannel.Default,
+    val timeoutAfter: Duration? = null
 )
+
+enum class IndexNotificationChannel {
+    Default,
+    /** Notifications showing the action taken for a recording (e.g. "Noted"). */
+    IndexAction
+}
 
 data class NotificationAction(
     val title: String,
@@ -93,6 +104,7 @@ class IndexNotificationManager(
         private const val DEEP_LINK_URI = "pebble://navbar/index"
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
+        private val ACTION_NOTIFICATION_TIMEOUT = 5.minutes
     }
     private val mapMutex = Mutex() // Guards the three mutable maps below
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
@@ -148,7 +160,11 @@ class IndexNotificationManager(
                 return InflightIndexNotification.Error(notifId, timestamp, entry.error ?: "Agent processing error")
             }
             RecordingEntryStatus.transcription_error -> {
-                return InflightIndexNotification.Error(notifId, timestamp, "Unable to transcribe Index recording")
+                return if (entry.errorType == RecordingEntryErrorType.no_speech) {
+                    InflightIndexNotification.NoSpeech(notifId, timestamp)
+                } else {
+                    InflightIndexNotification.Error(notifId, timestamp, "Unable to transcribe Index recording")
+                }
             }
             RecordingEntryStatus.completed -> {} // Continue to process
         }
@@ -351,7 +367,7 @@ class IndexNotificationManager(
                                                     )
                                                     val humanDate = UITimeUtil.humanDate(dateTime.date)
                                                     val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
-                                                    appendLine("Event added for ${humanDate}, ${humanTime}")
+                                                    appendLine("Added to calendar for ${humanDate}, ${humanTime}")
                                                     appendLine()
                                                     appendLine(lastAction.title)
                                                 }
@@ -395,7 +411,13 @@ class IndexNotificationManager(
                                     contentText = contentText,
                                     inProgress = null,
                                     localOnly = false,
-                                    deepLink = DEEP_LINK_URI,
+                                    deepLink = RingRoutes.recordingDeepLink(notification.recordingId),
+                                    channel = IndexNotificationChannel.IndexAction,
+                                    timeoutAfter = if (prefs.autoDismissActionNotifications.value) {
+                                        ACTION_NOTIFICATION_TIMEOUT
+                                    } else {
+                                        null
+                                    },
                                     actions = listOf(
                                         notification.shortcutAction.let { action ->
                                             when (action) {
@@ -414,6 +436,16 @@ class IndexNotificationManager(
                                             }
                                         }
                                     )
+                                )
+                            }
+                            is InflightIndexNotification.NoSpeech -> {
+                                GenericNotification(
+                                    id = notification.id,
+                                    title = "No audio detected",
+                                    contentText = "No speech was detected in your Index 01 recording.",
+                                    inProgress = null,
+                                    localOnly = false,
+                                    deepLink = DEEP_LINK_URI
                                 )
                             }
                             is InflightIndexNotification.Error -> {
@@ -437,6 +469,7 @@ class IndexNotificationManager(
                                     is InflightIndexNotification.Transcribing -> "transcribing"
                                     is InflightIndexNotification.AgentRunning -> "agent_running"
                                     is InflightIndexNotification.AgentComplete -> "agent_complete"
+                                    is InflightIndexNotification.NoSpeech -> "no_speech"
                                     is InflightIndexNotification.Error -> "error"
                                     is InflightIndexNotification.Discarded -> "dismissed_discarded"
                                 }
@@ -447,6 +480,7 @@ class IndexNotificationManager(
 
                         if (
                             notification is InflightIndexNotification.AgentComplete ||
+                            notification is InflightIndexNotification.NoSpeech ||
                             notification is InflightIndexNotification.Error ||
                             notification is InflightIndexNotification.Discarded
                         ) {
@@ -556,6 +590,7 @@ class IndexNotificationManager(
                             inProgress = NotificationProgress.Indeterminate,
                             localOnly = false
                         )
+                        inProgressUpdate = notif
                         platformIndexNotificationManager.notify(notif)
                     }
                     is RingEvent.FirmwareUpdate.Success -> {
@@ -579,6 +614,11 @@ class IndexNotificationManager(
                             deepLink = "pebblecore://deep-link/bug-report?pebble=false"
                         )
                         platformIndexNotificationManager.notify(notif)
+                        inProgressUpdate = null
+                    }
+                    is RingEvent.FirmwareUpdate.NotStarted -> {
+                        logger.d { "Firmware update to ${it.newVersion} did not start, dropping update notification" }
+                        inProgressUpdate?.let { notif -> platformIndexNotificationManager.cancel(notif.id) }
                         inProgressUpdate = null
                     }
                 }

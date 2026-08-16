@@ -17,6 +17,8 @@ import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.libindex.device.DiscoveredIndexDevice
 import coredevices.libindex.device.IndexDeviceManager
+import coredevices.libindex.device.IndexImage
+import coredevices.libindex.device.isFailsafe
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
@@ -30,7 +32,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -111,6 +112,13 @@ sealed interface RingEvent {
             override val isFailsafe: Boolean
         ) : FirmwareUpdate
 
+        /** The update never got underway (typically we couldn't connect); it will be retried. */
+        data class NotStarted(
+            override val ringId: String,
+            override val newVersion: String,
+            override val isFailsafe: Boolean
+        ) : FirmwareUpdate
+
         data class Success(
             override val ringId: String,
             override val newVersion: String,
@@ -158,11 +166,6 @@ class RingSync(
     private fun resample(samples: ShortArray, sampleRate: Int): ShortArray {
         val resampler = Resampler(sampleRate, TARGET_SAMPLE_RATE)
         return resampler.process(samples)
-    }
-
-    private fun handleButtonPressSequence(sequence: String?) {
-        sequence?.let { buttonSequenceRecorder.recordSequence(sequence) } ?:
-            buttonSequenceRecorder.recordNoSequence()
     }
 
     private val _ringEvents = MutableSharedFlow<RingEvent>(replay = 1, extraBufferCapacity = 50, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -290,6 +293,7 @@ class RingSync(
                                         is SatelliteStatus.Transferring -> {
                                             logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi} lastRxRSSI = ${satelliteStatus.satellite.state.value?.rxRSSI}" }
                                             val transferStatus = satelliteStatus.transferStatus
+                                            buttonSequenceRecorder.onTransferStatus(transferStatus)
                                             if (transferStatus is TransferStatus.TransferComplete) {
                                                 withContext(Dispatchers.Default) {
                                                     removeDCBias(transferStatus.samples)
@@ -360,12 +364,6 @@ class RingSync(
                                                         } ?: logger.w {
                                                             "No serial number available in satellite state to update lifetime collection count"
                                                         }
-                                                        if (transferStatus.collectionStartIndex == null || transferStatus.final) { // skip handling button presses for long transfers until they're final
-                                                            handleButtonPressSequence(transferStatus.buttonSequence)
-                                                        } else {
-                                                            handleButtonPressSequence(null)
-                                                        }
-
                                                         if (transferStatus.isAudio) {
                                                             val idx =
                                                                 transferStatus.collectionStartIndex
@@ -445,7 +443,10 @@ class RingSync(
                                                                 collectionIndex = transferStatus.collectionIndex,
                                                             )
                                                         )
-                                                        logger.e(transferStatus.exception) { "Transfer dropped: ${transferStatus.collectionIndex}" }
+                                                        val loggedException = transferStatus.exception?.takeIf {
+                                                            it.message?.contains("Connection failure", ignoreCase = true) != true
+                                                        }
+                                                        logger.e(loggedException) { "Transfer dropped: ${transferStatus.collectionIndex} ${transferStatus.exception?.message ?: ""}" }
                                                         if (rangeStart != null) {
                                                             logTransferFailedEvent(
                                                                 serialNumber = satelliteSerial,
@@ -800,6 +801,20 @@ class RingSync(
                                                         )
                                                     )
                                                 }
+
+                                                is SatelliteStatus.FirmwareUpdating.NotStarted -> {
+                                                    logger.i {
+                                                        "Satellite ${satelliteStatus.satellite.id} firmware update to version ${satelliteStatus.newVersion} did not start, will retry"
+                                                    }
+                                                    deviceManager.markFirmwareUpdatingState(satelliteStatus.satellite, isUpdating = false)
+                                                    _ringEvents.emit(
+                                                        RingEvent.FirmwareUpdate.NotStarted(
+                                                            ringId = satelliteStatus.satellite.id,
+                                                            newVersion = satelliteStatus.newVersion,
+                                                            isFailsafe = isFailsafe,
+                                                        )
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -849,8 +864,8 @@ class RingSync(
         )
     }
 
-    suspend fun stop() {
-        syncJob?.cancelAndJoin()
+    fun stop() {
+        syncJob?.cancel()
     }
 
     fun lastRingSummary(): String? = lastRing.value?.let {

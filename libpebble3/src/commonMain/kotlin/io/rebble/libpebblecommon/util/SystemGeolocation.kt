@@ -3,7 +3,6 @@ package io.rebble.libpebblecommon.util
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration
 import kotlin.time.Instant
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 sealed class GeolocationPositionResult {
@@ -22,9 +21,10 @@ sealed class GeolocationPositionResult {
 interface SystemGeolocation {
     companion object {
         /**
-         * Default cache freshness window when the caller doesn't specify a `maximumAge`.
+         * Default cache freshness window when the caller doesn't specify a `maximumAge`. Spec
+         * default is zero: an unspecified `maximumAge` means the caller wants a fresh fix.
          */
-        val DEFAULT_MAX_AGE = 30.minutes
+        val DEFAULT_MAX_AGE = Duration.ZERO
 
         /**
          * Default upper bound on how long to wait for an active fix when the caller doesn't

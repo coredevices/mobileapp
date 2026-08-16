@@ -15,6 +15,9 @@ class RecordingProcessingTaskRepository(
     private val dao: RecordingProcessingTaskDao
 ): QueueTaskRepository<RecordingProcessingTask> {
 
+    suspend fun getLatestButtonSequenceForTransfer(transferId: Long): String? =
+        dao.getLatestButtonSequenceForTransfer(transferId)
+
     private fun RecordingProcessingTask.toEntity(): RecordingProcessingTaskEntity {
         when (task) {
             is ProcessingTask.AudioRecording -> {

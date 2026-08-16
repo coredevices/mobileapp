@@ -8,6 +8,7 @@ import coredevices.ring.database.room.dao.CachedItemDao
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 /**
  * Items repository — Room-only. Reads come from the local cache table; writes
@@ -21,6 +22,7 @@ import kotlin.time.ExperimentalTime
 class ItemRepository(
     private val cacheDao: CachedItemDao,
     private val cancelReminder: suspend (localReminderId: Int) -> Unit,
+    private val rescheduleReminder: suspend (localReminderId: Int, recordingId: String?, newTime: Instant?) -> Unit = { _, _, _ -> },
 ) {
     fun getAllFlow(): Flow<List<CachedItem>> = cacheDao.getAllFlow()
 
@@ -53,6 +55,10 @@ class ItemRepository(
         if (completed || deleted) {
             (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
                 runCatching { cancelReminder(it) }
+            }
+        } else if (existing != null && !item.done && !item.deleted && existing.dueAt != item.dueAt) {
+            (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
+                runCatching { rescheduleReminder(it, item.sourceRecordingId, item.dueAt) }
             }
         }
     }

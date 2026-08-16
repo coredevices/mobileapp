@@ -1,6 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.reminders
 
 import coredevices.ring.agent.integrations.ReminderIntegration
+import kotlin.time.Instant
 
 expect fun createBuiltInReminderIntegration(): BuiltInReminderIntegration
 
@@ -24,4 +25,13 @@ interface BuiltInReminderIntegration : ReminderIntegration {
      * row) intact. Clears the persisted lead time so it isn't re-scheduled after a reboot.
      */
     suspend fun cancelExtraNotification(reminderId: Int)
+
+    /**
+     * Moves a built-in reminder to [newTime], replacing any scheduled or already-fired
+     * notification so it fires again at the new time. A null [newTime] just cancels the
+     * scheduled notification, keeping the reminder's row. [expectedRecordingId] must match
+     * the local row's recordingId — reminder ids are device-local, so an id synced from
+     * another device can collide with an unrelated local reminder.
+     */
+    suspend fun rescheduleReminder(reminderId: Int, expectedRecordingId: String?, newTime: Instant?)
 }

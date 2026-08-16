@@ -9,7 +9,9 @@ import io.ktor.utils.io.readByteArray
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
+import kotlin.time.Duration.Companion.seconds
 
 data class InboundPPMessage(
     val packet: PebblePacket,
@@ -40,7 +42,9 @@ class PebbleProtocolStreams(
     // within a single PPoG packet (we could make this [Byte] (or use source/sink) if that
     // works OK (for all knowns LE watches)).
     val outboundPPBytes: Channel<ByteArray> = Channel(capacity = 100),
-    val inboundMessagesFlow: MutableSharedFlow<InboundPPMessage> = MutableSharedFlow(),
+    val inboundMessagesFlow: MutableSharedFlow<InboundPPMessage> = MutableSharedFlow(
+        extraBufferCapacity = 100,
+    ),
 )
 
 class PebbleProtocolRunner(
@@ -70,12 +74,7 @@ class PebbleProtocolRunner(
                 }
                 logger.d("inbound pebble protocol packet: $packet")
                 if (packet != null) {
-                    pebbleProtocolStreams.inboundMessagesFlow.emit(
-                        InboundPPMessage(
-                            packet,
-                            packetBytes
-                        )
-                    )
+                    dispatch(InboundPPMessage(packet, packetBytes))
                 }
             }
         } catch (e: IOException) {
@@ -83,7 +82,19 @@ class PebbleProtocolRunner(
         }
     }
 
+    // Dispatch must never block indefinitely: that stops us draining inboundPPBytes,
+    // which wedges the PPoG loop bidirectionally. Throws to force a disconnect instead.
+    internal suspend fun dispatch(message: InboundPPMessage) {
+        if (!pebbleProtocolStreams.inboundMessagesFlow.tryEmit(message)) {
+            logger.w("inbound dispatch buffer full; waiting for slow subscriber")
+            withTimeoutOrNull(DISPATCH_STALL_TIMEOUT) {
+                pebbleProtocolStreams.inboundMessagesFlow.emit(message)
+            } ?: error("inbound dispatch stalled for $DISPATCH_STALL_TIMEOUT")
+        }
+    }
+
     companion object {
         private val PP_HEADER_SIZE: UShort = 4u
+        private val DISPATCH_STALL_TIMEOUT = 5.seconds
     }
 }

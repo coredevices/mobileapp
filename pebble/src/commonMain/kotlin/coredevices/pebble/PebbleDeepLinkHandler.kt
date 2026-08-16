@@ -22,9 +22,14 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlin.time.Duration.Companion.seconds
 
 expect fun readNameFromContentUri(appContext: AppContext, uri: Uri): String?
 
@@ -41,9 +46,20 @@ interface PebbleDeepLinkHandler {
      * (which needs a foreground Activity), then calls [consumeRequestIndexCompanion].
      */
     val requestIndexCompanion: StateFlow<Boolean>
+
+    val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?>
     fun consumeRequestIndexCompanion()
+    fun confirmPendingFirmwareSideload()
+    fun dismissPendingFirmwareSideload()
+    fun sideloadFirmware(file: Path)
+    fun showMessage(message: String)
     fun handle(uri: Uri?): Boolean
+
+    /** Show a navbar tab on the watch home screen (same mechanism as pebble://navbar links). */
+    fun navigateToTab(route: NavBarRoute)
 }
+
+data class PendingFirmwareSideload(val file: Path, val fileName: String)
 
 class RealPebbleDeepLinkHandler(
     private val pebbleAccount: PebbleAccount,
@@ -62,9 +78,17 @@ class RealPebbleDeepLinkHandler(
     override val navigateToPebbleDeepLink = _navigateToPebbleDeepLink.asStateFlow()
     private val _requestIndexCompanion = MutableStateFlow(false)
     override val requestIndexCompanion: StateFlow<Boolean> = _requestIndexCompanion.asStateFlow()
+    private val _pendingFirmwareSideload = MutableStateFlow<PendingFirmwareSideload?>(null)
+    override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
+        _pendingFirmwareSideload.asStateFlow()
+    private var reservedSideloadCount = 0
 
     override fun consumeRequestIndexCompanion() {
         _requestIndexCompanion.value = false
+    }
+
+    override fun navigateToTab(route: NavBarRoute) {
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
     }
 
     data class PebbleDeepLink(
@@ -113,7 +137,7 @@ class RealPebbleDeepLinkHandler(
             }
 
             uri.lastPathSegment?.endsWith(".pbl") ?: false -> handleLanguagePack(uri, uri.lastPathSegment!!)
-            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri)
+            uri.lastPathSegment?.endsWith(".pbz") ?: false -> handleFirmware(uri, uri.lastPathSegment!!)
             uri.lastPathSegment?.endsWith(".pbw") ?: false -> handleApp(uri)
             uri.scheme == "content" -> handleContentFallback(uri)
             else -> false
@@ -130,7 +154,7 @@ class RealPebbleDeepLinkHandler(
         logger.d { "filename: $name" }
         return when {
             name.endsWith(".pbl") -> handleLanguagePack(uri, name)
-            name.endsWith(".pbz") -> handleFirmware(uri)
+            name.endsWith(".pbz") -> handleFirmware(uri, name)
             name.endsWith(".pbw") -> handleApp(uri)
             else -> false
         }
@@ -156,17 +180,84 @@ class RealPebbleDeepLinkHandler(
         return true
     }
 
-    private fun handleFirmware(uri: Uri): Boolean {
+    private fun handleFirmware(uri: Uri, fileName: String): Boolean {
         logger.v { "handleFirmware() $uri" }
         val file = writeFile(context, uri)
         if (file == null) {
             logger.w { "handleFirmware: couldn't write file" }
+            _snackBarMessages.tryEmit("Failed to read firmware file")
             return false
         }
-        libPebble.watches.value.filterIsInstance<ConnectedPebble.Firmware>().forEach {
-            it.sideloadFirmware(file)
-        }
+        val previous = _pendingFirmwareSideload.value
+        val reserved = reserveSideloadCopy(file)
+        _pendingFirmwareSideload.value = PendingFirmwareSideload(reserved, fileName)
+        previous?.takeIf { it.file != reserved }
+            ?.let { SystemFileSystem.delete(it.file, mustExist = false) }
+        navigateToTab(PebbleNavBarRoutes.WatchesRoute)
         return true
+    }
+
+    private fun reserveSideloadCopy(shared: Path): Path {
+        val directory = shared.parent ?: return shared
+        if (reservedSideloadCount == 0) {
+            sweepStaleSideloadCopies(directory)
+        }
+        val reserved = Path(directory, "$RESERVED_SIDELOAD_PREFIX${reservedSideloadCount++}.pbz")
+        return try {
+            SystemFileSystem.delete(reserved, mustExist = false)
+            SystemFileSystem.atomicMove(shared, reserved)
+            reserved
+        } catch (e: Exception) {
+            logger.w(e) { "reserveSideloadCopy: falling back to the shared path" }
+            shared
+        }
+    }
+
+    private fun sweepStaleSideloadCopies(directory: Path) {
+        try {
+            SystemFileSystem.list(directory)
+                .filter { it.name.startsWith(RESERVED_SIDELOAD_PREFIX) }
+                .forEach { SystemFileSystem.delete(it, mustExist = false) }
+        } catch (e: Exception) {
+            logger.w(e) { "sweepStaleSideloadCopies failed" }
+        }
+    }
+
+    override fun confirmPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        sideloadFirmware(pending.file)
+    }
+
+    override fun dismissPendingFirmwareSideload() {
+        val pending = _pendingFirmwareSideload.value ?: return
+        _pendingFirmwareSideload.value = null
+        SystemFileSystem.delete(pending.file, mustExist = false)
+    }
+
+    override fun showMessage(message: String) {
+        _snackBarMessages.tryEmit(message)
+    }
+
+    override fun sideloadFirmware(file: Path) {
+        GlobalScope.launch {
+            val watches = withTimeoutOrNull(CONNECTED_WATCH_TIMEOUT) {
+                libPebble.watches
+                    .map { it.filterIsInstance<ConnectedPebble.Firmware>() }
+                    .first { it.isNotEmpty() }
+            }
+            if (watches == null) {
+                logger.w { "sideloadFirmware: no connected watch after $CONNECTED_WATCH_TIMEOUT" }
+                _snackBarMessages.tryEmit("Failed to sideload firmware: no connected watch")
+                return@launch
+            }
+            logger.i { "sideloadFirmware: sideloading to ${watches.size} watch(es)" }
+            navigateToTab(PebbleNavBarRoutes.WatchesRoute)
+            _snackBarMessages.tryEmit("Sideloading firmware...")
+            watches.forEach {
+                it.sideloadFirmware(file)
+            }
+        }
     }
 
     private fun handleApp(uri: Uri): Boolean {
@@ -267,6 +358,8 @@ class RealPebbleDeepLinkHandler(
     }
 
     companion object {
+        private val CONNECTED_WATCH_TIMEOUT = 60.seconds
+        private const val RESERVED_SIDELOAD_PREFIX = "pending_sideload_"
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
         private const val NAVBAR_URL: String = "navbar"

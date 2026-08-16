@@ -372,6 +372,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsFwUpdateAcrossDisconnection(21),
     SupportsBlobDbVersion(22),
     SupportsSettingsSync(23),
+    SupportsWeatherDbV4(24),
     ;
 
     companion object {
@@ -440,7 +441,9 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
         StartReconnecting(0x07u),
         MAPDisabled(0x08u),
         MAPEnabled(0x09u),
-        FirmwareUpdateStartResponse(0x0au)
+        FirmwareUpdateStartResponse(0x0au),
+        FirmwareUpdateStatus(0x0bu),
+        FirmwareUpdateStatusResponse(0x0cu)
     }
 
     val command = SUByte(m, 0x0u)
@@ -468,6 +471,18 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
     class MAPEnabled: SystemMessage(Message.MAPEnabled)
     class FirmwareUpdateStartResponse: SystemMessage(Message.FirmwareUpdateStartResponse) {
         val response = SUByte(m)
+    }
+    class FirmwareUpdateStatusRequest: SystemMessage(Message.FirmwareUpdateStatus)
+
+    /**
+     * Per-object status of a partially-transferred firmware update, so it can be resumed.
+     */
+    class FirmwareUpdateStatusResponse: SystemMessage(Message.FirmwareUpdateStatusResponse) {
+        val reserved = SBytes(m, 2)
+        val resourcesBytesWritten = SUInt(m, endianness = Endian.Little)
+        val resourcesCrc = SUInt(m, endianness = Endian.Little)
+        val firmwareBytesWritten = SUInt(m, endianness = Endian.Little)
+        val firmwareCrc = SUInt(m, endianness = Endian.Little)
     }
 
     enum class FirmwareUpdateStartStatus(val value: UByte) {
@@ -572,6 +587,10 @@ fun systemPacketsRegister() {
         SystemMessage.endpoint,
         SystemMessage.Message.FirmwareUpdateStartResponse.value
     ) { SystemMessage.FirmwareUpdateStartResponse() }
+    PacketRegistry.register(
+        SystemMessage.endpoint,
+        SystemMessage.Message.FirmwareUpdateStatusResponse.value
+    ) { SystemMessage.FirmwareUpdateStatusResponse() }
 
     PacketRegistry.register(
         ProtocolEndpoint.TIME,

@@ -1,58 +1,58 @@
 
 import com.codingfeline.buildkonfig.compiler.FieldSpec
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
     alias(libs.plugins.buildKonfig)
-    alias(libs.plugins.googleServices)
     alias(libs.plugins.nativeCocoaPods)
-}
-
-android {
-    namespace = "coredevices.ring"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    buildFeatures {
-        buildConfig = true
-        compose = true
-    }
-
-    defaultConfig {
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
 }
 
 compose.resources {
     packageOfResClass = "coreapp.ring.generated.resources"
 }
 
+// Set by the IDE during sync only. The simulator target doubles the pod/cinterop work sync waits
+// on; command-line and Xcode builds still configure it.
+val ideSync = providers.systemProperty("idea.sync.active").orNull.toBoolean()
+
 kotlin {
     val xcodeExists = providers.exec {
         isIgnoreExitValue = true
         commandLine("which", "xcode-select")
     }.result.get().exitValue == 0
-    androidTarget {
-        publishLibraryVariants("release", "debug")
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    val xcodeDir = if (xcodeExists) {
+        providers.exec {
+            commandLine("xcode-select", "-p")
+        }.standardOutput.asText.get().trim()
+    } else {
+        ""
+    }
+    android {
+        namespace = "coredevices.ring"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
+        }
+
+        androidResources {
+            enable = true
+        }
+
+        withHostTestBuilder {}
+
+        withDeviceTestBuilder {}.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
     }
 
@@ -68,24 +68,41 @@ kotlin {
 // A step-by-step guide on how to include this library in an XCode
 // project can be found here:
 // https://developer.android.com/kotlin/multiplatform/migrate
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach {
+    buildList {
+        add(iosArm64())
+        if (!ideSync) add(iosSimulatorArm64())
+    }.forEach {
         it.binaries.getTest(NativeBuildType.DEBUG).apply {
-            val xcodeExists = providers.exec {
-                isIgnoreExitValue = true
-                commandLine("which", "xcode-select")
-            }.result.get().exitValue == 0
             if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
+                linkerOpts.addAll(listOf("-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"))
+            }
+        }
+        it.binaries.all {
+            val osName =
+                if (target.konanTarget.name.contains("simulator")) "iphonesimulator" else "iphoneos"
+            if (xcodeExists) {
                 linkerOpts.addAll(listOf(
                     "-weak_framework", "CoreML",
-                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator",
-                    "-Wl,-weak-lswift_Concurrency", "-Wl,-rpath,/usr/lib/swift"
+                    "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$osName"
                 ))
+            }
+            // The binary FirebaseFirestoreInternal is static, so its C deps must be linked into
+            // every binary that pulls in Firestore, not just the pod framework.
+            val grpcSlice = if (target.konanTarget.name.contains("simulator")) {
+                "ios-arm64_x86_64-simulator"
+            } else {
+                "ios-arm64"
+            }
+            listOf(
+                "FirebaseFirestoreGRPCCoreBinary/grpc.xcframework" to "grpc",
+                "FirebaseFirestoreGRPCCPPBinary/grpcpp.xcframework" to "grpcpp",
+                "FirebaseFirestoreGRPCBoringSSLBinary/openssl_grpc.xcframework" to "openssl_grpc",
+                "FirebaseFirestoreAbseilBinary/absl.xcframework" to "absl",
+            ).forEach { (path, fw) ->
+                val sliceDir = layout.buildDirectory
+                    .dir("cocoapods/synthetic/ios/Pods/$path/$grpcSlice")
+                    .get().asFile
+                linkerOpts.addAll(listOf("-F" + sliceDir.absolutePath, "-framework", fw))
             }
         }
     }
@@ -99,14 +116,11 @@ kotlin {
         framework {
             baseName = "RingModule"
             isStatic = false
-            if (xcodeExists) {
-                val xcodeDir = providers.exec {
-                    commandLine("xcode-select", "-p")
-                }.standardOutput.asText.get().trim()
-                linkerOpts.addAll(listOf("-weak_framework", "CoreML", "-L$xcodeDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator"))
-            }
         }
-        pod("GoogleSignIn", "8.0.0")
+        pod("GoogleSignIn") {
+            version = "8.0.0"
+            linkOnly = true
+        }
         pod("FirebaseCore", "11.10.0")
         pod("FirebaseAuth") {
             version = "11.10.0"
@@ -114,7 +128,20 @@ kotlin {
             extraOpts += listOf("-compiler-option", "-fmodules")
         }
         pod("FirebaseFirestore") {
-            version = "11.10.0"
+            linkOnly = true
+            source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
+                // 11.10.0 — keep in step with :composeApp, or the two modules resolve
+                // different Firestore builds
+                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+            }
+        }
+        pod("nanopb") {
+            version = "3.30910.0"
+            linkOnly = true
+        }
+        pod("leveldb-library") {
+            version = "1.22.6"
+            moduleName = "leveldb"
             linkOnly = true
         }
         pod("FirebaseStorage") {
@@ -203,6 +230,8 @@ kotlin {
 
         androidMain {
             dependencies {
+                // gitlive's compile variant declares com.google.firebase:* without versions.
+                implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.androidx.glance)
                 implementation(libs.androidx.glance.material3)
                 implementation(compose.uiTooling)
@@ -214,7 +243,7 @@ kotlin {
             }
         }
 
-        androidInstrumentedTest {
+        getByName("androidDeviceTest") {
             dependencies {
                 implementation(libs.androidx.test.runner)
                 implementation(libs.kotlin.test)
@@ -255,7 +284,7 @@ dependencies {
     add("kspCommonMainMetadata", libs.room.compiler)
     add("kspAndroid", libs.room.compiler)
     add("kspIosArm64", libs.room.compiler)
-    if (System.getenv("CI_RELEASE") != "true") {
+    if (!ideSync) {
         //add("kspIosX64", libs.room.compiler)
         add("kspIosSimulatorArm64", libs.room.compiler)
     }

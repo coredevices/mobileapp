@@ -42,6 +42,11 @@ sealed interface InflightIndexNotification {
         }
     }
 
+    data class NoSpeech(
+        override val id: Int,
+        override val pressedTimestamp: IndexTimestamp
+    ): InflightIndexNotification
+
     data class Error(
         override val id: Int,
         override val pressedTimestamp: IndexTimestamp,

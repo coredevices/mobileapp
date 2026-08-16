@@ -5,5 +5,23 @@ use_frameworks!
 
 target 'iosApp' do
         pod 'composeApp', :path => '../composeApp'
+        # Precompiled Firestore: avoids building gRPC/BoringSSL/abseil from source
+        # 11.10.0
+        pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :commit => 'e43715cc392c819b522c7a189bed9400e757c788'
         pod 'Mixpanel-swift'
+end
+
+# The precompiled FirebaseFirestoreInternal is a static archive, and -ObjC force-loads its
+# classes into every binary linking it. ComposeApp.framework links and exports them already;
+# a second copy in the app binary registers duplicate FIR* classes and all Firestore casts fail.
+post_install do |installer|
+    installer.aggregate_targets.each do |aggregate|
+        aggregate.user_build_configurations.each_key do |config|
+            path = aggregate.xcconfig_path(config)
+            next unless File.exist?(path)
+            before = File.read(path)
+            after = before.gsub(/\s-(weak_)?framework\s+"FirebaseFirestore(Internal)?"/, '')
+            File.write(path, after) if after != before
+        end
+    end
 end

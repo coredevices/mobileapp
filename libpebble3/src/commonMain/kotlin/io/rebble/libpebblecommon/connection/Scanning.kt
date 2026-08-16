@@ -143,6 +143,22 @@ class RealScanning(
         _isClassicScanning.value = false
     }
 
+    override fun addQemuWatch(address: String, connect: Boolean) {
+        Logger.d("addSocketWatch: $address (connect=$connect)")
+        val identifier = PebbleSocketIdentifier(address)
+        watchConnector.addScanResult(
+            PebbleScanResult(
+                identifier = identifier,
+                name = identifier.displayName(),
+                rssi = 0,
+                leScanRecord = null,
+            )
+        )
+        if (connect) {
+            watchConnector.requestConnection(identifier)
+        }
+    }
+
     /**
      * Hide Aplite/Basalt/Chalk watches from BLE scan results on platforms that support BT Classic
      * (Android), so users go through the dedicated Classic scan instead. Older firmware without

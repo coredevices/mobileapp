@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.russhwolf.settings.Settings
 import coreapp.util.generated.resources.Res
+import coreapp.util.generated.resources.black
 import coreapp.util.generated.resources.dark
 import coreapp.util.generated.resources.light
 import coreapp.util.generated.resources.system
@@ -54,7 +55,27 @@ val greyScheme = darkColorScheme(
     outline = outlineDark,
     outlineVariant = outlineVariantDark,
     scrim = coreGrey,
-    surfaceContainer = coreGrey,
+    surfaceDim = Color(0xFF262626),
+    surfaceBright = Color(0xFF4D4D4D),
+    surfaceContainerLowest = Color(0xFF1A1A1A),
+    surfaceContainerLow = Color(0xFF262626),
+    surfaceContainer = Color(0xFF3D3D3D),
+    surfaceContainerHigh = Color(0xFF474747),
+    surfaceContainerHighest = Color(0xFF525252),
+)
+
+// Containers must ascend lowest -> highest, and surfaceContainer must clear `surface`: it is what
+// menus and popups paint themselves, so matching the page behind them leaves them with no edge.
+val blackScheme = greyScheme.copy(
+    background = Color.Black,
+    surface = Color.Black,
+    scrim = Color.Black,
+    surfaceDim = Color.Black,
+    surfaceBright = coreDarkGrey,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0D0D0D),
+    surfaceContainer = Color(0xFF141414),
+    surfaceContainerHigh = Color(0xFF1F1F1F),
     surfaceContainerHighest = coreDarkGrey,
 )
 
@@ -149,6 +170,7 @@ data class ColorFamily(
 enum class CoreAppTheme(val resource: StringResource, val key: String) {
     Light(Res.string.light, "light"),
     Dark(Res.string.dark, "dark"),
+    Black(Res.string.black, "black"),
     System(Res.string.system, "system"),
     ;
 
@@ -158,9 +180,10 @@ enum class CoreAppTheme(val resource: StringResource, val key: String) {
     }
 }
 
-enum class CoreAppColorScheme {
-    Light,
-    Grey,
+enum class CoreAppColorScheme(val isDark: Boolean) {
+    Light(false),
+    Grey(true),
+    Black(true),
 }
 
 @Composable
@@ -172,6 +195,7 @@ fun currentColorScheme(): CoreAppColorScheme {
         when (theme) {
             CoreAppTheme.Light -> CoreAppColorScheme.Light
             CoreAppTheme.Dark -> CoreAppColorScheme.Grey
+            CoreAppTheme.Black -> CoreAppColorScheme.Black
             CoreAppTheme.System -> if (systemInDarkTheme) CoreAppColorScheme.Grey else CoreAppColorScheme.Light
         }
     }
@@ -183,11 +207,12 @@ fun AppTheme(
     content: @Composable() () -> Unit
 ) {
     val colorScheme = currentColorScheme()
-    val extendedColors = if (colorScheme == CoreAppColorScheme.Grey) darkExtendedColors else lightExtendedColors
+    val extendedColors = if (colorScheme.isDark) darkExtendedColors else lightExtendedColors
     setStatusBarTheme(colorScheme)
     val materialColorScheme = when (colorScheme) {
         CoreAppColorScheme.Light -> lightScheme
         CoreAppColorScheme.Grey -> greyScheme
+        CoreAppColorScheme.Black -> blackScheme
     }
     CompositionLocalProvider(LocalExtendedColors provides extendedColors) {
         MaterialTheme(

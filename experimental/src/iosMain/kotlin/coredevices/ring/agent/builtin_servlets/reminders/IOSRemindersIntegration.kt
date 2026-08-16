@@ -5,6 +5,7 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
+import coredevices.ring.agent.integrations.fuzzyFilter
 import kotlinx.datetime.toNSDate
 import platform.EventKit.EKAlarm
 import platform.EventKit.EKAuthorizationStatusAuthorized
@@ -91,12 +92,14 @@ class IOSRemindersIntegration : ReminderIntegration {
         return ekReminder.calendarItemIdentifier
     }
 
-    override suspend fun searchForList(listName: String): List<ReminderListEntry> {
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> =
+        getAllLists().fuzzyFilter(listName)
+
+    override suspend fun getAllLists(): List<ReminderListEntry> {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }
         @Suppress("UNCHECKED_CAST")
         return (eventStore.calendarsForEntityType(EKEntityType.EKEntityTypeReminder) as List<EKCalendar>)
-            .filter { it.title.contains(listName, ignoreCase = true) }
             .map { ReminderListEntry(id = it.calendarIdentifier, title = it.title) }
     }
 

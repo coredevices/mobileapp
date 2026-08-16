@@ -99,11 +99,6 @@ object TolerantInstantSerializer : KSerializer<Instant> {
         } catch (_: Throwable) {
             // Top-level decode failed — last-resort sentinel.
         }
-
-        if (!sawAny) {
-            Logger.withTag("TolerantInstant")
-                .w { "neither native Timestamp nor kotlinx struct shape; using epoch-0 sentinel" }
-        }
         return Instant.fromEpochSeconds(epochSeconds, nanos)
     }
 

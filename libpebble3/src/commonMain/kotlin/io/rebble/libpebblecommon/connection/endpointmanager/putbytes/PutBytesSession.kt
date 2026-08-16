@@ -91,6 +91,9 @@ class PutBytesSession(
      * Should be `flowOn(IO)`
      *
      * @param sendInstall send an install command? You will want to do this unless it's a FW update.
+     * @param resumeOffset resume an interrupted transfer from this offset. [source] must already be
+     * skipped to it, and [objectCrc] must be provided (the CRC of the whole object - the watch
+     * expects that on commit even for a partial transfer).
      */
     fun beginSession(
         size: UInt,
@@ -99,13 +102,18 @@ class PutBytesSession(
         filename: String,
         source: Source,
         sendInstall: Boolean,
+        resumeOffset: UInt = 0u,
+        objectCrc: UInt? = null,
     ) = putBytesFlow {
-        val initResponse = putBytesService.initSession(size, type, bank, filename)
+        require(resumeOffset < size) { "Resume offset $resumeOffset >= size $size" }
+        require(resumeOffset == 0u || objectCrc != null) { "objectCrc required when resuming" }
+        val remaining = size - resumeOffset
+        val initResponse = putBytesService.initSession(remaining, type, bank, filename, resumeOffset)
         val cookie = initResponse.cookie.get()
         emit(SessionState.Open(cookie))
         _currentSession.value = CurrentSession(cookie)
-        val crc32 = transferData(cookie, size, source)
-        val response = putBytesService.sendCommit(cookie, crc32)
+        val crc32 = transferData(cookie, remaining, source)
+        val response = putBytesService.sendCommit(cookie, objectCrc ?: crc32)
         check(response.cookie.get() == cookie) { "Received response for wrong cookie" }
         if (sendInstall) {
             sendInstall(cookie)

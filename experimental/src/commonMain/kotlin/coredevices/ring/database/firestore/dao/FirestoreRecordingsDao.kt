@@ -66,7 +66,7 @@ class FirestoreRecordingsDao(dbProvider: () -> FirebaseFirestore): CollectionDao
         return collection.document(id)
     }
 
-    suspend fun getCount(): Int {
+    suspend fun getCount(): Long {
         return collection.count()
     }
 

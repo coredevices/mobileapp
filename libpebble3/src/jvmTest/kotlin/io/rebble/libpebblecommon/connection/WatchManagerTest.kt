@@ -24,6 +24,7 @@ import io.rebble.libpebblecommon.di.HackyProvider
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.FirmwareUpdateManager
 import com.russhwolf.settings.PropertiesSettings
@@ -71,7 +72,11 @@ class WatchManagerTest {
     }
     private val pebbleDeviceFactory = PebbleDeviceFactory()
     private val createPlatformIdentifier = object : CreatePlatformIdentifier {
-        override fun identifier(identifier: PebbleIdentifier, name: String): PlatformIdentifier {
+        override fun identifier(
+            identifier: PebbleIdentifier,
+            name: String,
+            lastAttemptFailed: Boolean,
+        ): PlatformIdentifier {
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }
@@ -110,8 +115,8 @@ class WatchManagerTest {
             _disconnected.complete(ConnectionFailureReason.FailedToConnect)
         }
 
-        override suspend fun connect(previouslyConnected: Boolean, lastError: ConnectionFailureReason?) {
-            lastPreviouslyConnected = previouslyConnected
+        override suspend fun connect(knownWatchProperties: KnownWatchProperties?, lastError: ConnectionFailureReason?) {
+            lastPreviouslyConnected = knownWatchProperties?.lastConnected != null
             activeConnections++
             totalConnections++
             if (activeConnections > 1) {
@@ -120,13 +125,14 @@ class WatchManagerTest {
             }
             _state.value = ConnectingPebbleState.Connecting(identifier)
             delay(1.milliseconds)
-            _state.value = ConnectingPebbleState.Negotiating(identifier)
+            _state.value = ConnectingPebbleState.Negotiating(identifier, null)
             delay(1.milliseconds)
             if (connectSuccess) {
                 _state.value = ConnectingPebbleState.Connected.ConnectedNotInPrf(
                     identifier = identifier,
                     watchInfo = TODO(),
                     services = TODO(),
+                    reversePpogVersion = null,
                 )
             } else {
                 _state.value = ConnectingPebbleState.Failed(identifier, ConnectionFailureReason.FailedToConnect)
@@ -158,7 +164,12 @@ class WatchManagerTest {
         override val firmwareUpdateState: StateFlow<FirmwareUpdater.FirmwareUpdateStatus>
             = MutableStateFlow(FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle())
 
-        override fun init(watchPlatform: WatchHardwarePlatform, slot: Int?) {
+        override fun init(
+            watchPlatform: WatchHardwarePlatform,
+            slot: Int?,
+            supportsResume: Boolean,
+            runningFwVersion: FirmwareVersion,
+        ) {
         }
 
         override fun sideloadFirmware(path: Path) {}
@@ -195,6 +206,9 @@ class WatchManagerTest {
         }
 
         override fun stopClassicScan() {
+        }
+
+        override fun addQemuWatch(address: String, connect: Boolean) {
         }
     }
     private val watchConfig = WatchConfig(multipleConnectedWatchesSupported = false).asFlow()

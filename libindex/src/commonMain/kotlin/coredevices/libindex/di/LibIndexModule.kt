@@ -7,7 +7,9 @@ import coredevices.libindex.Scanning
 import coredevices.libindex.device.IndexDeviceFactory
 import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.IndexPairing
+import coredevices.libindex.device.IndexSystem
 import coredevices.libindex.device.RealIndexPairing
+import coredevices.libindex.device.RealIndexSystem
 import coredevices.libindex.device.RealScanning
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,7 @@ val libIndexModule = module {
     includes(platformLibIndexModule)
     single { LibIndexCoroutineScope(Dispatchers.Default) }
     singleOf(::RealIndexPairing) bind IndexPairing::class
+    singleOf(::RealIndexSystem) bind IndexSystem::class
     singleOf(::IndexDeviceFactory)
 
     single {

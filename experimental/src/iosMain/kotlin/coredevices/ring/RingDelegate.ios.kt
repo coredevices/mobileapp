@@ -2,6 +2,7 @@ package coredevices.ring
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.service.BackgroundRingService
@@ -22,6 +23,11 @@ actual class RingDelegate(
      * Called by activity onCreate / didFinishLaunching to initialize the Ring module.
      */
     actual suspend fun init() {
+        try {
+            IOSBuiltInReminderIntegration.ensureCategoryRegistered()
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to register notification category for reminders" }
+        }
         listenForUserPresent(recordingsDao, coreConfigHolder, settings)
         if (!backgroundRingService.isRunning.value) {
             backgroundRingService.startRingSyncJob()

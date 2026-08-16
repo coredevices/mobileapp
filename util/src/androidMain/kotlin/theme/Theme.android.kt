@@ -13,27 +13,12 @@ actual fun setStatusBarTheme(colorScheme: CoreAppColorScheme) {
     val activity = LocalActivity.current as? ComponentActivity
     LaunchedEffect(colorScheme) {
         if (activity != null) {
-            when (colorScheme) {
-                CoreAppColorScheme.Grey -> activity.enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.dark(
-                        Color.TRANSPARENT,
-                    ),
-                    navigationBarStyle = SystemBarStyle.dark(
-                        Color.TRANSPARENT,
-                    ),
-                )
-
-                CoreAppColorScheme.Light -> activity.enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.light(
-                        Color.TRANSPARENT,
-                        Color.TRANSPARENT,
-                    ),
-                    navigationBarStyle = SystemBarStyle.light(
-                        Color.TRANSPARENT,
-                        Color.TRANSPARENT,
-                    ),
-                )
+            val style = if (colorScheme.isDark) {
+                SystemBarStyle.dark(Color.TRANSPARENT)
+            } else {
+                SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
             }
+            activity.enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         }
     }
 }

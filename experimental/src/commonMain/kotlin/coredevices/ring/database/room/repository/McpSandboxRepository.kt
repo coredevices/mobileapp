@@ -28,6 +28,9 @@ class McpSandboxRepository(
 ) {
     fun getAllGroupsFlow() = groupDao.getAllFlow()
 
+    fun getDefaultGroupFlow(): Flow<McpSandboxGroupEntity?> =
+        groupDao.getAllFlow().map { it.firstOrNull() }
+
     suspend fun getDefaultGroupId(): Long {
         return groupDao.getAllFlow().first().first().id
     }

@@ -5,6 +5,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
@@ -151,6 +152,7 @@ class RecordingProcessingQueue(
                                     transcription = it.transcription,
                                     transcribedUsingModel = it.transcribedUsingModel,
                                     error = it.error,
+                                    errorType = it.errorType,
                                     ringTransferInfo = it.ringTransferInfo,
                                     userMessageId = it.userMessageId
                                 )
@@ -351,6 +353,7 @@ class RecordingProcessingQueue(
                         transcription = entry.transcription,
                         transcribedUsingModel = entry.transcribedUsingModel,
                         error = entry.error,
+                        errorType = entry.errorType,
                         ringTransferInfo = entry.ringTransferInfo,
                         userMessageId = entry.userMessageId,
                     )
@@ -427,10 +430,40 @@ class RecordingProcessingQueue(
         } catch (e: AgentAuthenticationException) {
             logger.e(e) { "Creation of recording operation failed" }
             withContext(Dispatchers.IO) {
-                recordingRepository.createFailedRecordingEntry(
-                    recordingId = recordingId,
-                    errorMessage = "Login required for cloud processing"
-                )
+                val recordingEntryDao: RecordingEntryDao = get()
+                val stagedEntry =
+                    (handle.stage as? RecordingProcessingStage.RecordingEntryCreated)
+                        ?.recordingEntryId?.let { recordingEntryDao.getById(it) }
+                if (stagedEntry != null) {
+                    // Retrying an existing entry — update it in place rather than
+                    // inserting a duplicate failed entry on the same recording.
+                    recordingEntryDao.backfillRecordingEntryFileName(stagedEntry.id, fileId)
+                    recordingEntryDao.updateRecordingEntryStatus(
+                        stagedEntry.id,
+                        status = RecordingEntryStatus.agent_error,
+                        error = "Login required for cloud processing",
+                        errorType = RecordingEntryErrorType.login_required
+                    )
+                    // Keep parity with createFailedRecordingEntry: surface the error
+                    // as the transcription text — but never clobber a real transcript.
+                    if (stagedEntry.transcription.isNullOrBlank()) {
+                        recordingEntryDao.updateRecordingEntryTranscription(
+                            stagedEntry.id,
+                            transcription = "Error: Login required for cloud processing",
+                            modelUsed = stagedEntry.transcribedUsingModel
+                        )
+                    }
+                    // The insert path bumps the parent recording; do the same so
+                    // sync dirty-detection sees the in-place change.
+                    recordingEntryDao.touchLocalRecording(recordingId, Clock.System.now())
+                } else {
+                    recordingRepository.createFailedRecordingEntry(
+                        recordingId = recordingId,
+                        errorMessage = "Login required for cloud processing",
+                        errorType = RecordingEntryErrorType.login_required,
+                        fileName = fileId
+                    )
+                }
             }
             return
         }
@@ -509,6 +542,8 @@ class RecordingProcessingQueue(
         trace.markEvent("handling_audio_task_end", TraceEventData.HandlingAudioTask(transferId))
     }
 
+    fun isTypedQuestion(text: String): Boolean = text.trim().endsWith("?")
+
     private suspend fun handleChat(
         handle: TaskHandle,
         task: ProcessingTask.TextRecording
@@ -530,7 +565,8 @@ class RecordingProcessingQueue(
         val operation = recordingOperationFactory.createTextOnlyOperation(
             recordingId = recordingId,
             text = transcription,
-            forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) }
+            forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) },
+            isQuestion = isTypedQuestion(transcription),
         )
         operation.run(handle)
     }
@@ -609,9 +645,11 @@ class RecordingProcessingQueue(
             recordingEntryId = recordingEntryId,
             recordingEntityId = recordingId,
         )
+        val persistedButtonSequence = buttonSequence
+            ?: queueTaskRepository.getLatestButtonSequenceForTransfer(transferId)
         val task = ProcessingTask.AudioRecording(
             transferId = transferId,
-            buttonSequence = buttonSequence,
+            buttonSequence = persistedButtonSequence,
         )
         scheduleTask(
             RecordingProcessingTask(

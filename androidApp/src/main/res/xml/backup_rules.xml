@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  firebase-auth keeps its Tink keysets and the encrypted signed-in user in these two files,
+  wrapped by non-exportable AndroidKeyStore keys. Restoring them onto another device leaves
+  them permanently undecryptable, which bricks GitHub/Apple sign-in ("Failed to
+  generate/retrieve public encryption key for Generic IDP flow").
+
+  Paths embed FirebaseApp.getPersistenceKey() =
+  base64UrlNoPad("[DEFAULT]") + "+" + base64UrlNoPad(mobilesdk_app_id); recompute if the
+  Firebase app id in google-services.json ever changes.
+-->
+<full-backup-content>
+    <exclude
+        domain="sharedpref"
+        path="com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+    <exclude
+        domain="sharedpref"
+        path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+</full-backup-content>

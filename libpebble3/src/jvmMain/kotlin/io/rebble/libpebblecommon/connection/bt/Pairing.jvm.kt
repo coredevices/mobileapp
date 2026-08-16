@@ -3,7 +3,8 @@ package io.rebble.libpebblecommon.connection.bt
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleBtClassicIdentifier
-import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityStatus
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.ConnectivityWatcher
+import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import kotlinx.coroutines.flow.Flow
 
 actual fun isBonded(identifier: PebbleBleIdentifier): Boolean {
@@ -17,7 +18,8 @@ actual fun createBond(identifier: PebbleBleIdentifier): Boolean {
 actual fun getBluetoothDevicePairEvents(
     context: AppContext,
     identifier: PebbleBleIdentifier,
-    connectivity: Flow<ConnectivityStatus>
+    connectivityWatcher: ConnectivityWatcher,
+    connectionScope: ConnectionCoroutineScope,
 ): Flow<BluetoothDevicePairEvent> {
     TODO("Not yet implemented")
 }
