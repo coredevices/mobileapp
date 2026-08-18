@@ -108,11 +108,9 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.IndexFeedViewModel
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -129,6 +127,7 @@ internal fun IndexHeader(
     onQueryChange: (String) -> Unit,
     onStartSearch: () -> Unit,
     onCancelSearch: () -> Unit,
+    relativeTimeNow: Instant,
     trailingActions: @Composable (RowScope.() -> Unit)? = null,
 ) {
     val colors = IndexTheme.colors
@@ -212,7 +211,7 @@ internal fun IndexHeader(
                     softWrap = false,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 )
-                PulsingSyncHint(modifier = Modifier.weight(1f))
+                PulsingSyncHint(now = relativeTimeNow, modifier = Modifier.weight(1f))
             }
             IconButton(onClick = onStartSearch) {
                 Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
@@ -223,24 +222,14 @@ internal fun IndexHeader(
 }
 
 @Composable
-internal fun PulsingSyncHint(modifier: Modifier = Modifier) {
+internal fun PulsingSyncHint(now: Instant, modifier: Modifier = Modifier) {
     val colors = IndexTheme.colors
     val lastSyncedAt by koinInject<RingSync>().lastSyncedAt.collectAsState()
-
-    // Re-evaluate on a slow tick so the relative label ages ("just now" →
-    // "5m ago") and flips back to the pulsing prompt once the sync goes stale.
-    var now by remember { mutableStateOf(Clock.System.now()) }
-    LaunchedEffect(lastSyncedAt) {
-        while (true) {
-            now = Clock.System.now()
-            delay(1.minutes)
-        }
-    }
 
     val synced = lastSyncedAt
     if (synced != null && now - synced < SYNC_HINT_FRESH_WINDOW) {
         Text(
-            "Last synced ${relativeTime(synced)}",
+            "Last synced ${relativeTime(synced, now)}",
             color = colors.onSurfaceVariant,
             fontSize = 12.sp,
             letterSpacing = (-0.05).sp,
@@ -376,6 +365,7 @@ internal fun PeekStrip(
     peeks: List<IndexFeedViewModel.UiState.RecordingPeek>,
     onOpenRecording: (LocalRecording) -> Unit,
     onRetryRecording: (LocalRecording, RecordingEntryEntity) -> Unit,
+    relativeTimeNow: Instant,
 ) {
     val visiblePeeks = peeks.take(5)
     val firstId = visiblePeeks.firstOrNull()?.recording?.id
@@ -409,6 +399,7 @@ internal fun PeekStrip(
                 peek = peek,
                 onClick = { onOpenRecording(peek.recording) },
                 onRetry = { peek.retryEntry?.let { onRetryRecording(peek.recording, it) } },
+                relativeTimeNow = relativeTimeNow,
                 modifier = Modifier.animateItem(
                     fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     placementSpec = spring(
@@ -427,6 +418,7 @@ internal fun PeekCard(
     peek: IndexFeedViewModel.UiState.RecordingPeek,
     onClick: () -> Unit,
     onRetry: () -> Unit,
+    relativeTimeNow: Instant,
     modifier: Modifier = Modifier,
 ) {
     val colors = IndexTheme.colors
@@ -449,7 +441,7 @@ internal fun PeekCard(
             }
             Spacer(Modifier.width(6.dp))
             Text(
-                relativeTime(peek.recording.localTimestamp).uppercase(),
+                relativeTime(peek.recording.localTimestamp, relativeTimeNow).uppercase(),
                 color = colors.primary,
                 fontSize = 11.sp,
                 lineHeight = 13.sp,
@@ -550,6 +542,7 @@ internal fun TaskRow(
     task: CachedItem,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    relativeTimeNow: Instant,
 ) {
     val colors = IndexTheme.colors
     Column {
@@ -599,7 +592,7 @@ internal fun TaskRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                taskSubline(task)?.let { sub ->
+                taskSubline(task, relativeTimeNow)?.let { sub ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(top = 0.dp),
@@ -624,6 +617,7 @@ internal fun LazyListScope.todosCarousel(
     todos: List<CachedItem>,
     onToggle: (CachedItem) -> Unit,
     onOpen: (CachedItem) -> Unit,
+    relativeTimeNow: Instant,
 ) {
     val pages = todos.chunked(IndexFeedViewModel.TODO_PAGE_SIZE)
     if (pages.isEmpty()) return
@@ -658,6 +652,7 @@ internal fun LazyListScope.todosCarousel(
                             task = task,
                             onToggle = { onToggle(task) },
                             onClick = { onOpen(task) },
+                            relativeTimeNow = relativeTimeNow,
                         )
                     }
                     // Intentionally NO empty-row spacers. Pager pages can
@@ -670,14 +665,14 @@ internal fun LazyListScope.todosCarousel(
     }
 }
 
-internal fun taskSubline(task: CachedItem): String? {
+internal fun taskSubline(task: CachedItem, now: Instant): String? {
     val due = task.dueAt
     return when (task.kind) {
-        "reminder" -> due?.let { formatDue(it) }
+        "reminder" -> due?.let { formatDue(it, now) }
         "scheduled" -> {
             // We could parse fields for fireKind = alarm/timer; for the home
             // preview just show due-time / "Timer".
-            due?.let { formatDue(it) } ?: "Scheduled"
+            due?.let { formatDue(it, now) } ?: "Scheduled"
         }
         else -> null
     }
