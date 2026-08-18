@@ -72,16 +72,18 @@ class PebbleKit2(
             if (connectSuccess) {
                 launchIncomingAppMessageHandler(scope, incomingAppMessages)
             } else {
-                val appName = appInfo.shortName
-                val downloadUrl = appInfo.companionApp?.android?.url
-                errorTracker.reportError(
-                    UserFacingError.MissingCompanionApp(
-                        "$appName needs a companion app to function properly",
-                        appName,
-                        uuid,
-                        downloadUrl
+                if (appInfo.companionApp?.android?.required != false) {
+                    val appName = appInfo.shortName
+                    val downloadUrl = appInfo.companionApp?.android?.url
+                    errorTracker.reportError(
+                        UserFacingError.MissingCompanionApp(
+                            "$appName needs a companion app to function properly",
+                            appName,
+                            uuid,
+                            downloadUrl
+                        )
                     )
-                )
+                }
                 if (!pkjsRunning) {
                     // Don't auto-NACK if PKJS is running
                     launchNackAllIncomingMessages(scope, incomingAppMessages)
