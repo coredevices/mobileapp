@@ -34,7 +34,7 @@ jobs:
 
       - name: Add release artifacts
         id: release_artifacts
-        uses: softprops/action-gh-release@15d2aaca23625e5b2744248f7b68fc1e6bbff48e
+        uses: softprops/action-gh-release@e5ee6bc58a36b838b92fc1217f2e4b414b5abcc8
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
