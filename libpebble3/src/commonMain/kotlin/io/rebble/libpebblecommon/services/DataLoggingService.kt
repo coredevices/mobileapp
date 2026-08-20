@@ -37,8 +37,9 @@ class DataLoggingService(
     }
 
     suspend fun realInit(info: WatchInfo) {
-        acceptSessions = true
+        // Set watchInfo first: acceptSessions == true implies watchInfo != null
         watchInfo = info
+        acceptSessions = true
         send(DataLoggingOutgoingPacket.ReportOpenSessions(emptyList()))
     }
 
@@ -50,8 +51,9 @@ class DataLoggingService(
                     val tag = it.tag.get()
                     val applicationUuid = it.applicationUUID.get()
                     val itemSize = it.dataItemSize.get()
+                    val timestamp = it.timestamp.get()
                     logger.d { "Session opened: $id tag: $tag (accepted: $acceptSessions)" }
-                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize)
+                    sessions[id] = DataLoggingSession(id, tag, applicationUuid, itemSize, timestamp)
                     datalogging.openSession(id, tag, applicationUuid, itemSize)
                     sendAckNack(id)
                 }
@@ -73,6 +75,7 @@ class DataLoggingService(
                         sessionId = id,
                         uuid = session.uuid,
                         tag = session.tag,
+                        timestamp = session.timestamp,
                         data = it.payload.get().toByteArray(),
                         watchInfo = info,
                         itemSize = session.itemSize,
@@ -85,10 +88,22 @@ class DataLoggingService(
                     val session = sessions[id]
                     logger.d { "Session closed: $id" }
                     if (session != null) {
-                        datalogging.closeSession(id, session.tag)
+                        datalogging.closeSession(
+                            sessionId = id,
+                            tag = session.tag,
+                            uuid = session.uuid,
+                            timestamp = session.timestamp,
+                            itemSize = session.itemSize,
+                            watchSerial = watchInfo?.serial,
+                        )
                     }
                     sessions.remove(id)
                     sendAckNack(id)
+                }
+
+                is DataLoggingIncomingPacket.Timeout -> {
+                    // The watch did not get our ACK; it keeps the batch and sends it again later
+                    logger.w { "Ack timeout reported by the watch for session ${it.sessionId.get()}" }
                 }
             }
         }.launchIn(scope)
@@ -100,4 +115,5 @@ data class DataLoggingSession(
     val tag: UInt,
     val uuid: Uuid,
     val itemSize: UShort,
+    val timestamp: UInt,
 )
