@@ -326,10 +326,12 @@ class RealPebbleWebServices(
         }
     }
 
-    private val appstoreServices = mutableMapOf<String, AppstoreService>()
+    // Keyed by id: a deleted-and-re-added source keeps its url but gets a new row id, and a
+    // service holding the old id writes collections/hearts that fail the foreign key.
+    private val appstoreServices = mutableMapOf<Int, AppstoreService>()
 
     private fun appstoreServiceForSource(source: AppstoreSource): AppstoreService {
-        return appstoreServices.getOrPut(source.url) {
+        return appstoreServices.getOrPut(source.id) {
             get {
                 parametersOf(source)
             }

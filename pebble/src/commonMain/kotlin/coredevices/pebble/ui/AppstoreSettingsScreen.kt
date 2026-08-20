@@ -2,6 +2,7 @@ package coredevices.pebble.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -102,17 +103,21 @@ class AppstoreSettingsScreenViewModel(
         viewModelScope.launch {
             val source = AppstoreSource(
                 title = title,
-                // Store the feed URL in the same canonical form as the built-in feeds: it is
-                // string-concatenated into request URLs and compared for equality elsewhere.
-                url = url.trim().trimEnd('/')
+                url = url.normalizeSourceUrl(),
             )
             sourceDao.insertSource(source)
+            updateCollections()
         }
     }
 }
 
 @Composable
-fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
+fun AppstoreSettingsScreen(
+    nav: NavBarNav,
+    topBarParams: TopBarParams,
+    addSourceName: String? = null,
+    addSourceUrl: String? = null,
+) {
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
@@ -150,10 +155,15 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                         }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
+                    if (isEnabled) {
+                        viewModel.updateCollections()
+                    }
                 }
             }
         },
         onCollectionEnabledChanged = viewModel::updateCollectionEnabled,
+        addSourceName = addSourceName,
+        addSourceUrl = addSourceUrl,
     )
 }
 
@@ -165,8 +175,10 @@ fun AppstoreSettingsScreen(
     onSourceAdded: (title: String, url: String) -> Unit,
     onSourceEnableChange: (Int, Boolean) -> Unit,
     onCollectionEnabledChanged: (AppstoreCollection, Boolean) -> Unit,
+    addSourceName: String? = null,
+    addSourceUrl: String? = null,
 ) {
-    var createSourceOpen by remember { mutableStateOf(false) }
+    var createSourceOpen by remember { mutableStateOf(addSourceName != null && addSourceUrl != null) }
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(
@@ -180,6 +192,9 @@ fun AppstoreSettingsScreen(
     ) { insets ->
         if (createSourceOpen) {
             CreateAppstoreSourceDialog(
+                existingUrls = sources.mapTo(mutableSetOf()) { it.url },
+                initialTitle = addSourceName.orEmpty(),
+                initialUrl = addSourceUrl.orEmpty(),
                 onDismissRequest = {
                     createSourceOpen = false
                 },
@@ -189,7 +204,10 @@ fun AppstoreSettingsScreen(
                 }
             )
         }
-        LazyColumn(Modifier.padding(insets)) {
+        LazyColumn(
+            modifier = Modifier.padding(insets),
+            contentPadding = PaddingValues(bottom = 88.dp),
+        ) {
             items(sources.size, { sources[it].id }) { i ->
                 val source = sources[i]
                 val collections = collections?.get(source)
@@ -223,14 +241,6 @@ fun AppstoreSourceItem(
             },
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = source.enabled,
-                        onCheckedChange = {
-                            onEnableChange(source.id, it)
-                        }
-                    )
-                    // Built-in feeds can't be removed: deleting them either strands the user
-                    // (Rebble is never re-added) or trips re-init, which wipes user-added sources.
                     if (!source.isPebbleFeed() && !source.isRebbleFeed()) {
                         IconButton(
                             onClick = {
@@ -240,6 +250,12 @@ fun AppstoreSourceItem(
                             Icon(Icons.Default.Delete, contentDescription = "Delete Source")
                         }
                     }
+                    Checkbox(
+                        checked = source.enabled,
+                        onCheckedChange = {
+                            onEnableChange(source.id, it)
+                        }
+                    )
                 }
             },
             modifier = Modifier.clickable {
@@ -293,13 +309,26 @@ fun AppstoreSourceItem(
     }
 }
 
+private fun String.normalizeSourceUrl() = trim().trimEnd('/')
+
 @Composable
 fun CreateAppstoreSourceDialog(
+    existingUrls: Set<String>,
+    initialTitle: String = "",
+    initialUrl: String = "",
     onDismissRequest: () -> Unit,
     onSourceCreated: (title: String, url: String) -> Unit,
 ) {
-    var title by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf(initialTitle) }
+    var url by remember { mutableStateOf(initialUrl) }
+    val normalizedUrl = url.normalizeSourceUrl()
+    val parsedUrl = parseUrl(normalizedUrl)
+    // Feed urls are concatenated into request paths, so anything past the path is a broken source.
+    val urlValid = parsedUrl != null &&
+            parsedUrl.protocolOrNull in setOf(URLProtocol.HTTP, URLProtocol.HTTPS) &&
+            parsedUrl.encodedQuery.isEmpty() &&
+            parsedUrl.fragment.isEmpty() &&
+            normalizedUrl !in existingUrls
     M3Dialog(
         onDismissRequest = onDismissRequest,
         icon = {
@@ -316,11 +345,9 @@ fun CreateAppstoreSourceDialog(
             }
             TextButton(
                 onClick = {
-                    onSourceCreated(title, url)
+                    onSourceCreated(title, normalizedUrl)
                 },
-                enabled = title.isNotBlank() &&
-                        url.isNotBlank() &&
-                        parseUrl(url)?.protocolOrNull in setOf(URLProtocol.HTTP, URLProtocol.HTTPS)
+                enabled = title.isNotBlank() && urlValid
             ) {
                 Text("Add")
             }

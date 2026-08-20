@@ -669,11 +669,10 @@ class AppstoreService(
 }
 
 fun enableByDefault(source: AppstoreSource, type: AppType, slug: String): Boolean {
-    val isFirstSource = INITIAL_APPSTORE_SOURCES.first().url == source.url
     return when (slug) {
         "all-generated" -> false
         "all" -> true
-        else -> isFirstSource
+        else -> !source.isRebbleFeed()
     }
 }
 

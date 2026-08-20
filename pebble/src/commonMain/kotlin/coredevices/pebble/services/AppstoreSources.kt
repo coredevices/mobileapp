@@ -40,9 +40,8 @@ class AppstoreSourceInitializer(
 ) {
     suspend fun initAppstoreSourcesDB() {
         val current = appstoreSourceDao.getAllSources().first()
-        // Only the builtin feeds take part in init/migration: user-added sources
-        // have no Algolia credentials, so checking the whole table would flag
-        // needsInit on every launch and wipe them (they became session-only).
+        // Only builtins take part in init/migration: user-added sources have no Algolia
+        // credentials, so checking the whole table would flag needsInit and wipe them.
         val builtinUrls = INITIAL_APPSTORE_SOURCES.map { it.url }.toSet()
         val builtins = current.filter { it.url in builtinUrls }
         //TODO: remove the migration stuff after a while

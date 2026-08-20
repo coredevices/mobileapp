@@ -613,7 +613,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
-                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute()) },
                 ) },
                 basicSettingsDropdownItem(
                     title = "App Theme",
