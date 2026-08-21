@@ -14,11 +14,14 @@ import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.ui.autoSaveWatchLogs
+import coredevices.pebble.ui.showDebugOptions
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.BleDiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebble
@@ -40,8 +43,11 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 class PebbleAppDelegate(
     private val libPebble: LibPebble,
@@ -60,6 +66,7 @@ class PebbleAppDelegate(
     private val analyticsHeartbeatQueue: AnalyticsHeartbeatQueue,
     private val pebbleWebServices: PebbleWebServices,
     private val batteryChargedNotifier: BatteryChargedNotifier,
+    private val appContext: AppContext,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -253,8 +260,40 @@ class PebbleAppDelegate(
             scope.launch {
                 analyticsHeartbeatQueue.uploadPendingFromDb()
             },
+            scope.launch {
+                autoSaveWatchLogs()
+            },
         )
         jobs.joinAll()
+    }
+
+    private suspend fun autoSaveWatchLogs() {
+        if (!settings.showDebugOptions() || !settings.autoSaveWatchLogs()) return
+        val now = clock.now()
+        val lastSaveMs = settings.getLong(LAST_WATCH_LOG_AUTO_SAVE_KEY, 0L)
+        if (now.toEpochMilliseconds() - lastSaveMs < AUTO_SAVE_WATCH_LOGS_INTERVAL.inWholeMilliseconds) {
+            return
+        }
+        val gathered = getWatchLogs()
+        if (gathered == null) {
+            logger.d { "autoSaveWatchLogs: no connected watch with log support, will retry next sync" }
+            return
+        }
+        val saved = saveWatchLogCopy(appContext, gathered, "$WATCH_LOGS_FILE_PREFIX$now.txt")
+        SystemFileSystem.delete(gathered, mustExist = false)
+        if (saved == null) {
+            logger.w { "autoSaveWatchLogs: could not save a copy, will retry next sync" }
+            return
+        }
+        pruneWatchLogCopies(appContext, MAX_AUTO_SAVED_WATCH_LOGS)
+        settings.putLong(LAST_WATCH_LOG_AUTO_SAVE_KEY, now.toEpochMilliseconds())
+        logger.d { "autoSaveWatchLogs: saved $saved" }
+    }
+
+    companion object {
+        private const val LAST_WATCH_LOG_AUTO_SAVE_KEY = "lastWatchLogAutoSaveMs"
+        private val AUTO_SAVE_WATCH_LOGS_INTERVAL = 22.hours
+        private const val MAX_AUTO_SAVED_WATCH_LOGS = 21
     }
 }
 
