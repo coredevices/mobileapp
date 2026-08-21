@@ -402,7 +402,7 @@ internal fun HttpServerEditDialog(
                 isError = !nameIsValid,
                 supportingText = when {
                     !nameIsValid -> {
-                        { Text("Letters, digits, - and _ only: the name is part of every tool name sent to the model") }
+                        { Text("Name can only contain letters, digits, - and _ characters") }
                     }
                     else -> {
                         { Text("") }
