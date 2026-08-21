@@ -110,11 +110,8 @@ data class McpSessionTool(
 )
 
 /**
- * Integration names round-trip through the model as part of a composite tool name -
- * "integration__tool" for Nenya, "integration.tool" for Cactus - and are split back out to
- * look the integration up again. A name carrying anything the providers' tool-name sanitizer
- * rewrites, or a second separator, no longer matches the key it was stored under, so the call
- * fails here as "Unknown tool name" before any request reaches the server.
+ * Integration names must survive round-trip through the model as part of a composite tool name.
+ * Validate it won't get changed by the tool-name sanitizer and doesn't use the "__" separator.
  */
 fun isValidIntegrationName(name: String): Boolean =
     INTEGRATION_NAME_REGEX.matches(name) && !name.contains("__")
