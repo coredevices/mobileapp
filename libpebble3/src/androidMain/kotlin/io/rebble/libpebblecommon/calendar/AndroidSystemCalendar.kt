@@ -521,6 +521,8 @@ class AndroidSystemCalendar(
     override fun supportsPinActions(): Boolean = true
 }
 
+private const val UNKNOWN_ACCOUNT = "unknown"
+
 /**
  * Lenient parse for the writable-calendar list: unlike the sync list, a calendar missing its
  * display name or colour is still a valid target for new events.
@@ -539,8 +541,8 @@ private fun Cursor.toWritableCalendar(): CalendarEntity? {
     return CalendarEntity(
         platformId = id.toString(),
         name = displayName ?: accountName ?: "Calendar",
-        ownerName = accountName ?: "unknown",
-        ownerId = ownerAccount ?: "unknown",
+        ownerName = accountName ?: UNKNOWN_ACCOUNT,
+        ownerId = ownerAccount ?: UNKNOWN_ACCOUNT,
         color = getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_COLOR)
             ?.let { getInt(it) } ?: 0,
         enabled = true,
@@ -556,6 +558,7 @@ private fun Cursor.toWritableCalendar(): CalendarEntity? {
  * event creation silently fail even when writable calendars exist.
  */
 internal fun List<CalendarEntity>.ownAccountFirst(): List<CalendarEntity> {
-    val own = firstOrNull { it.ownerId == it.ownerName } ?: return this
+    val own = firstOrNull { it.ownerName != UNKNOWN_ACCOUNT && it.ownerId == it.ownerName }
+        ?: return this
     return listOf(own) + filterNot { it.platformId == own.platformId }
 }

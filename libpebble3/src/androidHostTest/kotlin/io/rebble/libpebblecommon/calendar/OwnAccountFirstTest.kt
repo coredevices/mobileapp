@@ -38,6 +38,15 @@ class OwnAccountFirstTest {
     }
 
     @Test
+    fun calendarWithNoAccountIsNotTreatedAsOwn() {
+        val calendars = listOf(
+            calendar("1", accountName = "unknown", ownerAccount = "unknown"),
+            calendar("2"),
+        )
+        assertEquals(calendars, calendars.ownAccountFirst())
+    }
+
+    @Test
     fun emptyList() {
         assertEquals(emptyList(), emptyList<CalendarEntity>().ownAccountFirst())
     }

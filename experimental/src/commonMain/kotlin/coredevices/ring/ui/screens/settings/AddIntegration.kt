@@ -298,8 +298,10 @@ fun PhoneCalendarPicker() {
             }
             loaded.isEmpty() -> Text("No calendars found that Index can add events to.")
             else -> {
-                // Nothing picked yet: the first calendar is the one the phone would use anyway.
-                val effectiveId = selectedId ?: loaded.first().platformId
+                // Same fallback as event creation: without a choice - or when the chosen
+                // calendar is gone - the first one is what the phone would use anyway.
+                val effectiveId = loaded.firstOrNull { it.platformId == selectedId }?.platformId
+                    ?: loaded.first().platformId
                 loaded.forEach { calendar ->
                     Row(
                         modifier = Modifier
