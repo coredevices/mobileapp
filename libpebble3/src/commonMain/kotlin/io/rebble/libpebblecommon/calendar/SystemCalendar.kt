@@ -12,7 +12,13 @@ interface SystemCalendar {
     fun hasPermission(): Boolean
 
     /**
-     * Create an event in the device's primary/default calendar.
+     * Calendars the user can create events in, the platform's default for new events first.
+     */
+    suspend fun getWritableCalendars(): List<CalendarEntity>
+
+    /**
+     * Create an event in [NewCalendarEvent.calendarId], or the default calendar when that is
+     * null or no longer writable.
      * @return the platform id of the created event, or null if creation failed (no permission,
      *         no writable calendar, or a platform error).
      */
@@ -25,3 +31,10 @@ interface SystemCalendar {
      */
     fun supportsPinActions(): Boolean
 }
+
+/**
+ * Which calendar an event goes in, given [getWritableCalendars] and the user's choice: their
+ * calendar if it's still writable, otherwise the platform default (first in the list).
+ */
+internal fun List<CalendarEntity>.resolveWritableTarget(requestedId: String?): CalendarEntity? =
+    firstOrNull { it.platformId == requestedId } ?: firstOrNull()

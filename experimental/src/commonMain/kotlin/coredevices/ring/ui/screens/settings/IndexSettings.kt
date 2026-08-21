@@ -1534,6 +1534,8 @@ fun AuthorizedIntegrations(preferences: Preferences) {
 private fun PhoneCalendarConfigDialog(preferences: Preferences, onDismiss: () -> Unit) {
     M3Dialog(
         onDismissRequest = onDismiss,
+        // The calendar list can be long; scroll it so the buttons stay reachable.
+        scrollableContent = true,
         title = { Text(PHONE_CALENDAR_TITLE) },
         buttons = {
             TextButton(
@@ -1545,7 +1547,11 @@ private fun PhoneCalendarConfigDialog(preferences: Preferences, onDismiss: () ->
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     ) {
-        Text("Index can add events to your phone's calendar when you explicitly ask for a calendar event.")
+        Column {
+            Text("Index can add events to your phone's calendar when you explicitly ask for a calendar event.")
+            Spacer(Modifier.height(16.dp))
+            PhoneCalendarPicker()
+        }
     }
 }
 
