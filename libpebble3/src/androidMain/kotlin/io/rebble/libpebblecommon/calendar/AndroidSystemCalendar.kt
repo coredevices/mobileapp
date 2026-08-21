@@ -521,8 +521,6 @@ class AndroidSystemCalendar(
     override fun supportsPinActions(): Boolean = true
 }
 
-private const val UNKNOWN_ACCOUNT = "unknown"
-
 /**
  * Lenient parse for the writable-calendar list: unlike the sync list, a calendar missing its
  * display name or colour is still a valid target for new events.
@@ -547,18 +545,4 @@ private fun Cursor.toWritableCalendar(): CalendarEntity? {
             ?.let { getInt(it) } ?: 0,
         enabled = true,
     )
-}
-
-/**
- * Puts the account's own calendar (ownerAccount == accountName) first — that's the one Android
- * treats as primary, and where events go when the user hasn't picked a calendar.
- *
- * Deliberately does NOT order by IS_PRIMARY — that is a computed column that some calendar
- * providers reject in a sort clause (the query then throws / returns null), which would make
- * event creation silently fail even when writable calendars exist.
- */
-internal fun List<CalendarEntity>.ownAccountFirst(): List<CalendarEntity> {
-    val own = firstOrNull { it.ownerName != UNKNOWN_ACCOUNT && it.ownerId == it.ownerName }
-        ?: return this
-    return listOf(own) + filterNot { it.platformId == own.platformId }
 }
