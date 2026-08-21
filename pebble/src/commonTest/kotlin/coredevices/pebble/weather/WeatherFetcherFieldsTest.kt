@@ -1,6 +1,7 @@
 package coredevices.pebble.weather
 
 import coredevices.util.WeatherUnit
+import io.rebble.libpebblecommon.weather.WeatherType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -19,6 +20,21 @@ class WeatherFetcherFieldsTest {
     fun returnsNullForUnparseableOffset() {
         assertNull("2026-07-20T06:03:00Z".utcOffsetMinutes())
         assertNull("".utcOffsetMinutes())
+    }
+
+    @Test
+    fun mapsHourlyForecastFields() {
+        val hour = HourlyForecast(iconCode = 32, temp = 21, uvIndex = 6.44).toHourlyForecast()
+        assertEquals(WeatherType.Sun, hour.weatherType)
+        assertEquals(21, hour.temp)
+        assertEquals(64, hour.uvIndexX10)
+
+        val missing = HourlyForecast(iconCode = 32).toHourlyForecast()
+        assertEquals(0, missing.temp)
+        assertNull(missing.uvIndexX10)
+
+        // int8 field: out-of-range temps clamp rather than wrap.
+        assertEquals(127, HourlyForecast(iconCode = 32, temp = 200).toHourlyForecast().temp)
     }
 
     @Test

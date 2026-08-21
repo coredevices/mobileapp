@@ -2,23 +2,50 @@ package coredevices.ring.external.indexwebhook
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coredevices.ring.service.button.RingGesture
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** A single editable webhook header row. */
 data class WebhookHeaderInput(val name: String, val value: String)
 
+sealed interface WebhookTestState {
+    data object Idle : WebhookTestState
+    data object Sending : WebhookTestState
+    data class Done(val ok: Boolean, val label: String) : WebhookTestState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class IndexWebhookSettingsViewModel(
-    private val webhookPreferences: IndexWebhookPreferences
+    private val webhookPreferences: IndexWebhookPreferences,
+    private val webhookApi: IndexWebhookApi,
+    private val runRepository: IndexWebhookRunRepository,
 ) : ViewModel() {
 
-    private val _webhookUrl = MutableStateFlow<String?>(null)
-    val webhookUrl = _webhookUrl.asStateFlow()
+    private val _gesture = MutableStateFlow<RingGesture?>(null)
+    val gesture = _gesture.asStateFlow()
 
-    private val _dialogOpen = MutableStateFlow(false)
-    val dialogOpen = _dialogOpen.asStateFlow()
+    val dialogOpen = _gesture
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** The gesture the settings row summarises, so opening it edits the config it describes. */
+    val configuredGesture = webhookPreferences.configs
+        .map { configs -> configs.entries.firstOrNull { it.value.isActive }?.key }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** URL of any gesture with a saved webhook, for the settings row summary. */
+    val webhookUrl = webhookPreferences.configs
+        .map { configs -> configs.values.firstOrNull { it.isActive }?.url }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _urlInput = MutableStateFlow("")
     val urlInput = _urlInput.asStateFlow()
@@ -29,33 +56,40 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
-    private val _triggerInput = MutableStateFlow(IndexWebhookTrigger.DoubleClickHold)
-    val triggerInput = _triggerInput.asStateFlow()
+    private val _testState = MutableStateFlow<WebhookTestState>(WebhookTestState.Idle)
+    val testState = _testState.asStateFlow()
 
-    val isLinked: Boolean
-        get() = !_webhookUrl.value.isNullOrBlank()
-
-    init {
-        viewModelScope.launch {
-            webhookPreferences.webhookUrl.collectLatest { url ->
-                _webhookUrl.value = url?.ifBlank { null }
-            }
+    val runs = _gesture
+        .flatMapLatest { gesture ->
+            gesture?.let { runRepository.runs(it) } ?: flowOf(emptyList())
         }
-    }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<IndexWebhookRun>())
 
-    fun openDialog() {
-        _urlInput.value = _webhookUrl.value ?: ""
-        // Show existing headers, or a single empty row to start from.
-        _headerInputs.value = webhookPreferences.headers.value
-            .map { WebhookHeaderInput(it.key, it.value) }
-            .ifEmpty { listOf(WebhookHeaderInput("", "")) }
-        _payloadModeInput.value = webhookPreferences.payloadMode.value
-        _triggerInput.value = webhookPreferences.trigger.value
-        _dialogOpen.value = true
+    /** The other recording gesture, when it has a saved webhook worth copying. */
+    val copyableGesture = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
+        otherGesture(gesture)?.takeIf { configs[it]?.isActive == true }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Whether the open gesture has a stored webhook to delete, disabled ones included. */
+    val canRemove = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
+        gesture != null && configs[gesture]?.url?.isNotBlank() == true
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun openDialog(gesture: RingGesture = RingGesture.Hold) {
+        val config = webhookPreferences.configFor(gesture)
+        loadDraft(config)
+        _testState.value = WebhookTestState.Idle
+        _gesture.value = gesture
     }
 
     fun closeDialog() {
-        _dialogOpen.value = false
+        _gesture.value = null
+    }
+
+    fun removeCurrentGesture() {
+        val gesture = _gesture.value ?: return
+        webhookPreferences.clear(gesture)
+        closeDialog()
     }
 
     fun updateUrlInput(url: String) {
@@ -86,30 +120,57 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
-    fun updateTrigger(trigger: IndexWebhookTrigger) {
-        _triggerInput.value = trigger
+    fun copyFromOtherGesture() {
+        val other = copyableGesture.value ?: return
+        loadDraft(webhookPreferences.configFor(other))
+    }
+
+    fun sendTestEvent() {
+        val gesture = _gesture.value ?: return
+        val url = _urlInput.value.trim().ifBlank { null } ?: return
+        _testState.value = WebhookTestState.Sending
+        viewModelScope.launch {
+            val result = webhookApi.sendTestEvent(gesture, url, draftHeaders())
+            _testState.value = WebhookTestState.Done(
+                ok = result.ok,
+                label = "${result.status} · ${result.durationMs} ms",
+            )
+        }
     }
 
     fun save() {
-        viewModelScope.launch {
-            val url = _urlInput.value.ifBlank { null }?.trim()
-            // Drop rows with a blank name; later rows win on duplicate names.
-            val headers = _headerInputs.value
-                .map { it.name.trim() to it.value.trim() }
-                .filter { it.first.isNotEmpty() }
-                .toMap()
-            webhookPreferences.setWebhookUrl(url)
-            webhookPreferences.setHeaders(headers)
-            webhookPreferences.setPayloadMode(_payloadModeInput.value)
-            webhookPreferences.setTrigger(_triggerInput.value)
-            closeDialog()
+        val gesture = _gesture.value ?: return
+        val url = _urlInput.value.trim().ifBlank { null }
+        if (url == null) {
+            webhookPreferences.clear(gesture)
+        } else {
+            webhookPreferences.setConfig(
+                gesture,
+                IndexWebhookConfig(
+                    url = url,
+                    payloadMode = _payloadModeInput.value,
+                    headers = draftHeaders(),
+                    saved = true,
+                ),
+            )
         }
+        closeDialog()
     }
 
-    fun clearAll() {
-        viewModelScope.launch {
-            webhookPreferences.clearAll()
-            closeDialog()
-        }
+    private fun loadDraft(config: IndexWebhookConfig) {
+        _urlInput.value = config.url ?: ""
+        _headerInputs.value = config.headers
+            .map { WebhookHeaderInput(it.key, it.value) }
+            .ifEmpty { listOf(WebhookHeaderInput("", "")) }
+        _payloadModeInput.value = config.payloadMode
     }
+
+    /** Drops rows with a blank name; later rows win on duplicate names. */
+    private fun draftHeaders(): Map<String, String> = _headerInputs.value
+        .map { it.name.trim() to it.value.trim() }
+        .filter { it.first.isNotEmpty() }
+        .toMap()
+
+    private fun otherGesture(gesture: RingGesture?): RingGesture? =
+        gesture?.let { IndexWebhookPreferences.gestures.firstOrNull { other -> other != it } }
 }

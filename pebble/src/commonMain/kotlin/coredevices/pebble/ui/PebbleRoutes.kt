@@ -77,7 +77,10 @@ object PebbleNavBarRoutes {
     data object HealthRoute : NavBarRoute
 
     @Serializable
-    data object AppstoreSettingsRoute : NavBarRoute
+    data class AppstoreSettingsRoute(
+        val addSourceName: String? = null,
+        val addSourceUrl: String? = null,
+    ) : NavBarRoute
 
     @Serializable
     data class NotificationAppRoute(val packageName: String) : NavBarRoute
@@ -254,7 +257,8 @@ fun NavGraphBuilder.addNavBarRoutes(
         CannedRepliesScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(nav, topBarParams)
+        val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
+        AppstoreSettingsScreen(nav, topBarParams, route.addSourceName, route.addSourceUrl)
     }
     composable<PebbleNavBarRoutes.OfflineModelsRoute> {
         ModelManagementScreen(nav, topBarParams)

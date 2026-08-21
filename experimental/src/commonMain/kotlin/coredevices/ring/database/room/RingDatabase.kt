@@ -9,6 +9,7 @@ import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
+import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import co.touchlab.kermit.Logger
@@ -84,7 +85,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 33,
+    version = 34,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -121,6 +122,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 31, to = 32),
         // 32→33: adds RecordingEntryEntity.errorType (classification of `error`).
         AutoMigration(from = 32, to = 33),
+        // 33→34 is Migrate33To34, added to the builder in experimentalModule.
     ]
 )
 @TypeConverters(Converters::class)
@@ -168,6 +170,38 @@ class Migrate27To28 : AutoMigrationSpec {
         connection.execSQL(
             "UPDATE LocalRecording SET lastPushedUpdated = updated WHERE firestoreId IS NOT NULL"
         )
+    }
+}
+
+/**
+ * Gives existing installs the builtin MCP associations a fresh install is seeded with. Startup no
+ * longer backfills them, so a builtin added later needs its own migration to reach existing groups.
+ */
+class Migrate33To34(isAndroid: Boolean) : Migration(33, 34) {
+    private val builtinMcpNames = buildList {
+        add("builtin_note")
+        add("builtin_reminder")
+        add("builtin_calendar")
+        if (isAndroid) {
+            add("builtin_clock")
+            add("builtin_messaging")
+        }
+    }
+
+    override fun migrate(connection: SQLiteConnection) {
+        val statement = connection.prepare(
+            "INSERT OR IGNORE INTO BuiltinMcpGroupAssociation (groupId, builtinMcpName) " +
+                "SELECT id, ? FROM McpSandboxGroupEntity ORDER BY id LIMIT 1"
+        )
+        try {
+            builtinMcpNames.forEach { name ->
+                statement.bindText(1, name)
+                statement.step()
+                statement.reset()
+            }
+        } finally {
+            statement.close()
+        }
     }
 }
 

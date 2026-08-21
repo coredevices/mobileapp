@@ -283,7 +283,8 @@ class BugReportProcessor(
 
     private suspend fun createSummary(
         screenContext: String,
-        attachments: List<DocumentAttachment>
+        attachments: List<DocumentAttachment>,
+        params: BugReportGenerationParams? = null,
     ): String {
         val deviceSummary = generateDeviceSummary(experimentalDevices)
         val pkjsSummary = getPKJSSummary()
@@ -298,6 +299,15 @@ class BugReportProcessor(
             }
             if (screenContext.isNotEmpty()) {
                 append("\n${screenContext}")
+            }
+            // What the user chose to attach. Recorded here rather than in the log
+            // file because dumpLogs() runs on the next line and FileLogWriter.log()
+            // only queues the entry, so a log line would race the snapshot. Without
+            // it, a report that arrives with no recent_recordings.json is
+            // indistinguishable from an opt-out (MOB-11470).
+            params?.let {
+                append("\nInclude recording: ${it.sendRecording}")
+                append("\nInclude recent recordings: ${it.sendRecentRecordings}")
             }
             attachments.onEach {
                 append("\nAttachment: ${it.fileName}")
@@ -317,7 +327,11 @@ class BugReportProcessor(
         return processBugReport(service = !params.shareLocally) { state, userIdToken ->
             logger.d { "processBugReport - Phase 1: Creating bug report without attachments" }
             val summaryWithAttachmentCount =
-                createSummary(params.screenContext, params.attachments + params.imageAttachments)
+                createSummary(
+                    params.screenContext,
+                    params.attachments + params.imageAttachments,
+                    params,
+                )
             val logs = logWriter.dumpLogs()
 
             // Collect all attachments to get count for summary

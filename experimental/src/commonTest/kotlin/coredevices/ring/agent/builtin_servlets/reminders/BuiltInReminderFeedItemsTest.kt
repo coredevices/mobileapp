@@ -162,9 +162,17 @@ class BuiltInReminderFeedItemsTest {
     }
 
     @Test
-    fun searchForListFallsBackToNotesListWhenNothingMatches() = runBlocking {
+    fun searchForListResolvesGroceriesToShoppingViaSynonym() = runBlocking {
         val (feedItems, _) = fixture()
         val entry = feedItems.searchForList("groceries").single()
+        assertEquals(LIST_SHOPPING_ID, entry.id)
+        assertEquals("Shopping", entry.title)
+    }
+
+    @Test
+    fun searchForListFallsBackToNotesListWhenNothingMatches() = runBlocking {
+        val (feedItems, _) = fixture()
+        val entry = feedItems.searchForList("vacation packing").single()
         assertEquals(LIST_NOTES_SELF_ID, entry.id)
         assertEquals("Notes to self", entry.title)
     }

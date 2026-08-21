@@ -108,7 +108,11 @@ internal fun SignInStep(
             } else {
                 // onDismiss is a no-op: we react to the auth state observed by the
                 // parent, which re-renders this step into its signed-in state.
-                SignInButtons(onDismiss = {}, primaryColor = true)
+                SignInButtons(
+                    onDismiss = {},
+                    primaryColor = true,
+                    skipAccountSwitchConfirmation = true,
+                )
             }
             Spacer(Modifier.height(24.dp))
         }

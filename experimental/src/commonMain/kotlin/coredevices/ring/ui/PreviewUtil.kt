@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.koin.compose.KoinApplication
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import coredevices.ring.ui.theme.IndexThemeHost
 import theme.AppTheme
 import theme.CoreAppTheme
 import theme.ThemeProvider
@@ -25,7 +26,7 @@ fun PreviewWrapper(content: @Composable () -> Unit) {
         })
     }) {
         AppTheme {
-            content()
+            IndexThemeHost { content() }
         }
     }
 }

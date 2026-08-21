@@ -19,6 +19,7 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.RingDelegate
@@ -33,6 +34,7 @@ import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.navigation.addRingRoutes
 import coredevices.ring.ui.screens.home.FeedTabContents
 import coredevices.ring.ui.screens.home.IndexFeedScreen
+import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import dev.gitlive.firebase.Firebase
@@ -76,6 +78,7 @@ class ExperimentalDevices(
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
+    private val indexSettingsSummary: IndexSettingsSummary,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -175,29 +178,31 @@ class ExperimentalDevices(
             topBarParams.actions { /* moved into IndexFeedScreen.IndexHeader */ }
             onDispose { /* nothing to clean up */ }
         }
-        IndexFeedScreen(
-            coreNav = coreNav,
-            scrollToTop = topBarParams.scrollToTop,
-            headerActions = {
-                BugReportButton(
-                    coreNav,
-                    pebble = false,
-                    screenContext = mapOf("screen" to "IndexFeed"),
-                )
-                if (isDebugEnabled) {
-                    IconButton(
-                        onClick = { launchWavImportDialog(listOf("audio/*")) },
-                    ) {
-                        Icon(Icons.Default.AudioFile, contentDescription = "Debug")
+        IndexThemeHost {
+            IndexFeedScreen(
+                coreNav = coreNav,
+                scrollToTop = topBarParams.scrollToTop,
+                headerActions = {
+                    BugReportButton(
+                        coreNav,
+                        pebble = false,
+                        screenContext = mapOf("screen" to "IndexFeed"),
+                    )
+                    if (isDebugEnabled) {
+                        IconButton(
+                            onClick = { launchWavImportDialog(listOf("audio/*")) },
+                        ) {
+                            Icon(Icons.Default.AudioFile, contentDescription = "Debug")
+                        }
                     }
-                }
-                IconButton(
-                    onClick = { coreNav.navigateTo(RingRoutes.Settings) },
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                }
-            },
-        )
+                    IconButton(
+                        onClick = { coreNav.navigateTo(RingRoutes.Settings) },
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                },
+            )
+        }
         // (Legacy `FeedTabContents` is no longer referenced from here.
         // It used to be kept-alive via a `::FeedTabContents` callable
         // reference, but Kotlin/Native 2.3 crashes during IR lowering on
@@ -287,14 +292,16 @@ class ExperimentalDevices(
         attachments
     }
 
-    fun debugSummary(): String {
+    suspend fun debugSummary(): String {
         return buildString {
             ringSync.lastRingSummary()?.let {
                 append(it)
                 append("\n")
             }
             append("Index Debug enabled: ${preferences.debugDetailsEnabled.value}\n")
-            append("LLM mode: ${preferences.llmMode.value}")
+            append("LLM mode: ${preferences.llmMode.value}\n")
+            append(runCatching { indexSettingsSummary.summary() }
+                .getOrElse { "\nIndex Settings unavailable: ${it.message}" })
         }
     }
 }

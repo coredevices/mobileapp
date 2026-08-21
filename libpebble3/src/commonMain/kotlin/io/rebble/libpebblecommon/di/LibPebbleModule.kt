@@ -114,6 +114,7 @@ import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
+import io.rebble.libpebblecommon.imaging.ImagingService
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
@@ -498,7 +499,8 @@ fun initKoin(
                             get(), get(), get(),
                             get(), get(), get(),
                             get(), get(), get(),
-                            get(), get(), get(), get(),
+                            get(), get(), get(), get(), get(),
+                            get(),
                         )
                     } bind PebbleConnector::class
                     scopedOf(::PebbleProtocolRunner)
@@ -530,6 +532,7 @@ fun initKoin(
                     scopedOf(::GetBytesService)
                     scopedOf(::PhoneControlService)
                     scopedOf(::MusicService)
+                    scopedOf(::ImagingService)
                     scopedOf(::ScreenshotService)
                     scopedOf(::VoiceService)
                     scopedOf(::AudioStreamService)
@@ -559,6 +562,7 @@ fun initKoin(
                                     get<DevConnectionCloudpebbleProxy>()
                                 }
                             }.distinctUntilChanged(),
+                            lanServer = get<DevConnectionServer>(),
                             identifier = get(),
                             protocolHandler = get(),
                             companionAppLifecycleManager = get(),

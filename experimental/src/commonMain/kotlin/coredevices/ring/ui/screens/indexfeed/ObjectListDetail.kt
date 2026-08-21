@@ -96,7 +96,6 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_S
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel

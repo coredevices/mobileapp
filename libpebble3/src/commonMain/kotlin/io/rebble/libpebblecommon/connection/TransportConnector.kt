@@ -21,6 +21,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicCo
 import io.rebble.libpebblecommon.connection.endpointmanager.phonecontrol.PhoneControlManager
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.TimelineActionManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.imaging.ImagingService
+import io.rebble.libpebblecommon.imaging.NotificationImageProvider
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.DataLoggingService
@@ -153,6 +155,7 @@ class RealPebbleConnector(
     private val phoneControlManager: PhoneControlManager,
     private val musicService: MusicService,
     private val musicControlManager: MusicControlManager,
+    private val imagingService: ImagingService,
     private val firmwareUpdateManager: FirmwareUpdateManager,
     private val devConnectionManager: DevConnectionManager,
     private val screenshotService: ScreenshotService,
@@ -161,6 +164,7 @@ class RealPebbleConnector(
     private val appOrderManager: AppOrderManager,
     private val languagePackInstaller: RealLanguagePackInstaller,
     private val healthService: HealthService,
+    private val notificationImageProvider: NotificationImageProvider,
 ) : PebbleConnector {
     private val logger = Logger.withTag("PebbleConnector-$identifier")
     private val _state = MutableStateFlow<ConnectingPebbleState>(Inactive(identifier))
@@ -280,6 +284,8 @@ class RealPebbleConnector(
         companionAppLifecycleManager.init(identifier, watchInfo)
         phoneControlManager.init()
         musicControlManager.init()
+        notificationImageProvider.register(imagingService)
+        imagingService.init()
         voiceSessionManager.init()
         dataLoggingService.realInit(watchInfo)
         appOrderManager.init(forceResend = watchInfo.isUnfaithful || !previouslyConnected)

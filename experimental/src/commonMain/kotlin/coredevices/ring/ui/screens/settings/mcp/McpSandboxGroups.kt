@@ -48,9 +48,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
+import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
+import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
@@ -58,6 +60,7 @@ import coredevices.ring.database.room.repository.McpServerEntry
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ui.M3Dialog
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
@@ -66,14 +69,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 class McpSandboxGroupsViewModel(
     val mcpSandboxRepository: McpSandboxRepository,
+    private val indexActionsRepository: IndexActionsRepository,
     private val preferences: Preferences,
     private val snackbarHostState: SnackbarHostState,
 ): ViewModel() {
+    val builtinActions = indexActionsRepository.actions.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
     val sandboxGroups = mcpSandboxRepository.getAllGroupsFlow().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -98,7 +109,7 @@ class McpSandboxGroupsViewModel(
             if (!preferences.llmMode.value.usesLocalCactus()) return@launch
             preferences.setLlmMode(LlmMode.RemoteOnly)
             snackbarHostState.showSnackbar(
-                "Assistant model set to Cloud Only. The offline model doesn't support MCP sandboxes"
+                "Assistant model set to Cloud LLM. The Local LLM doesn't support MCP sandboxes"
             )
         }
     }
@@ -121,6 +132,12 @@ class McpSandboxGroupsViewModel(
     fun saveHttpServer(server: HttpMcpServerEntity, groupIds: Set<Long>) {
         viewModelScope.launch {
             mcpSandboxRepository.addOrUpdateHttpServer(server, groupIds)
+        }
+    }
+
+    fun setActionEnabled(builtinMcpName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            indexActionsRepository.setActionEnabled(builtinMcpName, enabled)
         }
     }
 
@@ -148,6 +165,11 @@ fun McpSandboxGroups(coreNav: CoreNav) {
     val snackbarHostState = remember { SnackbarHostState() }
     val vm = koinViewModel<McpSandboxGroupsViewModel> { parametersOf(snackbarHostState) }
     val defaultGroupId by vm.defaultGroupId.collectAsState()
+    // Built-ins are stored by internal name; show the user-facing one.
+    val servletRepository = koinInject<ServletRepository>()
+    val builtinTitles = remember(servletRepository) {
+        servletRepository.getAllServlets().associate { it.name to it.title }
+    }
     var selectedTab by remember { mutableStateOf(GROUPS_TAB) }
     var showAddGroupDialog by remember { mutableStateOf(false) }
     var showAddServerDialog by remember { mutableStateOf(false) }
@@ -221,12 +243,15 @@ fun McpSandboxGroups(coreNav: CoreNav) {
                 )
                 SERVERS_TAB -> McpServersTab(
                     serverEntries = vm.serverEntries,
+                    builtinActions = vm.builtinActions,
                     allGroups = vm.sandboxGroups,
                     defaultGroupId = defaultGroupId,
+                    builtinTitle = { builtinTitles[it] ?: it },
                     showAddServerDialog = showAddServerDialog,
                     onDismissAddServerDialog = { showAddServerDialog = false },
                     loadGroupIds = vm::groupIdsForEntry,
                     onSaveHttpServer = vm::saveHttpServer,
+                    onSetActionEnabled = vm::setActionEnabled,
                     onSetBuiltinGroups = vm::setBuiltinGroups,
                     onDeleteHttpServer = vm::deleteHttpServer
                 )

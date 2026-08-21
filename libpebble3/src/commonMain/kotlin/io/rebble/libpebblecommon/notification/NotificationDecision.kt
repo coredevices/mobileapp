@@ -16,4 +16,5 @@ enum class NotificationDecision {
     NotSentDuplicate,
     NotSentScreenOn,
     NotSentRuleFiltered,
+    NotSentEmpty,
 }

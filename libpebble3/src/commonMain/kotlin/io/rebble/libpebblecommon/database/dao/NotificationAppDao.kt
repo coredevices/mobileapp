@@ -80,6 +80,16 @@ interface NotificationAppRealDao : NotificationAppItemDao {
     }
 
     @Transaction
+    suspend fun updateAppSendImages(packageName: String, sendImages: Boolean) {
+        val existing = getEntry(packageName)
+        if (existing == null) {
+            logger.e("updateAppSendImages: no record to update!")
+            return
+        }
+        insertOrReplace(existing.copy(sendImages = sendImages))
+    }
+
+    @Transaction
     suspend fun updateAppMuteState(packageName: String, muteState: MuteState) {
         val existing = getEntry(packageName)
         if (existing == null) {
@@ -119,6 +129,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 colorName = existingItem?.colorName ?: writeItem.colorName,
                 iconCode = existingItem?.iconCode ?: writeItem.iconCode,
                 allowDuplicates = existingItem?.allowDuplicates ?: writeItem.allowDuplicates,
+                sendImages = existingItem?.sendImages ?: writeItem.sendImages,
                 isSystemApp = existingItem?.isSystemApp ?: writeItem.isSystemApp,
                 autoAdded = existingItem?.autoAdded ?: writeItem.autoAdded,
                 // Phone-owned; the watch never sends it and asNotificationAppItem() doesn't decode it.

@@ -66,12 +66,17 @@ actual class RealAppleAuthUtil : AppleAuthUtil {
                         ?: UIWindow()
             }
             val authorizationController = ASAuthorizationController(listOf(request))
+            // ASAuthorizationController references its delegate and presentation context
+            // provider weakly, so this is the only strong reference keeping them alive
+            // until the callback fires.
+            var strongDelegate: NSObject? = delegate
             authorizationController.delegate = delegate
             authorizationController.presentationContextProvider = delegate
             authorizationController.performRequests()
             awaitClose {
                 authorizationController.delegate = null
                 authorizationController.presentationContextProvider = null
+                strongDelegate = null
             }
         }
 

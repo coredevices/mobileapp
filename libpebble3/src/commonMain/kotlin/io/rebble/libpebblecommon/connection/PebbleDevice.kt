@@ -141,7 +141,8 @@ object ConnectedPebble {
     }
 
     interface DevConnection {
-        suspend fun startDevConnection()
+        /** [forceLan] ignores the lanDevConnection config and always uses the LAN server. */
+        suspend fun startDevConnection(forceLan: Boolean = false)
         suspend fun stopDevConnection()
         val devConnectionActive: StateFlow<Boolean>
     }
@@ -209,7 +210,8 @@ object ConnectedPebble {
             trackPosMs: UInt,
             playbackRatePct: UInt,
             shuffle: Boolean,
-            repeatType: RepeatType
+            repeatType: RepeatType,
+            skipSeeksWithinTrack: Boolean,
         )
         suspend fun updatePlayerInfo(packageId: String, name: String)
         suspend fun updateVolumeInfo(volumePercent: UByte)

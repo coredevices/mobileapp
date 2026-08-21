@@ -92,7 +92,6 @@ import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.ui.openSystemClockApp
 import coredevices.ring.ui.components.recording.RecordingTraceTimeline
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.viewmodel.MessagePlaybackState
 import coredevices.ring.ui.viewmodel.RecordingDetailsViewModel
 import coredevices.util.rememberUiContext
@@ -130,133 +129,131 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
     val allLists by viewModel.allLists.collectAsState()
     val durationSec by viewModel.durationSeconds.collectAsState()
 
-    IndexThemeHost {
-        val indexColors = IndexTheme.colors
-        val statusBarPad = WindowInsets.statusBars.asPaddingValues()
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = indexColors.surface,
-            modifier = Modifier.padding(top = statusBarPad.calculateTopPadding()),
-            topBar = {
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(indexColors.surface)
-                        .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = coreNav::goBack) {
+    val indexColors = IndexTheme.colors
+    val statusBarPad = WindowInsets.statusBars.asPaddingValues()
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = indexColors.surface,
+        modifier = Modifier.padding(top = statusBarPad.calculateTopPadding()),
+        topBar = {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(indexColors.surface)
+                    .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = coreNav::goBack) {
+                    Icon(
+                        Icons.AutoMirrored.Default.ArrowBack,
+                        contentDescription = stringResource(UtilRes.string.back),
+                        tint = indexColors.onSurface,
+                    )
+                }
+                Text(
+                    // Prototype shows the recording's date/time as the
+                    // title, not the AI-generated assistantTitle.
+                    (itemState as? RecordingDetailsViewModel.ItemState.Loaded)?.recording?.localTimestamp
+                        ?.let { formatRecordingTitle(it) }
+                        ?: "Index Recording",
+                    color = indexColors.onSurface,
+                    fontSize = 16.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                )
+                BugReportButton(
+                    coreNav,
+                    pebble = false,
+                    screenContext = mapOf(
+                        "screen" to "RecordingDetails",
+                        "transcriptionModel" to ((itemState as? RecordingDetailsViewModel.ItemState.Loaded)?.entries?.firstOrNull()?.transcribedUsingModel ?: "<unknown>"),
+                        "state" to itemState.toString(),
+                        "recordingId" to id.toString(),
+                    ),
+                    recordingPath = (viewModel.itemState.value as? RecordingDetailsViewModel.ItemState.Loaded)
+                        ?.entries?.firstOrNull()?.fileName,
+                )
+                // Box anchors the DropdownMenu to the icon's bounds so
+                // the menu opens directly below the dots — without
+                // wrapping, the menu anchors to the right-slot start
+                // and renders on the left side of the screen
+                // (May 8 fix, mirrors ObjectItemDetail / ObjectListDetail).
+                Box {
+                    IconButton(onClick = viewModel::toggleMoreMenu) {
                         Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = stringResource(UtilRes.string.back),
-                            tint = indexColors.onSurface,
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(Res.string.more_options),
+                            tint = indexColors.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        // Prototype shows the recording's date/time as the
-                        // title, not the AI-generated assistantTitle.
-                        (itemState as? RecordingDetailsViewModel.ItemState.Loaded)?.recording?.localTimestamp
-                            ?.let { formatRecordingTitle(it) }
-                            ?: "Index Recording",
-                        color = indexColors.onSurface,
-                        fontSize = 16.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                    )
-                    BugReportButton(
-                        coreNav,
-                        pebble = false,
-                        screenContext = mapOf(
-                            "screen" to "RecordingDetails",
-                            "transcriptionModel" to ((itemState as? RecordingDetailsViewModel.ItemState.Loaded)?.entries?.firstOrNull()?.transcribedUsingModel ?: "<unknown>"),
-                            "state" to itemState.toString(),
-                            "recordingId" to id.toString(),
-                        ),
-                        recordingPath = (viewModel.itemState.value as? RecordingDetailsViewModel.ItemState.Loaded)
-                            ?.entries?.firstOrNull()?.fileName,
-                    )
-                    // Box anchors the DropdownMenu to the icon's bounds so
-                    // the menu opens directly below the dots — without
-                    // wrapping, the menu anchors to the right-slot start
-                    // and renders on the left side of the screen
-                    // (May 8 fix, mirrors ObjectItemDetail / ObjectListDetail).
-                    Box {
-                        IconButton(onClick = viewModel::toggleMoreMenu) {
-                            Icon(
-                                Icons.Default.MoreVert,
-                                contentDescription = stringResource(Res.string.more_options),
-                                tint = indexColors.onSurfaceVariant,
+                    DropdownMenu(expanded = moreMenuExpanded, onDismissRequest = viewModel::dismissMoreMenu) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.export_recording)) },
+                            onClick = { viewModel.exportRecording(); viewModel.dismissMoreMenu() },
+                        )
+                        // Re-run the agent ingestion against this recording.
+                        // Always available — moving it out of the debug-only
+                        // block so the user can recover from a failed
+                        // ingestion or pick up new agent behaviour without
+                        // toggling debug mode.
+                        if (showDebugDetails) {
+                            DropdownMenuItem(
+                                text = { Text(if (showTraceTimeline) "Hide Trace Timeline" else "Show Trace Timeline") },
+                                onClick = { viewModel.toggleTraceTimeline(); viewModel.dismissMoreMenu() },
                             )
                         }
-                        DropdownMenu(expanded = moreMenuExpanded, onDismissRequest = viewModel::dismissMoreMenu) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.export_recording)) },
-                                onClick = { viewModel.exportRecording(); viewModel.dismissMoreMenu() },
-                            )
-                            // Re-run the agent ingestion against this recording.
-                            // Always available — moving it out of the debug-only
-                            // block so the user can recover from a failed
-                            // ingestion or pick up new agent behaviour without
-                            // toggling debug mode.
-                            if (showDebugDetails) {
-                                DropdownMenuItem(
-                                    text = { Text(if (showTraceTimeline) "Hide Trace Timeline" else "Show Trace Timeline") },
-                                    onClick = { viewModel.toggleTraceTimeline(); viewModel.dismissMoreMenu() },
-                                )
-                            }
-                            DropdownMenuItem(
-                                text = { Text("Delete recording", color = indexColors.error) },
-                                onClick = { viewModel.dismissMoreMenu(); viewModel.requestDelete() },
-                            )
-                        }
-                    }
-                }
-            },
-        ) { insets ->
-            Box(
-                modifier = Modifier.padding(insets).fillMaxSize().background(indexColors.surface),
-            ) {
-                when (val state = itemState) {
-                    is RecordingDetailsViewModel.ItemState.Loading -> {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                    is RecordingDetailsViewModel.ItemState.Error -> {
-                        Text("Error loading recording", color = indexColors.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
-                    }
-                    is RecordingDetailsViewModel.ItemState.Loaded -> {
-                        RecordingDetailsContents(
-                            recording = state.recording,
-                            messages = state.messages,
-                            entries = state.entries,
-                            linkedItems = linkedItems,
-                            allLists = allLists,
-                            durationSec = durationSec,
-                            playbackState = playbackState,
-                            togglePlayback = viewModel::togglePlayback,
-                            showDebugDetails = showDebugDetails,
-                            showTraceTimeline = showTraceTimeline,
-                            onRetry = viewModel::retryRecording,
-                            onOpenObject = { id ->
-                                coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.ObjectDetails(id))
-                            },
-                            onCopied = { scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") } },
+                        DropdownMenuItem(
+                            text = { Text("Delete recording", color = indexColors.error) },
+                            onClick = { viewModel.dismissMoreMenu(); viewModel.requestDelete() },
                         )
                     }
                 }
             }
+        },
+    ) { insets ->
+        Box(
+            modifier = Modifier.padding(insets).fillMaxSize().background(indexColors.surface),
+        ) {
+            when (val state = itemState) {
+                is RecordingDetailsViewModel.ItemState.Loading -> {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+                is RecordingDetailsViewModel.ItemState.Error -> {
+                    Text("Error loading recording", color = indexColors.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
+                }
+                is RecordingDetailsViewModel.ItemState.Loaded -> {
+                    RecordingDetailsContents(
+                        recording = state.recording,
+                        messages = state.messages,
+                        entries = state.entries,
+                        linkedItems = linkedItems,
+                        allLists = allLists,
+                        durationSec = durationSec,
+                        playbackState = playbackState,
+                        togglePlayback = viewModel::togglePlayback,
+                        showDebugDetails = showDebugDetails,
+                        showTraceTimeline = showTraceTimeline,
+                        onRetry = viewModel::retryRecording,
+                        onOpenObject = { id ->
+                            coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.ObjectDetails(id))
+                        },
+                        onCopied = { scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") } },
+                    )
+                }
+            }
         }
-        if (showDeleteDialog) {
-            DeleteRecordingDialog(
-                linkedItemCount = linkedItems.size,
-                onDismiss = viewModel::dismissDeleteDialog,
-                onDeleteRecordingOnly = {
-                    viewModel.deleteRecording(alsoDeleteItems = false) { coreNav.goBack() }
-                },
-                onDeleteRecordingAndItems = {
-                    viewModel.deleteRecording(alsoDeleteItems = true) { coreNav.goBack() }
-                },
-            )
-        }
+    }
+    if (showDeleteDialog) {
+        DeleteRecordingDialog(
+            linkedItemCount = linkedItems.size,
+            onDismiss = viewModel::dismissDeleteDialog,
+            onDeleteRecordingOnly = {
+                viewModel.deleteRecording(alsoDeleteItems = false) { coreNav.goBack() }
+            },
+            onDeleteRecordingAndItems = {
+                viewModel.deleteRecording(alsoDeleteItems = true) { coreNav.goBack() }
+            },
+        )
     }
     Firebase.crashlytics.setCustomKey("recording_details_recording_id", 0)
 }

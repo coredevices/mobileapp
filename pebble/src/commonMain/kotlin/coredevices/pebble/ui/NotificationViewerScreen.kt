@@ -179,6 +179,7 @@ fun NotificationDecision.displayName(): String = when (this) {
     NotificationDecision.NotSendContactMuted -> "Contact Muted"
     NotificationDecision.NotSentScreenOn -> "Screen On"
     NotificationDecision.NotSentRuleFiltered -> "Rule Filtered"
+    NotificationDecision.NotSentEmpty -> "Empty"
 }
 
 private val FORMAT = LocalDateTime.Format {

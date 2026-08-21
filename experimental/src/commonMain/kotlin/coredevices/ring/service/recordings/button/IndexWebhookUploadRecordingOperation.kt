@@ -6,7 +6,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import kotlinx.coroutines.sync.Mutex
@@ -29,9 +29,9 @@ class IndexWebhookUploadRecordingOperation(
     private val webhookPreferences: IndexWebhookPreferences,
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
-    private val fileId: String,
+    private val fileId: String?,
     private val recordingId: Long,
-    private val trigger: IndexWebhookRecordingTrigger?,
+    private val gesture: RingGesture,
 ): RecordingOperation, KoinComponent {
 
     companion object {
@@ -47,17 +47,20 @@ class IndexWebhookUploadRecordingOperation(
         // Run the inner operation first (transcription + agent processing)
         decorated.run(handle)
 
-        if (!sentRecordingIdsLock.withLock { sentRecordingIds.add(fileId) }) {
-            logger.d { "Webhook already sent for recording $fileId, skipping" }
+        val sendKey = fileId ?: "text-$recordingId"
+        val payloadMode = webhookPreferences.configFor(gesture).payloadMode
+        // Typed input has no audio, so a recording-only webhook has nothing to deliver.
+        if (fileId == null && payloadMode == IndexWebhookPayloadMode.RecordingOnly) return
+
+        if (!sentRecordingIdsLock.withLock { sentRecordingIds.add(sendKey) }) {
+            logger.d { "Webhook already sent for recording $sendKey, skipping" }
             return
         }
-
-        val payloadMode = webhookPreferences.payloadMode.value
 
         // Read audio samples if needed
         val samples: ShortArray?
         val sampleRate: Int
-        if (payloadMode != IndexWebhookPayloadMode.TranscriptionOnly) {
+        if (fileId != null && payloadMode != IndexWebhookPayloadMode.TranscriptionOnly) {
             val (source, meta) = recordingStorage.openRecordingSource(fileId)
             samples = ShortArray((meta.size / 2).toInt())
             source.buffered().use {
@@ -79,6 +82,6 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.uploadIfEnabled(samples, sampleRate, fileId, transcription, recordedAt, trigger)
+        webhookApi.uploadIfEnabled(samples, sampleRate, sendKey, transcription, recordedAt, gesture)
     }
 }

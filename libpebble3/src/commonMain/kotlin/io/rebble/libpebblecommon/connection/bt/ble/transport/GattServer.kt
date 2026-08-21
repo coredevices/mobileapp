@@ -69,6 +69,11 @@ class GattServerManager(
                     BluetoothState.Disabled -> {
                         if (blePlatformConfig.closeGattServerWhenBtDisabled) {
                             close()
+                        } else {
+                            // The adapter dropping (on iOS, a bluetoothd reset) invalidates any
+                            // subscribed central, so the services must be re-added to prompt the
+                            // watch to redo discovery and resubscribe.
+                            serverMutex.withLock { servicesAdded = false }
                         }
                     }
                 }

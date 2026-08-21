@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -74,7 +73,6 @@ fun ChatInput(
     onCancelClick: () -> Unit = {},
     onTextSubmit: ((String) -> Unit)? = null
 ) {
-    IndexThemeHost {
     val colors = IndexTheme.colors
     var inputText by remember { mutableStateOf("") }
     var isFocused by remember { mutableStateOf(false) }
@@ -157,7 +155,6 @@ fun ChatInput(
                 )
             }
         }
-    }
     }
 }
 

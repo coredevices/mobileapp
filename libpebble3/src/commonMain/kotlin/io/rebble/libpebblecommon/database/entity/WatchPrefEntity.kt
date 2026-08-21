@@ -214,6 +214,7 @@ enum class BoolWatchPref(
     QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
+    MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
     ;
 
     override val type = WatchPrefType.TypeBoolean

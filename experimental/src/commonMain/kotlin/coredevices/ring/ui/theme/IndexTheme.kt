@@ -1,6 +1,7 @@
 package coredevices.ring.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,9 @@ data class IndexColors(
     val surfaceContainer: Color,
     val surfaceContainerHigh: Color,
     val surfaceContainerHighest: Color,
+    /** Bottom sheet background. Deliberately further from [surface] than the container
+     *  ramp, so a sheet reads as a separate layer over the screen behind it. */
+    val sheetSurface: Color,
 
     // Foreground / text
     val onSurface: Color,
@@ -58,6 +62,7 @@ data class IndexColors(
             surfaceContainer = Color(0xFFF2EDEA),
             surfaceContainerHigh = Color(0xFFECE7E4),
             surfaceContainerHighest = Color(0xFFE6E1DE),
+            sheetSurface = Color(0xFFFFFFFF),
             onSurface = Color(0xFF1C1B1A),
             // Prototype "meta" (#7A756F) — section headers + subtle text.
             onSurfaceVariant = Color(0xFF7A756F),
@@ -85,6 +90,7 @@ data class IndexColors(
             surfaceContainer = Color(0xFF2A2826),
             surfaceContainerHigh = Color(0xFF33302D),
             surfaceContainerHighest = Color(0xFF3B3835),
+            sheetSurface = Color(0xFF322F2C),
             onSurface = Color(0xFFF2EDEA),
             // Prototype "meta" (#8A8480) in dark mode.
             onSurfaceVariant = Color(0xFF8A8480),
@@ -114,6 +120,7 @@ data class IndexColors(
             surfaceContainer = Color(0xFF141414),
             surfaceContainerHigh = Color(0xFF1F1F1F),
             surfaceContainerHighest = Color(0xFF2B2930),
+            sheetSurface = Color(0xFF1C1C1C),
             outlineVariant = Color(0xFF1F1F1F),
         )
     }
@@ -129,26 +136,21 @@ object IndexTheme {
 }
 
 /**
- * Wrap a screen in [IndexThemeHost] to bind [IndexColors] to the app-level
- * theme setting (Settings → General → App Theme), or a forced override. The
- * app theme resolves Light/Dark/System; only "System" defers to the OS.
+ * Binds [IndexColors] to the app-level theme setting (Settings → General → App
+ * Theme), which resolves Light/Dark/System; only "System" defers to the OS.
+ *
+ * Provided once per composition root — the ring destinations in `addRingRoutes`
+ * and the Index tab — so screens and shared components below just read
+ * [IndexTheme]. A nested host would override the outer one.
  */
 @Composable
-fun IndexThemeHost(
-    forceDark: Boolean? = null,
-    content: @Composable () -> Unit,
-) {
-    val scheme = currentColorScheme()
-    val colors = when (forceDark) {
-        true -> IndexColors.Dark
-        false -> IndexColors.Light
-        null -> when (scheme) {
-            CoreAppColorScheme.Light -> IndexColors.Light
-            CoreAppColorScheme.Grey -> IndexColors.Dark
-            CoreAppColorScheme.Black -> IndexColors.Black
-        }
+fun IndexThemeHost(content: @Composable () -> Unit) {
+    val colors = when (currentColorScheme()) {
+        CoreAppColorScheme.Light -> IndexColors.Light
+        CoreAppColorScheme.Grey -> IndexColors.Dark
+        CoreAppColorScheme.Black -> IndexColors.Black
     }
-    androidx.compose.runtime.CompositionLocalProvider(
+    CompositionLocalProvider(
         LocalIndexColors provides colors,
         content = content,
     )

@@ -40,7 +40,13 @@ class ConnectivityWatcher(private val scope: ConnectionCoroutineScope) {
             // the connection scope is cancelled.
             var attempt = 0
             while (true) {
-                val sub = gattClient?.subscribeToCharacteristic(PAIRING_SERVICE_UUID, CONNECTIVITY_CHARACTERISTIC)
+                val sub = gattClient?.subscribeToCharacteristic(
+                    serviceUuid = PAIRING_SERVICE_UUID,
+                    characteristicUuid = CONNECTIVITY_CHARACTERISTIC,
+                    // Kable writes the CCCD lazily, on first collection: anything the watch
+                    // notifies before that is lost, so re-read once notifications are live.
+                    onSubscription = { readValue() },
+                )
                 if (sub == null) {
                     logger.w { "sub is null" }
                 }

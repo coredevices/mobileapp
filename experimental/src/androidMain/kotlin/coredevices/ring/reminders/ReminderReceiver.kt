@@ -51,7 +51,12 @@ class ReminderReceiver: BroadcastReceiver(), KoinComponent {
             .setGroup("reminders")
             .setAutoCancel(true)
             .setContentIntent(makeContentIntent(context, notificationId(data.id, isPreNotification), deepLink))
-            .addAction(0, "Done", makeMarkDonePendingIntent(context, data.id))
+            // showsUserInterface must be false (it's a no-UI broadcast) or the watch mirror drops the action
+            .addAction(
+                NotificationCompat.Action.Builder(0, "Done", makeMarkDonePendingIntent(context, data.id))
+                    .setShowsUserInterface(false)
+                    .build()
+            )
             .build()
 
     private fun makeMarkDonePendingIntent(context: Context, reminderId: Int): PendingIntent? {

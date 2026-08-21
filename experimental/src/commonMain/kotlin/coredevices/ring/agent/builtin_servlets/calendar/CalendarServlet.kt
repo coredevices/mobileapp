@@ -5,6 +5,9 @@ import coredevices.mcp.client.BuiltInMcpIntegration
 import coredevices.ring.database.Preferences
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -24,8 +27,7 @@ object CalendarServlet : BuiltInMcpIntegration(
         // integration in Accounts → Add integration AND calendar permission is granted. Gate on
         // the same PermissionRequester the settings UI uses so the dot and tool availability stay
         // in sync (notably on iOS, where EKAuthorizationStatus can lag a fresh in-session grant).
-        val connected = preferences.phoneCalendarEnabled.value &&
-            permissionRequester.grantedPermissions.value.contains(Permission.Calendar)
+        val connected = phoneCalendarConnected(preferences, permissionRequester).first()
         return if (connected) {
             emptyList()
         } else {
@@ -36,3 +38,12 @@ object CalendarServlet : BuiltInMcpIntegration(
         }
     }
 }
+
+/** Phone Calendar is connected only once the user has linked it AND the OS permission is live. */
+fun phoneCalendarConnected(
+    preferences: Preferences,
+    permissionRequester: PermissionRequester,
+): Flow<Boolean> = combine(
+    preferences.phoneCalendarEnabled,
+    permissionRequester.grantedPermissions,
+) { enabled, granted -> enabled && Permission.Calendar in granted }

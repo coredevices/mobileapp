@@ -23,7 +23,7 @@ class AgentFactory: KoinComponent {
         get<IndexAgentCactus> { parametersOf(conversation) }
 
     private fun remote(conversation: List<ConversationMessageDocument>): Agent =
-        get<IndexAgentNenya> { parametersOf(conversation) }
+        get<IndexAgentNenya> { parametersOf(conversation, prefs.defaultCaptureType.value) }
 
     fun createForChatMode(
         mode: ChatMode,

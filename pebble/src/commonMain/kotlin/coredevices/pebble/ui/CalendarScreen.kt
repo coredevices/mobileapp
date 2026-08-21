@@ -150,7 +150,7 @@ fun CalendarScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                             )
                             Text(entry.name)
                         }
-                        if (entry.enabled && !entry.syncEvents || !entry.visible) {
+                        if (entry.enabled && (!entry.syncEvents || !entry.visible)) {
                             Row {
                                 Text(
                                     text = "Not synced by Android - toggle checkbox to ask Android to sync",

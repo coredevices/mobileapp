@@ -211,16 +211,21 @@ class IosPermissionRequester(
         return state == CBManagerAuthorizationAllowedAlways
     }
 
+    // These managers and their delegates are only weakly referenced by the system, so they must be
+    // held here for as long as the request is outstanding, or the callback never arrives.
+    private var bluetoothManager: CBCentralManager? = null
+    private var bluetoothDelegate: CBCentralManagerDelegateProtocol? = null
+    private var locationManager: CLLocationManager? = null
+    private var locationDelegate: CLLocationManagerDelegateProtocol? = null
+
     private suspend fun requestBluetoothPermission(): PermissionResult {
         val state = suspendCancellableCoroutine { continuation ->
-            CBCentralManager(
-                object : NSObject(), CBCentralManagerDelegateProtocol {
-                    override fun centralManagerDidUpdateState(central: CBCentralManager) {
-                        continuation.resumeIfActive(central.state, "requestBluetoothPermission")
-                    }
-                },
-                null
-            )
+            bluetoothDelegate = object : NSObject(), CBCentralManagerDelegateProtocol {
+                override fun centralManagerDidUpdateState(central: CBCentralManager) {
+                    continuation.resumeIfActive(central.state, "requestBluetoothPermission")
+                }
+            }
+            bluetoothManager = CBCentralManager(bluetoothDelegate, null)
         }
         return (state == CBManagerStatePoweredOn).asPermissionResult()
     }
@@ -236,9 +241,9 @@ class IosPermissionRequester(
 
     private suspend fun requestLocationPermission(): PermissionResult {
         val result = suspendCancellableCoroutine { continuation ->
-            val manager = CLLocationManager()
+            val manager = CLLocationManager().also { locationManager = it }
             var firstCallback = true
-            manager.delegate = object : NSObject(), CLLocationManagerDelegateProtocol {
+            locationDelegate = object : NSObject(), CLLocationManagerDelegateProtocol {
                 override fun locationManagerDidChangeAuthorization(manager: CLLocationManager) {
                     val status = manager.authorizationStatus
                     logger.v { "locationManagerDidChangeAuthorization (location): $status firstCallback=$firstCallback" }
@@ -250,6 +255,7 @@ class IosPermissionRequester(
                     continuation.resumeIfActive(status, "requestLocationPermission")
                 }
             }
+            manager.delegate = locationDelegate
             manager.requestWhenInUseAuthorization()
         }
         return (result == kCLAuthorizationStatusAuthorizedAlways || result == kCLAuthorizationStatusAuthorizedWhenInUse).asPermissionResult()

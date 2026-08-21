@@ -79,7 +79,6 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_S
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel
@@ -105,34 +104,32 @@ fun ObjectDetail(coreNav: CoreNav, objectId: String, startEditing: Boolean = fal
     val vm = koinViewModel<ObjectDetailViewModel> { parametersOf(objectId, snackbarHostState) }
     val state by vm.state.collectAsStateWithLifecycle()
 
-    IndexThemeHost {
-        val colors = IndexTheme.colors
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = colors.surface,
-            // Include the IME so the content shrinks above the keyboard —
-            // otherwise editing the last row in a long list leaves the
-            // focused field hidden behind the keyboard (MOB-9093).
-            contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
-        ) { insets ->
-            Box(modifier = Modifier.padding(insets).fillMaxSize().background(colors.surface)) {
-                when (val s = state) {
-                    is ObjectDetailViewModel.UiState.Loading -> {
-                        DetailTopBar(title = "", coreNav = coreNav, right = {})
-                    }
-                    is ObjectDetailViewModel.UiState.NotFound -> {
-                        Column {
-                            DetailTopBar(title = "Not found", coreNav = coreNav, right = {})
-                            Text(
-                                "This item is gone.",
-                                modifier = Modifier.padding(24.dp),
-                                color = colors.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    is ObjectDetailViewModel.UiState.ItemView -> ItemView(s, coreNav, vm)
-                    is ObjectDetailViewModel.UiState.ListView -> ListView(s, coreNav, vm, startEditing)
+    val colors = IndexTheme.colors
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = colors.surface,
+        // Include the IME so the content shrinks above the keyboard —
+        // otherwise editing the last row in a long list leaves the
+        // focused field hidden behind the keyboard (MOB-9093).
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
+    ) { insets ->
+        Box(modifier = Modifier.padding(insets).fillMaxSize().background(colors.surface)) {
+            when (val s = state) {
+                is ObjectDetailViewModel.UiState.Loading -> {
+                    DetailTopBar(title = "", coreNav = coreNav, right = {})
                 }
+                is ObjectDetailViewModel.UiState.NotFound -> {
+                    Column {
+                        DetailTopBar(title = "Not found", coreNav = coreNav, right = {})
+                        Text(
+                            "This item is gone.",
+                            modifier = Modifier.padding(24.dp),
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                }
+                is ObjectDetailViewModel.UiState.ItemView -> ItemView(s, coreNav, vm)
+                is ObjectDetailViewModel.UiState.ListView -> ListView(s, coreNav, vm, startEditing)
             }
         }
     }

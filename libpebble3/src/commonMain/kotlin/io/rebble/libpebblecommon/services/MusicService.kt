@@ -59,14 +59,16 @@ class MusicService(private val protocolHandler: PebbleProtocolHandler) : Protoco
         trackPosMs: UInt,
         playbackRatePct: UInt,
         shuffle: Boolean,
-        repeatType: RepeatType
+        repeatType: RepeatType,
+        skipSeeksWithinTrack: Boolean,
     ) {
         send(MusicControl.UpdatePlayStateInfo(
             playbackState = state.protocolValue,
             trackPosition = trackPosMs,
             playRate = playbackRatePct,
             shuffle = if (shuffle) MusicControl.ShuffleState.On else MusicControl.ShuffleState.Off,
-            repeat = repeatType.protocolValue
+            repeat = repeatType.protocolValue,
+            skipSeeksWithinTrack = skipSeeksWithinTrack,
         ))
     }
 

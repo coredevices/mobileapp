@@ -118,7 +118,7 @@ class IndexFeedViewModel(
     fun newList(onCreated: (String) -> Unit) {
         if (newListJob?.isActive == true) return
         newListJob = viewModelScope.launch(Dispatchers.IO) {
-            val newId = listRepo.newList()
+            val newId = listRepo.createList("New list")
             withContext(Dispatchers.Main) { onCreated(newId) }
         }
     }

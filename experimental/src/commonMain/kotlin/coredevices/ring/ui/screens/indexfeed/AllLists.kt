@@ -61,7 +61,6 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_T
 import coredevices.ring.ui.screens.home.NoteListCard
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.AllListsViewModel
 import kotlin.time.ExperimentalTime
@@ -79,85 +78,83 @@ fun AllLists(coreNav: CoreNav) {
     var searching by remember { mutableStateOf(false) }
     LaunchedEffect(searching) { if (!searching) vm.setQuery("") }
 
-    IndexThemeHost {
-        val colors = IndexTheme.colors
-        val statusBarPad = WindowInsets.statusBars.asPaddingValues()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.surface)
-                .padding(top = statusBarPad.calculateTopPadding()),
-        ) {
-            if (searching) {
-                ListsSearchTopBar(
-                    value = query,
-                    onChange = vm::setQuery,
-                    onCancel = { searching = false; vm.setQuery("") },
-                )
-            } else {
-                TopBar(
-                    title = "All notes",
-                    coreNav = coreNav,
-                    right = {
-                        IconButton(onClick = { searching = true }) {
-                            Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                        }
-                        // "+" new-list — creates an empty list then jumps
-                        // straight into rename mode on its detail page.
-                        Text(
-                            "+",
-                            color = colors.primary,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier
-                                .clickable {
-                                    vm.newList { newId ->
-                                        coreNav.navigateTo(RingRoutes.ObjectDetails(newId, startEditing = true))
-                                    }
+    val colors = IndexTheme.colors
+    val statusBarPad = WindowInsets.statusBars.asPaddingValues()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.surface)
+            .padding(top = statusBarPad.calculateTopPadding()),
+    ) {
+        if (searching) {
+            ListsSearchTopBar(
+                value = query,
+                onChange = vm::setQuery,
+                onCancel = { searching = false; vm.setQuery("") },
+            )
+        } else {
+            TopBar(
+                title = "All notes",
+                coreNav = coreNav,
+                right = {
+                    IconButton(onClick = { searching = true }) {
+                        Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
+                    // "+" new-list — creates an empty list then jumps
+                    // straight into rename mode on its detail page.
+                    Text(
+                        "+",
+                        color = colors.primary,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clickable {
+                                vm.newList { newId ->
+                                    coreNav.navigateTo(RingRoutes.ObjectDetails(newId, startEditing = true))
                                 }
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                },
+            )
+        }
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+        ) {
+            if (state.lists.isEmpty()) {
+                item("empty") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(36.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (query.isNotBlank()) "No matching lists." else "No lists yet.",
+                            color = colors.onSurfaceVariant,
+                            fontSize = 14.sp,
                         )
-                    },
-                )
+                    }
+                }
             }
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-            ) {
-                if (state.lists.isEmpty()) {
-                    item("empty") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(36.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                if (query.isNotBlank()) "No matching lists." else "No lists yet.",
-                                color = colors.onSurfaceVariant,
-                                fontSize = 14.sp,
+            val rows = state.lists.chunked(2)
+            items(items = rows, key = { it.first().list.firestoreId }) { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    row.forEach { entry ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            NoteListCard(
+                                list = entry.list,
+                                items = entry.items,
+                                onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(entry.list.firestoreId)) },
                             )
                         }
                     }
+                    if (row.size == 1) Box(modifier = Modifier.weight(1f))
                 }
-                val rows = state.lists.chunked(2)
-                items(items = rows, key = { it.first().list.firestoreId }) { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        row.forEach { entry ->
-                            Box(modifier = Modifier.weight(1f)) {
-                                NoteListCard(
-                                    list = entry.list,
-                                    items = entry.items,
-                                    onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(entry.list.firestoreId)) },
-                                )
-                            }
-                        }
-                        if (row.size == 1) Box(modifier = Modifier.weight(1f))
-                    }
-                }
-                item { Spacer(Modifier.height(16.dp)) }
             }
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }

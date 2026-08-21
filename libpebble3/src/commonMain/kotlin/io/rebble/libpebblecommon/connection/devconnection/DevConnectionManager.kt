@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 
 class DevConnectionManager(
     private val transport: Flow<DevConnectionTransport>,
+    private val lanServer: DevConnectionServer,
     private val identifier: PebbleIdentifier,
     private val protocolHandler: PebbleProtocolHandler,
     private val companionAppLifecycleManager: CompanionAppLifecycleManager,
@@ -33,7 +34,10 @@ class DevConnectionManager(
             SharingStarted.Companion.Eagerly,
             false
         )
-    override suspend fun startDevConnection() {
+    override suspend fun startDevConnection(forceLan: Boolean) {
+        // Must never complete: onCompletion below stops the transport, so a finite flow would
+        // tear the server down as soon as it emitted.
+        val transport = if (forceLan) MutableStateFlow(lanServer) else transport
         val inboundPKJSLogs = companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() }
         job.value = scope.launch {
             var last: DevConnectionTransport? = null

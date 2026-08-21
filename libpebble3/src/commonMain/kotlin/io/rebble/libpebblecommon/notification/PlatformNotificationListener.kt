@@ -108,6 +108,12 @@ class NotificationApi(
         }
     }
 
+    override fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean) {
+        libPebbleCoroutineScope.launch {
+            notificationAppDao.updateAppSendImages(packageName, sendImages)
+        }
+    }
+
     override fun updateNotificationChannelMuteState(
         packageName: String,
         channelId: String,

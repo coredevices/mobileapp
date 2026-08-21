@@ -12,6 +12,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
@@ -660,9 +661,15 @@ class RingRecordingE2ETest {
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
-                    trigger: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger?,
+                    gesture: coredevices.ring.service.button.RingGesture,
                 ) {}
-                override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+                override suspend fun sendTestEvent(
+                    gesture: coredevices.ring.service.button.RingGesture,
+                    url: String,
+                    headers: Map<String, String>,
+                ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
+                    ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
+                )
             }
         } bind IndexWebhookApi::class
         single<com.russhwolf.settings.Settings> {
@@ -723,4 +730,7 @@ private class E2EPreferences : Preferences {
     override fun setLastWipedRing(id: String?) {}
     override fun setLastBackupCount(count: Int?) {}
     override fun setPlatformSttDefaulted() {}
+    override val defaultCaptureType: StateFlow<DefaultCaptureType> =
+        MutableStateFlow(DefaultCaptureType.Note)
+    override fun setDefaultCaptureType(type: DefaultCaptureType) {}
 }

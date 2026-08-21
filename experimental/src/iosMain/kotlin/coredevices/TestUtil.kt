@@ -17,6 +17,7 @@ import coredevices.ring.database.SecondaryMode
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.util.Platform
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
@@ -103,8 +104,8 @@ object TestUtil {
         val koin = KoinPlatform.getKoin()
         val builtinMcpRepository: BuiltinServletRepository = koin.get()
         val scope = CoroutineScope(Dispatchers.Default)
-        val mcpIntegrations = builtinMcpRepository.getAllServlets().map {
-            builtinMcpRepository.resolveName(it.name)!!
+        val mcpIntegrations = builtinMcpRepository.getAllServlets().mapNotNull {
+            builtinMcpRepository.resolveName(it.name)
         }
         return McpSession(
             integrations = mcpIntegrations,
@@ -225,6 +226,9 @@ private object PreferencesTestImpl: Preferences {
     override fun setLastWipedRing(id: String?) {}
     override fun setLastBackupCount(count: Int?) {}
     override fun setPlatformSttDefaulted() {}
+    override val defaultCaptureType: StateFlow<DefaultCaptureType> =
+        MutableStateFlow(DefaultCaptureType.Note)
+    override fun setDefaultCaptureType(type: DefaultCaptureType) {}
 }
 
 private object UsersDaoTestImpl: UsersDao {

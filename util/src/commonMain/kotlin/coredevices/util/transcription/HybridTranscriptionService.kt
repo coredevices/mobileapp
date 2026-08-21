@@ -249,19 +249,24 @@ class HybridTranscriptionService(
                 RoutedResult(text, sttMode, PLATFORM_STT_MODEL_NAME)
             }
             CactusSTTMode.RemoteFirst -> {
+                suspend fun localFallback(remoteError: Exception): RoutedResult = try {
+                    val text = cactus.transcribeLocal(audio, sampleRate)
+                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
+                    throw remoteError
+                }
                 try {
                     val result = remote(willFallbackLocal = true)
                     RoutedResult(result.text, sttMode, result.modelUsed)
                 } catch (e: TimeoutCancellationException) {
                     logger.w(e) { "Remote transcription timeout, falling back to local: ${e.message}" }
-                    val text = cactus.transcribeLocal(audio, sampleRate)
-                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                    localFallback(TranscriptionException.TranscriptionNetworkError(e, "wisprflow"))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    if (e is TranscriptionException.NoSpeechDetected) throw e
                     logger.w(e) { "Remote transcription failed, falling back to local: ${e.message}" }
-                    val text = cactus.transcribeLocal(audio, sampleRate)
-                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                    localFallback(e)
                 }
             }
             CactusSTTMode.LocalFirst -> {

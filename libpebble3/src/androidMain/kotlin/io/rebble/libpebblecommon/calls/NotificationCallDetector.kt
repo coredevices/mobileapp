@@ -6,6 +6,7 @@ import android.service.notification.StatusBarNotification
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
+import io.rebble.libpebblecommon.util.stripBidiIsolates
 
 /**
  * Passive store for CATEGORY_CALL notification actions and contact info.
@@ -33,8 +34,10 @@ class NotificationCallDetector(
         val notification = sbn.notification
         if (notification.category != Notification.CATEGORY_CALL) return
 
-        val title = notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        // Dialers bidi-wrap the number; the watch only recognises a caller ID as a number if it is
+        // digits and punctuation, otherwise it abbreviates it like a name.
+        val title = stripBidiIsolates(notification.extras.getCharSequence(Notification.EXTRA_TITLE))
+        val text = stripBidiIsolates(notification.extras.getCharSequence(Notification.EXTRA_TEXT))
         val answer = findAnswerAction(notification)
         val decline = findDeclineAction(notification)
 

@@ -4,6 +4,11 @@ import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
 import coredevices.ring.database.Preferences
+import coredevices.ring.isBeeperAvailable
+import coredevices.util.Permission
+import coredevices.util.PermissionRequester
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -39,3 +44,12 @@ object MessagingServlet: BuiltInMcpIntegration(
         }
     }
 }
+/** Beeper needs to be installed and to have granted access before the agent can message through it. */
+fun beeperUnavailableReason(permissionRequester: PermissionRequester): Flow<String?> =
+    permissionRequester.grantedPermissions.map { granted ->
+        when {
+            !isBeeperAvailable() -> "Beeper isn't installed on this phone"
+            Permission.Beeper !in granted -> "Allow access to Beeper in your phone's settings"
+            else -> null
+        }
+    }

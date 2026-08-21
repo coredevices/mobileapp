@@ -133,7 +133,7 @@ private fun resolveCalendarInstance(
         return null
     }
     val allDay = cursor.getNullableColumnIndex(CalendarContract.Instances.ALL_DAY)
-        ?.let { cursor.getInt(it) } ?: false
+        ?.let { cursor.getInt(it) } ?: 0
     val location = cursor.getNullableColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
         ?.let { cursor.getString(it) }
     val availability = cursor.getNullableColumnIndex(CalendarContract.Instances.AVAILABILITY)
@@ -253,48 +253,44 @@ private fun resolveAttendees(
         arrayOf(eventId.toString()),
         null
     )?.use { cursor ->
-        return@use generateSequence {
-            if (cursor.moveToNext()) {
-                val id = cursor.getNullableColumnIndex(CalendarContract.Attendees._ID)
-                    ?.let { cursor.getLong(it) } ?: return@generateSequence null
-                val eventId = cursor.getNullableColumnIndex(CalendarContract.Attendees.EVENT_ID)
-                    ?.let { cursor.getLong(it) } ?: return@generateSequence null
+        buildList {
+            while (cursor.moveToNext()) {
                 val name = cursor.getNullableColumnIndex(CalendarContract.Attendees.ATTENDEE_NAME)
-                    ?.let { cursor.getString(it) } ?: return@generateSequence null
+                    ?.let { cursor.getString(it) }
                 val email = cursor.getNullableColumnIndex(CalendarContract.Attendees.ATTENDEE_EMAIL)
-                    ?.let { cursor.getString(it) } ?: return@generateSequence null
+                    ?.let { cursor.getString(it) }
                 val type = cursor.getNullableColumnIndex(CalendarContract.Attendees.ATTENDEE_TYPE)
-                    ?.let { cursor.getInt(it) } ?: return@generateSequence null
+                    ?.let { cursor.getInt(it) } ?: continue
                 val status =
                     cursor.getNullableColumnIndex(CalendarContract.Attendees.ATTENDEE_STATUS)
-                        ?.let { cursor.getInt(it) } ?: return@generateSequence null
+                        ?.let { cursor.getInt(it) } ?: continue
                 val relationship =
                     cursor.getNullableColumnIndex(CalendarContract.Attendees.ATTENDEE_RELATIONSHIP)
-                        ?.let { cursor.getInt(it) } ?: return@generateSequence null
+                        ?.let { cursor.getInt(it) } ?: continue
 
-                EventAttendee(
-                    name = name,
-                    email = email,
-                    role = when (type) {
-                        CalendarContract.Attendees.TYPE_REQUIRED -> EventAttendee.Role.Required
-                        CalendarContract.Attendees.TYPE_OPTIONAL -> EventAttendee.Role.Optional
-                        CalendarContract.Attendees.TYPE_RESOURCE -> EventAttendee.Role.Resource
-                        else -> EventAttendee.Role.None
-                    },
-                    isOrganizer = relationship == CalendarContract.Attendees.RELATIONSHIP_ORGANIZER,
-                    isCurrentUser = email == ownerEmail,
-                    attendanceStatus = when (status) {
-                        CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED -> EventAttendee.AttendanceStatus.Accepted
-                        CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED -> EventAttendee.AttendanceStatus.Declined
-                        CalendarContract.Attendees.ATTENDEE_STATUS_INVITED -> EventAttendee.AttendanceStatus.Invited
-                        CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE -> EventAttendee.AttendanceStatus.Tentative
-                        else -> EventAttendee.AttendanceStatus.None
-                    }
+                add(
+                    EventAttendee(
+                        name = name,
+                        email = email,
+                        role = when (type) {
+                            CalendarContract.Attendees.TYPE_REQUIRED -> EventAttendee.Role.Required
+                            CalendarContract.Attendees.TYPE_OPTIONAL -> EventAttendee.Role.Optional
+                            CalendarContract.Attendees.TYPE_RESOURCE -> EventAttendee.Role.Resource
+                            else -> EventAttendee.Role.None
+                        },
+                        isOrganizer = relationship == CalendarContract.Attendees.RELATIONSHIP_ORGANIZER,
+                        isCurrentUser = email != null && email == ownerEmail,
+                        attendanceStatus = when (status) {
+                            CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED -> EventAttendee.AttendanceStatus.Accepted
+                            CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED -> EventAttendee.AttendanceStatus.Declined
+                            CalendarContract.Attendees.ATTENDEE_STATUS_INVITED -> EventAttendee.AttendanceStatus.Invited
+                            CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE -> EventAttendee.AttendanceStatus.Tentative
+                            else -> EventAttendee.AttendanceStatus.None
+                        }
+                    )
                 )
-            } else {
-                null
             }
-        }.toList()
+        }
     } ?: listOf()
 }
 
@@ -306,23 +302,13 @@ private fun resolveReminders(eventId: Long, contentResolver: ContentResolver): L
         arrayOf(eventId.toString()),
         null
     )?.use { cursor ->
-        return@use generateSequence {
-            if (cursor.moveToNext()) {
-                val id = cursor.getNullableColumnIndex(CalendarContract.Reminders._ID)
-                    ?.let { cursor.getLong(it) } ?: return@generateSequence null
-                val eventId = cursor.getNullableColumnIndex(CalendarContract.Reminders.EVENT_ID)
-                    ?.let { cursor.getLong(it) } ?: return@generateSequence null
+        buildList {
+            while (cursor.moveToNext()) {
                 val minutes = cursor.getNullableColumnIndex(CalendarContract.Reminders.MINUTES)
-                    ?.let { cursor.getInt(it) } ?: return@generateSequence null
-                val method = cursor.getNullableColumnIndex(CalendarContract.Reminders.METHOD)
-                    ?.let { cursor.getInt(it) } ?: return@generateSequence null
-                EventReminder(
-                    minutesBefore = minutes,
-                )
-            } else {
-                null
+                    ?.let { cursor.getInt(it) } ?: continue
+                add(EventReminder(minutesBefore = minutes))
             }
-        }.toList()
+        }
     } ?: listOf()
 }
 
@@ -338,27 +324,27 @@ class AndroidSystemCalendar(
         return try {
             return contentResolver.query(calendarUri, calendarProjection, null, null, null)
                 ?.use { cursor ->
-                    return@use generateSequence {
-                        if (cursor.moveToNext()) {
+                    buildList {
+                        while (cursor.moveToNext()) {
                             val id = cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
                                 ?.let { cursor.getLong(it) }
                             if (id == null) {
                                 logger.w("Calendar has no ID")
-                                return@generateSequence null
+                                continue
                             }
                             val accountName =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
                                     ?.let { cursor.getString(it) }
                             if (accountName == null) {
                                 logger.w("Calendar has no accountName")
-                                return@generateSequence null
+                                continue
                             }
                             val displayName =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
                                     ?.let { cursor.getString(it) }
                             if (displayName == null) {
                                 logger.w("Calendar has no displayName")
-                                return@generateSequence null
+                                continue
                             }
                             val ownerAccount =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
@@ -371,7 +357,7 @@ class AndroidSystemCalendar(
                                     ?.let { cursor.getInt(it) }
                             if (color == null) {
                                 logger.w("Calendar has no color")
-                                return@generateSequence null
+                                continue
                             }
                             val syncEvents =
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.SYNC_EVENTS)
@@ -380,20 +366,20 @@ class AndroidSystemCalendar(
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.VISIBLE)
                                     ?.let { cursor.getInt(it) }
 
-                            CalendarEntity(
-                                platformId = id.toString(),
-                                name = displayName,
-                                ownerName = accountName,
-                                ownerId = ownerAccount ?: "unknown",
-                                color = color,
-                                enabled = true,
-                                syncEvents = syncEvents == 1,
-                                visible = visible == 1,
+                            add(
+                                CalendarEntity(
+                                    platformId = id.toString(),
+                                    name = displayName,
+                                    ownerName = accountName,
+                                    ownerId = ownerAccount ?: "unknown",
+                                    color = color,
+                                    enabled = true,
+                                    syncEvents = syncEvents == 1,
+                                    visible = visible == 1,
+                                )
                             )
-                        } else {
-                            null
                         }
-                    }.toList()
+                    }
                 } ?: emptyList()
         } catch (e: SecurityException) {
             logger.e(e) { "Error syncing calendars"}
@@ -417,7 +403,7 @@ class AndroidSystemCalendar(
                     + " AND IFNULL(" + CalendarContract.Instances.STATUS + ", " + CalendarContract.Instances.STATUS_TENTATIVE + ") != " + CalendarContract.Instances.STATUS_CANCELED,
             arrayOf(calendar.platformId), "BEGIN ASC"
         )?.use { cursor ->
-            logger.d("Found ${cursor.count} events for calendar ${calendar.name.obfuscate(privateLogger)}")
+            logger.d("Found ${cursor.count} events for calendar ${calendar.platformId}/${calendar.name.obfuscate(privateLogger)}")
             val list = mutableListOf<CalendarEvent>()
             while (cursor.moveToNext()) {
                 val event = resolveCalendarInstance(contentResolver, cursor, calendar.ownerId)

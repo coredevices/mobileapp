@@ -86,6 +86,21 @@ class ListTool: BuiltInMcpTool(
          */
         fun matchListIdByHint(lists: List<CachedList>, hint: String): String? {
             if (hint.isBlank()) return null
+            return matchLists(lists, hint)
+                ?: hintSynonyms.firstNotNullOfOrNull { (word, alternates) ->
+                    if (hint.lowercase().contains(word)) {
+                        alternates.firstNotNullOfOrNull { matchLists(lists, it) }
+                    } else null
+                }
+        }
+
+        // Spoken names that don't literally match a seeded list title.
+        private val hintSynonyms = listOf(
+            "groceries" to listOf("grocery", "shopping"),
+            "grocery" to listOf("groceries", "shopping"),
+        )
+
+        private fun matchLists(lists: List<CachedList>, hint: String): String? {
             fun bestMatchOn(key: (CachedList) -> String?): String? = lists
                 .mapNotNull { list -> key(list)?.let { ReminderListEntry(list.firestoreId, it) } }
                 .fuzzyFilter(hint)

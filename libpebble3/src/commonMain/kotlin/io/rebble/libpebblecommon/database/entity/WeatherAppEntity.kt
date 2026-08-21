@@ -58,6 +58,7 @@ data class WeatherAppEntry(
     val todayWindDirection: Int? = null,
     val todayHourly: List<WeatherHourlyForecast>? = null,
     val locationUtcOffsetMin: Int? = null,
+    val tomorrowHourly: List<WeatherHourlyForecast>? = null,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), key).toBytes()
 
@@ -87,6 +88,7 @@ data class WeatherAppEntry(
     internal fun v4Record(): WeatherAppBlobRecordV4 {
         val daily = (dailyForecast ?: emptyList()).take(WEATHER_DB_MAX_FORECAST_DAYS)
         val hourly = (todayHourly ?: emptyList()).take(WEATHER_DB_HOURLY_COUNT)
+        val tomorrowHours = (tomorrowHourly ?: emptyList()).take(WEATHER_DB_HOURLY_COUNT)
         return WeatherAppBlobRecordV4(
             currentTemp = currentTemp,
             currentWeatherType = currentWeatherType.toUByte(),
@@ -107,15 +109,16 @@ data class WeatherAppEntry(
             numDaily = daily.size.toUByte(),
             daily = daily,
             todayHourlyCount = hourly.size.toUByte(),
-            todayHourlyWeatherType = UByteArray(WEATHER_DB_HOURLY_COUNT) { i ->
-                hourly.getOrNull(i)?.weatherType?.code?.toUByte() ?: WeatherType.Unknown.code.toUByte()
-            },
-            todayHourlyTemp = ByteArray(WEATHER_DB_HOURLY_COUNT) { i -> hourly.getOrNull(i)?.temp ?: 0 },
+            todayHourlyWeatherType = hourly.hourlyTypes(),
+            todayHourlyTemp = hourly.hourlyTemps(),
             todayHourlyUvX10 = UByteArray(WEATHER_DB_HOURLY_COUNT) { i ->
                 hourly.getOrNull(i)?.uvIndexX10?.toInt().toMetricByte()
             },
             locationUtcOffsetMin = locationUtcOffsetMin?.toShort() ?: WEATHER_V4_UTC_OFFSET_UNKNOWN,
             todayWindDirDeg = todayWindDirection?.toShort() ?: WEATHER_V4_WIND_DIR_DEG_UNKNOWN,
+            tomorrowHourlyCount = tomorrowHours.size.toUByte(),
+            tomorrowHourlyWeatherType = tomorrowHours.hourlyTypes(),
+            tomorrowHourlyTemp = tomorrowHours.hourlyTemps(),
             locationName = locationName,
             forecastShort = forecastShort,
         )
@@ -123,6 +126,14 @@ data class WeatherAppEntry(
 
     override fun recordHashCode(): Int = hashCode()
 }
+
+private fun List<WeatherHourlyForecast>.hourlyTypes(): UByteArray =
+    UByteArray(WEATHER_DB_HOURLY_COUNT) { i ->
+        getOrNull(i)?.weatherType?.code?.toUByte() ?: WeatherType.Unknown.code.toUByte()
+    }
+
+private fun List<WeatherHourlyForecast>.hourlyTemps(): ByteArray =
+    ByteArray(WEATHER_DB_HOURLY_COUNT) { i -> getOrNull(i)?.temp ?: 0 }
 
 private fun Double?.toCoordE2(): Short =
     this?.let { (it * 100).roundToInt().coerceIn(Short.MIN_VALUE + 1, Short.MAX_VALUE.toInt()).toShort() }
@@ -160,7 +171,7 @@ class WeatherAppBlobRecord(
 // v4 record sizing + "unknown" sentinels — must match weather_db.h.
 internal const val WEATHER_DB_MAX_FORECAST_DAYS = 7
 internal const val WEATHER_DB_HOURLY_COUNT = 24
-internal const val WEATHER_DB_MINOR_VERSION: UByte = 4u
+internal const val WEATHER_DB_MINOR_VERSION: UByte = 5u
 internal val WEATHER_V4_TEMP_UNKNOWN: Short = Short.MAX_VALUE          // 32767
 internal val WEATHER_V4_UV_UNKNOWN: Short = -1
 internal val WEATHER_V4_PRECIP_UNKNOWN: Short = -1
@@ -218,9 +229,9 @@ private fun Int?.toClampedUShort(): UShort =
     this?.takeIf { it >= 0 }?.coerceAtMost(65534)?.toUShort() ?: WEATHER_V4_USHORT_UNKNOWN
 
 /**
- * v4 weather BlobDB record, minor version 4. Layout is the v3 fixed prefix (identical offsets),
+ * v4 weather BlobDB record, minor version 5. Layout is the v3 fixed prefix (identical offsets),
  * then the v4 fixed fields, then the trailing pstring16s — exactly as the firmware reads it. See
- * weather_db.h. The fixed block is 201 bytes; the watch rejects a minor >= 1 record any shorter,
+ * weather_db.h. The fixed block is 250 bytes; the watch rejects a minor >= 1 record any shorter,
  * so every field is always emitted (unknown ones as sentinels). The phone only sends this when
  * the watch advertises
  * [ProtocolCapsFlag.SupportsWeatherDbV4]; otherwise it keeps writing [WeatherAppBlobRecord] (v3).
@@ -253,6 +264,9 @@ class WeatherAppBlobRecordV4(
     locationUtcOffsetMin: Short,
     todayWindDirDeg: Short,
     todayHourlyUvX10: UByteArray,
+    tomorrowHourlyCount: UByte,
+    tomorrowHourlyWeatherType: UByteArray,
+    tomorrowHourlyTemp: ByteArray,
     locationName: String,
     forecastShort: String,
 ) : StructMappable(endianness = Endian.Little) {
@@ -334,6 +348,12 @@ class WeatherAppBlobRecordV4(
     // --- v4 minor 4 additions ---
     // UV x10 per hour 0-23 (255 unknown): the watch's current-hour reading.
     val todayHourlyUvX10 = SBytes(m, WEATHER_DB_HOURLY_COUNT, todayHourlyUvX10, endianness = Endian.Unspecified)
+
+    // --- v4 minor 5 additions ---
+    // Tomorrow's hourly series, mirroring today's, for the clock dial's after-midnight hours.
+    val tomorrowHourlyCount = SUByte(m, tomorrowHourlyCount)
+    val tomorrowHourlyWeatherType = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyWeatherType, endianness = Endian.Unspecified)
+    val tomorrowHourlyTemp = SBytes(m, WEATHER_DB_HOURLY_COUNT, tomorrowHourlyTemp.toUByteArray(), endianness = Endian.Unspecified)
 
     // --- variable-length trailing strings (MUST stay last) ---
     val allStringsLength = SUShort(m, (locationName.length + 2 + forecastShort.length + 2).toUShort(), endianness = Endian.Little)

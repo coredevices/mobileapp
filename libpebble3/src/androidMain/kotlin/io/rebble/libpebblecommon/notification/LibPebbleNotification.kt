@@ -13,7 +13,9 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LibPebbleNotificationAction.ActionType
 import io.rebble.libpebblecommon.notification.NotificationDecision
+import io.rebble.libpebblecommon.notification.NotificationImage
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.toPebbleColor
@@ -35,11 +37,26 @@ data class LibPebbleNotification(
     val color: Int? = null, // ARGB
     /** Previous timeline notification UUIDs for which we should also handle actions */
     val previousUuids: List<Uuid>,
+    /** Height/width in sixteenths of the attached image, if there is one. */
+    val imageAspect: UByte? = null,
+    /** Where to read the attached image from; dropped once it has been cached. */
+    val image: NotificationImage? = null,
+    /**
+     * Identifies the message this notification is about; outlives [image] so it can take part in
+     * deduplication.
+     */
+    val messageKey: String? = null,
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
                 title == other.title &&
-                body == other.body
+                body == other.body &&
+                // Consecutive photos share the sender's name and the app's "Image" placeholder
+                // body, so without the message identity every attachment after the first looks like
+                // a duplicate. The aspect stands in for "has an image", which is what makes the
+                // re-post that finally carries the photo count as new.
+                messageKey == other.messageKey &&
+                imageAspect == other.imageAspect
     }
 
     companion object {
@@ -110,6 +127,9 @@ data class LibPebbleNotification(
             }
             vibrationPattern?.let {
                 vibrationPattern { it }
+            }
+            imageAspect?.let {
+                uByte(TimelineAttribute.ImageAspectRatio) { it }
             }
             tinyIcon { icon }
         }

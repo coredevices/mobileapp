@@ -15,7 +15,8 @@ import kotlin.uuid.Uuid
  *
  * The fixed prefix + daily[7] are constant-width, so v4 today-extras land at stable offsets:
  * uv @21, precip @23, wind speed @25, wind direction @27, hourly count @69,
- * hourly weather types @70..93, hourly temps @94..117, hourly uv @177..200.
+ * hourly weather types @70..93, hourly temps @94..117, hourly uv @177..200,
+ * tomorrow hourly count @201, types @202..225, temps @226..249.
  */
 internal class WeatherAppEntryV4MappingTest {
 
@@ -27,6 +28,7 @@ internal class WeatherAppEntryV4MappingTest {
         todayHourly: List<WeatherHourlyForecast>? = null,
         locationUtcOffsetMin: Int? = null,
         dailyForecast: List<WeatherDailyForecast> = listOf(WeatherDailyForecast(21, 13, WeatherType.Sun)),
+        tomorrowHourly: List<WeatherHourlyForecast>? = null,
     ) = WeatherAppEntry(
         key = Uuid.parse("00000000-0000-0000-0000-000000000000"),
         currentTemp = 18,
@@ -47,6 +49,7 @@ internal class WeatherAppEntryV4MappingTest {
         todayWindDirection = todayWindDirection,
         todayHourly = todayHourly,
         locationUtcOffsetMin = locationUtcOffsetMin,
+        tomorrowHourly = tomorrowHourly,
     )
 
     private fun le16(value: Int) = ubyteArrayOf((value and 0xFF).toUByte(), ((value shr 8) and 0xFF).toUByte())
@@ -101,6 +104,27 @@ internal class WeatherAppEntryV4MappingTest {
         assertUByteArrayEquals(ubyteArrayOf(0x00u, 0x80u), bytes.sliceArray(118..119)) // utc offset = -32768
         assertUByteArrayEquals(ubyteArrayOf(0xFFu, 0xFFu), bytes.sliceArray(161..162)) // wind dir deg = -1
         assertUByteArrayEquals(UByteArray(24) { 0xFFu }, bytes.sliceArray(177..200))   // hourly uv = 255
+        assertEquals(0u.toUByte(), bytes[201])                                         // tomorrow count = 0
+        assertUByteArrayEquals(UByteArray(24) { 0xFFu }, bytes.sliceArray(202..225))   // types = Unknown
+        assertUByteArrayEquals(UByteArray(24), bytes.sliceArray(226..249))             // temps = 0
+    }
+
+    @Test
+    fun mapsTomorrowHourly() {
+        val bytes = entry(
+            tomorrowHourly = listOf(
+                WeatherHourlyForecast(WeatherType.HeavyRain, 8),
+                WeatherHourlyForecast(WeatherType.PartlyCloudy, -3),
+            ),
+        ).v4Record().toBytes()
+
+        assertEquals(2u.toUByte(), bytes[201])
+        assertEquals(WeatherType.HeavyRain.code.toUByte(), bytes[202])
+        assertEquals(WeatherType.PartlyCloudy.code.toUByte(), bytes[203])
+        assertEquals(WeatherType.Unknown.code.toUByte(), bytes[204])
+        assertEquals(8u.toUByte(), bytes[226])
+        assertEquals(0xFDu.toUByte(), bytes[227]) // -3
+        assertEquals(0u.toUByte(), bytes[228])
     }
 
     @Test
@@ -118,7 +142,7 @@ internal class WeatherAppEntryV4MappingTest {
             ),
         ).v4Record().toBytes()
 
-        assertEquals(4u.toUByte(), bytes[18])                                  // minor_version
+        assertEquals(5u.toUByte(), bytes[18])                                  // minor_version
         assertUByteArrayEquals(le16(540), bytes.sliceArray(118..119))          // utc offset
         // daily_metrics[0] @120, [1] @123 (no wind for day 1), [2] @126 padded unknown
         assertUByteArrayEquals(ubyteArrayOf(40u, 15u, 62u), bytes.sliceArray(120..122))
@@ -161,19 +185,21 @@ internal class WeatherAppEntryV4MappingTest {
         assertUByteArrayEquals(le16(65534), bytes.sliceArray(145..146))
     }
 
-    /** The watch drops any minor >= 1 record whose fixed block is short of 201 bytes. */
+    /** The watch drops any minor >= 1 record whose fixed block is short of 250 bytes. */
     @Test
-    fun fixedBlockIsAlways201Bytes() {
+    fun fixedBlockIsAlways250Bytes() {
         val bytes = entry().v4Record().toBytes()
-        assertEquals(201 + 2 + 3 + 3, bytes.size) // fixed + string header + "X" + "Y"
+        assertEquals(250 + 2 + 3 + 3, bytes.size) // fixed + string header + "X" + "Y"
     }
 
     @Test
     fun clampsHourlyToTwentyFourEntries() {
         val bytes = entry(
             todayHourly = List(30) { WeatherHourlyForecast(WeatherType.Sun, 10) },
+            tomorrowHourly = List(30) { WeatherHourlyForecast(WeatherType.Sun, 10) },
         ).v4Record().toBytes()
 
         assertEquals(24u.toUByte(), bytes[69]) // count capped at WEATHER_DB_HOURLY_COUNT
+        assertEquals(24u.toUByte(), bytes[201])
     }
 }

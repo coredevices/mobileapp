@@ -126,6 +126,7 @@ class WisprFlowRESTTranscriptionService(
                 is STTLanguage.Specific -> language.languageCodes.toList()
             },
             context = buildContext(conversationContext, dictionaryContext, contentContext),
+            pipeline = listOf("transcribe", "align"),
         )
 
         try {

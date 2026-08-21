@@ -15,6 +15,9 @@ interface McpSandboxGroupDao {
     @Query("SELECT * FROM McpSandboxGroupEntity")
     fun getAllFlow(): Flow<List<McpSandboxGroupEntity>>
 
+    @Query("SELECT * FROM McpSandboxGroupEntity")
+    suspend fun getAll(): List<McpSandboxGroupEntity>
+
     @Query("UPDATE McpSandboxGroupEntity SET modelType = :modelType WHERE id = :groupId")
     suspend fun updateModelType(groupId: Long, modelType: SandboxModelType)
 

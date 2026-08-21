@@ -24,7 +24,7 @@ class HumanDateTimeParser(
     private val currentDateTime: LocalDateTime get() = clock.now().toLocalDateTime(timeZone)
 
     fun parse(input: String): InterpretedDateTime? {
-        val normalized = input.trim().lowercase()
+        val normalized = normalizeTimeExpressions(input.trim().lowercase())
 
         return parseRelative(normalized)
             ?: parseAbsoluteDateTime(normalized)
@@ -33,22 +33,158 @@ class HumanDateTimeParser(
     }
 
     /**
+     * Rewrites spoken-time renderings (as STT engines emit them) into canonical digit form so
+     * downstream regex patterns (which only recognise digits) can match. Covers:
+     *
+     *  - Hour + minute in any digit/word mix: "seven fifty am" → "7:50 am", "9 15 a.m." → "9:15 a.m.",
+     *    "9 fifteen" → "9:15", "nine 15" → "9:15", "eight twenty five" → "8:25"
+     *  - "oh" minutes: "nine oh five" / "9 oh 5" → "9:05"
+     *  - "<minute> past/after <hour>", and "<minute> to/till/before/of <hour>" when anchored by
+     *    am/pm or "at" (or the minute is half/quarter) — "ten to twelve" alone stays a range
+     *  - Hour word with time context: "eight pm" → "8 pm", "at eight" → "at 8", "eight o'clock" → "8"
+     *  - "noon" → "12 pm", "midnight" → "12 am"
+     *  - "in the morning/afternoon/evening/night" / "at night" → am/pm suffix
+     *
+     * Hour words with no adjacent time context are left alone so date phrases like
+     * "march twenty one" and durations like "in twenty five minutes" are untouched.
+     * Digit-digit pairs ("9 15") are only rewritten next to am/pm or after "at".
+     */
+    private fun normalizeTimeExpressions(s: String): String {
+        var r = s
+
+        r = r.replace(noonRegex, "12 pm")
+        r = r.replace(midnightRegex, "12 am")
+
+        // "<hour word> o'clock" → digit (o'clock is the time context), then strip residual
+        // "o'clock" after digit hours ("8 o'clock")
+        r = r.replace(hourWordOclockRegex) { match ->
+            wordToHour(match.groupValues[1])?.toString() ?: match.value
+        }
+        r = r.replace(oclockRegex, "")
+
+        r = r.replace(inTheTimeOfDayRegex) { match ->
+            if (match.groupValues[1] == "morning") " am" else " pm"
+        }
+        r = r.replace(atNightRegex, " pm")
+
+        r = r.replace(minutesPastHourRegex) { match ->
+            val minute = pastToMinute(match.groupValues[1]) ?: return@replace match.value
+            val hour = hourOf(match.groupValues[2], match.groupValues[3]) ?: return@replace match.value
+            "$hour:${minute.toString().padStart(2, '0')}"
+        }
+        r = r.replace(minutesToHourRegex) { match ->
+            val atPrefix = match.groupValues[1]
+            val minuteWord = match.groupValues[2]
+            val amPm = match.groupValues[5]
+            // Number-word minutes double as range endpoints ("free ten to twelve"), so those need
+            // an am/pm or "at" anchor; half/quarter are unambiguous
+            val anchored = minuteWord == "half" || minuteWord == "quarter" ||
+                atPrefix.isNotEmpty() || amPm.isNotEmpty()
+            if (!anchored) return@replace match.value
+            val minute = pastToMinute(minuteWord) ?: return@replace match.value
+            val hour = hourOf(match.groupValues[3], match.groupValues[4]) ?: return@replace match.value
+            val prev = if (hour == 1) 12 else hour - 1
+            // Crossing 12 flips the meridiem: "quarter to noon" is 11:45 am
+            val outAmPm = if (hour == 12) flipAmPm(amPm) else amPm
+            "$atPrefix$prev:${(60 - minute).toString().padStart(2, '0')}$outAmPm"
+        }
+
+        r = r.replace(ohMinutesRegex) { match ->
+            val hour = hourOf(match.groupValues[1], match.groupValues[2]) ?: return@replace match.value
+            val ones = match.groupValues[3].takeIf { it.isNotEmpty() }?.let { wordToHour(it) }
+                ?: match.groupValues[4].toIntOrNull()
+                ?: return@replace match.value
+            "$hour:0$ones"
+        }
+
+        // Hour + minute compounds. Word on either side is unambiguous time context; digit-digit
+        // ("9 15") needs adjacent am/pm or "at" so addresses/quantities are left alone.
+        r = r.replace(wordHourMinuteRegex) { match ->
+            val hour = wordToHour(match.groupValues[1]) ?: return@replace match.value
+            val minute = minuteOf(match.groupValues[2]) ?: return@replace match.value
+            "$hour:${minute.toString().padStart(2, '0')}"
+        }
+        r = r.replace(digitHourWordMinuteRegex) { match ->
+            val hour = match.groupValues[1].toIntOrNull()?.takeIf { it in 0..23 } ?: return@replace match.value
+            val minute = parseMinuteWord(match.groupValues[2]) ?: return@replace match.value
+            "$hour:${minute.toString().padStart(2, '0')}"
+        }
+        r = r.replace(digitPairAmPmRegex) { match ->
+            val hour = match.groupValues[1].toIntOrNull()?.takeIf { it in 0..23 } ?: return@replace match.value
+            val minute = match.groupValues[2].toIntOrNull()?.takeIf { it in 0..59 } ?: return@replace match.value
+            "$hour:${minute.toString().padStart(2, '0')}${match.groupValues[3]}"
+        }
+        r = r.replace(atDigitPairRegex) { match ->
+            val hour = match.groupValues[1].toIntOrNull()?.takeIf { it in 0..23 } ?: return@replace match.value
+            val minute = match.groupValues[2].toIntOrNull()?.takeIf { it in 0..59 } ?: return@replace match.value
+            "at $hour:${minute.toString().padStart(2, '0')}"
+        }
+
+        // Hour word with time context: trailing am/pm ("eight pm" → "8 pm") or preceding "at"
+        // ("at eight" → "at 8"). Bare hour words elsewhere are left alone.
+        r = r.replace(hourWordAmPmRegex) { match ->
+            val hour = wordToHour(match.groupValues[1]) ?: return@replace match.value
+            "$hour${match.groupValues[2]}"
+        }
+        r = r.replace(atHourWordRegex) { match ->
+            wordToHour(match.groupValues[1])?.let { "at $it" } ?: match.value
+        }
+
+        return r
+    }
+
+    private fun hourOf(word: String, digits: String): Int? =
+        word.takeIf { it.isNotEmpty() }?.let { wordToHour(it) }
+            ?: digits.toIntOrNull()?.takeIf { it in 0..23 }
+
+    private fun minuteOf(minute: String): Int? =
+        minute.toIntOrNull()?.takeIf { it in 0..59 } ?: parseMinuteWord(minute)
+
+    private fun pastToMinute(minute: String): Int? = when (minute) {
+        "half" -> 30
+        "quarter" -> 15
+        else -> minuteOf(minute)?.takeIf { it in 1..59 }
+    }
+
+    private fun flipAmPm(amPm: String): String =
+        if ('p' in amPm) amPm.replace('p', 'a') else amPm.replace('a', 'p')
+
+    private fun wordToHour(word: String): Int? = wordToNumber(word)?.toInt()?.takeIf { it in 1..12 }
+
+    private fun parseMinuteWord(word: String): Int? {
+        val trimmed = word.trim()
+        wordToNumber(trimmed)?.let { return it.toInt() }
+        // Compound tens + ones: "twenty five" → 25
+        val parts = trimmed.split(whitespaceRegex)
+        if (parts.size == 2) {
+            val tens = wordToNumber(parts[0])?.toInt()?.takeIf { it in 20..50 && it % 10 == 0 } ?: return null
+            val ones = wordToNumber(parts[1])?.toInt()?.takeIf { it in 1..9 } ?: return null
+            return tens + ones
+        }
+        return null
+    }
+
+    /**
      * Scans a full user message for a date/time expression and extracts it.
      * Returns the parsed result along with the matched substring and its range,
      * or null if no date/time expression is found.
      *
+     * Spoken-time forms are normalized before matching; when that rewrites the text, the returned
+     * matchedText/range refer to the normalized lowercased message, not the original.
+     *
      * Example: "remind me to buy groceries tomorrow at 3pm" -> ParsedDateTimeResult(AbsoluteDateTime(...), "tomorrow at 3pm", 32..48)
      */
     fun parseFromMessage(message: String): ParsedDateTimeResult? {
-        val normalized = message.lowercase()
+        val lowered = message.lowercase()
+        val normalized = normalizeTimeExpressions(lowered)
+        val source = if (normalized == lowered) message else normalized
 
         for (pattern in messagePatterns) {
             pattern.find(normalized)?.let { match ->
                 val candidate = match.value.trim()
                 parse(candidate)?.let { result ->
-                    // Map back to original message range
-                    val originalText = message.substring(match.range).trim()
-                    val trimStart = message.indexOf(originalText, match.range.first)
+                    val originalText = source.substring(match.range).trim()
+                    val trimStart = source.indexOf(originalText, match.range.first)
                     return ParsedDateTimeResult(
                         result,
                         originalText,
@@ -170,6 +306,11 @@ class HumanDateTimeParser(
     }
 
     private fun parseAbsoluteDateTime(input: String): InterpretedDateTime.AbsoluteDateTime? {
+        tonightPattern.find(input)?.let { match ->
+            val time = resolveTimeOfDay(input, match.range, "night") ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(currentDateTime.date, time))
+        }
+
         dayWordTimeOfDayPattern.find(input)?.let { match ->
             val dayWord = match.groupValues[1].let { if (it == "this") "today" else it }
             val date = parseDayWord(dayWord) ?: return null
@@ -187,7 +328,8 @@ class HumanDateTimeParser(
             val dayWord = match.groupValues[1]
             val timeStr = match.groupValues[2]
             val date = parseDayWord(dayWord) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            // The pattern contains an explicit "at", so a bare hour is a time ("tomorrow at 8")
+            val time = parseTimeString(timeStr, allowBareHour = true) ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
@@ -203,7 +345,7 @@ class HumanDateTimeParser(
             val dayName = match.groupValues[1]
             val timeStr = match.groupValues[2]
             val date = parseNextDayOfWeek(dayName) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val time = parseTimeString(timeStr, allowBareHour = true) ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
@@ -334,7 +476,12 @@ class HumanDateTimeParser(
     }
 
     private fun parseTimeString(timeStr: String, allowBareHour: Boolean = false): LocalTime? {
-        val cleaned = timeStr.trim().lowercase()
+        val lowered = timeStr.trim().lowercase()
+        namedTimePattern.find(lowered)?.let { match ->
+            namedTimes[match.groupValues[1]]?.let { return it }
+        }
+
+        val cleaned = lowered
             .replace(".", "")
             .replace(" ", "")
 
@@ -531,6 +678,39 @@ class HumanDateTimeParser(
         // 9am default in ReminderTool/ListTool so weekend resolution doesn't land on a past slot.
         private val DEFAULT_BARE_DATE_TIME = LocalTime(9, 0)
 
+        // Word-number patterns used by normalizeTimeExpressions
+        private const val HOUR_WORD_PATTERN = """(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"""
+        private const val MINUTE_ONES_BODY = """one|two|three|four|five|six|seven|eight|nine"""
+        private const val MINUTE_TENS_PATTERN = """(?:twenty|thirty|forty|fifty)"""
+        private const val MINUTE_ONES_PATTERN = """(?:$MINUTE_ONES_BODY)"""
+        private const val MINUTE_TEENS_PATTERN = """(?:ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)"""
+        private const val MINUTE_COMPOUND_PATTERN = """(?:$MINUTE_TEENS_PATTERN|$MINUTE_TENS_PATTERN(?:\s+$MINUTE_ONES_PATTERN)?)"""
+        private const val MINUTE_ONES_CAPTURE = """($MINUTE_ONES_BODY)"""
+        private const val PAST_TO_MINUTE_PATTERN = """half|quarter|$MINUTE_COMPOUND_PATTERN|$MINUTE_ONES_PATTERN|\d{1,2}"""
+        private const val TO_MINUTE_PATTERN = """half|quarter|$MINUTE_COMPOUND_PATTERN"""
+        private const val AMPM_EXPR = """[ap]\.?\s*m\.?(?![a-z])"""
+
+        // Normalizer rewrite patterns
+        private val noonRegex = Regex("""\bnoon\b""")
+        private val midnightRegex = Regex("""\bmidnight\b""")
+        private val hourWordOclockRegex = Regex("""\b$HOUR_WORD_PATTERN\s+o'?clock\b""")
+        private val oclockRegex = Regex("""\s*\bo'?clock\b""")
+        private val inTheTimeOfDayRegex = Regex("""\s+in\s+the\s+(morning|afternoon|evening|night)\b""")
+        private val atNightRegex = Regex("""\s+at\s+night\b""")
+        private val minutesPastHourRegex =
+            Regex("""\b(?:a\s+)?($PAST_TO_MINUTE_PATTERN)\s+(?:past|after)\s+(?:$HOUR_WORD_PATTERN|(\d{1,2}))\b""")
+        private val minutesToHourRegex =
+            Regex("""(\bat\s+)?\b(?:a\s+)?($TO_MINUTE_PATTERN)\s+(?:to|till|before|of)\s+(?:$HOUR_WORD_PATTERN\b|(\d{1,2})(?![0-9]))((?:\s*$AMPM_EXPR)?)""")
+        private val ohMinutesRegex =
+            Regex("""\b(?:$HOUR_WORD_PATTERN|(\d{1,2}))\s+(?:oh|o)\s+(?:$MINUTE_ONES_CAPTURE|(\d))\b""")
+        private val wordHourMinuteRegex = Regex("""\b$HOUR_WORD_PATTERN\s+($MINUTE_COMPOUND_PATTERN|\d{2})\b""")
+        private val digitHourWordMinuteRegex = Regex("""\b(\d{1,2})\s+($MINUTE_COMPOUND_PATTERN)\b""")
+        private val digitPairAmPmRegex = Regex("""\b(\d{1,2})\s+(\d{2})(\s*$AMPM_EXPR)""")
+        private val atDigitPairRegex = Regex("""\bat\s+(\d{1,2})\s+(\d{2})\b""")
+        private val hourWordAmPmRegex = Regex("""\b$HOUR_WORD_PATTERN(\s*$AMPM_EXPR)(?:\b|$)""")
+        private val atHourWordRegex = Regex("""\bat\s+$HOUR_WORD_PATTERN\b""")
+        private val whitespaceRegex = Regex("""\s+""")
+
         // Shared regex fragments
         private const val TIME_EXPR = """\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?)"""
         private const val TIME_24_EXPR = """\d{1,2}:\d{2}"""
@@ -538,6 +718,8 @@ class HumanDateTimeParser(
         private const val DAY_OF_WEEK_EXPR = """(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"""
         private const val MONTH_EXPR = """(?:january|february|march|april|may|june|july|august|september|october|november|december)"""
         private const val TIME_OF_DAY_EXPR = """(?:morning|afternoon|evening|night)"""
+        private const val NAMED_TIME_EXPR = """noon|midnight"""
+        private const val ANY_TIME_EXPR = """$TIME_EXPR|$TIME_24_EXPR|$NAMED_TIME_EXPR"""
         private const val NUMBER_WORDS_EXPR = """two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty"""
 
         // Spelled-out day-of-month numbers, cardinal ("twenty one") or ordinal ("twenty-first").
@@ -570,6 +752,8 @@ class HumanDateTimeParser(
         private val standaloneDurationPattern = Regex("""^$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$""")
 
         // Absolute date+time patterns
+        // "tonight" is a single token, so it can't go through the day-word + time-of-day patterns.
+        private val tonightPattern = Regex("""\btonight\b""")
         private val dayWordTimeOfDayPattern = Regex("""(today|tomorrow|this)\s+(morning|afternoon|evening|night)""")
         private val dayOfWeekTimeOfDayPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(morning|afternoon|evening|night)""")
         private val dayWordTimePattern = Regex("""(today|tomorrow)\s+at\s+(.+)""")
@@ -583,7 +767,13 @@ class HumanDateTimeParser(
         // Absolute time patterns
         private val atTimePattern = Regex("""at\s+(.+)""")
         private val timePattern = Regex("""^(\d{1,2})(?::(\d{2}))?(am|pm)?$""")
-        private val amPmPattern = Regex("""[ap]\.?\s*m\.?""")
+        // Word boundaries keep "noon" off "afternoon", which resolves to 14:00 instead.
+        private val namedTimePattern = Regex("""\b($NAMED_TIME_EXPR)\b""")
+        private val namedTimes = mapOf(
+            "noon" to LocalTime(12, 0),
+            "midnight" to LocalTime(0, 0),
+        )
+        private val amPmPattern = Regex(AMPM_EXPR)
 
         // Absolute date patterns
         private val weekendPattern = Regex("""^(?:(this|the|next|coming|this\s+coming)\s+)?weekend$""")
@@ -596,19 +786,24 @@ class HumanDateTimeParser(
         // Patterns for parseFromMessage, ordered by specificity (most specific first)
         private val messagePatterns = listOf(
             // Date + time combinations
-            Regex("""(?:$DAY_WORD_EXPR)\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
-            Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
-            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
-            Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
+            Regex("""(?:$DAY_WORD_EXPR)\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
+            Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
+            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
+            Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$ANY_TIME_EXPR)"""),
             // Date + time-of-day combinations. Explicit-time variants first so they aren't
             // truncated to the vague form; bare hour is allowed since "at" anchors it as a time.
+            Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$ANY_TIME_EXPR|\d{1,2})"""),
+            Regex("""at\s+\d{1,2}\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
+            Regex("""tonight\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
+            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+tonight"""),
+            Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+tonight"""),
             Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+$TIME_OF_DAY_EXPR"""),
@@ -621,12 +816,13 @@ class HumanDateTimeParser(
             Regex("""in\s+$QUANTIFIER_EXPR\s+$UNIT_EXPR"""),
             Regex("""$QUANTIFIER_EXPR\s+$UNIT_EXPR\s+from\s+now"""),
             // "at <time>" (standalone)
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)"""),
             // Date patterns
             Regex("""(?:next|on)\s+$DAY_OF_WEEK_EXPR"""),
             Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
             Regex("""\b\d{1,2}/\d{1,2}\b"""),
             Regex("""\b(?:$DAY_WORD_EXPR)\b"""),
+            Regex("""\btonight\b"""),
             Regex("""\b$DAY_OF_WEEK_EXPR\b"""),
             // Upcoming weekend. Unsupported past/recurring qualifiers ("last", "every", "this past")
             // are captured too so the candidate fails parse() and is skipped, rather than silently
@@ -634,8 +830,9 @@ class HumanDateTimeParser(
             Regex("""\b(?:(?:last|every|past|this\s+past|this\s+coming|this|the|next|coming)\s+)?weekend\b"""),
             // The trailing \b keeps this off "next weekend", handled by the pattern above.
             Regex("""\bnext\s+week\b"""),
-            // Bare time (e.g. "3pm")
+            // Bare time (e.g. "3pm", "noon")
             Regex("""\b$TIME_EXPR"""),
+            Regex("""\b(?:$NAMED_TIME_EXPR)\b"""),
         )
     }
 }

@@ -34,23 +34,13 @@ class ListRepository(
         cacheDao.upsert(CachedList.fromDocument(id, list))
     }
 
-    /** Creates a fresh user notes list and returns the new doc id. The id is
-     *  generated locally from the timestamp; the next "Sync now" will push it
-     *  to Firestore alongside everything else. */
-    suspend fun newList(): String {
+    /** Creates a fresh user list with a locally-generated id and returns that id.
+     *  The next "Sync now" pushes it to Firestore alongside everything else. */
+    suspend fun createList(title: String): String {
         val now = Clock.System.now()
-        val newId = "list_${now.toEpochMilliseconds()}"
-        setList(
-            newId,
-            ListDocument(
-                createdAt = now,
-                updatedAt = now,
-                title = "New list",
-                icon = "📝",
-                listKind = "note",
-            ),
-        )
-        return newId
+        val id = "list_${now.toEpochMilliseconds()}"
+        setList(id, ListDocument(createdAt = now, updatedAt = now, title = title))
+        return id
     }
 
     suspend fun softDelete(id: String) {

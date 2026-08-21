@@ -62,14 +62,27 @@ open class TextOnlyRecordingOperation(
                 sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
                 this
             )
-            recordingProcessor.processText(
-                recordingId = recordingId,
-                mcpSession = mcpSession,
-                recordingEntryId = entryId,
-                agent = chatAgent,
-                forcedTool = forcedTool?.let { { _, sessionContext -> it(sessionContext) } },
-                text = text
-            )
+            try {
+                recordingProcessor.processText(
+                    recordingId = recordingId,
+                    mcpSession = mcpSession,
+                    recordingEntryId = entryId,
+                    agent = chatAgent,
+                    forcedTool = forcedTool?.let { { _, sessionContext -> it(sessionContext) } },
+                    text = text
+                )
+                recordingEntryDao.updateRecordingEntryStatus(
+                    entryId,
+                    status = RecordingEntryStatus.completed,
+                )
+            } catch (e: Exception) {
+                recordingEntryDao.updateRecordingEntryStatus(
+                    entryId,
+                    status = RecordingEntryStatus.agent_error,
+                    error = e.message,
+                )
+                throw e
+            }
         }
     }
 }

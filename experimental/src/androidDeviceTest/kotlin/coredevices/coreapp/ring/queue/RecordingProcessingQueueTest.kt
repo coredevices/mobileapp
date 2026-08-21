@@ -47,6 +47,7 @@ import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
@@ -131,6 +132,9 @@ class FakePreferences : Preferences {
         TODO("Not yet implemented")
     }
     override fun setPlatformSttDefaulted() {}
+    override val defaultCaptureType: StateFlow<DefaultCaptureType> =
+        MutableStateFlow(DefaultCaptureType.Note)
+    override fun setDefaultCaptureType(type: DefaultCaptureType) {}
 }
 
 class FakeServletRepository : ServletRepository {
@@ -255,9 +259,15 @@ class RecordingProcessingQueueTest {
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
-                    trigger: coredevices.ring.external.indexwebhook.IndexWebhookRecordingTrigger?,
+                    gesture: coredevices.ring.service.button.RingGesture,
                 ) {}
-                override val isEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+                override suspend fun sendTestEvent(
+                    gesture: coredevices.ring.service.button.RingGesture,
+                    url: String,
+                    headers: Map<String, String>,
+                ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
+                    ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
+                )
             }
         } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)

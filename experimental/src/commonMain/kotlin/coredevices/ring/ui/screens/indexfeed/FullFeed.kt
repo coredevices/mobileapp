@@ -80,7 +80,6 @@ import coredevices.indexai.data.entity.LocalRecording
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.FullFeedViewModel
 import kotlinx.datetime.TimeZone
@@ -123,132 +122,130 @@ fun FullFeed(coreNav: CoreNav) {
     var searching by remember { mutableStateOf(false) }
     LaunchedEffect(searching) { if (!searching) vm.setQuery("") }
 
-    IndexThemeHost {
-        val colors = IndexTheme.colors
-        val statusBarPad = WindowInsets.statusBars.asPaddingValues()
-        val listState = rememberLazyListState()
-        val scope = rememberCoroutineScope()
-        val timestampRevealState = remember { RecordingTimestampRevealState() }
-        var preSearchIndex by rememberSaveable { mutableIntStateOf(0) }
-        var preSearchOffset by rememberSaveable { mutableIntStateOf(0) }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.surface)
-                .imePadding()
-                .padding(top = statusBarPad.calculateTopPadding()),
-        ) {
-            if (searching) {
-                FeedSearchTopBar(
-                    value = query,
-                    onChange = vm::setQuery,
-                    onCancel = {
-                        searching = false
-                        vm.setQuery("")
-                        scope.launch {
-                            listState.scrollToItem(preSearchIndex, preSearchOffset)
-                        }
-                    },
-                )
-            } else {
-                FullFeedTopBar(coreNav = coreNav, onSearch = {
-                    preSearchIndex = listState.firstVisibleItemIndex
-                    preSearchOffset = listState.firstVisibleItemScrollOffset
-                    searching = true
-                })
-            }
-
-            // ONE-SHOT auto-scroll-to-bottom: fires the first time the
-            // entries flow emits a non-empty list, then never again. Both
-            // the flag and `listState` are `rememberSaveable`, so when
-            // the user pops back from a recording detail screen the saved
-            // scroll position restores cleanly without the effect re-
-            // firing and snapping to the bottom.
-            //
-            // Previously this was `LaunchedEffect(state.entries.size)`
-            // with no guard — it re-fired on every recomposition (and
-            // every list mutation) and clobbered the restored scroll.
-            var didInitialScroll by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(state.entries.isNotEmpty()) {
-                if (!didInitialScroll && state.entries.isNotEmpty()) {
-                    listState.scrollToItem(state.entries.size - 1)
-                    didInitialScroll = true
-                }
-            }
-
-            // Stick-to-bottom when new entries arrive: if the user is
-            // already viewing the bottom of the list (within the last
-            // visible item), animate to the new last item so the freshly
-            // recorded message + agent reply scroll into view. If they've
-            // scrolled up to read older messages, leave them alone.
-            var prevSize by remember { mutableIntStateOf(state.entries.size) }
-            LaunchedEffect(state.entries.size, query) {
-                val newSize = state.entries.size
-                if (query.isBlank() && newSize > prevSize && didInitialScroll) {
-                    val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    // `prevSize - 1` was the previous last index. If they
-                    // could see it, treat them as "at the bottom" and
-                    // follow the new content.
-                    val wasAtBottom = lastVisible >= prevSize - 1
-                    if (wasAtBottom) {
-                        listState.animateScrollToItem(newSize - 1)
+    val colors = IndexTheme.colors
+    val statusBarPad = WindowInsets.statusBars.asPaddingValues()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val timestampRevealState = remember { RecordingTimestampRevealState() }
+    var preSearchIndex by rememberSaveable { mutableIntStateOf(0) }
+    var preSearchOffset by rememberSaveable { mutableIntStateOf(0) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.surface)
+            .imePadding()
+            .padding(top = statusBarPad.calculateTopPadding()),
+    ) {
+        if (searching) {
+            FeedSearchTopBar(
+                value = query,
+                onChange = vm::setQuery,
+                onCancel = {
+                    searching = false
+                    vm.setQuery("")
+                    scope.launch {
+                        listState.scrollToItem(preSearchIndex, preSearchOffset)
                     }
-                }
-                prevSize = newSize
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                state.entries.forEach { entry ->
-                    when (entry) {
-                        is FullFeedViewModel.Entry.DayDivider -> stickyHeader(key = entry.uniqueKey) {
-                            DayDivider(entry.label, sticky = true)
-                        }
-                        is FullFeedViewModel.Entry.RecordingRow -> item(key = entry.uniqueKey) {
-                            ImessageRecordingRow(
-                                recording = entry.recording,
-                                transcription = entry.transcription,
-                                retryEntry = entry.retryEntry,
-                                assistantReply = entry.assistantReply,
-                                chips = entry.chips,
-                                actionError = entry.actionError,
-                                timestampRevealState = timestampRevealState,
-                                onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(entry.recording.id)) },
-                                onRetryRecording = { retryEntry ->
-                                    vm.retryRecording(entry.recording.id, retryEntry)
-                                },
-                                onOpenObject = { id -> coreNav.navigateTo(RingRoutes.ObjectDetails(id)) },
-                            )
-                        }
-                    }
-                }
-                if (state.entries.isEmpty()) {
-                    item("empty") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(48.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                if (query.isNotBlank()) "No matches." else "No recordings yet.",
-                                color = IndexTheme.colors.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                item { Spacer(Modifier.height(16.dp)) }
-            }
-
-            // The shell screen owns its own compose bar (HomeFeed renders it
-            // inline). Full feed mirrors that — the bottom NavigationBar is
-            // provided by the chrome on top of this column.
-            IndexComposeBarHost(
-                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
-                onTextSubmit = vm::submitText,
+                },
             )
+        } else {
+            FullFeedTopBar(coreNav = coreNav, onSearch = {
+                preSearchIndex = listState.firstVisibleItemIndex
+                preSearchOffset = listState.firstVisibleItemScrollOffset
+                searching = true
+            })
         }
+
+        // ONE-SHOT auto-scroll-to-bottom: fires the first time the
+        // entries flow emits a non-empty list, then never again. Both
+        // the flag and `listState` are `rememberSaveable`, so when
+        // the user pops back from a recording detail screen the saved
+        // scroll position restores cleanly without the effect re-
+        // firing and snapping to the bottom.
+        //
+        // Previously this was `LaunchedEffect(state.entries.size)`
+        // with no guard — it re-fired on every recomposition (and
+        // every list mutation) and clobbered the restored scroll.
+        var didInitialScroll by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(state.entries.isNotEmpty()) {
+            if (!didInitialScroll && state.entries.isNotEmpty()) {
+                listState.scrollToItem(state.entries.size - 1)
+                didInitialScroll = true
+            }
+        }
+
+        // Stick-to-bottom when new entries arrive: if the user is
+        // already viewing the bottom of the list (within the last
+        // visible item), animate to the new last item so the freshly
+        // recorded message + agent reply scroll into view. If they've
+        // scrolled up to read older messages, leave them alone.
+        var prevSize by remember { mutableIntStateOf(state.entries.size) }
+        LaunchedEffect(state.entries.size, query) {
+            val newSize = state.entries.size
+            if (query.isBlank() && newSize > prevSize && didInitialScroll) {
+                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                // `prevSize - 1` was the previous last index. If they
+                // could see it, treat them as "at the bottom" and
+                // follow the new content.
+                val wasAtBottom = lastVisible >= prevSize - 1
+                if (wasAtBottom) {
+                    listState.animateScrollToItem(newSize - 1)
+                }
+            }
+            prevSize = newSize
+        }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            state.entries.forEach { entry ->
+                when (entry) {
+                    is FullFeedViewModel.Entry.DayDivider -> stickyHeader(key = entry.uniqueKey) {
+                        DayDivider(entry.label, sticky = true)
+                    }
+                    is FullFeedViewModel.Entry.RecordingRow -> item(key = entry.uniqueKey) {
+                        ImessageRecordingRow(
+                            recording = entry.recording,
+                            transcription = entry.transcription,
+                            retryEntry = entry.retryEntry,
+                            assistantReply = entry.assistantReply,
+                            chips = entry.chips,
+                            actionError = entry.actionError,
+                            timestampRevealState = timestampRevealState,
+                            onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(entry.recording.id)) },
+                            onRetryRecording = { retryEntry ->
+                                vm.retryRecording(entry.recording.id, retryEntry)
+                            },
+                            onOpenObject = { id -> coreNav.navigateTo(RingRoutes.ObjectDetails(id)) },
+                        )
+                    }
+                }
+            }
+            if (state.entries.isEmpty()) {
+                item("empty") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (query.isNotBlank()) "No matches." else "No recordings yet.",
+                            color = IndexTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            item { Spacer(Modifier.height(16.dp)) }
+        }
+
+        // The shell screen owns its own compose bar (HomeFeed renders it
+        // inline). Full feed mirrors that — the bottom NavigationBar is
+        // provided by the chrome on top of this column.
+        IndexComposeBarHost(
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
+            onTextSubmit = vm::submitText,
+        )
     }
 }
 

@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -49,8 +50,11 @@ import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
 import coredevices.mcp.data.McpPrompt
+import coredevices.ring.agent.IndexAction
 import coredevices.ring.database.room.repository.McpServerEntry
 import coredevices.ring.ui.PreviewWrapper
+import coredevices.ring.agent.BuiltinServletRepository
+import org.koin.compose.koinInject
 import coredevices.ui.M3Dialog
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import kotlinx.coroutines.delay
@@ -63,16 +67,20 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 @Composable
 fun McpServersTab(
     serverEntries: StateFlow<List<McpServerEntry>>,
+    builtinActions: StateFlow<List<IndexAction>>,
     allGroups: StateFlow<List<McpSandboxGroupEntity>>,
     defaultGroupId: Long,
+    builtinTitle: (String) -> String,
     showAddServerDialog: Boolean,
     onDismissAddServerDialog: () -> Unit,
     loadGroupIds: suspend (McpServerEntry) -> Set<Long>,
     onSaveHttpServer: (HttpMcpServerEntity, Set<Long>) -> Unit,
+    onSetActionEnabled: (String, Boolean) -> Unit,
     onSetBuiltinGroups: (String, Set<Long>) -> Unit,
     onDeleteHttpServer: (HttpMcpServerEntity) -> Unit,
 ) {
     val entries by serverEntries.collectAsState()
+    val actions by builtinActions.collectAsState()
     val groups by allGroups.collectAsState()
     var editingEntry by remember { mutableStateOf<McpServerEntry?>(null) }
     var editingGroupIds by remember { mutableStateOf<Set<Long>?>(null) }
@@ -82,11 +90,18 @@ fun McpServersTab(
         editingGroupIds = editingEntry?.let { loadGroupIds(it) }
     }
 
+    // Seed new servers into the default group, but only once it has loaded and only when it can
+    // actually use HTTP servers — Index Agent groups ignore them.
+    val newServerGroupIds = groups
+        .firstOrNull { it.id == defaultGroupId && it.modelType != SandboxModelType.IndexAgent }
+        ?.let { setOf(it.id) }
+        .orEmpty()
+
     if (showAddServerDialog) {
         HttpServerEditDialog(
             initialServer = null,
             allGroups = groups,
-            initialGroupIds = emptySet(),
+            initialGroupIds = newServerGroupIds,
             onDismiss = onDismissAddServerDialog,
             onConfirm = { server, groupIds ->
                 onSaveHttpServer(server, groupIds)
@@ -105,6 +120,7 @@ fun McpServersTab(
                     entry = editing,
                     allGroups = groups,
                     defaultGroupId = defaultGroupId,
+                    builtinTitle = builtinTitle,
                     initialGroupIds = editingGroups,
                     onDismiss = { editingEntry = null },
                     onConfirm = { groupIds ->
@@ -139,6 +155,11 @@ fun McpServersTab(
             val entry = entries[index]
             McpServerEntryItem(
                 entry = entry,
+                builtinTitle = builtinTitle,
+                action = (entry as? McpServerEntry.BuiltinMcpEntry)?.let { builtin ->
+                    actions.firstOrNull { it.name == builtin.builtinMcpName }
+                },
+                onSetActionEnabled = onSetActionEnabled,
                 onClick = { editingEntry = entry }
             )
         }
@@ -209,15 +230,16 @@ private fun BuiltinGroupsDialog(
     entry: McpServerEntry.BuiltinMcpEntry,
     allGroups: List<McpSandboxGroupEntity>,
     defaultGroupId: Long,
+    builtinTitle: (String) -> String,
     initialGroupIds: Set<Long>,
     onDismiss: () -> Unit,
     onConfirm: (Set<Long>) -> Unit
 ) {
-    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
+    var selectedGroupIds by remember(initialGroupIds) { mutableStateOf(initialGroupIds) }
     M3Dialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(entry.builtinMcpName)
+            Text(builtinTitle(entry.builtinMcpName))
         },
         buttons = {
             TextButton(onClick = onDismiss) {
@@ -230,15 +252,17 @@ private fun BuiltinGroupsDialog(
         }
     ) {
         Column {
-            Text("Choose which sandbox groups include this built-in MCP. It can't be removed from the default group.")
+            Text("Choose which sandbox groups include this built-in MCP.")
             Spacer(Modifier.height(8.dp))
             GroupSelectionDropdown(
                 allGroups = allGroups,
-                selectedGroupIds = selectedGroupIds,
+                selectedGroupIds = selectedGroupIds + (allGroups.filter {
+                    it.modelType == SandboxModelType.IndexAgent
+                }.map { it.id }.toSet()),
                 onSelectionChange = { selectedGroupIds = it },
                 // Builtins must stay in the default group
                 optionEnabled = { group, isSelected ->
-                    !(isSelected && group.id == defaultGroupId)
+                    !(isSelected && group.modelType == SandboxModelType.IndexAgent)
                 }
             )
         }
@@ -246,7 +270,7 @@ private fun BuiltinGroupsDialog(
 }
 
 @Composable
-private fun HttpServerEditDialog(
+internal fun HttpServerEditDialog(
     initialServer: HttpMcpServerEntity?,
     allGroups: List<McpSandboxGroupEntity>,
     initialGroupIds: Set<Long>,
@@ -274,7 +298,9 @@ private fun HttpServerEditDialog(
     var availablePrompts by remember { mutableStateOf<List<McpPrompt>>(emptyList()) }
     var selectedPrompts by remember { mutableStateOf(initialServer?.includedPrompts?.toSet() ?: emptySet()) }
     var showPromptsSection by remember { mutableStateOf(initialServer?.includedPrompts?.isNotEmpty() == true) }
-    var selectedGroupIds by remember { mutableStateOf(initialGroupIds) }
+    // Keyed so a seed that arrives after the dialog opened (the default group loads asynchronously)
+    // still takes effect.
+    var selectedGroupIds by remember(initialGroupIds) { mutableStateOf(initialGroupIds) }
 
     // Debounced fetch of server title and prompts when URL, protocol, or auth header changes
     LaunchedEffect(url, streamable, authHeader) {
@@ -425,16 +451,7 @@ private fun HttpServerEditDialog(
                 allGroups = allGroups,
                 selectedGroupIds = selectedGroupIds,
                 onSelectionChange = { selectedGroupIds = it },
-                // Index Agent groups ignore HTTP servers, so only allow removal there
-                // (associations may exist from before a group's model type changed)
-                optionEnabled = { group, isSelected ->
-                    isSelected || group.modelType != SandboxModelType.IndexAgent
-                }
-            )
-            Text(
-                text = "HTTP servers can't be added to Index Agent groups as they would be ignored",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                optionEnabled = { _, _ -> true }
             )
             Spacer(Modifier.height(8.dp))
             Row(
@@ -535,6 +552,9 @@ private fun HttpServerEditDialog(
 @Composable
 fun McpServerEntryItem(
     entry: McpServerEntry,
+    builtinTitle: (String) -> String,
+    action: IndexAction? = null,
+    onSetActionEnabled: (String, Boolean) -> Unit = { _, _ -> },
     onClick: (McpServerEntry) -> Unit = { },
 ) {
     ListItem(
@@ -552,7 +572,7 @@ fun McpServerEntryItem(
         headlineContent = {
             Text(
                 when (entry) {
-                    is McpServerEntry.BuiltinMcpEntry -> entry.builtinMcpName
+                    is McpServerEntry.BuiltinMcpEntry -> builtinTitle(entry.builtinMcpName)
                     is McpServerEntry.HttpServerEntry ->
                         entry.server.cachedTitle.ifBlank { entry.server.name }
                 }
@@ -560,10 +580,17 @@ fun McpServerEntryItem(
         },
         supportingContent = {
             when (entry) {
-                is McpServerEntry.HttpServerEntry -> {
-                    Text(entry.server.url)
-                }
-                else -> {}
+                is McpServerEntry.HttpServerEntry -> Text(entry.server.url)
+                is McpServerEntry.BuiltinMcpEntry -> action?.disabledReason?.let { Text(it) }
+            }
+        },
+        trailingContent = {
+            if (action != null) {
+                Switch(
+                    checked = action.enabled,
+                    enabled = action.disabledReason == null,
+                    onCheckedChange = { onSetActionEnabled(action.name, it) }
+                )
             }
         }
     )
@@ -584,12 +611,17 @@ private fun McpServersTabPreview() {
                     McpServerEntry.BuiltinMcpEntry("builtin-1"),
                 )
             ),
+            builtinActions = MutableStateFlow(
+                listOf(IndexAction("builtin-1", "Note Creation", enabled = true))
+            ),
             allGroups = MutableStateFlow(previewGroups),
             defaultGroupId = 1L,
+            builtinTitle = { "Note Creation" },
             showAddServerDialog = false,
             onDismissAddServerDialog = {},
             loadGroupIds = { emptySet() },
             onSaveHttpServer = { _, _ -> },
+            onSetActionEnabled = { _, _ -> },
             onSetBuiltinGroups = { _, _ -> },
             onDeleteHttpServer = {}
         )
@@ -604,6 +636,7 @@ private fun BuiltinGroupsDialogPreview() {
             entry = McpServerEntry.BuiltinMcpEntry("clock"),
             allGroups = previewGroups,
             defaultGroupId = 1L,
+            builtinTitle = { "Timers & Alarms" },
             initialGroupIds = setOf(1L),
             onDismiss = {},
             onConfirm = {}
@@ -646,5 +679,17 @@ private fun HttpServerEditDialogEditPreview() {
             onConfirm = { _, _ -> },
             onDelete = {}
         )
+    }
+}
+
+/** Built-ins are stored by internal name; show the user-facing one. */
+@Composable
+private fun builtinTitle(builtinMcpName: String): String {
+    val servletRepository = koinInject<BuiltinServletRepository>()
+    return remember(builtinMcpName) {
+        servletRepository.getAllServlets()
+            .firstOrNull { it.name == builtinMcpName }
+            ?.title
+            ?: builtinMcpName
     }
 }

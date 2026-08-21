@@ -50,8 +50,30 @@ class ListToolMatchListIdByHintTest {
     }
 
     @Test
+    fun groceryHintResolvesToShoppingListViaSynonym() {
+        assertEquals(LIST_SHOPPING_ID, matchListIdByHint(seededLists, "grocery"))
+        assertEquals(LIST_SHOPPING_ID, matchListIdByHint(seededLists, "groceries"))
+        assertEquals(LIST_SHOPPING_ID, matchListIdByHint(seededLists, "groceries for the week"))
+    }
+
+    @Test
+    fun userCreatedGroceryListWinsOverSynonym() {
+        val lists = seededLists + CachedList(firestoreId = "custom", title = "Grocery", seed = null)
+        assertEquals("custom", matchListIdByHint(lists, "grocery"))
+        // Plural/singular mismatch with the custom title must still prefer it over Shopping.
+        assertEquals("custom", matchListIdByHint(lists, "groceries"))
+        assertEquals("custom", matchListIdByHint(lists, "groceries for the week"))
+    }
+
+    @Test
+    fun userCreatedGroceriesListWinsOverSynonymForSingularHint() {
+        val lists = seededLists + CachedList(firestoreId = "custom", title = "Groceries", seed = null)
+        assertEquals("custom", matchListIdByHint(lists, "grocery"))
+    }
+
+    @Test
     fun unknownHintResolvesToNull() {
-        assertNull(matchListIdByHint(seededLists, "groceries for the week"))
+        assertNull(matchListIdByHint(seededLists, "vacation packing"))
     }
 
     @Test

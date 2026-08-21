@@ -303,6 +303,27 @@ class HealthStatsSyncTest {
         assertEquals(100, readUShortLE(payload, 60), "slot 60 must average over per-slot days (5), not total matching days (7)")
     }
 
+    @Test
+    fun sleepPayload_encodesFallAsleepAndWakeupAsSecondsOfDay() {
+        val dayStart = LocalDate(2026, 8, 10).atStartOfDayIn(TimeZone.UTC).epochSeconds
+        // bed 23:00 the night before, wake 07:00
+        val sleep = nightSleep(dayStart - 3600, dayStart + 7 * 3600)
+
+        val payload = sleepPayload(dayStart, sleep, TimeZone.UTC).toByteArray()
+
+        assertEquals(23 * 3600, readUIntLE(payload, 4), "fall_asleep_time must be seconds of local day")
+        assertEquals(7 * 3600, readUIntLE(payload, 5), "wakeup_time must be seconds of local day")
+    }
+
+    /** Reads a single little-endian UInt at field index `index` (4 bytes each) from payload. */
+    private fun readUIntLE(payload: ByteArray, index: Int): Int {
+        var value = 0L
+        for (i in 3 downTo 0) {
+            value = (value shl 8) or (payload[index * 4 + i].toLong() and 0xFF)
+        }
+        return value.toInt()
+    }
+
     /** Reads a single little-endian UShort at byte offset slotIndex * 2 from payload. Returns Int 0..65535. */
     private fun readUShortLE(payload: ByteArray, slotIndex: Int): Int {
         val byteOffset = slotIndex * 2

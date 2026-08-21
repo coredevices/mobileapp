@@ -476,7 +476,9 @@ fun ObsidianDialog(
                                 subfolder = subfolder,
                                 customTag = customTag,
                             )
-                            preferences.setNoteProvider(NoteProvider.Obsidian)
+                            if (!alreadyConfigured) {
+                                preferences.setNoteProvider(NoteProvider.Obsidian)
+                            }
                             onDismiss()
                         }
                     }

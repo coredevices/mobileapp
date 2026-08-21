@@ -28,6 +28,7 @@ actual class PlatformIndexNotificationManager(
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setGroup("index_transfer")
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
     actual fun notify(notification: GenericNotification) {
         val uriIntent = notification.deepLink?.let {
             Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {

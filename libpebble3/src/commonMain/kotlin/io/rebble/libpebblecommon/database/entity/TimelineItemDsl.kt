@@ -72,6 +72,10 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UIntListAttribute(attribute, block()))
     }
 
+    fun uByte(attribute: TimelineAttribute, block: () -> UByte) {
+        attributes.add(BaseAttribute.UByteAttribute(attribute, block()))
+    }
+
     fun title(block: () -> String) {
         string(TimelineAttribute.Title, block)
     }
@@ -126,6 +130,10 @@ class AttributesListBuilder internal constructor() {
 
     fun lastUpdated(block: () -> Instant) {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
+    }
+
+    fun launchCode(block: () -> UInt) {
+        attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LaunchCode, block()))
     }
 
     fun appName(block: () -> String) {

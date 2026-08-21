@@ -28,6 +28,7 @@ actual fun postWatchFullyChargedNotification(appContext: AppContext, watchName: 
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         .setContentIntent(viewPendingIntent)
         .setAutoCancel(true)
+        .setLocalOnly(true)
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.notify(WATCH_FULLY_CHARGED_NOTIFICATION_ID, builder.build())
 }

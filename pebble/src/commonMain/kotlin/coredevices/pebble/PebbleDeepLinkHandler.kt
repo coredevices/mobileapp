@@ -8,6 +8,7 @@ import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.libindex.device.REQUEST_URI_HOST
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.REBBLE_FEED_URL
 import coredevices.pebble.ui.NavBarRoute
 import coredevices.pebble.ui.PebbleNavBarRoutes
 import io.rebble.libpebblecommon.connection.AppContext
@@ -102,7 +103,11 @@ class RealPebbleDeepLinkHandler(
             uri.scheme == "pebble" -> {
                 when (uri.host) {
                     CUSTOM_BOOT_CONFIG_URL -> handleBootConfig(uri.path)
-                    STORE_URL -> handleAppstore("https://appstore-api.rebble.io/api", uri.path)
+                    STORE_URL -> handleAppstore(
+                        uri.getQueryParameter(STORE_SOURCE_PARAM) ?: REBBLE_FEED_URL,
+                        uri.path,
+                    )
+                    ADD_STORE_FEED_HOST -> handleAddStoreFeed(uri)
                     NAVBAR_URL -> handleNavbar(uri.path)
                     REGISTER_INDEX_COMPANION_HOST -> handleRegisterIndexCompanion()
                     SHOW_WATCHES_HOST -> handleShowWatches(uri.path)
@@ -315,6 +320,15 @@ class RealPebbleDeepLinkHandler(
         return true
     }
 
+    private fun handleAddStoreFeed(uri: Uri): Boolean {
+        val route = parseAddStoreFeedFrom(uri) ?: run {
+            logger.w { "handleAddStoreFeed: expected pebble://$ADD_STORE_FEED_HOST/{name}/{url}" }
+            return false
+        }
+        _navigateToPebbleDeepLink.value = PebbleDeepLink(route)
+        return true
+    }
+
     private fun handleShowWatches(path: String?): Boolean {
         if (path != null) {
             firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
@@ -362,6 +376,8 @@ class RealPebbleDeepLinkHandler(
         private const val RESERVED_SIDELOAD_PREFIX = "pending_sideload_"
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
+        private const val STORE_SOURCE_PARAM: String = "source"
+        private const val ADD_STORE_FEED_HOST: String = "add-store-feed"
         private const val NAVBAR_URL: String = "navbar"
         private val SHOW_WATCHES_HOST = "show-watches"
 //        private val UPDATE_WATCH_NOW_HOST = "update-watch-now"
@@ -375,6 +391,18 @@ class RealPebbleDeepLinkHandler(
         private val logger = Logger.withTag("PebbleDeepLinkHandler")
 
         fun updateNowUri(identifier: PebbleIdentifier): Uri = Uri.parse("pebble://${SHOW_WATCHES_HOST}/${identifier.asString}")
+
+        /** `pebble://add-store-feed/{name}/{url}`, both segments percent-encoded. */
+        internal fun parseAddStoreFeedFrom(uri: Uri): PebbleNavBarRoutes.AppstoreSettingsRoute? {
+            val segments = uri.pathSegments
+            if (segments.size != 2) return null
+            val (name, url) = segments
+            if (name.isBlank() || url.isBlank()) return null
+            return PebbleNavBarRoutes.AppstoreSettingsRoute(
+                addSourceName = name,
+                addSourceUrl = url,
+            )
+        }
 
         internal fun parseTokenFrom(path: String?): String? {
             if (path == null) {

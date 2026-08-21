@@ -55,7 +55,7 @@ coredevices-speex = "c61d18a"
 mcp = "0.15.0"
 glance = "1.1.1"
 #noinspection GradleDependency
-coredevices-haversine = "9f9f3ba"
+coredevices-haversine = "c11a7b6"
 #noinspection GradleDependency
 coredevices-krisp = "811c72e"
 junit-ext = "1.3.0"

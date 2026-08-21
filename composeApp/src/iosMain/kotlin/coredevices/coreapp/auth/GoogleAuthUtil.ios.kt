@@ -2,11 +2,14 @@ package coredevices.coreapp.auth
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
+import cocoapods.GoogleSignIn.GIDGoogleUser
 import cocoapods.GoogleSignIn.GIDSignIn
 import coredevices.util.auth.GoogleAuthUtil
 import dev.gitlive.firebase.auth.AuthCredential
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import platform.UIKit.UIApplication
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -15,6 +18,7 @@ actual class RealGoogleAuthUtil : GoogleAuthUtil {
     companion object {
         private val logger = Logger.withTag("RealGoogleAuthUtil")
     }
+    private val restoreMutex = Mutex()
     override suspend fun signInGoogle(context: PlatformUiContext): AuthCredential? {
         val signIn = GIDSignIn.sharedInstance()
         val presentingViewController = UIApplication.sharedApplication.keyWindow?.rootViewController
@@ -88,12 +92,28 @@ actual class RealGoogleAuthUtil : GoogleAuthUtil {
     }
 
     override suspend fun getAccessToken(scopes: List<String>): String? {
-        val user = GIDSignIn.sharedInstance().currentUser ?: return null
+        val user = GIDSignIn.sharedInstance().currentUser ?: restorePreviousSignIn() ?: return null
         val granted = user.grantedScopes?.mapNotNull { it as? String }?.toSet() ?: emptySet()
         if (!scopes.all { it in granted }) return null
 
         val d = CompletableDeferred<String?>()
         user.refreshTokensIfNeededWithCompletion { u, _ -> d.complete(u?.accessToken?.tokenString) }
         return d.await()
+    }
+
+    // GIDSignIn.currentUser is in-memory only; after a cold launch it's nil until the keychain
+    // session is restored, even though the grant is still valid. The SDK keeps a single restore
+    // completion, so concurrent restore calls must be serialized.
+    private suspend fun restorePreviousSignIn(): GIDGoogleUser? = restoreMutex.withLock {
+        GIDSignIn.sharedInstance().currentUser ?: suspendCoroutine<GIDGoogleUser?> { cont ->
+            GIDSignIn.sharedInstance().restorePreviousSignInWithCompletion { user, error ->
+                if (error != null) {
+                    logger.d { "getAccessToken: could not restore previous sign in: ${error.localizedDescription}" }
+                    cont.resume(null)
+                } else {
+                    cont.resume(user)
+                }
+            }
+        }
     }
 }

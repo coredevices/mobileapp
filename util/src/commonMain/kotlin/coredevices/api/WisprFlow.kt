@@ -95,6 +95,8 @@ data class WisprTranscribeRequest(
     val language: List<String>? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val context: WisprContext? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val pipeline: List<String>? = null
 )
 
 @Serializable

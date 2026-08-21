@@ -57,7 +57,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
+import coredevices.pebble.rememberLibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
 import io.rebble.libpebblecommon.database.isAfter
@@ -89,6 +91,9 @@ fun NotificationAppScreen(
         val viewModel = koinViewModel<NotificationAppScreenViewModel>()
         val notificationApps: NotificationApps = koinInject()
         val platform = koinInject<Platform>()
+        val pebbleFeatures: PebbleFeatures = koinInject()
+        val libPebbleConfig by rememberLibPebble().config.collectAsState()
+        val sendImagesEnabledGlobally = libPebbleConfig.notificationConfig.sendNotificationImages
         val appWrapperFlow = remember(packageName) {
             notificationApps.notificationApps()
                 .map { it.firstOrNull { it.app.packageName == packageName } }
@@ -259,6 +264,30 @@ fun NotificationAppScreen(
                                         notificationApps.updateNotificationAppAllowDuplicates(
                                             packageName = appWrapper.app.packageName,
                                             allowDuplicates = newValue,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (pebbleFeatures.supportsNotificationImages()) item {
+                        ElevatedCard(
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                            modifier = Modifier.padding(10.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            ) {
+                                Text("Send images", fontSize = 17.sp)
+                                Switch(
+                                    checked = appWrapper.app.sendImages,
+                                    enabled = sendImagesEnabledGlobally,
+                                    onCheckedChange = { newValue ->
+                                        notificationApps.updateNotificationAppSendImages(
+                                            packageName = appWrapper.app.packageName,
+                                            sendImages = newValue,
                                         )
                                     },
                                 )

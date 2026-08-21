@@ -155,5 +155,25 @@
                 <action android:name="coredevices.coreapp.ADD_QEMU_WATCH" />
             </intent-filter>
         </receiver>
+
+        <!-- Starts the LAN dev connection for pebble-tool's adb transport. Same DUMP gate. -->
+        <receiver
+            android:name="coredevices.coreapp.debug.DevConnectionReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="coredevices.coreapp.DEV_CONNECTION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Sets a persisted app setting from adb (e.g. hasSeenWatchOnboarding). Same DUMP gate. -->
+        <receiver
+            android:name="coredevices.coreapp.debug.SetSettingReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="coredevices.coreapp.SET_SETTING" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

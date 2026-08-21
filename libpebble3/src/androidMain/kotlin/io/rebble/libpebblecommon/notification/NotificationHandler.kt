@@ -33,9 +33,11 @@ import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendChanne
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSendContactMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentAppMuted
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentDuplicate
+import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentEmpty
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentLocalOnly
 import io.rebble.libpebblecommon.notification.NotificationDecision.NotSentRuleFiltered
 import io.rebble.libpebblecommon.notification.NotificationDecision.SendToWatch
+import io.rebble.libpebblecommon.notification.NotificationImageStore
 import io.rebble.libpebblecommon.notification.processor.NotificationProperties
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
@@ -61,6 +63,7 @@ class NotificationHandler(
     private val notificationDao: NotificationDao,
     private val context: Context,
     private val notificationRuleDao: NotificationRuleDao,
+    private val notificationImageStore: NotificationImageStore,
 ) {
     companion object {
         private val logger = Logger.withTag("NotificationHandler")
@@ -341,9 +344,16 @@ class NotificationHandler(
 //            }
 //        }
 
-    private fun sendNotification(notification: LibPebbleNotification) {
-        inflightNotifications[notification.key] = notification
-        notificationSendQueue.trySend(notification).also {
+    private suspend fun sendNotification(notification: LibPebbleNotification) {
+        val hasCachedImage = notification.image?.let { notificationImageStore.put(notification.uuid, it) }
+        // Only claim an image if one is actually cached, so the watch never reserves an empty band.
+        // The source can hold a full-size bitmap; the cache owns the image from here on.
+        val toSend = notification.copy(
+            image = null,
+            imageAspect = notification.imageAspect.takeIf { hasCachedImage == true },
+        )
+        inflightNotifications[toSend.key] = toSend
+        notificationSendQueue.trySend(toSend).also {
             if (it.isFailure) {
                 logger.w { "Couldn't write notification to send queue" }
             }
@@ -361,16 +371,18 @@ class NotificationHandler(
 
     fun handleNotificationRemoved(sbn: StatusBarNotification) {
         logger.d { "onNotificationRemoved(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
-        val inflight = inflightNotifications[sbn.key]
-        if (inflight != null) {
-            inflightNotifications.remove(sbn.key)
-            notificationDeleteQueue.trySend(inflight.uuid).also {
+        val inflight = inflightNotifications.remove(sbn.key)
+        if (inflight == null) {
+            logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
+            return
+        }
+        // One key can have produced several watch notifications (e.g. MessagingStyle conversations)
+        for (uuid in listOf(inflight.uuid) + inflight.previousUuids) {
+            notificationDeleteQueue.trySend(uuid).also {
                 if (it.isFailure) {
                     logger.w { "Couldn't write notification to deletion queue" }
                 }
             }
-        } else {
-            logger.d { "Failed to remove notification: key=${sbn.key.obfuscate(privateLogger)} not found in inflight" }
         }
     }
 
@@ -496,6 +508,7 @@ internal suspend fun decideNotification(
         anyContactMuted -> NotSendContactMuted
         !anyContactStarred && appEntry.muteState == MuteState.Always -> NotSentAppMuted
         !anyContactStarred && (channel != null && channel.muteState == MuteState.Always) -> NotSendChannelMuted
+        notification.title.isNullOrBlank() && notification.body.isNullOrBlank() -> NotSentEmpty
         isRuleFiltered() -> NotSentRuleFiltered
         !allowDuplicates && inflightNotifications.any { it.displayDataEquals(notification) } -> NotSentDuplicate
         !notificationConfig.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn

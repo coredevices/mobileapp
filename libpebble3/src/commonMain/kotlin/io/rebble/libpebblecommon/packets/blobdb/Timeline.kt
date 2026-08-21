@@ -306,6 +306,9 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
     Icon(0x30u),
     VibrationPattern(0x31u),
     NotificationFilteringRules(0x33u, 1024),
+
+    /** Height/width of the image the phone holds for this item, in sixteenths. */
+    ImageAspectRatio(0x34u),
     ;
 
     companion object {

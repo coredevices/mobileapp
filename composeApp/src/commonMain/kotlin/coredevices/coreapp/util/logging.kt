@@ -57,7 +57,7 @@ fun initLogging() {
 
 expect fun generateDeviceSummaryPlatformDetails(): String
 
-fun generateDeviceSummary(experimentalDevices: ExperimentalDevices): String {
+suspend fun generateDeviceSummary(experimentalDevices: ExperimentalDevices): String {
     val deviceSummary = generateDeviceSummaryPlatformDetails()
     val experimentalSummary = experimentalDevices.debugSummary()
     return deviceSummary + "\n" + (experimentalSummary ?: "")

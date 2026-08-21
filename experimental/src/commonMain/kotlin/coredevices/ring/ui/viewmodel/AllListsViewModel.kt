@@ -53,7 +53,7 @@ class AllListsViewModel(
      *  doc id so the screen can navigate into rename mode. */
     fun newList(onCreated: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val newId = listRepo.newList()
+            val newId = listRepo.createList("New list")
             // Hop to Main: onCreated navigates, and NavController
             // requires the main thread.
             withContext(Dispatchers.Main) { onCreated(newId) }

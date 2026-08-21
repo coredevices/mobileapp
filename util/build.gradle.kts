@@ -212,6 +212,6 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
-        buildConfigField(FieldSpec.Type.STRING, "CACTUS_WEIGHTS_VERSION", "v2.0.1")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_WEIGHTS_VERSION", "v2.1.0")
     }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import platform.CoreGraphics.CGColorGetColorSpace
@@ -40,7 +41,6 @@ import platform.Foundation.NSError
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIDevice
-import kotlin.math.abs
 import kotlin.time.Instant
 
 class IosSystemCalendar(
@@ -108,13 +108,19 @@ class IosSystemCalendar(
             listOf(cal)
         )
         val events = ek.eventsMatchingPredicate(predicate) as List<EKEvent>
+        val timeZone = TimeZone.currentSystemDefault()
         return events.mapNotNull {
             val id = it.eventIdentifier ?: return@mapNotNull null
             val title = it.title ?: return@mapNotNull null
             val description = it.notes ?: ""
             val location = it.location ?: ""
-            val start = it.startDate?.toKotlinInstant() ?: return@mapNotNull null
-            val end = it.endDate?.toKotlinInstant() ?: return@mapNotNull null
+            // EventKit gives all-day events at local midnight; the watch wants the bare date.
+            val start = it.startDate?.toKotlinInstant()
+                ?.let { s -> if (it.allDay) s.anchorAllDayToUtc(timeZone) else s }
+                ?: return@mapNotNull null
+            val end = it.endDate?.toKotlinInstant()
+                ?.let { e -> if (it.allDay) e.anchorAllDayToUtc(timeZone) else e }
+                ?: return@mapNotNull null
             val attendees = it.attendees as? List<EKParticipant> ?: emptyList()
             val alarms = it.alarms as? List<EKAlarm> ?: emptyList()
             val availability = when (it.availability) {
@@ -213,9 +219,7 @@ class IosSystemCalendar(
     override fun supportsPinActions(): Boolean = false
 }
 
-fun EKAlarm.asReminder(): EventReminder = EventReminder(
-    minutesBefore = abs(relativeOffset.toInt() / 60),
-)
+fun EKAlarm.asReminder(): EventReminder = EventReminder.fromStartOffset(relativeOffset)
 
 fun EKParticipant.asAttendee(): EventAttendee {
     val status = when (participantStatus) {

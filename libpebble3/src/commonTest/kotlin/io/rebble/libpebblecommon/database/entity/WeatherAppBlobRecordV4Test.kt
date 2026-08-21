@@ -10,7 +10,7 @@ internal class WeatherAppBlobRecordV4Test {
 
     /**
      * Golden reference for the firmware's "San Francisco, 18° and Sunny" worked example, extended
-     * to minor version 4 (weather_db.h). The fixed block must be exactly 201 bytes — the watch
+     * to minor version 5 (weather_db.h). The fixed block must be exactly 250 bytes — the watch
      * rejects a shorter minor >= 1 record and silently keeps showing the previous one.
      */
     @Test
@@ -61,6 +61,12 @@ internal class WeatherAppBlobRecordV4Test {
                 0u, 0u, 0u, 0u, 0u, 0u, 0u, 5u, 10u, 20u, 35u, 55u,
                 70u, 80u, 75u, 60u, 40u, 25u, 10u, 5u, 0u, 0u, 0u, 0u,
             ),
+            tomorrowHourlyCount = 24u,
+            tomorrowHourlyWeatherType = UByteArray(24) { 0u }, // PartlyCloudy
+            tomorrowHourlyTemp = byteArrayOf(
+                11, 11, 11, 11, 11, 11, 11, 12, 13, 14, 15, 16,
+                17, 18, 18, 18, 17, 17, 16, 14, 13, 12, 12, 11,
+            ),
             locationName = "San Francisco",
             forecastShort = "Clear",
         )
@@ -68,7 +74,7 @@ internal class WeatherAppBlobRecordV4Test {
         val expected = hexToUByteArray(
             """
             04 12 00 07 15 00 0D 00 00 12 00 0B 00 80 E1 4E
-            68 01 04 11 00 32 00 14 00 0C 00 0E 01 C1 0E 2E
+            68 01 05 11 00 32 00 14 00 0C 00 0E 01 C1 0E 2E
             D0 07 15 00 0D 00 07 12 00 0B 00 00 17 00 0B 00
             01 0D 00 05 00 03 15 00 0A 00 04 10 00 07 00 00
             14 00 0C 00 07 18 07 07 07 07 07 07 07 07 07 07
@@ -79,13 +85,19 @@ internal class WeatherAppBlobRecordV4Test {
             2F 03 00 11 00 FF 7F FF 7F FF 7F FF 7F FF 7F FF
             7F 0E 01 0E 01 FF FF FF FF FF FF FF FF FF FF FF
             FF 00 00 00 00 00 00 00 05 0A 14 23 37 46 50 4B
-            3C 28 19 0A 05 00 00 00 00 16 00 0D 00 53 61 6E
+            3C 28 19 0A 05 00 00 00 00
+            18
+            00 00 00 00 00 00 00 00 00 00 00 00
+            00 00 00 00 00 00 00 00 00 00 00 00
+            0B 0B 0B 0B 0B 0B 0B 0C 0D 0E 0F 10
+            11 12 12 12 11 11 10 0E 0D 0C 0C 0B
+            16 00 0D 00 53 61 6E
             20 46 72 61 6E 63 69 73 63 6F 05 00 43 6C 65 61
             72
             """
         )
 
-        assertEquals(225, expected.size)
+        assertEquals(274, expected.size)
         assertUByteArrayEquals(expected, record.toBytes())
     }
 
@@ -120,16 +132,19 @@ internal class WeatherAppBlobRecordV4Test {
             locationUtcOffsetMin = WEATHER_V4_UTC_OFFSET_UNKNOWN,
             todayWindDirDeg = WEATHER_V4_WIND_DIR_DEG_UNKNOWN,
             todayHourlyUvX10 = UByteArray(24) { WEATHER_V4_DAILY_METRIC_UNKNOWN },
+            tomorrowHourlyCount = 0u,
+            tomorrowHourlyWeatherType = UByteArray(24) { WeatherType.Unknown.code.toUByte() },
+            tomorrowHourlyTemp = ByteArray(24),
             locationName = "X",
             forecastShort = "Y",
         )
 
         val bytes = record.toBytes()
 
-        // Fixed portion is 201 bytes; then 2-byte string header + "X" (3) + "Y" (3) = 209 total.
-        assertEquals(209, bytes.size)
+        // Fixed portion is 250 bytes; then 2-byte string header + "X" (3) + "Y" (3) = 258 total.
+        assertEquals(258, bytes.size)
         // minor_version @18, feels-like @19 (unknown 32767 = FF 7F)
-        assertEquals(4u.toUByte(), bytes[18])
+        assertEquals(5u.toUByte(), bytes[18])
         assertUByteArrayEquals(ubyteArrayOf(0xFFu, 0x7Fu), bytes.sliceArray(19..20)) // feels-like
         assertUByteArrayEquals(ubyteArrayOf(0xFFu, 0xFFu), bytes.sliceArray(21..22)) // uv = -1
         assertUByteArrayEquals(ubyteArrayOf(0xFFu, 0xFFu), bytes.sliceArray(23..24)) // precip = -1
@@ -153,6 +168,9 @@ internal class WeatherAppBlobRecordV4Test {
         assertUByteArrayEquals(UByteArray(16) { 0xFFu }, bytes.sliceArray(161..176))
         // today_hourly_uv_x10[24] @177..200, all unknown (255)
         assertUByteArrayEquals(UByteArray(24) { 0xFFu }, bytes.sliceArray(177..200))
+        assertEquals(0u.toUByte(), bytes[201]) // tomorrow_hourly_count
+        assertUByteArrayEquals(UByteArray(24) { 0xFFu }, bytes.sliceArray(202..225)) // types = Unknown
+        assertUByteArrayEquals(UByteArray(24), bytes.sliceArray(226..249))           // temps = 0
     }
 
     private fun hexToUByteArray(hex: String): UByteArray =

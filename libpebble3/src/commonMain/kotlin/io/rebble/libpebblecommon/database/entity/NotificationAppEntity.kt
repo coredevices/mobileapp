@@ -60,6 +60,9 @@ data class NotificationAppItem(
     val iconCode: String?,
     @ColumnInfo(defaultValue = "0")
     val allowDuplicates: Boolean = false,
+    /** Send the photo attached to this app's notifications, when there is one. */
+    @ColumnInfo(defaultValue = "1")
+    val sendImages: Boolean = true,
     @ColumnInfo(defaultValue = "0")
     val isSystemApp: Boolean = false,
     /**

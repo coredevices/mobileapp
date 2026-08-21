@@ -33,6 +33,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -71,10 +72,8 @@ class KableGattConnector(
             _disconnected.complete(disconnected.status.asFailureReason())
         }
         var timedOut = false
-        // With autoConnect the OS waits (indefinitely) for the watch to show up; timing out would
-        // put us back to retrying in a loop, which is the thing autoConnect exists to avoid.
-        val connectTimeoutJob = if (autoConnect) null else scope.launch {
-            delay(CONNECT_TIMEOUT)
+        val connectTimeoutJob = scope.launch {
+            delay(if (autoConnect) AUTO_CONNECT_TIMEOUT else CONNECT_TIMEOUT)
             timedOut = true
             logger.w { "Connect timeout — force-disconnecting peripheral" }
             peripheral.disconnect()
@@ -99,7 +98,7 @@ class KableGattConnector(
                 GattConnectionResult.Failure(disconnectReason ?: ConnectionFailureReason.FailedToConnect)
             }
         } finally {
-            connectTimeoutJob?.cancel()
+            connectTimeoutJob.cancel()
         }
     }
 
@@ -120,6 +119,9 @@ class KableGattConnector(
 
     companion object {
         private val CONNECT_TIMEOUT = 60.seconds
+        // The OS can stop honouring a pending autoConnect without telling us; re-arm periodically
+        // rather than waiting forever.
+        private val AUTO_CONNECT_TIMEOUT = 20.minutes
     }
 }
 

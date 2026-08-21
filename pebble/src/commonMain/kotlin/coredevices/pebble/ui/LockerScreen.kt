@@ -544,7 +544,7 @@ fun LockerScreen(
                                         )
                                         IconButton(
                                             onClick = {
-                                                navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute)
+                                                navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute())
                                             },
                                         ) {
                                             Icon(

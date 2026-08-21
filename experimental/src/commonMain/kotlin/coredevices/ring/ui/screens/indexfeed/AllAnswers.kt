@@ -59,7 +59,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.AllAnswersViewModel
 import kotlin.time.Clock
@@ -79,58 +78,56 @@ fun AllAnswers(coreNav: CoreNav) {
     var searching by remember { mutableStateOf(false) }
     LaunchedEffect(searching) { if (!searching) vm.setQuery("") }
 
-    IndexThemeHost {
-        val colors = IndexTheme.colors
-        val statusBarPad = WindowInsets.statusBars.asPaddingValues()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.surface)
-                .padding(top = statusBarPad.calculateTopPadding()),
+    val colors = IndexTheme.colors
+    val statusBarPad = WindowInsets.statusBars.asPaddingValues()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.surface)
+            .padding(top = statusBarPad.calculateTopPadding()),
+    ) {
+        if (searching) {
+            AnswersSearchTopBar(
+                value = query,
+                onChange = vm::setQuery,
+                onCancel = { searching = false; vm.setQuery("") },
+            )
+        } else {
+            TopBar(
+                title = "You asked",
+                coreNav = coreNav,
+                right = {
+                    IconButton(onClick = { searching = true }) {
+                        Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
+                },
+            )
+        }
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
         ) {
-            if (searching) {
-                AnswersSearchTopBar(
-                    value = query,
-                    onChange = vm::setQuery,
-                    onCancel = { searching = false; vm.setQuery("") },
-                )
-            } else {
-                TopBar(
-                    title = "You asked",
-                    coreNav = coreNav,
-                    right = {
-                        IconButton(onClick = { searching = true }) {
-                            Icon(Icons.Default.Search, "Search", tint = colors.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                        }
-                    },
-                )
-            }
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
-            ) {
-                if (state.answers.isEmpty()) {
-                    item("empty") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(36.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                if (query.isNotBlank()) "No matching questions." else "No questions yet. Ask your Index.",
-                                color = colors.onSurfaceVariant,
-                                fontSize = 14.sp,
-                            )
-                        }
+            if (state.answers.isEmpty()) {
+                item("empty") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(36.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (query.isNotBlank()) "No matching questions." else "No questions yet. Ask your Index.",
+                            color = colors.onSurfaceVariant,
+                            fontSize = 14.sp,
+                        )
                     }
                 }
-                items(items = state.answers, key = { it.firestoreId }) { ans ->
-                    AnswerRow(
-                        answer = ans,
-                        onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(ans.firestoreId)) },
-                    )
-                }
-                item { Spacer(Modifier.height(16.dp)) }
             }
+            items(items = state.answers, key = { it.firestoreId }) { ans ->
+                AnswerRow(
+                    answer = ans,
+                    onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(ans.firestoreId)) },
+                )
+            }
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }

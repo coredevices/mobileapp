@@ -50,7 +50,7 @@ import kotlinx.io.files.SystemFileSystem
 
 class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebble) {
     companion object {
-        private const val PORT = 9000
+        const val PORT = 9000
         private val logger = Logger.withTag("DevConnectionServer")
     }
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null

@@ -2,6 +2,7 @@ package coredevices.ring.database
 
 import com.russhwolf.settings.Settings
 import coredevices.libindex.database.BasePreferences
+import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
@@ -64,6 +65,9 @@ interface Preferences: BasePreferences {
     fun setLastWipedRing(id: String?)
     fun setLastBackupCount(count: Int?)
     fun setPlatformSttDefaulted()
+
+    val defaultCaptureType: StateFlow<DefaultCaptureType>
+    fun setDefaultCaptureType(type: DefaultCaptureType)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
@@ -314,6 +318,18 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setPlatformSttDefaulted() {
         settings.putBoolean("platform_stt_defaulted", true)
     }
+
+    private val _defaultCaptureType = MutableStateFlow(
+        DefaultCaptureType.fromId(
+            settings.getInt("default_capture_type", DefaultCaptureType.Note.id)
+        )
+    )
+    override val defaultCaptureType = _defaultCaptureType.asStateFlow()
+
+    override fun setDefaultCaptureType(type: DefaultCaptureType) {
+        settings.putInt("default_capture_type", type.id)
+        _defaultCaptureType.value = type
+    }
 }
 
 enum class MusicControlMode(val id: Int) {
@@ -331,11 +347,11 @@ enum class MusicControlMode(val id: Int) {
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
     Search(1),
+    /** No longer selectable; only ever read back to migrate to a webhook-only gesture route. */
+    IndexWebhook(2),
     McpSandbox(3);
 
     companion object {
-        // id=2 was the legacy IndexWebhook value, now controlled by the
-        // webhook trigger preference; map it to Disabled on load.
         fun fromId(id: Int): SecondaryMode {
             return entries.firstOrNull { it.id == id } ?: Disabled
         }

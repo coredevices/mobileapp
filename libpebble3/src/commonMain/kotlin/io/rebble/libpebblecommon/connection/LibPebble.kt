@@ -347,6 +347,7 @@ interface NotificationApps {
         muteState: MuteState,
     )
     fun updateNotificationAppAllowDuplicates(packageName: String, allowDuplicates: Boolean)
+    fun updateNotificationAppSendImages(packageName: String, sendImages: Boolean)
 
     fun notificationRulesForApp(packageName: String): Flow<List<NotificationRuleEntity>>
     fun upsertNotificationRule(rule: NotificationRuleEntity)

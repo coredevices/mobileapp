@@ -116,11 +116,9 @@ internal suspend fun updateHealthStatsInDatabase(
         // Add sleep stat
         val dailySleep = fetchAndGroupDailySleep(healthDao, dayStart, timeZone)
         val sleepPayloadData = sleepPayload(
-            dayStart,
-            dailySleep?.totalSleep?.toInt() ?: 0,
-            dailySleep?.deepSleep?.toInt() ?: 0,
-            dailySleep?.firstStart?.toInt() ?: 0,
-            dailySleep?.lastEnd?.toInt() ?: 0,
+            dayStartEpochSec = dayStart,
+            dailySleep = dailySleep,
+            timeZone = timeZone,
             typicals = sleepTypicals[day.dayOfWeek],
         )
         stats.add(HealthStat(
@@ -140,10 +138,8 @@ internal suspend fun updateHealthStatsInDatabase(
     SLEEP_KEYS[today.dayOfWeek]?.let { todaySleepKey ->
         val todaySleepPayloadData = sleepPayload(
             dayStartEpochSec = 0L,
-            sleepDuration = 0,
-            deepSleepDuration = 0,
-            fallAsleepTime = 0,
-            wakeupTime = 0,
+            dailySleep = null,
+            timeZone = timeZone,
             typicals = sleepTypicals[today.dayOfWeek],
         )
         stats.add(HealthStat(
@@ -171,15 +167,24 @@ internal suspend fun updateHealthStatsInDatabase(
 // Payload generation functions - construct binary data for BlobDB
 // These are called during stat computation and results are stored in HealthStat entity
 
-/** Creates a sleep data payload for BlobDB */
-private fun sleepPayload(
+/**
+ * Creates a sleep data payload for BlobDB.
+ *
+ * fall_asleep_time / wakeup_time are seconds-of-local-day (0..86399), matching the firmware's
+ * own `time_util_get_minute_of_day`-derived values; epoch seconds here render as a garbage
+ * hour on the watch's sleep card.
+ */
+internal fun sleepPayload(
     dayStartEpochSec: Long,
-    sleepDuration: Int,
-    deepSleepDuration: Int,
-    fallAsleepTime: Int,
-    wakeupTime: Int,
+    dailySleep: DailySleep?,
+    timeZone: TimeZone,
     typicals: WeekdaySleepTypicals? = null,
 ): UByteArray {
+    val sleepDuration = dailySleep?.totalSleep?.toInt() ?: 0
+    val deepSleepDuration = dailySleep?.deepSleep?.toInt() ?: 0
+    val fallAsleepTime = dailySleep?.let { secondsOfDay(it.firstStart, timeZone) } ?: 0
+    val wakeupTime = dailySleep?.let { secondsOfDay(it.lastEnd, timeZone) } ?: 0
+
     val buffer = DataBuffer(SLEEP_PAYLOAD_SIZE).apply { setEndian(Endian.Little) }
 
     buffer.putUInt(HEALTH_STATS_VERSION) // version

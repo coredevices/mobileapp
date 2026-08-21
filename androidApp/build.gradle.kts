@@ -15,27 +15,20 @@ val properties = Properties().apply {
 }
 val localReleaseBuild = properties["LOCAL_RELEASE_BUILD"]?.toString()?.toBooleanStrictOrNull() ?: false
 
-// Hoisted out of the lambda below, which must not capture the project.
-val providerFactory = providers
-
-// Number of commits in the git history, so it always increases on main.
-val gitVersionCode = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "rev-list", "--count", "HEAD")
-}.standardOutput.asText.map {
-    it.trim().toIntOrNull() ?: throw GradleException("Error reading current commit count")
-}
-
-// Newest tag anywhere in the repo, including on branches HEAD doesn't descend from.
+// Most recent tag reachable from HEAD, so a release branch versions from its own tag.
 val gitVersionName = providers.exec {
     isIgnoreExitValue = true
-    commandLine("git", "rev-list", "--tags", "--max-count=1")
-}.standardOutput.asText.flatMap { rev ->
-    providerFactory.exec {
-        isIgnoreExitValue = true
-        commandLine("git", "describe", "--tags", rev.trim().ifEmpty { "HEAD" })
-    }.standardOutput.asText
-}.map { it.trim().ifEmpty { "unknown" } }
+    commandLine("git", "describe", "--tags", "--abbrev=0", "HEAD")
+}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }
+
+// Tag as an increasing int: 1.9.1.3 -> 10901003. Major must stay below 100, the rest below 1000.
+val gitVersionCode = gitVersionName.map { name ->
+    val parts = name.split('.').map { it.toIntOrNull() ?: -1 }
+    if (parts.size > 4 || parts.first() !in 0..99 || parts.any { it !in 0..999 }) {
+        throw GradleException("Cannot derive versionCode from tag '$name'")
+    }
+    listOf(10_000_000, 100_000, 1_000, 1).zip(parts) { scale, part -> scale * part }.sum()
+}
 
 android {
     namespace = "coredevices.coreapp"

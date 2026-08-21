@@ -16,61 +16,63 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
 
+const val ANDROID_ONLY_REASON = "Only available on Android"
+
+/**
+ * TODO(RING-84): the local Cactus model isn't trained on these tools yet, so they are only usable
+ *  via the online Nenya agent. Remove once the on-device model supports them.
+ */
+val LOCAL_MODEL_UNSUPPORTED_SERVLETS = setOf(CalendarServlet.NAME, MessagingServlet.name)
+
+internal fun builtinServletDefinitions(isAndroid: Boolean): List<McpServerDefinition> {
+    val androidOnly = if (isAndroid) null else ANDROID_ONLY_REASON
+    return listOf(
+        McpServerDefinition(
+            name = NoteServlet.NAME,
+            title = "Note Creation"
+        ),
+        McpServerDefinition(
+            name = ReminderServlet.NAME,
+            title = "Reminders"
+        ),
+        McpServerDefinition(
+            name = CalendarServlet.NAME,
+            title = "Calendar"
+        ),
+        McpServerDefinition(
+            name = ClockServlet.name,
+            title = "Timers & Alarms",
+            unavailableReason = androidOnly
+        ),
+        McpServerDefinition(
+            name = MessagingServlet.name,
+            title = "Beeper Messaging",
+            unavailableReason = androidOnly
+        )
+    )
+}
+
 class BuiltinServletRepository: KoinComponent, ServletRepository {
     private val platform: Platform by inject()
 
-    override fun getAllServlets(): List<McpServerDefinition> {
-        return buildList {
-            addAll(
-                listOf(
-                    McpServerDefinition(
-                        name = NoteServlet.NAME,
-                        title = "Note Creation"
-                    ),
-                    /*McpServerDefinition(
-                        name = JsServlet.name,
-                        title = "JavaScript Evaluation"
-                    ),*/
-                    McpServerDefinition(
-                        name = ReminderServlet.NAME,
-                        title = "Reminders"
-                    ),
-                    McpServerDefinition(
-                        name = CalendarServlet.NAME,
-                        title = "Calendar"
-                    )
-                )
-            )
-            if (platform.isAndroid) {
-                addAll(
-                    listOf(
-                        McpServerDefinition(
-                            name = ClockServlet.name,
-                            title = "Timers & Alarms"
-                        ),
-                        McpServerDefinition(
-                            name = MessagingServlet.name,
-                            title = "Beeper Messaging"
-                        )
-                    )
-                )
-            }
-        }
-    }
+    /**
+     * Includes servlets unavailable on this platform so settings can show them greyed out.
+     * Anything building a real MCP session must drop entries where [McpServerDefinition.available]
+     * is false; [resolveName] returns null for them.
+     */
+    override fun getAllServlets(): List<McpServerDefinition> =
+        builtinServletDefinitions(platform.isAndroid)
 
     override fun resolveName(name: String): McpIntegration? {
         return when (name) {
             NoteServlet.NAME -> NoteServlet(
                 createNoteTool = CreateNoteTool(get())
             )
-            ClockServlet.name -> ClockServlet
+            ClockServlet.name -> ClockServlet.takeIf { platform.isAndroid }
             JsServlet.name -> JsServlet
-            ReminderServlet.NAME -> ReminderServlet(get(), get())
+            ReminderServlet.NAME -> ReminderServlet(get(), get(), get())
             CalendarServlet.NAME -> CalendarServlet
-            MessagingServlet.name -> {
-                require(platform.isAndroid) { "Messaging servlet is only available on Android" }
-                MessagingServlet
-            }
+            MessagingServlet.name -> MessagingServlet.takeIf { platform.isAndroid }
             else -> null
         }
     }

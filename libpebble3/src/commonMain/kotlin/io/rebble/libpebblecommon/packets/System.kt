@@ -369,6 +369,8 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsSmoothFwInstallProgress(14),
     SupportsCustomVibePatterns(15),
     JavascriptBytecodeVersionAppended(16),
+    SupportsImageFetch(17),
+    SupportsNotificationImages(18),
     SupportsFwUpdateAcrossDisconnection(21),
     SupportsBlobDbVersion(22),
     SupportsSettingsSync(23),

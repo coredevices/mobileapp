@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.packets.appReorderIncomingRegister
 import io.rebble.libpebblecommon.packets.appRunStatePacketsRegister
 import io.rebble.libpebblecommon.packets.appmessagePacketsRegister
 import io.rebble.libpebblecommon.packets.audioStreamPacketsRegister
+import io.rebble.libpebblecommon.packets.imagingPacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.blobDB2PacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.blobDBPacketsRegister
 import io.rebble.libpebblecommon.packets.blobdb.timelinePacketsRegister
@@ -41,6 +42,7 @@ object PacketRegistry {
         appmessagePacketsRegister()
         appRunStatePacketsRegister()
         musicPacketsRegister()
+        imagingPacketsRegister()
         appFetchIncomingPacketsRegister()
         putBytesIncomingPacketsRegister()
         appReorderIncomingRegister()

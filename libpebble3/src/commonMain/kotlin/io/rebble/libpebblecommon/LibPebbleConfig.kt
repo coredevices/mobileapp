@@ -97,6 +97,7 @@ data class WatchConfig(
      * Intended to be a debug option to dsiable watch settings sync.
      */
     val enableWatchSettingsSync: Boolean = true,
+    val musicSeekWhenAvailable: Boolean = true,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -175,6 +176,7 @@ data class NotificationConfig(
      * When [false], no notifications will be sent at all
      */
     val sendNotifications: Boolean = true,
+    val sendNotificationImages: Boolean = true,
     val useAndroidVibePatterns: Boolean = false,
     val overrideDefaultVibePattern: String? = null,
     /**
