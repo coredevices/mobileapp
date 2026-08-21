@@ -277,8 +277,8 @@ interface Calendar {
     /** Calendars the user can create events in, the phone's default for new events first. */
     suspend fun writableCalendars(): List<CalendarEntity>
 
-    /** Create an event in [NewCalendarEvent.calendarId], or the phone's default calendar when
-     *  that is null. Returns the new event id, or null. */
+    /** Create an event in [NewCalendarEvent.calendarId], falling back to the phone's default
+     *  calendar when that is null or no longer writable. Returns the new event id, or null. */
     suspend fun createEvent(event: NewCalendarEvent): String?
 }
 
