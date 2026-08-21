@@ -274,7 +274,11 @@ interface Calendar {
     fun calendars(): Flow<List<CalendarEntity>>
     fun updateCalendarEnabled(calendarId: Int, enabled: Boolean)
 
-    /** Create an event in the device's primary/default calendar. Returns the new event id, or null. */
+    /** Calendars the user can create events in, the phone's default for new events first. */
+    suspend fun writableCalendars(): List<CalendarEntity>
+
+    /** Create an event in [NewCalendarEvent.calendarId], falling back to the phone's default
+     *  calendar when that is null or no longer writable. Returns the new event id, or null. */
     suspend fun createEvent(event: NewCalendarEvent): String?
 }
 
