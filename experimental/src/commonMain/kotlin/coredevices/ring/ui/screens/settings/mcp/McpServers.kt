@@ -402,7 +402,7 @@ internal fun HttpServerEditDialog(
                 isError = !nameIsValid,
                 supportingText = when {
                     !nameIsValid -> {
-                        { Text("Name can only contain letters, digits, - and _ characters") }
+                        { Text("Name can only contain letters, digits, - and _ characters, up to 32") }
                     }
                     else -> {
                         { Text("") }

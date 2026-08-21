@@ -34,4 +34,12 @@ class IntegrationNameTest {
     fun rejectsEmptyName() {
         assertFalse(isValidIntegrationName(""))
     }
+
+    @Test
+    fun rejectsNamesThatCrowdOutTheToolHalf() {
+        // sanitizeToolName truncates "$name__$tool" at 64 characters, which silently
+        // rewrites the tool half rather than the name.
+        assertTrue(isValidIntegrationName("a".repeat(32)))
+        assertFalse(isValidIntegrationName("a".repeat(33)))
+    }
 }

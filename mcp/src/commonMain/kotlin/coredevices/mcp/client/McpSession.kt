@@ -111,9 +111,14 @@ data class McpSessionTool(
 
 /**
  * Integration names must survive round-trip through the model as part of a composite tool name.
- * Validate it won't get changed by the tool-name sanitizer and doesn't use the "__" separator.
+ * Validate it won't get changed by the tool-name sanitizer, doesn't use the "__" separator, and
+ * leaves the tool half room inside the sanitizer's 64 character limit.
  */
 fun isValidIntegrationName(name: String): Boolean =
-    INTEGRATION_NAME_REGEX.matches(name) && !name.contains("__")
+    name.length <= MAX_INTEGRATION_NAME_LENGTH &&
+        INTEGRATION_NAME_REGEX.matches(name) &&
+        !name.contains("__")
+
+private const val MAX_INTEGRATION_NAME_LENGTH = 32
 
 private val INTEGRATION_NAME_REGEX = Regex("[A-Za-z0-9_-]+")
