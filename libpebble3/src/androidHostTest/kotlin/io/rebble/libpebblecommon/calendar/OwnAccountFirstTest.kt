@@ -48,6 +48,6 @@ class OwnAccountFirstTest {
 
     @Test
     fun emptyList() {
-        assertEquals(emptyList(), emptyList<CalendarEntity>().ownAccountFirst())
+        assertEquals(emptyList<CalendarEntity>(), emptyList<CalendarEntity>().ownAccountFirst())
     }
 }
