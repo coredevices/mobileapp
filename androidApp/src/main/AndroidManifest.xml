@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" tools:node="remove" />
     <!-- Mixpanel -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="com.streetwriters.notesnook.permission.RECEIVE_INDEX_CAPTURE" />
+    <queries>
+        <package android:name="com.streetwriters.notesnook" />
+    </queries>
     <application
         android:name=".MainApplication"
         android:usesCleartextTraffic="true"

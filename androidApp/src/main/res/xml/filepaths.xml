@@ -13,6 +13,6 @@
         name="screenshots"
         path="screenshots/" />
     <cache-path
-        name="bugreports"
-        path="bugreports/" />
+        name="index_local"
+        path="index-local/" />
 </paths>

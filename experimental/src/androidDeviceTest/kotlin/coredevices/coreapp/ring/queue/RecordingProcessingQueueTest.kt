@@ -270,6 +270,30 @@ class RecordingProcessingQueueTest {
                 )
             }
         } bind IndexWebhookApi::class
+        single {
+            object : coredevices.ring.external.indexlocal.IndexLocalCaptureApi {
+                override fun deliverIfEnabled(
+                    samples: ShortArray?,
+                    sampleRate: Int,
+                    recordingId: String,
+                    transcription: String?,
+                    recordedAt: Instant,
+                    gesture: coredevices.ring.service.button.RingGesture,
+                ) {}
+                override fun deliverReminder(
+                    title: String,
+                    deadline: kotlin.time.Instant?,
+                    notifyBefore: kotlin.time.Duration?,
+                    recordingId: String,
+                    recordedAt: Instant,
+                ) {}
+                override fun isCapturingRecording() = false
+                override fun beginRecordingCapture() {}
+                override fun endRecordingCapture() {}
+                override fun isNotesnookInstalled() = false
+            }
+        } bind coredevices.ring.external.indexlocal.IndexLocalCaptureApi::class
+        singleOf(::coredevices.ring.external.indexlocal.IndexLocalAppPreferences)
         singleOf(::IndexWebhookPreferences)
 
         single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }

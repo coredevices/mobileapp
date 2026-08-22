@@ -113,10 +113,30 @@ class IndexActionsSectionTest {
     }
 
     @Test
+    fun `notesnook is only offered on android`() {
+        assertFalse(
+            noteDestOptions(emptyList(), isAndroid = false).any { it.provider == NoteProvider.Notesnook }
+        )
+        assertTrue(
+            noteDestOptions(emptyList(), isAndroid = true).any { it.provider == NoteProvider.Notesnook }
+        )
+        assertFalse(
+            reminderDestOptions(emptyList(), isAndroid = false)
+                .any { it.provider == ReminderProvider.Notesnook }
+        )
+        assertTrue(
+            reminderDestOptions(emptyList(), isAndroid = true)
+                .any { it.provider == ReminderProvider.Notesnook }
+        )
+    }
+
+    @Test
     fun `connecting a provider opens that provider's own flow`() {
         assertEquals(ActionsDialog.Notion, noteConnectDialog(NoteProvider.Notion))
         assertEquals(ActionsDialog.Obsidian, noteConnectDialog(NoteProvider.Obsidian))
         assertEquals(ActionsDialog.Tasker, noteConnectDialog(NoteProvider.Tasker))
+        assertEquals(ActionsDialog.Notesnook, noteConnectDialog(NoteProvider.Notesnook))
+        assertEquals(ActionsDialog.Notesnook, reminderConnectDialog(ReminderProvider.Notesnook))
         assertEquals(ActionsDialog.GoogleTasks, reminderConnectDialog(ReminderProvider.GoogleTasks))
         assertEquals(ActionsDialog.Tasker, reminderConnectDialog(ReminderProvider.Tasker))
     }

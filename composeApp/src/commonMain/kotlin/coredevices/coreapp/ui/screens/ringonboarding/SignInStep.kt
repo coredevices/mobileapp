@@ -69,7 +69,7 @@ internal fun SignInStep(
             }
             Spacer(Modifier.height(40.dp))
             Text(
-                text = "Sign in to continue",
+                text = if (signedIn) "You're signed in" else "Sign in (optional)",
                 fontSize = 32.sp,
                 lineHeight = 38.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -78,8 +78,12 @@ internal fun SignInStep(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Index 01 needs an account for backup and agent processing. " +
-                        "Sign in to finish setting up your ring.",
+                text = if (signedIn) {
+                    "Index 01 can back up recordings and run the remote agent with this account."
+                } else {
+                    "An account is only needed for cloud backup and the remote agent. " +
+                        "Local recording, transcription, and Notesnook work without signing in."
+                },
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
                 color = palette.onSurfaceVariant,
@@ -122,7 +126,10 @@ internal fun SignInStep(
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
         ) {
-            PrimaryFilledButton(text = "Continue", onClick = onContinue, enabled = signedIn)
+            PrimaryFilledButton(
+                text = if (signedIn) "Continue" else "Continue without signing in",
+                onClick = onContinue,
+            )
         }
     }
 }
