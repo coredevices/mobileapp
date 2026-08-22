@@ -277,6 +277,8 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.STRING, "NOTION_OAUTH_BACKEND_URL", "https://index-oauth.repebble.com")
 
         buildConfigField(FieldSpec.Type.STRING, "TESTS_NOTION_TOKEN", System.getenv("TESTS_NOTION_TOKEN") ?: properties.getProperty("TESTS_NOTION_TOKEN") ?: "")
+        buildConfigField(FieldSpec.Type.STRING, "TESTS_MEMOS_URL", System.getenv("TESTS_MEMOS_URL") ?: properties.getProperty("TESTS_MEMOS_URL") ?: "")
+        buildConfigField(FieldSpec.Type.STRING, "TESTS_MEMOS_TOKEN", System.getenv("TESTS_MEMOS_TOKEN") ?: properties.getProperty("TESTS_MEMOS_TOKEN") ?: "")
     }
 }
 
