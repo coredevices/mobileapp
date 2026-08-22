@@ -115,7 +115,12 @@ internal fun noteDestOptions(
     available: List<NoteProvider>,
     isAndroid: Boolean,
 ): List<DestOption<NoteProvider>> = NoteProvider.entries
-    .filter { it != NoteProvider.Tasker || isAndroid }
+    .filter {
+        when (it) {
+            NoteProvider.Tasker, NoteProvider.Notesnook -> isAndroid
+            else -> true
+        }
+    }
     .map { DestOption(it, it.settingsTitle, it in available) }
 
 internal fun reminderDestOptions(
@@ -124,7 +129,7 @@ internal fun reminderDestOptions(
 ): List<DestOption<ReminderProvider>> = ReminderProvider.entries
     .filter {
         when (it) {
-            ReminderProvider.Tasker -> isAndroid
+            ReminderProvider.Tasker, ReminderProvider.Notesnook -> isAndroid
             ReminderProvider.IOSReminders -> !isAndroid
             else -> true
         }
@@ -141,12 +146,14 @@ internal fun noteConnectDialog(provider: NoteProvider): ActionsDialog? = when (p
     NoteProvider.Notion -> ActionsDialog.Notion
     NoteProvider.Obsidian -> ActionsDialog.Obsidian
     NoteProvider.Tasker -> ActionsDialog.Tasker
+    NoteProvider.Notesnook -> ActionsDialog.Notesnook
     NoteProvider.Builtin -> null
 }
 
 internal fun reminderConnectDialog(provider: ReminderProvider): ActionsDialog? = when (provider) {
     ReminderProvider.GoogleTasks -> ActionsDialog.GoogleTasks
     ReminderProvider.Tasker -> ActionsDialog.Tasker
+    ReminderProvider.Notesnook -> ActionsDialog.Notesnook
     ReminderProvider.BuiltIn, ReminderProvider.IOSReminders -> null
 }
 
@@ -182,7 +189,7 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
 }
 
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
-internal enum class ActionsDialog { AddServer, Sideload, Notion, GoogleTasks, Obsidian, Tasker, PhoneCalendar }
+internal enum class ActionsDialog { AddServer, Sideload, Notion, GoogleTasks, Obsidian, Tasker, Notesnook, PhoneCalendar }
 
 @Composable
 fun IndexActionsSection(
@@ -369,6 +376,7 @@ fun IndexActionsSection(
         ActionsDialog.GoogleTasks -> GTasksDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Obsidian -> ObsidianDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Tasker -> TaskerDialog(onDismiss = closeConnectDialog)
+        ActionsDialog.Notesnook -> NotesnookDialog(onDismiss = closeConnectDialog)
         ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(onDismiss = { dialog = null })
         null -> {}
     }

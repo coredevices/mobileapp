@@ -88,6 +88,7 @@ import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.LlmMode
+import coredevices.ring.agent.builtin_servlets.notes.NOTESNOOK_DEFINITION
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
@@ -1410,6 +1411,9 @@ fun AuthorizedIntegrations(preferences: Preferences) {
     val taskerAuth by flow {
         emit(noteIntegrationFactory.createNoteClient(NoteProvider.Tasker).isAuthorized())
     }.collectAsState(false)
+    val notesnookAuth by flow {
+        emit(noteIntegrationFactory.createNoteClient(NoteProvider.Notesnook).isAuthorized())
+    }.collectAsState(false)
     val currentReminderProvider by preferences.reminderProvider.collectAsState()
     val currentNoteProvider by preferences.noteProvider.collectAsState()
 
@@ -1523,6 +1527,22 @@ fun AuthorizedIntegrations(preferences: Preferences) {
                 selectedNoteProvider = currentNoteProvider == NoteProvider.Tasker,
                 onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Tasker) },
                 onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Tasker) }
+            )
+        }
+        if (platform.isAndroid && notesnookAuth) {
+            var showNotesnookConfig by remember { mutableStateOf(false) }
+            if (showNotesnookConfig) {
+                NotesnookConfigDialog(onDismiss = { showNotesnookConfig = false })
+            }
+            IntegrationItem(
+                title = NOTESNOOK_DEFINITION.title,
+                hasReminder = true,
+                hasNotes = true,
+                selectedReminderProvider = currentReminderProvider == ReminderProvider.Notesnook,
+                selectedNoteProvider = currentNoteProvider == NoteProvider.Notesnook,
+                onSelectReminderProvider = { preferences.setReminderProvider(ReminderProvider.Notesnook) },
+                onSelectNoteProvider = { preferences.setNoteProvider(NoteProvider.Notesnook) },
+                onConfigure = { showNotesnookConfig = true },
             )
         }
     }

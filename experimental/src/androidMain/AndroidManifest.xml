@@ -40,6 +40,8 @@
         <package android:name="com.beeper.android"/>
         <!-- Tasker integration checks for/launches the Tasker app (package visibility, Android 11+). -->
         <package android:name="net.dinglisch.android.taskerm"/>
+        <!-- Notesnook local Index capture (explicit service/broadcast, Android 11+ package visibility). -->
+        <package android:name="com.streetwriters.notesnook"/>
     </queries>
     <application>
         <receiver android:name=".glance.VoiceWidgetReceiver"

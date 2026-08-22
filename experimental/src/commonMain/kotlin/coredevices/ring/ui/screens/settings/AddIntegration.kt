@@ -45,7 +45,9 @@ import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.notes.NOTESNOOK_DEFINITION
 import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
@@ -53,6 +55,7 @@ import coredevices.ring.agent.integrations.obsidian.ObsidianMode
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.data.IntegrationDefinition
 import coredevices.ring.database.Preferences
+import coredevices.ring.external.indexlocal.IndexLocalCaptureApi
 import coredevices.ui.M3Dialog
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -148,6 +151,16 @@ fun AddIntegration(coreNav: CoreNav) {
                     Item(def) {
                         dialog = {
                             TaskerDialog(
+                                onDismiss = { dialog = null }
+                            )
+                        }
+                    }
+                }
+                item {
+                    val def = remember { NOTESNOOK_DEFINITION }
+                    Item(def) {
+                        dialog = {
+                            NotesnookDialog(
                                 onDismiss = { dialog = null }
                             )
                         }
@@ -748,6 +761,127 @@ fun TaskerDialog(
             }
             is SignInState.Success -> {
                 Text("Tasker connected. Choose it for notes or reminders in Index settings.")
+            }
+            is SignInState.Error -> {
+                Text(
+                    "Error: ${s.message}",
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NotesnookConfigDialog(
+    onDismiss: () -> Unit
+) {
+    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
+    val preferences = koinInject<Preferences>()
+    val scope = rememberCoroutineScope()
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Notesnook") },
+        buttons = {
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        noteIntegrationFactory.createNoteClient(NoteProvider.Notesnook).unlink()
+                        if (preferences.noteProvider.value == NoteProvider.Notesnook) {
+                            preferences.setNoteProvider(NoteProvider.Builtin)
+                        }
+                        if (preferences.reminderProvider.value == ReminderProvider.Notesnook) {
+                            preferences.setReminderProvider(ReminderProvider.BuiltIn)
+                        }
+                        onDismiss()
+                    }
+                }
+            ) { Text("Disconnect") }
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    ) {
+        Text(
+            "Index notes and reminders go to Notesnook on this phone. Audio, transcription, " +
+                "and reminder due times are sent with an explicit intent — no internet."
+        )
+    }
+}
+
+@Composable
+fun NotesnookDialog(
+    onDismiss: () -> Unit
+) {
+    val uiContext = rememberUiContext()!!
+    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
+    val preferences = koinInject<Preferences>()
+    val api = koinInject<IndexLocalCaptureApi>()
+    var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
+    val installed = remember { api.isNotesnookInstalled() }
+    val scope = rememberCoroutineScope()
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Notesnook") },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text(if (state is SignInState.Success) "Done" else "Cancel")
+            }
+            if (state !is SignInState.Success) {
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    enabled = state !is SignInState.SigningIn && installed,
+                    onClick = {
+                        state = SignInState.SigningIn
+                        scope.launch {
+                            state = try {
+                                val client = noteIntegrationFactory.createNoteClient(NoteProvider.Notesnook)
+                                if (client.signIn(uiContext)) {
+                                    preferences.setNoteProvider(NoteProvider.Notesnook)
+                                    SignInState.Success
+                                } else {
+                                    SignInState.Error("Notesnook is not installed. Install it, then try again.")
+                                }
+                            } catch (e: Throwable) {
+                                Logger.w("AddIntegration", e) { "Error connecting Notesnook: ${e.message}" }
+                                SignInState.Error(e.message ?: "Unknown error")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Connect")
+                }
+            }
+        }
+    ) {
+        when (val s = state) {
+            is SignInState.Idle -> {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Saves Index notes and reminders to Notesnook on this phone. " +
+                            "Audio, transcription, and reminder due times are sent with an " +
+                            "explicit intent — no internet."
+                    )
+                    if (!installed) {
+                        Text(
+                            "Notesnook is not installed. Install it, then come back to connect.",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+            is SignInState.SigningIn -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is SignInState.Success -> {
+                Text("Notesnook connected. Choose it for notes or reminders in Index settings.")
             }
             is SignInState.Error -> {
                 Text(

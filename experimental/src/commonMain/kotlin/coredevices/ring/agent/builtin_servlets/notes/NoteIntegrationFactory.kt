@@ -24,6 +24,7 @@ class NoteIntegrationFactory(
             NoteProvider.Notion -> delegated(get<NotionIntegration>(), integration)
             NoteProvider.Obsidian -> delegated(get<ObsidianIntegration>(), integration)
             NoteProvider.Tasker -> delegated(createTaskerNoteClient(), integration)
+            NoteProvider.Notesnook -> delegated(createNotesnookNoteClient(), integration)
         }
     }
 

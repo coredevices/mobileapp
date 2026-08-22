@@ -6,11 +6,16 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
+import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
+import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.external.indexlocal.IndexLocalCaptureApi
+import coredevices.ring.external.indexlocal.IndexLocalCaptureRecordingOperation
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.sendsFor
+import coredevices.ring.external.indexwebhook.sendsFor as webhookSendsFor
 import coredevices.ring.service.ButtonPress
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.service.button.GestureDestination
@@ -28,10 +33,12 @@ class RecordingOperationFactory(
     private val gestureRouting: GestureRoutingPreferences,
     private val indexWebhookApi: IndexWebhookApi,
     private val indexWebhookPreferences: IndexWebhookPreferences,
+    private val indexLocalCaptureApi: IndexLocalCaptureApi,
     private val recordingStorage: RecordingStorage,
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
+    private val preferences: Preferences,
 ) {
     suspend fun createForButtonSequence(
         recordingId: Long,
@@ -42,22 +49,35 @@ class RecordingOperationFactory(
     ): RecordingOperation {
         val gesture = sequence?.let { RingGesture.forSequence(it) }
         val destination = gestureRouting.recordingDestinationFor(gesture)
+        val notesnookNotes = preferences.noteProvider.value == NoteProvider.Notesnook
         val inner = createForDestination(
             destination = destination,
             recordingId = recordingId,
             fileId = fileId,
             transferId = transferId,
-            forcedTool = forcedNoteTool
+            // The local-capture decorator owns the Notesnook note (audio + transcript).
+            // Skip CreateNoteTool so the same hold does not create a second text-only note.
+            forcedTool = if (notesnookNotes && destination == GestureDestination.IndexAgent) {
+                { text, _ -> notesnookCaptureResult(text) }
+            } else {
+                forcedNoteTool
+            }
         )
         // The phone's own hold-to-record has no gesture and borrows Hold & Talk's webhook, so the
         // send is gated on Hold & Talk's route too — not the agent route resolved above.
         val webhookGesture = gesture ?: RingGesture.Hold
-        return maybeWrapWithWebhook(
+        return maybeWrapWithLocalCapture(
             recordingId = recordingId,
             fileId = fileId,
             gesture = webhookGesture,
             destination = gestureRouting.recordingDestinationFor(webhookGesture),
-            inner = inner,
+            inner = maybeWrapWithWebhook(
+                recordingId = recordingId,
+                fileId = fileId,
+                gesture = webhookGesture,
+                destination = gestureRouting.recordingDestinationFor(webhookGesture),
+                inner = inner,
+            ),
         )
     }
 
@@ -68,10 +88,31 @@ class RecordingOperationFactory(
         destination: GestureDestination.Recording,
         inner: RecordingOperation,
     ): RecordingOperation {
-        if (!indexWebhookPreferences.configFor(gesture).sendsFor(destination)) return inner
+        if (!indexWebhookPreferences.configFor(gesture).webhookSendsFor(destination)) return inner
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
+            recordingStorage = recordingStorage,
+            fileId = fileId,
+            recordingId = recordingId,
+            gesture = gesture,
+            decorated = inner,
+        )
+    }
+
+    private fun maybeWrapWithLocalCapture(
+        recordingId: Long,
+        fileId: String?,
+        gesture: RingGesture,
+        destination: GestureDestination.Recording,
+        inner: RecordingOperation,
+    ): RecordingOperation {
+        if (destination != GestureDestination.IndexAgent) return inner
+        val notesnookNotes = preferences.noteProvider.value == NoteProvider.Notesnook
+        val notesnookReminders = preferences.reminderProvider.value == ReminderProvider.Notesnook
+        if (!notesnookNotes && !notesnookReminders) return inner
+        return IndexLocalCaptureRecordingOperation(
+            localCaptureApi = indexLocalCaptureApi,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
@@ -89,6 +130,7 @@ class RecordingOperationFactory(
         // A typed question routes to the search/answer agent and forces no note. Anything else
         // follows wherever Hold & Talk points, so typing stands in for the gesture.
         val destination = gestureRouting.recordingDestinationFor(RingGesture.Hold)
+        val notesnookNotes = preferences.noteProvider.value == NoteProvider.Notesnook
         val mode = if (isQuestion) {
             ChatMode.Search
         } else {
@@ -101,14 +143,26 @@ class RecordingOperationFactory(
             recordingId = recordingId,
             chatAgent = agent,
             text = text,
-            forcedTool = if (isQuestion) null else forcedTool,
+            forcedTool = if (isQuestion) {
+                null
+            } else if (notesnookNotes && destination == GestureDestination.IndexAgent) {
+                { _ -> notesnookCaptureResult(text) }
+            } else {
+                forcedTool
+            },
         )
-        return maybeWrapWithWebhook(
+        return maybeWrapWithLocalCapture(
             recordingId = recordingId,
             fileId = null,
             gesture = RingGesture.Hold,
             destination = destination,
-            inner = inner,
+            inner = maybeWrapWithWebhook(
+                recordingId = recordingId,
+                fileId = null,
+                gesture = RingGesture.Hold,
+                destination = destination,
+                inner = inner,
+            ),
         )
     }
 
@@ -192,6 +246,12 @@ class RecordingOperationFactory(
             semanticResult = SemanticResult.Response(answer, question = question)
         )
     }
+
+    private fun notesnookCaptureResult(text: String): ToolCallResult =
+        ToolCallResult(
+            resultString = "",
+            semanticResult = SemanticResult.ListItemCreation(text)
+        )
 }
 
 private object NoAgentRecordingOperation : RecordingOperation {

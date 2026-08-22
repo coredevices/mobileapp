@@ -1,0 +1,18 @@
+                        -H/Users/tannermeade/dev/mobileapp/cactus-native/src/main/cpp
+-DCMAKE_SYSTEM_NAME=Android
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+-DCMAKE_SYSTEM_VERSION=26
+-DANDROID_PLATFORM=android-26
+-DANDROID_ABI=arm64-v8a
+-DCMAKE_ANDROID_ARCH_ABI=arm64-v8a
+-DANDROID_NDK=/Users/tannermeade/Library/Android/sdk/ndk/28.2.13676358
+-DCMAKE_ANDROID_NDK=/Users/tannermeade/Library/Android/sdk/ndk/28.2.13676358
+-DCMAKE_TOOLCHAIN_FILE=/Users/tannermeade/Library/Android/sdk/ndk/28.2.13676358/build/cmake/android.toolchain.cmake
+-DCMAKE_MAKE_PROGRAM=/Users/tannermeade/Library/Android/sdk/cmake/3.22.1/bin/ninja
+-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/Users/tannermeade/dev/mobileapp/cactus-native/build/intermediates/cxx/RelWithDebInfo/y1v376t6/obj/arm64-v8a
+-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/Users/tannermeade/dev/mobileapp/cactus-native/build/intermediates/cxx/RelWithDebInfo/y1v376t6/obj/arm64-v8a
+-DCMAKE_BUILD_TYPE=RelWithDebInfo
+-B/Users/tannermeade/dev/mobileapp/cactus-native/.cxx/RelWithDebInfo/y1v376t6/arm64-v8a
+-GNinja
+                        Build command args: []
+                        Version: 2

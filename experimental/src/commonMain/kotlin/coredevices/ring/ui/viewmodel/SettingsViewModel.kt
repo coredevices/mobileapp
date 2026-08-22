@@ -221,6 +221,11 @@ class SettingsViewModel(
             ) {
                 add(ReminderProvider.Tasker)
             }
+            if (platform.isAndroid &&
+                noteIntegrationFactory.createNoteClient(NoteProvider.Notesnook).isAuthorized()
+            ) {
+                add(ReminderProvider.Notesnook)
+            }
         }
     }
 

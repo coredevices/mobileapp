@@ -56,6 +56,10 @@ import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
+import coredevices.ring.agent.builtin_servlets.notes.NotesnookFromLocalAppsMigration
+import coredevices.ring.external.indexlocal.IndexLocalAppPreferences
+import coredevices.ring.external.indexlocal.IndexLocalCaptureApi
+import coredevices.ring.external.indexlocal.IndexLocalCaptureApiImpl
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
@@ -91,6 +95,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -209,6 +214,7 @@ val experimentalModule = module {
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
     singleOf(::IndexWebhookRunRepository)
+    singleOf(::IndexLocalAppPreferences)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
     single {
@@ -220,8 +226,19 @@ val experimentalModule = module {
             get<RecordingBackgroundScope>()
         )
     } bind IndexWebhookApi::class
+    single {
+        IndexLocalCaptureApiImpl(
+            get(),
+            get<RecordingBackgroundScope>()
+        )
+    } bind IndexLocalCaptureApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
+    single(createdAtStart = true) {
+        NotesnookFromLocalAppsMigration(get(), get(), get()).also { migration ->
+            get<RecordingBackgroundScope>().launch { migration.run() }
+        }
+    }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class

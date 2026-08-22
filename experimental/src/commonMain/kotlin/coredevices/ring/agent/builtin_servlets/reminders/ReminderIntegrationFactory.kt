@@ -24,6 +24,7 @@ class ReminderIntegrationFactory(
             ReminderProvider.GoogleTasks -> delegated(get<GTasksIntegration>(), provider)
             ReminderProvider.IOSReminders -> delegated(createRemindersAppIntegration(), provider)
             ReminderProvider.Tasker -> delegated(createTaskerReminderIntegration(), provider)
+            ReminderProvider.Notesnook -> delegated(createNotesnookReminderIntegration(), provider)
         }
     }
 

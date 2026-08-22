@@ -266,7 +266,6 @@ fun OnboardingScreen(
                 }
 
                 OnboardingStage.SignIn -> {
-                    val coreConfig by viewModel.coreConfig.collectAsState()
                     Column(
                         modifier = Modifier.fillMaxSize().padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -286,13 +285,20 @@ fun OnboardingScreen(
                             // to the existing account if Firebase reports a collision.
                             skipAccountSwitchConfirmation = true,
                         )
-                        if (!coreConfig.enableIndex) {
-                            PebbleElevatedButton(
-                                text = "Skip",
-                                onClick = { viewModel.stage.value = OnboardingStage.Done },
-                                primaryColor = true,
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        PebbleElevatedButton(
+                            text = "Continue without signing in",
+                            onClick = { viewModel.stage.value = OnboardingStage.Done },
+                            primaryColor = false,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Cloud backup and the remote agent need an account. " +
+                                "You can sign in later from Settings.",
+                            textAlign = TextAlign.Center,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
                     }
                 }
 

@@ -4,7 +4,8 @@ enum class NoteProvider(val id: Int, val title: String) {
     Builtin(1, "Builtin Notes"),
     Notion(2, "Notion"),
     Tasker(3, "Tasker"),
-    Obsidian(4, "Obsidian");
+    Obsidian(4, "Obsidian"),
+    Notesnook(5, "Notesnook");
 
     companion object {
         fun fromId(id: Int): NoteProvider? = entries.find { it.id == id }
