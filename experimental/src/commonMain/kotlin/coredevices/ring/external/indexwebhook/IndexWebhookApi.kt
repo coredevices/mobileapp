@@ -46,6 +46,8 @@ interface IndexWebhookApi {
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
+        signRequests: Boolean,
+        signingSecret: String?,
     ): IndexWebhookRunResult
 }
 
@@ -65,6 +67,8 @@ val RingGesture.webhookTriggerValue: String
     }
 
 internal const val WEBHOOK_AUDIO_SIZE_HEADER = "X-Audio-Size"
+internal const val WEBHOOK_VERSION_HEADER = "X-Index-Webhook-Version"
+internal const val WEBHOOK_VERSION = "1"
 internal const val WEBHOOK_TRIGGER_HEADER = "X-Index-Trigger"
 internal const val WEBHOOK_TEST_HEADER = "X-Index-Test"
 internal const val WEBHOOK_TEST_TRIGGER = "test-event"
@@ -78,6 +82,7 @@ class IndexWebhookApiImpl(
     config: ApiConfig,
     private val m4aEncoder: M4aEncoder,
     private val webhookPreferences: IndexWebhookPreferences,
+    private val signingSecretStorage: IndexWebhookSigningSecretStorage,
     private val runRepository: IndexWebhookRunRepository,
     private val scope: CoroutineScope,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes) {
@@ -113,9 +118,21 @@ class IndexWebhookApiImpl(
                     config.payloadMode != IndexWebhookPayloadMode.RecordingOnly
                 ) transcription else null
 
+                val signingSecret = if (config.signRequests) {
+                    try {
+                        signingSecretStorage.get(gesture)
+                    } catch (e: Exception) {
+                        logger.e(e) { "Could not read webhook signing secret" }
+                        null
+                    }
+                } else null
+
                 val result = post(
                     url = url,
                     headers = config.headers,
+                    signRequests = config.signRequests,
+                    signingSecret = signingSecret,
+                    deliveryId = recordingId,
                     triggerValue = gesture.webhookTriggerValue,
                     audioData = m4aData,
                     filename = "$recordingId.m4a",
@@ -146,10 +163,15 @@ class IndexWebhookApiImpl(
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
+        signRequests: Boolean,
+        signingSecret: String?,
     ): IndexWebhookRunResult {
         val result = post(
             url = url,
             headers = headers,
+            signRequests = signRequests,
+            signingSecret = signingSecret,
+            deliveryId = Uuid.random().toString(),
             triggerValue = WEBHOOK_TEST_TRIGGER,
             audioData = null,
             filename = null,
@@ -171,6 +193,9 @@ class IndexWebhookApiImpl(
     private suspend fun post(
         url: String,
         headers: Map<String, String>,
+        signRequests: Boolean,
+        signingSecret: String?,
+        deliveryId: String,
         triggerValue: String,
         audioData: ByteArray?,
         filename: String?,
@@ -189,16 +214,38 @@ class IndexWebhookApiImpl(
         )
         val started = TimeSource.Monotonic.markNow()
         return try {
+            val timestamp = Clock.System.now().toEpochMilliseconds() / 1000
+            val signature = if (signRequests) {
+                if (signingSecret.isNullOrBlank()) {
+                    return IndexWebhookRunResult(
+                        ok = false,
+                        status = "SIGNING ERROR",
+                        detail = "Signing secret is missing",
+                        byteSize = bodyBytes.size.toLong(),
+                        durationMs = started.elapsedNow().inWholeMilliseconds,
+                    )
+                }
+                createWebhookSignature(
+                    secret = signingSecret,
+                    timestamp = timestamp,
+                    deliveryId = deliveryId,
+                    triggerValue = triggerValue,
+                    isTest = isTest,
+                    body = bodyBytes,
+                )
+            } else null
             val response = client.post(url) {
-                headers
-                    .filterKeys {
-                        !it.equals(WEBHOOK_TRIGGER_HEADER, ignoreCase = true) &&
-                            !it.equals(WEBHOOK_TEST_HEADER, ignoreCase = true)
-                    }
+                headers.withoutReservedWebhookHeaders()
                     .forEach { (name, value) -> header(name, value) }
+                header(WEBHOOK_VERSION_HEADER, WEBHOOK_VERSION)
                 header(WEBHOOK_TRIGGER_HEADER, triggerValue)
                 if (isTest) header(WEBHOOK_TEST_HEADER, "true")
                 if (audioData != null) header(WEBHOOK_AUDIO_SIZE_HEADER, audioData.size.toString())
+                if (signature != null) {
+                    header(WEBHOOK_SIGNATURE_HEADER, signature)
+                    header(WEBHOOK_TIMESTAMP_HEADER, timestamp.toString())
+                    header(WEBHOOK_DELIVERY_HEADER, deliveryId)
+                }
                 setBody(
                     ByteArrayContent(
                         bytes = bodyBytes,
