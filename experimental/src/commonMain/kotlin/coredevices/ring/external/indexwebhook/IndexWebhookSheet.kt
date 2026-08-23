@@ -159,6 +159,54 @@ fun IndexWebhookSheet(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("Headers")
+                headerInputs.forEachIndexed { index, header ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedTextField(
+                            value = header.name,
+                            onValueChange = { viewModel.updateHeaderName(index, it) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            placeholder = { Text("Name", style = MaterialTheme.typography.bodyMedium) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = dismissKeyboard,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = header.value,
+                            onValueChange = { viewModel.updateHeaderValue(index, it) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            placeholder = { Text("Value", style = MaterialTheme.typography.bodyMedium) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = dismissKeyboard,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { viewModel.removeHeader(index) }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove header",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = viewModel::addHeader,
+                    contentPadding = PaddingValues(4.dp),
+                ) {
+                    Text("Add header", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("Security")
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -168,7 +216,7 @@ fun IndexWebhookSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Sign requests", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Add an HMAC-SHA256 signature your server can verify",
+                            "Add an HMAC-SHA256 signature",
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.onSurfaceVariant,
                         )
@@ -234,54 +282,6 @@ fun IndexWebhookSheet(
                             },
                         )
                     }
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Headers")
-                headerInputs.forEachIndexed { index, header ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        OutlinedTextField(
-                            value = header.name,
-                            onValueChange = { viewModel.updateHeaderName(index, it) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            placeholder = { Text("Name", style = MaterialTheme.typography.bodyMedium) },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = dismissKeyboard,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedTextField(
-                            value = header.value,
-                            onValueChange = { viewModel.updateHeaderValue(index, it) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            placeholder = { Text("Value", style = MaterialTheme.typography.bodyMedium) },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = dismissKeyboard,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { viewModel.removeHeader(index) }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Remove header",
-                                tint = colors.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-                TextButton(
-                    onClick = viewModel::addHeader,
-                    contentPadding = PaddingValues(4.dp),
-                ) {
-                    Text("Add header", style = MaterialTheme.typography.labelLarge)
                 }
             }
 
