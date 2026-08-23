@@ -27,6 +27,7 @@ sealed interface GestureDestination {
 
     data object PlayPause : Music
     data object NextTrack : Music
+    data object PreviousTrack : Music
     data object IndexAgent : Recording
     data object WebSearch : Recording
     data class McpSandbox(val groupId: Long?) : Recording
