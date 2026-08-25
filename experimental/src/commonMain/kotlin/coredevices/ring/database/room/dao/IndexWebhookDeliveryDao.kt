@@ -6,7 +6,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.util.queue.TaskStatus
-import kotlin.time.Instant
 
 @Dao
 interface IndexWebhookDeliveryDao {
@@ -22,9 +21,6 @@ interface IndexWebhookDeliveryDao {
     @Query("SELECT * FROM IndexWebhookDeliveryEntity WHERE status = 'Pending' ORDER BY created ASC")
     suspend fun getPending(): List<IndexWebhookDeliveryEntity>
 
-    @Query("UPDATE IndexWebhookDeliveryEntity SET attempts = attempts + 1, lastAttempt = :attemptedAt WHERE id = :id")
-    suspend fun markAttempt(id: Long, attemptedAt: Instant)
-
     @Query("UPDATE IndexWebhookDeliveryEntity SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: TaskStatus)
 
@@ -37,8 +33,8 @@ interface IndexWebhookDeliveryDao {
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity " +
-            "SET status = 'Pending', attempts = 0, lastAttempt = NULL " +
+            "SET status = 'Pending' " +
             "WHERE deliveryId = :deliveryId AND status = 'Failed'",
     )
-    suspend fun resetForRetry(deliveryId: String)
+    suspend fun resetForRetry(deliveryId: String): Int
 }

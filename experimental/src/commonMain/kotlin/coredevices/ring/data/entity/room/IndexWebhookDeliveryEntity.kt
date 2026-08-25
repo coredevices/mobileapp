@@ -16,8 +16,6 @@ import kotlin.time.Instant
 data class IndexWebhookDeliveryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val created: Instant = Clock.System.now(),
-    val lastAttempt: Instant? = null,
-    val attempts: Int = 0,
     val status: TaskStatus = TaskStatus.Pending,
     val deliveryId: String,
     val gesture: String,

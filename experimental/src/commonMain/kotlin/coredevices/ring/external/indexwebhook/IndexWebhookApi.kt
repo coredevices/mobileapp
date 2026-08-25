@@ -11,6 +11,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -61,13 +62,13 @@ class IndexWebhookApiImpl(
     config: ApiConfig,
     private val signingSecretStorage: IndexWebhookSigningSecretStorage,
     private val runRepository: IndexWebhookRunRepository,
-) : IndexWebhookApi, IndexWebhookSender, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
+) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookApi")
     }
 
-    override suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
+    suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val signingSecret = if (delivery.signRequests) {
             try {
                 signingSecretStorage.get(delivery.gesture)
@@ -215,6 +216,8 @@ class IndexWebhookApiImpl(
                     retryable = response.status.value.isRetryableWebhookStatus(),
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to post to webhook" }
             IndexWebhookRunResult(

@@ -3,23 +3,22 @@ package coredevices.ring.external.indexwebhook
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.queue.TaskStatus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class IndexWebhookDeliveryQueueTest {
 
     @Test
@@ -36,24 +35,18 @@ class IndexWebhookDeliveryQueueTest {
             ),
             successResult(),
         )
-        val queueScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val queue = IndexWebhookDeliveryQueue(
             repository = repository,
-            sender = sender,
+            send = sender::send,
             scope = queueScope,
             rescheduleDelay = 10.milliseconds,
         )
 
-        runCurrent()
         queue.enqueue(delivery())
-        withContext(Dispatchers.Default) {
-            withTimeout(5.seconds) {
-                sender.sentCount.first { it == 2 }
-                repository.status.first { it == TaskStatus.Success }
-            }
-        }
+        advanceUntilIdle()
 
-        assertEquals(2, sender.sentCount.value)
+        assertEquals(2, sender.sentCount)
         assertEquals(TaskStatus.Success, repository.single().status)
         queueScope.cancel()
     }
@@ -72,16 +65,19 @@ class IndexWebhookDeliveryQueueTest {
             ),
             successResult(),
         )
-        val queueScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(repository, sender, queueScope, 10.milliseconds)
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, 10.milliseconds)
 
         queue.enqueue(delivery())
-        awaitStatus(repository, TaskStatus.Failed)
+        runCurrent()
+        assertEquals(TaskStatus.Failed, repository.single().status)
 
-        queue.retry("recording-1")
-        awaitStatus(repository, TaskStatus.Success)
+        assertTrue(queue.retry("recording-1"))
+        assertFalse(queue.retry("recording-1"))
+        runCurrent()
 
-        assertEquals(listOf("recording-1", "recording-1"), sender.sentDeliveryIds.value)
+        assertEquals(TaskStatus.Success, repository.single().status)
+        assertEquals(listOf("recording-1", "recording-1"), sender.sentDeliveryIds)
         queueScope.cancel()
     }
 
@@ -98,21 +94,21 @@ class IndexWebhookDeliveryQueueTest {
                 retryable = true,
             ),
         )
-        val firstScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-        val firstQueue = IndexWebhookDeliveryQueue(repository, firstSender, firstScope, 1.hours)
+        val firstScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val firstQueue = IndexWebhookDeliveryQueue(repository, firstSender::send, firstScope, 1.hours)
         firstQueue.enqueue(delivery())
-        withContext(Dispatchers.Default) {
-            withTimeout(5.seconds) { firstSender.sentCount.first { it == 1 } }
-        }
+        runCurrent()
+        assertEquals(1, firstSender.sentCount)
         firstScope.cancel()
 
         val secondSender = FakeSender(successResult())
-        val secondScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-        val secondQueue = IndexWebhookDeliveryQueue(repository, secondSender, secondScope)
+        val secondScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val secondQueue = IndexWebhookDeliveryQueue(repository, secondSender::send, secondScope)
         secondQueue.resumePendingDeliveries()
-        awaitStatus(repository, TaskStatus.Success)
+        runCurrent()
 
-        assertEquals(1, secondSender.sentCount.value)
+        assertEquals(TaskStatus.Success, repository.single().status)
+        assertEquals(1, secondSender.sentCount)
         secondScope.cancel()
     }
 
@@ -120,23 +116,16 @@ class IndexWebhookDeliveryQueueTest {
     fun duplicateEnqueueSendsOneSuccessfulDelivery() = runTest {
         val repository = InMemoryDeliveryRepository()
         val sender = FakeSender(successResult())
-        val queueScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(repository, sender, queueScope)
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope)
 
         queue.enqueue(delivery())
-        awaitStatus(repository, TaskStatus.Success)
+        runCurrent()
         queue.enqueue(delivery())
+        runCurrent()
 
-        delay(100.milliseconds)
-        assertEquals(1, sender.sentCount.value)
+        assertEquals(1, sender.sentCount)
         queueScope.cancel()
-    }
-
-    private suspend fun awaitStatus(
-        repository: InMemoryDeliveryRepository,
-        status: TaskStatus,
-    ) = withContext(Dispatchers.Default) {
-        withTimeout(5.seconds) { repository.status.first { it == status } }
     }
 
     private fun delivery() = IndexWebhookDelivery(
@@ -160,14 +149,14 @@ class IndexWebhookDeliveryQueueTest {
     )
 }
 
-private class FakeSender(vararg results: IndexWebhookRunResult) : IndexWebhookSender {
+private class FakeSender(vararg results: IndexWebhookRunResult) {
     private val results = ArrayDeque(results.toList())
-    val sentCount = MutableStateFlow(0)
-    val sentDeliveryIds = MutableStateFlow<List<String>>(emptyList())
+    var sentCount = 0
+    val sentDeliveryIds = mutableListOf<String>()
 
-    override suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
-        sentCount.value += 1
-        sentDeliveryIds.value += delivery.deliveryId
+    suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
+        sentCount += 1
+        sentDeliveryIds += delivery.deliveryId
         return results.removeFirst()
     }
 }
@@ -175,7 +164,6 @@ private class FakeSender(vararg results: IndexWebhookRunResult) : IndexWebhookSe
 private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
     private val deliveries = mutableMapOf<Long, IndexWebhookDelivery>()
     private var nextId = 1L
-    val status = MutableStateFlow(TaskStatus.Pending)
 
     fun single(): IndexWebhookDelivery = deliveries.values.single()
 
@@ -192,25 +180,16 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
 
     override suspend fun setStatus(id: Long, status: TaskStatus) {
         deliveries.computeIfPresent(id) { _, task -> task.copy(status = status) }
-        this.status.value = status
     }
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = deliveries[id]
 
-    override suspend fun markAttempt(id: Long) {
-        deliveries.computeIfPresent(id) { _, task ->
-            task.copy(attempts = task.attempts + 1, lastAttempt = kotlin.time.Clock.System.now())
-        }
-    }
-
     override suspend fun resetForRetry(deliveryId: String): Long? {
         val task = deliveries.values.firstOrNull { it.deliveryId == deliveryId } ?: return null
+        if (task.status != TaskStatus.Failed) return null
         deliveries[task.id] = task.copy(
-            attempts = 0,
-            lastAttempt = null,
             status = TaskStatus.Pending,
         )
-        status.value = TaskStatus.Pending
         return task.id
     }
 }
