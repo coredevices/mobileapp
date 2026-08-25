@@ -22,6 +22,8 @@ data class IndexWebhookRun(
     val detail: String,
     val byteSize: Long,
     val durationMs: Long,
+    val deliveryId: String? = null,
+    val canRetry: Boolean = false,
 ) {
     val timestamp: Instant get() = Instant.fromEpochMilliseconds(timestampMs)
 }
@@ -55,6 +57,8 @@ class IndexWebhookRunRepository(private val settings: Settings) {
         detail: String,
         byteSize: Long,
         durationMs: Long,
+        deliveryId: String? = null,
+        canRetry: Boolean = false,
         timestamp: Instant = Clock.System.now(),
     ) {
         val run = IndexWebhookRun(
@@ -64,6 +68,8 @@ class IndexWebhookRunRepository(private val settings: Settings) {
             detail = detail,
             byteSize = byteSize,
             durationMs = durationMs,
+            deliveryId = deliveryId,
+            canRetry = canRetry,
         )
         mutex.withLock {
             val updated = (listOf(run) + _runs.value[gesture].orEmpty())

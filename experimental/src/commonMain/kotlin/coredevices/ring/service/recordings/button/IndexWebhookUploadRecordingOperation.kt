@@ -3,14 +3,14 @@ package coredevices.ring.service.recordings.button
 import co.touchlab.kermit.Logger
 import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.indexai.database.dao.RecordingEntryDao
-import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.audio.M4aEncoder
+import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import org.koin.core.component.KoinComponent
@@ -25,8 +25,9 @@ import kotlin.time.Clock
  * Uses the same PCM→M4A encoding pipeline as the original Vermillion integration.
  */
 class IndexWebhookUploadRecordingOperation(
-    private val webhookApi: IndexWebhookApi,
+    private val webhookQueue: IndexWebhookDeliveryQueue,
     private val webhookPreferences: IndexWebhookPreferences,
+    private val m4aEncoder: M4aEncoder,
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String?,
@@ -36,8 +37,6 @@ class IndexWebhookUploadRecordingOperation(
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookUploadRecordingOperation")
-        private val sentRecordingIds = mutableSetOf<String>()
-        private val sentRecordingIdsLock = Mutex()
     }
 
     private val recordingEntryDao: RecordingEntryDao by inject()
@@ -48,14 +47,12 @@ class IndexWebhookUploadRecordingOperation(
         decorated.run(handle)
 
         val sendKey = fileId ?: "text-$recordingId"
-        val payloadMode = webhookPreferences.configFor(gesture).payloadMode
+        val config = webhookPreferences.configFor(gesture)
+        val url = config.url
+        if (!config.isActive || url == null) return
+        val payloadMode = config.payloadMode
         // Typed input has no audio, so a recording-only webhook has nothing to deliver.
         if (fileId == null && payloadMode == IndexWebhookPayloadMode.RecordingOnly) return
-
-        if (!sentRecordingIdsLock.withLock { sentRecordingIds.add(sendKey) }) {
-            logger.d { "Webhook already sent for recording $sendKey, skipping" }
-            return
-        }
 
         // Read audio samples if needed
         val samples: ShortArray?
@@ -82,6 +79,19 @@ class IndexWebhookUploadRecordingOperation(
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        webhookApi.uploadIfEnabled(samples, sampleRate, sendKey, transcription, recordedAt, gesture)
+        val audioData = samples?.let { m4aEncoder.encode(it, sampleRate) }
+        webhookQueue.enqueue(
+            IndexWebhookDelivery(
+                deliveryId = sendKey,
+                gesture = gesture,
+                url = url,
+                headers = config.headers,
+                audioData = audioData,
+                filename = audioData?.let { "$sendKey.m4a" },
+                transcription = transcription,
+                recordedAt = recordedAt,
+            )
+        )
+        logger.d { "Queued webhook delivery for recording $sendKey" }
     }
 }

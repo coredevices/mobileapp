@@ -42,6 +42,7 @@ import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.Migrate33To34
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.IndexWebhookDeliveryRoomRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
@@ -54,6 +55,9 @@ import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookSender
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
@@ -156,6 +160,9 @@ val experimentalModule = module {
         get<RingDatabase>().recordingProcessingTaskDao()
     }
     single {
+        get<RingDatabase>().indexWebhookDeliveryDao()
+    }
+    single {
         get<RingDatabase>().traceSessionDao()
     }
     single {
@@ -172,6 +179,7 @@ val experimentalModule = module {
         RingTransferRepository(get(), get<RingDatabase>())
     }
     singleOf(::RecordingProcessingTaskRepository)
+    singleOf(::IndexWebhookDeliveryRoomRepository) bind IndexWebhookDeliveryRepository::class
     single {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
@@ -211,17 +219,15 @@ val experimentalModule = module {
     singleOf(::IndexWebhookRunRepository)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
-    single {
-        IndexWebhookApiImpl(
-            get(),
-            get(),
-            get(),
-            get(),
-            get<RecordingBackgroundScope>()
-        )
-    } bind IndexWebhookApi::class
+    single { IndexWebhookApiImpl(get(), get()) } binds arrayOf(
+        IndexWebhookApi::class,
+        IndexWebhookSender::class,
+    )
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
+    single {
+        IndexWebhookDeliveryQueue(get(), get(), get<RecordingBackgroundScope>())
+    }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
