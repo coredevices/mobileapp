@@ -45,6 +45,20 @@ fun IndexWebhookConfig.sendsFor(destination: GestureDestination.Recording): Bool
     isActive && destination != GestureDestination.Nothing
 
 /**
+ * Whether the webhook can be delivered before the recording is processed.
+ *
+ * [IndexWebhookPayloadMode.RecordingOnly] carries nothing that processing produces, and the audio
+ * is already written to disk before processing starts — so waiting for transcription and the agent
+ * only delays the endpoint, and loses the delivery outright when transcription fails. The other two
+ * modes carry the transcription, which is precisely what processing writes.
+ *
+ * Typed input has no audio ([hasAudio] false), so nothing can go early: a recording-only webhook has
+ * nothing at all to deliver, and the other modes still wait for the transcription.
+ */
+fun IndexWebhookPayloadMode.sendsBeforeProcessing(hasAudio: Boolean): Boolean =
+    this == IndexWebhookPayloadMode.RecordingOnly && hasAudio
+
+/**
  * Stores one [IndexWebhookConfig] per recording gesture.
  */
 class IndexWebhookPreferences(private val settings: Settings) {

@@ -46,6 +46,24 @@ class IndexWebhookSendDecisionTest {
     }
 
     @Test
+    fun aRecordingOnlyWebhookDoesNotWaitForProcessing() {
+        assertTrue(IndexWebhookPayloadMode.RecordingOnly.sendsBeforeProcessing(hasAudio = true))
+    }
+
+    @Test
+    fun anythingCarryingTheTranscriptionWaitsForIt() {
+        assertFalse(IndexWebhookPayloadMode.TranscriptionOnly.sendsBeforeProcessing(hasAudio = true))
+        assertFalse(IndexWebhookPayloadMode.Both.sendsBeforeProcessing(hasAudio = true))
+    }
+
+    @Test
+    fun typedInputHasNoAudioToSendEarly() {
+        IndexWebhookPayloadMode.entries.forEach {
+            assertFalse(it.sendsBeforeProcessing(hasAudio = false), "$it sent early with no audio")
+        }
+    }
+
+    @Test
     fun triggerHeaderValuesAreStable() {
         assertEquals("single-click-hold", RingGesture.Hold.webhookTriggerValue)
         assertEquals("double-click-hold", RingGesture.ClickHold.webhookTriggerValue)
