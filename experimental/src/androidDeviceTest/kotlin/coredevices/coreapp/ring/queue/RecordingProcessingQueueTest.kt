@@ -37,11 +37,9 @@ import coredevices.ring.database.room.repository.IndexWebhookDeliveryRoomReposit
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
-import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.external.indexwebhook.IndexWebhookSender
 import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -80,7 +78,6 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
-import org.koin.dsl.binds
 import org.koin.dsl.module
 import java.io.File
 import kotlin.collections.emptyList
@@ -258,7 +255,7 @@ class RecordingProcessingQueueTest {
         singleOf(::McpSessionFactory)
 
         single {
-            object : IndexWebhookApi, IndexWebhookSender {
+            object : IndexWebhookApi {
                 override suspend fun sendTestEvent(
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
@@ -266,19 +263,20 @@ class RecordingProcessingQueueTest {
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
-
-                override suspend fun send(delivery: IndexWebhookDelivery) = sendTestEvent(
-                    delivery.gesture,
-                    delivery.url,
-                    delivery.headers,
-                )
             }
-        } binds arrayOf(IndexWebhookApi::class, IndexWebhookSender::class)
+        } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)
         singleOf(::M4aEncoder)
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRoomRepository) bind IndexWebhookDeliveryRepository::class
-        single { IndexWebhookDeliveryQueue(get(), get(), get<RecordingBackgroundScope>()) }
+        single {
+            val api = get<IndexWebhookApi>()
+            IndexWebhookDeliveryQueue(
+                get(),
+                { delivery -> api.sendTestEvent(delivery.gesture, delivery.url, delivery.headers) },
+                get<RecordingBackgroundScope>(),
+            )
+        }
 
         single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 

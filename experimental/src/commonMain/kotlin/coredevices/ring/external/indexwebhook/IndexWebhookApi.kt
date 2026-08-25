@@ -11,6 +11,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -56,13 +57,13 @@ internal const val WEBHOOK_DELIVERY_HEADER = "X-Index-Delivery"
 class IndexWebhookApiImpl(
     config: ApiConfig,
     private val runRepository: IndexWebhookRunRepository,
-) : IndexWebhookApi, IndexWebhookSender, ApiClient(config.version, timeout = 2.minutes) {
+) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes) {
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookApi")
     }
 
-    override suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
+    suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val result = post(
             url = delivery.url,
             headers = delivery.headers,
@@ -141,7 +142,8 @@ class IndexWebhookApiImpl(
                     .filterKeys {
                         !it.equals(WEBHOOK_TRIGGER_HEADER, ignoreCase = true) &&
                             !it.equals(WEBHOOK_TEST_HEADER, ignoreCase = true) &&
-                            !it.equals(WEBHOOK_DELIVERY_HEADER, ignoreCase = true)
+                            !it.equals(WEBHOOK_DELIVERY_HEADER, ignoreCase = true) &&
+                            !it.equals(WEBHOOK_AUDIO_SIZE_HEADER, ignoreCase = true)
                     }
                     .forEach { (name, value) -> header(name, value) }
                 header(WEBHOOK_TRIGGER_HEADER, triggerValue)
@@ -174,6 +176,8 @@ class IndexWebhookApiImpl(
                     retryable = response.status.value.isRetryableWebhookStatus(),
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to post to webhook" }
             IndexWebhookRunResult(

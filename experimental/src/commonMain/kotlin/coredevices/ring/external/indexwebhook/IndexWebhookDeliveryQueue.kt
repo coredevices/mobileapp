@@ -1,12 +1,9 @@
 package coredevices.ring.external.indexwebhook
 
 import coredevices.ring.service.button.RingGesture
-import coredevices.util.queue.QueueTask
 import coredevices.util.queue.TaskStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -16,11 +13,9 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 data class IndexWebhookDelivery(
-    override val id: Long = 0,
-    override val created: Instant = Clock.System.now(),
-    override val lastAttempt: Instant? = null,
-    override val attempts: Int = 0,
-    override val status: TaskStatus = TaskStatus.Pending,
+    val id: Long = 0,
+    val created: Instant = Clock.System.now(),
+    val status: TaskStatus = TaskStatus.Pending,
     val deliveryId: String,
     val gesture: RingGesture,
     val url: String,
@@ -29,30 +24,27 @@ data class IndexWebhookDelivery(
     val filename: String?,
     val transcription: String?,
     val recordedAt: Instant,
-) : QueueTask
-
-fun interface IndexWebhookSender {
-    suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult
-}
+)
 
 interface IndexWebhookDeliveryRepository {
     suspend fun insert(delivery: IndexWebhookDelivery): Long
     suspend fun getPending(): List<IndexWebhookDelivery>
     suspend fun getById(id: Long): IndexWebhookDelivery?
-    suspend fun markAttempt(id: Long)
     suspend fun setStatus(id: Long, status: TaskStatus)
     suspend fun resetForRetry(deliveryId: String): Long?
 }
 
 class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
-    private val sender: IndexWebhookSender,
+    private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
     private val rescheduleDelay: Duration = 1.minutes,
-) : AutoCloseable {
+) {
     private val tasks = Channel<Long>(Channel.UNLIMITED)
-    private val worker = scope.launch(Dispatchers.IO) {
-        for (id in tasks) process(id)
+    init {
+        scope.launch {
+            for (id in tasks) process(id)
+        }
     }
 
     suspend fun enqueue(delivery: IndexWebhookDelivery) {
@@ -74,9 +66,8 @@ class IndexWebhookDeliveryQueue(
     private suspend fun process(id: Long) {
         val delivery = repository.getById(id) ?: return
         if (delivery.status != TaskStatus.Pending) return
-        repository.markAttempt(id)
         try {
-            val result = sender.send(delivery)
+            val result = send(delivery)
             when {
                 result.ok -> repository.setStatus(id, TaskStatus.Success)
                 result.retryable -> scope.launch {
@@ -93,10 +84,5 @@ class IndexWebhookDeliveryQueue(
                 tasks.send(id)
             }
         }
-    }
-
-    override fun close() {
-        worker.cancel()
-        tasks.close()
     }
 }

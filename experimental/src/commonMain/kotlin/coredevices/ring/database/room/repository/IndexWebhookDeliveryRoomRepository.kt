@@ -9,7 +9,6 @@ import coredevices.util.queue.TaskStatus
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
-import kotlin.time.Clock
 
 class IndexWebhookDeliveryRoomRepository(
     private val dao: IndexWebhookDeliveryDao,
@@ -27,10 +26,6 @@ class IndexWebhookDeliveryRoomRepository(
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = dao.getById(id)?.toDomain()
 
-    override suspend fun markAttempt(id: Long) {
-        dao.markAttempt(id, Clock.System.now())
-    }
-
     override suspend fun setStatus(id: Long, status: TaskStatus) {
         if (status == TaskStatus.Success) {
             dao.markSuccessAndClearPayload(id)
@@ -40,17 +35,13 @@ class IndexWebhookDeliveryRoomRepository(
     }
 
     override suspend fun resetForRetry(deliveryId: String): Long? {
-        dao.resetForRetry(deliveryId)
-        return dao.getByDeliveryId(deliveryId)
-            ?.takeIf { it.status == TaskStatus.Pending }
-            ?.id
+        if (dao.resetForRetry(deliveryId) == 0) return null
+        return requireNotNull(dao.getByDeliveryId(deliveryId)).id
     }
 
     private fun IndexWebhookDelivery.toEntity() = IndexWebhookDeliveryEntity(
         id = id,
         created = created,
-        lastAttempt = lastAttempt,
-        attempts = attempts,
         status = status,
         deliveryId = deliveryId,
         gesture = gesture.name,
@@ -65,8 +56,6 @@ class IndexWebhookDeliveryRoomRepository(
     private fun IndexWebhookDeliveryEntity.toDomain() = IndexWebhookDelivery(
         id = id,
         created = created,
-        lastAttempt = lastAttempt,
-        attempts = attempts,
         status = status,
         deliveryId = deliveryId,
         gesture = RingGesture.valueOf(gesture),

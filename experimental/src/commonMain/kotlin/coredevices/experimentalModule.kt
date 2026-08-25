@@ -57,7 +57,6 @@ import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
-import coredevices.ring.external.indexwebhook.IndexWebhookSender
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
@@ -219,14 +218,15 @@ val experimentalModule = module {
     singleOf(::IndexWebhookRunRepository)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
-    single { IndexWebhookApiImpl(get(), get()) } binds arrayOf(
-        IndexWebhookApi::class,
-        IndexWebhookSender::class,
-    )
+    single { IndexWebhookApiImpl(get(), get()) } bind IndexWebhookApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single {
-        IndexWebhookDeliveryQueue(get(), get(), get<RecordingBackgroundScope>())
+        IndexWebhookDeliveryQueue(
+            get(),
+            get<IndexWebhookApiImpl>()::send,
+            get<RecordingBackgroundScope>(),
+        )
     }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
