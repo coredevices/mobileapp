@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 35,
-    "identityHash": "252a9aeda58bf2e2ef49059fb49271bc",
+    "identityHash": "f7c54b530b69dccd3030913aa7dded79",
     "entities": [
       {
         "tableName": "LocalReminderData",
@@ -932,7 +932,7 @@
       },
       {
         "tableName": "IndexWebhookDeliveryEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `created` INTEGER NOT NULL, `status` TEXT NOT NULL, `deliveryId` TEXT NOT NULL, `gesture` TEXT NOT NULL, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `audioData` BLOB, `filename` TEXT, `transcription` TEXT, `recordedAt` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `created` INTEGER NOT NULL, `status` TEXT NOT NULL, `attempts` INTEGER NOT NULL, `nextAttemptAt` INTEGER, `deliveryId` TEXT NOT NULL, `gesture` TEXT NOT NULL, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `audioData` BLOB, `filename` TEXT, `transcription` TEXT, `recordedAt` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -951,6 +951,17 @@
             "columnName": "status",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "attempts",
+            "columnName": "attempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "deliveryId",
@@ -1367,7 +1378,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '252a9aeda58bf2e2ef49059fb49271bc')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f7c54b530b69dccd3030913aa7dded79')"
     ]
   }
 }

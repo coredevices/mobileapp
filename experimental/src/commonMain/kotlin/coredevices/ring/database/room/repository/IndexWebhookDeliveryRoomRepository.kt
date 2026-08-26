@@ -9,6 +9,7 @@ import coredevices.util.queue.TaskStatus
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlin.time.Instant
 
 class IndexWebhookDeliveryRoomRepository(
     private val dao: IndexWebhookDeliveryDao,
@@ -34,6 +35,10 @@ class IndexWebhookDeliveryRoomRepository(
         }
     }
 
+    override suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant) {
+        dao.scheduleRetry(id, nextAttemptAt)
+    }
+
     override suspend fun resetForRetry(deliveryId: String): Long? {
         if (dao.resetForRetry(deliveryId) == 0) return null
         return requireNotNull(dao.getByDeliveryId(deliveryId)).id
@@ -43,6 +48,8 @@ class IndexWebhookDeliveryRoomRepository(
         id = id,
         created = created,
         status = status,
+        attempts = attempts,
+        nextAttemptAt = nextAttemptAt,
         deliveryId = deliveryId,
         gesture = gesture.name,
         url = url,
@@ -57,6 +64,8 @@ class IndexWebhookDeliveryRoomRepository(
         id = id,
         created = created,
         status = status,
+        attempts = attempts,
+        nextAttemptAt = nextAttemptAt,
         deliveryId = deliveryId,
         gesture = RingGesture.valueOf(gesture),
         url = url,

@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -14,8 +15,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,7 +41,7 @@ class IndexWebhookDeliveryQueueTest {
             repository = repository,
             send = sender::send,
             scope = queueScope,
-            rescheduleDelay = 10.milliseconds,
+            now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
         queue.enqueue(delivery())
@@ -66,7 +67,7 @@ class IndexWebhookDeliveryQueueTest {
             successResult(),
         )
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, 10.milliseconds)
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope)
 
         queue.enqueue(delivery())
         runCurrent()
@@ -95,7 +96,12 @@ class IndexWebhookDeliveryQueueTest {
             ),
         )
         val firstScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val firstQueue = IndexWebhookDeliveryQueue(repository, firstSender::send, firstScope, 1.hours)
+        val firstQueue = IndexWebhookDeliveryQueue(
+            repository,
+            firstSender::send,
+            firstScope,
+            now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
+        )
         firstQueue.enqueue(delivery())
         runCurrent()
         assertEquals(1, firstSender.sentCount)
@@ -103,9 +109,14 @@ class IndexWebhookDeliveryQueueTest {
 
         val secondSender = FakeSender(successResult())
         val secondScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val secondQueue = IndexWebhookDeliveryQueue(repository, secondSender::send, secondScope)
+        val secondQueue = IndexWebhookDeliveryQueue(
+            repository,
+            secondSender::send,
+            secondScope,
+            now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
+        )
         secondQueue.resumePendingDeliveries()
-        runCurrent()
+        advanceUntilIdle()
 
         assertEquals(TaskStatus.Success, repository.single().status)
         assertEquals(1, secondSender.sentCount)
@@ -125,6 +136,41 @@ class IndexWebhookDeliveryQueueTest {
         runCurrent()
 
         assertEquals(1, sender.sentCount)
+        queueScope.cancel()
+    }
+
+    @Test
+    fun retryAfterOverridesBackoff() = runTest {
+        val repository = InMemoryDeliveryRepository()
+        val sender = FakeSender(
+            IndexWebhookRunResult(
+                ok = false,
+                status = "429 ERROR",
+                detail = "slow down",
+                byteSize = 12,
+                durationMs = 1,
+                retryable = true,
+                retryAfter = 1.hours,
+            ),
+            successResult(),
+        )
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(
+            repository,
+            sender::send,
+            queueScope,
+            now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
+        )
+
+        queue.enqueue(delivery())
+        runCurrent()
+        advanceTimeBy(59.minutes)
+        runCurrent()
+        assertEquals(1, sender.sentCount)
+
+        advanceTimeBy(1.minutes)
+        runCurrent()
+        assertEquals(2, sender.sentCount)
         queueScope.cancel()
     }
 
@@ -182,6 +228,12 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
         deliveries.computeIfPresent(id) { _, task -> task.copy(status = status) }
     }
 
+    override suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant) {
+        deliveries.computeIfPresent(id) { _, task ->
+            task.copy(attempts = task.attempts + 1, nextAttemptAt = nextAttemptAt)
+        }
+    }
+
     override suspend fun getById(id: Long): IndexWebhookDelivery? = deliveries[id]
 
     override suspend fun resetForRetry(deliveryId: String): Long? {
@@ -189,6 +241,8 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
         if (task.status != TaskStatus.Failed) return null
         deliveries[task.id] = task.copy(
             status = TaskStatus.Pending,
+            attempts = 0,
+            nextAttemptAt = null,
         )
         return task.id
     }

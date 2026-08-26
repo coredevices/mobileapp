@@ -7,8 +7,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -16,6 +19,8 @@ data class IndexWebhookDelivery(
     val id: Long = 0,
     val created: Instant = Clock.System.now(),
     val status: TaskStatus = TaskStatus.Pending,
+    val attempts: Int = 0,
+    val nextAttemptAt: Instant? = null,
     val deliveryId: String,
     val gesture: RingGesture,
     val url: String,
@@ -31,6 +36,7 @@ interface IndexWebhookDeliveryRepository {
     suspend fun getPending(): List<IndexWebhookDelivery>
     suspend fun getById(id: Long): IndexWebhookDelivery?
     suspend fun setStatus(id: Long, status: TaskStatus)
+    suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant)
     suspend fun resetForRetry(deliveryId: String): Long?
 }
 
@@ -38,7 +44,7 @@ class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
     private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
-    private val rescheduleDelay: Duration = 1.minutes,
+    private val now: () -> Instant = Clock.System::now,
 ) {
     private val tasks = Channel<Long>(Channel.UNLIMITED)
     init {
@@ -66,23 +72,46 @@ class IndexWebhookDeliveryQueue(
     private suspend fun process(id: Long) {
         val delivery = repository.getById(id) ?: return
         if (delivery.status != TaskStatus.Pending) return
+        delivery.nextAttemptAt?.let {
+            val remaining = it - now()
+            if (remaining > Duration.ZERO) {
+                schedule(id, remaining)
+                return
+            }
+        }
         try {
             val result = send(delivery)
             when {
                 result.ok -> repository.setStatus(id, TaskStatus.Success)
-                result.retryable -> scope.launch {
-                    delay(rescheduleDelay)
-                    tasks.send(id)
-                }
+                result.retryable -> reschedule(delivery, result.retryAfter)
                 else -> repository.setStatus(id, TaskStatus.Failed)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            scope.launch {
-                delay(rescheduleDelay)
-                tasks.send(id)
-            }
+            reschedule(delivery, null)
         }
     }
+
+    private suspend fun reschedule(delivery: IndexWebhookDelivery, retryAfter: Duration?) {
+        val after = webhookRetryDelay(delivery.attempts, retryAfter)
+        repository.scheduleRetry(delivery.id, now() + after)
+        schedule(delivery.id, after)
+    }
+
+    private fun schedule(id: Long, after: Duration) {
+        scope.launch {
+            delay(after)
+            tasks.send(id)
+        }
+    }
+}
+
+internal fun webhookRetryDelay(
+    attempts: Int,
+    retryAfter: Duration?,
+    jitter: Duration = Random.nextLong(30_001).milliseconds,
+): Duration {
+    val backoff = (1.minutes * (1 shl attempts.coerceIn(0, 6))).coerceAtMost(1.hours)
+    return maxOf(backoff + jitter, retryAfter ?: Duration.ZERO)
 }

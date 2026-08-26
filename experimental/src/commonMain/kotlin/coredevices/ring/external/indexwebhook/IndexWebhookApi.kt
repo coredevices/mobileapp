@@ -9,11 +9,15 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.content.ByteArrayContent
+import io.ktor.http.fromHttpToGmtDate
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
@@ -34,6 +38,7 @@ data class IndexWebhookRunResult(
     val byteSize: Long,
     val durationMs: Long,
     val retryable: Boolean = false,
+    val retryAfter: Duration? = null,
 )
 
 /** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
@@ -174,6 +179,7 @@ class IndexWebhookApiImpl(
                     byteSize = bodyBytes.size.toLong(),
                     durationMs = elapsed,
                     retryable = response.status.value.isRetryableWebhookStatus(),
+                    retryAfter = response.headers[HttpHeaders.RetryAfter].toRetryAfterDuration(),
                 )
             }
         } catch (e: CancellationException) {
@@ -194,6 +200,15 @@ class IndexWebhookApiImpl(
 
 internal fun Int.isRetryableWebhookStatus(): Boolean =
     this == 408 || this == 425 || this == 429 || this in 500..599
+
+internal fun String?.toRetryAfterDuration(now: Instant = Clock.System.now()): Duration? {
+    val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    value.toLongOrNull()?.takeIf { it >= 0 }?.let { return it.seconds }
+    return runCatching {
+        (Instant.fromEpochMilliseconds(value.fromHttpToGmtDate().timestamp) - now)
+            .coerceAtLeast(Duration.ZERO)
+    }.getOrNull()
+}
 
 private fun contentsLabel(hasAudio: Boolean, hasTranscription: Boolean): String = when {
     hasAudio && hasTranscription -> "recording + transcription"

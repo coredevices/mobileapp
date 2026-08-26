@@ -113,7 +113,7 @@ def receive():
 
 - Network delivery is async and does not re-run transcription or agent processing
 - Recording deliveries are persisted before sending and resume after an app restart
-- Network failures, HTTP 408/425/429 responses, and 5xx responses retry automatically
+- Network failures, HTTP 408/425/429 responses, and 5xx responses retry with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor a longer `Retry-After`
 - Other HTTP failures remain available through **Retry** in **Recent runs**
 - Successful deliveries keep only their delivery ID for deduplication; queued payload data is removed from the phone
 - The recording is always processed normally (transcription + agent) before the webhook fires
