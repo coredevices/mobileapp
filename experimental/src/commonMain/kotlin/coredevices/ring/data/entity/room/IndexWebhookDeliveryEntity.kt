@@ -17,6 +17,8 @@ data class IndexWebhookDeliveryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val created: Instant = Clock.System.now(),
     val status: TaskStatus = TaskStatus.Pending,
+    val attempts: Int = 0,
+    val nextAttemptAt: Instant? = null,
     val deliveryId: String,
     val gesture: String,
     val url: String,
