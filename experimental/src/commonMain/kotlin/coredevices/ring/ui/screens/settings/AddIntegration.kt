@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
@@ -48,6 +49,8 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.memos.MemosIntegration
+import coredevices.ring.agent.integrations.memos.MemosPreferences
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianMode
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
@@ -124,6 +127,16 @@ fun AddIntegration(coreNav: CoreNav) {
                 Item(def) {
                     dialog = {
                         ObsidianDialog(
+                            onDismiss = { dialog = null }
+                        )
+                    }
+                }
+            }
+            item {
+                val def = remember { MemosIntegration.DEFINITION }
+                Item(def) {
+                    dialog = {
+                        MemosDialog(
                             onDismiss = { dialog = null }
                         )
                     }
@@ -748,6 +761,101 @@ fun TaskerDialog(
             }
             is SignInState.Success -> {
                 Text("Tasker connected. Choose it for notes or reminders in Index settings.")
+            }
+            is SignInState.Error -> {
+                Text(
+                    "Error: ${s.message}",
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MemosDialog(
+    onDismiss: () -> Unit
+) {
+    val integration = koinInject<MemosIntegration>()
+    val prefs = koinInject<MemosPreferences>()
+    var serverUrl by remember { mutableStateOf(prefs.baseUrl.value ?: "") }
+    var token by remember { mutableStateOf("") }
+    var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
+    val scope = rememberCoroutineScope()
+
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Memos") },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text(if (state is SignInState.Success) "Done" else "Cancel")
+            }
+            if (state !is SignInState.Success) {
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    enabled = state !is SignInState.SigningIn &&
+                        serverUrl.isNotBlank() && token.isNotBlank(),
+                    onClick = {
+                        state = SignInState.SigningIn
+                        scope.launch {
+                            state = try {
+                                if (integration.connect(serverUrl, token)) {
+                                    SignInState.Success
+                                } else {
+                                    SignInState.Error(
+                                        "Could not reach that server, or the token was rejected."
+                                    )
+                                }
+                            } catch (e: Throwable) {
+                                Logger.w("AddIntegration", e) { "Error connecting Memos: ${e.message}" }
+                                SignInState.Error(e.message ?: "Unknown error")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Connect")
+                }
+            }
+        }
+    ) {
+        when (val s = state) {
+            is SignInState.Idle -> {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Saves your notes to a self-hosted Memos server.")
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = { serverUrl = it },
+                        label = { Text("Server URL") },
+                        placeholder = { Text("https://memos.example.com") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = token,
+                        onValueChange = { token = it },
+                        label = { Text("Access token") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Create a token in Memos under Settings \u2192 My Account \u2192 Access Tokens.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            is SignInState.SigningIn -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            is SignInState.Success -> {
+                Text("Memos connected. Choose it for notes in Index settings.")
             }
             is SignInState.Error -> {
                 Text(

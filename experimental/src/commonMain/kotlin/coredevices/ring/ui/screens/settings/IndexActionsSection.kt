@@ -140,6 +140,7 @@ internal fun actionConnectDialog(action: IndexAction): ActionsDialog? =
 internal fun noteConnectDialog(provider: NoteProvider): ActionsDialog? = when (provider) {
     NoteProvider.Notion -> ActionsDialog.Notion
     NoteProvider.Obsidian -> ActionsDialog.Obsidian
+    NoteProvider.Memos -> ActionsDialog.Memos
     NoteProvider.Tasker -> ActionsDialog.Tasker
     NoteProvider.Builtin -> null
 }
@@ -182,7 +183,7 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
 }
 
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
-internal enum class ActionsDialog { AddServer, Sideload, Notion, GoogleTasks, Obsidian, Tasker, PhoneCalendar }
+internal enum class ActionsDialog { AddServer, Sideload, Notion, GoogleTasks, Obsidian, Memos, Tasker, PhoneCalendar }
 
 @Composable
 fun IndexActionsSection(
@@ -368,6 +369,7 @@ fun IndexActionsSection(
         ActionsDialog.Notion -> NotionDialog(onDismiss = closeConnectDialog)
         ActionsDialog.GoogleTasks -> GTasksDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Obsidian -> ObsidianDialog(onDismiss = closeConnectDialog)
+        ActionsDialog.Memos -> MemosDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Tasker -> TaskerDialog(onDismiss = closeConnectDialog)
         ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(onDismiss = { dialog = null })
         null -> {}

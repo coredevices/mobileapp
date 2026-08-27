@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.memos.MemosIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.database.Preferences
 import coredevices.firestore.UsersDao
@@ -24,6 +25,7 @@ class NoteIntegrationFactory(
             NoteProvider.Notion -> delegated(get<NotionIntegration>(), integration)
             NoteProvider.Obsidian -> delegated(get<ObsidianIntegration>(), integration)
             NoteProvider.Tasker -> delegated(createTaskerNoteClient(), integration)
+            NoteProvider.Memos -> delegated(get<MemosIntegration>(), integration)
         }
     }
 

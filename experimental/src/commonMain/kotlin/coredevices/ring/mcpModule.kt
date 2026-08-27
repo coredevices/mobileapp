@@ -11,6 +11,7 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.agent.integrations.NotionIntegration
+import coredevices.ring.agent.integrations.memos.MemosIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -35,6 +36,7 @@ internal val mcpModule = module {
     // constructor defaults are used — Koin's factoryOf would try to resolve every
     // parameter from the graph and fail on kotlinx.datetime.TimeZone.
     factory { ObsidianIntegration(get(), get()) }
+    factoryOf(::MemosIntegration)
     factoryOf(::LocalNoteClient)
     singleOf(::NoteIntegrationFactory)
 }
