@@ -8,6 +8,8 @@ import coredevices.ring.RingDelegate
 import coredevices.ring.agent.integrations.obsidian.IosObsidianVault
 import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.ring.database.IntegrationTokenStorageImpl
+import coredevices.ring.external.indexwebhook.IosNetworkMonitor
+import coredevices.ring.external.indexwebhook.NetworkMonitor
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.encryption.EncryptionKeyManager
@@ -31,6 +33,7 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
 
 actual val platformRingModule = module {
+    singleOf(::IosNetworkMonitor) bind NetworkMonitor::class
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)
     factoryOf(::AudioRecorder)

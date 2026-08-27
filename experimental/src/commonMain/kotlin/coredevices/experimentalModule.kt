@@ -57,6 +57,7 @@ import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
+import coredevices.ring.external.indexwebhook.NetworkMonitor
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookSigningSecretStorage
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
@@ -235,6 +236,7 @@ val experimentalModule = module {
             get(),
             get<IndexWebhookApiImpl>()::send,
             get<RecordingBackgroundScope>(),
+            networkState = get<NetworkMonitor>().state,
         )
     }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
