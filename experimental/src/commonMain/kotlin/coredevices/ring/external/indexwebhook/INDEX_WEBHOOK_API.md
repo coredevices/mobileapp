@@ -107,6 +107,10 @@ def receive():
 ## Notes
 
 - Uploads are async and non-blocking — they don't delay the normal recording pipeline
-- Failed uploads are retried on the next recording (no persistent retry queue)
-- The recording is always processed normally (transcription + agent) before the webhook fires
+- **Recording only** fires as soon as the audio is on disk, in parallel with transcription and the
+  agent. The endpoint gets the audio at the earliest moment it exists, and still gets it when
+  transcription fails. **Transcription only** and **Both** wait for the recording to be processed,
+  because processing is what produces the transcription they carry
+- A failed upload is logged and listed under **Recent runs**. There is no retry — not on the next
+  recording, and not when the processing queue retries the same one
 - Audio is the same 16kHz resampled version used for transcription
