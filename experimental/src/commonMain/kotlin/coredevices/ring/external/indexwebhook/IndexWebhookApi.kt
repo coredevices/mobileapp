@@ -14,6 +14,7 @@ import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.fromHttpToGmtDate
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.io.IOException
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -39,6 +40,7 @@ data class IndexWebhookRunResult(
     val durationMs: Long,
     val retryable: Boolean = false,
     val retryAfter: Duration? = null,
+    val transportFailure: Boolean = false,
 )
 
 /** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
@@ -193,6 +195,7 @@ class IndexWebhookApiImpl(
                 byteSize = bodyBytes.size.toLong(),
                 durationMs = started.elapsedNow().inWholeMilliseconds,
                 retryable = true,
+                transportFailure = e is IOException,
             )
         }
     }

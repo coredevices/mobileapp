@@ -12,6 +12,8 @@ import coredevices.ring.agent.builtin_servlets.js.JsEngine
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.ring.database.IntegrationTokenStorageImpl
 import coredevices.ring.encryption.EncryptionKeyManager
+import coredevices.ring.external.indexwebhook.AndroidNetworkMonitor
+import coredevices.ring.external.indexwebhook.NetworkMonitor
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.service.PlatformIndexNotificationManager
@@ -35,6 +37,7 @@ import coredevices.util.transcription.InferenceBoost
 import org.koin.dsl.module
 
 actual val platformRingModule = module {
+    singleOf(::AndroidNetworkMonitor) bind NetworkMonitor::class
     single<InferenceBoostProvider> { AndroidInferenceBoostProvider(get()) } bind InferenceBoost::class
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)

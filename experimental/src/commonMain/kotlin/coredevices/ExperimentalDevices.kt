@@ -28,6 +28,7 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.external.indexwebhook.NetworkMonitor
 import coredevices.ring.service.RingSync
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
@@ -80,10 +81,12 @@ class ExperimentalDevices(
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val indexSettingsSummary: IndexSettingsSummary,
+    private val networkMonitor: NetworkMonitor,
     private val indexWebhookDeliveryQueue: IndexWebhookDeliveryQueue,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
+        networkMonitor.start()
         indexWebhookDeliveryQueue.resumePendingDeliveries()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->

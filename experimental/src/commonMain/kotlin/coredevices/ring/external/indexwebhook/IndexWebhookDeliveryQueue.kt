@@ -6,6 +6,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -45,6 +48,7 @@ class IndexWebhookDeliveryQueue(
     private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
     private val now: () -> Instant = Clock.System::now,
+    private val networkState: StateFlow<NetworkState> = MutableStateFlow(NetworkState(true)),
 ) {
     private val tasks = Channel<Long>(Channel.UNLIMITED)
     init {
@@ -79,10 +83,13 @@ class IndexWebhookDeliveryQueue(
                 return
             }
         }
+        networkState.first { it.available }
+        val outageCount = networkState.value.outageCount
         try {
             val result = send(delivery)
             when {
                 result.ok -> repository.setStatus(id, TaskStatus.Success)
+                result.transportFailure && networkState.value.outageCount != outageCount -> retryWhenNetworkReturns(id)
                 result.retryable -> reschedule(delivery, result.retryAfter)
                 else -> repository.setStatus(id, TaskStatus.Failed)
             }
@@ -91,6 +98,11 @@ class IndexWebhookDeliveryQueue(
         } catch (_: Exception) {
             reschedule(delivery, null)
         }
+    }
+
+    private suspend fun retryWhenNetworkReturns(id: Long) {
+        networkState.first { it.available }
+        tasks.send(id)
     }
 
     private suspend fun reschedule(delivery: IndexWebhookDelivery, retryAfter: Duration?) {
