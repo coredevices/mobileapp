@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.datalogging
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.packets.DataItemType
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.structmapper.SBytes
 import io.rebble.libpebblecommon.structmapper.SUInt
@@ -14,6 +15,7 @@ import kotlin.uuid.Uuid
 class Datalogging(
     private val webServices: WebServices,
     private val healthDataProcessor: HealthDataProcessor,
+    private val companionDatalogging: CompanionDatalogging,
 ) {
     private val logger = Logger.withTag("Datalogging")
 
@@ -29,6 +31,12 @@ class Datalogging(
         // Handle health tags
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSendDataItems(sessionId, data, itemsLeft)
+            return
+        }
+
+        // Third-party watchapp data belongs to its companion app
+        if (uuid != SYSTEM_APP_UUID) {
+            companionDatalogging.onDataItems(watchInfo.serial, sessionId, data)
             return
         }
 
@@ -66,15 +74,32 @@ class Datalogging(
         }
     }
 
-    fun openSession(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
+    fun openSession(
+        sessionId: UByte,
+        tag: UInt,
+        applicationUuid: Uuid,
+        itemSize: UShort,
+        itemType: DataItemType,
+        timestamp: UInt,
+        watchIdentity: String,
+    ) {
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSessionOpen(sessionId, tag, applicationUuid, itemSize)
+            return
+        }
+        if (applicationUuid != SYSTEM_APP_UUID) {
+            companionDatalogging.onSessionOpened(
+                watchIdentity, sessionId, applicationUuid, timestamp, tag, itemType, itemSize)
         }
     }
 
-    fun closeSession(sessionId: UByte, tag: UInt) {
+    fun closeSession(sessionId: UByte, tag: UInt, applicationUuid: Uuid, watchIdentity: String) {
         if (tag in HealthDataProcessor.HEALTH_TAGS) {
             healthDataProcessor.handleSessionClose(sessionId)
+            return
+        }
+        if (applicationUuid != SYSTEM_APP_UUID) {
+            companionDatalogging.onSessionClosed(watchIdentity, sessionId)
         }
     }
 
