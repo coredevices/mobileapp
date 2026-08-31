@@ -4,13 +4,15 @@ package io.rebble.libpebblecommon.imaging
  * Encodes an ARGB image as the watch's 4-bpp palettized [EncodedImage]: choose a 16-colour palette
  * by median cut over the watch's 64-colour (GColor8) space, Floyd–Steinberg dither to that palette,
  * and pack two 4-bit indices per byte (even x = high nibble, matching the firmware).
+ *
+ * Pixels are matched against what the panel actually shows (see ScreenColors.kt), not the nominal
+ * 0/85/170/255 the GColor8 bits suggest. The bytes on the wire are still GColor8 codes.
  */
 object ImageEncoder {
     private const val MAX_COLORS = 16
 
-    // 8-bit channel (0..255) -> 2-bit GColor8 channel (0..3), rounded to nearest of 0/85/170/255.
+    // 8-bit channel (0..255) -> 2-bit GColor8 channel (0..3).
     private fun quant2(v: Int): Int = (v.coerceIn(0, 255) * 3 + 127) / 255
-    private fun expand2(c: Int): Int = c * 85
     private fun gcolor8(r: Int, g: Int, b: Int): Int = (0x3 shl 6) or (r shl 4) or (g shl 2) or b
 
     private class Color(val r: Int, val g: Int, val b: Int, val count: Int)
@@ -18,9 +20,9 @@ object ImageEncoder {
     /** Encodes an ARGB8888 pixel array (row-major, [width] * [height]). */
     fun encode(argb: IntArray, width: Int, height: Int): EncodedImage {
         val palette = medianCutPalette(argb)
-        val palR = IntArray(palette.size) { expand2((palette[it] shr 4) and 0x3) }
-        val palG = IntArray(palette.size) { expand2((palette[it] shr 2) and 0x3) }
-        val palB = IntArray(palette.size) { expand2(palette[it] and 0x3) }
+        val palR = IntArray(palette.size) { SCREEN_R[palette[it] and 0x3F] }
+        val palG = IntArray(palette.size) { SCREEN_G[palette[it] and 0x3F] }
+        val palB = IntArray(palette.size) { SCREEN_B[palette[it] and 0x3F] }
 
         val stride = (width + 1) / 2
         val pixels = UByteArray(stride * height)
