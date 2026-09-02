@@ -154,6 +154,7 @@ import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -227,6 +228,14 @@ enum class Section(val title: String, val icon: ImageVector) {
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
     BundledPlugins("Bundled Plugins", Icons.Default.Extension), // TODO to be removed when we have a better solution
+}
+
+internal fun List<PebbleDevice>.anySupportsSettingsSync(): Boolean = any {
+    it is KnownPebbleDevice && it.capabilities.contains(ProtocolCapsFlag.SupportsBlobDbVersion)
+}
+
+internal fun List<PebbleDevice>.anySupportsChargeLimit(): Boolean = any {
+    it is KnownPebbleDevice && it.capabilities.contains(ProtocolCapsFlag.SupportsChargeLimit)
 }
 
 fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
@@ -478,11 +487,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val watches by libPebble.watches.collectAsState(null)
     val watchesCastable = watches ?: return null
     val anyWatchSupportsSettingsSync = remember(watchesCastable) {
-        watchesCastable.any {
-            it is KnownPebbleDevice && it.capabilities.contains(
-                ProtocolCapsFlag.SupportsBlobDbVersion
-            )
-        }
+        watchesCastable.anySupportsSettingsSync()
     }
     val watchPrefs = watchPrefs()
     val coreAnalytics: CoreAnalytics = koinInject()

@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting.Companion.toJson
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
@@ -66,6 +67,12 @@ data class WatchPrefItem(
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w { "Don't know how to encode watch pref key: $id" }
+            return null
+        }
+        if (id == EnumWatchPref.ChargeLimit.id &&
+            !params.capabilities.contains(ProtocolCapsFlag.SupportsChargeLimit)
+        ) {
+            logger.d { "Watch does not support a charge limit" }
             return null
         }
         logger.v { "trying to insert watch pref to watch blobdb: $id / $value" }
@@ -400,6 +407,21 @@ enum class WatchLanguage(override val code: UByte, override val displayName: Str
     Polish(9u, "Polski"),
 }
 
+// Matches CHARGE_LIMIT_PCT_* in pebble-firmware:include/pbl/services/battery/battery_charge_limit.h.
+enum class ChargeLimitLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    Limit50(50u, "50%"),
+    Limit55(55u, "55%"),
+    Limit60(60u, "60%"),
+    Limit65(65u, "65%"),
+    Limit70(70u, "70%"),
+    Limit75(75u, "75%"),
+    Limit80(80u, "80%"),
+    Limit85(85u, "85%"),
+    Limit90(90u, "90%"),
+    Limit95(95u, "95%"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -520,6 +542,22 @@ enum class EnumWatchPref(
         defaultValue = WatchLanguage.Custom,
         options = WatchLanguage.entries,
     ),
+    ChargeLimit(
+        id = "chargeLimitPct",
+        displayName = "Charge Limit",
+        description = "Limit charging to extend your battery's lifespan",
+        defaultValue = ChargeLimitLevel.Off,
+        options = ChargeLimitLevel.entries,
+    ) {
+        override fun decodeValue(value: String): WatchPrefEnum {
+            val code = value.toUByteOrNull() ?: return defaultValue
+            if (code > ChargeLimitLevel.Limit95.code) return ChargeLimitLevel.Off
+            return ChargeLimitLevel.entries
+                .filter { it != ChargeLimitLevel.Off && it.code <= code }
+                .maxByOrNull { it.code }
+                ?: ChargeLimitLevel.Off
+        }
+    },
     ;
 
     override val type = WatchPrefType.TypeUInt8
