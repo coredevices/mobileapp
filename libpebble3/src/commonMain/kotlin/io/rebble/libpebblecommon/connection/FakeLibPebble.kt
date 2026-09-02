@@ -332,6 +332,8 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override suspend fun writableCalendars(): List<CalendarEntity> = emptyList()
+
     override suspend fun createEvent(event: NewCalendarEvent): String? = null
 
     // OtherPebbleApps interface

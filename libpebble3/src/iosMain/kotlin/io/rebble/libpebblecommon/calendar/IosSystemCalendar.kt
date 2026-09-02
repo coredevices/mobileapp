@@ -79,16 +79,17 @@ class IosSystemCalendar(
         val ek = eventStore() ?: return emptyList()
         val calendars =
             ek.calendarsForEntityType(EKEntityType.EKEntityTypeEvent) as List<EKCalendar>
-        return calendars.map {
-            CalendarEntity(
-                platformId = it.calendarIdentifier,
-                name = it.title,
-                ownerName = it.source?.title ?: "unknown",
-                ownerId = it.source?.sourceIdentifier ?: "unknown",
-                color = it.CGColor?.cgColorToInt() ?: 0,
-                enabled = true,
-            )
-        }
+        return calendars.map { it.asEntity() }
+    }
+
+    override suspend fun getWritableCalendars(): List<CalendarEntity> {
+        val ek = eventStore() ?: return emptyList()
+        val defaultId = ek.defaultCalendarForNewEvents?.calendarIdentifier
+        val calendars =
+            ek.calendarsForEntityType(EKEntityType.EKEntityTypeEvent) as List<EKCalendar>
+        return calendars.filter { it.allowsContentModifications }
+            .map { it.asEntity() }
+            .sortedByDescending { it.platformId == defaultId }
     }
 
     override suspend fun getCalendarEvents(
@@ -188,9 +189,10 @@ class IosSystemCalendar(
 
     override suspend fun createEvent(event: NewCalendarEvent): String? {
         val ek = eventStore() ?: return null
-        val calendar = ek.defaultCalendarForNewEvents
+        val calendar = getWritableCalendars().resolveWritableTarget(event.calendarId)
+            ?.let { ek.calendarWithIdentifier(it.platformId) }
         if (calendar == null) {
-            logger.e { "No default calendar for new events" }
+            logger.e { "No writable calendar for new events" }
             return null
         }
         val ekEvent = EKEvent.eventWithEventStore(ek)
@@ -218,6 +220,15 @@ class IosSystemCalendar(
 
     override fun supportsPinActions(): Boolean = false
 }
+
+private fun EKCalendar.asEntity(): CalendarEntity = CalendarEntity(
+    platformId = calendarIdentifier,
+    name = title,
+    ownerName = source?.title ?: "unknown",
+    ownerId = source?.sourceIdentifier ?: "unknown",
+    color = CGColor?.cgColorToInt() ?: 0,
+    enabled = true,
+)
 
 fun EKAlarm.asReminder(): EventReminder = EventReminder.fromStartOffset(relativeOffset)
 

@@ -36,6 +36,8 @@ interface Preferences: BasePreferences {
     /** Whether the user has connected the Phone Calendar integration (Accounts → Add integration).
      *  The calendar tool stays unavailable until this is enabled AND calendar permission is granted. */
     val phoneCalendarEnabled: StateFlow<Boolean>
+    /** Platform id of the calendar the agent adds events to; null means the phone's default. */
+    val phoneCalendarId: StateFlow<String?>
     val useEncryption: StateFlow<Boolean>
     val encryptionKeyFingerprint: StateFlow<String?>
     val lastWipedRing: StateFlow<String?>
@@ -60,6 +62,7 @@ interface Preferences: BasePreferences {
     fun setAutoDismissActionNotifications(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
     fun setPhoneCalendarEnabled(enabled: Boolean)
+    fun setPhoneCalendarId(platformId: String?)
     fun setUseEncryption(enabled: Boolean)
     fun setEncryptionKeyFingerprint(fingerprint: String?)
     fun setLastWipedRing(id: String?)
@@ -160,6 +163,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val backupEnabled = _backupEnabled.asStateFlow()
     private val _phoneCalendarEnabled = MutableStateFlow(settings.getBoolean("phone_calendar_enabled", false))
     override val phoneCalendarEnabled = _phoneCalendarEnabled.asStateFlow()
+    private val _phoneCalendarId = MutableStateFlow(settings.getStringOrNull("phone_calendar_id"))
+    override val phoneCalendarId = _phoneCalendarId.asStateFlow()
     private val _useEncryption = MutableStateFlow(settings.getBoolean("use_encryption", false))
     override val useEncryption = _useEncryption.asStateFlow()
     private val _encryptionKeyFingerprint = MutableStateFlow(settings.getStringOrNull("encryption_key_fingerprint"))
@@ -281,6 +286,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setPhoneCalendarEnabled(enabled: Boolean) {
         settings.putBoolean("phone_calendar_enabled", enabled)
         _phoneCalendarEnabled.value = enabled
+    }
+
+    override fun setPhoneCalendarId(platformId: String?) {
+        if (platformId != null) {
+            settings.putString("phone_calendar_id", platformId)
+        } else {
+            settings.remove("phone_calendar_id")
+        }
+        _phoneCalendarId.value = platformId
     }
 
     override fun setUseEncryption(enabled: Boolean) {

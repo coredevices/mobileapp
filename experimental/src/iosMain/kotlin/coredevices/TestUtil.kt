@@ -151,6 +151,8 @@ private object PreferencesTestImpl: Preferences {
         get() = MutableStateFlow(true)
     override val phoneCalendarEnabled: StateFlow<Boolean>
         get() = MutableStateFlow(false)
+    override val phoneCalendarId: StateFlow<String?>
+        get() = MutableStateFlow(null)
     override val useEncryption: StateFlow<Boolean>
         get() = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?>
@@ -221,6 +223,7 @@ private object PreferencesTestImpl: Preferences {
 
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}
+    override fun setPhoneCalendarId(platformId: String?) {}
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
