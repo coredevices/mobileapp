@@ -741,8 +741,8 @@ fun TaskerDialog(
                     Text(
                         "B.  Event → Intent Received, Action = coredevices.coreapp.INDEX_ITEM. " +
                             "Each detail is a separate variable: %text, %message_type, %timestamp, " +
-                            "and for reminders %deadline (ISO-8601 UTC), %notify_before_seconds, " +
-                            "%list."
+                            "and for reminders %raw_text (the unaltered transcript), %deadline " +
+                            "(ISO-8601 UTC), %notify_before_seconds, %list."
                     )
                 }
             }

@@ -12,14 +12,18 @@ expect fun createTaskerReminderIntegration(): ReminderIntegration
 
 /**
  * Intent extras describing a Tasker reminder. Each key surfaces as a Tasker variable on the
- * "Intent Received" side (`%deadline`, `%notify_before_seconds`, `%list`). The due date is a UTC
- * ISO-8601 instant; the lead time is whole seconds and only travels alongside a due date.
+ * "Intent Received" side (`%deadline`, `%notify_before_seconds`, `%list`, `%raw_text`). The due date
+ * is a UTC ISO-8601 instant; the lead time is whole seconds and only travels alongside a due date.
+ * [rawText] is the unaltered transcript, for recipes that would rather parse the spoken phrasing
+ * themselves (e.g. Todoist Quick Add) than the app's split-out fields.
  */
 internal fun taskerReminderExtras(
     deadline: Instant?,
     listId: String?,
     notifyBefore: Duration?,
+    rawText: String?,
 ): Map<String, String> = buildMap {
+    rawText?.let { put("raw_text", it) }
     deadline?.let {
         put("deadline", it.toString())
         notifyBefore?.let { lead -> put("notify_before_seconds", lead.inWholeSeconds.toString()) }

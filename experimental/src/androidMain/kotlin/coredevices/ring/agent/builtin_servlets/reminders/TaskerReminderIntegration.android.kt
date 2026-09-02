@@ -15,9 +15,9 @@ actual fun createTaskerReminderIntegration(): ReminderIntegration = TaskerRemind
 
 /**
  * Routes reminders to Tasker via [TaskerEndpoint]. The reminder text is sent as the payload with a
- * `messageType=reminder` extra, plus the [taskerReminderExtras] describing the due date. Tasker has
- * no native list concept, so [searchForList] echoes the requested name back and it is forwarded
- * verbatim as the `list` extra; honouring the lead time is up to the user's Tasker profile.
+ * `messageType=reminder` extra, plus the [taskerReminderExtras] (due date, list, raw transcript).
+ * Tasker has no native list concept, so [searchForList] echoes the requested name back and it is
+ * forwarded verbatim as the `list` extra; honouring the lead time is up to the user's Tasker profile.
  */
 class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
     private val tokenStorage: IntegrationTokenStorage by inject()
@@ -31,7 +31,7 @@ class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
     ): String = TaskerEndpoint.send(
         title,
         messageType = "reminder",
-        extras = taskerReminderExtras(deadline, listId, notifyBefore),
+        extras = taskerReminderExtras(deadline, listId, notifyBefore, source?.rawText),
     )
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> =
