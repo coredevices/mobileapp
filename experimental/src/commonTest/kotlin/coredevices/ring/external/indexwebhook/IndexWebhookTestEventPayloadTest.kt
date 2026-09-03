@@ -56,6 +56,36 @@ class IndexWebhookTestEventPayloadTest {
     }
 
     @Test
+    fun locationFieldsAreAllIncludedWhenAvailable() {
+        val body = buildWebhookMultipartBody(
+            boundary = "BOUNDARY",
+            audioData = null,
+            filename = "recording.m4a",
+            recordedAt = 1L,
+            transcription = "hello",
+            isTest = false,
+            location = IndexWebhookLocation(
+                latitude = 37.775,
+                longitude = -122.419,
+                timestamp = 1_700_000_000_000L,
+            ),
+        ).decodeToString()
+
+        assertTrue(body.contains("name=\"locationLatitude\"\r\n\r\n37.775\r\n"))
+        assertTrue(body.contains("name=\"locationLongitude\"\r\n\r\n-122.419\r\n"))
+        assertTrue(body.contains("name=\"locationTimestamp\"\r\n\r\n1700000000000\r\n"))
+    }
+
+    @Test
+    fun locationFieldsAreAllOmittedWhenUnavailable() {
+        val body = testEventBody()
+
+        assertFalse(body.contains("name=\"locationLatitude\""))
+        assertFalse(body.contains("name=\"locationLongitude\""))
+        assertFalse(body.contains("name=\"locationTimestamp\""))
+    }
+
+    @Test
     fun testEventTriggerValueIsDistinctFromEveryGestureValue() {
         assertEquals("test-event", WEBHOOK_TEST_TRIGGER)
         assertTrue(

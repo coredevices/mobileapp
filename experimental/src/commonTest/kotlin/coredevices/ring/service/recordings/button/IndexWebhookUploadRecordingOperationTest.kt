@@ -178,6 +178,7 @@ private class FakeWebhookApi : IndexWebhookApi {
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
+        includeLocation: Boolean,
     ) = throw NotImplementedError("unused")
 }
 

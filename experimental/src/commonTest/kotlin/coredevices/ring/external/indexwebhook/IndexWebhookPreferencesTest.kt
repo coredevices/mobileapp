@@ -107,6 +107,7 @@ class IndexWebhookPreferencesTest {
         val hold = IndexWebhookConfig(
             url = "https://hold.example.com",
             payloadMode = IndexWebhookPayloadMode.TranscriptionOnly,
+            includeLocation = true,
             headers = mapOf("X-A" to "1"),
             saved = true,
         )
@@ -184,6 +185,7 @@ class IndexWebhookPreferencesTest {
         val prefs = IndexWebhookPreferences(settings)
 
         assertEquals("https://example.com/hook", prefs.configFor(RingGesture.Hold).url)
+        assertFalse(prefs.configFor(RingGesture.Hold).includeLocation)
         assertEquals("https://example.com/hook", prefs.configFor(RingGesture.ClickHold).url)
         assertTrue(prefs.configFor(RingGesture.Hold).isActive)
         assertEquals(null, settings.getStringOrNull("index_webhook_config_SingleClickHold"))

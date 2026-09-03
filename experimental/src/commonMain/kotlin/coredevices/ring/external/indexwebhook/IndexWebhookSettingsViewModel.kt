@@ -56,6 +56,9 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
+    private val _includeLocationInput = MutableStateFlow(false)
+    val includeLocationInput = _includeLocationInput.asStateFlow()
+
     private val _testState = MutableStateFlow<WebhookTestState>(WebhookTestState.Idle)
     val testState = _testState.asStateFlow()
 
@@ -120,6 +123,10 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateIncludeLocation(includeLocation: Boolean) {
+        _includeLocationInput.value = includeLocation
+    }
+
     fun copyFromOtherGesture() {
         val other = copyableGesture.value ?: return
         loadDraft(webhookPreferences.configFor(other))
@@ -130,7 +137,12 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null } ?: return
         _testState.value = WebhookTestState.Sending
         viewModelScope.launch {
-            val result = webhookApi.sendTestEvent(gesture, url, draftHeaders())
+            val result = webhookApi.sendTestEvent(
+                gesture,
+                url,
+                draftHeaders(),
+                _includeLocationInput.value,
+            )
             _testState.value = WebhookTestState.Done(
                 ok = result.ok,
                 label = "${result.status} · ${result.durationMs} ms",
@@ -149,6 +161,7 @@ class IndexWebhookSettingsViewModel(
                 IndexWebhookConfig(
                     url = url,
                     payloadMode = _payloadModeInput.value,
+                    includeLocation = _includeLocationInput.value,
                     headers = draftHeaders(),
                     saved = true,
                 ),
@@ -163,6 +176,7 @@ class IndexWebhookSettingsViewModel(
             .map { WebhookHeaderInput(it.key, it.value) }
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = config.payloadMode
+        _includeLocationInput.value = config.includeLocation
     }
 
     /** Drops rows with a blank name; later rows win on duplicate names. */

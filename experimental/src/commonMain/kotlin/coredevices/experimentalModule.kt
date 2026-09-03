@@ -217,7 +217,9 @@ val experimentalModule = module {
             get(),
             get(),
             get(),
-            get<RecordingBackgroundScope>()
+            get<RecordingBackgroundScope>(),
+            get(),
+            get(),
         )
     } bind IndexWebhookApi::class
 
