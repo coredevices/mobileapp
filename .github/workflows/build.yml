@@ -60,10 +60,9 @@ jobs:
           restore-keys: |
             ios-deps-${{ runner.os }}-
       - name: Set up Xcode
-        run: |
-          ls /Applications/Xcode*
-          swift --version
-          sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
       - name: Use dummy google-services json
         run: mv androidApp/src/google-services-dummy.json androidApp/src/google-services.json
       - name: Build
