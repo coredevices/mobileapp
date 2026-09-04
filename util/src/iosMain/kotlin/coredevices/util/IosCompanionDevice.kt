@@ -7,7 +7,8 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 class IosCompanionDevice : CompanionDevice {
     override suspend fun registerDevice(
         identifier: IndexIdentifier,
-        uiContext: PlatformUiContext
+        uiContext: PlatformUiContext,
+        useClassicAssociation: Boolean
     ) {
     }
 
