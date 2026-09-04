@@ -137,6 +137,7 @@ data class OtherPebbleApp(
 interface HealthApi {
     val healthSettings: Flow<HealthSettings>
     fun updateHealthSettings(healthSettings: HealthSettings)
+    suspend fun updateImperialUnits(imperialUnits: Boolean)
     suspend fun getHealthDebugStats(): HealthDebugStats
     fun requestHealthData(fullSync: Boolean = false)
     fun sendHealthAveragesToWatch()

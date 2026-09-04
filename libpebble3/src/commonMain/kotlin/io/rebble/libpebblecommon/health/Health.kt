@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
+import io.rebble.libpebblecommon.database.entity.setImperialUnits
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
@@ -71,6 +72,10 @@ class Health(
             healthSettingsDao.setWatchSettings(healthSettings)
             logger.d { "Health settings saved to database - will sync to watch via BlobDB" }
         }
+    }
+
+    override suspend fun updateImperialUnits(imperialUnits: Boolean) {
+        healthSettingsDao.setImperialUnits(imperialUnits)
     }
 
     override suspend fun getHealthDebugStats(): HealthDebugStats {
