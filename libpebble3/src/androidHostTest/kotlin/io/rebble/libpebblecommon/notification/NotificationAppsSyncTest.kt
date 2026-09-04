@@ -8,9 +8,11 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.carriedOverMuteState
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.mergedWithOsApp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 class NotificationAppsSyncTest {
@@ -147,6 +149,73 @@ class NotificationAppsSyncTest {
         val group = ChannelGroup(id = "g", name = "Group", channels = emptyList())
         val channel = ChannelItem(id = "new", name = "Other", muteState = MuteState.Never)
         assertEquals(MuteState.Never, existing.carriedOverMuteState(group, channel))
+    }
+
+    @Test
+    fun osSyncMerge_preservesUserSetFields() {
+        val existing = appItem("com.example", autoAdded = false).copy(
+            muteState = MuteState.Always,
+            muteExpiration = MillisecondInstant(Instant.fromEpochMilliseconds(1234)),
+            vibePatternName = "pattern",
+            colorName = "red",
+            iconCode = "icon",
+            allowDuplicates = true,
+            sendImages = false,
+            rulesUpdated = MillisecondInstant(Instant.fromEpochMilliseconds(5678)),
+        )
+
+        val merged = existing.mergedWithOsApp(
+            name = "Example",
+            channels = emptyList(),
+            isSystemApp = false,
+        )
+
+        assertEquals(existing.copy(name = "Example"), merged)
+    }
+
+    @Test
+    fun osSyncMerge_takesNameChannelsAndSystemFlagFromOs() {
+        val existing = appItem("com.example", autoAdded = true).copy(name = "Old name")
+        val channels = listOf(
+            ChannelGroup(
+                id = "g", name = "Group", channels = listOf(
+                    ChannelItem(id = "a", name = "Chat", muteState = MuteState.Never),
+                )
+            )
+        )
+
+        val merged = existing.mergedWithOsApp("New name", channels, isSystemApp = true)
+
+        assertEquals("New name", merged.name)
+        assertEquals(channels, merged.channelGroups)
+        assertTrue(merged.isSystemApp)
+        assertFalse(merged.autoAdded)
+    }
+
+    @Test
+    fun osSyncMerge_carriesOverChannelMuteStates() {
+        val existing = appItem("com.example", autoAdded = false).copy(
+            channelGroups = listOf(
+                ChannelGroup(
+                    id = "g", name = "Group", channels = listOf(
+                        ChannelItem(id = "a", name = "Chat", muteState = MuteState.Always),
+                    )
+                )
+            )
+        )
+        val fromOs = listOf(
+            ChannelGroup(
+                id = "g", name = "Group", channels = listOf(
+                    ChannelItem(id = "a", name = "Chat", muteState = MuteState.Never),
+                    ChannelItem(id = "b", name = "Calls", muteState = MuteState.Never),
+                )
+            )
+        )
+
+        val merged = existing.mergedWithOsApp("Example", fromOs, isSystemApp = false)
+
+        assertEquals(MuteState.Always, merged.channelGroups[0].channels[0].muteState)
+        assertEquals(MuteState.Never, merged.channelGroups[0].channels[1].muteState)
     }
 
     private fun appItem(pkg: String, autoAdded: Boolean): NotificationAppItem =

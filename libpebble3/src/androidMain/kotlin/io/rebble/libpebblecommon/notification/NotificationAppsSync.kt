@@ -99,43 +99,29 @@ class AndroidNotificationAppsSync(
             val existing = existingApps.remove(osApp.packageName)
             val channels = notificationListenerConnection.getChannelsForApp(osApp.packageName)
             val name = pm.getApplicationLabel(osApp).toString()
-            val newAppItem = NotificationAppItem(
-                packageName = osApp.packageName,
-                name = name,
-                muteState = notificationConfig.defaultMuteStateForPackage(osApp.packageName, isSystemApp),
-                channelGroups = channels,
-                stateUpdated = timeProvider.now().asMillisecond(),
-                lastNotified = Instant.DISTANT_PAST.asMillisecond(),
-                vibePatternName = null,
-                colorName = null,
-                iconCode = null,
-                allowDuplicates = NotificationProperties.lookup(osApp.packageName)?.allowDuplicates ?: false,
-                isSystemApp = isSystemApp,
-                autoAdded = false,
-            )
             if (existing == null) {
 //                logger.d("adding ${osApp.packageName}")
-                notificationAppDao.insertOrReplace(newAppItem)
+                notificationAppDao.insertOrReplace(
+                    NotificationAppItem(
+                        packageName = osApp.packageName,
+                        name = name,
+                        muteState = notificationConfig.defaultMuteStateForPackage(osApp.packageName, isSystemApp),
+                        channelGroups = channels,
+                        stateUpdated = timeProvider.now().asMillisecond(),
+                        lastNotified = Instant.DISTANT_PAST.asMillisecond(),
+                        vibePatternName = null,
+                        colorName = null,
+                        iconCode = null,
+                        allowDuplicates = NotificationProperties.lookup(osApp.packageName)?.allowDuplicates ?: false,
+                        isSystemApp = isSystemApp,
+                        autoAdded = false,
+                    )
+                )
             } else {
-                val newEntryWithExistingStates = newAppItem.copy(
-                    muteState = existing.muteState,
-                    channelGroups = newAppItem.channelGroups.map { group ->
-                        group.copy(
-                            channels =
-                                group.channels.map { ch ->
-                                    ch.copy(
-                                        muteState = existing.carriedOverMuteState(group, ch)
-                                    )
-                                })
-                    },
-                    stateUpdated = existing.stateUpdated,
-                    lastNotified = existing.lastNotified,
-                    vibePatternName = existing.vibePatternName,
-                    colorName = existing.colorName,
-                    iconCode = existing.iconCode,
-                    allowDuplicates = existing.allowDuplicates,
+                val newEntryWithExistingStates = existing.mergedWithOsApp(
+                    name = name,
+                    channels = channels,
                     isSystemApp = isSystemApp,
-                    autoAdded = false,
                 )
                 if (existing != newEntryWithExistingStates) {
                     logger.d("updating ${osApp.packageName.obfuscate(privateLogger)}")
@@ -173,6 +159,26 @@ class AndroidNotificationAppsSync(
         )
     }
 }
+
+// Merge onto the existing row rather than onto a freshly built one: only the name, channels and
+// system flag come from the OS, so every user-set field survives a resync even if it is added to
+// NotificationAppItem later.
+internal fun NotificationAppItem.mergedWithOsApp(
+    name: String,
+    channels: List<ChannelGroup>,
+    isSystemApp: Boolean,
+): NotificationAppItem = copy(
+    name = name,
+    channelGroups = channels.map { group ->
+        group.copy(
+            channels = group.channels.map { channel ->
+                channel.copy(muteState = carriedOverMuteState(group, channel))
+            },
+        )
+    },
+    isSystemApp = isSystemApp,
+    autoAdded = false,
+)
 
 // Some apps (e.g. Snapchat, Signal) recreate channels with new IDs; fall back to
 // group+channel name so a muted channel stays muted.
