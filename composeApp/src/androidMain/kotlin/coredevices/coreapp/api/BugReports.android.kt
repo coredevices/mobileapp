@@ -56,7 +56,7 @@ actual fun createNotification(
 private fun Context.createChannel() {
     val channel = NotificationChannel(
         CHANNEL_ID,
-        "Firmware Updates",
+        "Support Chat",
         NotificationManager.IMPORTANCE_DEFAULT
     ).apply {
         description = "Support Chat"
