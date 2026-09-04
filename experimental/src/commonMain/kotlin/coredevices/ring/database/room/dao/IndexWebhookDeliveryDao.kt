@@ -13,8 +13,8 @@ interface IndexWebhookDeliveryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(delivery: IndexWebhookDeliveryEntity): Long
 
-    @Query("SELECT * FROM IndexWebhookDeliveryEntity WHERE deliveryId = :deliveryId LIMIT 1")
-    suspend fun getByDeliveryId(deliveryId: String): IndexWebhookDeliveryEntity?
+    @Query("SELECT id FROM IndexWebhookDeliveryEntity WHERE deliveryId = :deliveryId LIMIT 1")
+    suspend fun getIdByDeliveryId(deliveryId: String): Long?
 
     @Query("SELECT * FROM IndexWebhookDeliveryEntity WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): IndexWebhookDeliveryEntity?

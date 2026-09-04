@@ -81,7 +81,7 @@ class IndexWebhookApiImpl(
     suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val started = TimeSource.Monotonic.markNow()
         val result = try {
-            val prepared = prepare(delivery)
+            val prepared = persistPayload(delivery)
             post(
                 url = prepared.url,
                 headers = prepared.headers,
@@ -97,7 +97,7 @@ class IndexWebhookApiImpl(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logger.e(e) { "Failed to prepare webhook" }
+            logger.e(e) { "Failed to persist webhook payload" }
             IndexWebhookRunResult(
                 ok = false,
                 status = "FAILED",
@@ -120,7 +120,7 @@ class IndexWebhookApiImpl(
         return result
     }
 
-    suspend fun prepare(delivery: IndexWebhookDelivery): IndexWebhookDelivery {
+    suspend fun persistPayload(delivery: IndexWebhookDelivery): IndexWebhookDelivery {
         if (delivery.fileId == null || delivery.audioData != null) return delivery
         val audioData = encodeAudio(delivery.fileId)
         deliveryRepository.setAudioData(delivery.id, audioData)

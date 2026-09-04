@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
@@ -22,24 +23,6 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class IndexWebhookDeliveryQueueTest {
-
-    @Test
-    fun exceptionUsesBackoff() = runTest {
-        val repository = InMemoryDeliveryRepository()
-        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(
-            repository,
-            send = { error("send failed") },
-            scope = queueScope,
-            prepare = {},
-        )
-
-        queue.enqueue(delivery())
-        runCurrent()
-
-        assertEquals(1, repository.single().attempts)
-        queueScope.cancel()
-    }
 
     @Test
     fun transientFailureRemainsPendingAndRetries() = runTest {
@@ -60,7 +43,7 @@ class IndexWebhookDeliveryQueueTest {
             repository = repository,
             send = sender::send,
             scope = queueScope,
-            prepare = {},
+            persistPayload = {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
@@ -84,7 +67,7 @@ class IndexWebhookDeliveryQueueTest {
                 IndexWebhookRunResult(false, "503 ERROR", "unavailable", 12, 1, retryable = true)
             },
             scope = queueScope,
-            prepare = {},
+            persistPayload = {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
@@ -127,7 +110,7 @@ class IndexWebhookDeliveryQueueTest {
     }
 
     @Test
-    fun pendingDeliveryResumesAfterQueueRestart() = runTest {
+    fun pendingDeliveryResumesAfterQueueAndDatabaseRecovery() = runTest {
         val repository = InMemoryDeliveryRepository()
         val firstSender = FakeSender(
             IndexWebhookRunResult(
@@ -153,9 +136,16 @@ class IndexWebhookDeliveryQueueTest {
         firstScope.cancel()
 
         val secondSender = FakeSender(successResult())
+        var resumeAttempts = 0
+        val recoveringRepository = object : IndexWebhookDeliveryRepository by repository {
+            override suspend fun getPendingIds(): List<Long> {
+                if (resumeAttempts++ == 0) error("database busy")
+                return repository.getPendingIds()
+            }
+        }
         val secondScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val secondQueue = IndexWebhookDeliveryQueue(
-            repository,
+            recoveringRepository,
             secondSender::send,
             secondScope,
             {},
@@ -234,7 +224,7 @@ class IndexWebhookDeliveryQueueTest {
                 successResult()
             },
             scope = queueScope,
-            prepare = { prepared += it.deliveryId },
+            persistPayload = { prepared += it.deliveryId },
         )
 
         queue.enqueue(delivery())
@@ -248,24 +238,44 @@ class IndexWebhookDeliveryQueueTest {
     }
 
     @Test
-    fun itemFailureDoesNotStopWorker() = runTest {
+    fun durableItemSurvivesEnqueueAndWorkerFailures() = runTest {
         val backingRepository = InMemoryDeliveryRepository()
-        val brokenId = backingRepository.insert(delivery())
-        backingRepository.insert(delivery().copy(deliveryId = "recording-2"))
+        var brokenReads = 0
         val repository = object : IndexWebhookDeliveryRepository by backingRepository {
             override suspend fun getById(id: Long): IndexWebhookDelivery? {
-                if (id == brokenId) error("corrupt delivery")
+                if (id == 1L && brokenReads++ < 2) error("database busy")
                 return backingRepository.getById(id)
             }
         }
-        val sender = FakeSender(successResult())
+        val sender = FakeSender(successResult(), successResult())
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, {})
 
-        queue.resumePendingDeliveries()
-        advanceUntilIdle()
+        assertFailsWith<IllegalStateException> { queue.enqueue(delivery()) }
+        queue.enqueue(delivery().copy(deliveryId = "recording-2"))
+        runCurrent()
 
         assertEquals(listOf("recording-2"), sender.sentDeliveryIds)
+        advanceUntilIdle()
+
+        assertEquals(listOf("recording-2", "recording-1"), sender.sentDeliveryIds)
+        queueScope.cancel()
+    }
+
+    @Test
+    fun invalidDeliveryFailsWithoutRetrying() = runTest {
+        val backingRepository = InMemoryDeliveryRepository()
+        val repository = object : IndexWebhookDeliveryRepository by backingRepository {
+            override suspend fun getById(id: Long): IndexWebhookDelivery =
+                throw InvalidWebhookDeliveryException(IllegalArgumentException("invalid headers"))
+        }
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(repository, { successResult() }, queueScope, {})
+
+        assertFailsWith<InvalidWebhookDeliveryException> { queue.enqueue(delivery()) }
+        advanceUntilIdle()
+
+        assertEquals(TaskStatus.Failed, backingRepository.single().status)
         queueScope.cancel()
     }
 

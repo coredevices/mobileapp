@@ -227,7 +227,7 @@ val experimentalModule = module {
             get(),
             api::send,
             get<RecordingBackgroundScope>(),
-            { api.prepare(it) },
+            { api.persistPayload(it) },
         )
     }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }

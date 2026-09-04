@@ -1,6 +1,7 @@
 package coredevices.ring.service.recordings.button
 
 import co.touchlab.kermit.Logger
+import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
@@ -35,25 +36,22 @@ class IndexWebhookUploadRecordingOperation(
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         var enqueueJob: Job? = null
-        fun enqueueInBackground(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
+        fun enqueueInBackground(config: IndexWebhookConfig, transcription: String?) {
             enqueueJob = backgroundScope.launch {
-                enqueueWebhook(payloadMode, transcription)
+                enqueueWebhook(config, transcription)
             }
         }
 
-        // One mode snapshot drives the whole delivery, so a mid-operation settings
-        // change can't split the payload across incompatible modes.
-        val payloadMode = webhookPreferences.configFor(gesture).payloadMode
+        val config = webhookPreferences.configFor(gesture)
+        val payloadMode = config.payloadMode
         val decoratedWillSend = when {
-            // Audio is already on disk and no transcript is in the payload, so prepare it now.
             fileId != null && payloadMode == IndexWebhookPayloadMode.RecordingOnly -> {
-                enqueueInBackground(payloadMode, transcription = null)
+                enqueueInBackground(config, transcription = null)
                 true
             }
-            // Send from the transcript hook, carrying the exact persisted transcript.
             decorated is TranscribingRecordingOperation -> {
                 decorated.onTranscriptionPersisted = { transcription ->
-                    enqueueInBackground(payloadMode, transcription)
+                    enqueueInBackground(config, transcription)
                 }
                 true
             }
@@ -61,18 +59,16 @@ class IndexWebhookUploadRecordingOperation(
         }
         try {
             decorated.run(handle)
-            // Only operations that never sent above (e.g. webhook-only) fall back to a send
-            // here — otherwise this could race the hook's send and win with a null transcript.
-            if (!decoratedWillSend) enqueueWebhook(payloadMode, transcription = null)
+            if (!decoratedWillSend) enqueueWebhook(config, transcription = null)
         } finally {
             enqueueJob?.join()
         }
     }
 
-    private suspend fun enqueueWebhook(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
+    private suspend fun enqueueWebhook(config: IndexWebhookConfig, transcription: String?) {
         try {
             val sendKey = fileId ?: "text-$recordingId"
-            val config = webhookPreferences.configFor(gesture)
+            val payloadMode = config.payloadMode
             val url = config.url
             if (!config.isActive || url == null) return
             if (fileId == null && payloadMode == IndexWebhookPayloadMode.RecordingOnly) return

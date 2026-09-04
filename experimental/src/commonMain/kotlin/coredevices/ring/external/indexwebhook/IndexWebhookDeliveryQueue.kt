@@ -5,6 +5,7 @@ import coredevices.ring.service.button.RingGesture
 import coredevices.util.queue.TaskStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,11 +45,13 @@ interface IndexWebhookDeliveryRepository {
     suspend fun resetForRetry(deliveryId: String): Long?
 }
 
+internal class InvalidWebhookDeliveryException(cause: Exception) : Exception(cause)
+
 class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
     private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
-    private val prepare: suspend (IndexWebhookDelivery) -> Unit,
+    private val persistPayload: suspend (IndexWebhookDelivery) -> Unit,
     private val now: () -> Instant = Clock.System::now,
 ) {
     companion object {
@@ -56,45 +59,72 @@ class IndexWebhookDeliveryQueue(
     }
 
     private val tasks = Channel<Long>(Channel.UNLIMITED)
-    init {
-        scope.launch {
-            for (id in tasks) {
-                try {
-                    process(id)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    logger.e(e) { "Webhook delivery $id failed" }
-                }
+    private val workerFailures = mutableMapOf<Long, Int>()
+    private val worker = scope.launch(start = CoroutineStart.LAZY) {
+        for (id in tasks) {
+            try {
+                process(id)
+                workerFailures.remove(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val failures = workerFailures[id] ?: 0
+                workerFailures[id] = failures + 1
+                logger.e(e) { "Webhook delivery $id failed; retrying" }
+                schedule(id, webhookRetryDelay(failures, null))
             }
         }
     }
 
+    private fun startWorker() {
+        worker.start()
+    }
+
     suspend fun enqueue(delivery: IndexWebhookDelivery) {
+        startWorker()
         val id = repository.insert(delivery)
-        val stored = repository.getById(id) ?: return
-        if (stored.status != TaskStatus.Pending) return
         try {
-            prepare(stored)
+            val stored = repository.getById(id) ?: return
+            if (stored.status != TaskStatus.Pending) return
+            persistPayload(stored)
         } finally {
             tasks.send(id)
         }
     }
 
     suspend fun retry(deliveryId: String): Boolean {
+        startWorker()
         val taskId = repository.resetForRetry(deliveryId) ?: return false
         tasks.send(taskId)
         return true
     }
 
     fun resumePendingDeliveries() {
+        startWorker()
         scope.launch {
-            repository.getPendingIds().forEach { tasks.send(it) }
+            var failures = 0
+            while (true) {
+                try {
+                    repository.getPendingIds().forEach { tasks.send(it) }
+                    return@launch
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to resume webhook deliveries; retrying" }
+                    delay(webhookRetryDelay(failures++, null))
+                }
+            }
         }
     }
 
     private suspend fun process(id: Long) {
-        val delivery = repository.getById(id) ?: return
+        val delivery = try {
+            repository.getById(id)
+        } catch (e: InvalidWebhookDeliveryException) {
+            logger.e(e) { "Webhook delivery $id is invalid" }
+            repository.setStatus(id, TaskStatus.Failed)
+            return
+        } ?: return
         if (delivery.status != TaskStatus.Pending) return
         delivery.nextAttemptAt?.let {
             val remaining = it - now()
@@ -103,17 +133,11 @@ class IndexWebhookDeliveryQueue(
                 return
             }
         }
-        try {
-            val result = send(delivery)
-            when {
-                result.ok -> repository.setStatus(id, TaskStatus.Success)
-                result.retryable -> retryOrFail(delivery, result.retryAfter)
-                else -> repository.setStatus(id, TaskStatus.Failed)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            retryOrFail(delivery, null)
+        val result = send(delivery)
+        when {
+            result.ok -> repository.setStatus(id, TaskStatus.Success)
+            result.retryable -> retryOrFail(delivery, result.retryAfter)
+            else -> repository.setStatus(id, TaskStatus.Failed)
         }
     }
 
