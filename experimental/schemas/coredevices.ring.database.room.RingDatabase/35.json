@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 35,
-    "identityHash": "949e8cbf59396ee295df969ac8ed0625",
+    "identityHash": "a3bcb0cf79edfcbc5f60500ad4380b13",
     "entities": [
       {
         "tableName": "LocalReminderData",
@@ -932,7 +932,7 @@
       },
       {
         "tableName": "IndexWebhookDeliveryEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `created` INTEGER NOT NULL, `status` TEXT NOT NULL, `attempts` INTEGER NOT NULL, `nextAttemptAt` INTEGER, `deliveryId` TEXT NOT NULL, `gesture` TEXT NOT NULL, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `fileId` TEXT, `audioData` BLOB, `transcription` TEXT, `recordingId` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `created` INTEGER NOT NULL, `status` TEXT NOT NULL, `attempts` INTEGER NOT NULL, `nextAttemptAt` INTEGER, `failedAt` INTEGER, `deliveryId` TEXT NOT NULL, `gesture` TEXT NOT NULL, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `fileId` TEXT, `audioData` BLOB, `transcription` TEXT, `recordingId` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -961,6 +961,11 @@
           {
             "fieldPath": "nextAttemptAt",
             "columnName": "nextAttemptAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "failedAt",
+            "columnName": "failedAt",
             "affinity": "INTEGER"
           },
           {
@@ -1378,7 +1383,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '949e8cbf59396ee295df969ac8ed0625')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a3bcb0cf79edfcbc5f60500ad4380b13')"
     ]
   }
 }

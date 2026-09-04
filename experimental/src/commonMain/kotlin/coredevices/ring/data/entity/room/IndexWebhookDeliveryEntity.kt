@@ -19,6 +19,7 @@ data class IndexWebhookDeliveryEntity(
     val status: TaskStatus = TaskStatus.Pending,
     val attempts: Int = 0,
     val nextAttemptAt: Instant? = null,
+    val failedAt: Instant? = null,
     val deliveryId: String,
     val gesture: String,
     val url: String,

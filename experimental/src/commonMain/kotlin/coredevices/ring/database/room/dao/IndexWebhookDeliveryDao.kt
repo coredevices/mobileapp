@@ -28,6 +28,12 @@ interface IndexWebhookDeliveryDao {
     @Query("UPDATE IndexWebhookDeliveryEntity SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: TaskStatus)
 
+    @Query(
+        "UPDATE IndexWebhookDeliveryEntity " +
+            "SET status = 'Failed', failedAt = :failedAt, nextAttemptAt = NULL WHERE id = :id",
+    )
+    suspend fun markFailed(id: Long, failedAt: Instant)
+
     @Query("UPDATE IndexWebhookDeliveryEntity SET audioData = :audioData WHERE id = :id")
     suspend fun setAudioData(id: Long, audioData: ByteArray)
 
@@ -46,7 +52,7 @@ interface IndexWebhookDeliveryDao {
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity " +
-            "SET status = 'Pending', attempts = 0, nextAttemptAt = NULL " +
+            "SET status = 'Pending', attempts = 0, nextAttemptAt = NULL, failedAt = NULL " +
             "WHERE deliveryId = :deliveryId AND status = 'Failed'",
     )
     suspend fun resetForRetry(deliveryId: String): Int
@@ -55,7 +61,7 @@ interface IndexWebhookDeliveryDao {
         "DELETE FROM IndexWebhookDeliveryEntity WHERE status = 'Failed' AND gesture = :gesture " +
             "AND id NOT IN (SELECT id FROM IndexWebhookDeliveryEntity " +
             "WHERE status = 'Failed' AND gesture = :gesture " +
-            "ORDER BY created DESC, id DESC LIMIT :keep)",
+            "ORDER BY failedAt DESC, id DESC LIMIT :keep)",
     )
     suspend fun pruneFailed(gesture: String, keep: Int)
 }

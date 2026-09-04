@@ -10,6 +10,7 @@ import coredevices.util.queue.TaskStatus
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 class IndexWebhookDeliveryRoomRepository(
@@ -32,14 +33,14 @@ class IndexWebhookDeliveryRoomRepository(
     }
 
     override suspend fun setStatus(id: Long, status: TaskStatus) {
-        if (status == TaskStatus.Success) {
-            dao.markSuccessAndClearPayload(id)
-        } else {
-            val gesture = if (status == TaskStatus.Failed) dao.getGesture(id) else null
-            dao.setStatus(id, status)
-            if (gesture != null) {
+        when (status) {
+            TaskStatus.Success -> dao.markSuccessAndClearPayload(id)
+            TaskStatus.Failed -> {
+                val gesture = dao.getGesture(id) ?: return
+                dao.markFailed(id, Clock.System.now())
                 dao.pruneFailed(gesture, IndexWebhookRunRepository.MAX_RUNS_PER_GESTURE)
             }
+            else -> dao.setStatus(id, status)
         }
     }
 

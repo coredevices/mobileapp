@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,7 @@ class IndexWebhookRunRepository(private val settings: Settings) {
 
         private val json = Json { ignoreUnknownKeys = true }
         private val serializer = ListSerializer(IndexWebhookRun.serializer())
+        private val logger = Logger.withTag("IndexWebhookRunRepository")
     }
 
     private val _runs = MutableStateFlow(migrateAndLoad())
@@ -78,7 +80,12 @@ class IndexWebhookRunRepository(private val settings: Settings) {
             val updated = (listOf(run) + previousRuns)
                 .sortedByDescending { it.timestampMs }
                 .take(MAX_RUNS_PER_GESTURE)
-            settings.putString(runsKey(gesture), json.encodeToString(serializer, updated))
+            try {
+                settings.putString(runsKey(gesture), json.encodeToString(serializer, updated))
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to record webhook run" }
+                return@withLock
+            }
             _runs.value = _runs.value + (gesture to updated)
         }
     }
