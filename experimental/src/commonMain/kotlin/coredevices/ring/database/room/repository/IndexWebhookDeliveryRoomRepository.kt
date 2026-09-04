@@ -59,10 +59,9 @@ class IndexWebhookDeliveryRoomRepository(
         url = url,
         headersJson = Json.encodeToString(headerSerializer, headers),
         signRequests = signRequests,
-        audioData = audioData,
-        filename = filename,
+        fileId = fileId,
         transcription = transcription,
-        recordedAt = recordedAt,
+        recordingId = recordingId,
     )
 
     private fun IndexWebhookDeliveryEntity.toDomain() = IndexWebhookDelivery(
@@ -76,9 +75,8 @@ class IndexWebhookDeliveryRoomRepository(
         url = url,
         headers = Json.decodeFromString(headerSerializer, headersJson),
         signRequests = signRequests,
-        audioData = audioData,
-        filename = filename,
+        fileId = fileId,
         transcription = transcription,
-        recordedAt = recordedAt,
+        recordingId = recordingId,
     )
 }

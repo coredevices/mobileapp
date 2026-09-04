@@ -36,7 +36,7 @@ interface IndexWebhookDeliveryDao {
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity SET status = 'Success', nextAttemptAt = NULL, " +
-            "url = '', headersJson = '{}', audioData = NULL, filename = NULL, transcription = NULL " +
+            "url = '', headersJson = '{}', fileId = NULL, transcription = NULL " +
             "WHERE id = :id",
     )
     suspend fun markSuccessAndClearPayload(id: Long)

@@ -8,8 +8,6 @@ import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
-import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
-import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
@@ -20,7 +18,6 @@ import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.recordings.RecordingProcessingQueue
-import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 
 class RecordingOperationFactory(
@@ -30,8 +27,6 @@ class RecordingOperationFactory(
     private val gestureRouting: GestureRoutingPreferences,
     private val indexWebhookQueue: IndexWebhookDeliveryQueue,
     private val indexWebhookPreferences: IndexWebhookPreferences,
-    private val m4aEncoder: M4aEncoder,
-    private val recordingStorage: RecordingStorage,
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
@@ -81,8 +76,6 @@ class RecordingOperationFactory(
         return IndexWebhookUploadRecordingOperation(
             enqueue = indexWebhookQueue::enqueue,
             webhookPreferences = indexWebhookPreferences,
-            encodeM4a = m4aEncoder::encode,
-            recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
             gesture = gesture,
