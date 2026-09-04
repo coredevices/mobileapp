@@ -90,7 +90,7 @@ class IndexWebhookApiImpl(
             byteSize = result.byteSize,
             durationMs = result.durationMs,
             deliveryId = delivery.deliveryId,
-            canRetry = !result.ok && !result.retryable,
+            canRetry = result.shouldOfferManualRetry(delivery.attempts),
         )
         return result
     }
@@ -206,6 +206,9 @@ internal fun Int.isRetryableWebhookStatus(): Boolean =
     this == 408 || this == 425 || this == 429 || this in 500..599
 
 internal fun Throwable.isRetryableWebhookFailure(): Boolean = this is IOException
+
+internal fun IndexWebhookRunResult.shouldOfferManualRetry(attempts: Int): Boolean =
+    !ok && (!retryable || attempts + 1 >= MAX_WEBHOOK_DELIVERY_ATTEMPTS)
 
 internal fun String?.toRetryAfterDuration(now: Instant = Clock.System.now()): Duration? {
     val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null

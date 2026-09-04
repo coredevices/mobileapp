@@ -71,6 +71,21 @@ class IndexWebhookRunRepositoryTest {
     }
 
     @Test
+    fun newerAttemptRetiresOlderRetryAction() = runTest {
+        repository.record(
+            RingGesture.Hold, false, "401 ERROR", "unauthorized", 1, 1,
+            deliveryId = "delivery-1", canRetry = true,
+        )
+        repository.record(
+            RingGesture.Hold, true, "200 OK", "delivered", 1, 1,
+            deliveryId = "delivery-1",
+        )
+
+        val runs = repository.runs(RingGesture.Hold).first()
+        assertEquals(listOf(false, false), runs.map { it.canRetry })
+    }
+
+    @Test
     fun runsSurviveANewRepositoryOverTheSameSettings() = runTest {
         repeat(3) { record(RingGesture.Hold, it) }
 

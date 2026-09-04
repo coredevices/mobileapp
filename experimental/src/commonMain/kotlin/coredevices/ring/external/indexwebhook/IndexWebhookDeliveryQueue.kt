@@ -34,6 +34,8 @@ data class IndexWebhookDelivery(
     val recordedAt: Instant,
 )
 
+internal const val MAX_WEBHOOK_DELIVERY_ATTEMPTS = 10
+
 interface IndexWebhookDeliveryRepository {
     suspend fun insert(delivery: IndexWebhookDelivery): Long
     suspend fun getPendingIds(): List<Long>
@@ -90,13 +92,13 @@ class IndexWebhookDeliveryQueue(
             when {
                 result.ok -> repository.setStatus(id, TaskStatus.Success)
                 result.transportFailure && networkState.value.outageCount != outageCount -> retryWhenNetworkReturns(id)
-                result.retryable -> reschedule(delivery, result.retryAfter)
+                result.retryable -> retryOrFail(delivery, result.retryAfter)
                 else -> repository.setStatus(id, TaskStatus.Failed)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            reschedule(delivery, null)
+            retryOrFail(delivery, null)
         }
     }
 
@@ -109,6 +111,14 @@ class IndexWebhookDeliveryQueue(
         val after = webhookRetryDelay(delivery.attempts, retryAfter)
         repository.scheduleRetry(delivery.id, now() + after)
         schedule(delivery.id, after)
+    }
+
+    private suspend fun retryOrFail(delivery: IndexWebhookDelivery, retryAfter: Duration?) {
+        if (delivery.attempts + 1 >= MAX_WEBHOOK_DELIVERY_ATTEMPTS) {
+            repository.setStatus(delivery.id, TaskStatus.Failed)
+        } else {
+            reschedule(delivery, retryAfter)
+        }
     }
 
     private fun schedule(id: Long, after: Duration) {
