@@ -247,6 +247,28 @@ class IndexWebhookDeliveryQueueTest {
         queueScope.cancel()
     }
 
+    @Test
+    fun itemFailureDoesNotStopWorker() = runTest {
+        val backingRepository = InMemoryDeliveryRepository()
+        val brokenId = backingRepository.insert(delivery())
+        backingRepository.insert(delivery().copy(deliveryId = "recording-2"))
+        val repository = object : IndexWebhookDeliveryRepository by backingRepository {
+            override suspend fun getById(id: Long): IndexWebhookDelivery? {
+                if (id == brokenId) error("corrupt delivery")
+                return backingRepository.getById(id)
+            }
+        }
+        val sender = FakeSender(successResult())
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, {})
+
+        queue.resumePendingDeliveries()
+        advanceUntilIdle()
+
+        assertEquals(listOf("recording-2"), sender.sentDeliveryIds)
+        queueScope.cancel()
+    }
+
     private fun delivery() = IndexWebhookDelivery(
         deliveryId = "recording-1",
         gesture = RingGesture.Hold,

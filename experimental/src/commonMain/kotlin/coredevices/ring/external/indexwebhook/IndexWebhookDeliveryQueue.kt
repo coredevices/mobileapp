@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import co.touchlab.kermit.Logger
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.queue.TaskStatus
 import kotlinx.coroutines.CancellationException
@@ -50,10 +51,22 @@ class IndexWebhookDeliveryQueue(
     private val prepare: suspend (IndexWebhookDelivery) -> Unit,
     private val now: () -> Instant = Clock.System::now,
 ) {
+    companion object {
+        private val logger = Logger.withTag("IndexWebhookDeliveryQueue")
+    }
+
     private val tasks = Channel<Long>(Channel.UNLIMITED)
     init {
         scope.launch {
-            for (id in tasks) process(id)
+            for (id in tasks) {
+                try {
+                    process(id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Webhook delivery $id failed" }
+                }
+            }
         }
     }
 
