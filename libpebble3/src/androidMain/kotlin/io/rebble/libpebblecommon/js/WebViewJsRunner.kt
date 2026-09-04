@@ -30,6 +30,7 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,7 @@ class WebViewJsRunner(
     remoteTimelineEmulator: RemoteTimelineEmulator,
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
+    pluginRegistry: PluginRegistry,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -81,7 +83,7 @@ class WebViewJsRunner(
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(
@@ -458,6 +460,12 @@ class WebViewJsRunner(
     override suspend fun signalWebviewClosed(data: String?) {
         withContext(Dispatchers.Main) {
             webView?.evaluateJavascript("window.signalWebviewClosedEvent(${Json.encodeToString(data)})", null)
+        }
+    }
+
+    override suspend fun signalConfigMessage(requestId: Int, json: String) {
+        withContext(Dispatchers.Main) {
+            webView?.evaluateJavascript("window.signalConfigMessageEvent($requestId, $json)", null)
         }
     }
 

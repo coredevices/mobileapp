@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stocks</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    form { display: flex; gap: 8px; margin-bottom: 12px; }
+    input { flex: 1; padding: 10px 12px; font-size: 15px; border-radius: 8px;
+            border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit;
+            text-transform: uppercase; }
+    button { padding: 10px 16px; font-size: 15px; border-radius: 8px; border: 0;
+             background: #ff6b00; color: #fff; }
+    button.remove { background: transparent; color: inherit; opacity: .5; font-size: 20px;
+                    padding: 0 6px; }
+    #status { padding: 10px 12px; border-radius: 8px; background: rgba(128,128,128,.15);
+              font-size: 14px; min-height: 20px; }
+    ul { list-style: none; padding: 0; margin: 16px 0 0; }
+    li { padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,.25); display: flex;
+         align-items: center; gap: 10px; }
+    .symbol { font-weight: 700; }
+    .name { flex: 1; opacity: .7; font-size: 14px; overflow: hidden; white-space: nowrap;
+            text-overflow: ellipsis; }
+    .hint { font-size: 13px; opacity: .7; margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <h1>Stocks</h1>
+  <p class="hint">Each ticker you add shows up on the watch as its own instance.</p>
+
+  <form id="form">
+    <input id="symbol" placeholder="GOOG" autocapitalize="characters" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+  <div id="status">Starting the Stocks plugin…</div>
+  <ul id="list"></ul>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var statusEl = $('status');
+
+  function say(text) { statusEl.textContent = text; }
+
+  // The plugin does the fetching: it holds the ticker list and knows the quote API.
+  function send(message) { return Pebble.sendMessage('plugin', message); }
+
+  function draw(stocks) {
+    $('list').innerHTML = '';
+    (stocks || []).forEach(function (stock) {
+      var row = document.createElement('li');
+      var symbol = document.createElement('span');
+      symbol.className = 'symbol';
+      symbol.textContent = stock.symbol;
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = stock.name || '';
+      var remove = document.createElement('button');
+      remove.className = 'remove';
+      remove.textContent = '×';
+      remove.onclick = async function () {
+        draw((await send({ type: 'remove', symbol: stock.symbol })).stocks);
+      };
+      row.appendChild(symbol);
+      row.appendChild(name);
+      row.appendChild(remove);
+      $('list').appendChild(row);
+    });
+    say((stocks || []).length ? 'Tap × to drop a ticker.' : 'No tickers yet — add one above.');
+  }
+
+  $('form').onsubmit = async function (event) {
+    event.preventDefault();
+    var symbol = $('symbol').value;
+    if (!symbol) return;
+    say('Looking up ' + symbol.toUpperCase() + '…');
+    var result = await send({ type: 'add', symbol: symbol });
+    if (result.stocks) draw(result.stocks);
+    if (result.error) say(result.error);
+    else $('symbol').value = '';
+  };
+
+  // The plugin is only started when this page opens, so wait for it to say it is running.
+  Pebble.addEventListener('ready', async function (event) {
+    if (event.target !== 'plugin') return;
+    draw((await send({ type: 'list' })).stocks);
+  });
+</script>
+</body>
+</html>

@@ -125,3 +125,67 @@ androidComponents {
         }
     }
 }
+
+/**
+ * Builds a plugin API demo watchapp into this app's assets, and into the folder the iOS app
+ * bundles from — the two hosts that ship watchapps — so a developer only has to reinstall the
+ * phone app to get a fresh copy onto the watch.
+ *
+ * Needs the Pebble SDK (`pebble` on PATH). Without it the build carries on and the app simply
+ * ships no bundled watchapp — see BundledPluginLoader.
+ */
+fun registerTestAppBuild(name: String) =
+    tasks.register<Exec>("build${name.replaceFirstChar { it.uppercase() }}Pbw") {
+        val appDir = file("../test-apps/$name")
+        val pbw = File(appDir, "build/$name.pbw")
+        val androidAsset = file("src/main/assets/bundled-apps/$name.pbw")
+        val iosResource = file("../iosApp/bundled-apps/$name.pbw")
+        inputs.dir(File(appDir, "src")).withPropertyName("source")
+        inputs.file(File(appDir, "package.json")).withPropertyName("manifest")
+        outputs.files(androidAsset, iosResource).withPropertyName("bundled")
+
+        val pebble = System.getenv("PATH").orEmpty().split(File.pathSeparator)
+            .map { File(it, "pebble") }
+            .firstOrNull { it.canExecute() }
+        onlyIf("the Pebble SDK is installed") { pebble != null }
+
+        workingDir = appDir
+        executable = pebble?.absolutePath ?: "pebble"
+        args("build")
+        doLast {
+            listOf(androidAsset, iosResource).forEach { destination ->
+                destination.parentFile.mkdirs()
+                pbw.copyTo(destination, overwrite = true)
+            }
+        }
+    }
+
+val testApps = listOf("plugin-test", "weather-face")
+val testAppPbws = testApps.map { registerTestAppBuild(it) }
+
+// waf self-extracts its library to ~/.waf3-* on first run; two concurrent waf processes
+// racing that unpack die with "cannot import name 'Scripting' from 'waflib'". The builds
+// take ~1s each, so just serialize them.
+testAppPbws.zipWithNext().forEach { (first, second) -> second.configure { mustRunAfter(first) } }
+
+// Everything a demo watchapp generates lands outside this project's build dir, so `clean` has
+// to be told about it: the waf build tree in the app itself, and the pbws it installed.
+tasks.named<Delete>("clean") {
+    testApps.forEach {
+        delete(
+            file("../test-apps/$it/build"),
+            file("src/main/assets/bundled-apps/$it.pbw"),
+            file("../iosApp/bundled-apps/$it.pbw"),
+        )
+    }
+}
+
+tasks.register("buildTestAppPbws") {
+    description = "Builds every plugin API demo watchapp into the host apps' resources."
+    dependsOn(testAppPbws)
+}
+
+// The pbws ship in this app's assets, so anything reading that dir — asset merging, and lint's
+// model of the source sets — has to run after they land.
+tasks.matching { it.name.contains("Assets") || it.name.contains("lint", ignoreCase = true) }
+    .configureEach { dependsOn(testAppPbws) }

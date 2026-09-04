@@ -1,0 +1,25 @@
+{
+  "uuid": "2c4b7f10-9a3d-4e6b-8f21-5d0c7e9a1b34",
+  "name": "Stocks",
+  "description": "Share prices for the tickers the user picked in settings. Each ticker is an instance carrying its price, the day's change in cash and the same change as a percentage.",
+  "script": "stocks-plugin.js",
+  "configPage": "stocks-config.html",
+  "sources": [
+    {
+      "category": "finance",
+      "items": ["stock"],
+      "properties": {
+        "ticker": ["shortText"],
+        "name": ["shortText"],
+        "price": ["shortText", "longText"],
+        "day_change": ["shortText", "longText"],
+        "day_change_percent": ["shortText", "longText"]
+      },
+      "supportsMultiple": true,
+      "usesPermissions": [
+        { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
+      ],
+      "suggestedRefreshIntervalSec": 60
+    }
+  ]
+}

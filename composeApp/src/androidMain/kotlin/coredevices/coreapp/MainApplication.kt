@@ -107,12 +107,13 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val am =
                 getSystemService(ActivityManager::class.java)
-            val reasons =
-                am.getHistoricalProcessExitReasons(packageName, 0, 5)
-            reasons.firstOrNull()?.let { info ->
+            // The newest record is often an isolated child (WebView), so log them all.
+            val reasons = am.getHistoricalProcessExitReasons(packageName, 0, 0)
+            reasons.forEach { info ->
                 val time = Instant.fromEpochMilliseconds(info.timestamp)
                 logger.i {
-                    "Previous exit @ $time reason=${reasonName(info.reason)} " +
+                    "Previous exit @ $time process=${info.processName} " +
+                            "reason=${reasonName(info.reason)} " +
                             "description=${info.description} importance=${info.importance} " +
                             "pss=${info.pss} rss=${info.rss} status=${info.status}"
                 }

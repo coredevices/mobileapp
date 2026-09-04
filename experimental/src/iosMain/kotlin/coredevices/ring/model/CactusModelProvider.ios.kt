@@ -5,6 +5,7 @@ import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.models.modelsDirectory
 import coredevices.util.models.promoteSingleRootDir
+import coredevices.util.models.weightsVersionFor
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.buffered
@@ -42,14 +43,13 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
 
     private val modelsDir: String by lazy { modelsDirectory() }
 
-    actual override suspend fun getSTTModelPath(): String {
-        val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+    actual override suspend fun getSTTModelPath(modelName: String, version: String): String {
+        return resolveModelPath(modelName, version)
     }
 
     actual override suspend fun getLMModelPath(): String {
         val modelName = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        return resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+        return resolveModelPath(modelName, weightsVersionFor(modelName))
     }
 
     actual override fun isModelDownloaded(modelName: String): Boolean {
@@ -66,7 +66,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     actual override fun getIncompatibleModels(): List<String> {
-        val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+        val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_STT_MODEL_ENG, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
         return getDownloadedModels().filter { name ->
             modelNeedsReplacement(name, compatible, versionMatches(name), isBundled(name))
         }
@@ -76,7 +76,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
         val versionPath = Path("$modelsDir/$modelName/.cactus_version")
         if (!SystemFileSystem.exists(versionPath)) return false
         val onDisk = SystemFileSystem.source(versionPath).buffered().use { it.readString() }.trim()
-        return onDisk == CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+        return onDisk == weightsVersionFor(modelName)
     }
 
     private fun isBundled(modelName: String): Boolean =

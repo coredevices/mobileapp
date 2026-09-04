@@ -5,6 +5,7 @@ import android.webkit.JavascriptInterface
 import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,7 +22,8 @@ class WebViewPrivatePKJSInterface(
     remoteTimelineEmulator: RemoteTimelineEmulator,
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow) {
+    pluginRegistry: PluginRegistry,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry) {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)
@@ -121,5 +123,33 @@ class WebViewPrivatePKJSInterface(
     @JavascriptInterface
     override fun deleteTimelinePin(id: String) {
         super.deleteTimelinePin(id)
+    }
+
+    @JavascriptInterface
+    override fun subscribeToSource(subscriptionId: Int, requestJson: String) {
+        super.subscribeToSource(subscriptionId, requestJson)
+    }
+
+    @JavascriptInterface
+    override fun unsubscribeSource(subscriptionId: Int) {
+        super.unsubscribeSource(subscriptionId)
+    }
+
+    @JavascriptInterface
+    override fun invokeAction(callId: Int, requestJson: String) {
+        super.invokeAction(callId, requestJson)
+    }
+
+    @JavascriptInterface
+    override fun enumeratePlugins(): String = super.enumeratePlugins()
+
+    @JavascriptInterface
+    override fun configMessageReply(requestId: Int, json: String) {
+        super.configMessageReply(requestId, json)
+    }
+
+    @JavascriptInterface
+    override fun sendConfigMessage(json: String) {
+        super.sendConfigMessage(json)
     }
 }

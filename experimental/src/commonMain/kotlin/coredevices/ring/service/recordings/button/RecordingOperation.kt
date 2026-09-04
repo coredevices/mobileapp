@@ -43,6 +43,12 @@ interface RecordingOperation {
     suspend fun run(handle: RecordingProcessingQueue.TaskHandle? = null)
 }
 
+/** An operation whose transcription is available before agent processing finishes. */
+interface TranscribingRecordingOperation : RecordingOperation {
+    /** Invoked with the persisted transcript, before agent processing starts. */
+    var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)?
+}
+
 open class DefaultRecordingOperation(
     private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
@@ -54,10 +60,12 @@ open class DefaultRecordingOperation(
     private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
     /** Sandbox group whose MCP servers are exposed to the agent; null = default group. */
     private val sandboxGroupId: Long? = null,
-) : RecordingOperation, KoinComponent {
+) : TranscribingRecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
     }
+
+    override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
 
     private val recordingStorage: RecordingStorage by inject()
     private val recordingEntryDao: RecordingEntryDao by inject()
@@ -250,6 +258,7 @@ open class DefaultRecordingOperation(
                 transcription.text,
                 transcription.modelUsed
             )
+            onTranscriptionPersisted?.invoke(transcription.text)
 
             try {
                 trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(

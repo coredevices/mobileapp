@@ -36,6 +36,7 @@ import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -53,6 +54,8 @@ import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
+import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -72,6 +75,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.io.files.Path
@@ -164,7 +168,7 @@ class FakeLibPebble : LibPebble {
     }
 
     // LockerApi interface
-    override suspend fun sideloadApp(pbwPath: Path): Boolean {
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean): Boolean {
         // No-op
         return true
     }
@@ -473,6 +477,15 @@ class FakeLibPebble : LibPebble {
 
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
     }
+
+    override val currentWeather: Flow<List<WeatherAppEntry>> = flowOf(emptyList())
+
+    override fun registerPlugin(plugin: Plugin) {
+    }
+
+    override fun configurablePlugins(): List<ConfigurablePlugin> = emptyList()
+
+    override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
 
     override suspend fun getLatestTimestamp(): Long? = 0
 

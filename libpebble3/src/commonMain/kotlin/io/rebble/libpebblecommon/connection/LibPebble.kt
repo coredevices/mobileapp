@@ -35,6 +35,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -53,6 +54,10 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.performPlatformSpecificInit
+import io.rebble.libpebblecommon.plugin.BundledPluginLoader
+import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
+import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -89,7 +94,7 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -200,7 +205,31 @@ interface HealthDataApi {
 
 interface Weather {
     fun updateWeatherData(weatherData: List<WeatherLocationData>)
+
+    /** Latest stored weather, one entry per saved location. Temperatures are already in the
+     *  user's configured unit — whoever wrote them converted first. */
+    val currentWeather: Flow<List<WeatherAppEntry>>
 }
+
+/**
+ * Registration for plugins that live outside libpebble3 (see `new-plugin-api.md`). libpebble3's
+ * Koin context is isolated, so app-side plugins cannot be injected into the registry directly.
+ */
+interface Plugins {
+    fun registerPlugin(plugin: Plugin)
+
+    /** Plugins that ship a settings page, for the app to list. */
+    fun configurablePlugins(): List<ConfigurablePlugin>
+
+    /** The script behind [pluginUuid]'s settings page, or null if it has none. */
+    fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
+}
+
+data class ConfigurablePlugin(
+    val uuid: String,
+    val name: String,
+    val configPageUrl: String,
+)
 
 interface Timeline {
     fun insertOrReplace(pin: TimelinePin)
@@ -303,7 +332,8 @@ interface LockerApi {
     /**
      * @return true if the app was successfully synced and launched on all connected watches.
      */
-    suspend fun sideloadApp(pbwPath: Path): Boolean
+    /** [loadOnWatch] launches it once it has synced; leave it off for background installs. */
+    suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean = true): Boolean
     fun getAllLockerBasicInfo(): Flow<List<AppBasicProperties>>
     fun getAllLockerUuids(): Flow<List<Uuid>>
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
@@ -382,6 +412,8 @@ class LibPebble3(
     private val watchManager: WatchManager,
     private val scanning: Scanning,
     private val locker: Locker,
+    private val bundledPluginLoader: BundledPluginLoader,
+    private val pluginRegistry: PluginRegistry,
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -414,7 +446,7 @@ class LibPebble3(
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
-    HealthDataApi by health {
+    HealthDataApi by health, Plugins by pluginRegistry {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -443,6 +475,7 @@ class LibPebble3(
             vibePatternDao.ensureAllDefaultsInserted()
         }
         locker.init(this)
+        bundledPluginLoader.init(this)
 
         performPlatformSpecificInit()
     }

@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.ring.ui.components.chat.IndexComposeBarHost
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.theme.IndexTheme
@@ -385,7 +386,11 @@ private fun ImessageRecordingRow(
         SwipeRevealRecordingBubble(
             text = transcription.takeIf { it.isNotBlank() }
                 ?: recording.assistantTitle?.takeIf { it.isNotBlank() }
-                ?: "Index Recording",
+                ?: if (retryEntry?.errorType == RecordingEntryErrorType.no_speech) {
+                    "No speech detected"
+                } else {
+                    "Index Recording"
+                },
             timestamp = recording.localTimestamp,
             revealState = timestampRevealState,
             onOpenRecording = onOpenRecording,

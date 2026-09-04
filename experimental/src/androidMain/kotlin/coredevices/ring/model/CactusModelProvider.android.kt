@@ -5,6 +5,7 @@ import co.touchlab.kermit.Logger
 import com.cactus.cactusSetTelemetryEnvironment
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.models.promoteSingleRootDir
+import coredevices.util.models.weightsVersionFor
 import kotlinx.io.files.Path
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -40,14 +41,13 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     private val context: Context get() = KoinPlatform.getKoin().get()
     private val modelsDir: File get() = context.filesDir.resolve("models").also { it.mkdirs() }
 
-    actual override suspend fun getSTTModelPath(): String = withContext(Dispatchers.IO) {
-        val modelName = CommonBuildKonfig.CACTUS_STT_MODEL
-        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+    actual override suspend fun getSTTModelPath(modelName: String, version: String): String = withContext(Dispatchers.IO) {
+        return@withContext resolveModelPath(modelName, version)
     }
 
     actual override suspend fun getLMModelPath(): String = withContext(Dispatchers.IO) {
         val modelName = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        return@withContext resolveModelPath(modelName, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+        return@withContext resolveModelPath(modelName, weightsVersionFor(modelName))
     }
 
     actual override fun isModelDownloaded(modelName: String): Boolean {
@@ -63,7 +63,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     }
 
     actual override fun getIncompatibleModels(): List<String> {
-        val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
+        val compatible = setOf(CommonBuildKonfig.CACTUS_STT_MODEL, CommonBuildKonfig.CACTUS_STT_MODEL_ENG, CommonBuildKonfig.CACTUS_LM_MODEL_NAME)
         return getDownloadedModels().filter { name ->
             modelNeedsReplacement(name, compatible, versionMatches(name), isBundled(name))
         }
@@ -72,7 +72,7 @@ actual class CactusModelProvider actual constructor() : coredevices.util.transcr
     private fun versionMatches(modelName: String): Boolean {
         val versionFile = modelsDir.resolve(modelName).resolve(".cactus_version")
         return versionFile.exists() &&
-            versionFile.readText().trim() == CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+            versionFile.readText().trim() == weightsVersionFor(modelName)
     }
 
     private fun isBundled(modelName: String): Boolean =

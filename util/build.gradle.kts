@@ -31,18 +31,6 @@ val properties = Properties().apply {
     }
 }
 
-val enableKrisp = (properties["ENABLE_KRISP"] ?: project.properties["ENABLE_KRISP"] ?: System.getenv("ENABLE_KRISP")) == "true"
-val useKrispStubsForTests =
-    (properties["USE_KRISP_STUBS_FOR_TESTS"]
-        ?: project.properties["USE_KRISP_STUBS_FOR_TESTS"]
-        ?: System.getenv("USE_KRISP_STUBS_FOR_TESTS")
-        ?: "true") == "true"
-val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':').lowercase() }
-val isTestLikeInvocation = requestedTaskNames.any { taskName ->
-    taskName.contains("test") || taskName == "check"
-}
-val useKrispArtifact = enableKrisp && !(useKrispStubsForTests && isTestLikeInvocation)
-
 kotlin {
 
 // Target declarations - add or remove as needed below. These define
@@ -132,11 +120,6 @@ kotlin {
                 api(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 api(libs.settings)
-                if (useKrispArtifact) {
-                    implementation(libs.coredevices.krispPrivate)
-                } else {
-                    implementation(project(":krisp-stubs"))
-                }
             }
         }
 
@@ -211,7 +194,9 @@ buildkonfig {
         buildConfigField(FieldSpec.Type.BOOLEAN, "GITHUB_AUTH_ENABLED", gradleBooleanProp("githubAuthEnabled", default = true).toString())
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_PRO_KEY", gradleStringPropOrNull("cactusProKey"), nullable = true)
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL", "parakeet-tdt-0.6b-v3")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_STT_MODEL_ENG", "parakeet-tdt-0.6b-v2")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_LM_MODEL_NAME", "needle-pebble-ft")
         buildConfigField(FieldSpec.Type.STRING, "CACTUS_WEIGHTS_VERSION", "v2.1.0")
+        buildConfigField(FieldSpec.Type.STRING, "CACTUS_WEIGHTS_VERSION_ENG", "v2.0.1")
     }
 }

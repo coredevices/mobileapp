@@ -4,6 +4,11 @@ import co.touchlab.kermit.Logger
 import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.plugin.ActionDeclaration
+import io.rebble.libpebblecommon.plugin.ActionDispatcher
+import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.SourceDeclaration
+import io.rebble.libpebblecommon.plugin.SourceDispatcher
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +22,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -33,7 +40,11 @@ abstract class PrivatePKJSInterface(
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val httpInterceptorManager: HttpInterceptorManager,
     private val notificationConfigFlow: NotificationConfigFlow,
+    private val pluginRegistry: PluginRegistry,
 ) {
+    private val sourceDispatcher = SourceDispatcher(pluginRegistry, jsRunner, scope)
+    private val actionDispatcher = ActionDispatcher(pluginRegistry, jsRunner, scope)
+
     companion object {
         private val logger = Logger.withTag("PrivatePKJSInterface")
         private val sensitiveTerms = setOf(
@@ -227,4 +238,46 @@ abstract class PrivatePKJSInterface(
         val uuid = Uuid.parse(jsRunner.appInfo.uuid)
         runBlocking { remoteTimelineEmulator.deletePin(appUuid = uuid, pinIdentifier = id) }
     }
+
+    open fun subscribeToSource(subscriptionId: Int, requestJson: String) {
+        sourceDispatcher.subscribe(subscriptionId, requestJson)
+    }
+
+    open fun unsubscribeSource(subscriptionId: Int) {
+        sourceDispatcher.unsubscribe(subscriptionId)
+    }
+
+    open fun invokeAction(callId: Int, requestJson: String) {
+        actionDispatcher.invoke(callId, requestJson)
+    }
+
+    /** The app's answer to a config-page message, keyed by the id the host sent. */
+    open fun configMessageReply(requestId: Int, json: String) {
+        jsRunner.onConfigReply(requestId, json)
+    }
+
+    /** The app pushing at its config page, unprompted. */
+    open fun sendConfigMessage(json: String) {
+        jsRunner.onConfigPush(json)
+    }
+
+    open fun enumeratePlugins(): String = Json.encodeToString(
+        ListSerializer(PluginSummary.serializer()),
+        pluginRegistry.all().map { plugin ->
+            PluginSummary(
+                uuid = plugin.pluginUuid.toString(),
+                name = plugin.name,
+                sources = plugin.sources,
+                actions = plugin.actions,
+            )
+        },
+    )
+
+    @Serializable
+    data class PluginSummary(
+        val uuid: String,
+        val name: String,
+        val sources: List<SourceDeclaration>,
+        val actions: List<ActionDeclaration>,
+    )
 }

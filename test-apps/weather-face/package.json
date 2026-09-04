@@ -1,0 +1,56 @@
+{
+  "name": "weather-face",
+  "author": "Pebble",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Plugin Demo: Weather Face",
+    "uuid": "3f6d2a90-5c41-4b7e-9d38-6a1e0c4f27b5",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "place",
+      "temp",
+      "high",
+      "low",
+      "uv",
+      "condition",
+      "precip",
+      "err",
+      "h0t",
+      "h1t",
+      "h2t",
+      "theme",
+      "iconSlot",
+      "iconWidth",
+      "iconHeight",
+      "iconPalette",
+      "iconPixels",
+      "heroSize",
+      "hourSize",
+      "hello"
+    ],
+    "resources": {
+      "media": []
+    },
+    "capabilities": [
+      "configurable"
+    ]
+  }
+}

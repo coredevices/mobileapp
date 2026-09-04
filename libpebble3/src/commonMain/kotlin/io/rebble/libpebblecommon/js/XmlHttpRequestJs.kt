@@ -1,3 +1,10 @@
+package io.rebble.libpebblecommon.js
+
+/**
+ * The `XMLHttpRequest` developers write against, on top of the `_XMLHTTPRequestManager`
+ * interface. Shared by PKJS on iOS and by every [JsEngine] context.
+ */
+internal const val XML_HTTP_REQUEST_JS = """
 class XMLHttpRequest {
     static _instances = new Map();
 
@@ -51,7 +58,11 @@ class XMLHttpRequest {
         if (!url) {
             throw new Error("SyntaxError: URL is required.");
         }
+        // Set here rather than from the host: send() checks it on the very next line of script,
+        // and a host-side eval cannot land before this call returns.
+        this.readyState = XMLHttpRequest.OPENED;
         _XMLHTTPRequestManager.open(this._instanceID, method, url, async, user, password);
+        this._dispatchEvent("readystatechange", { type: "readystatechange" });
     }
 
     setRequestHeader(header, value) {
@@ -63,7 +74,7 @@ class XMLHttpRequest {
             throw new Error("InvalidStateError: The object is in an invalid state (not sent).");
         }
         return Object.entries(this.responseHeaders)
-            .map(([key, value]) => `${key}: ${value}`)
+            .map(([key, value]) => `${'$'}{key}: ${'$'}{value}`)
             .join("\r\n");
     }
 
@@ -164,3 +175,4 @@ class XMLHttpRequest {
 }
 
 globalThis.XMLHttpRequest = XMLHttpRequest;
+"""

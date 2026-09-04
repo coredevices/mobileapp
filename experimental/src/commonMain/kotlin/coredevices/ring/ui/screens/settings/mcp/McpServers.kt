@@ -49,6 +49,7 @@ import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.indexai.data.entity.mcp_sandbox.SandboxModelType
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
+import coredevices.mcp.client.isValidIntegrationName
 import coredevices.mcp.data.McpPrompt
 import coredevices.ring.agent.IndexAction
 import coredevices.ring.database.room.repository.McpServerEntry
@@ -349,7 +350,8 @@ internal fun HttpServerEditDialog(
     // Only Name and URL are required. Contactability is advisory (surfaced as an error below)
     // but must not gate saving: a server may be momentarily down, need auth entered here, or
     // simply not respond to the title probe while still being a valid entry to create.
-    val canSave = name.isNotBlank() && url.isNotBlank()
+    val nameIsValid = name.isBlank() || isValidIntegrationName(name)
+    val canSave = name.isNotBlank() && nameIsValid && url.isNotBlank()
 
     M3Dialog(
         onDismissRequest = onDismiss,
@@ -397,6 +399,15 @@ internal fun HttpServerEditDialog(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
+                isError = !nameIsValid,
+                supportingText = when {
+                    !nameIsValid -> {
+                        { Text("Name can only contain letters, digits, - and _ characters, up to 32") }
+                    }
+                    else -> {
+                        { Text("") }
+                    }
+                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = dismissKeyboard,

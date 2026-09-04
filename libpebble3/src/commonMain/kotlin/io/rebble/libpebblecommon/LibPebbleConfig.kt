@@ -98,6 +98,7 @@ data class WatchConfig(
      */
     val enableWatchSettingsSync: Boolean = true,
     val musicSeekWhenAvailable: Boolean = true,
+    val enablePlugins: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

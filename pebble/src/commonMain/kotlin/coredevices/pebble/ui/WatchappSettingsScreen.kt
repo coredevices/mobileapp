@@ -19,9 +19,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.request.RequestInterceptor
@@ -37,20 +36,19 @@ import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
-import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.config.ConfigPageBridge
+import coredevices.pebble.config.ConfigPageSessions
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
-import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 private const val URL_DATA_PREFIX = "data:text/html;charset=utf-8,"
@@ -66,7 +64,9 @@ internal object WatchappSettingsUrlCache {
 }
 internal expect fun webViewFactory(
     params: WebViewFactoryParam,
-    uuid: Uuid
+    uuid: Uuid,
+    /** Null leaves the page with no `Pebble` object, which is what a plain webview should be. */
+    bridge: ConfigPageBridge?,
 ): NativeWebView
 
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
@@ -77,47 +77,31 @@ internal expect fun rememberWebViewFileChooserParams(): PlatformWebViewParams?
 
 private val logger = Logger.withTag("WatchappSettingsScreen")
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @Composable
 fun WatchappSettingsScreen(
     coreNav: CoreNav,
-    watchIdentifier: String,
+    /** What is being configured: a watchapp, a plugin, or a pbw that ships both. */
+    uuid: String,
     title: String,
 ) {
-    val url = remember(watchIdentifier) {
-        normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(watchIdentifier) ?: "")
+    val url = remember(uuid) {
+        normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(uuid) ?: "")
     }
-    DisposableEffect(watchIdentifier) {
-        onDispose { WatchappSettingsUrlCache.remove(watchIdentifier) }
+    DisposableEffect(uuid) {
+        onDispose { WatchappSettingsUrlCache.remove(uuid) }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-        val libPebble = rememberLibPebble()
-        val pkjsSessionFlow = remember(watchIdentifier) {
-            libPebble.watches
-                .flatMapLatest { watches ->
-                    watches.filterIsInstance<ConnectedPebbleDevice>().firstOrNull { watch ->
-                        watch.identifier.asString == watchIdentifier
-                    }?.currentPKJSSession ?: emptyFlow()
-                }
-        }
-        val pkjsSession by pkjsSessionFlow.collectAsState(null)
-        // Close the screen if the PKJS session we opened settings for ends or is
-        // replaced — otherwise the webviewclosed event would route to a different
-        // app's session.
-        var originalSessionUuid by remember { mutableStateOf<Uuid?>(null) }
-        LaunchedEffect(pkjsSession?.uuid) {
-            val currentUuid = pkjsSession?.uuid
-            if (originalSessionUuid == null) {
-                if (currentUuid != null) originalSessionUuid = currentUuid
-            } else if (currentUuid != originalSessionUuid) {
-                logger.d {
-                    "PKJS session changed (was $originalSessionUuid, now $currentUuid); closing settings"
-                }
-                withContext(Dispatchers.Main) {
-                    coreNav.goBack()
-                }
+        val sessions: ConfigPageSessions = koinInject()
+        val session by remember(uuid, title) { sessions.sessionsFor(uuid, title) }
+            .collectAsState(null)
+        // Nothing left to configure — the watchapp stopped and there is no plugin behind it.
+        LaunchedEffect(session) {
+            if (session?.isOrphaned == true) {
+                logger.d { "No scripts left for $uuid; closing settings" }
+                withContext(Dispatchers.Main) { coreNav.goBack() }
             }
         }
+        val webViewUuid = remember(uuid) { runCatching { Uuid.parse(uuid) }.getOrNull() }
         val fileChooserParams = rememberWebViewFileChooserParams()
         val state = rememberWebViewState(url) {
             androidWebSettings.domStorageEnabled = true
@@ -127,9 +111,7 @@ fun WatchappSettingsScreen(
             SettingsRequestInterceptor(
                 onSuccess = { data ->
                     runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
-                    pkjsSession?.triggerOnWebviewClosed(data) ?: run {
-                        logger.w { "No PKJS session found for $watchIdentifier, cannot handle webview close" }
-                    }
+                    session?.onPageClosed(data)
                     withContext(Dispatchers.Main) {
                         coreNav.goBack()
                     }
@@ -143,6 +125,25 @@ fun WatchappSettingsScreen(
             )
         }
         val navigator = rememberWebViewNavigator(requestInterceptor = interceptor)
+        val scope = rememberCoroutineScope()
+        // One bridge for the life of the screen: it is installed when the WebView is built,
+        // before any page has loaded, and picks up scripts as they resolve.
+        val bridge = remember { if (sessions.enabled) ConfigPageBridge(scope) else null }
+        DisposableEffect(session) {
+            val open = session
+            bridge?.scripts = open?.scripts.orEmpty()
+            // Starting a plugin takes a moment; the page waits for its 'ready' event.
+            val starting = scope.launch { open?.open { target -> bridge?.ready(target) } }
+            onDispose {
+                starting.cancel()
+                open?.scripts?.keys?.forEach { bridge?.forget(it) }
+                bridge?.scripts = emptyMap()
+                scope.launch { open?.close() }
+            }
+        }
+        LaunchedEffect(session) {
+            session?.messages?.collect { (target, json) -> bridge?.push(target, json) }
+        }
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Loading) {
                 logger.d { "Page load finished, applying shims" }
@@ -173,13 +174,13 @@ fun WatchappSettingsScreen(
                 )
             }
         ) { paddingValues ->
-            pkjsSession?.uuid?.let { uuid ->
+            webViewUuid?.let { uuid ->
                 WebView(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     navigator = navigator,
                     platformWebViewParams = fileChooserParams,
-                    factory = { webViewFactory(it, uuid) }
+                    factory = { webViewFactory(it, uuid, bridge) }
                 )
             }
         }

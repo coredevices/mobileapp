@@ -10,12 +10,13 @@
 		058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 		058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
 		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
-		670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */ = {isa = PBXBuildFile; fileRef = 670755B32DC121B600DA5904 /* XMLHTTPRequest.js */; };
 		6707B38B2DF7BF28003519BB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */; };
 		671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */ = {isa = PBXBuildFile; fileRef = 671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */; };
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
+		677B8EF52DBFE88C0060DBE1 /* plugins in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBE2 /* plugins */; };
+		677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBE4 /* bundled-apps */; };
 		67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */ = {isa = PBXBuildFile; fileRef = 67A3BC012F0A123400ABCDEF /* WebSocket.js */; };
 		67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */; };
 		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
@@ -30,13 +31,14 @@
 		058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		2152FB032600AC8F00CF470E /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
 		2EB31172B477C48B1FE18840 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
-		670755B32DC121B600DA5904 /* XMLHTTPRequest.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = XMLHTTPRequest.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/XMLHTTPRequest.js; sourceTree = SOURCE_ROOT; };
 		6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		671C014E2FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip */ = {isa = PBXFileReference; lastKnownFileType = archive.zip; path = "needle-pebble-ft-cq4.zip"; sourceTree = "<group>"; };
 		67555A952E0212D1006BB488 /* JSTimeout.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = JSTimeout.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/JSTimeout.js; sourceTree = SOURCE_ROOT; };
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		677B8EF52DBFE88C0060DBD6 /* startup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = startup.js; path = ../libpebble3/src/androidMain/assets/startup.js; sourceTree = SOURCE_ROOT; };
+		677B8EF52DBFE88C0060DBE2 /* plugins */ = {isa = PBXFileReference; lastKnownFileType = folder; name = plugins; path = ../libpebble3/src/androidMain/assets/plugins; sourceTree = SOURCE_ROOT; };
+		677B8EF52DBFE88C0060DBE4 /* bundled-apps */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bundled-apps"; path = "bundled-apps"; sourceTree = SOURCE_ROOT; };
 		67A3BC012F0A123400ABCDEF /* WebSocket.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = WebSocket.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/WebSocket.js; sourceTree = SOURCE_ROOT; };
 		67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		67EA51BF2EF988F7003958BE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
@@ -131,9 +133,10 @@
 			isa = PBXGroup;
 			children = (
 				67555A952E0212D1006BB488 /* JSTimeout.js */,
-				670755B32DC121B600DA5904 /* XMLHTTPRequest.js */,
 				67A3BC012F0A123400ABCDEF /* WebSocket.js */,
 				677B8EF52DBFE88C0060DBD6 /* startup.js */,
+				677B8EF52DBFE88C0060DBE2 /* plugins */,
+				677B8EF52DBFE88C0060DBE4 /* bundled-apps */,
 				67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */,
 				058557BA273AAA24004C7B11 /* Assets.xcassets */,
 				7555FF82242A565900829871 /* ContentView.swift */,
@@ -223,7 +226,8 @@
 				671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */,
 				67555A962E0212D1006BB488 /* JSTimeout.js in Resources */,
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
-				670755B42DC121B600DA5904 /* XMLHTTPRequest.js in Resources */,
+				677B8EF52DBFE88C0060DBE1 /* plugins in Resources */,
+				677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */,
 				67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */,
 				058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */,
 				058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */,

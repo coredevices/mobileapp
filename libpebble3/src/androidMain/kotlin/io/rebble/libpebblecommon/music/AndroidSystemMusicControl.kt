@@ -55,16 +55,25 @@ private data class PlaybackStatusWithControls(
 
 private const val SEEK_INTERVAL_MS = 15_000L
 
-internal enum class SkipBehaviour {
+internal enum class SkipBehaviour(val seeksWithinTrack: Boolean) {
     /** Change track. */
-    Skip,
+    Skip(seeksWithinTrack = false),
 
     /** The player's own fast forward/rewind, which uses the interval configured in that app. */
-    PlayerSeek,
+    PlayerSeek(seeksWithinTrack = true),
 
     /** Seek by [SEEK_INTERVAL_MS] ourselves. */
-    SeekTo,
+    SeekTo(seeksWithinTrack = true),
+
+    /** A media button, which these players treat as a jump by their own interval. */
+    MediaKey(seeksWithinTrack = true),
 }
+
+/** Audiobook players whose next/previous should seek within the book rather than change chapter. */
+private val ALWAYS_SEEK_PACKAGES = setOf("com.audible.application")
+
+/** Players that expose no usable transport actions but respond to media buttons. */
+private val MEDIA_KEY_PACKAGES = setOf("com.overdrive.mobile.android.libby")
 
 /**
  * What next/previous should do for a player advertising [actions]: change track where the player
@@ -74,24 +83,32 @@ internal enum class SkipBehaviour {
  * Both skip actions are read together so that a button can't change meaning mid-session: YouTube
  * drops previous at the start of a queue but still means next/previous throughout.
  */
-internal fun skipBehaviour(actions: Long, forward: Boolean, watchConfig: WatchConfig): SkipBehaviour {
+internal fun skipBehaviour(
+    actions: Long,
+    forward: Boolean,
+    watchConfig: WatchConfig,
+    packageName: String?,
+): SkipBehaviour {
     val skipActions = PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
     val playerSeekAction = if (forward) {
         PlaybackState.ACTION_FAST_FORWARD
     } else {
         PlaybackState.ACTION_REWIND
     }
+    val canSeekTo = actions and PlaybackState.ACTION_SEEK_TO != 0L
     return when {
         !watchConfig.musicSeekWhenAvailable -> SkipBehaviour.Skip
+        canSeekTo && packageName in ALWAYS_SEEK_PACKAGES -> SkipBehaviour.SeekTo
+        packageName in MEDIA_KEY_PACKAGES -> SkipBehaviour.MediaKey
         actions and skipActions != 0L -> SkipBehaviour.Skip
         actions and playerSeekAction != 0L -> SkipBehaviour.PlayerSeek
-        actions and PlaybackState.ACTION_SEEK_TO != 0L -> SkipBehaviour.SeekTo
+        canSeekTo -> SkipBehaviour.SeekTo
         else -> SkipBehaviour.Skip
     }
 }
 
-private fun PlaybackState?.seeksWithinTrack(watchConfig: WatchConfig): Boolean =
-    skipBehaviour(this?.actions ?: 0L, forward = true, watchConfig) != SkipBehaviour.Skip
+private fun PlaybackState?.seeksWithinTrack(watchConfig: WatchConfig, packageName: String?): Boolean =
+    skipBehaviour(this?.actions ?: 0L, forward = true, watchConfig, packageName).seeksWithinTrack
 
 /** [PlaybackState.getPosition] is only accurate as of [PlaybackState.getLastPositionUpdateTime]. */
 private fun PlaybackState.currentPosition(): Long = if (state == PlaybackState.STATE_PLAYING) {
@@ -316,7 +333,10 @@ class AndroidSystemMusicControl(
         combine(targetSession, watchConfigFlow.flow) { session, config ->
             val state = session?.controller?.playbackState
             session?.playbackStatus?.copy(
-                skipSeeksWithinTrack = state.seeksWithinTrack(config.watchConfig),
+                skipSeeksWithinTrack = state.seeksWithinTrack(
+                    config.watchConfig,
+                    session.controller.packageName,
+                ),
             )
         }.stateIn(libPebbleCoroutineScope, SharingStarted.Eagerly, null)
 
@@ -359,9 +379,20 @@ class AndroidSystemMusicControl(
         val session = targetSession.value ?: return
         val controls = session.transportControls
         val state = session.controller.playbackState
-        when (skipBehaviour(state?.actions ?: 0L, forward, watchConfigFlow.value)) {
+        when (
+            skipBehaviour(
+                state?.actions ?: 0L,
+                forward,
+                watchConfigFlow.value,
+                session.controller.packageName,
+            )
+        ) {
             SkipBehaviour.Skip ->
                 if (forward) controls.skipToNext() else controls.skipToPrevious()
+
+            SkipBehaviour.MediaKey -> session.controller.dispatchMediaKey(
+                if (forward) KeyEvent.KEYCODE_MEDIA_NEXT else KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            )
 
             SkipBehaviour.PlayerSeek ->
                 if (forward) controls.fastForward() else controls.rewind()
@@ -402,6 +433,11 @@ class AndroidSystemMusicControl(
             logger.d { "Encoding album art ${bitmap.width}x${bitmap.height} -> ${width}x${height}" }
             bitmap.encodeForWatch(width, height)
         }
+}
+
+private fun MediaController.dispatchMediaKey(keyCode: Int) {
+    dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+    dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
 }
 
 private fun MediaMetadata.albumArtBitmap() =

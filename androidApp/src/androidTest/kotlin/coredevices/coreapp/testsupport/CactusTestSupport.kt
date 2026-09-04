@@ -20,7 +20,7 @@ class ReadOnlyModelPathProvider(
     private val modelsDir: File,
     private val sttModelName: String,
 ) : CactusModelPathProvider {
-    override suspend fun getSTTModelPath(): String = modelsDir.resolve(sttModelName).absolutePath
+    override suspend fun getSTTModelPath(modelName: String, version: String): String = modelsDir.resolve(sttModelName).absolutePath
     override suspend fun getLMModelPath(): String = error("LM model not served via ReadOnlyModelPathProvider")
     override fun isModelDownloaded(modelName: String): Boolean =
         modelsDir.resolve(modelName).resolve("config.txt").exists()

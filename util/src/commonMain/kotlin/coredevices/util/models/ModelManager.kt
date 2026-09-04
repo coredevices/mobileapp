@@ -3,6 +3,9 @@ package coredevices.util.models
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.Platform
 import coredevices.util.transcription.CactusModelPathProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.withContext
 
 class ModelManager(
     private val platform: Platform,
@@ -37,35 +40,53 @@ class ModelManager(
         modelPathProvider?.deleteModel(modelName)
     }
 
-    suspend fun getAvailableSTTModels(): List<ModelInfo> {
-        val sttModel = CommonBuildKonfig.CACTUS_STT_MODEL
-        val version = CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+    private fun buildModelInfo(slug: String, version: String = weightsVersionFor(slug), intendedTask: String? = null, supportsMultiLanguage: Boolean = true): ModelInfo {
         val sttSizeMB = modelPathProvider?.let {
-            val onDisk = (it.getModelSizeBytes(sttModel) / (1024 * 1024)).toInt()
+            val onDisk = (it.getModelSizeBytes(slug) / (1024 * 1024)).toInt()
             if (onDisk > 0) onDisk else KNOWN_STT_SIZE_MB
         } ?: KNOWN_STT_SIZE_MB
-
-        val currentModel = ModelInfo(
-            slug = sttModel,
+        return ModelInfo(
+            intendedTask = intendedTask,
+            slug = slug,
             sizeInMB = sttSizeMB,
-            url = "$HF_BASE/$sttModel/resolve/$version/${sttModel.lowercase()}-$QUANTIZATION.zip"
+            url = "$HF_BASE/$slug/resolve/$version/${slug.lowercase()}-$QUANTIZATION.zip",
+            supportsMultiLanguage = supportsMultiLanguage
         )
+    }
+
+    suspend fun getSelectableSTTModels(): List<ModelInfo> = withContext(Dispatchers.IO) {
+        listOf(
+            buildModelInfo(
+                slug = CommonBuildKonfig.CACTUS_STT_MODEL,
+                intendedTask = "Widest language support",
+                supportsMultiLanguage = true
+            ),
+            buildModelInfo(
+                slug = CommonBuildKonfig.CACTUS_STT_MODEL_ENG,
+                intendedTask = "Higher accuracy for English",
+                supportsMultiLanguage = false
+            )
+        )
+    }
+
+    suspend fun getAvailableSTTModels(): List<ModelInfo> {
+        val sttModels = getSelectableSTTModels()
 
         // Include old downloaded models (e.g. whisper) so they can be deleted
         val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
         val oldModels = modelPathProvider?.getDownloadedModels()
-            ?.filter { it != sttModel && it != lmModel }
+            ?.filter { !sttModels.any { m -> m.slug == it } && it != lmModel }
             ?.map { slug ->
                 val sizeMB = (modelPathProvider.getModelSizeBytes(slug) / (1024 * 1024)).toInt()
                 ModelInfo(slug = slug, sizeInMB = sizeMB)
             } ?: emptyList()
 
-        return listOf(currentModel) + oldModels
+        return sttModels + oldModels
     }
 
     suspend fun getAvailableLanguageModels(): List<ModelInfo> {
         val lmModel = CommonBuildKonfig.CACTUS_LM_MODEL_NAME
-        val version = CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+        val version = weightsVersionFor(lmModel)
         val lmSizeMB = modelPathProvider?.let {
             val onDisk = (it.getModelSizeBytes(lmModel) / (1024 * 1024)).toInt()
             if (onDisk > 0) onDisk else KNOWN_LM_SIZE_MB
@@ -107,11 +128,18 @@ sealed class RecommendedModel {
     data class Standard(override val modelSlug: String) : RecommendedModel()
 }
 
+fun weightsVersionFor(modelSlug: String): String = when (modelSlug) {
+    CommonBuildKonfig.CACTUS_STT_MODEL_ENG -> CommonBuildKonfig.CACTUS_WEIGHTS_VERSION_ENG
+    else -> CommonBuildKonfig.CACTUS_WEIGHTS_VERSION
+}
+
 data class ModelInfo(
     val createdAt: kotlin.time.Instant = kotlin.time.Clock.System.now(),
+    val intendedTask: String? = null,
     val slug: String,
     val sizeInMB: Int = 0,
-    val url: String = ""
+    val url: String = "",
+    val supportsMultiLanguage: Boolean = false
 )
 
 expect fun Platform.supportsNPU(): Boolean

@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.request
@@ -14,7 +13,6 @@ import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
-import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -25,8 +23,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSNull
-import platform.JavaScriptCore.JSValue
 import kotlin.uuid.Uuid
 
 private const val UNSENT = 0
@@ -37,20 +33,21 @@ private const val DONE = 4
 
 class XMLHTTPRequestManager(
     private val scope: CoroutineScope,
-    private val eval: (String) -> JSValue?,
+    private val eval: (String) -> Unit,
     private val httpInterceptorManager: HttpInterceptorManager,
-    private val appInfo: PbwAppInfo,
-): RegisterableJsInterface {
+    private val appUuid: Uuid,
+    private val client: HttpClient,
+): JsEngineInterface, AutoCloseable {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
-    private val client = HttpClient(Darwin)
     private val logger = Logger.withTag("XMLHTTPRequestManager")
-    override val interf = mapOf(
-        "getXHRInstanceID" to this::getXHRInstanceID,
-        "open" to this::open,
-        "setRequestHeader" to this::setRequestHeader,
-        "send" to this::send,
-        "abort" to this::abort,
+
+    override val methods = listOf(
+        "getXHRInstanceID",
+        "open",
+        "setRequestHeader",
+        "send",
+        "abort",
     )
 
     override val name = "_XMLHTTPRequestManager"
@@ -102,7 +99,7 @@ class XMLHTTPRequestManager(
         val bytes = when (data) {
             is ByteArray -> data
             is String -> data.encodeToByteArray()
-            is NSNull, null -> null
+            null -> null
             else -> {
                 logger.e { "Invalid data type for send: ${data::class.simpleName}" }
                 null
@@ -146,7 +143,6 @@ class XMLHTTPRequestManager(
             if (!this.async) {
                 logger.w { "Synchronous XHR opened" }
             }
-            changeReadyState(OPENED)
         }
 
         fun setRequestHeader(header: String, value: Any) {
@@ -164,7 +160,6 @@ class XMLHTTPRequestManager(
                     dispatchEvent(XHREvent.LoadStart)
                 }
                 if (httpInterceptorManager.shouldIntercept(url!!)) {
-                    val appUuid = Uuid.parse(appInfo.uuid)
                     val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)
                     scope.launch {
                         val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
@@ -267,7 +262,6 @@ class XMLHTTPRequestManager(
     }
 
     override fun close() {
-        client.close()
         instances.values.forEach { it.requestJob?.cancel("Closing") }
         instances.clear()
     }

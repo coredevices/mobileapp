@@ -1,7 +1,13 @@
 package coredevices.util.transcription
 
+import coredevices.util.CommonBuildKonfig
+import coredevices.util.models.weightsVersionFor
+
 interface CactusModelPathProvider {
-    suspend fun getSTTModelPath(): String
+    suspend fun getSTTModelPath(
+        modelName: String = CommonBuildKonfig.CACTUS_STT_MODEL,
+        version: String = weightsVersionFor(modelName),
+    ): String
     suspend fun getLMModelPath(): String
     fun isModelDownloaded(modelName: String): Boolean
     fun getDownloadedModels(): List<String>

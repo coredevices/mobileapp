@@ -5,6 +5,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.plugins.HttpRedirect
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -24,10 +25,20 @@ import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-abstract class ApiClient(version: String, timeout: Duration = 30.seconds):
-    KoinComponent {
+abstract class ApiClient(
+    version: String,
+    timeout: Duration = 30.seconds,
+    // Ktor only follows redirects for GET/HEAD by default; enable for clients that must
+    // follow 301/302 on POST (e.g. user-configured webhook endpoints).
+    followAllRedirects: Boolean = false,
+): KoinComponent {
     private val engine by inject<HttpClientEngine> { parametersOf(timeout) }
     protected val client = HttpClient(engine) {
+        if (followAllRedirects) {
+            install(HttpRedirect) {
+                checkHttpMethod = false
+            }
+        }
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true

@@ -53,7 +53,7 @@ fun ModelDownloadDialog(
             try {
                 models.forEach { model ->
                     when (model) {
-                        is ModelType.STT -> modelProvider.getSTTModelPath()
+                        is ModelType.STT -> modelProvider.getSTTModelPath(model.modelName)
                         is ModelType.Agent -> modelProvider.getLMModelPath()
                     }
                 }

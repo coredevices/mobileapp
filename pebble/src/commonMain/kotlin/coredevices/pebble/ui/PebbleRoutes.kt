@@ -27,9 +27,10 @@ object PebbleRoutes {
     @Serializable
     data class FirmwareSideloadRoute(val identifier: String) : CoreRoute
 
+    /** Settings for whatever is registered under [uuid]: a watchapp, a plugin, or both. */
     @Serializable
     data class WatchappSettingsRoute(
-        val watchIdentifier: String,
+        val uuid: String,
         val title: String,
     ) : CoreRoute
 
@@ -300,7 +301,7 @@ fun NavGraphBuilder.addPebbleRoutes(
         val route: PebbleRoutes.WatchappSettingsRoute = it.toRoute()
         WatchappSettingsScreen(
             coreNav = coreNav,
-            watchIdentifier = route.watchIdentifier,
+            uuid = route.uuid,
             title = route.title,
         )
     }

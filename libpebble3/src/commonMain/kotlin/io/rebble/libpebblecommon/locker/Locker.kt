@@ -85,9 +85,9 @@ class Locker(
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
     }
 
-    override suspend fun sideloadApp(pbwPath: Path): Boolean =
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean): Boolean =
         try {
-            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = true)
+            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

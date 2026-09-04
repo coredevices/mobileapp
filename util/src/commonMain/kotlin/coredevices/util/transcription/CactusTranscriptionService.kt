@@ -19,6 +19,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -89,12 +90,11 @@ class CactusTranscriptionService(
 
     val lastModelUsed get() = lastInitedModel
     val isModelReady get() = modelHandle != 0L
-    val configuredModel get() = sttConfig.value.modelName
     val onInitialized = Channel<Boolean>(Channel.RENDEZVOUS)
 
     private val sttConfig = coreConfigFlow.flow.map { it.sttConfig }.stateIn(
         scope,
-        started = kotlinx.coroutines.flow.SharingStarted.Lazily,
+        started = SharingStarted.Eagerly,
         initialValue = coreConfigFlow.value.sttConfig
     )
 
@@ -211,7 +211,7 @@ class CactusTranscriptionService(
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
         if (!isCactusSupported()) return
-        val sttModelName = CommonBuildKonfig.CACTUS_STT_MODEL
+        val sttModelName = sttConfig.value.modelName ?: CommonBuildKonfig.CACTUS_STT_MODEL
         if (!modelProvider.isModelDownloaded(sttModelName) ||
             sttModelName in modelProvider.getIncompatibleModels()
         ) {
@@ -226,7 +226,7 @@ class CactusTranscriptionService(
             }
         }
         if (modelHandle == 0L) {
-            val modelPath = modelProvider.getSTTModelPath()
+            val modelPath = modelProvider.getSTTModelPath(sttModelName)
             cactusSetBackend("cpu")
             modelHandle = cactusInit(modelPath, null, false)
             lastInitedModel = config.modelName
@@ -235,7 +235,7 @@ class CactusTranscriptionService(
         }
     }
 
-    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(CommonBuildKonfig.CACTUS_STT_MODEL)
+    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(sttConfig.value.modelName ?: CommonBuildKonfig.CACTUS_STT_MODEL)
 
     private fun performInit(): Job {
         return scope.launch(Dispatchers.IO) {

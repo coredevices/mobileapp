@@ -134,9 +134,10 @@ import coredevices.libindex.device.IndexPairingResult
 import coredevices.libindex.device.IndexPairingState
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
+import coredevices.libindex.device.PairableIndexDevice
 import coredevices.libindex.device.PairingRequestResult
+import coredevices.libindex.device.RSSIMeasurement
 import coredevices.libindex.device.RepairableIndexDevice
-import coredevices.libindex.device.isFailsafe
 import coredevices.libindex.ui.components.Press
 import coredevices.libindex.ui.components.PressPatternDot
 import coredevices.pebble.PebbleDeepLinkHandler
@@ -208,6 +209,7 @@ import org.koin.compose.koinInject
 import org.koin.dsl.module
 import theme.coreOrange
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
 expect fun scanPermission(): Permission?
@@ -707,7 +709,7 @@ fun WatchesPreview() {
                 object : LibIndex {
                     override val rings: IndexDevices = MutableStateFlow(
                         listOf(
-                            object : DiscoveredIndexDevice {
+                            object : PairableIndexDevice {
                                 override val identifier = IndexIdentifier("1234")
                                 override val name = "Index 01"
                                 override val rssi = -50
@@ -728,6 +730,10 @@ fun WatchesPreview() {
                                 override val mac: String = "00:11:22:33:44:55"
                                 override fun remove() {
                                     TODO("Not yet implemented")
+                                }
+
+                                override suspend fun measureRSSI(connectionTimeout: Duration): RSSIMeasurement {
+                                    TODO()
                                 }
                             }
                         )
@@ -782,6 +788,7 @@ fun RingItem(
     val coreAnalytics = koinInject<CoreAnalytics>()
     val platform = koinInject<Platform>()
     val companionDevice = koinInject<CompanionDevice>()
+    val libIndex = koinInject<LibIndex>()
     val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
     var companionApproved by remember(ring.identifier) {
@@ -802,7 +809,6 @@ fun RingItem(
                     IndexImage.ProductionTest -> "Production test mode"
                     IndexImage.Primary -> "Available to pair"
                 }
-                is RepairableIndexDevice -> "Production test mode"
                 is InterviewedIndexDevice if (ring.updating) -> "Updating..."
                 else -> "Ready"
             }
@@ -813,95 +819,122 @@ fun RingItem(
                     fontWeight = if (ring is DiscoveredIndexDevice) FontWeight.Normal else FontWeight.Bold,
                     modifier = Modifier.padding(vertical = 3.dp),
                 )
-                if (ring is DiscoveredIndexDevice) {
-                    when (ring.pairingState) {
-                        is IndexPairingState.Error -> Text(
-                            text = "Pairing failure",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(vertical = 3.dp),
-                        )
+                // Re-check once the system association dialog resolves so the
+                // warning clears if the user approved it.
+                when (ring) {
+                    is PairableIndexDevice -> {
+                        when (ring.pairingState) {
+                            is IndexPairingState.Error -> Text(
+                                text = "Pairing failure",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(vertical = 3.dp),
+                            )
 
-                        IndexPairingState.Pairing -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 5.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Pairing...")
+                            IndexPairingState.Pairing -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 5.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Pairing...")
+                                }
+                            }
+
+                            IndexPairingState.NotPaired -> {
                             }
                         }
-
-                        IndexPairingState.NotPaired -> {
-                        }
-                    }
-                    if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
-                        Button(
-                            enabled = !ring.isFailsafe,
-                            onClick = {
-                                scope.launch {
-                                    uiContext?.let { companionDevice.registerDevice(ring.identifier, it) }
-                                    val result = try {
-                                        ring.pair()
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                    when (result) {
-                                        is IndexPairingResult.Success -> {
-                                            coreAnalytics.logEvent("ring.pair_success")
+                        if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        uiContext?.let { companionDevice.registerDevice(ring.identifier, it) }
+                                        val result = try {
+                                            ring.pair()
+                                        } catch (e: Exception) {
+                                            null
                                         }
-                                        is IndexPairingResult.PairingFailure -> {
-                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
-                                            if (
-                                                result.cause is PairingRequestResult.RingAlreadyPaired ||
-                                                (platform.isIOS && result.cause is PairingRequestResult.CreateBondFailed)
-                                            ) {
-                                                showRingAlreadyPairedDialog = true
+                                        when (result) {
+                                            is IndexPairingResult.Success -> {
+                                                coreAnalytics.logEvent("ring.pair_success")
+                                            }
+
+                                            is IndexPairingResult.PairingFailure -> {
+                                                coreAnalytics.logEvent(
+                                                    "ring.pair_failed",
+                                                    mapOf("reason" to "bonding_error")
+                                                )
+                                                if (
+                                                    result.cause is PairingRequestResult.RingAlreadyPaired ||
+                                                    (platform.isIOS && result.cause is PairingRequestResult.CreateBondFailed)
+                                                ) {
+                                                    showRingAlreadyPairedDialog = true
+                                                }
+                                            }
+
+                                            is IndexPairingResult.EraseFailed -> {
+                                                coreAnalytics.logEvent(
+                                                    "ring.pair_failed",
+                                                    mapOf("reason" to "erase_failed")
+                                                )
+                                            }
+
+                                            null -> {
+                                                coreAnalytics.logEvent(
+                                                    "ring.pair_failed",
+                                                    mapOf("reason" to "bonding_error")
+                                                )
                                             }
                                         }
-                                        is IndexPairingResult.EraseFailed -> {
-                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "erase_failed"))
-                                        }
-                                        null -> {
-                                            coreAnalytics.logEvent("ring.pair_failed", mapOf("reason" to "bonding_error"))
-                                        }
                                     }
+                                },
+                                modifier = Modifier.padding(top = 5.dp)
+                            ) {
+                                Text("Pair")
+                            }
+                        }
+                    }
+
+                    is RepairableIndexDevice -> {
+                        var buttonEnabled by remember { mutableStateOf(true) }
+                        Button(
+                            enabled = buttonEnabled,
+                            onClick = {
+                                buttonEnabled = false
+                                scope.launch {
+                                    try {
+                                        ring.forceFailsafe()
+                                        // The ring reboots into failsafe under a new address; rescan
+                                        // so it is listed and the recovery scan loop picks it up.
+                                        libIndex.startScan()
+                                    } catch (e: Exception) {
+                                        logger.e(e) { "Failed to force failsafe: ${e.message}" }
+                                    }
+                                    buttonEnabled = true
                                 }
                             },
                             modifier = Modifier.padding(top = 5.dp)
                         ) {
-                            Text("Pair")
+                            Text("Restore firmware")
                         }
                     }
-                } else if (ring is RepairableIndexDevice) {
-                    var buttonEnabled by remember { mutableStateOf(true) }
-                    Button(
-                        enabled = buttonEnabled,
-                        onClick = {
-                            buttonEnabled = false
-                            scope.launch {
-                                try {
-                                    ring.forceFailsafe()
-                                } catch (e: Exception) {
-                                    logger.e(e) { "Failed to force failsafe: ${e.message}" }
-                                }
-                                buttonEnabled = true
-                            }
-                        },
-                        modifier = Modifier.padding(top = 5.dp)
-                    ) {
-                        Text("Restore firmware")
+
+                    is InterviewedIndexDevice if ring.updating -> {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                        )
                     }
-                } else if (ring is InterviewedIndexDevice && ring.updating) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                    )
+
+                    is DiscoveredIndexDevice if ring.currentImage == IndexImage.Failsafe -> {
+                        Text("Restoring - please wait...")
+                    }
+                    else -> {}
                 }
                 if (ring is KnownIndexDevice && !companionApproved) {
                     Text(

@@ -96,6 +96,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
+import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
@@ -460,7 +461,11 @@ internal fun PeekCard(
         Text(
             peek.transcription.takeIf { it.isNotBlank() }
                 ?: peek.recording.assistantTitle?.takeIf { it.isNotBlank() }
-                ?: "Index Recording",
+                ?: if (peek.retryEntry?.errorType == RecordingEntryErrorType.no_speech) {
+                    "No speech detected"
+                } else {
+                    "Index Recording"
+                },
             color = colors.onSurface,
             fontSize = 13.sp,
             lineHeight = 18.sp,

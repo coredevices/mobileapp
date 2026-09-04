@@ -107,6 +107,8 @@ internal class WeatherAppBlobRecordV4Test {
      */
     @Test
     fun encodesUnknownSentinels() {
+        val locationName = "České Budějovice"
+        val forecastShort = "Déšť 🌧️"
         val record = WeatherAppBlobRecordV4(
             currentTemp = 18,
             currentWeatherType = 7u,
@@ -135,14 +137,16 @@ internal class WeatherAppBlobRecordV4Test {
             tomorrowHourlyCount = 0u,
             tomorrowHourlyWeatherType = UByteArray(24) { WeatherType.Unknown.code.toUByte() },
             tomorrowHourlyTemp = ByteArray(24),
-            locationName = "X",
-            forecastShort = "Y",
+            locationName = locationName,
+            forecastShort = forecastShort,
         )
 
         val bytes = record.toBytes()
+        val serializedStringsSize =
+            record.locationName.toBytes().size + record.forecastShort.toBytes().size
 
-        // Fixed portion is 250 bytes; then 2-byte string header + "X" (3) + "Y" (3) = 258 total.
-        assertEquals(258, bytes.size)
+        assertEquals(serializedStringsSize, record.allStringsLength.get().toInt())
+        assertEquals(250 + UShort.SIZE_BYTES + serializedStringsSize, bytes.size)
         // minor_version @18, feels-like @19 (unknown 32767 = FF 7F)
         assertEquals(5u.toUByte(), bytes[18])
         assertUByteArrayEquals(ubyteArrayOf(0xFFu, 0x7Fu), bytes.sliceArray(19..20)) // feels-like

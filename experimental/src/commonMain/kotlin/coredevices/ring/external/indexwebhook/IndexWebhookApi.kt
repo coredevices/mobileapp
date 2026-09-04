@@ -64,7 +64,7 @@ internal const val WEBHOOK_DELIVERY_HEADER = "X-Index-Delivery"
 class IndexWebhookApiImpl(
     config: ApiConfig,
     private val runRepository: IndexWebhookRunRepository,
-) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes) {
+) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookApi")
