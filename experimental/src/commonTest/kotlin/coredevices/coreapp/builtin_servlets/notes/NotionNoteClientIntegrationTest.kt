@@ -60,6 +60,13 @@ class NotionNoteClientIntegrationTest {
             TODO("Not yet implemented")
         }
 
+        override suspend fun updateRingBatteryVoltage(
+            serial: String,
+            voltageMilliV: Int
+        ) {
+            TODO("Not yet implemented")
+        }
+
         override fun init() {
             TODO("Not yet implemented")
         }

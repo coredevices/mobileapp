@@ -581,6 +581,7 @@ class RingRecordingE2ETest {
                 override fun updateLastConnectedSerial(serial: String?) {}
                 override fun updateRingTransferDurationMetric(duration: kotlin.time.Duration) {}
                 override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+                override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
             }
         }
         single {
@@ -608,6 +609,10 @@ class RingRecordingE2ETest {
                 override suspend fun updateRingLifetimeCollectionCount(
                     serial: String,
                     count: Int
+                ) {}
+                override suspend fun updateRingBatteryVoltage(
+                    serial: String,
+                    voltageMilliV: Int
                 ) {}
 
                 override fun init() {}

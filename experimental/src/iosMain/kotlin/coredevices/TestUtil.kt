@@ -251,6 +251,12 @@ private object UsersDaoTestImpl: UsersDao {
     ) {
     }
 
+    override suspend fun updateRingBatteryVoltage(
+        serial: String,
+        voltageMilliV: Int
+    ) {
+    }
+
     override fun init() {
         TODO("Not yet implemented")
     }

@@ -55,7 +55,7 @@ coredevices-speex = "c61d18a"
 mcp = "0.15.0"
 glance = "1.1.1"
 #noinspection GradleDependency
-coredevices-haversine = "69926ef"
+coredevices-haversine = "828a8fb"
 junit-ext = "1.3.0"
 paging = "3.5.0"
 reorderable = "3.1.0"
