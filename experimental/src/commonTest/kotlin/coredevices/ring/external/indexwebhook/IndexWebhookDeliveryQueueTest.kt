@@ -2,6 +2,7 @@ package coredevices.ring.external.indexwebhook
 
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.queue.TaskStatus
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ class IndexWebhookDeliveryQueueTest {
             repository,
             send = { error("send failed") },
             scope = queueScope,
+            prepare = {},
         )
 
         queue.enqueue(delivery())
@@ -58,6 +60,7 @@ class IndexWebhookDeliveryQueueTest {
             repository = repository,
             send = sender::send,
             scope = queueScope,
+            prepare = {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
@@ -81,6 +84,7 @@ class IndexWebhookDeliveryQueueTest {
                 IndexWebhookRunResult(false, "503 ERROR", "unavailable", 12, 1, retryable = true)
             },
             scope = queueScope,
+            prepare = {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
@@ -107,7 +111,7 @@ class IndexWebhookDeliveryQueueTest {
             successResult(),
         )
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope)
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, {})
 
         queue.enqueue(delivery())
         runCurrent()
@@ -140,6 +144,7 @@ class IndexWebhookDeliveryQueueTest {
             repository,
             firstSender::send,
             firstScope,
+            {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
         firstQueue.enqueue(delivery())
@@ -153,6 +158,7 @@ class IndexWebhookDeliveryQueueTest {
             repository,
             secondSender::send,
             secondScope,
+            {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
         secondQueue.resumePendingDeliveries()
@@ -168,7 +174,7 @@ class IndexWebhookDeliveryQueueTest {
         val repository = InMemoryDeliveryRepository()
         val sender = FakeSender(successResult())
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope)
+        val queue = IndexWebhookDeliveryQueue(repository, sender::send, queueScope, {})
 
         queue.enqueue(delivery())
         runCurrent()
@@ -199,6 +205,7 @@ class IndexWebhookDeliveryQueueTest {
             repository,
             sender::send,
             queueScope,
+            {},
             now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
         )
 
@@ -211,6 +218,32 @@ class IndexWebhookDeliveryQueueTest {
         advanceTimeBy(1.minutes)
         runCurrent()
         assertEquals(2, sender.sentCount)
+        queueScope.cancel()
+    }
+
+    @Test
+    fun preparesNewDeliveryWhileEarlierSendIsBlocked() = runTest {
+        val repository = InMemoryDeliveryRepository()
+        val releaseFirstSend = CompletableDeferred<Unit>()
+        val prepared = mutableListOf<String>()
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(
+            repository = repository,
+            send = {
+                if (it.deliveryId == "recording-1") releaseFirstSend.await()
+                successResult()
+            },
+            scope = queueScope,
+            prepare = { prepared += it.deliveryId },
+        )
+
+        queue.enqueue(delivery())
+        runCurrent()
+        queue.enqueue(delivery().copy(deliveryId = "recording-2", fileId = "recording-2"))
+
+        assertEquals(listOf("recording-1", "recording-2"), prepared)
+        releaseFirstSend.complete(Unit)
+        advanceUntilIdle()
         queueScope.cancel()
     }
 

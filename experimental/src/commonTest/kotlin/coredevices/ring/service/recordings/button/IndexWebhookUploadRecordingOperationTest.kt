@@ -5,9 +5,13 @@ import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,14 +24,30 @@ import kotlin.test.assertTrue
 class IndexWebhookUploadRecordingOperationTest {
 
     @Test
-    fun recordingOnlySendsWithoutWaitingForTranscription() = runTest {
+    fun recordingOnlyPreparesWithoutBlockingTranscription() = runTest {
         val deliveries = mutableListOf<IndexWebhookDelivery>()
-        val inner = FakeTranscribingOp(transcript = "spoken") {
-            assertEquals(1, deliveries.size)
-        }
-        buildDecorator(deliveries, IndexWebhookPayloadMode.RecordingOnly, inner, fileId = "rec-1", recordingId = 1)
-            .run(null)
-        // Decorator sent without attaching the transcription hook: it did not wait.
+        val releasePreparation = CompletableDeferred<Unit>()
+        var innerRan = false
+        val inner = FakeTranscribingOp(transcript = "spoken") { innerRan = true }
+        val operation = buildDecorator(
+            deliveries,
+            IndexWebhookPayloadMode.RecordingOnly,
+            inner,
+            fileId = "rec-1",
+            recordingId = 1,
+            enqueue = {
+                releasePreparation.await()
+                deliveries += it
+            },
+        )
+
+        val job = launch { operation.run(null) }
+        testScheduler.runCurrent()
+        assertTrue(innerRan)
+        assertFalse(job.isCompleted)
+        releasePreparation.complete(Unit)
+        job.join()
+
         assertFalse(inner.hookPresentAtRun)
         assertEquals(1, deliveries.size)
         assertEquals("rec-1", deliveries.single().fileId)
@@ -106,7 +126,7 @@ class IndexWebhookUploadRecordingOperationTest {
         assertEquals("typed note", deliveries.single().transcription)
     }
 
-    private fun buildDecorator(
+    private fun TestScope.buildDecorator(
         deliveries: MutableList<IndexWebhookDelivery>,
         mode: IndexWebhookPayloadMode,
         decorated: RecordingOperation,
@@ -127,6 +147,7 @@ class IndexWebhookUploadRecordingOperationTest {
             fileId = fileId,
             recordingId = recordingId,
             gesture = RingGesture.Hold,
+            backgroundScope = RecordingBackgroundScope(backgroundScope),
         )
     }
 }

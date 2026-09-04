@@ -86,32 +86,28 @@ class IndexWebhookApiImpl(
     suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val started = TimeSource.Monotonic.markNow()
         val result = try {
-            val audioData = delivery.audioData ?: delivery.fileId?.let {
-                val audioData = prepareAudio(it)
-                deliveryRepository.setAudioData(delivery.id, audioData)
-                audioData
-            }
-            val signingSecret = if (delivery.signRequests) {
+            val prepared = prepare(delivery)
+            val signingSecret = if (prepared.signRequests) {
                 try {
-                    signingSecretStorage.get(delivery.gesture)
+                    signingSecretStorage.get(prepared.gesture)
                 } catch (e: Exception) {
                     logger.e(e) { "Could not read webhook signing secret" }
                     null
                 }
             } else null
             post(
-                url = delivery.url,
-                headers = delivery.headers,
-                signRequests = delivery.signRequests,
+                url = prepared.url,
+                headers = prepared.headers,
+                signRequests = prepared.signRequests,
                 signingSecret = signingSecret,
-                triggerValue = delivery.gesture.webhookTriggerValue,
-                audioData = audioData,
-                filename = audioData?.let { "${delivery.deliveryId}.m4a" },
-                transcription = delivery.transcription,
-                recordedAt = localRecordingDao.getRecording(delivery.recordingId)?.localTimestamp
-                    ?: delivery.created,
+                triggerValue = prepared.gesture.webhookTriggerValue,
+                audioData = prepared.audioData,
+                filename = prepared.audioData?.let { "${prepared.deliveryId}.m4a" },
+                transcription = prepared.transcription,
+                recordedAt = localRecordingDao.getRecording(prepared.recordingId)?.localTimestamp
+                    ?: prepared.created,
                 isTest = false,
-                deliveryId = delivery.deliveryId,
+                deliveryId = prepared.deliveryId,
             )
         } catch (e: CancellationException) {
             throw e
@@ -139,7 +135,14 @@ class IndexWebhookApiImpl(
         return result
     }
 
-    private suspend fun prepareAudio(fileId: String): ByteArray {
+    suspend fun prepare(delivery: IndexWebhookDelivery): IndexWebhookDelivery {
+        if (delivery.fileId == null || delivery.audioData != null) return delivery
+        val audioData = encodeAudio(delivery.fileId)
+        deliveryRepository.setAudioData(delivery.id, audioData)
+        return delivery.copy(audioData = audioData)
+    }
+
+    private suspend fun encodeAudio(fileId: String): ByteArray {
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
         val samples = ShortArray((meta.size / 2).toInt())
         source.buffered().use {
