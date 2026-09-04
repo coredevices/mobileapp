@@ -86,6 +86,17 @@ class IndexWebhookRunRepositoryTest {
     }
 
     @Test
+    fun settingsWriteFailureDoesNotEscape() = runTest {
+        val store = object : Settings by MapSettings() {
+            override fun putString(key: String, value: String) = error("write failed")
+        }
+
+        IndexWebhookRunRepository(store).record(
+            RingGesture.Hold, true, "200 OK", "delivered", 1, 1,
+        )
+    }
+
+    @Test
     fun runsSurviveANewRepositoryOverTheSameSettings() = runTest {
         repeat(3) { record(RingGesture.Hold, it) }
 
