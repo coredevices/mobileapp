@@ -27,6 +27,7 @@ data class IndexWebhookDelivery(
     val headers: Map<String, String>,
     val signRequests: Boolean = false,
     val fileId: String?,
+    val audioData: ByteArray? = null,
     val transcription: String?,
     val recordingId: Long,
 )
@@ -37,6 +38,7 @@ interface IndexWebhookDeliveryRepository {
     suspend fun insert(delivery: IndexWebhookDelivery): Long
     suspend fun getPendingIds(): List<Long>
     suspend fun getById(id: Long): IndexWebhookDelivery?
+    suspend fun setAudioData(id: Long, audioData: ByteArray)
     suspend fun setStatus(id: Long, status: TaskStatus)
     suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant)
     suspend fun resetForRetry(deliveryId: String): Long?

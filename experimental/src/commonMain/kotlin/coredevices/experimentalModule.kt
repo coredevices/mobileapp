@@ -229,6 +229,7 @@ val experimentalModule = module {
             get(),
             get(),
             get(),
+            get(),
         )
     } bind IndexWebhookApi::class
 
