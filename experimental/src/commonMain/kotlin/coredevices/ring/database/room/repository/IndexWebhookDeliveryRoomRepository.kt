@@ -36,8 +36,8 @@ class IndexWebhookDeliveryRoomRepository(
         }
     }
 
-    override suspend fun setAudioData(id: Long, audioData: ByteArray) {
-        dao.setAudioData(id, audioData)
+    override suspend fun setPayload(id: Long, audioData: ByteArray?, recordedAt: Instant) {
+        dao.setPayload(id, audioData, recordedAt)
     }
 
     override suspend fun setStatus(id: Long, status: TaskStatus) {
@@ -65,6 +65,7 @@ class IndexWebhookDeliveryRoomRepository(
     private fun IndexWebhookDelivery.toEntity() = IndexWebhookDeliveryEntity(
         id = id,
         created = created,
+        recordedAt = recordedAt,
         status = status,
         attempts = attempts,
         nextAttemptAt = nextAttemptAt,
@@ -81,6 +82,7 @@ class IndexWebhookDeliveryRoomRepository(
     private fun IndexWebhookDeliveryEntity.toDomain() = IndexWebhookDelivery(
         id = id,
         created = created,
+        recordedAt = recordedAt,
         status = status,
         attempts = attempts,
         nextAttemptAt = nextAttemptAt,

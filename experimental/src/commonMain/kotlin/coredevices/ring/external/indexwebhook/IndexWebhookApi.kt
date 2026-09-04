@@ -89,8 +89,7 @@ class IndexWebhookApiImpl(
                 audioData = prepared.audioData,
                 filename = prepared.audioData?.let { "${prepared.deliveryId}.m4a" },
                 transcription = prepared.transcription,
-                recordedAt = localRecordingDao.getRecording(prepared.recordingId)?.localTimestamp
-                    ?: prepared.created,
+                recordedAt = checkNotNull(prepared.recordedAt),
                 isTest = false,
                 deliveryId = prepared.deliveryId,
             )
@@ -121,10 +120,13 @@ class IndexWebhookApiImpl(
     }
 
     suspend fun persistPayload(delivery: IndexWebhookDelivery): IndexWebhookDelivery {
-        if (delivery.fileId == null || delivery.audioData != null) return delivery
-        val audioData = encodeAudio(delivery.fileId)
-        deliveryRepository.setAudioData(delivery.id, audioData)
-        return delivery.copy(audioData = audioData)
+        if (delivery.recordedAt != null && (delivery.fileId == null || delivery.audioData != null)) return delivery
+        val recordedAt = delivery.recordedAt
+            ?: localRecordingDao.getRecording(delivery.recordingId)?.localTimestamp
+            ?: delivery.created
+        val audioData = delivery.audioData ?: delivery.fileId?.let { encodeAudio(it) }
+        deliveryRepository.setPayload(delivery.id, audioData, recordedAt)
+        return delivery.copy(audioData = audioData, recordedAt = recordedAt)
     }
 
     private suspend fun encodeAudio(fileId: String): ByteArray {

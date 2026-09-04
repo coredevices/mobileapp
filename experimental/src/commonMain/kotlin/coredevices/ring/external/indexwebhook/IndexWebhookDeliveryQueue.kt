@@ -20,6 +20,7 @@ import kotlin.time.Instant
 data class IndexWebhookDelivery(
     val id: Long = 0,
     val created: Instant = Clock.System.now(),
+    val recordedAt: Instant? = null,
     val status: TaskStatus = TaskStatus.Pending,
     val attempts: Int = 0,
     val nextAttemptAt: Instant? = null,
@@ -39,7 +40,7 @@ interface IndexWebhookDeliveryRepository {
     suspend fun insert(delivery: IndexWebhookDelivery): Long
     suspend fun getPendingIds(): List<Long>
     suspend fun getById(id: Long): IndexWebhookDelivery?
-    suspend fun setAudioData(id: Long, audioData: ByteArray)
+    suspend fun setPayload(id: Long, audioData: ByteArray?, recordedAt: Instant)
     suspend fun setStatus(id: Long, status: TaskStatus)
     suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant)
     suspend fun resetForRetry(deliveryId: String): Long?

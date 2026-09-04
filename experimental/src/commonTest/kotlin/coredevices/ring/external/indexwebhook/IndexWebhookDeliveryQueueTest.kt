@@ -216,15 +216,21 @@ class IndexWebhookDeliveryQueueTest {
         val repository = InMemoryDeliveryRepository()
         val releaseFirstSend = CompletableDeferred<Unit>()
         val prepared = mutableListOf<String>()
+        val sentRecordedAt = mutableListOf<Instant?>()
+        val recordedAt = Instant.fromEpochMilliseconds(123)
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val queue = IndexWebhookDeliveryQueue(
             repository = repository,
             send = {
+                sentRecordedAt += it.recordedAt
                 if (it.deliveryId == "recording-1") releaseFirstSend.await()
                 successResult()
             },
             scope = queueScope,
-            persistPayload = { prepared += it.deliveryId },
+            persistPayload = {
+                prepared += it.deliveryId
+                repository.setPayload(it.id, it.audioData, recordedAt)
+            },
         )
 
         queue.enqueue(delivery())
@@ -234,6 +240,7 @@ class IndexWebhookDeliveryQueueTest {
         assertEquals(listOf("recording-1", "recording-2"), prepared)
         releaseFirstSend.complete(Unit)
         advanceUntilIdle()
+        assertEquals(listOf<Instant?>(recordedAt, recordedAt), sentRecordedAt)
         queueScope.cancel()
     }
 
@@ -342,8 +349,8 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = deliveries[id]
 
-    override suspend fun setAudioData(id: Long, audioData: ByteArray) {
-        deliveries.computeIfPresent(id) { _, task -> task.copy(audioData = audioData) }
+    override suspend fun setPayload(id: Long, audioData: ByteArray?, recordedAt: Instant) {
+        deliveries.computeIfPresent(id) { _, task -> task.copy(audioData = audioData, recordedAt = recordedAt) }
     }
 
     override suspend fun resetForRetry(deliveryId: String): Long? {
