@@ -171,6 +171,29 @@ class IndexWebhookDeliveryQueueTest {
     }
 
     @Test
+    fun retryableFailuresStopAfterTheAttemptLimit() = runTest {
+        val repository = InMemoryDeliveryRepository()
+        var sentCount = 0
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+        val queue = IndexWebhookDeliveryQueue(
+            repository,
+            send = {
+                sentCount += 1
+                IndexWebhookRunResult(false, "503 ERROR", "unavailable", 12, 1, retryable = true)
+            },
+            scope = queueScope,
+            now = { Instant.fromEpochMilliseconds(testScheduler.currentTime) },
+        )
+
+        queue.enqueue(delivery())
+        advanceUntilIdle()
+
+        assertEquals(MAX_WEBHOOK_DELIVERY_ATTEMPTS, sentCount)
+        assertEquals(TaskStatus.Failed, repository.single().status)
+        queueScope.cancel()
+    }
+
+    @Test
     fun manualRetryReusesAPermanentlyFailedDelivery() = runTest {
         val repository = InMemoryDeliveryRepository()
         val sender = FakeSender(

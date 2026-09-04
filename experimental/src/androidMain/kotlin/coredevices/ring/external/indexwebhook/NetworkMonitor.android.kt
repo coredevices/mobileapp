@@ -29,7 +29,5 @@ class AndroidNetworkMonitor(context: Context) : NetworkMonitor {
         _state.update { it.withAvailability(available) }
     }
 
-    private fun isAvailable(): Boolean = connectivityManager.activeNetwork
-        ?.let(connectivityManager::getNetworkCapabilities)
-        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    private fun isAvailable(): Boolean = connectivityManager.activeNetwork != null
 }

@@ -72,7 +72,10 @@ class IndexWebhookRunRepository(private val settings: Settings) {
             canRetry = canRetry,
         )
         mutex.withLock {
-            val updated = (listOf(run) + _runs.value[gesture].orEmpty())
+            val previousRuns = _runs.value[gesture].orEmpty().map {
+                if (deliveryId != null && it.deliveryId == deliveryId) it.copy(canRetry = false) else it
+            }
+            val updated = (listOf(run) + previousRuns)
                 .sortedByDescending { it.timestampMs }
                 .take(MAX_RUNS_PER_GESTURE)
             settings.putString(runsKey(gesture), json.encodeToString(serializer, updated))

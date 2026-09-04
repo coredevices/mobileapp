@@ -33,6 +33,16 @@ class IndexWebhookRetryPolicyTest {
     }
 
     @Test
+    fun offersManualRetryForPermanentOrExhaustedFailures() {
+        val permanent = IndexWebhookRunResult(false, "400", "bad request", 0, 0)
+        val transient = permanent.copy(status = "503", retryable = true)
+
+        assertTrue(permanent.shouldOfferManualRetry(0))
+        assertFalse(transient.shouldOfferManualRetry(0))
+        assertTrue(transient.shouldOfferManualRetry(MAX_WEBHOOK_DELIVERY_ATTEMPTS - 1))
+    }
+
+    @Test
     fun exponentialBackoffCapsAtOneHourAndHonorsRetryAfter() {
         assertEquals(1.minutes, webhookRetryDelay(0, null, Duration.ZERO))
         assertEquals(8.minutes, webhookRetryDelay(3, null, Duration.ZERO))
