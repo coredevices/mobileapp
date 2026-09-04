@@ -222,10 +222,12 @@ val experimentalModule = module {
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single {
+        val api = get<IndexWebhookApiImpl>()
         IndexWebhookDeliveryQueue(
             get(),
-            get<IndexWebhookApiImpl>()::send,
+            api::send,
             get<RecordingBackgroundScope>(),
+            { api.prepare(it) },
         )
     }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }

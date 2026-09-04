@@ -81,22 +81,18 @@ class IndexWebhookApiImpl(
     suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val started = TimeSource.Monotonic.markNow()
         val result = try {
-            val audioData = delivery.audioData ?: delivery.fileId?.let {
-                val audioData = prepareAudio(it)
-                deliveryRepository.setAudioData(delivery.id, audioData)
-                audioData
-            }
+            val prepared = prepare(delivery)
             post(
-                url = delivery.url,
-                headers = delivery.headers,
-                triggerValue = delivery.gesture.webhookTriggerValue,
-                audioData = audioData,
-                filename = audioData?.let { "${delivery.deliveryId}.m4a" },
-                transcription = delivery.transcription,
-                recordedAt = localRecordingDao.getRecording(delivery.recordingId)?.localTimestamp
-                    ?: delivery.created,
+                url = prepared.url,
+                headers = prepared.headers,
+                triggerValue = prepared.gesture.webhookTriggerValue,
+                audioData = prepared.audioData,
+                filename = prepared.audioData?.let { "${prepared.deliveryId}.m4a" },
+                transcription = prepared.transcription,
+                recordedAt = localRecordingDao.getRecording(prepared.recordingId)?.localTimestamp
+                    ?: prepared.created,
                 isTest = false,
-                deliveryId = delivery.deliveryId,
+                deliveryId = prepared.deliveryId,
             )
         } catch (e: CancellationException) {
             throw e
@@ -124,7 +120,14 @@ class IndexWebhookApiImpl(
         return result
     }
 
-    private suspend fun prepareAudio(fileId: String): ByteArray {
+    suspend fun prepare(delivery: IndexWebhookDelivery): IndexWebhookDelivery {
+        if (delivery.fileId == null || delivery.audioData != null) return delivery
+        val audioData = encodeAudio(delivery.fileId)
+        deliveryRepository.setAudioData(delivery.id, audioData)
+        return delivery.copy(audioData = audioData)
+    }
+
+    private suspend fun encodeAudio(fileId: String): ByteArray {
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
         val samples = ShortArray((meta.size / 2).toInt())
         source.buffered().use {

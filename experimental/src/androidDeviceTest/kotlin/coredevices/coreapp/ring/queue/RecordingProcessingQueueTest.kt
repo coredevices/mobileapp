@@ -273,6 +273,7 @@ class RecordingProcessingQueueTest {
                 get(),
                 { delivery -> api.sendTestEvent(delivery.gesture, delivery.url, delivery.headers) },
                 get<RecordingBackgroundScope>(),
+                {},
             )
         }
 

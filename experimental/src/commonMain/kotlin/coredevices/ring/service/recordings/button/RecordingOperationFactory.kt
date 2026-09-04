@@ -13,6 +13,7 @@ import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
 import coredevices.ring.service.ButtonPress
+import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
@@ -31,6 +32,7 @@ class RecordingOperationFactory(
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
+    private val recordingBackgroundScope: RecordingBackgroundScope,
 ) {
     suspend fun createForButtonSequence(
         recordingId: Long,
@@ -81,6 +83,7 @@ class RecordingOperationFactory(
             recordingId = recordingId,
             gesture = gesture,
             decorated = decorated,
+            backgroundScope = recordingBackgroundScope,
         )
     }
 

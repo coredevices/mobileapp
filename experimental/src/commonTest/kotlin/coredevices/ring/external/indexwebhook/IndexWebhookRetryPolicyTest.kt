@@ -43,11 +43,11 @@ class IndexWebhookRetryPolicyTest {
     }
 
     @Test
-    fun exponentialBackoffCapsAtOneHourAndHonorsRetryAfter() {
+    fun exponentialBackoffAndRetryAfterCapAtOneHour() {
         assertEquals(1.minutes, webhookRetryDelay(0, null, Duration.ZERO))
         assertEquals(8.minutes, webhookRetryDelay(3, null, Duration.ZERO))
         assertEquals(1.hours, webhookRetryDelay(20, null, Duration.ZERO))
-        assertEquals(2.hours, webhookRetryDelay(0, 2.hours, Duration.ZERO))
+        assertEquals(1.hours, webhookRetryDelay(0, 2.hours, Duration.ZERO))
     }
 
     @Test

@@ -113,7 +113,7 @@ def receive():
 
 - Network delivery is async and does not re-run transcription or agent processing
 - Recording deliveries are persisted before sending and resume after an app restart
-- Network failures, HTTP 408/425/429 responses, and 5xx responses retry up to 10 attempts with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor a longer `Retry-After`
+- Network failures, HTTP 408/425/429 responses, and 5xx responses retry up to 10 attempts with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor `Retry-After` values up to one hour
 - Other HTTP failures remain available through **Retry** in **Recent runs**
 - Failed payloads are retained for the 20 recent runs per gesture; older failures are deleted
 - Successful deliveries keep only their delivery ID for deduplication; queued payload data is removed from the phone

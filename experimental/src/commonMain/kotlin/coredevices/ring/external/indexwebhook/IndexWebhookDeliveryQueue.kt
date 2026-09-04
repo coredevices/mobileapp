@@ -47,6 +47,7 @@ class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
     private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
+    private val prepare: suspend (IndexWebhookDelivery) -> Unit,
     private val now: () -> Instant = Clock.System::now,
 ) {
     private val tasks = Channel<Long>(Channel.UNLIMITED)
@@ -57,7 +58,14 @@ class IndexWebhookDeliveryQueue(
     }
 
     suspend fun enqueue(delivery: IndexWebhookDelivery) {
-        tasks.send(repository.insert(delivery))
+        val id = repository.insert(delivery)
+        val stored = repository.getById(id) ?: return
+        if (stored.status != TaskStatus.Pending) return
+        try {
+            prepare(stored)
+        } finally {
+            tasks.send(id)
+        }
     }
 
     suspend fun retry(deliveryId: String): Boolean {
@@ -124,5 +132,5 @@ internal fun webhookRetryDelay(
     jitter: Duration = Random.nextLong(30_001).milliseconds,
 ): Duration {
     val backoff = (1.minutes * (1 shl attempts.coerceIn(0, 6))).coerceAtMost(1.hours)
-    return maxOf(backoff + jitter, retryAfter ?: Duration.ZERO)
+    return maxOf(backoff + jitter, retryAfter?.coerceAtMost(1.hours) ?: Duration.ZERO)
 }
