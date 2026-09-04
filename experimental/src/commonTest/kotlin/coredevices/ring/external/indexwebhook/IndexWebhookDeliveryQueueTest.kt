@@ -277,6 +277,10 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = deliveries[id]
 
+    override suspend fun setAudioData(id: Long, audioData: ByteArray) {
+        deliveries.computeIfPresent(id) { _, task -> task.copy(audioData = audioData) }
+    }
+
     override suspend fun resetForRetry(deliveryId: String): Long? {
         val task = deliveries.values.firstOrNull { it.deliveryId == deliveryId } ?: return null
         if (task.status != TaskStatus.Failed) return null

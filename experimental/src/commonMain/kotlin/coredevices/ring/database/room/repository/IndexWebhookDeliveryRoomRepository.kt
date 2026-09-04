@@ -27,6 +27,10 @@ class IndexWebhookDeliveryRoomRepository(
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = dao.getById(id)?.toDomain()
 
+    override suspend fun setAudioData(id: Long, audioData: ByteArray) {
+        dao.setAudioData(id, audioData)
+    }
+
     override suspend fun setStatus(id: Long, status: TaskStatus) {
         if (status == TaskStatus.Success) {
             dao.markSuccessAndClearPayload(id)
@@ -59,6 +63,7 @@ class IndexWebhookDeliveryRoomRepository(
         url = url,
         headersJson = Json.encodeToString(headerSerializer, headers),
         fileId = fileId,
+        audioData = audioData,
         transcription = transcription,
         recordingId = recordingId,
     )
@@ -74,6 +79,7 @@ class IndexWebhookDeliveryRoomRepository(
         url = url,
         headers = Json.decodeFromString(headerSerializer, headersJson),
         fileId = fileId,
+        audioData = audioData,
         transcription = transcription,
         recordingId = recordingId,
     )

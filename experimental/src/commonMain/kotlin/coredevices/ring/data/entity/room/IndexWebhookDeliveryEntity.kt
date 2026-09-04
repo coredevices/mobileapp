@@ -24,6 +24,7 @@ data class IndexWebhookDeliveryEntity(
     val url: String,
     val headersJson: String,
     val fileId: String?,
+    val audioData: ByteArray?,
     val transcription: String?,
     val recordingId: Long,
 )

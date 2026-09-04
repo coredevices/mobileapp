@@ -28,6 +28,9 @@ interface IndexWebhookDeliveryDao {
     @Query("UPDATE IndexWebhookDeliveryEntity SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: TaskStatus)
 
+    @Query("UPDATE IndexWebhookDeliveryEntity SET audioData = :audioData WHERE id = :id")
+    suspend fun setAudioData(id: Long, audioData: ByteArray)
+
     @Query(
         "UPDATE IndexWebhookDeliveryEntity " +
             "SET attempts = attempts + 1, nextAttemptAt = :nextAttemptAt WHERE id = :id",
@@ -36,7 +39,7 @@ interface IndexWebhookDeliveryDao {
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity SET status = 'Success', nextAttemptAt = NULL, " +
-            "url = '', headersJson = '{}', fileId = NULL, transcription = NULL " +
+            "url = '', headersJson = '{}', fileId = NULL, audioData = NULL, transcription = NULL " +
             "WHERE id = :id",
     )
     suspend fun markSuccessAndClearPayload(id: Long)

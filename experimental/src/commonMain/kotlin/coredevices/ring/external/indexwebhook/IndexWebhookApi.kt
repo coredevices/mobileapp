@@ -71,6 +71,7 @@ class IndexWebhookApiImpl(
     private val recordingStorage: RecordingStorage,
     private val localRecordingDao: LocalRecordingDao,
     private val runRepository: IndexWebhookRunRepository,
+    private val deliveryRepository: IndexWebhookDeliveryRepository,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
@@ -80,13 +81,10 @@ class IndexWebhookApiImpl(
     suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
         val started = TimeSource.Monotonic.markNow()
         val result = try {
-            val audioData = delivery.fileId?.let { fileId ->
-                val (source, meta) = recordingStorage.openRecordingSource(fileId)
-                val samples = ShortArray((meta.size / 2).toInt())
-                source.buffered().use {
-                    for (i in samples.indices) samples[i] = it.readShortLe()
-                }
-                m4aEncoder.encode(samples, meta.cachedMetadata.sampleRate)
+            val audioData = delivery.audioData ?: delivery.fileId?.let {
+                val audioData = prepareAudio(it)
+                deliveryRepository.setAudioData(delivery.id, audioData)
+                audioData
             }
             post(
                 url = delivery.url,
@@ -124,6 +122,15 @@ class IndexWebhookApiImpl(
             canRetry = result.shouldOfferManualRetry(delivery.attempts),
         )
         return result
+    }
+
+    private suspend fun prepareAudio(fileId: String): ByteArray {
+        val (source, meta) = recordingStorage.openRecordingSource(fileId)
+        val samples = ShortArray((meta.size / 2).toInt())
+        source.buffered().use {
+            for (i in samples.indices) samples[i] = it.readShortLe()
+        }
+        return m4aEncoder.encode(samples, meta.cachedMetadata.sampleRate)
     }
 
     override suspend fun sendTestEvent(

@@ -218,7 +218,7 @@ val experimentalModule = module {
     singleOf(::IndexWebhookRunRepository)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
-    single { IndexWebhookApiImpl(get(), get(), get(), get(), get()) } bind IndexWebhookApi::class
+    single { IndexWebhookApiImpl(get(), get(), get(), get(), get(), get()) } bind IndexWebhookApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single {
