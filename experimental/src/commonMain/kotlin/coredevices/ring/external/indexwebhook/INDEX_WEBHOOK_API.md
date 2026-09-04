@@ -207,5 +207,6 @@ The in-memory replay cache above is only illustrative. A production service shou
 - Recording deliveries are persisted before sending and resume after an app restart
 - Network failures, HTTP 408/425/429 responses, and 5xx responses retry with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor a longer `Retry-After`
 - Other HTTP failures remain available through **Retry** in **Recent runs**
+- Failed payloads are retained for the 20 recent runs per gesture; older failures are deleted
 - Successful deliveries keep only their delivery ID for deduplication; queued payload data is removed from the phone
 - Audio is the same 16kHz resampled version used for transcription

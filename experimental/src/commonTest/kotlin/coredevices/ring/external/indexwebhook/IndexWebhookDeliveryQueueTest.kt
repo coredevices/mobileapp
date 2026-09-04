@@ -340,7 +340,9 @@ private class InMemoryDeliveryRepository : IndexWebhookDeliveryRepository {
         return id
     }
 
-    override suspend fun getPending() = deliveries.values.filter { it.status == TaskStatus.Pending }
+    override suspend fun getPendingIds() = deliveries.values
+        .filter { it.status == TaskStatus.Pending }
+        .map { it.id }
 
     override suspend fun setStatus(id: Long, status: TaskStatus) {
         deliveries.computeIfPresent(id) { _, task -> task.copy(status = status) }

@@ -2,10 +2,7 @@ package coredevices.ring.service.recordings.button
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.database.dao.LocalRecordingDao
-import coredevices.indexai.database.dao.RecordingEntryDao
-import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
-import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.button.RingGesture
@@ -20,12 +17,15 @@ import kotlin.time.Clock
 /**
  * Decorator that uploads recording data to a user-configured webhook endpoint.
  *
- * after the inner operation (transcription + agent processing) completes.
+ * RecordingOnly payloads send at operation start (the audio is already on disk).
+ * Transcript-bearing payloads send once the inner operation persists the transcript,
+ * concurrently with agent processing. Operations with no transcript hook send after
+ * the inner operation completes.
  */
 class IndexWebhookUploadRecordingOperation(
-    private val webhookQueue: IndexWebhookDeliveryQueue,
+    private val enqueue: suspend (IndexWebhookDelivery) -> Unit,
     private val webhookPreferences: IndexWebhookPreferences,
-    private val m4aEncoder: M4aEncoder,
+    private val encodeM4a: suspend (ShortArray, Int) -> ByteArray,
     private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String?,
@@ -37,19 +37,40 @@ class IndexWebhookUploadRecordingOperation(
         private val logger = Logger.withTag("IndexWebhookUploadRecordingOperation")
     }
 
-    private val recordingEntryDao: RecordingEntryDao by inject()
     private val localRecordingDao: LocalRecordingDao by inject()
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
-        // Run the inner operation first (transcription + agent processing)
+        // One mode snapshot drives the whole delivery, so a mid-operation settings
+        // change can't split the payload across incompatible modes.
+        val payloadMode = webhookPreferences.configFor(gesture).payloadMode
+        val decoratedWillSend = when {
+            // Audio is already on disk and no transcript is in the payload, so send now.
+            fileId != null && payloadMode == IndexWebhookPayloadMode.RecordingOnly -> {
+                sendWebhook(payloadMode, transcription = null)
+                true
+            }
+            // Send from the transcript hook, carrying the exact persisted transcript.
+            decorated is TranscribingRecordingOperation -> {
+                decorated.onTranscriptionPersisted = { transcription -> sendWebhook(payloadMode, transcription) }
+                true
+            }
+            else -> false
+        }
         decorated.run(handle)
+        if (!decoratedWillSend) {
+            try {
+                sendWebhook(payloadMode, transcription = null)
+            } catch (e: Exception) {
+                logger.e(e) { "Webhook send failed" }
+            }
+        }
+    }
 
+    private suspend fun sendWebhook(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
         val sendKey = fileId ?: "text-$recordingId"
         val config = webhookPreferences.configFor(gesture)
         val url = config.url
         if (!config.isActive || url == null) return
-        val payloadMode = config.payloadMode
-        // Typed input has no audio, so a recording-only webhook has nothing to deliver.
         if (fileId == null && payloadMode == IndexWebhookPayloadMode.RecordingOnly) return
 
         // Read audio samples if needed
@@ -69,15 +90,15 @@ class IndexWebhookUploadRecordingOperation(
             sampleRate = 16000
         }
 
-        val transcription = if (payloadMode != IndexWebhookPayloadMode.RecordingOnly) {
-            recordingEntryDao.getMostRecentEntryForRecording(recordingId)?.transcription
+        val transcriptionToSend = if (payloadMode != IndexWebhookPayloadMode.RecordingOnly) {
+            transcription
         } else null
 
         val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
             ?: Clock.System.now()
 
-        val audioData = samples?.let { m4aEncoder.encode(it, sampleRate) }
-        webhookQueue.enqueue(
+        val audioData = samples?.let { encodeM4a(it, sampleRate) }
+        enqueue(
             IndexWebhookDelivery(
                 deliveryId = sendKey,
                 gesture = gesture,
@@ -86,7 +107,7 @@ class IndexWebhookUploadRecordingOperation(
                 signRequests = config.signRequests,
                 audioData = audioData,
                 filename = audioData?.let { "$sendKey.m4a" },
-                transcription = transcription,
+                transcription = transcriptionToSend,
                 recordedAt = recordedAt,
             )
         )

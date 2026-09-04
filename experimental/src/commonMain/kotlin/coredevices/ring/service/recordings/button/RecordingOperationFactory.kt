@@ -79,9 +79,9 @@ class RecordingOperationFactory(
             inner
         }
         return IndexWebhookUploadRecordingOperation(
-            webhookQueue = indexWebhookQueue,
+            enqueue = indexWebhookQueue::enqueue,
             webhookPreferences = indexWebhookPreferences,
-            m4aEncoder = m4aEncoder,
+            encodeM4a = m4aEncoder::encode,
             recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,

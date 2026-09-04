@@ -37,7 +37,7 @@ data class IndexWebhookDelivery(
 
 interface IndexWebhookDeliveryRepository {
     suspend fun insert(delivery: IndexWebhookDelivery): Long
-    suspend fun getPending(): List<IndexWebhookDelivery>
+    suspend fun getPendingIds(): List<Long>
     suspend fun getById(id: Long): IndexWebhookDelivery?
     suspend fun setStatus(id: Long, status: TaskStatus)
     suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant)
@@ -70,7 +70,7 @@ class IndexWebhookDeliveryQueue(
 
     fun resumePendingDeliveries() {
         scope.launch {
-            repository.getPending().forEach { tasks.send(it.id) }
+            repository.getPendingIds().forEach { tasks.send(it) }
         }
     }
 

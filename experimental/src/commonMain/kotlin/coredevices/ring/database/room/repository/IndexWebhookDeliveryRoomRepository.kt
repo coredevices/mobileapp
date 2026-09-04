@@ -4,6 +4,7 @@ import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.queue.TaskStatus
 import kotlinx.serialization.builtins.MapSerializer
@@ -22,8 +23,7 @@ class IndexWebhookDeliveryRoomRepository(
         return requireNotNull(dao.getByDeliveryId(delivery.deliveryId)).id
     }
 
-    override suspend fun getPending(): List<IndexWebhookDelivery> =
-        dao.getPending().map { it.toDomain() }
+    override suspend fun getPendingIds(): List<Long> = dao.getPendingIds()
 
     override suspend fun getById(id: Long): IndexWebhookDelivery? = dao.getById(id)?.toDomain()
 
@@ -31,7 +31,11 @@ class IndexWebhookDeliveryRoomRepository(
         if (status == TaskStatus.Success) {
             dao.markSuccessAndClearPayload(id)
         } else {
+            val gesture = if (status == TaskStatus.Failed) dao.getGesture(id) else null
             dao.setStatus(id, status)
+            if (gesture != null) {
+                dao.pruneFailed(gesture, IndexWebhookRunRepository.MAX_RUNS_PER_GESTURE)
+            }
         }
     }
 
