@@ -218,6 +218,24 @@ class NotificationAppsSyncTest {
         assertEquals(MuteState.Never, merged.channelGroups[0].channels[1].muteState)
     }
 
+    @Test
+    fun osSyncMerge_emptyOsChannelsKeepsExistingChannels() {
+        // getChannelsForApp() returns empty when the notification listener isn't bound yet.
+        val existing = appItem("com.example", autoAdded = false).copy(
+            channelGroups = listOf(
+                ChannelGroup(
+                    id = "g", name = "Group", channels = listOf(
+                        ChannelItem(id = "a", name = "Chat", muteState = MuteState.Always),
+                    )
+                )
+            )
+        )
+
+        val merged = existing.mergedWithOsApp("Example", channels = emptyList(), isSystemApp = false)
+
+        assertEquals(existing.channelGroups, merged.channelGroups)
+    }
+
     private fun appItem(pkg: String, autoAdded: Boolean): NotificationAppItem =
         NotificationAppItem(
             packageName = pkg,

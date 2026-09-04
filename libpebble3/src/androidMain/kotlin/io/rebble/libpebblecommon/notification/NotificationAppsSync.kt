@@ -169,7 +169,10 @@ internal fun NotificationAppItem.mergedWithOsApp(
     isSystemApp: Boolean,
 ): NotificationAppItem = copy(
     name = name,
-    channelGroups = channels.map { group ->
+    // An empty list from the OS doesn't mean the app has no channels: getChannelsForApp() also
+    // returns empty whenever the notification listener isn't bound, which is the normal state for
+    // a while after a reboot or an Android user switch. Overwriting would wipe channel mutes.
+    channelGroups = if (channels.isEmpty()) channelGroups else channels.map { group ->
         group.copy(
             channels = group.channels.map { channel ->
                 channel.copy(muteState = carriedOverMuteState(group, channel))
