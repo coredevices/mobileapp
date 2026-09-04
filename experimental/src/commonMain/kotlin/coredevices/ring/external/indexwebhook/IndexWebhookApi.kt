@@ -2,8 +2,11 @@ package coredevices.ring.external.indexwebhook
 
 import co.touchlab.kermit.Logger
 import coredevices.api.ApiClient
+import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.ring.api.ApiConfig
+import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.service.button.RingGesture
+import coredevices.ring.storage.RecordingStorage
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -14,7 +17,9 @@ import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.fromHttpToGmtDate
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.io.buffered
 import kotlinx.io.IOException
+import kotlinx.io.readShortLe
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -40,7 +45,6 @@ data class IndexWebhookRunResult(
     val durationMs: Long,
     val retryable: Boolean = false,
     val retryAfter: Duration? = null,
-    val transportFailure: Boolean = false,
 )
 
 /** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
@@ -63,6 +67,9 @@ internal const val WEBHOOK_DELIVERY_HEADER = "X-Index-Delivery"
  */
 class IndexWebhookApiImpl(
     config: ApiConfig,
+    private val m4aEncoder: M4aEncoder,
+    private val recordingStorage: RecordingStorage,
+    private val localRecordingDao: LocalRecordingDao,
     private val runRepository: IndexWebhookRunRepository,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
@@ -71,17 +78,41 @@ class IndexWebhookApiImpl(
     }
 
     suspend fun send(delivery: IndexWebhookDelivery): IndexWebhookRunResult {
-        val result = post(
-            url = delivery.url,
-            headers = delivery.headers,
-            triggerValue = delivery.gesture.webhookTriggerValue,
-            audioData = delivery.audioData,
-            filename = delivery.filename,
-            transcription = delivery.transcription,
-            recordedAt = delivery.recordedAt,
-            isTest = false,
-            deliveryId = delivery.deliveryId,
-        )
+        val started = TimeSource.Monotonic.markNow()
+        val result = try {
+            val audioData = delivery.fileId?.let { fileId ->
+                val (source, meta) = recordingStorage.openRecordingSource(fileId)
+                val samples = ShortArray((meta.size / 2).toInt())
+                source.buffered().use {
+                    for (i in samples.indices) samples[i] = it.readShortLe()
+                }
+                m4aEncoder.encode(samples, meta.cachedMetadata.sampleRate)
+            }
+            post(
+                url = delivery.url,
+                headers = delivery.headers,
+                triggerValue = delivery.gesture.webhookTriggerValue,
+                audioData = audioData,
+                filename = audioData?.let { "${delivery.deliveryId}.m4a" },
+                transcription = delivery.transcription,
+                recordedAt = localRecordingDao.getRecording(delivery.recordingId)?.localTimestamp
+                    ?: delivery.created,
+                isTest = false,
+                deliveryId = delivery.deliveryId,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to prepare webhook" }
+            IndexWebhookRunResult(
+                ok = false,
+                status = "FAILED",
+                detail = e.message ?: "unknown error",
+                byteSize = 0,
+                durationMs = started.elapsedNow().inWholeMilliseconds,
+                retryable = e.isRetryableWebhookFailure(),
+            )
+        }
         runRepository.record(
             gesture = delivery.gesture,
             ok = result.ok,
@@ -196,7 +227,6 @@ class IndexWebhookApiImpl(
                 byteSize = bodyBytes.size.toLong(),
                 durationMs = started.elapsedNow().inWholeMilliseconds,
                 retryable = retryable,
-                transportFailure = retryable,
             )
         }
     }

@@ -40,7 +40,6 @@ import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -266,7 +265,6 @@ class RecordingProcessingQueueTest {
             }
         } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)
-        singleOf(::M4aEncoder)
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRoomRepository) bind IndexWebhookDeliveryRepository::class
         single {

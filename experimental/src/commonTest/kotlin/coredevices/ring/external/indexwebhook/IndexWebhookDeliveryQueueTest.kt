@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -24,113 +23,13 @@ import kotlin.time.Instant
 class IndexWebhookDeliveryQueueTest {
 
     @Test
-    fun networkStateCountsOnlyOutageStarts() {
-        val offline = NetworkState(true).withAvailability(false)
-        val stillOffline = offline.withAvailability(false)
-        val restored = stillOffline.withAvailability(true)
-
-        assertEquals(1, offline.outageCount)
-        assertEquals(1, stillOffline.outageCount)
-        assertEquals(1, restored.outageCount)
-    }
-
-    @Test
-    fun waitsForNetworkBeforeSending() = runTest {
+    fun exceptionUsesBackoff() = runTest {
         val repository = InMemoryDeliveryRepository()
-        val sender = FakeSender(successResult())
-        val networkState = MutableStateFlow(NetworkState(false))
         val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val queue = IndexWebhookDeliveryQueue(
             repository,
-            sender::send,
-            queueScope,
-            networkState = networkState,
-        )
-
-        queue.enqueue(delivery())
-        runCurrent()
-        assertEquals(0, sender.sentCount)
-
-        networkState.value = NetworkState(true)
-        runCurrent()
-        assertEquals(1, sender.sentCount)
-        assertEquals(TaskStatus.Success, repository.single().status)
-        queueScope.cancel()
-    }
-
-    @Test
-    fun briefNetworkLossDoesNotConsumeABackoffAttempt() = runTest {
-        val repository = InMemoryDeliveryRepository()
-        val networkState = MutableStateFlow(NetworkState(true))
-        var sentCount = 0
-        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(
-            repository,
-            send = {
-                sentCount += 1
-                if (sentCount == 1) {
-                    networkState.value = NetworkState(false, outageCount = 1)
-                    networkState.value = NetworkState(true, outageCount = 1)
-                    IndexWebhookRunResult(
-                        false,
-                        "FAILED",
-                        "offline",
-                        12,
-                        1,
-                        retryable = true,
-                        transportFailure = true,
-                    )
-                } else {
-                    successResult()
-                }
-            },
+            send = { error("send failed") },
             scope = queueScope,
-            networkState = networkState,
-        )
-
-        queue.enqueue(delivery())
-        runCurrent()
-        assertEquals(2, sentCount)
-        assertEquals(0, repository.single().attempts)
-        assertEquals(TaskStatus.Success, repository.single().status)
-        queueScope.cancel()
-    }
-
-    @Test
-    fun networkLossDoesNotTurnAPermanentHttpFailureIntoARetry() = runTest {
-        val repository = InMemoryDeliveryRepository()
-        val networkState = MutableStateFlow(NetworkState(true))
-        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(
-            repository,
-            send = {
-                networkState.value = NetworkState(false, outageCount = 1)
-                IndexWebhookRunResult(false, "401 ERROR", "unauthorized", 12, 1)
-            },
-            scope = queueScope,
-            networkState = networkState,
-        )
-
-        queue.enqueue(delivery())
-        runCurrent()
-
-        assertEquals(TaskStatus.Failed, repository.single().status)
-        queueScope.cancel()
-    }
-
-    @Test
-    fun exceptionAfterSendingStillUsesBackoff() = runTest {
-        val repository = InMemoryDeliveryRepository()
-        val networkState = MutableStateFlow(NetworkState(true))
-        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
-        val queue = IndexWebhookDeliveryQueue(
-            repository,
-            send = {
-                networkState.value = NetworkState(false, outageCount = 1)
-                error("recording the result failed")
-            },
-            scope = queueScope,
-            networkState = networkState,
         )
 
         queue.enqueue(delivery())
@@ -320,10 +219,9 @@ class IndexWebhookDeliveryQueueTest {
         gesture = RingGesture.Hold,
         url = "https://example.com/hook",
         headers = mapOf("Authorization" to "Bearer test"),
-        audioData = byteArrayOf(1, 2, 3),
-        filename = "recording-1.m4a",
+        fileId = "recording-1",
         transcription = "hello",
-        recordedAt = Instant.fromEpochMilliseconds(1_000),
+        recordingId = 1,
     )
 
     private fun successResult() = IndexWebhookRunResult(

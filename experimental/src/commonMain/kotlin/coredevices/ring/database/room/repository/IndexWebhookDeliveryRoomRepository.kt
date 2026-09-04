@@ -58,10 +58,9 @@ class IndexWebhookDeliveryRoomRepository(
         gesture = gesture.name,
         url = url,
         headersJson = Json.encodeToString(headerSerializer, headers),
-        audioData = audioData,
-        filename = filename,
+        fileId = fileId,
         transcription = transcription,
-        recordedAt = recordedAt,
+        recordingId = recordingId,
     )
 
     private fun IndexWebhookDeliveryEntity.toDomain() = IndexWebhookDelivery(
@@ -74,9 +73,8 @@ class IndexWebhookDeliveryRoomRepository(
         gesture = RingGesture.valueOf(gesture),
         url = url,
         headers = Json.decodeFromString(headerSerializer, headersJson),
-        audioData = audioData,
-        filename = filename,
+        fileId = fileId,
         transcription = transcription,
-        recordedAt = recordedAt,
+        recordingId = recordingId,
     )
 }

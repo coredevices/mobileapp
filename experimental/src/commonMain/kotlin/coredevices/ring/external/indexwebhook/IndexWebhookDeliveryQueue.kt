@@ -6,9 +6,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -28,10 +25,9 @@ data class IndexWebhookDelivery(
     val gesture: RingGesture,
     val url: String,
     val headers: Map<String, String>,
-    val audioData: ByteArray?,
-    val filename: String?,
+    val fileId: String?,
     val transcription: String?,
-    val recordedAt: Instant,
+    val recordingId: Long,
 )
 
 internal const val MAX_WEBHOOK_DELIVERY_ATTEMPTS = 10
@@ -50,7 +46,6 @@ class IndexWebhookDeliveryQueue(
     private val send: suspend (IndexWebhookDelivery) -> IndexWebhookRunResult,
     private val scope: CoroutineScope,
     private val now: () -> Instant = Clock.System::now,
-    private val networkState: StateFlow<NetworkState> = MutableStateFlow(NetworkState(true)),
 ) {
     private val tasks = Channel<Long>(Channel.UNLIMITED)
     init {
@@ -85,13 +80,10 @@ class IndexWebhookDeliveryQueue(
                 return
             }
         }
-        networkState.first { it.available }
-        val outageCount = networkState.value.outageCount
         try {
             val result = send(delivery)
             when {
                 result.ok -> repository.setStatus(id, TaskStatus.Success)
-                result.transportFailure && networkState.value.outageCount != outageCount -> retryWhenNetworkReturns(id)
                 result.retryable -> retryOrFail(delivery, result.retryAfter)
                 else -> repository.setStatus(id, TaskStatus.Failed)
             }
@@ -100,11 +92,6 @@ class IndexWebhookDeliveryQueue(
         } catch (_: Exception) {
             retryOrFail(delivery, null)
         }
-    }
-
-    private suspend fun retryWhenNetworkReturns(id: Long) {
-        networkState.first { it.available }
-        tasks.send(id)
     }
 
     private suspend fun reschedule(delivery: IndexWebhookDelivery, retryAfter: Duration?) {
