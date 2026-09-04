@@ -276,7 +276,9 @@ class RecordingProcessingQueueTest {
             val api = get<IndexWebhookApi>()
             IndexWebhookDeliveryQueue(
                 get(),
-                { delivery -> api.sendTestEvent(delivery.gesture, delivery.url, delivery.headers) },
+                { delivery ->
+                    api.sendTestEvent(delivery.gesture, delivery.url, delivery.headers, false, null)
+                },
                 get<RecordingBackgroundScope>(),
                 {},
             )

@@ -34,8 +34,8 @@ interface IndexWebhookDeliveryDao {
     )
     suspend fun markFailed(id: Long, failedAt: Instant)
 
-    @Query("UPDATE IndexWebhookDeliveryEntity SET audioData = :audioData WHERE id = :id")
-    suspend fun setAudioData(id: Long, audioData: ByteArray)
+    @Query("UPDATE IndexWebhookDeliveryEntity SET audioData = :audioData, recordedAt = :recordedAt WHERE id = :id")
+    suspend fun setPayload(id: Long, audioData: ByteArray?, recordedAt: Instant)
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity " +
@@ -45,7 +45,7 @@ interface IndexWebhookDeliveryDao {
 
     @Query(
         "UPDATE IndexWebhookDeliveryEntity SET status = 'Success', nextAttemptAt = NULL, " +
-            "url = '', headersJson = '{}', fileId = NULL, audioData = NULL, transcription = NULL " +
+            "url = '', headersJson = '{}', fileId = NULL, audioData = NULL, transcription = NULL, recordedAt = NULL " +
             "WHERE id = :id",
     )
     suspend fun markSuccessAndClearPayload(id: Long)

@@ -58,11 +58,14 @@ class IndexWebhookUploadRecordingOperationTest {
     fun transcriptModeSendsTheCapturedTranscript() = runTest {
         val deliveries = mutableListOf<IndexWebhookDelivery>()
         val inner = FakeTranscribingOp(transcript = "the captured transcript")
-        buildDecorator(deliveries, IndexWebhookPayloadMode.Both, inner, fileId = "rec-2", recordingId = 2)
+        buildDecorator(
+            deliveries, IndexWebhookPayloadMode.Both, inner, fileId = "rec-2", recordingId = 2, signRequests = true,
+        )
             .run(null)
         assertTrue(inner.hookPresentAtRun)
         assertEquals(1, deliveries.size)
         assertEquals("the captured transcript", deliveries.single().transcription)
+        assertTrue(deliveries.single().signRequests)
     }
 
     @Test
@@ -132,12 +135,18 @@ class IndexWebhookUploadRecordingOperationTest {
         decorated: RecordingOperation,
         fileId: String?,
         recordingId: Long,
+        signRequests: Boolean = false,
         enqueue: suspend (IndexWebhookDelivery) -> Unit = { deliveries += it },
     ): IndexWebhookUploadRecordingOperation {
         val prefs = IndexWebhookPreferences(MapSettings()).apply {
             setConfig(
                 RingGesture.Hold,
-                IndexWebhookConfig(url = "https://example.com/hook", payloadMode = mode, saved = true),
+                IndexWebhookConfig(
+                    url = "https://example.com/hook",
+                    payloadMode = mode,
+                    signRequests = signRequests,
+                    saved = true,
+                ),
             )
         }
         return IndexWebhookUploadRecordingOperation(

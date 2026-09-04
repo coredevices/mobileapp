@@ -3,6 +3,8 @@ package coredevices.ring.external.indexwebhook
 import com.russhwolf.settings.MapSettings
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.integrations.IntegrationTokenStorage
+import coredevices.util.queue.TaskStatus
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -127,11 +129,18 @@ class IndexWebhookSettingsViewModelTest {
         val secretStorage = IndexWebhookSigningSecretStorage(tokenStorage)
         val api = FakeWebhookApi()
         private val runRepository = IndexWebhookRunRepository(settings)
+        private val deliveryQueue = IndexWebhookDeliveryQueue(
+            UnusedDeliveryRepository,
+            { error("unused") },
+            CoroutineScope(Dispatchers.Unconfined),
+            {},
+        )
         val viewModel = IndexWebhookSettingsViewModel(
             preferences,
             api,
             runRepository,
             secretStorage,
+            deliveryQueue,
         )
     }
 
@@ -145,15 +154,6 @@ class IndexWebhookSettingsViewModelTest {
     private class FakeWebhookApi : IndexWebhookApi {
         var lastTestRequest: TestRequest? = null
 
-        override fun uploadIfEnabled(
-            samples: ShortArray?,
-            sampleRate: Int,
-            recordingId: String,
-            transcription: String?,
-            recordedAt: Instant,
-            gesture: RingGesture,
-        ) = Unit
-
         override suspend fun sendTestEvent(
             gesture: RingGesture,
             url: String,
@@ -164,6 +164,16 @@ class IndexWebhookSettingsViewModelTest {
             lastTestRequest = TestRequest(gesture, url, signRequests, signingSecret)
             return IndexWebhookRunResult(true, "200 OK", "test event", 0, 0)
         }
+    }
+
+    private object UnusedDeliveryRepository : IndexWebhookDeliveryRepository {
+        override suspend fun insert(delivery: IndexWebhookDelivery) = error("unused")
+        override suspend fun getPendingIds(): List<Long> = error("unused")
+        override suspend fun getById(id: Long): IndexWebhookDelivery? = error("unused")
+        override suspend fun setPayload(id: Long, audioData: ByteArray?, recordedAt: Instant) = error("unused")
+        override suspend fun setStatus(id: Long, status: TaskStatus) = error("unused")
+        override suspend fun scheduleRetry(id: Long, nextAttemptAt: Instant) = error("unused")
+        override suspend fun resetForRetry(deliveryId: String): Long? = error("unused")
     }
 
     private class MemoryTokenStorage : IntegrationTokenStorage {
