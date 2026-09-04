@@ -19,8 +19,11 @@ interface IndexWebhookDeliveryDao {
     @Query("SELECT * FROM IndexWebhookDeliveryEntity WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): IndexWebhookDeliveryEntity?
 
-    @Query("SELECT * FROM IndexWebhookDeliveryEntity WHERE status = 'Pending' ORDER BY created ASC")
-    suspend fun getPending(): List<IndexWebhookDeliveryEntity>
+    @Query("SELECT gesture FROM IndexWebhookDeliveryEntity WHERE id = :id")
+    suspend fun getGesture(id: Long): String?
+
+    @Query("SELECT id FROM IndexWebhookDeliveryEntity WHERE status = 'Pending' ORDER BY created ASC")
+    suspend fun getPendingIds(): List<Long>
 
     @Query("UPDATE IndexWebhookDeliveryEntity SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: TaskStatus)
@@ -44,4 +47,12 @@ interface IndexWebhookDeliveryDao {
             "WHERE deliveryId = :deliveryId AND status = 'Failed'",
     )
     suspend fun resetForRetry(deliveryId: String): Int
+
+    @Query(
+        "DELETE FROM IndexWebhookDeliveryEntity WHERE status = 'Failed' AND gesture = :gesture " +
+            "AND id NOT IN (SELECT id FROM IndexWebhookDeliveryEntity " +
+            "WHERE status = 'Failed' AND gesture = :gesture " +
+            "ORDER BY created DESC, id DESC LIMIT :keep)",
+    )
+    suspend fun pruneFailed(gesture: String, keep: Int)
 }

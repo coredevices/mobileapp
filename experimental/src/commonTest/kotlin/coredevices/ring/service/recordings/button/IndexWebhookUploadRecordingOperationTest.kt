@@ -8,16 +8,11 @@ import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.Buffer
@@ -45,7 +40,9 @@ class IndexWebhookUploadRecordingOperationTest {
     @Test
     fun recordingOnlySendsWithoutWaitingForTranscription() = runTest {
         val deliveries = mutableListOf<IndexWebhookDelivery>()
-        val inner = FakeTranscribingOp(transcript = "spoken")
+        val inner = FakeTranscribingOp(transcript = "spoken") {
+            assertEquals(1, deliveries.size)
+        }
         buildDecorator(deliveries, IndexWebhookPayloadMode.RecordingOnly, inner, fileId = "rec-1", recordingId = 1)
             .run(null)
         advanceUntilIdle()
@@ -71,15 +68,11 @@ class IndexWebhookUploadRecordingOperationTest {
     }
 
     @Test
-    fun deferredHookSendStillWinsOverTheFallback() = runTest {
+    fun transcriptHookDoesNotAlsoSendTheFallback() = runTest {
         val deliveries = mutableListOf<IndexWebhookDelivery>()
-        // A real dispatcher queues the hook's send instead of running it eagerly, so run()
-        // returns before it claims the key. The fallback must not fire a null-transcript
-        // send and beat it. Delivered exactly once, with the real transcript.
         val inner = FakeTranscribingOp(transcript = "must survive")
         buildDecorator(
             deliveries, IndexWebhookPayloadMode.Both, inner, fileId = "rec-3", recordingId = 3,
-            dispatcher = StandardTestDispatcher(testScheduler),
         ).run(null)
         advanceUntilIdle()
 
@@ -133,12 +126,10 @@ class IndexWebhookUploadRecordingOperationTest {
         decorated: RecordingOperation,
         fileId: String?,
         recordingId: Long,
-        dispatcher: CoroutineDispatcher = UnconfinedTestDispatcher(testScheduler),
     ): IndexWebhookUploadRecordingOperation {
         startKoin {
             modules(module {
                 single<LocalRecordingDao> { FakeLocalRecordingDao }
-                single { RecordingBackgroundScope(CoroutineScope(dispatcher)) }
             })
         }
         val prefs = IndexWebhookPreferences(MapSettings()).apply {
@@ -163,11 +154,13 @@ class IndexWebhookUploadRecordingOperationTest {
 private class FakeTranscribingOp(
     private val transcript: String,
     private val throwAfterHook: Boolean = false,
+    private val onRun: () -> Unit = {},
 ) : TranscribingRecordingOperation {
     override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
     var hookPresentAtRun = false
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
+        onRun()
         hookPresentAtRun = onTranscriptionPersisted != null
         onTranscriptionPersisted?.invoke(transcript)
         if (throwAfterHook) throw IllegalStateException("agent failed")

@@ -115,6 +115,7 @@ def receive():
 - Recording deliveries are persisted before sending and resume after an app restart
 - Network failures, HTTP 408/425/429 responses, and 5xx responses retry with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor a longer `Retry-After`
 - Other HTTP failures remain available through **Retry** in **Recent runs**
+- Failed payloads are retained for the 20 recent runs per gesture; older failures are deleted
 - Successful deliveries keep only their delivery ID for deduplication; queued payload data is removed from the phone
 - The webhook fires as early as its payload allows, in parallel with the rest of the pipeline: `RecordingOnly` sends as soon as the audio is on disk (before transcription); modes that include the transcript send once it is transcribed, concurrently with agent processing. The webhook therefore fires even if agent processing (or, for the recording-only mode, transcription) later fails.
 - Audio is the same 16kHz resampled version used for transcription

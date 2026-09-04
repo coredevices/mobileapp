@@ -5,11 +5,9 @@ import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.ring.external.indexwebhook.IndexWebhookDelivery
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
-import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
-import kotlinx.coroutines.launch
 import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import org.koin.core.component.KoinComponent
@@ -40,7 +38,6 @@ class IndexWebhookUploadRecordingOperation(
     }
 
     private val localRecordingDao: LocalRecordingDao by inject()
-    private val recordingBackgroundScope: RecordingBackgroundScope by inject()
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         // One mode snapshot drives the whole delivery, so a mid-operation settings
@@ -49,12 +46,12 @@ class IndexWebhookUploadRecordingOperation(
         val decoratedWillSend = when {
             // Audio is already on disk and no transcript is in the payload, so send now.
             fileId != null && payloadMode == IndexWebhookPayloadMode.RecordingOnly -> {
-                launchSend(payloadMode, transcription = null)
+                sendWebhook(payloadMode, transcription = null)
                 true
             }
             // Send from the transcript hook, carrying the exact persisted transcript.
             decorated is TranscribingRecordingOperation -> {
-                decorated.onTranscriptionPersisted = { transcription -> launchSend(payloadMode, transcription) }
+                decorated.onTranscriptionPersisted = { transcription -> sendWebhook(payloadMode, transcription) }
                 true
             }
             else -> false
@@ -66,17 +63,6 @@ class IndexWebhookUploadRecordingOperation(
         if (!decoratedWillSend) {
             try {
                 sendWebhook(payloadMode, transcription = null)
-            } catch (e: Exception) {
-                logger.e(e) { "Webhook send failed" }
-            }
-        }
-    }
-
-    /** Launched so reading the audio payload doesn't delay the inner operation. */
-    private fun launchSend(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
-        recordingBackgroundScope.launch {
-            try {
-                sendWebhook(payloadMode, transcription)
             } catch (e: Exception) {
                 logger.e(e) { "Webhook send failed" }
             }
