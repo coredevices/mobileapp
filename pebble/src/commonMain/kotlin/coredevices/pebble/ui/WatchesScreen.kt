@@ -266,8 +266,8 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     }
 
     suspend fun requestCDMForInactiveIndex(uiContext: PlatformUiContext, identifier: IndexIdentifier) {
-        topBarParams.showSnackbar("Press the button on your Index 01 so this device can find it...")
-        companionDevice.registerDevice(identifier, uiContext)
+        // Use classic as it won't scan and some phones have had trouble with LE CDM scan on the random addr
+        companionDevice.registerDevice(identifier, uiContext, true)
     }
 
     LaunchedEffect(requestIndexCompanion) {
@@ -852,7 +852,7 @@ fun RingItem(
                             Button(
                                 onClick = {
                                     scope.launch {
-                                        uiContext?.let { companionDevice.registerDevice(ring.identifier, it) }
+                                        uiContext?.let { companionDevice.registerDevice(ring.identifier, it, false) }
                                         val result = try {
                                             ring.pair()
                                         } catch (e: Exception) {

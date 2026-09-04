@@ -383,7 +383,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { object : CompanionDevice {
         override suspend fun registerDevice(
             identifier: IndexIdentifier,
-            uiContext: PlatformUiContext
+            uiContext: PlatformUiContext,
+            useClassicAssociation: Boolean
         ) {
 
         }
