@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import kotlinx.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -23,6 +24,12 @@ class IndexWebhookRetryPolicyTest {
         listOf(400, 401, 403, 404, 409, 422).forEach {
             assertFalse(it.isRetryableWebhookStatus(), "$it should require manual retry")
         }
+    }
+
+    @Test
+    fun retriesIoFailuresButNotInvalidRequests() {
+        assertTrue(IOException("offline").isRetryableWebhookFailure())
+        assertFalse(IllegalArgumentException("bad URL").isRetryableWebhookFailure())
     }
 
     @Test

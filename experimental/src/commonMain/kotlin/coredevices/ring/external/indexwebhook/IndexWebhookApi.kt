@@ -188,14 +188,15 @@ class IndexWebhookApiImpl(
             throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to post to webhook" }
+            val retryable = e.isRetryableWebhookFailure()
             IndexWebhookRunResult(
                 ok = false,
                 status = "FAILED",
                 detail = e.message ?: "unknown error",
                 byteSize = bodyBytes.size.toLong(),
                 durationMs = started.elapsedNow().inWholeMilliseconds,
-                retryable = true,
-                transportFailure = e is IOException,
+                retryable = retryable,
+                transportFailure = retryable,
             )
         }
     }
@@ -203,6 +204,8 @@ class IndexWebhookApiImpl(
 
 internal fun Int.isRetryableWebhookStatus(): Boolean =
     this == 408 || this == 425 || this == 429 || this in 500..599
+
+internal fun Throwable.isRetryableWebhookFailure(): Boolean = this is IOException
 
 internal fun String?.toRetryAfterDuration(now: Instant = Clock.System.now()): Duration? {
     val value = this?.trim()?.takeIf { it.isNotEmpty() } ?: return null

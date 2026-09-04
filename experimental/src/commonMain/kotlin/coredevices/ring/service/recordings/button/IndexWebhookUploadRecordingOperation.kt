@@ -8,6 +8,7 @@ import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import org.koin.core.component.KoinComponent
@@ -46,12 +47,12 @@ class IndexWebhookUploadRecordingOperation(
         val decoratedWillSend = when {
             // Audio is already on disk and no transcript is in the payload, so send now.
             fileId != null && payloadMode == IndexWebhookPayloadMode.RecordingOnly -> {
-                sendWebhook(payloadMode, transcription = null)
+                enqueueWebhook(payloadMode, transcription = null)
                 true
             }
             // Send from the transcript hook, carrying the exact persisted transcript.
             decorated is TranscribingRecordingOperation -> {
-                decorated.onTranscriptionPersisted = { transcription -> sendWebhook(payloadMode, transcription) }
+                decorated.onTranscriptionPersisted = { transcription -> enqueueWebhook(payloadMode, transcription) }
                 true
             }
             else -> false
@@ -59,17 +60,20 @@ class IndexWebhookUploadRecordingOperation(
         decorated.run(handle)
         // Only operations that never sent above (e.g. webhook-only) fall back to a send
         // here — otherwise this could race the hook's send and win with a null transcript.
-        // A webhook failure must never fail the recording.
-        if (!decoratedWillSend) {
-            try {
-                sendWebhook(payloadMode, transcription = null)
-            } catch (e: Exception) {
-                logger.e(e) { "Webhook send failed" }
-            }
+        if (!decoratedWillSend) enqueueWebhook(payloadMode, transcription = null)
+    }
+
+    private suspend fun enqueueWebhook(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
+        try {
+            prepareDelivery(payloadMode, transcription)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Webhook preparation failed" }
         }
     }
 
-    private suspend fun sendWebhook(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
+    private suspend fun prepareDelivery(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
         val sendKey = fileId ?: "text-$recordingId"
         val config = webhookPreferences.configFor(gesture)
         val url = config.url

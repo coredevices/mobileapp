@@ -95,6 +95,22 @@ class IndexWebhookUploadRecordingOperationTest {
     }
 
     @Test
+    fun preparationFailureDoesNotSkipRecordingProcessing() = runTest {
+        var innerRan = false
+        val inner = FakeTranscribingOp(transcript = "spoken") { innerRan = true }
+        buildDecorator(
+            mutableListOf(),
+            IndexWebhookPayloadMode.RecordingOnly,
+            inner,
+            fileId = "rec-7",
+            recordingId = 7,
+            encodeM4a = { _, _ -> error("encoder failed") },
+        ).run(null)
+
+        assertTrue(innerRan)
+    }
+
+    @Test
     fun transcriptionOnlyRecordingSendsTranscriptWithoutAudio() = runTest {
         val deliveries = mutableListOf<IndexWebhookDelivery>()
         val inner = FakeTranscribingOp(transcript = "just the words")
@@ -126,6 +142,7 @@ class IndexWebhookUploadRecordingOperationTest {
         decorated: RecordingOperation,
         fileId: String?,
         recordingId: Long,
+        encodeM4a: suspend (ShortArray, Int) -> ByteArray = { _, _ -> byteArrayOf(1) },
     ): IndexWebhookUploadRecordingOperation {
         startKoin {
             modules(module {
@@ -141,7 +158,7 @@ class IndexWebhookUploadRecordingOperationTest {
         return IndexWebhookUploadRecordingOperation(
             enqueue = { deliveries += it },
             webhookPreferences = prefs,
-            encodeM4a = { _, _ -> byteArrayOf(1) },
+            encodeM4a = encodeM4a,
             recordingStorage = FakeRecordingStorage,
             decorated = decorated,
             fileId = fileId,
