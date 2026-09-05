@@ -36,6 +36,7 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
+import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
@@ -46,6 +47,7 @@ import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
+import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
@@ -76,6 +78,7 @@ import kotlin.uuid.Uuid
         HttpMcpServerEntity::class,
         McpSandboxGroupEntity::class,
         RecordingProcessingTaskEntity::class,
+        IndexWebhookDeliveryEntity::class,
         TraceSessionEntity::class,
         TraceEntryEntity::class,
         CachedItem::class,
@@ -85,7 +88,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 34,
+    version = 35,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -123,6 +126,7 @@ import kotlin.uuid.Uuid
         // 32→33: adds RecordingEntryEntity.errorType (classification of `error`).
         AutoMigration(from = 32, to = 33),
         // 33→34 is Migrate33To34, added to the builder in experimentalModule.
+        AutoMigration(from = 34, to = 35),
     ]
 )
 @TypeConverters(Converters::class)
@@ -140,6 +144,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun httpMcpServerDao(): HttpMcpServerDao
     abstract fun mcpSandboxGroupDao(): McpSandboxGroupDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
+    abstract fun indexWebhookDeliveryDao(): IndexWebhookDeliveryDao
     abstract fun traceSessionDao(): TraceSessionDao
     abstract fun traceEntryDao(): TraceEntryDao
     abstract fun cachedItemDao(): CachedItemDao

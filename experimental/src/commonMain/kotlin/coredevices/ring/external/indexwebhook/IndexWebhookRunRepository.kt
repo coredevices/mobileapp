@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.ring.service.button.RingGesture
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,8 @@ data class IndexWebhookRun(
     val detail: String,
     val byteSize: Long,
     val durationMs: Long,
+    val deliveryId: String? = null,
+    val canRetry: Boolean = false,
 ) {
     val timestamp: Instant get() = Instant.fromEpochMilliseconds(timestampMs)
 }
@@ -38,6 +41,7 @@ class IndexWebhookRunRepository(private val settings: Settings) {
 
         private val json = Json { ignoreUnknownKeys = true }
         private val serializer = ListSerializer(IndexWebhookRun.serializer())
+        private val logger = Logger.withTag("IndexWebhookRunRepository")
     }
 
     private val _runs = MutableStateFlow(migrateAndLoad())
@@ -55,6 +59,8 @@ class IndexWebhookRunRepository(private val settings: Settings) {
         detail: String,
         byteSize: Long,
         durationMs: Long,
+        deliveryId: String? = null,
+        canRetry: Boolean = false,
         timestamp: Instant = Clock.System.now(),
     ) {
         val run = IndexWebhookRun(
@@ -64,12 +70,22 @@ class IndexWebhookRunRepository(private val settings: Settings) {
             detail = detail,
             byteSize = byteSize,
             durationMs = durationMs,
+            deliveryId = deliveryId,
+            canRetry = canRetry,
         )
         mutex.withLock {
-            val updated = (listOf(run) + _runs.value[gesture].orEmpty())
+            val previousRuns = _runs.value[gesture].orEmpty().map {
+                if (deliveryId != null && it.deliveryId == deliveryId) it.copy(canRetry = false) else it
+            }
+            val updated = (listOf(run) + previousRuns)
                 .sortedByDescending { it.timestampMs }
                 .take(MAX_RUNS_PER_GESTURE)
-            settings.putString(runsKey(gesture), json.encodeToString(serializer, updated))
+            try {
+                settings.putString(runsKey(gesture), json.encodeToString(serializer, updated))
+            } catch (e: Exception) {
+                logger.e(e) { "Failed to record webhook run" }
+                return@withLock
+            }
             _runs.value = _runs.value + (gesture to updated)
         }
     }

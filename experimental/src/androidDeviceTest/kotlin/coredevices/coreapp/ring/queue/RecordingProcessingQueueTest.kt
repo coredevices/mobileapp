@@ -33,9 +33,12 @@ import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
+import coredevices.ring.database.room.repository.IndexWebhookDeliveryRoomRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -79,7 +82,6 @@ import java.io.File
 import kotlin.collections.emptyList
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 // region Fakes
 
@@ -253,14 +255,6 @@ class RecordingProcessingQueueTest {
 
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(
-                    samples: ShortArray?,
-                    sampleRate: Int,
-                    recordingId: String,
-                    transcription: String?,
-                    recordedAt: Instant,
-                    gesture: coredevices.ring.service.button.RingGesture,
-                ) {}
                 override suspend fun sendTestEvent(
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
@@ -271,6 +265,17 @@ class RecordingProcessingQueueTest {
             }
         } bind IndexWebhookApi::class
         singleOf(::IndexWebhookPreferences)
+        single { get<RingDatabase>().indexWebhookDeliveryDao() }
+        singleOf(::IndexWebhookDeliveryRoomRepository) bind IndexWebhookDeliveryRepository::class
+        single {
+            val api = get<IndexWebhookApi>()
+            IndexWebhookDeliveryQueue(
+                get(),
+                { delivery -> api.sendTestEvent(delivery.gesture, delivery.url, delivery.headers) },
+                get<RecordingBackgroundScope>(),
+                {},
+            )
+        }
 
         single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 

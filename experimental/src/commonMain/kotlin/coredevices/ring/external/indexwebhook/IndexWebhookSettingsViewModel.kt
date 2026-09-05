@@ -28,6 +28,7 @@ class IndexWebhookSettingsViewModel(
     private val webhookPreferences: IndexWebhookPreferences,
     private val webhookApi: IndexWebhookApi,
     private val runRepository: IndexWebhookRunRepository,
+    private val deliveryQueue: IndexWebhookDeliveryQueue,
 ) : ViewModel() {
 
     private val _gesture = MutableStateFlow<RingGesture?>(null)
@@ -155,6 +156,11 @@ class IndexWebhookSettingsViewModel(
             )
         }
         closeDialog()
+    }
+
+    fun retry(run: IndexWebhookRun) {
+        val deliveryId = run.deliveryId ?: return
+        viewModelScope.launch { deliveryQueue.retry(deliveryId) }
     }
 
     private fun loadDraft(config: IndexWebhookConfig) {

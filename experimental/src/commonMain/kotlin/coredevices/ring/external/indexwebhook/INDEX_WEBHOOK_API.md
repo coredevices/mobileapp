@@ -21,6 +21,7 @@ Content-Type: multipart/form-data; boundary=<uuid>
 <each user-configured header>
 X-Audio-Size: <byte count>  (when audio is included)
 X-Index-Trigger: single-click-hold | double-click-hold | test-event
+X-Index-Delivery: <stable recording ID>  (recording events only)
 X-Index-Test: true  (test events only)
 ```
 
@@ -68,6 +69,8 @@ Headers are fully user-configurable in the webhook settings — add as many name
 
 `X-Index-Trigger` is added automatically to identify the gesture that started the recording — `single-click-hold`, `double-click-hold`, or `test-event` for a manually sent test. The gesture is persisted with the processing task and preserved when a failed recording is retried. Recordings with no known gesture do not fire a webhook at all. Neither `X-Index-Trigger` nor `X-Index-Test` can be overridden by a user-configured header.
 
+`X-Index-Delivery` identifies a recording delivery and stays the same across automatic and manual retries. Receivers should use it as an idempotency key: if the same value arrives more than once, return success without archiving a second copy. It cannot be overridden by a user-configured header.
+
 > Migration note: a previously configured single webhook is copied to both recording gestures, and an auth token configured before headers were user-settable is carried over as an `X-Widget-Token` header.
 
 ## Authentication
@@ -91,6 +94,7 @@ def receive():
     transcription = request.form.get('transcription')
     recorded_at = request.form.get('recordedAt')
     trigger = request.headers.get('X-Index-Trigger')
+    delivery_id = request.headers.get('X-Index-Delivery')
 
     if audio:
         audio.save(f'/tmp/{audio.filename}')
@@ -101,12 +105,17 @@ def receive():
 
     print(f'Recorded at: {recorded_at}')
     print(f'Trigger: {trigger}')
+    print(f'Delivery ID: {delivery_id}')
     return 'OK', 200
 ```
 
 ## Notes
 
-- Uploads are async and non-blocking — they don't delay the normal recording pipeline
-- Failed uploads are retried on the next recording (no persistent retry queue)
+- Network delivery is async and does not re-run transcription or agent processing
+- Recording deliveries are persisted before sending and resume after an app restart
+- Network failures, HTTP 408/425/429 responses, and 5xx responses retry up to 10 attempts with exponential backoff (one minute to one hour, plus up to 30 seconds of jitter) and honor `Retry-After` values up to one hour
+- Other HTTP failures remain available through **Retry** in **Recent runs**
+- Failed payloads are retained for the 20 recent runs per gesture; older failures are deleted
+- Successful deliveries keep only their delivery ID for deduplication; queued payload data is removed from the phone
 - The webhook fires as early as its payload allows, in parallel with the rest of the pipeline: `RecordingOnly` sends as soon as the audio is on disk (before transcription); modes that include the transcript send once it is transcribed, concurrently with agent processing. The webhook therefore fires even if agent processing (or, for the recording-only mode, transcription) later fails.
 - Audio is the same 16kHz resampled version used for transcription
