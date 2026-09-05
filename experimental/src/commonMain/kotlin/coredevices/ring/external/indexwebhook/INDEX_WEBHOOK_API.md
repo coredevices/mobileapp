@@ -9,7 +9,8 @@ Send Index ring recording data to any HTTP endpoint.
 3. Enter your webhook URL
 4. Add any request headers you need (e.g. an auth header)
 5. Choose what to send: Recording only, Transcription only, or Both
-6. Optionally tap **Send test event** to verify the endpoint, then **Save**
+6. Optionally enable **Include approximate location**
+7. Optionally tap **Send test event** to verify the endpoint, then **Save**
 
 A gesture only sends once its config is saved with a URL. The switch turns sending off without discarding the URL and headers, and the last 20 runs per gesture are listed under **Recent runs**.
 
@@ -52,13 +53,23 @@ Unix timestamp in milliseconds when the recording was captured.
 
 Always set to `"ring"`.
 
+### Location fields (conditional)
+
+When **Include approximate location** is enabled and the phone can provide a recent fix, the request includes all three fields:
+
+- `locationLatitude`: decimal degrees rounded to three decimal places
+- `locationLongitude`: decimal degrees rounded to three decimal places
+- `locationTimestamp`: Unix timestamp in milliseconds for the phone's location fix
+
+Location is best effort. The webhook still sends without these fields when permission is denied or a recent fix is unavailable. `locationTimestamp` is usually close to webhook delivery time, while `recordedAt` is the ring capture time. Sync and processing delays mean the phone location may differ from where the recording was made.
+
 ## Payload Modes
 
-| Mode               | `audio` | `transcription` | `recordedAt` | `client` |
-|--------------------|---------|-----------------|--------------|----------|
-| Recording only     | Yes     | No              | Yes          | Yes      |
-| Transcription only | No      | Yes             | Yes          | Yes      |
-| Both               | Yes     | Yes             | Yes          | Yes      |
+| Mode               | `audio` | `transcription` | `recordedAt` | `client` | Location fields |
+|--------------------|---------|-----------------|--------------|----------|-----------------|
+| Recording only     | Yes     | No              | Yes          | Yes      | If enabled and available |
+| Transcription only | No      | Yes             | Yes          | Yes      | If enabled and available |
+| Both               | Yes     | Yes             | Yes          | Yes      | If enabled and available |
 
 ## Headers
 
@@ -90,6 +101,9 @@ def receive():
     audio = request.files.get('audio')
     transcription = request.form.get('transcription')
     recorded_at = request.form.get('recordedAt')
+    location_latitude = request.form.get('locationLatitude')
+    location_longitude = request.form.get('locationLongitude')
+    location_timestamp = request.form.get('locationTimestamp')
     trigger = request.headers.get('X-Index-Trigger')
 
     if audio:
@@ -99,6 +113,9 @@ def receive():
     if transcription:
         print(f'Transcription: {transcription}')
 
+    if location_latitude and location_longitude and location_timestamp:
+        print(f'Phone location: {location_latitude}, {location_longitude} at {location_timestamp}')
+
     print(f'Recorded at: {recorded_at}')
     print(f'Trigger: {trigger}')
     return 'OK', 200
@@ -107,6 +124,7 @@ def receive():
 ## Notes
 
 - Uploads are async and non-blocking — they don't delay the normal recording pipeline
+- An enabled location lookup can add up to one second before the async webhook delivery
 - Failed uploads are retried on the next recording (no persistent retry queue)
 - The webhook fires as early as its payload allows, in parallel with the rest of the pipeline: `RecordingOnly` sends as soon as the audio is on disk (before transcription); modes that include the transcript send once it is transcribed, concurrently with agent processing. The webhook therefore fires even if agent processing (or, for the recording-only mode, transcription) later fails.
 - Audio is the same 16kHz resampled version used for transcription

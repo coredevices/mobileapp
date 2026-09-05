@@ -30,6 +30,7 @@ enum class IndexWebhookPayloadMode(val id: Int) {
 data class IndexWebhookConfig(
     val url: String? = null,
     val payloadMode: IndexWebhookPayloadMode = IndexWebhookPayloadMode.RecordingOnly,
+    val includeLocation: Boolean = false,
     val headers: Map<String, String> = emptyMap(),
     val saved: Boolean = false,
 ) {

@@ -1,10 +1,14 @@
 package coredevices.ring.external.indexwebhook
 
 import co.touchlab.kermit.Logger
+import coredevices.HackyPermissionRequesterProvider
 import coredevices.api.ApiClient
 import coredevices.ring.api.ApiConfig
 import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.service.button.RingGesture
+import coredevices.util.Permission
+import io.rebble.libpebblecommon.util.GeolocationPositionResult
+import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -14,8 +18,11 @@ import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.round
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
@@ -46,6 +53,7 @@ interface IndexWebhookApi {
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
+        includeLocation: Boolean,
     ): IndexWebhookRunResult
 }
 
@@ -56,6 +64,44 @@ data class IndexWebhookRunResult(
     val byteSize: Long,
     val durationMs: Long,
 )
+
+internal data class IndexWebhookLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long,
+)
+
+internal fun indexWebhookLocation(
+    result: GeolocationPositionResult.Success,
+    now: Instant,
+): IndexWebhookLocation? {
+    if (!result.latitude.isFinite() || result.latitude !in -90.0..90.0) return null
+    if (!result.longitude.isFinite() || result.longitude !in -180.0..180.0) return null
+    if (result.timestamp > now || result.timestamp < now - 1.hours) return null
+    return IndexWebhookLocation(
+        latitude = round(result.latitude * 1000) / 1000,
+        longitude = round(result.longitude * 1000) / 1000,
+        timestamp = result.timestamp.toEpochMilliseconds(),
+    )
+}
+
+internal suspend fun resolveIndexWebhookLocation(
+    includeLocation: Boolean,
+    hasPermission: suspend () -> Boolean,
+    getCurrentPosition: suspend () -> GeolocationPositionResult,
+    now: () -> Instant,
+): IndexWebhookLocation? {
+    if (!includeLocation) return null
+    return try {
+        if (!hasPermission()) return null
+        when (val result = getCurrentPosition()) {
+            is GeolocationPositionResult.Success -> indexWebhookLocation(result, now())
+            is GeolocationPositionResult.Error -> null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 /** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
 val RingGesture.webhookTriggerValue: String
@@ -80,6 +126,8 @@ class IndexWebhookApiImpl(
     private val webhookPreferences: IndexWebhookPreferences,
     private val runRepository: IndexWebhookRunRepository,
     private val scope: CoroutineScope,
+    private val permissionProvider: HackyPermissionRequesterProvider,
+    private val geolocation: SystemGeolocation,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
@@ -104,6 +152,7 @@ class IndexWebhookApiImpl(
 
                 // The caller already selected the payload for the delivery's mode.
                 val m4aData: ByteArray? = samples?.let { m4aEncoder.encode(it, sampleRate) }
+                val location = currentLocation(config.includeLocation)
 
                 val result = post(
                     url = url,
@@ -114,6 +163,7 @@ class IndexWebhookApiImpl(
                     transcription = transcription,
                     recordedAt = recordedAt,
                     isTest = false,
+                    location = location,
                 )
                 runRepository.record(
                     gesture = gesture,
@@ -138,6 +188,7 @@ class IndexWebhookApiImpl(
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
+        includeLocation: Boolean,
     ): IndexWebhookRunResult {
         val result = post(
             url = url,
@@ -148,6 +199,7 @@ class IndexWebhookApiImpl(
             transcription = WEBHOOK_TEST_TRANSCRIPTION,
             recordedAt = Clock.System.now(),
             isTest = true,
+            location = currentLocation(includeLocation),
         )
         runRepository.record(
             gesture = gesture,
@@ -160,6 +212,21 @@ class IndexWebhookApiImpl(
         return result
     }
 
+    private suspend fun currentLocation(includeLocation: Boolean): IndexWebhookLocation? {
+        return resolveIndexWebhookLocation(
+            includeLocation = includeLocation,
+            hasPermission = { permissionProvider.get().hasPermission(Permission.Location) },
+            getCurrentPosition = {
+                geolocation.getCurrentPosition(
+                    maximumAge = 1.hours,
+                    timeout = 1.seconds,
+                    highAccuracy = false,
+                )
+            },
+            now = Clock.System::now,
+        )
+    }
+
     private suspend fun post(
         url: String,
         headers: Map<String, String>,
@@ -169,6 +236,7 @@ class IndexWebhookApiImpl(
         transcription: String?,
         recordedAt: Instant,
         isTest: Boolean,
+        location: IndexWebhookLocation?,
     ): IndexWebhookRunResult {
         val boundary = Uuid.random().toString()
         val bodyBytes = buildWebhookMultipartBody(
@@ -178,6 +246,7 @@ class IndexWebhookApiImpl(
             recordedAt = recordedAt.toEpochMilliseconds(),
             transcription = transcription,
             isTest = isTest,
+            location = location,
         )
         val started = TimeSource.Monotonic.markNow()
         return try {
@@ -247,6 +316,7 @@ internal fun buildWebhookMultipartBody(
     recordedAt: Long,
     transcription: String?,
     isTest: Boolean,
+    location: IndexWebhookLocation? = null,
 ): ByteArray {
     val crlf = "\r\n"
     val parts = mutableListOf<ByteArray>()
@@ -274,6 +344,19 @@ internal fun buildWebhookMultipartBody(
         metadata.append("--$boundary$crlf")
         metadata.append("Content-Disposition: form-data; name=\"test\"$crlf$crlf")
         metadata.append("true$crlf")
+    }
+    if (location != null) {
+        metadata.append("--$boundary$crlf")
+        metadata.append("Content-Disposition: form-data; name=\"locationLatitude\"$crlf$crlf")
+        metadata.append("${location.latitude}$crlf")
+
+        metadata.append("--$boundary$crlf")
+        metadata.append("Content-Disposition: form-data; name=\"locationLongitude\"$crlf$crlf")
+        metadata.append("${location.longitude}$crlf")
+
+        metadata.append("--$boundary$crlf")
+        metadata.append("Content-Disposition: form-data; name=\"locationTimestamp\"$crlf$crlf")
+        metadata.append("${location.timestamp}$crlf")
     }
     metadata.append("--$boundary$crlf")
     metadata.append("Content-Disposition: form-data; name=\"recordedAt\"$crlf$crlf")

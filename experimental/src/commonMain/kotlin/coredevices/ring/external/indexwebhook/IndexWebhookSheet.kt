@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -62,6 +63,7 @@ fun IndexWebhookSheet(
     val urlInput by viewModel.urlInput.collectAsState()
     val headerInputs by viewModel.headerInputs.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
+    val includeLocation by viewModel.includeLocationInput.collectAsState()
     val testState by viewModel.testState.collectAsState()
     val copyable by viewModel.copyableGesture.collectAsState()
     val canRemove by viewModel.canRemove.collectAsState()
@@ -141,6 +143,26 @@ fun IndexWebhookSheet(
                         }
                     }
                 }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Include approximate location", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Adds this phone's location when the webhook is sent, rounded to ~100 m. " +
+                            "This may differ from where the recording was made.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = includeLocation,
+                    onCheckedChange = viewModel::updateIncludeLocation,
+                )
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
