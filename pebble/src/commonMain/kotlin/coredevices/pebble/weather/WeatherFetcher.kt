@@ -8,12 +8,17 @@ import coredevices.database.WeatherLocationEntity
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.util.CoreConfigFlow
 import coredevices.util.WeatherUnit
+import coredevices.util.deviceDefaultWeatherUnit
 import dev.jordond.compass.Place
 import dev.jordond.compass.geocoder.Geocoder
 import dev.jordond.compass.geocoder.GeocoderResult
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
+import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
@@ -27,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
@@ -56,12 +62,29 @@ class WeatherFetcher(
 ) {
     companion object {
         private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
+        private const val SETTINGS_KEY_MIGRATED_UNITS = "migrated_weather_units_to_watch_pref"
     }
 
     private val mutex = Mutex()
 
     suspend fun init() {
+        migrateUnitsToWatchPref()
         fetchIfNotFetchedYet()
+    }
+
+    /**
+     * Weather units are now the watch's imperial/metric pref. Seed it once from whatever the
+     * phone was using, so the two sides agree and nobody's units change under them. Wind
+     * follows that pref on its own; only the UK needs saying out loud.
+     */
+    private suspend fun migrateUnitsToWatchPref() {
+        if (settings.getBoolean(SETTINGS_KEY_MIGRATED_UNITS, false)) return
+        val previous = coreConfigFlow.value.weatherUnits ?: deviceDefaultWeatherUnit()
+        libPebble.updateImperialUnits(previous == WeatherUnit.Imperial)
+        if (previous == WeatherUnit.UkHybrid) {
+            libPebble.setWatchPref(WatchPreference(EnumWatchPref.WindSpeed, WindUnits.Mph))
+        }
+        settings.putBoolean(SETTINGS_KEY_MIGRATED_UNITS, true)
     }
 
     suspend fun fetchIfNotFetchedYet() {
@@ -77,7 +100,7 @@ class WeatherFetcher(
     suspend fun fetchWeather(scope: CoroutineScope) = mutex.withLock {
         val weatherEnabled = coreConfigFlow.value.fetchWeather
         val pinsEnabled = coreConfigFlow.value.weatherPinsV2
-        val units = coreConfigFlow.value.resolvedWeatherUnits
+        val units = libPebble.healthSettings.first().weatherUnit()
         if (!pinsEnabled || !weatherEnabled) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)
@@ -535,7 +558,10 @@ internal fun String.utcOffsetMinutes(): Int? {
     return sign * (hours * 60 + minutes)
 }
 
-/** The watch prints wind as "mph" literally, so metric responses (km/h) must be converted. */
+internal fun HealthSettings.weatherUnit(): WeatherUnit =
+    if (imperialUnits) WeatherUnit.Imperial else WeatherUnit.Metric
+
+/** The watch is sent wind in mph whatever the units, and converts for display itself. */
 internal fun Int?.toMph(units: WeatherUnit): Int? = when {
     this == null -> null
     units == WeatherUnit.Metric -> (this * 0.621371).roundToInt()

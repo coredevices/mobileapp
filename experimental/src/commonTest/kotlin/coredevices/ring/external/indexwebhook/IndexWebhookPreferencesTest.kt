@@ -108,6 +108,7 @@ class IndexWebhookPreferencesTest {
             url = "https://hold.example.com",
             payloadMode = IndexWebhookPayloadMode.TranscriptionOnly,
             headers = mapOf("X-A" to "1"),
+            signRequests = true,
             saved = true,
         )
 
@@ -116,6 +117,18 @@ class IndexWebhookPreferencesTest {
         val reloaded = IndexWebhookPreferences(settings)
         assertEquals(hold, reloaded.configFor(RingGesture.Hold))
         assertEquals(IndexWebhookConfig(), reloaded.configFor(RingGesture.ClickHold))
+    }
+
+    @Test
+    fun existingSerializedConfigsDefaultToUnsigned() {
+        val settings = MapSettings(
+            "index_webhook_config_Hold" to
+                """{"url":"https://example.com/hook","saved":true}""",
+        )
+
+        val config = IndexWebhookPreferences(settings).configFor(RingGesture.Hold)
+
+        assertFalse(config.signRequests)
     }
 
     @Test

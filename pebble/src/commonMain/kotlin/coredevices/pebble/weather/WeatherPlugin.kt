@@ -2,8 +2,7 @@ package coredevices.pebble.weather
 
 import coredevices.database.WeatherLocationDao
 import coredevices.database.WeatherLocationEntity
-import coredevices.util.CoreConfigFlow
-import coredevices.util.WeatherUnit
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.plugin.IconPixelSize
@@ -60,7 +59,7 @@ internal fun conditionCodeOf(code: Byte) = when (WeatherType.entries.firstOrNull
 class WeatherPlugin(
     private val weather: Weather,
     private val weatherLocationDao: WeatherLocationDao,
-    private val coreConfigFlow: CoreConfigFlow,
+    private val libPebble: LibPebble,
     private val clock: Clock,
 ) : Plugin {
 
@@ -120,12 +119,14 @@ class WeatherPlugin(
         return combine(
             weather.currentWeather,
             weatherLocationDao.getAllLocationsFlow(),
-        ) { entries, locations ->
+            libPebble.healthSettings,
+        ) { entries, locations, healthSettings ->
             val ordered = entries.inLocationOrder(locations)
+            val unit = if (healthSettings.imperialUnits) "°F" else "°C"
             if (item == ITEM_HOUR) {
-                hourlyEnvelope(ordered.firstOrNull(), iconPixelSize)
+                hourlyEnvelope(ordered.firstOrNull(), iconPixelSize, unit)
             } else {
-                toEnvelope(ordered, iconPixelSize)
+                toEnvelope(ordered, iconPixelSize, unit)
             }
         }
     }
@@ -134,11 +135,14 @@ class WeatherPlugin(
      * The hours ahead, soonest first, for the user's first saved location — the forecast has no
      * per-hour timestamp, so position is all an instance id can be.
      */
-    private fun hourlyEnvelope(entry: WeatherAppEntry?, iconSize: IconPixelSize?) = SourceEnvelope(
+    private fun hourlyEnvelope(
+        entry: WeatherAppEntry?,
+        iconSize: IconPixelSize?,
+        unit: String,
+    ) = SourceEnvelope(
         pluginUuid = pluginUuid.toString(),
         validUntilMs = null,
         instances = entry.hoursAhead(localHour(entry)).take(MAX_HOURS).mapIndexed { index, hour ->
-            val unit = degreeSymbol()
             SourceInstance(
                 instanceId = index.toString(),
                 properties = mapOf(
@@ -156,15 +160,14 @@ class WeatherPlugin(
         },
     )
 
-    private fun toEnvelope(entries: List<WeatherAppEntry>, iconSize: IconPixelSize?) =
+    private fun toEnvelope(entries: List<WeatherAppEntry>, iconSize: IconPixelSize?, unit: String) =
         SourceEnvelope(
             pluginUuid = pluginUuid.toString(),
             validUntilMs = null,
-            instances = entries.map { entry -> toInstance(entry, iconSize) },
+            instances = entries.map { entry -> toInstance(entry, iconSize, unit) },
         )
 
-    private fun toInstance(entry: WeatherAppEntry, iconSize: IconPixelSize?): SourceInstance {
-        val unit = degreeSymbol()
+    private fun toInstance(entry: WeatherAppEntry, iconSize: IconPixelSize?, unit: String): SourceInstance {
         return SourceInstance(
             instanceId = entry.key.toString(),
             properties = mapOf(
@@ -294,10 +297,6 @@ class WeatherPlugin(
         WeatherType.RainAndSnow -> "Rain and snow"
         else -> "Unknown"
     }
-
-    private fun isMetric() = coreConfigFlow.value.weatherUnits != WeatherUnit.Imperial
-
-    private fun degreeSymbol() = if (isMetric()) "°C" else "°F"
 
     private inline fun <reified T> encode(value: T): JsonElement = Json.encodeToJsonElement(value)
 

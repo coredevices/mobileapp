@@ -130,7 +130,7 @@ data class CompanionApp(
     val id: Int,
     val icon: String,
     val name: String,
-    val url: String,
+    val url: String? = null,
     val required: Boolean,
     @SerialName("pebblekit_version") val pebblekitVersion: String
 )

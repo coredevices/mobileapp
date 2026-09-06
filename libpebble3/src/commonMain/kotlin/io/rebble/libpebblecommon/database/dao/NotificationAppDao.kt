@@ -134,6 +134,7 @@ interface NotificationAppRealDao : NotificationAppItemDao {
                 autoAdded = existingItem?.autoAdded ?: writeItem.autoAdded,
                 // Phone-owned; the watch never sends it and asNotificationAppItem() doesn't decode it.
                 rulesUpdated = existingItem?.rulesUpdated ?: writeItem.rulesUpdated,
+                channelGroups = existingItem?.channelGroups ?: writeItem.channelGroups,
             )
             insertOrReplace(itemToSave)
             markSyncedToWatch(

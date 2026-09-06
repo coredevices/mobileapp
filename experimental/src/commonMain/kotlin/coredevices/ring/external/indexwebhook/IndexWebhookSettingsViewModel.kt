@@ -28,6 +28,7 @@ class IndexWebhookSettingsViewModel(
     private val webhookPreferences: IndexWebhookPreferences,
     private val webhookApi: IndexWebhookApi,
     private val runRepository: IndexWebhookRunRepository,
+    private val signingSecretStorage: IndexWebhookSigningSecretStorage,
 ) : ViewModel() {
 
     private val _gesture = MutableStateFlow<RingGesture?>(null)
@@ -56,6 +57,18 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
+    private val _signRequestsInput = MutableStateFlow(false)
+    val signRequestsInput = _signRequestsInput.asStateFlow()
+
+    private val _signingSecretInput = MutableStateFlow("")
+    val signingSecretInput = _signingSecretInput.asStateFlow()
+
+    private val _signingSecretLoading = MutableStateFlow(false)
+    val signingSecretLoading = _signingSecretLoading.asStateFlow()
+
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
+
     private val _testState = MutableStateFlow<WebhookTestState>(WebhookTestState.Idle)
     val testState = _testState.asStateFlow()
 
@@ -75,21 +88,33 @@ class IndexWebhookSettingsViewModel(
         gesture != null && configs[gesture]?.url?.isNotBlank() == true
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    private var secretLoadId = 0L
+
     fun openDialog(gesture: RingGesture = RingGesture.Hold) {
         val config = webhookPreferences.configFor(gesture)
-        loadDraft(config)
-        _testState.value = WebhookTestState.Idle
         _gesture.value = gesture
+        loadDraft(config, gesture)
+        _testState.value = WebhookTestState.Idle
     }
 
     fun closeDialog() {
+        secretLoadId++
+        _signingSecretInput.value = ""
+        _signingSecretLoading.value = false
         _gesture.value = null
     }
 
     fun removeCurrentGesture() {
         val gesture = _gesture.value ?: return
-        webhookPreferences.clear(gesture)
-        closeDialog()
+        viewModelScope.launch {
+            try {
+                signingSecretStorage.delete(gesture)
+                webhookPreferences.clear(gesture)
+                if (_gesture.value == gesture) closeDialog()
+            } catch (_: Exception) {
+                _testState.value = WebhookTestState.Done(false, "Could not remove webhook")
+            }
+        }
     }
 
     fun updateUrlInput(url: String) {
@@ -120,17 +145,35 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateSignRequests(signRequests: Boolean) {
+        _signRequestsInput.value = signRequests
+    }
+
+    fun updateSigningSecret(secret: String) {
+        _signingSecretInput.value = secret
+    }
+
     fun copyFromOtherGesture() {
         val other = copyableGesture.value ?: return
-        loadDraft(webhookPreferences.configFor(other))
+        loadDraft(webhookPreferences.configFor(other), other)
     }
 
     fun sendTestEvent() {
         val gesture = _gesture.value ?: return
         val url = _urlInput.value.trim().ifBlank { null } ?: return
+        if (_signingSecretLoading.value) return
+        val signRequests = _signRequestsInput.value
+        val signingSecret = _signingSecretInput.value.takeIf { signRequests }
+        if (signRequests && signingSecret.isNullOrBlank()) return
         _testState.value = WebhookTestState.Sending
         viewModelScope.launch {
-            val result = webhookApi.sendTestEvent(gesture, url, draftHeaders())
+            val result = webhookApi.sendTestEvent(
+                gesture = gesture,
+                url = url,
+                headers = draftHeaders(),
+                signRequests = signRequests,
+                signingSecret = signingSecret,
+            )
             _testState.value = WebhookTestState.Done(
                 ok = result.ok,
                 label = "${result.status} · ${result.durationMs} ms",
@@ -141,28 +184,65 @@ class IndexWebhookSettingsViewModel(
     fun save() {
         val gesture = _gesture.value ?: return
         val url = _urlInput.value.trim().ifBlank { null }
-        if (url == null) {
-            webhookPreferences.clear(gesture)
-        } else {
-            webhookPreferences.setConfig(
-                gesture,
-                IndexWebhookConfig(
-                    url = url,
-                    payloadMode = _payloadModeInput.value,
-                    headers = draftHeaders(),
-                    saved = true,
-                ),
-            )
+        if (_signingSecretLoading.value || _saving.value) return
+        val signRequests = _signRequestsInput.value
+        val signingSecret = _signingSecretInput.value
+        if (signRequests && signingSecret.isBlank()) return
+        val payloadMode = _payloadModeInput.value
+        val headers = draftHeaders()
+        _saving.value = true
+        viewModelScope.launch {
+            try {
+                if (url == null) {
+                    signingSecretStorage.delete(gesture)
+                    webhookPreferences.clear(gesture)
+                } else {
+                    if (signingSecret.isNotBlank()) {
+                        signingSecretStorage.save(gesture, signingSecret)
+                    } else {
+                        signingSecretStorage.delete(gesture)
+                    }
+                    webhookPreferences.setConfig(
+                        gesture,
+                        IndexWebhookConfig(
+                            url = url,
+                            payloadMode = payloadMode,
+                            headers = headers,
+                            signRequests = signRequests,
+                            saved = true,
+                        ),
+                    )
+                }
+                if (_gesture.value == gesture) closeDialog()
+            } catch (_: Exception) {
+                _testState.value = WebhookTestState.Done(false, "Could not save webhook")
+            } finally {
+                _saving.value = false
+            }
         }
-        closeDialog()
     }
 
-    private fun loadDraft(config: IndexWebhookConfig) {
+    private fun loadDraft(config: IndexWebhookConfig, secretGesture: RingGesture) {
         _urlInput.value = config.url ?: ""
         _headerInputs.value = config.headers
             .map { WebhookHeaderInput(it.key, it.value) }
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = config.payloadMode
+        _signRequestsInput.value = config.signRequests
+        _signingSecretInput.value = ""
+        val loadId = ++secretLoadId
+        _signingSecretLoading.value = true
+        viewModelScope.launch {
+            val secret = try {
+                signingSecretStorage.get(secretGesture).orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            if (secretLoadId == loadId && _gesture.value != null) {
+                _signingSecretInput.value = secret
+                _signingSecretLoading.value = false
+            }
+        }
     }
 
     /** Drops rows with a blank name; later rows win on duplicate names. */
