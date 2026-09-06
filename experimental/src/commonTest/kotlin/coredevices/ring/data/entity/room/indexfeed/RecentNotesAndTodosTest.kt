@@ -120,6 +120,13 @@ class RecentNotesAndTodosTest {
     }
 
     @Test
+    fun emptyTitleItemIsIncludedAndFingerprinted() {
+        val untitled = item("a", title = "")
+        assertEquals(listOf("a"), recentNotesAndTodos(listOf(untitled)).map { it.firestoreId })
+        assertEquals(listOf(Triple("a", "", "Note")), widgetRenderFingerprint(listOf(untitled)))
+    }
+
+    @Test
     fun fingerprintIgnoresFieldsThatAreNotRendered() {
         val a = item("a", createdAtMs = 1)
         val b = item("a", createdAtMs = 2)

@@ -91,8 +91,9 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
                 )
                 return@Column
             }
-            LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
-                items(rows, itemId = { it.firestoreId.hashCode().toLong() }) { item ->
+            // defaultWeight(): take the height left under the header so the list scrolls instead of clipping.
+            LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                items(rows) { item ->
                     Column(
                         modifier = GlanceModifier.fillMaxWidth().padding(vertical = 6.dp)
                             .clickable(actionStartActivity(launchIntent(context, RingRoutes.objectDeepLink(item.firestoreId)))),
