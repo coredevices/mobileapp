@@ -8,9 +8,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.datetime.TimeZone
 
 class RecentNotesAndTodosTest {
 
@@ -97,22 +101,6 @@ class RecentNotesAndTodosTest {
     }
 
     @Test
-    fun subtitleIsNoteForPlainNote() {
-        assertEquals("Note", widgetRowSubtitle(item("a")))
-    }
-
-    @Test
-    fun subtitleIsTodoForTodoMemberWithoutDueDate() {
-        assertEquals("To-do", widgetRowSubtitle(item("a", lists = LIST_TODOS_ID)))
-    }
-
-    @Test
-    fun subtitleStartsWithDueForTodoMemberWithDueDate() {
-        val subtitle = widgetRowSubtitle(item("a", lists = LIST_TODOS_ID, dueAt = Instant.fromEpochMilliseconds(0)))
-        assertTrue(subtitle.startsWith("Due "), subtitle)
-    }
-
-    @Test
     fun fingerprintChangesWhenMembershipFlipsSubtitle() {
         val asNote = item("a")
         val asTodo = item("a", lists = LIST_TODOS_ID)
@@ -124,6 +112,49 @@ class RecentNotesAndTodosTest {
         val untitled = item("a", title = "")
         assertEquals(listOf("a"), recentNotesAndTodos(listOf(untitled)).map { it.firestoreId })
         assertEquals(listOf(Triple("a", "", "Note")), widgetRenderFingerprint(listOf(untitled)))
+    }
+
+    // --- Banner widget: counts, row labels, relative time (all in UTC for determinism) ---
+
+    private val utc = TimeZone.UTC
+    private val now = Instant.parse("2026-09-06T10:00:00Z")
+
+    @Test
+    fun countsSplitTodosAndNotesAndSkipExcludedItems() {
+        val items = listOf(
+            item("t1", metadata = reminder, lists = LIST_TODOS_ID),
+            item("n1"), item("n2", lists = "yu"),
+            item("gone", deleted = true), item("done", done = true, lists = LIST_TODOS_ID),
+        )
+        assertEquals(WidgetCounts(todos = 1, notes = 2), widgetCounts(items))
+    }
+
+    @Test
+    fun relativeTimeBuckets() {
+        assertEquals("now", relativeTime(now - 30.seconds, now, utc))
+        assertEquals("5 min", relativeTime(now - 5.minutes, now, utc))
+        assertEquals("3 h", relativeTime(now - 3.hours, now, utc))
+        assertEquals("Yesterday", relativeTime(Instant.parse("2026-09-05T23:00:00Z"), now, utc))
+        assertEquals("1 Sep", relativeTime(Instant.parse("2026-09-01T09:00:00Z"), now, utc))
+    }
+
+    @Test
+    fun todoLabelReflectsDueDate() {
+        val lists = emptyMap<String, String>()
+        assertEquals("To-do", widgetRowLabel(item("a", lists = LIST_TODOS_ID), lists, now, utc))
+        assertEquals("Due today", widgetRowLabel(item("a", lists = LIST_TODOS_ID, dueAt = now + 2.hours), lists, now, utc))
+        assertEquals("Due tomorrow", widgetRowLabel(item("a", lists = LIST_TODOS_ID, dueAt = now + 1.days), lists, now, utc))
+        assertEquals("Due 15 Sep", widgetRowLabel(item("a", lists = LIST_TODOS_ID, dueAt = Instant.parse("2026-09-15T12:00:00Z")), lists, now, utc))
+        assertEquals("Overdue", widgetRowLabel(item("a", lists = LIST_TODOS_ID, dueAt = now - 2.days), lists, now, utc))
+    }
+
+    @Test
+    fun noteLabelIsParentListNameOrNote() {
+        val lists = mapOf("yu" to "yu", "notes_self" to "Notes to self")
+        assertEquals("yu", widgetRowLabel(item("a", lists = "yu"), lists, now, utc))
+        assertEquals("Notes to self", widgetRowLabel(item("a", lists = "notes_self"), lists, now, utc))
+        assertEquals("Note", widgetRowLabel(item("a"), lists, now, utc))
+        assertEquals("Note", widgetRowLabel(item("a", lists = "unknown_list"), lists, now, utc))
     }
 
     @Test

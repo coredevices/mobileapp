@@ -7,11 +7,13 @@ import androidx.glance.appwidget.updateAll
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.HackyPermissionRequesterProvider
+import coredevices.ring.data.entity.room.indexfeed.displayTitle
 import coredevices.ring.data.entity.room.indexfeed.recentNotesAndTodos
 import coredevices.ring.data.entity.room.indexfeed.widgetRenderFingerprint
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
 import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.glance.IndexNotesWidget
 import coredevices.ring.glance.VoiceWidgetReceiver
 import coredevices.util.CoreConfigHolder
@@ -34,6 +36,7 @@ actual class RingDelegate(
     private val settings: Settings,
     private val firestoreKnownRingsSync: FirestoreKnownRingsSync,
     private val itemRepo: ItemRepository,
+    private val listRepo: ListRepository,
 ) {
     private val logger = Logger.withTag("RingDelegate")
 
@@ -56,11 +59,13 @@ actual class RingDelegate(
     @OptIn(FlowPreview::class)
     private fun monitorIndexNotesWidget() {
         combine(
-            itemRepo.getAllFlow().debounce(500), // coalesce write bursts; config passes through
+            itemRepo.getAllFlow().debounce(500), // coalesce write bursts; lists/config pass through
+            listRepo.getAllFlow(),
             coreConfigHolder.config.map { it.enableIndex }.distinctUntilChanged(),
-        ) { items, enableIndex ->
+        ) { items, lists, enableIndex ->
             val rows = recentNotesAndTodos(items)
-            WidgetRenderState(widgetRenderFingerprint(rows), rows.size, enableIndex)
+            val titles = lists.associate { it.firestoreId to it.displayTitle }
+            WidgetRenderState(widgetRenderFingerprint(rows, titles), rows.size, enableIndex)
         }
             .distinctUntilChanged()
             .onEach { state ->

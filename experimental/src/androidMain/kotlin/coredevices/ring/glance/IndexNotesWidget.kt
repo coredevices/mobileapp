@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package coredevices.ring.glance
 
 import android.content.Context
@@ -11,116 +13,181 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.color.ColorProvider
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
+import coredevices.ring.data.entity.room.indexfeed.WidgetCounts
 import coredevices.ring.data.entity.room.indexfeed.displayTitle
+import coredevices.ring.data.entity.room.indexfeed.isWidgetTodo
 import coredevices.ring.data.entity.room.indexfeed.recentNotesAndTodos
-import coredevices.ring.data.entity.room.indexfeed.widgetRowSubtitle
+import coredevices.ring.data.entity.room.indexfeed.relativeTime
+import coredevices.ring.data.entity.room.indexfeed.widgetCounts
+import coredevices.ring.data.entity.room.indexfeed.widgetRowLabel
 import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.navigation.RingRoutes
+import coredevices.ring.ui.theme.IndexColors
 import coredevices.util.CoreConfigHolder
 import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
-import theme.greyScheme
-import theme.lightScheme
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
-/** Home-screen widget listing the most recent Index notes and to-dos.
- *  Instantiated by Glance (not Koin), so dependencies come via [KoinComponent]. */
+/** Index theme tokens as day/night providers so the widget matches the feed in both modes. */
+private object W {
+    private fun both(pick: (IndexColors) -> androidx.compose.ui.graphics.Color) =
+        ColorProvider(day = pick(IndexColors.Light), night = pick(IndexColors.Dark))
+    val surface = both { it.surface }
+    val ink = both { it.onSurface }
+    val meta = both { it.onSurfaceVariant }
+    val outline = both { it.outline }
+    val divider = both { it.outlineVariant }
+    val red = ColorProvider(IndexColors.Light.primary)
+    val onRed = ColorProvider(IndexColors.Light.onPrimary)
+}
+
+/** Home-screen widget: a Pebble-red band with today's counts over the most recent Index
+ *  notes and to-dos. Instantiated by Glance (not Koin), so dependencies come via [KoinComponent].
+ *
+ *  Data is collected INSIDE the composition: a Glance session can stay alive for tens of
+ *  seconds and update()/updateAll() only recomposes it — provideGlance is not re-run — so a
+ *  one-shot snapshot here would render stale for the session's lifetime. The .first() reads
+ *  only seed the initial frame. Mirrors the in-app feed: local Room data, gated on
+ *  enableIndex only (the feed never gates on sign-in). */
 class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
 
-    // Mirrors the in-app feed: local Room data, gated on enableIndex only (the feed
-    // itself never gates on sign-in — notes/to-dos are created locally and sync later).
-    //
-    // Data is collected INSIDE the composition: a Glance session can stay alive for
-    // tens of seconds, and update()/updateAll() only recomposes it — provideGlance is
-    // not re-run — so a one-shot snapshot taken here would render stale for the
-    // session's lifetime. The .first() snapshot only seeds the initial frame.
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val config = get<CoreConfigHolder>().config
         val itemsFlow = get<ItemRepository>().getAllFlow()
+        val listsFlow = get<ListRepository>().getAllFlow()
         val initialItems = itemsFlow.first()
+        val initialLists = listsFlow.first()
         provideContent {
             val enableIndex = config.collectAsState().value.enableIndex
             val items by itemsFlow.collectAsState(initialItems)
+            val lists by listsFlow.collectAsState(initialLists)
+            val titles = remember(lists) { lists.associate { it.firestoreId to it.displayTitle } }
             val rows = remember(items) { recentNotesAndTodos(items) }
-            GlanceTheme(ColorProviders(light = lightScheme, dark = greyScheme)) {
-                if (enableIndex) Content(context, rows) else Message(context, "Turn on Index to see your notes")
+            val counts = remember(items) { widgetCounts(items) }
+            Column(modifier = GlanceModifier.fillMaxSize().background(W.surface).cornerRadius(20.dp)) {
+                if (enableIndex) Banner(context, rows, counts, titles, Clock.System.now())
+                else Message(context, "Turn on Index to see your notes")
             }
         }
     }
 
     @Composable
     private fun Message(context: Context, text: String) {
-        Column(
-            modifier = GlanceModifier.fillMaxSize()
-                .background(GlanceTheme.colors.surface)
-                .padding(12.dp)
+        Text(
+            text,
+            modifier = GlanceModifier.fillMaxWidth().padding(16.dp)
                 .clickable(actionStartActivity(launchIntent(context, null))),
-        ) {
-            Text(text, style = TextStyle(color = GlanceTheme.colors.onSurface))
-        }
+            style = TextStyle(color = W.meta, fontSize = 13.sp),
+        )
     }
 
     @Composable
-    private fun Content(context: Context, rows: List<CachedItem>) {
-        Column(modifier = GlanceModifier.fillMaxSize().background(GlanceTheme.colors.surface).padding(12.dp)) {
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
-                HeaderLink(context, "Notes", RingRoutes.allListsDeepLink())
-                Spacer(GlanceModifier.width(16.dp))
-                HeaderLink(context, "To-dos", RingRoutes.objectDeepLink(LIST_TODOS_ID))
+    private fun ColumnScope.Banner(context: Context, rows: List<CachedItem>, counts: WidgetCounts, titles: Map<String, String>, now: Instant) {
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().background(W.red).padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                "Index",
+                modifier = GlanceModifier.clickable(actionStartActivity(launchIntent(context, null))),
+                style = TextStyle(color = W.onRed, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            )
+            Spacer(GlanceModifier.defaultWeight())
+            Column(horizontalAlignment = Alignment.End) {
+                CountLine(context, plural(counts.todos, "to-do"), RingRoutes.objectDeepLink(LIST_TODOS_ID))
+                CountLine(context, plural(counts.notes, "note"), RingRoutes.allListsDeepLink())
             }
-            if (rows.isEmpty()) {
-                Text(
-                    "Nothing yet — tap to add",
-                    modifier = GlanceModifier.padding(top = 8.dp)
-                        .clickable(actionStartActivity(launchIntent(context, RingRoutes.allListsDeepLink()))),
-                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant),
-                )
-                return@Column
-            }
-            // defaultWeight(): take the height left under the header so the list scrolls instead of clipping.
-            LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-                items(rows) { item ->
-                    Column(
-                        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 6.dp)
-                            .clickable(actionStartActivity(launchIntent(context, RingRoutes.objectDeepLink(item.firestoreId)))),
-                    ) {
-                        Text(item.displayTitle, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp))
-                        Text(widgetRowSubtitle(item), maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
-                    }
+        }
+        if (rows.isEmpty()) {
+            Text(
+                "Nothing yet — tap to add",
+                modifier = GlanceModifier.fillMaxWidth().padding(16.dp)
+                    .clickable(actionStartActivity(launchIntent(context, RingRoutes.allListsDeepLink()))),
+                style = TextStyle(color = W.meta, fontSize = 13.sp),
+            )
+            return
+        }
+        val first = rows.first()
+        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+            items(rows) { item ->
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    if (item !== first) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(W.divider)) {}
+                    RowLine(context, item, titles, now)
                 }
             }
         }
     }
 
     @Composable
-    private fun HeaderLink(context: Context, label: String, deepLink: String) {
+    private fun CountLine(context: Context, text: String, deepLink: String) {
         Text(
-            label,
+            text,
             modifier = GlanceModifier.clickable(actionStartActivity(launchIntent(context, deepLink))),
-            style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+            style = TextStyle(color = W.onRed, fontSize = 11.5.sp, fontWeight = FontWeight.Medium),
         )
     }
+
+    @Composable
+    private fun RowLine(context: Context, item: CachedItem, titles: Map<String, String>, now: Instant) {
+        val todo = item.isWidgetTodo()
+        val label = widgetRowLabel(item, titles, now)
+        val meta = if (todo) label else "$label · ${relativeTime(item.updatedAt, now)}"
+        val metaColor = if (todo && label != "To-do") W.red else W.meta
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp)
+                .clickable(actionStartActivity(launchIntent(context, RingRoutes.objectDeepLink(item.firestoreId)))),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Glyph(if (todo) W.red else W.outline)
+            Spacer(GlanceModifier.width(10.dp))
+            Column {
+                Text(item.displayTitle, maxLines = 1, style = TextStyle(color = W.ink, fontSize = 14.5.sp, fontWeight = FontWeight.Medium))
+                Text(meta, maxLines = 1, style = TextStyle(color = metaColor, fontSize = 11.5.sp, fontWeight = if (metaColor === W.red) FontWeight.Medium else FontWeight.Normal))
+            }
+        }
+    }
+
+    /** Hollow 13 dp circle drawn as a ring-coloured box with a surface-coloured box inside
+     *  (Glance has no border modifier). Red ring = to-do, outline ring = note. */
+    @Composable
+    private fun Glyph(ring: ColorProvider) {
+        Box(GlanceModifier.size(13.dp).background(ring).cornerRadius(7.dp), contentAlignment = Alignment.Center) {
+            Box(GlanceModifier.size(10.dp).background(W.surface).cornerRadius(5.dp)) {}
+        }
+    }
+
+    private fun plural(n: Int, word: String) = "$n $word${if (n == 1) "" else "s"}"
 
     /** Same explicit-component launch as [VoiceWidget]; a null [deepLink] is a bare app launch. */
     private fun launchIntent(context: Context, deepLink: String?): Intent =
