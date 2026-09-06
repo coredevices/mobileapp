@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -47,10 +50,19 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
 
     // Mirrors the in-app feed: local Room data, gated on enableIndex only (the feed
     // itself never gates on sign-in — notes/to-dos are created locally and sync later).
+    //
+    // Data is collected INSIDE the composition: a Glance session can stay alive for
+    // tens of seconds, and update()/updateAll() only recomposes it — provideGlance is
+    // not re-run — so a one-shot snapshot taken here would render stale for the
+    // session's lifetime. The .first() snapshot only seeds the initial frame.
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val enableIndex = get<CoreConfigHolder>().config.value.enableIndex
-        val rows = if (enableIndex) recentNotesAndTodos(get<ItemRepository>().getAllFlow().first()) else emptyList()
+        val config = get<CoreConfigHolder>().config
+        val itemsFlow = get<ItemRepository>().getAllFlow()
+        val initialItems = itemsFlow.first()
         provideContent {
+            val enableIndex = config.collectAsState().value.enableIndex
+            val items by itemsFlow.collectAsState(initialItems)
+            val rows = remember(items) { recentNotesAndTodos(items) }
             GlanceTheme(ColorProviders(light = lightScheme, dark = greyScheme)) {
                 if (enableIndex) Content(context, rows) else Message(context, "Turn on Index to see your notes")
             }
