@@ -35,8 +35,6 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.util.CoreConfigHolder
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -47,17 +45,14 @@ import theme.lightScheme
  *  Instantiated by Glance (not Koin), so dependencies come via [KoinComponent]. */
 class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
 
+    // Mirrors the in-app feed: local Room data, gated on enableIndex only (the feed
+    // itself never gates on sign-in — notes/to-dos are created locally and sync later).
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val enableIndex = get<CoreConfigHolder>().config.value.enableIndex
-        val signedIn = Firebase.auth.currentUser != null
-        val rows = if (enableIndex && signedIn) recentNotesAndTodos(get<ItemRepository>().getAllFlow().first()) else emptyList()
+        val rows = if (enableIndex) recentNotesAndTodos(get<ItemRepository>().getAllFlow().first()) else emptyList()
         provideContent {
             GlanceTheme(ColorProviders(light = lightScheme, dark = greyScheme)) {
-                when {
-                    !enableIndex -> Message(context, "Turn on Index to see your notes")
-                    !signedIn -> Message(context, "Sign in to see your notes")
-                    else -> Content(context, rows)
-                }
+                if (enableIndex) Content(context, rows) else Message(context, "Turn on Index to see your notes")
             }
         }
     }

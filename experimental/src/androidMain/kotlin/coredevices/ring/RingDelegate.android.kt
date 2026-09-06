@@ -16,15 +16,12 @@ import coredevices.ring.glance.IndexNotesWidget
 import coredevices.ring.glance.VoiceWidgetReceiver
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -50,26 +47,20 @@ actual class RingDelegate(
     private data class WidgetRenderState(
         val fingerprint: List<Triple<String, String, String>>,
         val itemCount: Int,
-        val uid: String?,
         val enableIndex: Boolean,
     )
 
-    /** Pushes a refresh to [IndexNotesWidget] whenever its rendered content, the
-     *  signed-in user, or the Index toggle changes. `updatePeriodMillis` in the
-     *  provider XML is only a best-effort fallback. */
+    /** Pushes a refresh to [IndexNotesWidget] whenever its rendered content or the
+     *  Index toggle changes. `updatePeriodMillis` in the provider XML is only a
+     *  best-effort fallback. */
     @OptIn(FlowPreview::class)
     private fun monitorIndexNotesWidget() {
-        val authUser = flow {
-            emit(Firebase.auth.currentUser)
-            Firebase.auth.authStateChanged.collect { emit(it) }
-        }
         combine(
-            itemRepo.getAllFlow().debounce(500), // coalesce write bursts; auth/config pass through
-            authUser,
+            itemRepo.getAllFlow().debounce(500), // coalesce write bursts; config passes through
             coreConfigHolder.config.map { it.enableIndex }.distinctUntilChanged(),
-        ) { items, user, enableIndex ->
+        ) { items, enableIndex ->
             val rows = recentNotesAndTodos(items)
-            WidgetRenderState(widgetRenderFingerprint(rows), rows.size, user?.uid, enableIndex)
+            WidgetRenderState(widgetRenderFingerprint(rows), rows.size, enableIndex)
         }
             .distinctUntilChanged()
             .onEach { state ->
