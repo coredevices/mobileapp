@@ -64,6 +64,7 @@ private object W {
     private fun both(pick: (IndexColors) -> androidx.compose.ui.graphics.Color) =
         ColorProvider(day = pick(IndexColors.Light), night = pick(IndexColors.Dark))
     val surface = both { it.surface }
+    val card = both { it.surfaceContainerLow }
     val ink = both { it.onSurface }
     val meta = both { it.onSurfaceVariant }
     val outline = both { it.outline }
@@ -138,12 +139,11 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
             )
             return
         }
-        val first = rows.first()
-        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+        // Rows as cards: 4 dp gaps, 10 dp side margin, so five still fit at 3×3.
+        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = 10.dp)) {
             items(rows) { item ->
-                Column(modifier = GlanceModifier.fillMaxWidth()) {
-                    if (item !== first) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(W.divider)) {}
-                    RowLine(context, item, titles, now)
+                Column(modifier = GlanceModifier.fillMaxWidth().padding(top = if (item === rows.first()) 8.dp else 4.dp)) {
+                    RowCard(context, item, titles, now)
                 }
             }
         }
@@ -159,17 +159,18 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
     }
 
     @Composable
-    private fun RowLine(context: Context, item: CachedItem, titles: Map<String, String>, now: Instant) {
+    private fun RowCard(context: Context, item: CachedItem, titles: Map<String, String>, now: Instant) {
         val todo = item.isWidgetTodo()
         val label = widgetRowLabel(item, titles, now)
         val meta = if (todo) label else "$label · ${relativeTime(item.updatedAt, now)}"
         val metaColor = if (todo && label != "To-do") W.red else W.meta
         Row(
-            modifier = GlanceModifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp)
+            modifier = GlanceModifier.fillMaxWidth().background(W.card).cornerRadius(12.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
                 .clickable(actionStartActivity(launchIntent(context, RingRoutes.objectDeepLink(item.firestoreId)))),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Glyph(if (todo) W.red else W.outline)
+            Glyph(if (todo) W.red else W.outline, fill = W.card)
             Spacer(GlanceModifier.width(10.dp))
             Column {
                 Text(item.displayTitle, maxLines = 1, style = TextStyle(color = W.ink, fontSize = 14.5.sp, fontWeight = FontWeight.Medium))
@@ -178,12 +179,12 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
         }
     }
 
-    /** Hollow 13 dp circle drawn as a ring-coloured box with a surface-coloured box inside
+    /** Hollow 13 dp circle drawn as a ring-coloured box with a [fill]-coloured box inside
      *  (Glance has no border modifier). Red ring = to-do, outline ring = note. */
     @Composable
-    private fun Glyph(ring: ColorProvider) {
+    private fun Glyph(ring: ColorProvider, fill: ColorProvider) {
         Box(GlanceModifier.size(13.dp).background(ring).cornerRadius(7.dp), contentAlignment = Alignment.Center) {
-            Box(GlanceModifier.size(10.dp).background(W.surface).cornerRadius(5.dp)) {}
+            Box(GlanceModifier.size(10.dp).background(fill).cornerRadius(5.dp)) {}
         }
     }
 
