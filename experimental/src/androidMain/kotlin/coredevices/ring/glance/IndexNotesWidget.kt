@@ -11,8 +11,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionStartActivity
@@ -38,6 +41,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import coredevices.ring.R
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.WidgetCounts
 import coredevices.ring.data.entity.room.indexfeed.displayTitle
@@ -170,7 +174,7 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
                 .clickable(actionStartActivity(launchIntent(context, RingRoutes.objectDeepLink(item.firestoreId)))),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Glyph(if (todo) W.red else W.outline, fill = W.card)
+            if (todo) Ring(W.red, fill = W.card) else NotePad()
             Spacer(GlanceModifier.width(10.dp))
             Column {
                 Text(item.displayTitle, maxLines = 1, style = TextStyle(color = W.ink, fontSize = 14.5.sp, fontWeight = FontWeight.Medium))
@@ -179,13 +183,24 @@ class IndexNotesWidget : GlanceAppWidget(), KoinComponent {
         }
     }
 
-    /** Hollow 13 dp circle drawn as a ring-coloured box with a [fill]-coloured box inside
-     *  (Glance has no border modifier). Red ring = to-do, outline ring = note. */
+    /** Hollow 13 dp circle (a to-do's unchecked box) drawn as a ring-coloured box with a
+     *  [fill]-coloured box inside — Glance has no border modifier. */
     @Composable
-    private fun Glyph(ring: ColorProvider, fill: ColorProvider) {
+    private fun Ring(ring: ColorProvider, fill: ColorProvider) {
         Box(GlanceModifier.size(13.dp).background(ring).cornerRadius(7.dp), contentAlignment = Alignment.Center) {
             Box(GlanceModifier.size(10.dp).background(fill).cornerRadius(5.dp)) {}
         }
+    }
+
+    /** Notepad glyph for note rows, tinted with the outline colour. */
+    @Composable
+    private fun NotePad() {
+        Image(
+            provider = ImageProvider(R.drawable.ic_widget_note),
+            contentDescription = null,
+            modifier = GlanceModifier.size(15.dp),
+            colorFilter = ColorFilter.tint(W.outline),
+        )
     }
 
     private fun plural(n: Int, word: String) = "$n $word${if (n == 1) "" else "s"}"
