@@ -46,4 +46,15 @@ class CoreDeepLinkHandlerTest {
     fun objectDeepLinkWithBlankIdDoesNotParse() {
         assertNull(handler.objectRouteFor(Uri.parse("pebblecore://deep-link/object?id=")))
     }
+
+    @Test
+    fun allListsDeepLinkParsesToAllLists() {
+        assertEquals(RingRoutes.AllLists, handler.allListsRouteFor(Uri.parse(RingRoutes.allListsDeepLink())))
+    }
+
+    @Test
+    fun allListsDeepLinkWithWrongSchemeOrPathDoesNotParse() {
+        assertNull(handler.allListsRouteFor(Uri.parse("pebble://deep-link/all-lists")))
+        assertNull(handler.allListsRouteFor(Uri.parse("pebblecore://deep-link/object?id=1")))
+    }
 }

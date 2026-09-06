@@ -1,0 +1,13 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+                    android:minWidth="180dp"
+                    android:minHeight="180dp"
+                    android:targetCellWidth="3"
+                    android:targetCellHeight="2"
+                    android:maxResizeWidth="360dp"
+                    android:maxResizeHeight="360dp"
+                    android:updatePeriodMillis="1800000"
+                    android:description="@string/index_notes_widget_description"
+                    android:resizeMode="horizontal|vertical"
+                    android:widgetCategory="home_screen"
+                    android:widgetFeatures="reconfigurable|configuration_optional">
+</appwidget-provider>

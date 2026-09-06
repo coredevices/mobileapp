@@ -17,6 +17,7 @@ class CoreDeepLinkHandler {
         logger.d { "handle: uri = $uri" }
         objectRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         recordingRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
+        allListsRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
     }
 
@@ -41,6 +42,15 @@ class CoreDeepLinkHandler {
         val id = uri.getQueryParameter(RingRoutes.OBJECT_DEEP_LINK_ID_PARAM)?.toLongOrNull()
             ?: return null
         return RingRoutes.RecordingDetails(id)
+    }
+
+    /** `pebblecore://deep-link/all-lists` opens the lists grid (used by the
+     *  Android home-screen widget's "Notes" header). */
+    internal fun allListsRouteFor(uri: Uri): RingRoutes.AllLists? {
+        if (uri.scheme != SCHEME) return null
+        if (uri.host != RingRoutes.OBJECT_DEEP_LINK_HOST) return null
+        if (uri.pathSegments.firstOrNull() != RingRoutes.ALL_LISTS_DEEP_LINK_PATH) return null
+        return RingRoutes.AllLists
     }
 
     fun clearPendingDeepLink() {
