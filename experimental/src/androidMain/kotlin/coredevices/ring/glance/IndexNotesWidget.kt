@@ -33,7 +33,6 @@ import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
-import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
@@ -72,7 +71,6 @@ private object W {
     val ink = both { it.onSurface }
     val meta = both { it.onSurfaceVariant }
     val outline = both { it.outline }
-    val divider = both { it.outlineVariant }
     val red = ColorProvider(IndexColors.Light.primary)
     val onRed = ColorProvider(IndexColors.Light.onPrimary)
 }
