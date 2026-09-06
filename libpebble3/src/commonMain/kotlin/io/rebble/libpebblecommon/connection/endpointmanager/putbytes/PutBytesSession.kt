@@ -123,7 +123,14 @@ class PutBytesSession(
 
     suspend fun sendInstall(cookie: UInt) {
         val installResponse = putBytesService.sendInstall(cookie)
-        // TODO this fired?
-//        check(installResponse.cookie.get() == cookie) { "Received response for wrong cookie" }
+        val responseCookie = installResponse.cookie.get()
+        // Firmware answers an install with cookie 0: prv_cleanup_and_send_response reads
+        // s_pb_state.token, and the commit that precedes an install has already reset the
+        // transfer state. That is why this check used to fire on every install. Zero is
+        // tolerated so the check can come back for the firmware that answers properly, while
+        // a cookie belonging to some other transfer is still caught.
+        check(responseCookie == cookie || responseCookie == 0u) {
+            "Received response for wrong cookie"
+        }
     }
 }
