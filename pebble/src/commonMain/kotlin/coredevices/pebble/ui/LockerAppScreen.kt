@@ -652,8 +652,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             name = "COMPANION",
                             nameModifier = propertyNameModifier,
                             value = entry.androidCompanion.name,
-                            onClick = {
-                                urlLauncher.open(entry.androidCompanion.url)
+                            onClick = entry.androidCompanion.url?.let { url ->
+                                { urlLauncher.open(url); Unit }
                             },
                         )
                     }
@@ -805,9 +805,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     }
 
                     storeSource?.let { storeSource ->
-                        val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
+                        val storeId = entry.storeId
+                        val onClick = if (storeId != null && entry.appstoreSource?.url == PEBBLE_FEED_URL) {
                             {
-                                urlLauncher.open("https://apps.repebble.com/${entry.storeId}")
+                                urlLauncher.open("https://apps.repebble.com/$storeId")
                                 Unit
                             }
                         } else {

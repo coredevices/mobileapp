@@ -23,3 +23,16 @@ project.gradle.taskGraph.whenReady {
         it.enabled = false
     }
 }
+
+// Synthetic pod installs share one CocoaPods cache, which is not safe for concurrent writers.
+abstract class PodInstallLock : BuildService<BuildServiceParameters.None>
+
+val podInstallLock = gradle.sharedServices.registerIfAbsent("podInstallLock", PodInstallLock::class) {
+    maxParallelUsages.set(1)
+}
+
+subprojects {
+    tasks.matching { it.name.startsWith("podInstallSynthetic") }.configureEach {
+        usesService(podInstallLock)
+    }
+}

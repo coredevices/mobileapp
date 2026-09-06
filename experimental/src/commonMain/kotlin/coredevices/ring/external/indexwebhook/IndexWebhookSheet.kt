@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Webhook
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,17 +36,24 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coredevices.ring.service.button.RingGesture
@@ -62,6 +71,10 @@ fun IndexWebhookSheet(
     val urlInput by viewModel.urlInput.collectAsState()
     val headerInputs by viewModel.headerInputs.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
+    val signRequests by viewModel.signRequestsInput.collectAsState()
+    val signingSecret by viewModel.signingSecretInput.collectAsState()
+    val signingSecretLoading by viewModel.signingSecretLoading.collectAsState()
+    val saving by viewModel.saving.collectAsState()
     val testState by viewModel.testState.collectAsState()
     val copyable by viewModel.copyableGesture.collectAsState()
     val canRemove by viewModel.canRemove.collectAsState()
@@ -69,6 +82,8 @@ fun IndexWebhookSheet(
     val focusManager = LocalFocusManager.current
     val dismissKeyboard = KeyboardActions(onDone = { focusManager.clearFocus() })
     val colors = IndexTheme.colors
+    var revealSigningSecret by remember(openFor) { mutableStateOf(false) }
+    val signingReady = !signRequests || signingSecret.isNotBlank()
 
     ModalBottomSheet(
         onDismissRequest = viewModel::closeDialog,
@@ -191,13 +206,93 @@ fun IndexWebhookSheet(
                 }
             }
 
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("Security")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sign requests", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Add an HMAC-SHA256 signature",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = signRequests,
+                        onCheckedChange = viewModel::updateSignRequests,
+                        enabled = !signingSecretLoading,
+                    )
+                }
+                if (signRequests) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SectionLabel("Signing secret")
+                        OutlinedTextField(
+                            value = signingSecret,
+                            onValueChange = viewModel::updateSigningSecret,
+                            enabled = !signingSecretLoading,
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            placeholder = {
+                                Text(if (signingSecretLoading) "Loading…" else "Paste a secret")
+                            },
+                            isError = !signingSecretLoading && signingSecret.isBlank(),
+                            visualTransformation = if (revealSigningSecret) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { revealSigningSecret = !revealSigningSecret },
+                                    enabled = !signingSecretLoading,
+                                ) {
+                                    Icon(
+                                        if (revealSigningSecret) Icons.Default.VisibilityOff
+                                        else Icons.Default.Visibility,
+                                        contentDescription = if (revealSigningSecret) {
+                                            "Hide signing secret"
+                                        } else {
+                                            "Show signing secret"
+                                        },
+                                    )
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = dismissKeyboard,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            if (!signingSecretLoading && signingSecret.isBlank()) {
+                                "A signing secret is required"
+                            } else {
+                                "Use a unique random secret of at least 32 bytes"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (!signingSecretLoading && signingSecret.isBlank()) {
+                                colors.error
+                            } else {
+                                colors.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedButton(
                     onClick = viewModel::sendTestEvent,
-                    enabled = urlInput.isNotBlank() && testState != WebhookTestState.Sending,
+                    enabled = urlInput.isNotBlank() && signingReady && !signingSecretLoading &&
+                        testState != WebhookTestState.Sending,
                     shape = CircleShape,
                     contentPadding = PaddingValues(horizontal = 20.dp),
                 ) {
@@ -227,11 +322,11 @@ fun IndexWebhookSheet(
 
             Button(
                 onClick = viewModel::save,
-                enabled = urlInput.isNotBlank(),
+                enabled = urlInput.isNotBlank() && signingReady && !signingSecretLoading && !saving,
                 shape = CircleShape,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
-                Text("Save")
+                Text(if (saving) "Saving…" else "Save")
             }
 
             if (canRemove) {

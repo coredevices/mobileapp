@@ -31,6 +31,7 @@ data class IndexWebhookConfig(
     val url: String? = null,
     val payloadMode: IndexWebhookPayloadMode = IndexWebhookPayloadMode.RecordingOnly,
     val headers: Map<String, String> = emptyMap(),
+    val signRequests: Boolean = false,
     val saved: Boolean = false,
 ) {
     val isActive: Boolean get() = saved && !url.isNullOrBlank()

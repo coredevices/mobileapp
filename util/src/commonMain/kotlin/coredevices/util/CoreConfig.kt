@@ -68,10 +68,10 @@ class CoreConfigFlow(val flow: StateFlow<CoreConfig>) {
 
 private const val SETTINGS_KEY = "coreapp.config"
 
-enum class WeatherUnit(val code: String, val displayName: String) {
-    Metric("m", "Metric"),
-    Imperial("e", "Imperial"),
-    UkHybrid("h", "Mixed (UK)"),
+enum class WeatherUnit(val code: String) {
+    Metric("m"),
+    Imperial("e"),
+    UkHybrid("h"),
 }
 
 @Serializable
@@ -83,6 +83,9 @@ data class CoreConfig(
     val disableFirmwareUpdateNotifications: Boolean = false,
     val enableIndex: Boolean = false,
     val indexPermissionsConfirmed: Boolean = false,
+    /** No longer written — weather units are the watch's imperial/metric pref. The migration in
+     * [coredevices.pebble.weather.WeatherFetcher] reads it, and an upgrade can arrive from any
+     * older version, so it has to stay. */
     val weatherUnits: WeatherUnit? = null,
     val showAllSettingsTab: Boolean = false,
     val sttConfig: STTConfig = STTConfig(),
@@ -96,11 +99,7 @@ data class CoreConfig(
     val showWatchConnectionDebugInfo: Boolean = false,
     val notifyWatchFullyCharged: Boolean = true,
     val useEngDashOta: Boolean = true,
-) {
-    /** Null until the user picks explicitly; the settings [Json] omits defaults, so a
-     * locale-derived default here would never be persisted. */
-    val resolvedWeatherUnits: WeatherUnit get() = weatherUnits ?: deviceDefaultWeatherUnit()
-}
+)
 
 @Serializable
 data class STTConfig(

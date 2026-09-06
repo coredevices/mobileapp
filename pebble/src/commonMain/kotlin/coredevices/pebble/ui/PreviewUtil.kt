@@ -202,6 +202,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override suspend fun initUserDevToken(rebbleUserToken: String?) {}
         override suspend fun updateLastConnectedWatch(serial: String) {}
         override suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+        override suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int) {}
 
         override fun init() {}
     }
@@ -382,7 +383,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     single { object : CompanionDevice {
         override suspend fun registerDevice(
             identifier: IndexIdentifier,
-            uiContext: PlatformUiContext
+            uiContext: PlatformUiContext,
+            useClassicAssociation: Boolean
         ) {
 
         }

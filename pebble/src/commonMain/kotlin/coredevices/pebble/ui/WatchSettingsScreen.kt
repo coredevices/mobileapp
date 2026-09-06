@@ -138,7 +138,6 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
-import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
@@ -629,6 +628,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = {
                         stringResource(it.resource)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HealthImperialUnits,
+                    title = "Imperial Units",
+                    description = "Use miles/feet/inches/lb and Fahrenheit instead of metric units",
+                    keywords = "weather health degrees celsius temperature miles",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = healthSettings.imperialUnits,
+                    onCheckChanged = {
+                        GlobalScope.launch {
+                            libPebble.updateImperialUnits(it)
+                            weatherFetcher.fetchWeather(this)
+                        }
                     },
                 ),
                 basicSettingsActionItem(
@@ -1153,20 +1167,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                 ),
-                basicSettingsToggleItem(
-                    id = SettingsIds.HealthImperialUnits,
-                    title = "Imperial Units",
-                    description = "Use miles/feet/inches/lb instead of metric units",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = healthSettings.imperialUnits,
-                    show = { healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(imperialUnits = it)
-                        )
-                    },
-                ),
                 basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthHeight,
                     title = "Height",
@@ -1362,24 +1362,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                         GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
-                    show = { coreConfig.fetchWeather }
-                ),
-                basicSettingsDropdownItem(
-                    title = "Units",
-                    keywords = "weather degrees",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Weather,
-                    items = WeatherUnit.entries,
-                    selectedItem = coreConfig.resolvedWeatherUnits,
-                    onItemSelected = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                weatherUnits = it,
-                            )
-                        )
-                        GlobalScope.launch { weatherFetcher.fetchWeather(this) }
-                    },
-                    itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
                 ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
