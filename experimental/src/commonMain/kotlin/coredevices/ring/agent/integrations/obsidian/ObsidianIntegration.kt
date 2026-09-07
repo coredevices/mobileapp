@@ -55,11 +55,18 @@ class ObsidianIntegration(
         return vault.hasAccess(handle)
     }
 
-    fun saveConfig(mode: ObsidianMode, targetNote: String, subfolder: String, customTag: String) {
+    fun saveConfig(
+        mode: ObsidianMode,
+        targetNote: String,
+        subfolder: String,
+        customTag: String,
+        appendPrefix: String = prefs.appendPrefix.value,
+    ) {
         prefs.setMode(mode)
         prefs.setTargetNote(ObsidianNoteFormatter.sanitizeSubfolder(targetNote))
         prefs.setSubfolder(subfolder)
         prefs.setCustomTag(ObsidianNoteFormatter.sanitizeTag(customTag))
+        prefs.setAppendPrefix(appendPrefix)
     }
 
     fun vaultDisplayName(): String? = prefs.vaultName.value
@@ -69,6 +76,7 @@ class ObsidianIntegration(
     fun currentTargetNote(): String = prefs.targetNote.value
     fun currentSubfolder(): String = prefs.subfolder.value
     fun currentCustomTag(): String = prefs.customTag.value
+    fun currentAppendPrefix(): String = prefs.appendPrefix.value
 
     /** Vault-relative paths of existing `.md` files for the "named note" suggestions (empty if no access). */
     suspend fun listNotes(): List<String> {
@@ -95,6 +103,7 @@ class ObsidianIntegration(
             targetNote = targetNote,
             subfolder = prefs.subfolder.value,
             customTag = prefs.customTag.value,
+            appendPrefix = prefs.appendPrefix.value,
         )
         val local = clock.now().toLocalDateTime(timeZone)
         val write = ObsidianNoteFormatter.plan(
