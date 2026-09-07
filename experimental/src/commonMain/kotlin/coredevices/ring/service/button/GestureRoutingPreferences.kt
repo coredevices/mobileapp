@@ -64,6 +64,7 @@ private const val SANDBOX_PREFIX = "mcp_sandbox:"
 private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.PlayPause -> "play_pause"
     GestureDestination.NextTrack -> "next_track"
+    GestureDestination.PreviousTrack -> "previous_track"
     GestureDestination.IndexAgent -> "index_agent"
     GestureDestination.WebSearch -> "web_search"
     GestureDestination.WebhookOnly -> "webhook_only"
@@ -76,6 +77,7 @@ private fun decodeDestination(raw: String): GestureDestination? = when {
         GestureDestination.McpSandbox(raw.removePrefix(SANDBOX_PREFIX).toLongOrNull())
     raw == "play_pause" -> GestureDestination.PlayPause
     raw == "next_track" -> GestureDestination.NextTrack
+    raw == "previous_track" -> GestureDestination.PreviousTrack
     raw == "index_agent" -> GestureDestination.IndexAgent
     raw == "web_search" -> GestureDestination.WebSearch
     raw == "webhook_only" -> GestureDestination.WebhookOnly
