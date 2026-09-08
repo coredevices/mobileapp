@@ -462,6 +462,7 @@ fun ObsidianDialog(
     M3Dialog(
         onDismissRequest = onDismiss,
         title = { Text("Obsidian") },
+        scrollableContent = true,
         buttons = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
             if (vaultName != null) {
