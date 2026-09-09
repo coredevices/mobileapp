@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.di
 
+import io.rebble.libpebblecommon.datalogging.CompanionDatalogging
+import io.rebble.libpebblecommon.datalogging.NoOpCompanionDatalogging
 import io.rebble.libpebblecommon.calendar.IosCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.IosSystemCalendar
 import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
@@ -41,6 +43,7 @@ import org.koin.dsl.module
 import kotlin.time.Duration.Companion.seconds
 
 actual val platformModule: Module = module {
+    single<CompanionDatalogging> { NoOpCompanionDatalogging }
     single {
         PhoneCapabilities(
             CommonPhoneCapabilities + setOf(

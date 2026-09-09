@@ -18,6 +18,8 @@ import io.rebble.libpebblecommon.connection.bt.classic.pebble.BtClassicConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
+import io.rebble.libpebblecommon.datalogging.CompanionDatalogging
+import io.rebble.libpebblecommon.pebblekit.classic.PebbleKitClassicDatalogging
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidPhoneReceiver
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidSystemCallLog
 import io.rebble.libpebblecommon.connection.bt.classic.transport.AndroidClassicScanner
@@ -86,6 +88,7 @@ actual val platformModule: Module = module {
     singleOf(::MusicPlugin)
     singleOf(::NotificationsPlugin)
     single { PlatformPlugins(setOf(get<MusicPlugin>(), get<NotificationsPlugin>())) }
+    singleOf(::PebbleKitClassicDatalogging) bind CompanionDatalogging::class
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
