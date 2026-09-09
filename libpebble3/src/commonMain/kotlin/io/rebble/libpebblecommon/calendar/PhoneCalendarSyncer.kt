@@ -244,6 +244,9 @@ class PhoneCalendarSyncer(
 
     override fun calendars(): Flow<List<CalendarEntity>> = calendarDao.getFlow()
 
+    override suspend fun writableCalendars(): List<CalendarEntity> =
+        systemCalendar.getWritableCalendars()
+
     override suspend fun createEvent(event: NewCalendarEvent): String? =
         systemCalendar.createEvent(event)
 
