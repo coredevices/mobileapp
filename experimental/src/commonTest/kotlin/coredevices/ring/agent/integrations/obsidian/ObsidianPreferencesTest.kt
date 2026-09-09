@@ -17,6 +17,7 @@ class ObsidianPreferencesTest {
         assertEquals("", prefs.targetNote.value)
         assertEquals("Index Inbox", prefs.subfolder.value)
         assertEquals("", prefs.customTag.value)
+        assertEquals(ObsidianNoteFormatter.DEFAULT_APPEND_PREFIX, prefs.appendPrefix.value)
     }
 
     @Test
@@ -38,11 +39,21 @@ class ObsidianPreferencesTest {
         prefs.setSubfolder("Capture")
         prefs.setCustomTag("fleeting")
 
+        prefs.setAppendPrefix("- [[YYYY-MM-DD]] HH:mm: ")
+
         val reloaded = ObsidianPreferences(settings)
         assertEquals(ObsidianMode.NAMED_NOTE, reloaded.mode.value)
         assertEquals("Daily.md", reloaded.targetNote.value)
         assertEquals("Capture", reloaded.subfolder.value)
         assertEquals("fleeting", reloaded.customTag.value)
+        assertEquals("- [[YYYY-MM-DD]] HH:mm: ", reloaded.appendPrefix.value)
+    }
+
+    @Test
+    fun emptyAppendPrefixSurvivesReload() {
+        val settings = MapSettings()
+        ObsidianPreferences(settings).setAppendPrefix("")
+        assertEquals("", ObsidianPreferences(settings).appendPrefix.value)
     }
 
     @Test
@@ -52,13 +63,16 @@ class ObsidianPreferencesTest {
         prefs.setVault("h", "n")
         prefs.setMode(ObsidianMode.MAIN_NOTE)
         prefs.setCustomTag("fleeting")
+        prefs.setAppendPrefix("- ")
 
         prefs.clear()
 
         assertNull(prefs.vaultHandle.value)
         assertFalse(settings.hasKey("obsidian_vault_handle"))
         assertFalse(settings.hasKey("obsidian_custom_tag"))
+        assertFalse(settings.hasKey("obsidian_append_prefix"))
         assertEquals(ObsidianMode.TIMESTAMPED_FILES, prefs.mode.value)
         assertEquals("", prefs.customTag.value)
+        assertEquals(ObsidianNoteFormatter.DEFAULT_APPEND_PREFIX, prefs.appendPrefix.value)
     }
 }
