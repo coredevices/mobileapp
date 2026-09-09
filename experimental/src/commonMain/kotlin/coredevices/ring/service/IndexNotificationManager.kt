@@ -134,6 +134,9 @@ class IndexNotificationManager(
             RingTransferStatus.Started, RingTransferStatus.Saving -> {
                 return InflightIndexNotification.Transferring(notifId, timestamp)
             }
+            RingTransferStatus.Completed if entry == null -> {
+                return InflightIndexNotification.Discarded(notifId, timestamp)
+            }
             RingTransferStatus.Discarded -> {
                 return InflightIndexNotification.Discarded(notifId, timestamp)
             }
