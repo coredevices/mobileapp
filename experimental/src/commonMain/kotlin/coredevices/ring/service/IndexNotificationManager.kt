@@ -134,6 +134,12 @@ class IndexNotificationManager(
             RingTransferStatus.Started, RingTransferStatus.Saving -> {
                 return InflightIndexNotification.Transferring(notifId, timestamp)
             }
+            // Webhook-only transcript deliveries intentionally create no recording entry or
+            // agent result. Once their audio has been saved, there is no local processing state
+            // left to show, so dismiss the transfer notification.
+            RingTransferStatus.Completed if entry == null -> {
+                return InflightIndexNotification.Discarded(notifId, timestamp)
+            }
             RingTransferStatus.Discarded -> {
                 return InflightIndexNotification.Discarded(notifId, timestamp)
             }
