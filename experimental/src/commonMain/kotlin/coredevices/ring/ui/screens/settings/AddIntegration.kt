@@ -726,15 +726,23 @@ fun TaskerDialog(
             is SignInState.Idle -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Sends your notes and reminders to Tasker as a shared intent " +
-                            "(text/plain), so you can route them to any app or action."
+                        "Sends your notes and reminders to Tasker, so you can route them to any " +
+                            "app or action."
                     )
-                    Text("To receive them, in Tasker:", fontWeight = FontWeight.Bold)
-                    Text("1.  Add a profile, pick Event → Received Share.")
-                    Text("2.  Attach a task — your text arrives in the %rs_text variable.")
                     Text(
-                        "3.  Optional: limit it to this app with %rs_package_name = " +
-                            "coredevices.coreapp."
+                        "Set up ONE of these profiles in Tasker (both together processes each " +
+                            "item twice):",
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "A.  Event → Received Share. Your text arrives in %rs_text. Optionally " +
+                            "limit it to this app with %rs_package_name = coredevices.coreapp."
+                    )
+                    Text(
+                        "B.  Event → Intent Received, Action = coredevices.coreapp.INDEX_ITEM. " +
+                            "Each detail is a separate variable: %text, %message_type, %timestamp, " +
+                            "and for reminders %raw_text (the unaltered transcript), %deadline " +
+                            "(ISO-8601 UTC), %notify_before_seconds, %list."
                     )
                 }
             }
