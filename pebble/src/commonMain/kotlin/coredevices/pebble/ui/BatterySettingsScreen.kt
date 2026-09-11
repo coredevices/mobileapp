@@ -47,6 +47,20 @@ private const val MOBILE_BATTERY_PATH = "/m/battery"
 
 @Composable
 fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        chargeLimitSettingsItem()?.Item()
+        Box(Modifier.weight(1f)) {
+            BatteryAnalyticsContent(navBarNav, topBarParams)
+        }
+    }
+}
+
+@Composable
+private fun BatteryAnalyticsContent(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     val apiConfig = koinInject<CommonApiConfig>()
     val settings = koinInject<Settings>()
     val analyticsEnabled = settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)
