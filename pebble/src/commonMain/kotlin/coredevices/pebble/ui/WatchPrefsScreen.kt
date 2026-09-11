@@ -23,7 +23,9 @@ import io.rebble.libpebblecommon.SystemAppIDs.MOTION_BACKLIGHT_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.QUIET_TIME_TOGGLE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_FUTURE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_PAST_UUID
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
@@ -36,8 +38,10 @@ import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefEnum
 import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import kotlinx.coroutines.flow.map
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 // Snap the notification timeout slider to 30-second increments (20 stops across 0..600s)
@@ -66,17 +70,11 @@ fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs().map { item ->
-            when (val pref = item.pref) {
-                is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
-                is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
-                is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
-                is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
-                is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
-                is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
-            }
-        }
+    val watches by libPebble.watches.collectAsState()
+    val mapped = remember(settings, quickLaunchOptions, watches) {
+        settings.hidePresetManagedBacklightPrefs()
+            .filter { watches.anySupports(it.pref) }
+            .map { it.settingsItem(libPebble, quickLaunchOptions) }
     }
     val showConfirmReset = remember { mutableStateOf(false) }
     ConfirmDialog(
@@ -157,6 +155,37 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
     BoolWatchPref.MusicShowAlbumArt -> Section.Music
+    EnumWatchPref.ChargeLimit -> Section.Battery
+    BoolWatchPref.FastCharge -> Section.Battery
+}
+
+@Composable
+internal fun batteryPrefItems(): List<SettingsItem> {
+    val libPebble = rememberLibPebble()
+    val config by libPebble.config.collectAsState()
+    val watches by libPebble.watches.collectAsState()
+    if (!config.watchConfig.enableWatchSettingsSync) {
+        return emptyList()
+    }
+    val settings by libPebble.watchPrefs.collectAsState(emptyList())
+    return BATTERY_PREFS
+        .mapNotNull { pref -> settings.firstOrNull { it.pref == pref } }
+        .filter { watches.anySupports(it.pref) }
+        .map { it.settingsItem(libPebble, quickLaunchOptions = emptyList()) }
+}
+
+private val BATTERY_PREFS: List<WatchPref<*>> = listOf(EnumWatchPref.ChargeLimit, BoolWatchPref.FastCharge)
+
+private fun WatchPreference<*>.settingsItem(
+    libPebble: LibPebble,
+    quickLaunchOptions: List<QuickLaunchOption>,
+): SettingsItem = when (val pref = pref) {
+    is BoolWatchPref -> booleanPref(pref.castParent(this), libPebble)
+    is EnumWatchPref -> enumPref(pref.castParent(this), libPebble)
+    is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(this), libPebble, quickLaunchOptions)
+    is ColorWatchPref -> colorPref(pref.castParent(this), libPebble)
+    is RgbColorWatchPref -> rgbColorPref(pref.castParent(this), libPebble)
+    is NumberWatchPref -> numberPref(pref.castParent(this), libPebble)
 }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
@@ -164,6 +193,20 @@ fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
     EnumWatchPref.WindSpeed -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
+
+internal fun List<PebbleDevice>.anySupports(pref: WatchPref<*>): Boolean {
+    val minFirmwareVersion = pref.minFirmwareVersion ?: return true
+    return any { it is KnownPebbleDevice && it.firmwareVersion()?.let { version -> version >= minFirmwareVersion } == true }
+}
+
+private fun KnownPebbleDevice.firmwareVersion(): FirmwareVersion? = FirmwareVersion.from(
+    tag = runningFwVersion,
+    isRecovery = false,
+    gitHash = "",
+    timestamp = Instant.DISTANT_PAST,
+    isDualSlot = false,
+    isSlot0 = false,
+)
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref

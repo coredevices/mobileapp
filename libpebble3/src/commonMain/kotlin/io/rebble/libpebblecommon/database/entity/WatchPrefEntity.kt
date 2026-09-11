@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting.Companion.to
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.structmapper.SBoolean
 import io.rebble.libpebblecommon.structmapper.SFixedList
@@ -66,6 +67,11 @@ data class WatchPrefItem(
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w { "Don't know how to encode watch pref key: $id" }
+            return null
+        }
+        val minFirmwareVersion = type.minFirmwareVersion
+        if (minFirmwareVersion != null && params.firmwareVersion < minFirmwareVersion) {
+            logger.d { "Watch firmware ${params.firmwareVersion.stringVersion} predates $id" }
             return null
         }
         logger.v { "trying to insert watch pref to watch blobdb: $id / $value" }
@@ -176,6 +182,7 @@ sealed interface WatchPref<T> {
     fun encodeValue(value: T): String
     fun castParent(parent: WatchPreference<*>): WatchPreference<T> = parent as WatchPreference<T>
     val isDebugSetting: Boolean
+    val minFirmwareVersion: FirmwareVersion? get() = null
 
     companion object {
         fun enumeratePrefs(): List<WatchPref<*>> = BoolWatchPref.entries
@@ -195,6 +202,7 @@ enum class BoolWatchPref(
     override val defaultValue: Boolean,
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
+    override val minFirmwareVersion: FirmwareVersion? = null,
 ) : WatchPref<Boolean> {
     TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
     Clock24h("clock24h", "24h clock", false),
@@ -215,6 +223,13 @@ enum class BoolWatchPref(
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
+    FastCharge(
+        "fastCharge",
+        "Fast Charging",
+        true,
+        description = "Charge at the full rate. Turn off for a gentler charge that is easier on the battery (Pebble Time 2 only)",
+        minFirmwareVersion = FirmwareVersion.sentinel(4, 37, 0),
+    ),
     ;
 
     override val type = WatchPrefType.TypeBoolean
@@ -407,6 +422,21 @@ enum class WatchLanguage(override val code: UByte, override val displayName: Str
     Polish(9u, "Polski"),
 }
 
+// Matches CHARGE_LIMIT_PCT_* in pebble-firmware:include/pbl/services/battery/battery_charge_limit.h.
+enum class ChargeLimitLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    Limit50(50u, "50%"),
+    Limit55(55u, "55%"),
+    Limit60(60u, "60%"),
+    Limit65(65u, "65%"),
+    Limit70(70u, "70%"),
+    Limit75(75u, "75%"),
+    Limit80(80u, "80%"),
+    Limit85(85u, "85%"),
+    Limit90(90u, "90%"),
+    Limit95(95u, "95%"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -414,6 +444,7 @@ enum class EnumWatchPref(
     val options: List<WatchPrefEnum>,
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
+    override val minFirmwareVersion: FirmwareVersion? = null,
 ) : WatchPref<WatchPrefEnum> {
     TextSize("textStyle", "Text Size", ContentSize.Default, ContentSize.entries),
     NotificationFilter(
@@ -534,6 +565,23 @@ enum class EnumWatchPref(
         defaultValue = WatchLanguage.Custom,
         options = WatchLanguage.entries,
     ),
+    ChargeLimit(
+        id = "chargeLimitPct",
+        displayName = "Charge Limit",
+        description = "Limit charging to extend your battery's lifespan",
+        defaultValue = ChargeLimitLevel.Off,
+        options = ChargeLimitLevel.entries,
+        minFirmwareVersion = FirmwareVersion.sentinel(4, 37, 0),
+    ) {
+        override fun decodeValue(value: String): WatchPrefEnum {
+            val code = value.toUByteOrNull() ?: return defaultValue
+            if (code > ChargeLimitLevel.Limit95.code) return ChargeLimitLevel.Off
+            return ChargeLimitLevel.entries
+                .filter { it != ChargeLimitLevel.Off && it.code <= code }
+                .maxByOrNull { it.code }
+                ?: ChargeLimitLevel.Off
+        }
+    },
     ;
 
     override val type = WatchPrefType.TypeUInt8

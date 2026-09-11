@@ -323,6 +323,19 @@ data class FirmwareVersion(
             )
         }
 
+        fun sentinel(major: Int, minor: Int, patch: Int) = FirmwareVersion(
+            stringVersion = "v$major.$minor.$patch",
+            timestamp = Instant.DISTANT_PAST,
+            major = major,
+            minor = minor,
+            patch = patch,
+            suffix = null,
+            gitHash = "",
+            isRecovery = false,
+            isDualSlot = false,
+            isSlot0 = false,
+        )
+
         fun FirmwareVersion.slot(): Int? = when {
             isDualSlot && isSlot0 -> 0
             isDualSlot && !isSlot0 -> 1
