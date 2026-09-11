@@ -72,16 +72,9 @@ fun watchPrefs(): List<SettingsItem> {
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val watches by libPebble.watches.collectAsState()
     val mapped = remember(settings, quickLaunchOptions, watches) {
-        settings.hidePresetManagedBacklightPrefs().filter { watches.anySupports(it.pref) }.map { item ->
-            when (val pref = item.pref) {
-                is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
-                is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
-                is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
-                is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
-                is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
-                is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
-            }
-        }
+        settings.hidePresetManagedBacklightPrefs()
+            .filter { watches.anySupports(it.pref) }
+            .map { it.settingsItem(libPebble, quickLaunchOptions) }
     }
     val showConfirmReset = remember { mutableStateOf(false) }
     ConfirmDialog(
@@ -163,19 +156,36 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MusicShowProgressBar -> Section.Music
     BoolWatchPref.MusicShowAlbumArt -> Section.Music
     EnumWatchPref.ChargeLimit -> Section.Battery
+    BoolWatchPref.FastCharge -> Section.Battery
 }
 
 @Composable
-internal fun chargeLimitSettingsItem(): SettingsItem? {
+internal fun batteryPrefItems(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val config by libPebble.config.collectAsState()
     val watches by libPebble.watches.collectAsState()
-    if (!config.watchConfig.enableWatchSettingsSync || !watches.anySupports(EnumWatchPref.ChargeLimit)) {
-        return null
+    if (!config.watchConfig.enableWatchSettingsSync) {
+        return emptyList()
     }
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
-    val item = settings.firstOrNull { it.pref == EnumWatchPref.ChargeLimit } ?: return null
-    return enumPref(EnumWatchPref.ChargeLimit.castParent(item), libPebble)
+    return BATTERY_PREFS
+        .mapNotNull { pref -> settings.firstOrNull { it.pref == pref } }
+        .filter { watches.anySupports(it.pref) }
+        .map { it.settingsItem(libPebble, quickLaunchOptions = emptyList()) }
+}
+
+private val BATTERY_PREFS: List<WatchPref<*>> = listOf(EnumWatchPref.ChargeLimit, BoolWatchPref.FastCharge)
+
+private fun WatchPreference<*>.settingsItem(
+    libPebble: LibPebble,
+    quickLaunchOptions: List<QuickLaunchOption>,
+): SettingsItem = when (val pref = pref) {
+    is BoolWatchPref -> booleanPref(pref.castParent(this), libPebble)
+    is EnumWatchPref -> enumPref(pref.castParent(this), libPebble)
+    is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(this), libPebble, quickLaunchOptions)
+    is ColorWatchPref -> colorPref(pref.castParent(this), libPebble)
+    is RgbColorWatchPref -> rgbColorPref(pref.castParent(this), libPebble)
+    is NumberWatchPref -> numberPref(pref.castParent(this), libPebble)
 }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {

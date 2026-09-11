@@ -202,6 +202,7 @@ enum class BoolWatchPref(
     override val defaultValue: Boolean,
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
+    override val minFirmwareVersion: FirmwareVersion? = null,
 ) : WatchPref<Boolean> {
     TimezoneSourceIsManual("timezoneSource", "Timezone configured manually", false, description = "Manually configure a time zone on the watch (instead of automatcially using the time zone of the phone)"),
     Clock24h("clock24h", "24h clock", false),
@@ -222,6 +223,13 @@ enum class BoolWatchPref(
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
+    FastCharge(
+        "fastCharge",
+        "Fast Charging",
+        true,
+        description = "Charge at the full rate. Turn off for a gentler charge that is easier on the battery (Pebble Time 2 only)",
+        minFirmwareVersion = FirmwareVersion.sentinel(4, 37, 0),
+    ),
     ;
 
     override val type = WatchPrefType.TypeBoolean

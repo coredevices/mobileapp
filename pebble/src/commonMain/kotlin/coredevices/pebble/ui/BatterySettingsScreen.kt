@@ -52,7 +52,7 @@ fun BatterySettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        chargeLimitSettingsItem()?.Item()
+        batteryPrefItems().forEach { it.Item() }
         Box(Modifier.weight(1f)) {
             BatteryAnalyticsContent(navBarNav, topBarParams)
         }
