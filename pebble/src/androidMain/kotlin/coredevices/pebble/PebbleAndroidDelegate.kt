@@ -1,5 +1,6 @@
 package coredevices.pebble
 
+import android.os.Build
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -32,12 +33,15 @@ class PebbleAndroidDelegate(
             Permission.Bluetooth,
             Permission.PostNotifications,
         )
-        private val AFTER_FIRST_CONNECTION_PERMISSIONS = setOf(
-            Permission.ReadNotifications,
-            Permission.ReadCallLog,
-            Permission.Calendar,
-            Permission.Contacts,
-            Permission.ReadPhoneState,
-        )
+        private val AFTER_FIRST_CONNECTION_PERMISSIONS = buildSet {
+            add(Permission.ReadNotifications)
+            add(Permission.ReadCallLog)
+            add(Permission.Calendar)
+            add(Permission.Contacts)
+            add(Permission.ReadPhoneState)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                add(Permission.MediaRouting)
+            }
+        }
     }
 }

@@ -114,6 +114,12 @@ class MusicControlManager(
                 MusicAction.VolumeUp -> systemMusicControl.volumeUp()
             }
         }.launchIn(watchScope)
+        musicControlService.outputRouteRequests.onEach {
+            musicControlService.updateOutputRoutes(systemMusicControl.getOutputRoutes())
+        }.launchIn(watchScope)
+        musicControlService.outputRouteSelections.onEach { selection ->
+            systemMusicControl.selectOutputRoute(selection.generation, selection.routeId)
+        }.launchIn(watchScope)
     }
 
     // Album art for [request]. Remembers it when the track matched but artwork isn't ready yet, so a

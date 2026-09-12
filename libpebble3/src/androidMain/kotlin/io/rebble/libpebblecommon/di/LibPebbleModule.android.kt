@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.di
 
 import android.app.Application
+import android.os.Build
 import io.rebble.libpebblecommon.calendar.AndroidCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
@@ -56,11 +57,14 @@ import org.koin.dsl.module
 actual val platformModule: Module = module {
     single {
         PhoneCapabilities(
-            CommonPhoneCapabilities + setOf(
-                ProtocolCapsFlag.SupportsExtendedMusicProtocol,
-                ProtocolCapsFlag.SupportsImageFetch,
-                ProtocolCapsFlag.SupportsTwoWayDismissal,
-            )
+            CommonPhoneCapabilities + buildSet {
+                add(ProtocolCapsFlag.SupportsExtendedMusicProtocol)
+                add(ProtocolCapsFlag.SupportsImageFetch)
+                add(ProtocolCapsFlag.SupportsTwoWayDismissal)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                    add(ProtocolCapsFlag.SupportsMusicOutputRouting)
+                }
+            }
         )
     }
     single {

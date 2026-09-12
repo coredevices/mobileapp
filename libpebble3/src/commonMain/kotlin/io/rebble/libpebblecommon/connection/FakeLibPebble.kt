@@ -49,6 +49,8 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.music.MusicAction
+import io.rebble.libpebblecommon.music.MusicOutputRouteSelection
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.notification.NotificationDecision
@@ -709,8 +711,12 @@ class FakeConnectedDevice(
 
     override suspend fun updateVolumeInfo(volumePercent: UByte) {}
 
+    override suspend fun updateOutputRoutes(routes: MusicOutputRoutes) {}
+
     override val musicActions: Flow<MusicAction> = MutableSharedFlow()
     override val updateRequestTrigger: Flow<Unit> = MutableSharedFlow()
+    override val outputRouteRequests: Flow<Unit> = MutableSharedFlow()
+    override val outputRouteSelections: Flow<MusicOutputRouteSelection> = MutableSharedFlow()
 
     @Deprecated("Use more generic currentCompanionAppSession instead and cast if necessary")
     override val currentPKJSSession: StateFlow<PKJSApp?> = MutableStateFlow(null)

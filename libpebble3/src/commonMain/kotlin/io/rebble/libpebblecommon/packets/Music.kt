@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.packets
 
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
 import io.rebble.libpebblecommon.protocolhelpers.PacketRegistry
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
@@ -22,10 +23,13 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         VolumeUp(0x06u),
         VolumeDown(0x07u),
         GetCurrentTrack(0x08u),
+        GetOutputRoutes(0x09u),
+        SelectOutputRoute(0x0au),
         UpdateCurrentTrack(0x10u),
         UpdatePlayStateInfo(0x11u),
         UpdateVolumeInfo(0x12u),
         UpdatePlayerInfo(0x13u),
+        UpdateOutputRoutes(0x14u),
     }
 
     class UpdateCurrentTrack(
@@ -103,6 +107,26 @@ open class MusicControl(val message: Message) : PebblePacket(ProtocolEndpoint.MU
         val name = SString(m, name)
     }
 
+    class SelectOutputRoute(
+        generation: UByte = 0u,
+        routeId: UByte = 0u,
+    ) : MusicControl(Message.SelectOutputRoute) {
+        val generation = SUByte(m, generation)
+        val routeId = SUByte(m, routeId)
+    }
+
+    class UpdateOutputRoutes(
+        routes: MusicOutputRoutes? = null,
+    ) : MusicControl(Message.UpdateOutputRoutes) {
+        private val encodedPayload = routes?.toProtocolPayload() ?: ubyteArrayOf()
+        val payload = SBytes(
+            m,
+            length = encodedPayload.size,
+            default = encodedPayload,
+            allRemainingBytes = true,
+        )
+    }
+
     enum class PlaybackState(val value: UByte) {
         Paused(0x00u),
         Playing(0x01u),
@@ -168,6 +192,16 @@ fun musicPacketsRegister() {
 
     PacketRegistry.register(
         ProtocolEndpoint.MUSIC_CONTROL,
+        MusicControl.Message.GetOutputRoutes.value
+    ) { MusicControl(MusicControl.Message.GetOutputRoutes) }
+
+    PacketRegistry.register(
+        ProtocolEndpoint.MUSIC_CONTROL,
+        MusicControl.Message.SelectOutputRoute.value
+    ) { MusicControl.SelectOutputRoute() }
+
+    PacketRegistry.register(
+        ProtocolEndpoint.MUSIC_CONTROL,
         MusicControl.Message.UpdateCurrentTrack.value
     ) { MusicControl.UpdateCurrentTrack() }
 
@@ -185,4 +219,40 @@ fun musicPacketsRegister() {
         ProtocolEndpoint.MUSIC_CONTROL,
         MusicControl.Message.UpdatePlayerInfo.value
     ) { MusicControl.UpdatePlayerInfo() }
+
+    PacketRegistry.register(
+        ProtocolEndpoint.MUSIC_CONTROL,
+        MusicControl.Message.UpdateOutputRoutes.value
+    ) { MusicControl.UpdateOutputRoutes() }
 }
+
+private fun MusicOutputRoutes.toProtocolPayload(): UByteArray {
+    val outputRoutes = routes.take(MAX_OUTPUT_ROUTES)
+    var payload = ubyteArrayOf(
+        status.protocolValue,
+        generation,
+        outputRoutes.size.toUByte(),
+    )
+    outputRoutes.forEach { route ->
+        val name = route.name.encodeToByteArray().let { encoded ->
+            var length = minOf(encoded.size, MAX_OUTPUT_ROUTE_NAME_BYTES)
+            while (length > 0 && length < encoded.size &&
+                (encoded[length].toInt() and 0xc0) == 0x80
+            ) {
+                length--
+            }
+            encoded.copyOf(length).toUByteArray()
+        }
+        payload += ubyteArrayOf(
+            route.id,
+            if (route.selected) OUTPUT_ROUTE_SELECTED else 0u,
+            name.size.toUByte(),
+        )
+        payload += name
+    }
+    return payload
+}
+
+private const val MAX_OUTPUT_ROUTES = 8
+private const val MAX_OUTPUT_ROUTE_NAME_BYTES = 63
+private const val OUTPUT_ROUTE_SELECTED: UByte = 1u

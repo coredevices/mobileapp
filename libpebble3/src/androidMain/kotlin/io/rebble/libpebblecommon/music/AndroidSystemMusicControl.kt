@@ -5,9 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.MediaRoute2Info
+import android.media.MediaRouter2
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.core.net.toUri
@@ -24,14 +27,19 @@ import io.rebble.libpebblecommon.imaging.encodeForWatch
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.music.PlaybackStatus
 import io.rebble.libpebblecommon.music.PlayerInfo
+import io.rebble.libpebblecommon.music.MusicOutputRoute
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
+import io.rebble.libpebblecommon.music.MusicOutputRouteStatus
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.music.SystemMusicControl
+import io.rebble.libpebblecommon.music.hasMediaRoutingControlPermission
 import io.rebble.libpebblecommon.music.isActive
 import io.rebble.libpebblecommon.music.matchesTruncated
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -113,6 +121,13 @@ internal fun skipBehaviour(
 private fun PlaybackState?.seeksWithinTrack(watchConfig: WatchConfig, packageName: String?): Boolean =
     skipBehaviour(this?.actions ?: 0L, forward = true, watchConfig, packageName).seeksWithinTrack
 
+internal fun <T, K> combineOutputRoutes(
+    selectedRoutes: List<T>,
+    controllerRoutes: List<T>,
+    discoveredRoutes: List<T>,
+    routeId: (T) -> K,
+): List<T> = (selectedRoutes + controllerRoutes + discoveredRoutes).distinctBy(routeId)
+
 /** [PlaybackState.getPosition] is only accurate as of [PlaybackState.getLastPositionUpdateTime]. */
 private fun PlaybackState.currentPosition(): Long = if (state == PlaybackState.STATE_PLAYING) {
     position + ((SystemClock.elapsedRealtime() - lastPositionUpdateTime) * playbackSpeed).toLong()
@@ -153,6 +168,10 @@ class AndroidSystemMusicControl(
     private val notificationServiceComponent = LibPebbleNotificationListener.componentName(context)
     private val packageMostRecentlyStartedPlayingAt: MutableMap<String, Instant> = mutableMapOf()
     private val appNameForPackage: MutableMap<String, String> = mutableMapOf()
+    private var outputRouter: MediaRouter2? = null
+    private var outputRouterPackage: String? = null
+    private var outputRoutesGeneration: UByte = 0u
+    private var outputRoutesById: Map<UByte, MediaRoute2Info> = emptyMap()
     private val _albumArtUpdated = MutableSharedFlow<Unit>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -415,6 +434,107 @@ class AndroidSystemMusicControl(
         audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
     }
 
+    override suspend fun getOutputRoutes(): MusicOutputRoutes {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return MusicOutputRoutes(MusicOutputRouteStatus.Unsupported)
+        }
+        if (!hasOutputRoutingPermission()) {
+            return MusicOutputRoutes(MusicOutputRouteStatus.PermissionRequired)
+        }
+        val packageName = targetSession.value?.controller?.packageName
+            ?: return MusicOutputRoutes(MusicOutputRouteStatus.NoPlayer)
+
+        return withContext(Dispatchers.Main) {
+            try {
+                val router = outputRouterFor(packageName)
+                    ?: return@withContext MusicOutputRoutes(MusicOutputRouteStatus.Error)
+                val scanToken = router.requestScan(MediaRouter2.ScanRequest.Builder().build())
+                val discoveredRoutes = try {
+                    delay(OUTPUT_ROUTE_SCAN_DURATION_MS)
+                    router.routes
+                } finally {
+                    router.cancelScanRequest(scanToken)
+                }
+                val controllers = router.controllers
+                val controller = controllers.lastOrNull()
+                    ?: return@withContext MusicOutputRoutes(MusicOutputRouteStatus.Error)
+                val selectedIds = controller.selectedRoutes.mapTo(mutableSetOf()) { it.id }
+                val controllerRoutes = controllers.flatMap {
+                    it.selectedRoutes + it.transferableRoutes
+                }
+                val routes = combineOutputRoutes(
+                    controller.selectedRoutes,
+                    controllerRoutes,
+                    discoveredRoutes,
+                ) { it.id }
+                    .take(MAX_OUTPUT_ROUTES)
+
+                outputRoutesGeneration = (outputRoutesGeneration + 1u).toUByte()
+                outputRoutesById = routes.mapIndexed { index, route ->
+                    index.toUByte() to route
+                }.toMap()
+
+                MusicOutputRoutes(
+                    status = MusicOutputRouteStatus.Available,
+                    generation = outputRoutesGeneration,
+                    routes = routes.mapIndexed { index, route ->
+                        MusicOutputRoute(
+                            id = index.toUByte(),
+                            name = route.name.toString(),
+                            selected = route.id in selectedIds,
+                        )
+                    },
+                )
+            } catch (e: SecurityException) {
+                logger.w(e) { "Media output routing permission denied" }
+                MusicOutputRoutes(MusicOutputRouteStatus.PermissionRequired)
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to get media output routes" }
+                MusicOutputRoutes(MusicOutputRouteStatus.Error)
+            }
+        }
+    }
+
+    override suspend fun selectOutputRoute(generation: UByte, routeId: UByte): Boolean =
+        withContext(Dispatchers.Main) {
+            if (generation != outputRoutesGeneration || !hasOutputRoutingPermission()) {
+                return@withContext false
+            }
+            val router = outputRouter ?: return@withContext false
+            val route = outputRoutesById[routeId] ?: return@withContext false
+            try {
+                router.transferTo(route)
+                true
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to select media output route" }
+                false
+            }
+        }
+
+    private fun hasOutputRoutingPermission(): Boolean =
+        context.hasMediaRoutingControlPermission()
+
+    private fun outputRouterFor(packageName: String): MediaRouter2? {
+        if (outputRouterPackage == packageName) {
+            return outputRouter
+        }
+        outputRouter = MediaRouter2.getInstance(
+            context,
+            packageName,
+            context.mainExecutor,
+            Runnable {
+                if (outputRouterPackage == packageName) {
+                    outputRouter = null
+                    outputRouterPackage = null
+                    outputRoutesById = emptyMap()
+                }
+            },
+        )
+        outputRouterPackage = packageName
+        outputRoutesById = emptyMap()
+        return outputRouter
+    }
+
     override val supportsAlbumArt: Boolean = true
 
     override suspend fun getAlbumArt(title: String, artist: String, width: Int, height: Int): EncodedImage? =
@@ -473,6 +593,9 @@ private val ALBUM_ART_URI_KEYS = listOf(
 )
 
 private val ALBUM_ART_KEYS = ALBUM_ART_BITMAP_KEYS + ALBUM_ART_URI_KEYS
+
+private const val MAX_OUTPUT_ROUTES = 8
+private const val OUTPUT_ROUTE_SCAN_DURATION_MS = 1_500L
 
 // containsKey, not getBitmap: getBitmap decodes the whole bitmap, and this runs on every metadata change.
 private fun MediaMetadata.hasAlbumArt() = ALBUM_ART_KEYS.any { containsKey(it) }

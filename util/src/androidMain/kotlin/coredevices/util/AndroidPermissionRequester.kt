@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
+import io.rebble.libpebblecommon.music.hasMediaRoutingControlPermission
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -35,6 +36,7 @@ class AndroidPermissionRequester(
             Permission.ReadNotifications -> requestNotificationAccess(uiContext.activity)
             Permission.SetAlarms -> requestAlarmPermission(uiContext.activity)
             Permission.BatteryOptimization -> requestBatteryOptimizationDisable(uiContext.activity)
+            Permission.MediaRouting -> requestMediaRoutingPermission(uiContext.activity)
             else -> requestAndroidRuntimePermissions(
                 permission.asAndroidPermissions(),
                 uiContext.activity,
@@ -46,6 +48,7 @@ class AndroidPermissionRequester(
             Permission.ReadNotifications -> companionDevice.hasNotificationAccess(context)
             Permission.SetAlarms -> hasAlarmPermission()
             Permission.BatteryOptimization -> batteryOptimizationsAreDisabled()
+            Permission.MediaRouting -> hasMediaRoutingPermission()
             else -> permissionGranted(permission)
         }
 
@@ -179,6 +182,34 @@ class AndroidPermissionRequester(
     private suspend fun requestNotificationAccess(activity: Activity): PermissionResult {
         return companionDevice.requestNotificationAccess(activity)
     }
+
+    private fun hasMediaRoutingPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return true
+        }
+        return context.hasMediaRoutingControlPermission()
+    }
+
+    private suspend fun requestMediaRoutingPermission(activity: Activity): PermissionResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return PermissionResult.Granted
+        }
+        val registry = activity as? ActivityResultRegistryOwner ?: return PermissionResult.Error
+        return suspendCancellableCoroutine { continuation ->
+            val launcher = registry.activityResultRegistry.register(
+                "requestMediaRoutingControl",
+                ActivityResultContracts.StartActivityForResult(),
+            ) {
+                if (continuation.isActive) {
+                    continuation.resume(hasMediaRoutingPermission().asPermissionResult())
+                }
+            }
+            val intent = Intent(Settings.ACTION_REQUEST_MEDIA_ROUTING_CONTROL).apply {
+                data = "package:${context.packageName}".toUri()
+            }
+            launcher.launch(intent)
+        }
+    }
 }
 
 private fun Permission.asAndroidPermissions(): List<String> = when (this) {
@@ -225,4 +256,5 @@ private fun Permission.asAndroidPermissions(): List<String> = when (this) {
         "com.beeper.android.permission.SEND_PERMISSION"
     )
     Permission.Reminders -> throw IllegalArgumentException("Not needed on Android")
+    Permission.MediaRouting -> throw IllegalArgumentException("Shouldn't be calling this for MediaRouting")
 }
