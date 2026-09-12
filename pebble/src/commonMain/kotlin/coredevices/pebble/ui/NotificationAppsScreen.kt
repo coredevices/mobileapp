@@ -1,17 +1,16 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -146,16 +145,15 @@ fun NotificationAppsScreen(topBarParams: TopBarParams, nav: NavBarNav, gotoDefau
 
         Column {
             if (pebbleFeatures.supportsNotificationAppSorting()) {
-                val filterScrollState = rememberScrollState()
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp, horizontal = 12.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.horizontalScroll(filterScrollState),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = SpaceEvenly,
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         val notifiedOnlyEnabled = pebbleFeatures.supportsNotifiedOnlyFilter()
                         ElevatedFilterChip(
