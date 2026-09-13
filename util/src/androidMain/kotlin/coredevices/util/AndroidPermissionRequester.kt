@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
@@ -196,18 +197,27 @@ class AndroidPermissionRequester(
         }
         val registry = activity as? ActivityResultRegistryOwner ?: return PermissionResult.Error
         return suspendCancellableCoroutine { continuation ->
-            val launcher = registry.activityResultRegistry.register(
+            lateinit var launcher: ActivityResultLauncher<Intent>
+            launcher = registry.activityResultRegistry.register(
                 "requestMediaRoutingControl",
                 ActivityResultContracts.StartActivityForResult(),
             ) {
+                launcher.unregister()
                 if (continuation.isActive) {
                     continuation.resume(hasMediaRoutingPermission().asPermissionResult())
                 }
             }
-            val intent = Intent(Settings.ACTION_REQUEST_MEDIA_ROUTING_CONTROL).apply {
-                data = "package:${context.packageName}".toUri()
+            continuation.invokeOnCancellation {
+                launcher.unregister()
             }
-            launcher.launch(intent)
+            try {
+                launcher.launch(Intent(Settings.ACTION_REQUEST_MEDIA_ROUTING_CONTROL))
+            } catch (e: Exception) {
+                launcher.unregister()
+                if (continuation.isActive) {
+                    continuation.resume(PermissionResult.Error)
+                }
+            }
         }
     }
 }
