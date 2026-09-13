@@ -118,7 +118,9 @@ class MusicControlManager(
             musicControlService.updateOutputRoutes(systemMusicControl.getOutputRoutes())
         }.launchIn(watchScope)
         musicControlService.outputRouteSelections.onEach { selection ->
-            systemMusicControl.selectOutputRoute(selection.generation, selection.routeId)
+            if (!systemMusicControl.selectOutputRoute(selection.generation, selection.routeId)) {
+                logger.w { "Unable to select music output route" }
+            }
         }.launchIn(watchScope)
     }
 
