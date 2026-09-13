@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Webhook
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,6 +89,7 @@ fun destinationsFor(kind: GestureKind, hasSandboxGroups: Boolean): List<GestureD
     GestureKind.Music -> listOf(
         GestureDestination.PlayPause,
         GestureDestination.NextTrack,
+        GestureDestination.PreviousTrack,
         GestureDestination.Nothing,
     )
     GestureKind.Recording -> buildList {
@@ -112,6 +114,7 @@ val GestureDestination.tileLabel: String
     get() = when (this) {
         GestureDestination.PlayPause -> "Play/Pause"
         GestureDestination.NextTrack -> "Next track"
+        GestureDestination.PreviousTrack -> "Rewind"
         GestureDestination.IndexAgent -> "Index agent"
         GestureDestination.WebSearch -> "Web search"
         GestureDestination.WebhookOnly -> "Webhook only"
@@ -123,6 +126,7 @@ private val GestureDestination.optionLabel: String
     get() = when (this) {
         GestureDestination.PlayPause -> "Play or pause music"
         GestureDestination.NextTrack -> "Skip to the next track"
+        GestureDestination.PreviousTrack -> "Rewind, or previous track"
         else -> tileLabel
     }
 
@@ -139,6 +143,7 @@ private val GestureDestination.icon: ImageVector
     get() = when (this) {
         GestureDestination.PlayPause -> Icons.Default.PlayArrow
         GestureDestination.NextTrack -> Icons.Default.SkipNext
+        GestureDestination.PreviousTrack -> Icons.Default.SkipPrevious
         GestureDestination.IndexAgent -> Icons.Default.GraphicEq
         GestureDestination.WebSearch -> Icons.Default.Search
         GestureDestination.WebhookOnly -> Icons.Default.Webhook
