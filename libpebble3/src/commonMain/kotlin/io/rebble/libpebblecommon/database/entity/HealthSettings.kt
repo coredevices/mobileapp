@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 import kotlin.time.Instant
-import kotlin.time.Instant.Companion.DISTANT_PAST
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -88,21 +87,8 @@ private val json = Json { ignoreUnknownKeys = true }
 // ActivityHRMSettings struct grew in firmware:
 //   v4.9.146: added uint8_t measurement_interval (1 → 2 bytes)
 //   v4.9.150: added bool activity_tracking_enabled  (2 → 3 bytes)
-private val FW_HRM_MEASUREMENT_INTERVAL = fwSentinel(4, 9, 146)
-private val FW_HRM_ACTIVITY_TRACKING = fwSentinel(4, 9, 150)
-
-private fun fwSentinel(major: Int, minor: Int, patch: Int) = FirmwareVersion(
-    stringVersion = "v$major.$minor.$patch",
-    timestamp = DISTANT_PAST,
-    major = major,
-    minor = minor,
-    patch = patch,
-    suffix = null,
-    gitHash = "",
-    isRecovery = false,
-    isDualSlot = false,
-    isSlot0 = false,
-)
+private val FW_HRM_MEASUREMENT_INTERVAL = FirmwareVersion.sentinel(4, 9, 146)
+private val FW_HRM_ACTIVITY_TRACKING = FirmwareVersion.sentinel(4, 9, 150)
 
 fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
     val activityPrefsFlow= getEntryFlow(KEY_ACTIVITY_PREFERENCES).map {

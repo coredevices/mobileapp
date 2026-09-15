@@ -71,6 +71,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
@@ -2665,6 +2666,8 @@ fun basicSettingsNumberFieldItem(
     },
 )
 
+private val LEADING_CONTROL_WIDTH = 48.dp
+
 fun <T> basicSettingsDropdownItem(
     id: String? = null,
     title: String,
@@ -2679,6 +2682,7 @@ fun <T> basicSettingsDropdownItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
     extraSupportingContent: (@Composable () -> Unit)? = null,
+    controlOnLeft: Boolean = false,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2688,36 +2692,44 @@ fun <T> basicSettingsDropdownItem(
     show = show,
     isDebugSetting = isDebugSetting,
     item = {
+        val dropdown: @Composable () -> Unit = {
+            var expanded by remember { mutableStateOf(false) }
+            Box(
+                modifier = if (controlOnLeft) Modifier.width(LEADING_CONTROL_WIDTH) else Modifier,
+                contentAlignment = Alignment.Center,
+            ) {
+                TextButton(
+                    onClick = { expanded = true },
+                    contentPadding = if (controlOnLeft) PaddingValues(0.dp) else ButtonDefaults.TextButtonContentPadding,
+                ) {
+                    Text(
+                        text = itemText(selectedItem),
+                        modifier = Modifier.widthIn(max = 150.dp),
+                        maxLines = 1,
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    items.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(itemText(option)) },
+                            onClick = {
+                                onItemSelected(option)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
         ListItem(
             headlineContent = {
                 Text(title)
             },
-            trailingContent = {
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    TextButton(onClick = { expanded = true }) {
-                        Text(
-                            text = itemText(selectedItem),
-                            modifier = Modifier.widthIn(max = 150.dp),
-                            maxLines = 1,
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        items.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(itemText(option)) },
-                                onClick = {
-                                    onItemSelected(option)
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            },
+            leadingContent = if (controlOnLeft) dropdown else null,
+            trailingContent = if (controlOnLeft) null else dropdown,
             supportingContent = {
                 Row {
                     if (description != null) {
