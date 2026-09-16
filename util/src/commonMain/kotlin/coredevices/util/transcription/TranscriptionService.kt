@@ -23,6 +23,7 @@ interface TranscriptionService {
      * Transcribe audio stream frames to text.
      * @param audioStreamFrames Audio stream frames to transcribe (in PCM format). If null, transcription will use default mic (and requires permission).
      * @param initialTimeout Optional override for the initial transcription attempt timeout; when null the service's own default is used.
+     * @param totalTimeout The overall budget the caller enforces around the call, so a mode with a fallback leg can leave it time to run.
      * @return Flow of transcription session status.
      */
     suspend fun transcribe(
@@ -34,6 +35,7 @@ interface TranscriptionService {
         contentContext: String? = null,
         encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
         initialTimeout: Duration? = null,
+        totalTimeout: Duration? = null,
     ): Flow<TranscriptionSessionStatus>
 
     val onInitialized: Channel<Boolean>

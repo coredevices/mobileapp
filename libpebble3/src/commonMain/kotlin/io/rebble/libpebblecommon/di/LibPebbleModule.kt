@@ -123,6 +123,13 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.plugin.BundledPluginLoader
+import io.rebble.libpebblecommon.plugin.CalendarPlugin
+import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
+import io.rebble.libpebblecommon.plugin.PlatformPlugins
+import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AppReorderService
 import io.rebble.libpebblecommon.services.AudioStreamService
@@ -409,6 +416,8 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
+                        get(),
+                        get(),
                     )
                 } bind LibPebble::class
                 single { RealConnectionScopeFactory(koin) } bind ConnectionScopeFactory::class
@@ -436,6 +445,18 @@ fun initKoin(
                 singleOf(::ActionOverrides)
                 singleOf(::PhoneCalendarSyncer)
                 singleOf(::MissedCallSyncer)
+                singleOf(::PhoneStatePlugin)
+                singleOf(::CalendarPlugin)
+                singleOf(::WatchSettingsPlugin)
+                single<Set<Plugin>> {
+                    setOf(
+                        get<PhoneStatePlugin>(),
+                        get<CalendarPlugin>(),
+                        get<WatchSettingsPlugin>(),
+                    ) + get<PlatformPlugins>().plugins
+                }
+                singleOf(::PluginRegistry)
+                singleOf(::BundledPluginLoader)
                 singleOf(::FirmwareDownloader)
                 singleOf(::InterruptedFirmwareUpdates)
                 singleOf(::JsTokenUtil)

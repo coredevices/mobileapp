@@ -86,6 +86,8 @@ import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.SpokenLanguageOptions
 import coredevices.util.transcription.coversLanguage
 import androidx.compose.ui.text.intl.Locale
+import coredevices.ring.ui.screens.settings.IndexAgentActionsSection
+import coredevices.ring.ui.screens.settings.RingButtonSection
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
@@ -293,57 +295,22 @@ internal fun SetupStep(
             }
         }
 
-        // 2 — Notes & reminders
+        // 2 — Ring button
         NumberedSection(
             num = 2,
-            title = "Notes & reminders",
-            sub = "Set a default destination for recordings that contain notes or reminders.",
+            title = "Ring Button",
+            sub = "Choose what each press does. You can change this later in Index settings.",
         ) {
-            RoutingMatrix(
-                preferences = preferences,
-                isAndroid = isAndroid,
-                currentReminderProvider = currentReminderProvider,
-                currentNoteProvider = currentNoteProvider,
-            )
+            RingButtonSection(viewModel)
         }
 
-        // 3 — Music play/pause
+        // 3 — Index agent actions
         NumberedSection(
             num = 3,
-            title = "Music play/pause",
-            sub = if (isAndroid) "Single or double click without holding to play/pause music."
-            else "Only available right now on Android.",
+            title = "Index Agent",
+            sub = "Pick which actions Index can take, and where notes and reminders are saved."
         ) {
-            val musicEnabled = isAndroid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PressTile(
-                    label = "Disabled",
-                    pattern = PressPattern.None,
-                    selected = musicPresetSelected(MusicControlMode.Disabled),
-                    enabled = musicEnabled,
-                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.Disabled)) },
-                    modifier = Modifier.weight(1f),
-                )
-                PressTile(
-                    label = "Single",
-                    pattern = PressPattern.Single,
-                    selected = musicPresetSelected(MusicControlMode.SingleClick),
-                    enabled = musicEnabled,
-                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.SingleClick)) },
-                    modifier = Modifier.weight(1f),
-                )
-                PressTile(
-                    label = "Double",
-                    pattern = PressPattern.Double,
-                    selected = musicPresetSelected(MusicControlMode.DoubleClick),
-                    enabled = musicEnabled,
-                    onClick = { viewModel.setGestureRoutes(musicRoutesFor(MusicControlMode.DoubleClick)) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            IndexAgentActionsSection(coreNav, viewModel, showHeader = false)
         }
 
         // 4 — Secondary action
@@ -622,11 +589,11 @@ internal fun SpeechModeChoice(
     onPlatformInfo: (() -> Unit)? = null,
 ) {
     val options = listOfNotNull(
-        Triple(CactusSTTMode.PlatformOnly, "On-device, with cloud fallback", "Native iOS speech to text")
+        Triple(CactusSTTMode.PlatformOnly, "On-device", "Recommended - private, stays on this iPhone")
             .takeIf { showPlatformOption },
         Triple(CactusSTTMode.RemoteOnly, "Cloud only", "Best performance, requires connection"),
-        Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 400MB download"),
-        Triple(CactusSTTMode.LocalFirst, "Local, cloud fallback", "400MB download"),
+        Triple(CactusSTTMode.RemoteFirst, "Cloud, with local fallback", "Recommended, 400MB download")
+            .takeIf { !showPlatformOption },
         Triple(CactusSTTMode.LocalOnly, "Local only", "Complete privacy, 400MB download"),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -699,365 +666,6 @@ private fun SpeechRadioCard(
                     )
                 }
             }
-        }
-    }
-}
-
-private data class RoutingProvider(
-    val name: String,
-    val sub: String?,
-    val supportsReminder: Boolean,
-    val supportsNote: Boolean,
-    val reminderValue: ReminderProvider?,
-    val noteValue: NoteProvider?,
-)
-
-private data class AvailableProvider(
-    val name: String,
-    val sub: String?,
-    val kindsLabel: String,
-    val onAdd: () -> Unit,
-)
-
-@Composable
-internal fun RoutingMatrix(
-    preferences: Preferences,
-    isAndroid: Boolean,
-    currentReminderProvider: ReminderProvider,
-    currentNoteProvider: NoteProvider,
-) {
-    val palette = LocalPalette.current
-    val gTasks = koinInject<GTasksIntegration>()
-    val notion = koinInject<NotionIntegration>()
-    // Bumped after a sign-in dialog dismisses, to re-check auth state.
-    var authRefresh by remember { mutableStateOf(0) }
-    val gTasksAuth by produceAuthState(authRefresh, gTasks::isAuthorized)
-    val notionAuth by produceAuthState(authRefresh, notion::isAuthorized)
-
-    var showGTasksDialog by remember { mutableStateOf(false) }
-    var showNotionDialog by remember { mutableStateOf(false) }
-    if (showGTasksDialog) {
-        GTasksDialog(onDismiss = {
-            showGTasksDialog = false
-            authRefresh++
-        })
-    }
-    if (showNotionDialog) {
-        NotionDialog(onDismiss = {
-            showNotionDialog = false
-            authRefresh++
-        })
-    }
-
-    val visible = buildList {
-        add(
-            RoutingProvider(
-                name = "Index",
-                sub = "Built into Pebble app",
-                supportsReminder = true,
-                supportsNote = true,
-                reminderValue = ReminderProvider.BuiltIn,
-                noteValue = NoteProvider.Builtin,
-            )
-        )
-        if (!isAndroid) {
-            add(
-                RoutingProvider(
-                    name = "iPhone Reminders",
-                    sub = "Built into iOS",
-                    supportsReminder = true,
-                    supportsNote = false,
-                    reminderValue = ReminderProvider.IOSReminders,
-                    noteValue = null,
-                )
-            )
-        }
-        if (gTasksAuth) {
-            add(
-                RoutingProvider(
-                    name = "Google Tasks",
-                    sub = null,
-                    supportsReminder = true,
-                    supportsNote = false,
-                    reminderValue = ReminderProvider.GoogleTasks,
-                    noteValue = null,
-                )
-            )
-        }
-        if (notionAuth) {
-            add(
-                RoutingProvider(
-                    name = "Notion",
-                    sub = "Append notes to a Notion page",
-                    supportsReminder = false,
-                    supportsNote = true,
-                    reminderValue = null,
-                    noteValue = NoteProvider.Notion,
-                )
-            )
-        }
-    }
-
-    val available = buildList {
-        if (!gTasksAuth) {
-            add(
-                AvailableProvider(
-                    name = "Google Tasks",
-                    sub = null,
-                    kindsLabel = "REMINDERS",
-                    onAdd = { showGTasksDialog = true },
-                )
-            )
-        }
-        if (!notionAuth) {
-            add(
-                AvailableProvider(
-                    name = "Notion",
-                    sub = "Append notes to a Notion page",
-                    kindsLabel = "NOTES",
-                    onAdd = { showNotionDialog = true },
-                )
-            )
-        }
-    }
-
-    var showAdd by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = palette.surfaceContainerLowest,
-        border = BorderStroke(1.dp, palette.outlineVariant),
-    ) {
-        Column {
-            // Column headers
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "REMINDERS",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp,
-                    color = palette.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.width(88.dp),
-                )
-                Text(
-                    "NOTES",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp,
-                    color = palette.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.width(88.dp),
-                )
-            }
-            visible.forEach { p ->
-                HorizontalDivider(thickness = 1.dp, color = palette.outlineVariant)
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            p.name,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.onSurface,
-                        )
-                        if (p.sub != null) {
-                            Text(
-                                p.sub,
-                                fontSize = 11.sp,
-                                color = palette.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.width(88.dp), contentAlignment = Alignment.Center) {
-                        if (p.supportsReminder && p.reminderValue != null) {
-                            RouteRadio(
-                                selected = currentReminderProvider == p.reminderValue,
-                                onClick = { preferences.setReminderProvider(p.reminderValue) },
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.width(88.dp), contentAlignment = Alignment.Center) {
-                        if (p.supportsNote && p.noteValue != null) {
-                            RouteRadio(
-                                selected = currentNoteProvider == p.noteValue,
-                                onClick = { preferences.setNoteProvider(p.noteValue) },
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (available.isNotEmpty()) {
-                HorizontalDivider(thickness = 1.dp, color = palette.outlineVariant)
-                if (!showAdd) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showAdd = true }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = palette.primary,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Add destination",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.primary,
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(palette.surfaceContainerLow)
-                            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
-                    ) {
-                        // Header row: ADD DESTINATION ... Cancel
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "ADD DESTINATION",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = palette.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                "Cancel",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.onSurfaceVariant,
-                                modifier = Modifier
-                                    .clickable { showAdd = false }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            available.forEach { p ->
-                                AvailableProviderCard(
-                                    provider = p,
-                                    onAdd = p.onAdd,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AvailableProviderCard(
-    provider: AvailableProvider,
-    onAdd: () -> Unit,
-) {
-    val palette = LocalPalette.current
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = palette.surfaceContainerLowest,
-        border = BorderStroke(1.dp, palette.outlineVariant),
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = provider.name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.onSurface,
-                )
-                if (provider.sub != null) {
-                    Spacer(Modifier.height(1.dp))
-                    Text(
-                        text = provider.sub,
-                        fontSize = 11.sp,
-                        color = palette.onSurfaceVariant,
-                    )
-                }
-            }
-            // Kind badge
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = palette.primaryContainer,
-            ) {
-                Text(
-                    text = provider.kindsLabel,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp,
-                    color = palette.primary,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            // + button
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(palette.primary)
-                    .clickable { onAdd() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Add ${provider.name}",
-                    modifier = Modifier.size(16.dp),
-                    tint = palette.onPrimary,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RouteRadio(
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(26.dp)
-            .clip(CircleShape)
-            .border(
-                width = 2.dp,
-                color = if (selected) LocalPalette.current.primary else LocalPalette.current.outline,
-                shape = CircleShape,
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(LocalPalette.current.primary),
-            )
         }
     }
 }

@@ -173,12 +173,19 @@ private fun asPin(jsonPin: TimelinePinJson, appUuid: Uuid, pinUuid: Uuid): Timel
         actions {
             jsonPin.actions?.forEach { a ->
                 val actionType = a.type.asActionType()
-                if (actionType == null) {
-                    logger.w { "Unknown action type: ${a.type}" }
-                } else {
-//                    action(actionType) {
-//                        // TODO developer actions
-//                    }
+                when (actionType) {
+                    null -> logger.w { "Unknown action type: ${a.type}" }
+                    // Handled entirely on the watch: launches the pin's parent app with
+                    // the launch code in launch_get_args().
+                    TimelineItem.Action.Type.OpenWatchapp -> action(actionType) {
+                        attributes {
+                            title { a.title }
+                            a.launchCode?.let { code -> launchCode { code } }
+                        }
+                    }
+                    // Anything invoked on the phone without a handler shows "Failed" on
+                    // the watch (TimelineActionManager), so don't offer it.
+                    else -> logger.w { "Dropping unsupported action type: ${a.type}" }
                 }
             }
             action(TimelineItem.Action.Type.Remove) {
@@ -246,6 +253,8 @@ data class TimelineReminderJson(
 data class TimelineActionJson(
     val title: String,
     val type: String,
+    /** uint32 passed to the watchapp via launch args (openWatchApp actions only). */
+    val launchCode: UInt? = null,
 )
 
 @Serializable

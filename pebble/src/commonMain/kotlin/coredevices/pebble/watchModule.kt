@@ -60,6 +60,8 @@ import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.weather.WeatherPlugin
 import coredevices.pebble.weather.YahooWeatherInterceptor
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -78,7 +80,9 @@ import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.connection.TokenProvider
+import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -143,6 +147,10 @@ val watchModule = module {
     singleOf(::RealAppstoreCache) bind AppstoreCache::class
     single { MobileGeocoder() } bind Geocoder::class
     single<HealthDataApi> { get<LibPebble>() }
+    // libpebble3 runs an isolated Koin context, so anything it owns reaches the app graph
+    // through the LibPebble interface rather than being injected directly.
+    single<Plugins> { get<LibPebble>() }
+    single<Weather> { get<LibPebble>() }
     single { InjectedPKJSHttpInterceptors(
         listOf(
             get<OpenWeather25Interceptor>(),
@@ -198,6 +206,8 @@ val watchModule = module {
     singleOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
+    singleOf(::WeatherPlugin)
+    singleOf(::ConfigPageSessions)
     factoryOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
     singleOf(::WatchOnboardingFinished)

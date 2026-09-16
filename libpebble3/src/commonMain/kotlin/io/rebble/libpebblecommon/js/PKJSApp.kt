@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
@@ -21,6 +22,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -59,7 +61,7 @@ class PKJSApp(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     private val connectionScope: ConnectionCoroutineScope,
-): LibPebbleKoinComponent, CompanionApp {
+): LibPebbleKoinComponent, CompanionApp, ConfigMessageTarget {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
         private val CONFIGURATION_URL_TIMEOUT = 10.seconds
@@ -213,6 +215,12 @@ class PKJSApp(
         runningScope?.cancel()
         jsRunner = null
     }
+
+    override val configMessages: Flow<String>
+        get() = jsRunner?.configPushes ?: emptyFlow()
+
+    /** The PKJS session is already running whenever its config page can be open. */
+    override suspend fun onConfigMessage(json: String): String? = jsRunner?.sendConfigMessage(json)
 
     fun triggerOnWebviewClosed(data: String) {
         runningScope?.launch {

@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.util.PrivateLogger
 
@@ -95,19 +96,35 @@ private fun StatusBarNotification.bigPicture(context: Context): Bitmap? {
 }
 
 private fun StatusBarNotification.messageBatch(privateLogger: PrivateLogger): List<NotificationCompat.MessagingStyle.Message> {
-    val messages = NotificationCompat.MessagingStyle
+    val style = NotificationCompat.MessagingStyle
         .extractMessagingStyleFromNotification(notification)
-        ?.messages
-    val newest = messages?.lastOrNull()
-    if (newest == null) {
+    if (style == null) {
         logger.v { "${privateLogger.obfuscate(packageName)}: not a MessagingStyle notification" }
         return emptyList()
     }
-    val batch = messages.asReversed().takeWhile {
+    return incomingBatch(style.messages, style.user)
+}
+
+/**
+ * A reply we send is appended to the conversation and the app re-posts the notification unchanged,
+ * so only messages from other people can define what the notification is about.
+ */
+internal fun incomingBatch(
+    messages: List<NotificationCompat.MessagingStyle.Message>,
+    user: Person,
+): List<NotificationCompat.MessagingStyle.Message> {
+    val incoming = messages.filterNot { it.isFromUser(user) }
+    val newest = incoming.lastOrNull() ?: return emptyList()
+    return incoming.asReversed().takeWhile {
         it.person?.key == newest.person?.key &&
                 newest.timestamp - it.timestamp <= ATTACHMENT_BATCH_WINDOW_MS
     }
-    return batch
+}
+
+private fun NotificationCompat.MessagingStyle.Message.isFromUser(user: Person): Boolean {
+    val sender = person ?: return true
+    val senderName = sender.name?.toString() ?: return false
+    return senderName == user.name?.toString()
 }
 
 private fun NotificationCompat.MessagingStyle.Message.isImage() =

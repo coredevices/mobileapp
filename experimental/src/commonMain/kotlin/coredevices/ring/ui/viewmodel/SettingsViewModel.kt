@@ -13,6 +13,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.libindex.device.IndexDeviceManager
 import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
+import coredevices.libindex.device.RSSIMeasurement
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.LlmMode
@@ -54,9 +55,12 @@ import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,6 +81,7 @@ import kotlinx.io.readByteArray
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Serializable
@@ -87,6 +92,16 @@ private data class BackupManifest(
     val exportedAt: String,
     val recordingCount: Int
 )
+sealed class DiagnosticsState {
+    object Idle : DiagnosticsState()
+    object Running : DiagnosticsState()
+    data class Error(val message: String) : DiagnosticsState()
+    data class Completed(val measurement: RSSIMeasurement) : DiagnosticsState()
+}
+
+private const val DIAGNOSTICS_ATTEMPTS = 3
+private val DIAGNOSTICS_RETRY_DELAY = 1.seconds
+private val DIAGNOSTICS_CONNECTION_TIMEOUT = 10.seconds
 
 class SettingsViewModel(
     private val ringSync: RingSync,
@@ -182,6 +197,9 @@ class SettingsViewModel(
     private val _availableReminderProviders = MutableStateFlow<List<ReminderProvider>>(emptyList())
     val availableReminderProviders = _availableReminderProviders.asStateFlow()
 
+    private val _diagnosticsState = MutableStateFlow<DiagnosticsState>(DiagnosticsState.Idle)
+    val diagnosticsState = _diagnosticsState.asStateFlow()
+
     init {
         viewModelScope.launch {
             updateAvailableNoteProviders()
@@ -191,6 +209,49 @@ class SettingsViewModel(
 
     fun setActionEnabled(name: String, enabled: Boolean) {
         viewModelScope.launch { indexActionsRepository.setActionEnabled(name, enabled) }
+    }
+
+    fun beginDiagnostics(): Job {
+        _diagnosticsState.value = DiagnosticsState.Running
+        return viewModelScope.launch {
+            val ring = indexDeviceManager.rings.value.filterIsInstance<KnownIndexDevice>().firstOrNull()
+                ?: run {
+                    Logger.withTag("RingDiagnostics").w { "No paired ring found for diagnostics" }
+                    _diagnosticsState.value = DiagnosticsState.Idle
+                    return@launch
+                }
+
+            var lastError: Exception? = null
+            repeat(DIAGNOSTICS_ATTEMPTS) { attempt ->
+                try {
+                    val result = ring.measureRSSI(DIAGNOSTICS_CONNECTION_TIMEOUT)
+                    Logger.withTag("RingDiagnostics").i { "RSSI diagnostic result: $result" }
+                    _diagnosticsState.value = DiagnosticsState.Completed(result)
+                    return@launch
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastError = e
+                    Logger.withTag("RingDiagnostics").w(e) {
+                        "RSSI measurement failed (attempt ${attempt + 1}/$DIAGNOSTICS_ATTEMPTS)"
+                    }
+                    if (attempt < DIAGNOSTICS_ATTEMPTS - 1) delay(DIAGNOSTICS_RETRY_DELAY)
+                }
+            }
+            _diagnosticsState.value = DiagnosticsState.Error(
+                lastError?.message ?: "Couldn't reach your Index 01"
+            )
+        }.apply {
+            invokeOnCompletion {
+                if (it is CancellationException) {
+                    _diagnosticsState.value = DiagnosticsState.Idle
+                }
+            }
+        }
+    }
+
+    fun resetDiagnostics() {
+        _diagnosticsState.value = DiagnosticsState.Idle
     }
 
     fun refreshAvailableProviders() {

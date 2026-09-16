@@ -581,6 +581,7 @@ class RingRecordingE2ETest {
                 override fun updateLastConnectedSerial(serial: String?) {}
                 override fun updateRingTransferDurationMetric(duration: kotlin.time.Duration) {}
                 override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+                override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
             }
         }
         single {
@@ -608,6 +609,10 @@ class RingRecordingE2ETest {
                 override suspend fun updateRingLifetimeCollectionCount(
                     serial: String,
                     count: Int
+                ) {}
+                override suspend fun updateRingBatteryVoltage(
+                    serial: String,
+                    voltageMilliV: Int
                 ) {}
 
                 override fun init() {}
@@ -667,6 +672,8 @@ class RingRecordingE2ETest {
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
+                    signRequests: Boolean,
+                    signingSecret: String?,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )

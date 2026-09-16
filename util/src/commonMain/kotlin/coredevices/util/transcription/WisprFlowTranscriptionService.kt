@@ -137,6 +137,7 @@ class WisprFlowTranscriptionService(
         contentContext: String?,
         encoding: AudioEncoding,
         initialTimeout: Duration?,
+        totalTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         if (audioStreamFrames == null) {
             return@flow

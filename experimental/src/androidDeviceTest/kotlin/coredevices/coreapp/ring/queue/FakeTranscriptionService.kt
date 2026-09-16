@@ -39,6 +39,7 @@ class FakeTranscriptionService : TranscriptionService {
         contentContext: String?,
         encoding: AudioEncoding,
         initialTimeout: Duration?,
+        totalTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         val behavior = behaviorQueue.removeFirst()
         when (behavior) {

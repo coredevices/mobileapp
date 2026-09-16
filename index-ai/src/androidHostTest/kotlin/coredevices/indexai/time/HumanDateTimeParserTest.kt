@@ -637,6 +637,55 @@ class HumanDateTimeParserTest {
         assertEquals(LocalDateTime(2025, 1, 16, 8, 0), result.dateTime)
     }
 
+    // ===== NAMED TIME TESTS =====
+
+    @Test
+    fun testAbsoluteTimeAtNoon() {
+        val result = parser.parse("at noon")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(12, 0), result.time)
+    }
+
+    @Test
+    fun testAbsoluteTimeAtMidnight() {
+        val result = parser.parse("at midnight")
+        assertIs<InterpretedDateTime.AbsoluteTime>(result)
+        assertEquals(LocalTime(0, 0), result.time)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeDayOfWeekAtNoon() {
+        val result = parser.parse("friday at noon")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 17, 12, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeTomorrowAtMidnight() {
+        val result = parser.parse("tomorrow at midnight")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 0, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAfternoonIsNotParsedAsNoon() {
+        val result = parser.parse("tomorrow afternoon")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 1, 16, 14, 0), result.dateTime)
+    }
+
+    @Test
+    fun testParseFromMessageDayOfWeekAtNoon() {
+        val result = parser.parseFromMessage("lunch with sarah at noon on friday")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result?.dateTime)
+        assertEquals(
+            LocalDateTime(2025, 1, 17, 12, 0),
+            (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime,
+        )
+        // normalizeTimeExpressions rewrites "noon" -> "12 pm", so the extracted text is normalized.
+        assertEquals("at 12 pm on friday", result.matchedText.lowercase())
+    }
+    
     @Test
     fun testBareTimeBeforeTimeOfDayWord() {
         val result = parser.parse("5:30 this afternoon")

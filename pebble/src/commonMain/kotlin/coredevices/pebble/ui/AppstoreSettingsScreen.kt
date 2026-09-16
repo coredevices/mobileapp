@@ -2,16 +2,22 @@ package coredevices.pebble.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,6 +44,8 @@ import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.isPebbleFeed
+import coredevices.pebble.services.isRebbleFeed
 import coredevices.ui.M3Dialog
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
@@ -95,15 +103,21 @@ class AppstoreSettingsScreenViewModel(
         viewModelScope.launch {
             val source = AppstoreSource(
                 title = title,
-                url = url
+                url = url.normalizeSourceUrl(),
             )
             sourceDao.insertSource(source)
+            updateCollections()
         }
     }
 }
 
 @Composable
-fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
+fun AppstoreSettingsScreen(
+    nav: NavBarNav,
+    topBarParams: TopBarParams,
+    addSourceName: String? = null,
+    addSourceUrl: String? = null,
+) {
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
@@ -141,10 +155,15 @@ fun AppstoreSettingsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
                         }
                 } else {
                     sourceDao.setSourceEnabled(sourceId, isEnabled)
+                    if (isEnabled) {
+                        viewModel.updateCollections()
+                    }
                 }
             }
         },
         onCollectionEnabledChanged = viewModel::updateCollectionEnabled,
+        addSourceName = addSourceName,
+        addSourceUrl = addSourceUrl,
     )
 }
 
@@ -156,10 +175,12 @@ fun AppstoreSettingsScreen(
     onSourceAdded: (title: String, url: String) -> Unit,
     onSourceEnableChange: (Int, Boolean) -> Unit,
     onCollectionEnabledChanged: (AppstoreCollection, Boolean) -> Unit,
+    addSourceName: String? = null,
+    addSourceUrl: String? = null,
 ) {
-    var createSourceOpen by remember { mutableStateOf(false) }
+    var createSourceOpen by remember { mutableStateOf(addSourceName != null && addSourceUrl != null) }
     Scaffold(
-        /*floatingActionButton = {
+        floatingActionButton = {
             FloatingActionButton(
                 onClick = {
                     createSourceOpen = true
@@ -167,10 +188,13 @@ fun AppstoreSettingsScreen(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add Source")
             }
-        }*/
+        }
     ) { insets ->
         if (createSourceOpen) {
             CreateAppstoreSourceDialog(
+                existingUrls = sources.mapTo(mutableSetOf()) { it.url },
+                initialTitle = addSourceName.orEmpty(),
+                initialUrl = addSourceUrl.orEmpty(),
                 onDismissRequest = {
                     createSourceOpen = false
                 },
@@ -180,7 +204,10 @@ fun AppstoreSettingsScreen(
                 }
             )
         }
-        LazyColumn(Modifier.padding(insets)) {
+        LazyColumn(
+            modifier = Modifier.padding(insets),
+            contentPadding = PaddingValues(bottom = 88.dp),
+        ) {
             items(sources.size, { sources[it].id }) { i ->
                 val source = sources[i]
                 val collections = collections?.get(source)
@@ -213,19 +240,23 @@ fun AppstoreSourceItem(
                 Text(text = source.url)
             },
             trailingContent = {
-                Checkbox(
-                    checked = source.enabled,
-                    onCheckedChange = {
-                        onEnableChange(source.id, it)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!source.isPebbleFeed() && !source.isRebbleFeed()) {
+                        IconButton(
+                            onClick = {
+                                onRemove(source.id)
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Source")
+                        }
                     }
-                )
-                /*IconButton(
-                    onClick = {
-                        onRemove(source.id)
-                    }
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Source")
-                }*/
+                    Checkbox(
+                        checked = source.enabled,
+                        onCheckedChange = {
+                            onEnableChange(source.id, it)
+                        }
+                    )
+                }
             },
             modifier = Modifier.clickable {
                 onEnableChange(source.id, !source.enabled)
@@ -278,13 +309,26 @@ fun AppstoreSourceItem(
     }
 }
 
+private fun String.normalizeSourceUrl() = trim().trimEnd('/')
+
 @Composable
 fun CreateAppstoreSourceDialog(
+    existingUrls: Set<String>,
+    initialTitle: String = "",
+    initialUrl: String = "",
     onDismissRequest: () -> Unit,
     onSourceCreated: (title: String, url: String) -> Unit,
 ) {
-    var title by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf(initialTitle) }
+    var url by remember { mutableStateOf(initialUrl) }
+    val normalizedUrl = url.normalizeSourceUrl()
+    val parsedUrl = parseUrl(normalizedUrl)
+    // Feed urls are concatenated into request paths, so anything past the path is a broken source.
+    val urlValid = parsedUrl != null &&
+            parsedUrl.protocolOrNull in setOf(URLProtocol.HTTP, URLProtocol.HTTPS) &&
+            parsedUrl.encodedQuery.isEmpty() &&
+            parsedUrl.fragment.isEmpty() &&
+            normalizedUrl !in existingUrls
     M3Dialog(
         onDismissRequest = onDismissRequest,
         icon = {
@@ -301,11 +345,9 @@ fun CreateAppstoreSourceDialog(
             }
             TextButton(
                 onClick = {
-                    onSourceCreated(title, url)
+                    onSourceCreated(title, normalizedUrl)
                 },
-                enabled = title.isNotBlank() &&
-                        url.isNotBlank() &&
-                        parseUrl(url)?.protocolOrNull in setOf(URLProtocol.HTTP, URLProtocol.HTTPS)
+                enabled = title.isNotBlank() && urlValid
             ) {
                 Text("Add")
             }

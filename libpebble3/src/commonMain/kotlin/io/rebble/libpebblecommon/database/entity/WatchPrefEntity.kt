@@ -337,6 +337,13 @@ enum class MenuScrollVibeBehaviour(override val code: UByte, override val displa
     VibeOnLocked(2u, "Vibe On Locked"),
 }
 
+/** Wind is labelled separately from distance so the UK (metric, but mph wind) is expressible. */
+enum class WindUnits(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    FromDistance(0u, "Automatic"),
+    KmH(1u, "km/h"),
+    Mph(2u, "mph"),
+}
+
 enum class MotionSensitivityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
     VeryLow(10u, "Very Low"),
     Low(25u, "Low"),
@@ -512,6 +519,13 @@ enum class EnumWatchPref(
         description = "Turn on backlight when tapping the screen",
         defaultValue = BacklightTouchWakeMode.DoubleTap,
         options = BacklightTouchWakeMode.entries,
+    ),
+    WindSpeed(
+        id = "unitsWind",
+        displayName = "Wind Speed",
+        description = "Automatic follows the Imperial Units setting.",
+        defaultValue = WindUnits.FromDistance,
+        options = WindUnits.entries,
     ),
     Language(
         id = "language",

@@ -1,7 +1,6 @@
 package coredevices.util.models
 
 import co.touchlab.kermit.Logger
-import coredevices.util.CommonBuildKonfig
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -150,7 +149,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
             val outputDirIo = IoPath(outputDir.toString())
             promoteSingleRootDir(outputDirIo)
             SystemFileSystem.sink(IoPath(outputDirIo, ".cactus_version")).buffered().use {
-                it.write(CommonBuildKonfig.CACTUS_WEIGHTS_VERSION.encodeToByteArray())
+                it.write(weightsVersionFor(slug).encodeToByteArray())
             }
             logger.i {"Model $slug downloaded and extracted to $outputDir"}
             manager.updateDownloadStatus(ModelDownloadStatus.Idle)

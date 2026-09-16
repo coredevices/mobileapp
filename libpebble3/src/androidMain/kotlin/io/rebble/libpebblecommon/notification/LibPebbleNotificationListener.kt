@@ -166,6 +166,9 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
     // *every* notification. So - the handler must be resilient to this.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // Before any filtering: the shade holds everything, not just what we forward to the watch.
+        connection.onShadeChanged()
+
         if (sbn.notification.category == Notification.CATEGORY_CALL) {
             notificationCallDetector.handleCallNotificationPosted(sbn)
             return
@@ -189,6 +192,8 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         rankingMap: RankingMap,
         reason: Int
     ) {
+        connection.onShadeChanged()
+
         if (sbn.notification.category == Notification.CATEGORY_CALL) {
             notificationCallDetector.handleCallNotificationRemoved(sbn)
             return

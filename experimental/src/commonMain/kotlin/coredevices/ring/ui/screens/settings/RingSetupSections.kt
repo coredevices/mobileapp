@@ -53,7 +53,7 @@ fun IndexWebhookSheetHost() {
 
 /** The Index Agent action list with its settings state, shared the same way as [RingButtonSection]. */
 @Composable
-fun IndexAgentActionsSection(coreNav: CoreNav, viewModel: SettingsViewModel) {
+fun IndexAgentActionsSection(coreNav: CoreNav, viewModel: SettingsViewModel, showHeader: Boolean = true) {
     val actions by viewModel.indexActions.collectAsState()
     val httpMcpDisabledReason by viewModel.httpMcpDisabledReason.collectAsState()
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
@@ -61,6 +61,7 @@ fun IndexAgentActionsSection(coreNav: CoreNav, viewModel: SettingsViewModel) {
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
     IndexActionsSection(
+        showHeader = showHeader,
         actions = actions,
         httpMcpDisabledReason = httpMcpDisabledReason,
         availableNoteProviders = availableNoteProviders,

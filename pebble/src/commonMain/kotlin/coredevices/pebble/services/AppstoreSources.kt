@@ -40,13 +40,17 @@ class AppstoreSourceInitializer(
 ) {
     suspend fun initAppstoreSourcesDB() {
         val current = appstoreSourceDao.getAllSources().first()
+        // Only builtins take part in init/migration: user-added sources have no Algolia
+        // credentials, so checking the whole table would flag needsInit and wipe them.
+        val builtinUrls = INITIAL_APPSTORE_SOURCES.map { it.url }.toSet()
+        val builtins = current.filter { it.url in builtinUrls }
         //TODO: remove the migration stuff after a while
-        val needsInit = current.isEmpty() ||
-                current.any { it.algoliaAppId == null } || // migrate old entries
-                current.firstOrNull { it.url == "https://appstore-api.repebble.com/api" }?.title != "Pebble App Store" // migrate title change
+        val needsInit = builtins.isEmpty() ||
+                builtins.any { it.algoliaAppId == null } || // migrate old entries
+                builtins.firstOrNull { it.url == PEBBLE_FEED_URL }?.title != "Pebble App Store" // migrate title change
         if (needsInit) {
             logger.d { "Initializing appstore sources database" }
-            current.forEach { source ->
+            builtins.forEach { source ->
                 appstoreSourceDao.deleteSourceById(source.id)
             }
             INITIAL_APPSTORE_SOURCES.forEach { source ->

@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hue</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    section { margin-bottom: 24px; }
+    button { padding: 10px 16px; font-size: 15px; border-radius: 8px; border: 0;
+             background: #ff6b00; color: #fff; margin-right: 8px; margin-top: 8px; }
+    button.secondary { background: rgba(128,128,128,.25); color: inherit; }
+    #status { padding: 10px 12px; border-radius: 8px; background: rgba(128,128,128,.15);
+              font-size: 14px; min-height: 20px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,.25); display: flex;
+         justify-content: space-between; }
+    .on { color: #ff6b00; }
+    .hint { font-size: 13px; opacity: .7; margin: 0 0 8px; }
+    input[type=checkbox] { width: 22px; height: 22px; accent-color: #ff6b00; }
+  </style>
+</head>
+<body>
+  <h1>Philips Hue</h1>
+
+  <section>
+    <div id="status">Starting the Hue plugin…</div>
+    <button id="pair">Pair with bridge</button>
+    <button id="discover" class="secondary">Find bridge</button>
+    <button id="forget" class="secondary">Forget</button>
+  </section>
+
+  <section>
+    <h1>Rooms</h1>
+    <p class="hint">Switch a room off here to hide it from the watch.</p>
+    <ul id="rooms"></ul>
+  </section>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var statusEl = $('status');
+
+  function say(text) { statusEl.textContent = text; }
+
+  // Everything that touches the network happens in the plugin: this page cannot reach a
+  // plain-HTTP bridge on the local network, and the plugin can.
+  function send(message) { return Pebble.sendMessage('plugin', message); }
+
+  async function refresh() {
+    var state = await send({ type: 'status' });
+    if (state.error) {
+      say(state.error);
+      return;
+    }
+    if (!state.ip) {
+      say('Looking for a bridge…');
+      var found = await send({ type: 'discover' });
+      if (!found.ip) {
+        say('No bridge found on this network.');
+        return;
+      }
+      state = await send({ type: 'status' });
+    }
+    if (!state.paired) {
+      say('Found a bridge at ' + state.ip + '. Press its link button, then pair.');
+      $('rooms').innerHTML = '';
+      return;
+    }
+    say('Paired with the bridge at ' + state.ip + '.');
+    var result = await send({ type: 'rooms' });
+    if (result.error) {
+      say(result.error);
+      return;
+    }
+    $('rooms').innerHTML = '';
+    (result.rooms || []).forEach(function (room) {
+      var li = document.createElement('li');
+      var name = document.createElement('span');
+      name.textContent = room.name + (room.on ? ' · on' : '');
+      if (room.on) name.className = 'on';
+      var toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.checked = !room.hidden;
+      toggle.onchange = function () {
+        send({ type: 'setHidden', id: room.id, hidden: !toggle.checked });
+      };
+      li.appendChild(name);
+      li.appendChild(toggle);
+      $('rooms').appendChild(li);
+    });
+  }
+
+  $('discover').onclick = async function () {
+    say('Looking for a bridge…');
+    var result = await send({ type: 'discover' });
+    say(result.ip ? 'Found a bridge at ' + result.ip + '.' : 'No bridge found on this network.');
+  };
+
+  $('pair').onclick = async function () {
+    say('Press the link button on your bridge…');
+    for (var attempt = 0; attempt < 30; attempt++) {
+      var result = await send({ type: 'pair' });
+      if (result.paired) { refresh(); return; }
+      if (!result.pending) { say(result.message || 'Pairing failed.'); return; }
+      await new Promise(function (r) { setTimeout(r, 2000); });
+    }
+    say('Gave up waiting for the link button.');
+  };
+
+  $('forget').onclick = async function () {
+    await send({ type: 'forget' });
+    refresh();
+  };
+
+  // The plugin is only started when this page opens, so wait for it to say it is running.
+  Pebble.addEventListener('ready', function (event) {
+    if (event.target !== 'plugin') return;
+    say('Checking…');
+    refresh();
+  });
+
+  // The plugin can also push at us — progress while it works, say.
+  Pebble.addEventListener('message', function (event) {
+    if (event.data && event.data.status) say(event.data.status);
+  });
+</script>
+</body>
+</html>

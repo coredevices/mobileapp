@@ -43,6 +43,7 @@ interface UsersDao {
     suspend fun initUserDevToken(rebbleUserToken: String?)
     suspend fun updateLastConnectedWatch(serial: String)
     suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int)
+    suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int)
     suspend fun updateEncryptionInfo(info: EncryptionInfo) {}
     fun init()
 }
@@ -310,6 +311,18 @@ class UsersDaoImpl(
         if ((existing[serial] ?: -1) >= count) return
         val merged = existing + (serial to count)
         userDoc?.update(mapOf("ring_lifetime_collection_counts" to merged))
+    }
+
+    override suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int) {
+        val user = user.first()
+        if (user == null) {
+            logger.w { "updateRingBatteryVoltage: user is null" }
+            return
+        }
+        val existing = user.user.ringVoltages.orEmpty()
+        if ((existing[serial] ?: -1) == voltageMilliV) return
+        val merged = existing + (serial to voltageMilliV)
+        userDoc?.update(mapOf("ring_voltages" to merged))
     }
 
     override suspend fun updateEncryptionInfo(info: EncryptionInfo) {

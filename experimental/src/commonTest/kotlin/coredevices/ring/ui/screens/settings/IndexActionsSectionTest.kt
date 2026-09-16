@@ -139,6 +139,27 @@ class IndexActionsSectionTest {
     }
 
     @Test
+    fun `connected providers with their own settings can be configured from the sheet`() {
+        assertEquals(ActionsDialog.NotionPage, noteConfigureDialog(NoteProvider.Notion))
+        assertEquals(ActionsDialog.Obsidian, noteConfigureDialog(NoteProvider.Obsidian))
+        assertNull(noteConfigureDialog(NoteProvider.Builtin))
+        assertNull(noteConfigureDialog(NoteProvider.Tasker))
+    }
+
+    @Test
+    fun `note destinations are only configurable once connected`() {
+        val options = noteDestOptions(
+            listOf(NoteProvider.Builtin, NoteProvider.Obsidian),
+            isAndroid = true,
+        )
+        assertEquals(
+            listOf(NoteProvider.Obsidian),
+            options.filter { it.configurable }.map { it.provider }
+        )
+        assertFalse(noteDestOptions(emptyList(), isAndroid = true).any { it.configurable })
+    }
+
+    @Test
     fun `providers with no connect flow fall back to the integration list`() {
         assertNull(noteConnectDialog(NoteProvider.Builtin))
         assertNull(reminderConnectDialog(ReminderProvider.BuiltIn))

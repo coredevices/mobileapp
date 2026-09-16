@@ -104,8 +104,9 @@ class CommonAppDelegate(
                         logger.w(e) { "Failed to delete incompatible model $it" }
                     }
                 }
-                if (settings.getStringOrNull(STT_UPDATE_NOTIFIED_VERSION_KEY) != CommonBuildKonfig.CACTUS_WEIGHTS_VERSION) {
-                    settings.putString(STT_UPDATE_NOTIFIED_VERSION_KEY, CommonBuildKonfig.CACTUS_WEIGHTS_VERSION)
+                val sttVersion = "${CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION}:${CommonBuildKonfig.CACTUS_STT_ENG_WEIGHTS_VERSION}"
+                if (settings.getStringOrNull(STT_UPDATE_NOTIFIED_VERSION_KEY) != sttVersion) {
+                    settings.putString(STT_UPDATE_NOTIFIED_VERSION_KEY, sttVersion)
                     NotifierManager.getLocalNotifier().notify(
                         STT_UPDATE_NOTIFICATION_ID,
                         "Offline voice recognition",

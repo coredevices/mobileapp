@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
+import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -9,6 +10,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -35,6 +37,7 @@ import platform.JavaScriptCore.JSGlobalContextRef
 import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
+import kotlin.uuid.Uuid
 
 class JavascriptCoreJsRunner(
     private val appContext: AppContext,
@@ -50,10 +53,12 @@ class JavascriptCoreJsRunner(
     private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val httpInterceptorManager: HttpInterceptorManager,
     private val notificationConfigFlow: NotificationConfigFlow,
+    private val pluginRegistry: PluginRegistry,
+    private val httpClient: HttpClient,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
-    private val interfaces = mutableMapOf<String, RegisterableJsInterface>()
+    private val interfaces = mutableMapOf<String, JsEngineInterface>()
     private var dispatcherRef: StableRef<*>? = null
     private var navigatorRef: StableRef<JSValue>? = null
     @OptIn(DelicateCoroutinesApi::class)
@@ -74,11 +79,17 @@ class JavascriptCoreJsRunner(
 
         val interfacesScope = scope + threadContext
         val instances = listOf(
-            XMLHTTPRequestManager(interfacesScope, evalFn, httpInterceptorManager, appInfo),
+            XMLHTTPRequestManager(
+                scope = interfacesScope,
+                eval = { evalFn(it) },
+                httpInterceptorManager = httpInterceptorManager,
+                appUuid = Uuid.parse(appInfo.uuid),
+                client = httpClient,
+            ),
             JSTimeout(interfacesScope, evalRawFn),
             WebSocketManager(interfacesScope, evalFn),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
@@ -101,7 +112,7 @@ class JavascriptCoreJsRunner(
         // Generate pure JS proxy objects — these contain no KotlinBase references.
         // Each method delegates to __nativeDispatch which routes to the Kotlin dispatch table.
         instances.forEach { iface ->
-            val methods = iface.interf.keys.joinToString(",") { "'$it'" }
+            val methods = iface.methods.joinToString(",") { "'$it'" }
             jsContext.evaluateScript("""
                 var ${iface.name} = {};
                 [$methods].forEach(function(m) {
@@ -110,7 +121,7 @@ class JavascriptCoreJsRunner(
                     };
                 });
             """.trimIndent())
-            iface.onRegister(jsContext)
+            (iface as? RegisterableJsInterface)?.onRegister(jsContext)
         }
     }
 
@@ -160,7 +171,7 @@ class JavascriptCoreJsRunner(
             scope.cancel()
             scope.coroutineContext[kotlinx.coroutines.Job]?.join()
 
-            interfaces.values.forEach { it.close() }
+            interfaces.values.forEach { (it as? AutoCloseable)?.close() }
             interfaces.clear()
             dispatcherRef?.dispose()
             dispatcherRef = null
@@ -173,7 +184,8 @@ class JavascriptCoreJsRunner(
     }
 
     private fun evaluateStandardLib() {
-        evaluateInternalScript("XMLHTTPRequest")
+        runBlocking(threadContext) { jsContext?.evalCatching(BASE64_JS) }
+        runBlocking(threadContext) { jsContext?.evalCatching(XML_HTTP_REQUEST_JS) }
         evaluateInternalScript("JSTimeout")
         evaluateInternalScript("WebSocket")
     }
@@ -264,6 +276,12 @@ class JavascriptCoreJsRunner(
     override suspend fun signalWebviewClosed(data: String?) {
         withContext(threadContext) {
             jsContext?.evalCatching("globalThis.signalWebviewClosedEvent(${Json.encodeToString(data)})")
+        }
+    }
+
+    override suspend fun signalConfigMessage(requestId: Int, json: String) {
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalConfigMessageEvent($requestId, $json)")
         }
     }
 

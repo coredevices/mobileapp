@@ -1,0 +1,54 @@
+{
+  "name": "plugin-test",
+  "author": "Pebble",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Plugin Demo: Dashboard",
+    "uuid": "8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "capabilities": [
+      "configurable"
+    ],
+    "messageKeys": [
+      "quad0",
+      "quad1",
+      "quad2",
+      "quad3",
+      "quad4",
+      "quad5",
+      "quad6",
+      "quad7",
+      "action",
+      "imgQuad",
+      "imgWidth",
+      "imgHeight",
+      "imgPalette",
+      "imgPixels",
+      "artSize",
+      "theme",
+      "quick",
+      "hello"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}

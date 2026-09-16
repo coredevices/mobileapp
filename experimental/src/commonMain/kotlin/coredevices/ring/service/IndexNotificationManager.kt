@@ -21,6 +21,7 @@ import coredevices.ring.ui.components.chat.actionText
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
+import coredevices.util.isAndroid
 import io.ktor.utils.io.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -547,7 +548,11 @@ class IndexNotificationManager(
 
     suspend fun processRingSyncTransferNotifications(events: Flow<RingEvent>) = coroutineScope {
         launch { processFirmwareUpdateNotifications(events) }
-        launch { processPairingIssueNotifications(events) }
+        // Skip pairing issue notifications on iOS - we seem to get false positives from the OS
+        // causing confusion/spam
+        if (platform.isAndroid) {
+            launch { processPairingIssueNotifications(events) }
+        }
     }
 
     // Leading-edge debounce: the ring scans continuously, so a lost pairing can be

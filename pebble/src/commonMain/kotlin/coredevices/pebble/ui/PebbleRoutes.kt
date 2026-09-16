@@ -27,9 +27,10 @@ object PebbleRoutes {
     @Serializable
     data class FirmwareSideloadRoute(val identifier: String) : CoreRoute
 
+    /** Settings for whatever is registered under [uuid]: a watchapp, a plugin, or both. */
     @Serializable
     data class WatchappSettingsRoute(
-        val watchIdentifier: String,
+        val uuid: String,
         val title: String,
     ) : CoreRoute
 
@@ -77,7 +78,10 @@ object PebbleNavBarRoutes {
     data object HealthRoute : NavBarRoute
 
     @Serializable
-    data object AppstoreSettingsRoute : NavBarRoute
+    data class AppstoreSettingsRoute(
+        val addSourceName: String? = null,
+        val addSourceUrl: String? = null,
+    ) : NavBarRoute
 
     @Serializable
     data class NotificationAppRoute(val packageName: String) : NavBarRoute
@@ -254,7 +258,8 @@ fun NavGraphBuilder.addNavBarRoutes(
         CannedRepliesScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
-        AppstoreSettingsScreen(nav, topBarParams)
+        val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
+        AppstoreSettingsScreen(nav, topBarParams, route.addSourceName, route.addSourceUrl)
     }
     composable<PebbleNavBarRoutes.OfflineModelsRoute> {
         ModelManagementScreen(nav, topBarParams)
@@ -296,7 +301,7 @@ fun NavGraphBuilder.addPebbleRoutes(
         val route: PebbleRoutes.WatchappSettingsRoute = it.toRoute()
         WatchappSettingsScreen(
             coreNav = coreNav,
-            watchIdentifier = route.watchIdentifier,
+            uuid = route.uuid,
             title = route.title,
         )
     }

@@ -45,6 +45,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -171,6 +173,8 @@ class RingSync(
     private val _ringEvents = MutableSharedFlow<RingEvent>(replay = 1, extraBufferCapacity = 50, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val ringEvents = _ringEvents.asSharedFlow()
 
+    val batteryVoltage = MutableSharedFlow<Pair<String, UShort?>>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
     private fun logTransferEvent(
         latency: Long?,
         rssi: Int?,
@@ -253,6 +257,14 @@ class RingSync(
                     logger.d { "Updating lifetime collection count for $serial to $count" }
                     coreAnalytics.updateRingLifetimeCollectionCount(serial, count)
                     usersDao.updateRingLifetimeCollectionCount(serial, count)
+                }
+            }
+            launch(Dispatchers.IO) {
+                batteryVoltage.debounce(1.seconds).collect {
+                    val (serial, voltage) = it
+                    logger.d { "Updating battery voltage for $serial to ${voltage}mv" }
+                    coreAnalytics.updateRingBatteryVoltage(voltage?.toInt() ?: -1)
+                    usersDao.updateRingBatteryVoltage(serial, voltage?.toInt() ?: -1)
                 }
             }
             satelliteManager.lastRing.onEach {
@@ -361,6 +373,7 @@ class RingSync(
                                                             } ?: logger.w {
                                                                 "No lifetime collection count available to update for serial $serial"
                                                             }
+                                                            batteryVoltage.emit(serial to transferStatus.batteryVoltageMilliV)
                                                         } ?: logger.w {
                                                             "No serial number available in satellite state to update lifetime collection count"
                                                         }
@@ -868,7 +881,7 @@ class RingSync(
         syncJob?.cancel()
     }
 
-    fun lastRingSummary(): String? = lastRing.value?.let {
+    suspend fun lastRingSummary(): String? = lastRing.value?.let {
         val state = it.state.value
         buildString {
             appendLine()
@@ -879,6 +892,8 @@ class RingSync(
             appendLine("Name: ${it.name}")
             appendLine("Last Seen: ${it.lastAdvertisement?.timestamp}")
             appendLine("Last RSSI: ${it.lastAdvertisement?.rssi}")
+            appendLine("Last RX RSSI: ${state?.rxRSSI}")
+            appendLine("Battery Voltage: ${batteryVoltage.firstOrNull()?.second ?: "<unknown>"} mV")
             appendLine("isInCollectionState: ${state?.isInCollectionState}")
             appendLine("isNearby: ${state?.isNearby}")
             appendLine("isInFailsafeMode: ${state?.isInFailsafeMode}")

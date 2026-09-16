@@ -1,0 +1,71 @@
+{
+  "uuid": "6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40",
+  "name": "Hue",
+  "description": "Philips Hue lights on the user's local bridge. Reads whether a light, a room or the whole home is on and how bright it is; turns them on and off and dims them.",
+  "script": "hue-plugin.js",
+  "configPage": "hue-config.html",
+  "sources": [
+    {
+      "category": "home",
+      "items": ["room_lights", "light"],
+      "properties": {
+        "name": ["shortText"],
+        "on": ["boolean", "shortText"],
+        "brightness": ["numericValue", "shortText"]
+      },
+      "supportsMultiple": true,
+      "usesPermissions": [
+        "LocalNetwork",
+        { "name": "Internet", "parameters": { "domains": ["discovery.meethue.com"] } }
+      ],
+      "suggestedRefreshIntervalSec": 30
+    },
+    {
+      "category": "home",
+      "items": ["home_lights"],
+      "properties": {
+        "name": ["shortText"],
+        "on": ["boolean", "shortText"],
+        "brightness": ["numericValue", "shortText"]
+      },
+      "supportsMultiple": false,
+      "usesPermissions": [
+        "LocalNetwork",
+        { "name": "Internet", "parameters": { "domains": ["discovery.meethue.com"] } }
+      ],
+      "suggestedRefreshIntervalSec": 30
+    }
+  ],
+  "actions": [
+    {
+      "name": "set_on",
+      "description": "Turn a light, a room or the whole home on or off.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "item": { "type": "string", "enum": ["home_lights", "room_lights", "light"], "description": "Which kind of thing instanceId names." },
+          "instanceId": { "type": "string", "description": "Id from the matching home/* source." },
+          "on": { "type": "boolean" }
+        },
+        "required": ["item", "instanceId", "on"]
+      },
+      "targets": ["home/home_lights/on", "home/room_lights/on", "home/light/on"],
+      "usesPermissions": ["LocalNetwork"]
+    },
+    {
+      "name": "set_brightness",
+      "description": "Set brightness as a percentage. 0 turns it off.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "item": { "type": "string", "enum": ["home_lights", "room_lights", "light"], "description": "Which kind of thing instanceId names." },
+          "instanceId": { "type": "string", "description": "Id from the matching home/* source." },
+          "percent": { "type": "integer", "minimum": 0, "maximum": 100 }
+        },
+        "required": ["item", "instanceId", "percent"]
+      },
+      "targets": ["home/home_lights/brightness", "home/room_lights/brightness", "home/light/brightness"],
+      "usesPermissions": ["LocalNetwork"]
+    }
+  ]
+}

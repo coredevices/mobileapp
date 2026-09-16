@@ -91,6 +91,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/filepaths" />
         </provider>
+        <!-- Eager WorkManager init crashes the process on devices whose framework JobScheduler
+             lacks forNamespace() despite reporting API 34+; init it on demand instead. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
+        </provider>
         <service
             android:name=".BugReportService"
             android:enabled="true"
@@ -163,6 +174,16 @@
             android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="coredevices.coreapp.DEV_CONNECTION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Sets a persisted app setting from adb (e.g. hasSeenWatchOnboarding). Same DUMP gate. -->
+        <receiver
+            android:name="coredevices.coreapp.debug.SetSettingReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="coredevices.coreapp.SET_SETTING" />
             </intent-filter>
         </receiver>
     </application>

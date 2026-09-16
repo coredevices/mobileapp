@@ -45,16 +45,25 @@ class IndexDeviceManager(
         private val logger = Logger.withTag("IndexDeviceRepository")
     }
 
-    fun update(indexDevice: IndexDevice) {
+    /**
+     * Moves the ring's scanned entry to [pairingState].
+     */
+    fun setPairingState(identifier: IndexIdentifier, name: String, pairingState: IndexPairingState) {
         _rings.update { prev ->
-            val existingIdx = prev.indexOfFirst { indexDevice.identifier.asString.equals(it.identifier.asString, ignoreCase = true) }
-            if (existingIdx != -1) {
-                prev
-                    .toMutableList()
-                    .apply { set(existingIdx, indexDevice) }
-            } else {
-                prev + indexDevice
-            }
+            val existing = prev.getByIDNamePair(identifier, name) as? PairableIndexDevice
+                ?: return@update prev
+            val updated = deviceFactory.create(
+                identifier = existing.identifier,
+                name = existing.name,
+                scanResult = IndexScanResult(
+                    identifier = existing.identifier,
+                    name = existing.name,
+                    rssi = existing.rssi,
+                    currentImage = existing.currentImage,
+                ),
+                pairingState = pairingState,
+            )
+            prev.map { if (it === existing) updated else it }
         }
     }
 
@@ -197,17 +206,16 @@ class IndexDeviceManager(
 
     fun addScanResult(result: IndexScanResult) {
         _rings.update { prev ->
-            val matching = prev.filter { it.isSameRing(result.identifier, result.name) }
+            val existing = prev.getByIDNamePair(result.identifier, result.name)
             // A paired ring keeps its entry; a scan result must not turn it back into a
             // scanned one, nor add a second row for it.
-            if (matching.any { !it.isScanned }) return@update prev
+            if (existing != null && !existing.isScanned) return@update prev
             prev.upsertRing(
                 deviceFactory.create(
                     identifier = result.identifier,
                     name = result.name,
                     scanResult = result,
-                    pairingState = matching.filterIsInstance<DiscoveredIndexDevice>()
-                        .firstOrNull()?.pairingState ?: IndexPairingState.NotPaired,
+                    pairingState = existing.inheritedPairingState(),
                 )
             )
         }
@@ -222,7 +230,7 @@ class IndexDeviceManager(
 
 /** Built from a scan result, so superseded by the next one and dropped when the scan ends. */
 internal val IndexDevice.isScanned: Boolean
-    get() = this is DiscoveredIndexDevice || this is RepairableIndexDevice
+    get() = this is DiscoveredIndexDevice
 
 /**
  * A ring entering failsafe advertises a slightly different address but keeps its name, so a
@@ -231,6 +239,19 @@ internal val IndexDevice.isScanned: Boolean
 internal fun IndexDevice.isSameRing(identifier: IndexIdentifier, name: String): Boolean =
     this.identifier.asString.equals(identifier.asString, ignoreCase = true) ||
         (isScanned && this.name == name)
+
+/**
+ * Get entry by identifier & name.
+ * Required because failsafe can have a different identifier.
+ */
+internal fun List<IndexDevice>.getByIDNamePair(identifier: IndexIdentifier, name: String): IndexDevice? =
+    firstOrNull { it.isSameRing(identifier, name) }
+
+/**
+ * Get pairing state to be inherited for updating device entry type, resets if e.g. Failsafe occurs
+ */
+internal fun IndexDevice?.inheritedPairingState(): IndexPairingState =
+    (this as? PairableIndexDevice)?.pairingState ?: IndexPairingState.NotPaired
 
 /**
  * Inserts [device] in place of every entry for the same ring. The devices screen keys its rows by
@@ -248,11 +269,13 @@ internal fun List<IndexDevice>.upsertRing(device: IndexDevice): List<IndexDevice
     }
 }
 
+@Suppress("ArrayInDataClass")
 data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
-    val currentImage: IndexImage
+    val currentImage: IndexImage,
+    val manufacturerData: ByteArray? = null,
 )
 
 internal data class StoredPairing(val id: String?, val name: String?)

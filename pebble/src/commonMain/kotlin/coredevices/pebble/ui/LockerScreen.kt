@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -352,6 +353,7 @@ fun LockerScreen(
             limit = 25,
         )
         val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value)
+        val activeWatchapp = loadActiveWatchapp(sharedViewModel.watchType.value)
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
@@ -400,11 +402,15 @@ fun LockerScreen(
                     PullToRefreshBox(isRefreshing = viewModel.storeIsRefreshing || viewModel.lockerIsRefreshing, onRefresh = {
                         viewModel.startLockerRefresh(libPebble, sharedViewModel.watchType.value)
                     }) {
-                        val myApps by remember(lockerEntries) {
+                        val active = if (viewModel.type.value == AppType.Watchface) {
+                            activeWatchface
+                        } else {
+                            activeWatchapp
+                        }
+                        val myApps by remember(lockerEntries, active) {
                             derivedStateOf {
                                 lockerEntries.filter {
-                                            it.showOnMainLockerScreen() &&
-                                            (it.uuid != activeWatchface.uuid || it.uuid != lockerEntries.first().uuid)
+                                    it.showOnMainLockerScreen() && it.uuid != active?.uuid
                                 }
                             }
                         }
@@ -422,6 +428,23 @@ fun LockerScreen(
                                         app.uuid?.let { seenUuids.add(it) }
                                     }
                                 }
+                            }
+                        }
+
+                        // Launching an app inserts the "Active" section above everything else.
+                        // The list stays anchored to whatever the user was looking at, so the
+                        // section arrives off-screen and unnoticed; scroll up to show it, but
+                        // only for someone who hadn't scrolled away from the top themselves.
+                        var wasAtTop by remember { mutableStateOf(true) }
+                        LaunchedEffect(active != null) {
+                            val listState = viewModel.mainListState
+                            if (active != null) {
+                                if (wasAtTop) listState.animateScrollToItem(0)
+                            } else {
+                                snapshotFlow {
+                                    listState.firstVisibleItemIndex == 0 &&
+                                        listState.firstVisibleItemScrollOffset == 0
+                                }.collect { atTop -> wasAtTop = atTop }
                             }
                         }
 
@@ -445,7 +468,7 @@ fun LockerScreen(
                                     onClick = onClick,
                                 )
                             }
-                            if (viewModel.type.value == AppType.Watchface) {
+                            active?.let {
                                 item(
                                     contentType = "active_watchface",
                                     key = "active_watchface"
@@ -465,15 +488,15 @@ fun LockerScreen(
                                                 .clickable {
                                                     navBarNav.navigateTo(
                                                         PebbleNavBarRoutes.LockerAppRoute(
-                                                            uuid = activeWatchface.uuid.toString(),
-                                                            storedId = activeWatchface.storeId,
-                                                            storeSource = activeWatchface.appstoreSource?.id,
+                                                            uuid = active.uuid.toString(),
+                                                            storedId = active.storeId,
+                                                            storeSource = active.appstoreSource?.id,
                                                         )
                                                     )
                                                 }.padding(vertical = 8.dp),
                                         ) {
                                             AppImage(
-                                                activeWatchface,
+                                                active,
                                                 modifier = Modifier.clip(RoundedCornerShape(10.dp)),
                                                 size = NATIVE_SCREENSHOT_HEIGHT,
                                             )
@@ -481,24 +504,24 @@ fun LockerScreen(
                                                 modifier = Modifier.padding(start = 8.dp),
                                             ) {
                                                 Text(
-                                                    activeWatchface.title,
+                                                    active.title,
                                                     fontSize = 20.sp,
                                                     modifier = Modifier.padding(0.dp)
                                                 )
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    activeWatchface.CompatibilityWarning(
+                                                    active.CompatibilityWarning(
                                                         topBarParams
                                                     )
                                                     Text(
-                                                        activeWatchface.developerName,
+                                                        active.developerName,
                                                         fontSize = 12.sp,
                                                         color = Color.Gray,
                                                         modifier = Modifier.padding(0.dp)
                                                             .weight(1f)
                                                     )
                                                 }
-                                                if (activeWatchface.hasSettings()) {
-                                                    activeWatchface.SettingsButton(
+                                                if (active.hasSettings()) {
+                                                    active.SettingsButton(
                                                         navBarNav,
                                                         topBarParams,
                                                         lastConnectedWatch is ConnectedPebbleDevice
@@ -544,7 +567,7 @@ fun LockerScreen(
                                         )
                                         IconButton(
                                             onClick = {
-                                                navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute)
+                                                navBarNav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute())
                                             },
                                         ) {
                                             Icon(

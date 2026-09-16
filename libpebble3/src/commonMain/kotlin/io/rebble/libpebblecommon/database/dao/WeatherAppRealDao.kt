@@ -4,9 +4,13 @@ import androidx.room.Dao
 import androidx.room.Query
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntryDao
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WeatherAppRealDao : WeatherAppEntryDao {
     @Query("SELECT * FROM WeatherAppEntryEntity WHERE deleted = 0")
     suspend fun getAll(): List<WeatherAppEntry>
+
+    @Query("SELECT * FROM WeatherAppEntryEntity WHERE deleted = 0")
+    fun getAllFlow(): Flow<List<WeatherAppEntry>>
 }

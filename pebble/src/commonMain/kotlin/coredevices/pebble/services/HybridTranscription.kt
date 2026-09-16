@@ -30,6 +30,10 @@ import kotlinx.io.readByteArray
 import kotlin.time.Duration.Companion.seconds
 
 internal expect fun tempTranscriptionDirectory(): Path
+
+/** Time we give ourselves before the firmware gives up on the session. */
+internal val PEBBLE_TRANSCRIPTION_BUDGET = PEBBLE_FW_TRANSCRIPTION_TIMEOUT - 1.seconds
+
 class HybridTranscription(
     private val service: HybridTranscriptionService,
     private val libPebbleLazy: Lazy<LibPebble>,
@@ -73,7 +77,7 @@ class HybridTranscription(
                     it.split(" ", limit = 2)
                 }
             } else null
-            val result = withTimeout(PEBBLE_FW_TRANSCRIPTION_TIMEOUT - 1.seconds) {
+            val result = withTimeout(PEBBLE_TRANSCRIPTION_BUDGET) {
                 service.transcribe(
                     audioStreamFrames = flow {
                         val totalBytes = decodedBuffer.size.toInt()
@@ -91,6 +95,7 @@ class HybridTranscription(
                     dictionaryContext = recentContacts,
                     sampleRate = encoderInfo.sampleRate.toInt(),
                     encoding = coredevices.util.AudioEncoding.PCM_16BIT,
+                    totalTimeout = PEBBLE_TRANSCRIPTION_BUDGET,
                 ).filterIsInstance<TranscriptionSessionStatus.Transcription>().first()
             }
             TranscriptionResult.Success(

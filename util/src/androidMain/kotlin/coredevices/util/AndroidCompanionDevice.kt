@@ -5,6 +5,7 @@ import android.app.Activity
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
 import android.companion.BluetoothLeDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
@@ -46,13 +47,15 @@ class AndroidCompanionDevice(
 
     override suspend fun registerDevice(
         identifier: IndexIdentifier,
-        uiContext: PlatformUiContext
+        uiContext: PlatformUiContext,
+        useClassicAssociation: Boolean
     ) {
         registerDeviceInternal(
             macAddress = identifier.asPlatformAddress,
             uiContext = uiContext,
             deviceProfile = null,
             onSuccess = {},
+            useClassicAssociation = useClassicAssociation,
         )
     }
 
@@ -80,6 +83,7 @@ class AndroidCompanionDevice(
         uiContext: PlatformUiContext,
         deviceProfile: String?,
         onSuccess: suspend (Activity) -> Unit,
+        useClassicAssociation: Boolean = false
     ) {
         if (coreConfigFlow.value.disableCompanionDeviceManager) {
             logger.i { "Not using companion device manager because user disabled it" }
@@ -96,9 +100,15 @@ class AndroidCompanionDevice(
         }
         settings[PENDING_CDM_POSSIBLE_CRASH] = true
 
-        val filter = BluetoothLeDeviceFilter.Builder()
-            .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
-            .build()
+        val filter = if (useClassicAssociation) {
+            BluetoothDeviceFilter.Builder()
+                .setAddress(macAddress)
+                .build()
+        } else {
+            BluetoothLeDeviceFilter.Builder()
+                .setScanFilter(ScanFilter.Builder().setDeviceAddress(macAddress).build())
+                .build()
+        }
         val associationRequest = AssociationRequest.Builder().apply {
             addDeviceFilter(filter)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && deviceProfile != null) {

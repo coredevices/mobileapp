@@ -313,7 +313,7 @@ class ModelDownloadService : JobService(), KoinComponent {
     private suspend fun downloadModel(modelSlug: String, stt: Boolean) {
         val modelProvider: CactusModelPathProvider by inject()
         if (stt) {
-            modelProvider.getSTTModelPath()
+            modelProvider.getSTTModelPath(modelSlug)
         } else {
             modelProvider.getLMModelPath()
         }

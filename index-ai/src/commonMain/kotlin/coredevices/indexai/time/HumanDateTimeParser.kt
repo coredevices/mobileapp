@@ -476,7 +476,12 @@ class HumanDateTimeParser(
     }
 
     private fun parseTimeString(timeStr: String, allowBareHour: Boolean = false): LocalTime? {
-        val cleaned = timeStr.trim().lowercase()
+        val lowered = timeStr.trim().lowercase()
+        namedTimePattern.find(lowered)?.let { match ->
+            namedTimes[match.groupValues[1]]?.let { return it }
+        }
+
+        val cleaned = lowered
             .replace(".", "")
             .replace(" ", "")
 
@@ -713,6 +718,8 @@ class HumanDateTimeParser(
         private const val DAY_OF_WEEK_EXPR = """(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"""
         private const val MONTH_EXPR = """(?:january|february|march|april|may|june|july|august|september|october|november|december)"""
         private const val TIME_OF_DAY_EXPR = """(?:morning|afternoon|evening|night)"""
+        private const val NAMED_TIME_EXPR = """noon|midnight"""
+        private const val ANY_TIME_EXPR = """$TIME_EXPR|$TIME_24_EXPR|$NAMED_TIME_EXPR"""
         private const val NUMBER_WORDS_EXPR = """two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty"""
 
         // Spelled-out day-of-month numbers, cardinal ("twenty one") or ordinal ("twenty-first").
@@ -760,6 +767,12 @@ class HumanDateTimeParser(
         // Absolute time patterns
         private val atTimePattern = Regex("""at\s+(.+)""")
         private val timePattern = Regex("""^(\d{1,2})(?::(\d{2}))?(am|pm)?$""")
+        // Word boundaries keep "noon" off "afternoon", which resolves to 14:00 instead.
+        private val namedTimePattern = Regex("""\b($NAMED_TIME_EXPR)\b""")
+        private val namedTimes = mapOf(
+            "noon" to LocalTime(12, 0),
+            "midnight" to LocalTime(0, 0),
+        )
         private val amPmPattern = Regex(AMPM_EXPR)
 
         // Absolute date patterns
@@ -773,15 +786,17 @@ class HumanDateTimeParser(
         // Patterns for parseFromMessage, ordered by specificity (most specific first)
         private val messagePatterns = listOf(
             // Date + time combinations
-            Regex("""(?:$DAY_WORD_EXPR)\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
-            Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
-            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
-            Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
+            Regex("""(?:$DAY_WORD_EXPR)\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
+            Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
+            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
+            Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$ANY_TIME_EXPR)"""),
             // Date + time-of-day combinations. Explicit-time variants first so they aren't
             // truncated to the vague form; bare hour is allowed since "at" anchors it as a time.
+            Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$ANY_TIME_EXPR|\d{1,2})"""),
+            Regex("""at\s+\d{1,2}\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})"""),
             Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR|\d{1,2})\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
             Regex("""(?:$TIME_EXPR|$TIME_24_EXPR)\s+(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR"""),
@@ -801,7 +816,7 @@ class HumanDateTimeParser(
             Regex("""in\s+$QUANTIFIER_EXPR\s+$UNIT_EXPR"""),
             Regex("""$QUANTIFIER_EXPR\s+$UNIT_EXPR\s+from\s+now"""),
             // "at <time>" (standalone)
-            Regex("""at\s+(?:$TIME_EXPR|$TIME_24_EXPR)"""),
+            Regex("""at\s+(?:$ANY_TIME_EXPR)"""),
             // Date patterns
             Regex("""(?:next|on)\s+$DAY_OF_WEEK_EXPR"""),
             Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
@@ -815,8 +830,9 @@ class HumanDateTimeParser(
             Regex("""\b(?:(?:last|every|past|this\s+past|this\s+coming|this|the|next|coming)\s+)?weekend\b"""),
             // The trailing \b keeps this off "next weekend", handled by the pattern above.
             Regex("""\bnext\s+week\b"""),
-            // Bare time (e.g. "3pm")
+            // Bare time (e.g. "3pm", "noon")
             Regex("""\b$TIME_EXPR"""),
+            Regex("""\b(?:$NAMED_TIME_EXPR)\b"""),
         )
     }
 }

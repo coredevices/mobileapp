@@ -5,6 +5,7 @@ import android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
 import android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 import android.content.pm.PackageManager.DONT_KILL_APP
 import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
@@ -13,7 +14,11 @@ import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -34,6 +39,27 @@ class AndroidPebbleNotificationListenerConnection(
     private val notificationSendQueue = notificationHandler.notificationSendQueue.consumeAsFlow()
     private val notificationDeleteQueue = notificationHandler.notificationDeleteQueue.consumeAsFlow()
 
+    private val _shadeChanged =
+        MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = DROP_OLDEST)
+
+    /**
+     * Fires whenever the shade may have changed; carries no payload, so read
+     * [activeNotifications] for the new state.
+     */
+    val shadeChanged: Flow<Unit> = _shadeChanged.asSharedFlow()
+
+    fun onShadeChanged() {
+        _shadeChanged.tryEmit(Unit)
+    }
+
+    /** Everything currently in the shade, or null when the listener isn't delivering. */
+    fun activeNotifications(): List<StatusBarNotification>? = try {
+        listenerService?.activeNotifications?.toList()
+    } catch (e: Exception) {
+        logger.w(e) { "getActiveNotifications failed" }
+        null
+    }
+
     fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
         return notificationHandler.getNotificationAction(itemId, actionId)
     }
@@ -41,6 +67,7 @@ class AndroidPebbleNotificationListenerConnection(
     fun setService(service: LibPebbleNotificationListener?) {
         logger.d { "setService: $service" }
         listenerService = service
+        onShadeChanged()
     }
 
     fun getService(): LibPebbleNotificationListener? = listenerService
@@ -107,14 +134,7 @@ class AndroidPebbleNotificationListenerConnection(
     }
 
     override fun init(libPebble: LibPebble) {
-        notificationHandler.init(activeNotifications = {
-            try {
-                listenerService?.activeNotifications?.toList()
-            } catch (e: Exception) {
-                logger.w(e) { "getActiveNotifications failed" }
-                null
-            }
-        })
+        notificationHandler.init(activeNotifications = ::activeNotifications)
         notificationSendQueue.onEach {
             libPebble.sendNotification(
                 it.toTimelineNotification(notificationConfig.value.cannedResponses)

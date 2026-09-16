@@ -1,72 +1,94 @@
 package coredevices.coreapp.transcription
 
+import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import coredevices.analytics.CoreAnalytics
+import coredevices.coreapp.testsupport.ReadOnlyModelPathProvider
 import coredevices.ring.model.CactusModelProvider
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.STTConfig
 import coredevices.util.models.CactusSTTMode
-import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
+import coredevices.util.transcription.TRANSCRIPTION_FAILURE_EVENT
+import coredevices.util.transcription.TRANSCRIPTION_SUCCESS_EVENT
+import coredevices.util.transcription.TranscriptionException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeout
 import org.junit.Assume
 import org.junit.Before
 import org.junit.Test
 import java.io.File
-import kotlin.math.sin
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TimeSource
 
-/**
- * Instrumented diagnostics for local Cactus transcription cancellation. Runs the *real* native
- * model on-device, so it answers the question "does cancelling the coroutine actually stop the
- * native inference, and how promptly?" — which is what the [CactusTranscriptionService]
- * cancellation wiring (withCactusStopOnCancel -> cactusStop) relies on.
- *
- * The model is loaded once and shared across the tests (a fresh service per test re-runs
- * cactusInit, which can be very slow after eviction and skews timings).
- *
- * If the model isn't present it's downloaded on demand (one-time, large). Note: `gradle
- * connectedAndroidTest` uninstalls the app afterwards, wiping the model, so it re-downloads each
- * run — run via `adb shell am instrument` against a persistent install to avoid that:
- *   adb shell am instrument -w \
- *     -e class coredevices.coreapp.transcription.CactusLocalCancellationTest \
- *     coredevices.coreapp.test/androidx.test.runner.AndroidJUnitRunner
- */
+private class RecordingAnalytics : CoreAnalytics {
+    val events = CopyOnWriteArrayList<Pair<String, Map<String, Any>?>>()
+    fun count(name: String) = events.count { (event, params) -> event == name && params?.get("service") == "cactus" }
+    override fun logEvent(name: String, parameters: Map<String, Any>?) { events.add(name to parameters) }
+    override suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: Instant) {}
+    override suspend fun processHeartbeat() {}
+    override fun updateLastConnectedSerial(serial: String?) {}
+    override fun updateRingTransferDurationMetric(duration: Duration) {}
+    override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+    override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
+}
+
 class CactusLocalCancellationTest {
     private companion object {
+        const val TAG = "CactusCancelTest"
         const val MODEL_NAME = "parakeet-tdt-0.6b-v3"
         const val SAMPLE_RATE = 16_000
 
-        // Long enough that baseline inference (~tens of seconds) is far larger than BUDGET +
-        // MAX_UNWIND, so "did the budget bound it?" is unambiguous. Pure tone; content is irrelevant.
-        val AUDIO_DURATION = 300.seconds
+        val CLIPS = listOf(
+            "eval_issue_9812_rec60.raw",
+            "eval_set_timer_15min.raw",
+            "eval_issue_9829.raw",
+            "eval_issue_9812_rec54.raw",
+            "eval_note_jared_size10.raw",
+            "eval_shopping_list_shrimp.raw",
+            "eval_set_alarm_750am.raw",
+            "eval_note_danny_lacurious.raw",
+            "eval_issue_9703.raw",
+            "eval_reminder_30min.raw",
+            "eval_reminder_11am_tomorrow.raw",
+            "eval_text_eric_shrimp.raw",
+            "eval_note_long_half_sizes.raw",
+        )
 
-        // How long we let inference run before cancelling / the phone-side budget under test.
-        val PRE_CANCEL_DELAY = 3.seconds
-        val BUDGET = 4.seconds
+        const val HEALTH_CLIP = "eval_shopping_list_shrimp.raw"
+        const val HEALTH_KEYWORD = "cornstarch"
 
-        // A cooperative native stop should unwind well within this. If it doesn't, cactusStop is
-        // not being honoured by the native decode loop (the bug we're hunting).
-        val MAX_UNWIND = 5.seconds
+        const val KNOWN_BLANK_CLIP = "eval_issue_9812_rec60.raw"
+
+        val RETURN_BUDGET = 1500.milliseconds
+        val STOP_BUDGET = 3.seconds
+        val DRAIN_BUDGET = 40.seconds
 
         private val initLock = Any()
+        private val analytics = RecordingAnalytics()
         private var sharedService: CactusTranscriptionService? = null
         private var modelPresent = false
+        private val clipCache = mutableMapOf<String, ByteArray>()
     }
 
     private lateinit var service: CactusTranscriptionService
@@ -74,26 +96,15 @@ class CactusLocalCancellationTest {
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        // Use the running app's Koin graph (MainApplication started it). Do NOT stop/replace it: the
-        // live app (PebbleService, Ring scanning, its uncaught-exception handler) depends on that
-        // graph. WisprFlow/Kirinki resolve their HttpClientEngine from it.
         synchronized(initLock) {
             if (sharedService == null) {
-                // Read-only provider points at the existing model and never downloads or deletes, so
-                // a test run can't wipe it; the service uses this for the whole run.
                 val modelsDir = File(context.filesDir, "models")
-                val provider = ReadOnlyModelPathProvider(modelsDir)
-                val modelDir = modelsDir.resolve(MODEL_NAME)
-
+                val provider = ReadOnlyModelPathProvider(modelsDir, MODEL_NAME)
                 if (!provider.isModelDownloaded(MODEL_NAME)) {
-                    println("[cactus-cancel] model missing at ${modelDir.absolutePath} — downloading $MODEL_NAME (one-time, hundreds of MB)…")
-                    // Only the *production* provider downloads; its delete-then-download is harmless
-                    // when there's no valid model to lose.
-                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath() } }
+                    Log.i(TAG, "[cancel] model missing — downloading $MODEL_NAME (one-time)…")
+                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath(MODEL_NAME) } }
                 }
                 modelPresent = provider.isModelDownloaded(MODEL_NAME)
-                println("[cactus-cancel] model dir=${modelDir.absolutePath} present=$modelPresent")
-
                 if (modelPresent) {
                     val svc = CactusTranscriptionService(
                         coreConfigFlow = CoreConfigFlow(
@@ -102,149 +113,246 @@ class CactusLocalCancellationTest {
                             ),
                         ),
                         modelProvider = provider,
-                        analytics = NoopAnalytics,
+                        analytics = analytics,
                         inferenceBoost = NoOpInferenceBoost(),
                     )
-                    val load = TimeSource.Monotonic.markNow()
                     runBlocking {
                         svc.earlyInit()
                         withTimeout(2.minutes) { while (!svc.isModelReady) delay(200) }
                     }
-                    println("[cactus-cancel] model loaded in ${load.elapsedNow()}")
                     sharedService = svc
                 }
             }
         }
-        Assume.assumeTrue("STT model '$MODEL_NAME' unavailable (download failed?)", modelPresent)
+        Assume.assumeTrue("STT model '$MODEL_NAME' unavailable", modelPresent)
         service = sharedService!!
     }
 
-    /** ~quiet sine tone PCM_16BIT mono — keeps the model busy for the buffer's full duration. */
-    private fun tonePcm(duration: Duration): ByteArray {
-        val samples = (SAMPLE_RATE * duration.inWholeMilliseconds / 1000).toInt()
-        val bytes = ByteArray(samples * 2)
-        for (i in 0 until samples) {
-            val v = (sin(2.0 * Math.PI * 220.0 * i / SAMPLE_RATE) * 4000).toInt()
-            bytes[i * 2] = (v and 0xFF).toByte()
-            bytes[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
-        }
-        return bytes
+    private fun clip(name: String): ByteArray = clipCache.getOrPut(name) {
+        InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { it.readBytes() }
     }
 
-    /**
-     * Run a transcription, swallowing the *result* outcome (NoSpeechDetected etc. — we feed a tone,
-     * so a blank result is expected). Cancellation is rethrown so it stays cooperative. We only care
-     * about timing/completion here, not the recognised text.
-     */
-    private suspend fun runTranscriptionIgnoringResult(audio: ByteArray) {
-        try {
-            service.transcribeLocal(audio = audio, sampleRate = SAMPLE_RATE)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // result error (e.g. NoSpeechDetected) — irrelevant to a timing test
-        }
+    private fun ByteArray.durationSeconds() = size / (SAMPLE_RATE * 2.0)
+
+    private fun busy(): Boolean {
+        val field = CactusTranscriptionService::class.java.getDeclaredField("transcriptionMutex")
+        field.isAccessible = true
+        return (field.get(service) as Mutex).isLocked
     }
 
-    /**
-     * Baseline: how long does an *uncancelled* local transcription of the buffer take? This is the
-     * number a cancel has to beat, and mirrors the runaway inference being investigated.
-     */
-    @Test
-    fun baseline_uncancelledLocalTranscriptionDuration() = runBlocking(Dispatchers.Default) {
-        val audio = tonePcm(AUDIO_DURATION)
+    private suspend fun awaitDrain(limit: Duration = DRAIN_BUDGET): Duration {
         val mark = TimeSource.Monotonic.markNow()
-        runTranscriptionIgnoringResult(audio)
-        val elapsed = mark.elapsedNow()
-        println("[cactus-cancel] baseline uncancelled inference of $AUDIO_DURATION audio took $elapsed")
-        assertTrue(elapsed > Duration.ZERO)
+        withTimeout(limit) { while (busy()) delay(25) }
+        return mark.elapsedNow()
     }
 
-    /**
-     * Cancelling the collecting coroutine mid-inference must make the native call unwind promptly
-     * (via cactusStop). We cancel after [PRE_CANCEL_DELAY] and assert the job actually finishes
-     * within [MAX_UNWIND]. If native ignores the stop, join() blocks for the whole buffer and the
-     * outer withTimeout fails the test with a clear message.
-     */
-    @Test
-    fun cancellingTranscriptionUnwindsPromptly() = runBlocking(Dispatchers.Default) {
-        val audio = tonePcm(AUDIO_DURATION)
+    private suspend fun transcribe(audio: ByteArray, timeout: Duration? = null): String =
+        service.transcribeLocal(audio = audio, sampleRate = SAMPLE_RATE, timeout = timeout)
 
-        val started = CompletableDeferred<Unit>()
-        val job: Job = launch {
-            started.complete(Unit)
-            runTranscriptionIgnoringResult(audio)
-        }
-        started.await()
-        delay(PRE_CANCEL_DELAY)
+    private fun assertHealthy(text: String, where: String) {
         assertTrue(
-            job.isActive,
-            "inference finished before we could cancel (${PRE_CANCEL_DELAY}); increase AUDIO_DURATION",
+            text.lowercase().contains(HEALTH_KEYWORD),
+            "[$where] handle produced '$text', expected it to contain '$HEALTH_KEYWORD' — " +
+                "an aborted run left the model unusable.",
         )
+    }
 
-        val cancelMark = TimeSource.Monotonic.markNow()
-        job.cancel()
-        try {
-            withTimeout(MAX_UNWIND) { job.join() }
-        } catch (_: TimeoutCancellationException) {
-            throw AssertionError(
-                "Native transcription did not unwind within $MAX_UNWIND of cancellation — " +
-                    "cactusStop() is not being honoured by the native decode loop.",
+    @Test
+    fun baseline_everyClipTranscribes() = runBlocking(Dispatchers.Default) {
+        for (name in CLIPS) {
+            val audio = clip(name)
+            val mark = TimeSource.Monotonic.markNow()
+            val text = transcribe(audio)
+            val elapsed = mark.elapsedNow()
+            Log.i(TAG, "[cancel] baseline %-34s %5.2fs audio -> %s (%d chars)".format(name, audio.durationSeconds(), elapsed, text.length))
+            if (name != KNOWN_BLANK_CLIP) {
+                assertTrue(text.isNotBlank(), "[$name] transcribed blank")
+            }
+            awaitDrain()
+        }
+    }
+
+    @Test
+    fun timeoutBoundsTheCaller_everyClip() = runBlocking(Dispatchers.Default) {
+        val budget = 1.seconds
+        for (name in CLIPS) {
+            val audio = clip(name)
+            val mark = TimeSource.Monotonic.markNow()
+            try {
+                transcribe(audio, timeout = budget)
+            } catch (_: Exception) {
+            }
+            val elapsed = mark.elapsedNow()
+            val drain = awaitDrain()
+            Log.i(TAG, "[cancel] timeout   %-34s returned in %s, drained in %s".format(name, elapsed, drain))
+            assertTrue(
+                elapsed < budget + RETURN_BUDGET,
+                "[$name] caller returned after $elapsed, expected < ${budget + RETURN_BUDGET} — " +
+                    "the native call is not detached from the caller.",
+            )
+            assertTrue(
+                drain < STOP_BUDGET,
+                "[$name] native call drained in $drain, expected < $STOP_BUDGET — cactusStop() did not abort it.",
             )
         }
-        val unwind = cancelMark.elapsedNow()
-        println("[cactus-cancel] native inference unwound $unwind after cancel")
-        assertTrue(unwind < MAX_UNWIND, "cancellation unwind took $unwind, expected < $MAX_UNWIND")
     }
 
-    /**
-     * The phone-side timeout (e.g. the 14s budget) must actually bound the native work. With a
-     * [BUDGET] far shorter than the baseline, the call must return at ~[BUDGET], not run to
-     * completion. Asserted on elapsed wall time, not on which exception surfaces: a blocking native
-     * call that ignores cancellation masks the TimeoutCancellationException, so the type is
-     * unreliable — the timing is what matters.
-     */
     @Test
-    fun withTimeoutBoundsLocalTranscription() = runBlocking(Dispatchers.Default) {
-        val audio = tonePcm(AUDIO_DURATION)
-        val mark = TimeSource.Monotonic.markNow()
-        try {
-            withTimeout(BUDGET) { runTranscriptionIgnoringResult(audio) }
-        } catch (_: TimeoutCancellationException) {
-            // expected when the budget is actually enforced
+    fun cancellationUnwindsTheCaller_everyClip() = runBlocking(Dispatchers.Default) {
+        for (name in CLIPS) {
+            val audio = clip(name)
+            val started = CompletableDeferred<Unit>()
+            val job: Job = launch {
+                started.complete(Unit)
+                try {
+                    transcribe(audio)
+                } catch (_: CancellationException) {
+                    throw CancellationException("cancelled")
+                } catch (_: Exception) {
+                }
+            }
+            started.await()
+            delay(300)
+            val mark = TimeSource.Monotonic.markNow()
+            job.cancel()
+            withTimeout(RETURN_BUDGET) { job.join() }
+            val unwind = mark.elapsedNow()
+            val drain = awaitDrain()
+            Log.i(TAG, "[cancel] cancel    %-34s unwound in %s, drained in %s".format(name, unwind, drain))
+            assertTrue(unwind < RETURN_BUDGET, "[$name] unwind took $unwind")
+            assertTrue(
+                drain < STOP_BUDGET,
+                "[$name] native call drained in $drain, expected < $STOP_BUDGET — cactusStop() did not abort it.",
+            )
         }
-        val elapsed = mark.elapsedNow()
-        println("[cactus-cancel] withTimeout($BUDGET) returned after $elapsed")
-        assertTrue(
-            elapsed < BUDGET + MAX_UNWIND,
-            "withTimeout took $elapsed; native work was not bounded by the $BUDGET budget — " +
-                "cactusStop() is not honoured during in-flight inference.",
-        )
     }
 
-    /**
-     * Read-only view of the already-downloaded model directory. Unlike the production provider it
-     * never downloads or deletes, so running the tests can't wipe the on-device model.
-     */
-    private class ReadOnlyModelPathProvider(private val modelsDir: File) : CactusModelPathProvider {
-        override suspend fun getSTTModelPath(): String = modelsDir.resolve(MODEL_NAME).absolutePath
-        override suspend fun getLMModelPath(): String = error("LM model not used in this test")
-        override fun isModelDownloaded(modelName: String): Boolean =
-            modelsDir.resolve(modelName).resolve("config.txt").exists()
-        override fun getDownloadedModels(): List<String> =
-            modelsDir.listFiles()?.filter { it.resolve("config.txt").exists() }?.map { it.name } ?: emptyList()
-        override fun getIncompatibleModels(): List<String> = emptyList()
-        override fun deleteModel(modelName: String) { /* never delete in tests */ }
-        override fun getModelSizeBytes(modelName: String): Long = 0L
-        override fun initTelemetry() {}
+    @Test
+    fun handleStaysHealthyAfterAbort_everyClip() = runBlocking(Dispatchers.Default) {
+        val health = clip(HEALTH_CLIP)
+        for (name in CLIPS) {
+            val audio = clip(name)
+            try {
+                transcribe(audio, timeout = 700.milliseconds)
+            } catch (_: Exception) {
+            }
+            awaitDrain()
+            val text = transcribe(health)
+            awaitDrain()
+            Log.i(TAG, "[cancel] health after abort of %-34s -> '%s'".format(name, text.trim()))
+            assertHealthy(text, "after abort of $name")
+        }
     }
 
-    private object NoopAnalytics : CoreAnalytics {
-        override fun logEvent(name: String, parameters: Map<String, Any>?) {}
-        override suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: kotlin.time.Instant) {}
-        override suspend fun processHeartbeat() {}
-        override fun updateLastConnectedSerial(serial: String?) {}
-        override fun updateRingTransferDurationMetric(duration: Duration) {}
-        override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+    @Test
+    fun concurrentRequestIsRefusedThenRecovers() = runBlocking(Dispatchers.Default) {
+        val long = clip("eval_text_eric_shrimp.raw")
+        val health = clip(HEALTH_CLIP)
+
+        val inFlight = async { transcribe(long) }
+        withTimeout(RETURN_BUDGET) { while (!busy()) delay(10) }
+
+        val refused = try {
+            transcribe(health)
+            false
+        } catch (_: TranscriptionException.TranscriptionInProgress) {
+            true
+        }
+        assertTrue(refused, "a request during an in-flight native call should be refused")
+
+        inFlight.await()
+        val drain = awaitDrain()
+        val text = transcribe(health)
+        Log.i(TAG, "[cancel] recovered after ${drain} -> '${text.trim()}'")
+        assertHealthy(text, "after drain")
+    }
+
+    @Test
+    fun cancellationBeforeDispatchNeverStrandsTheHandle() = runBlocking(Dispatchers.Default) {
+        val audio = clip("eval_text_eric_shrimp.raw")
+        repeat(40) { i ->
+            try {
+                transcribe(audio, timeout = Duration.ZERO)
+            } catch (_: Exception) {
+            }
+            val job = launch(start = CoroutineStart.UNDISPATCHED) {
+                try { transcribe(audio) } catch (_: Exception) {}
+            }
+            job.cancel()
+            withTimeout(RETURN_BUDGET) { job.join() }
+            try {
+                awaitDrain()
+            } catch (_: Exception) {
+                throw AssertionError("[iteration $i] the handle was never released")
+            }
+        }
+        assertHealthy(transcribe(clip(HEALTH_CLIP)), "after pre-dispatch cancellations")
+    }
+
+    private fun assertAnalytics(successes: Int, failures: Int, where: String) {
+        assertEquals(successes, analytics.count(TRANSCRIPTION_SUCCESS_EVENT), "[$where] cactus success events")
+        assertEquals(failures, analytics.count(TRANSCRIPTION_FAILURE_EVENT), "[$where] cactus failure events")
+    }
+
+    @Test
+    fun analytics_completedRunLogsOneSuccess() = runBlocking(Dispatchers.Default) {
+        awaitDrain()
+        analytics.events.clear()
+        transcribe(clip(HEALTH_CLIP))
+        awaitDrain()
+        assertAnalytics(successes = 1, failures = 0, where = "completed run")
+    }
+
+    @Test
+    fun analytics_timedOutRunLogsOneFailureAndNoSuccess() = runBlocking(Dispatchers.Default) {
+        awaitDrain()
+        analytics.events.clear()
+        try {
+            transcribe(clip("eval_text_eric_shrimp.raw"), timeout = 500.milliseconds)
+        } catch (_: Exception) {
+        }
+        awaitDrain()
+        assertAnalytics(successes = 0, failures = 1, where = "timed-out run")
+    }
+
+    @Test
+    fun analytics_cancelledRunLogsNothing() = runBlocking(Dispatchers.Default) {
+        awaitDrain()
+        analytics.events.clear()
+        val started = CompletableDeferred<Unit>()
+        val job = launch {
+            started.complete(Unit)
+            try {
+                transcribe(clip("eval_text_eric_shrimp.raw"))
+            } catch (_: Exception) {
+            }
+        }
+        started.await()
+        delay(300)
+        job.cancel()
+        job.join()
+        awaitDrain()
+        assertAnalytics(successes = 0, failures = 0, where = "cancelled run")
+    }
+
+    @Test
+    fun concurrentCallersYieldAtMostOneWinner() = runBlocking(Dispatchers.Default) {
+        val audio = clip(HEALTH_CLIP)
+        repeat(8) { round ->
+            val outcomes = (0 until 12).map {
+                async {
+                    try {
+                        transcribe(audio, timeout = 8.seconds)
+                        "ok"
+                    } catch (e: Exception) {
+                        e::class.simpleName ?: "unknown"
+                    }
+                }
+            }.awaitAll()
+            val winners = outcomes.count { it == "ok" }
+            assertTrue(winners <= 1, "[round $round] $winners callers ran at once: $outcomes")
+            awaitDrain()
+        }
+        assertHealthy(transcribe(audio), "after concurrent rounds")
     }
 }

@@ -2,9 +2,20 @@ package com.cactus
 
 import cactus.*
 import kotlinx.cinterop.*
+import platform.darwin.sysctlbyname
 import platform.posix.size_tVar
 
-actual fun isCactusSupported(): Boolean = true
+private val cactusSupported: Boolean by lazy {
+    memScoped {
+        val value = alloc<IntVar>()
+        val size = alloc<size_tVar>().apply { this.value = sizeOf<IntVar>().convert() }
+        val fp16 = sysctlbyname("hw.optional.arm.FEAT_FP16", value.ptr, size.ptr, null, 0u) == 0 && value.value != 0
+        val dotprod = sysctlbyname("hw.optional.arm.FEAT_DotProd", value.ptr, size.ptr, null, 0u) == 0 && value.value != 0
+        fp16 && dotprod
+    }
+}
+
+actual fun isCactusSupported(): Boolean = cactusSupported
 
 actual fun cactusSetBackend(backend: String): Int = cactus_set_backend(backend)
 

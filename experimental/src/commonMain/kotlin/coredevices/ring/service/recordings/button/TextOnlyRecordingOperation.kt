@@ -30,10 +30,12 @@ open class TextOnlyRecordingOperation(
     private val mcpSessionFactory: McpSessionFactory,
     private val forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
     private val sandboxGroupId: Long? = null,
-) : RecordingOperation, KoinComponent {
+) : TranscribingRecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("TextOnlyRecordingOperation")
     }
+
+    override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
 
     private val recordingProcessor: RecordingProcessor by inject()
     private val recordingEntryDao: RecordingEntryDao by inject()
@@ -57,6 +59,7 @@ open class TextOnlyRecordingOperation(
                 newId
             }
         }
+        onTranscriptionPersisted?.invoke(text)
         coroutineScope {
             val mcpSession = mcpSessionFactory.createForSandboxGroup(
                 sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),

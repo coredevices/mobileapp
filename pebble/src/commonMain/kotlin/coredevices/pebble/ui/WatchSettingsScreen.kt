@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
@@ -137,7 +138,6 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.STTConfig
-import coredevices.util.WeatherUnit
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
@@ -225,6 +225,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
+    BundledPlugins("Bundled Plugins", Icons.Default.Extension), // TODO to be removed when we have a better solution
 }
 
 fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
@@ -613,7 +614,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
-                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute) },
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute()) },
                 ) },
                 basicSettingsDropdownItem(
                     title = "App Theme",
@@ -627,6 +628,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = {
                         stringResource(it.resource)
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.HealthImperialUnits,
+                    title = "Imperial Units",
+                    description = "Use miles/feet/inches/lb and Fahrenheit instead of metric units",
+                    keywords = "weather health degrees celsius temperature miles",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = healthSettings.imperialUnits,
+                    onCheckChanged = {
+                        GlobalScope.launch {
+                            libPebble.updateImperialUnits(it)
+                            weatherFetcher.fetchWeather(this)
+                        }
                     },
                 ),
                 basicSettingsActionItem(
@@ -1151,20 +1167,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                 ),
-                basicSettingsToggleItem(
-                    id = SettingsIds.HealthImperialUnits,
-                    title = "Imperial Units",
-                    description = "Use miles/feet/inches/lb instead of metric units",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = healthSettings.imperialUnits,
-                    show = { healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(imperialUnits = it)
-                        )
-                    },
-                ),
                 basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthHeight,
                     title = "Height",
@@ -1360,24 +1362,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                         GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
-                    show = { coreConfig.fetchWeather }
-                ),
-                basicSettingsDropdownItem(
-                    title = "Units",
-                    keywords = "weather degrees",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Weather,
-                    items = WeatherUnit.entries,
-                    selectedItem = coreConfig.resolvedWeatherUnits,
-                    onItemSelected = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                weatherUnits = it,
-                            )
-                        )
-                        GlobalScope.launch { weatherFetcher.fetchWeather(this) }
-                    },
-                    itemText = { it.displayName },
                     show = { coreConfig.fetchWeather }
                 ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
@@ -1900,6 +1884,42 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { loggedIn != null },
                     isDebugSetting = true,
                 ),
+                basicSettingsToggleItem(
+                    title = "Use experimental plugins",
+                    description = "Enable the new plugins API. This is an experimental feature under development - not recommended unless you know what you are doing (API is unstable, and can expose private data until a permission system is implemented)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = libPebbleConfig.watchConfig.enablePlugins,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    enablePlugins = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                ),
+                *libPebble.configurablePlugins().map { plugin ->
+                    basicSettingsActionItem(
+                        title = "Configure ${plugin.name}",
+                        description = "Settings for the ${plugin.name} plugin",
+                        topLevelType = TopLevelType.Phone,
+                        section = Section.BundledPlugins,
+                        action = {
+                            WatchappSettingsUrlCache.put(plugin.uuid, plugin.configPageUrl)
+                            navBarNav?.navigateTo(
+                                PebbleRoutes.WatchappSettingsRoute(
+                                    uuid = plugin.uuid,
+                                    title = plugin.name,
+                                )
+                            )
+                        },
+                        show = { libPebbleConfig.watchConfig.enablePlugins },
+                        isDebugSetting = true,
+                    )
+                }.toTypedArray(),
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
                     description = "Sign out of your Pebble account ($coreUser)",

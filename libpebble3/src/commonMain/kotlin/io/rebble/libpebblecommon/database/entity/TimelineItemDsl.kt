@@ -132,6 +132,10 @@ class AttributesListBuilder internal constructor() {
         attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LastUpdated, block().epochSeconds.toUInt()))
     }
 
+    fun launchCode(block: () -> UInt) {
+        attributes.add(BaseAttribute.UIntAttribute(TimelineAttribute.LaunchCode, block()))
+    }
+
     fun appName(block: () -> String) {
         string(TimelineAttribute.AppName, block)
     }

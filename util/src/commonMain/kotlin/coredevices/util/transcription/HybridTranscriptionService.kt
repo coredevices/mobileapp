@@ -23,6 +23,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TimeSource
 
 /**
  * Mode-aware [TranscriptionService] that routes between the local Cactus model
@@ -40,6 +41,28 @@ class HybridTranscriptionService(
     companion object {
         private val logger = Logger.withTag("HybridTranscriptionService")
         private val wisprSkipInterval = 1.seconds
+
+        private const val LOCAL_TIMEOUT_FACTOR = 4.0
+        private const val BYTES_PER_SAMPLE = 2
+        private val minLocalTimeout = 8.seconds
+        private val maxLocalTimeout = 45.seconds
+        private val remoteFallbackReserve = 7.seconds
+
+        /**
+         * Budget for a local run: scales with clip length, capped by what is left of the caller's
+         * [remaining] budget after keeping [reserve] for a fallback leg.
+         */
+        internal fun localTimeout(
+            audio: ByteArray,
+            sampleRate: Int,
+            remaining: Duration? = null,
+            reserve: Duration = Duration.ZERO,
+        ): Duration {
+            val seconds = audio.size / (sampleRate * BYTES_PER_SAMPLE).coerceAtLeast(1).toDouble()
+            val byClip = (seconds * LOCAL_TIMEOUT_FACTOR).seconds.coerceIn(minLocalTimeout, maxLocalTimeout)
+            if (remaining == null) return byClip
+            return minOf(byClip, (remaining - reserve).coerceAtLeast(Duration.ZERO))
+        }
     }
 
     // Read fresh from the config StateFlow on every access so a runtime mode/model change takes
@@ -180,8 +203,12 @@ class HybridTranscriptionService(
         conversationContext: STTConversationContext?,
         dictionaryContext: List<String>?,
         contentContext: String?,
-        initialTimeout: Duration? = null
+        initialTimeout: Duration? = null,
+        totalTimeout: Duration? = null,
     ): RoutedResult {
+        val start = TimeSource.Monotonic.markNow()
+        fun remaining(): Duration? = totalTimeout?.minus(start.elapsedNow())
+
         suspend fun remote(willFallbackLocal: Boolean): TranscriptionSessionStatus.Transcription =
             remoteTranscribe(
                 audio = audio,
@@ -194,6 +221,12 @@ class HybridTranscriptionService(
                 initialTimeout = initialTimeout ?: if (willFallbackLocal) 7.seconds else 10.seconds
             )
 
+        suspend fun local(reserve: Duration = Duration.ZERO): String = cactus.transcribeLocal(
+            audio,
+            sampleRate,
+            timeout = localTimeout(audio, sampleRate, remaining(), reserve),
+        )
+
         logger.d { "Using transcription mode ${sttConfig.mode}" }
         return when (val sttMode = sttConfig.mode) {
             CactusSTTMode.RemoteOnly -> {
@@ -201,7 +234,7 @@ class HybridTranscriptionService(
                 RoutedResult(result.text, sttMode, result.modelUsed)
             }
             CactusSTTMode.LocalOnly -> {
-                val text = cactus.transcribeLocal(audio, sampleRate)
+                val text = local()
                 RoutedResult(text, sttMode, configuredModel)
             }
             CactusSTTMode.PlatformOnly -> {
@@ -250,7 +283,7 @@ class HybridTranscriptionService(
             }
             CactusSTTMode.RemoteFirst -> {
                 suspend fun localFallback(remoteError: Exception): RoutedResult = try {
-                    val text = cactus.transcribeLocal(audio, sampleRate)
+                    val text = local()
                     RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
                 } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
                     throw remoteError
@@ -271,7 +304,7 @@ class HybridTranscriptionService(
             }
             CactusSTTMode.LocalFirst -> {
                 try {
-                    val text = cactus.transcribeLocal(audio, sampleRate, timeout = 8.seconds)
+                    val text = local(reserve = remoteFallbackReserve)
                     // Treat an empty/no-speech local result as a failure so we fall back to
                     // remote, as remote is more accurate.
                     validateContainsSpeech(text, configuredModel)
@@ -305,8 +338,10 @@ class HybridTranscriptionService(
         contentContext: String?,
         encoding: AudioEncoding,
         initialTimeout: Duration?,
+        totalTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         logger.d { "HybridTranscriptionService.transcribe() called" }
+        val start = TimeSource.Monotonic.markNow()
         // Kick off local model init concurrently with audio collection so it's warm if we need it.
         earlyInit()
         emit(TranscriptionSessionStatus.Open)
@@ -326,7 +361,6 @@ class HybridTranscriptionService(
         }
 
         try {
-            val start = Clock.System.now()
             val (text, modeUsed, modelUsed) = route(
                 audio = buffer.readByteArray(),
                 sampleRate = sampleRate,
@@ -335,8 +369,9 @@ class HybridTranscriptionService(
                 dictionaryContext = dictionaryContext,
                 contentContext = contentContext,
                 initialTimeout = initialTimeout,
+                totalTimeout = totalTimeout?.minus(start.elapsedNow()),
             )
-            val duration = Clock.System.now() - start
+            val duration = start.elapsedNow()
             logger.d { "Transcription completed in $duration" }
 
             validateContainsSpeech(text, modelUsed)

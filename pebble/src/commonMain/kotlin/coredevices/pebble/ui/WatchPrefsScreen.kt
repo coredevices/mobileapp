@@ -115,6 +115,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.AmbientLightSensor -> Section.Display
     BoolWatchPref.BacklightMotion -> Section.Display
     EnumWatchPref.Language -> Section.Display
+    EnumWatchPref.WindSpeed -> Section.Weather
 //    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
 //    ColorWatchPref.AppMenuHighlightColor -> Section.Display
     EnumWatchPref.TextSize -> Section.Notifications
@@ -158,6 +159,12 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MusicShowAlbumArt -> Section.Music
 }
 
+fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
+    // Weather is configured on the phone, even though the unit it sets is a watch pref.
+    EnumWatchPref.WindSpeed -> TopLevelType.Phone
+    else -> TopLevelType.Watch
+}
+
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref
     return when (pref) {
@@ -184,7 +191,7 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
             id = pref.id,
             title = pref.displayName,
             description = pref.description,
-            topLevelType = TopLevelType.Watch,
+            topLevelType = pref.topLevelType(),
             section = pref.section(),
             value = item.valueOrDefault(),
             min = pref.min,
@@ -209,7 +216,7 @@ private fun basicSettingsNumberSecondsItem(
     id = pref.id,
     title = pref.displayName,
     description = pref.description,
-    topLevelType = TopLevelType.Watch,
+    topLevelType = pref.topLevelType(),
     section = pref.section(),
     value = item.valueOrDefault().milliseconds.inWholeSeconds,
     min = pref.min.milliseconds.inWholeSeconds.toInt(),
@@ -230,7 +237,7 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
     return SettingsItem(
         id = pref.id,
         title = pref.displayName,
-        topLevelType = TopLevelType.Watch,
+        topLevelType = pref.topLevelType(),
         section = pref.section(),
         item = {
             ListItem(
@@ -264,7 +271,7 @@ private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): S
         id = item.pref.id,
         title = item.pref.displayName,
         description = item.pref.description,
-        topLevelType = TopLevelType.Watch,
+        topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
         checked = item.valueOrDefault(),
         onCheckChanged = { enabled ->
@@ -280,7 +287,7 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
         id = pref.id,
         title = pref.displayName,
         description = pref.description,
-        topLevelType = TopLevelType.Watch,
+        topLevelType = pref.topLevelType(),
         section = pref.section(),
         selectedItem = item.valueOrDefault(),
         items = pref.options,
@@ -297,7 +304,7 @@ private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): Set
     return SettingsItem(
         id = pref.id,
         title = pref.displayName,
-        topLevelType = TopLevelType.Watch,
+        topLevelType = pref.topLevelType(),
         section = pref.section(),
         item = {
             ListItem(
@@ -358,7 +365,7 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
         id = item.pref.id,
         title = item.pref.displayName,
         description = item.pref.description,
-        topLevelType = TopLevelType.Watch,
+        topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
         selectedItem = defaultQl,
         items = options,

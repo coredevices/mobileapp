@@ -65,6 +65,11 @@ import kotlin.time.Duration.Companion.seconds
 
 expect fun getTempFwPath(appContext: AppContext): Path
 
+// A fixed path in the app container where a firmware .pbz can be dropped (e.g. over AFC/`go-ios file
+// push` on a dev build, or adb) and then sideloaded from the debug screen without a file picker. Unlike
+// UIFileSharingEnabled this never exposes the app's Documents to Files/Finder.
+expect fun getSideloadDropPath(appContext: AppContext): Path
+
 private sealed class UiFirmwareUpdateStatus {
     data object Idle : UiFirmwareUpdateStatus()
     data object Starting : UiFirmwareUpdateStatus()
@@ -238,6 +243,30 @@ fun DebugFirmwareSideload(watchIdentifier: String, coreNav: CoreNav) {
                                 }
                                 Text(text)
                             }
+                        }
+                        // Sideload a .pbz dropped at the fixed container path (no picker). Used by
+                        // automated QA (pushes over AFC/adb) and handy for developers. Its own row so
+                        // the long label doesn't overflow the row above.
+                        Button(onClick = {
+                            val drop = getSideloadDropPath(appContext)
+                            if (SystemFileSystem.exists(drop)) {
+                                // Leave Idle before launching so a second tap can't start a 2nd job.
+                                setUpdateState(UiFirmwareUpdateStatus.Starting)
+                                doFirmwareUpdate {
+                                    logger.d { "sideload from container path: $drop" }
+                                    sideloadFirmware(drop)
+                                }
+                            } else {
+                                logger.w { "no firmware at $drop" }
+                                setUpdateState(
+                                    UiFirmwareUpdateStatus.Error(
+                                        IllegalStateException("missing"),
+                                        "No firmware at $drop"
+                                    )
+                                )
+                            }
+                        }, modifier = Modifier.padding(5.dp)) {
+                            Text("Sideload from container")
                         }
                     }
 

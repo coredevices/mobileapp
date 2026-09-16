@@ -71,6 +71,7 @@ import coredevices.ui.PebbleElevatedButton
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.SystemAppIDs.KICKSTART_APP_UUID
 import io.rebble.libpebblecommon.connection.CommonConnectedDevice
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.entity.CompanionApp
@@ -86,8 +87,6 @@ import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -223,6 +222,15 @@ fun loadActiveWatchface(watchType: WatchType): CommonApp? {
     val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType)
     val lockerEntry by libPebble.activeWatchface.collectAsState()
     return lockerEntry?.load(watchType) ?: fallback
+}
+
+@Composable
+fun loadActiveWatchapp(watchType: WatchType): CommonApp? {
+    val connectedWatch = connectedWatch() as? ConnectedPebbleDevice ?: return null
+    val uuid by connectedWatch.runningApp.collectAsState()
+    val lockerEntry = loadLockerEntry(uuid, watchType)
+    if (lockerEntry?.type == AppType.Watchapp) return lockerEntry
+    return null
 }
 
 @Composable

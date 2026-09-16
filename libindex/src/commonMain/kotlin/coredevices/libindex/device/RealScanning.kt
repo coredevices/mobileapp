@@ -85,6 +85,7 @@ class RealScanning(
                             name = it.name,
                             rssi = it.rssi,
                             currentImage = currentImage,
+                            manufacturerData = it.manufacturerData.data,
                         )
                     )
                 }
