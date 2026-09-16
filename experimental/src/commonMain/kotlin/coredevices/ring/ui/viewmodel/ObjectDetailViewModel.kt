@@ -17,7 +17,6 @@ import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
-import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -341,6 +340,17 @@ class ObjectDetailViewModel(
         }
     }
 
+    fun setListKind(kind: String) {
+        val s = state.value as? UiState.ListView ?: return
+        appScope.launch {
+            val updated = s.list.toDocument().copy(
+                listKind = kind,
+                updatedAt = Clock.System.now(),
+            )
+            listRepo.setList(s.list.firestoreId, updated)
+        }
+    }
+
     /** Patch an item — used by the per-kind edit mode in ObjectDetail.
      *  `dueAt = NoChange` keeps the existing dueAt; pass any [Instant?] (or
      *  `null`) to overwrite, including clearing.
@@ -416,9 +426,7 @@ class ObjectDetailViewModel(
     ) {
         val s = state.value as? UiState.ListView ?: return
         val cleanTitle = title.trim().ifBlank { return }
-        // New items added to the Shopping list are checklist items so they get a
-        // tickable circle and can be checked off (MOB-8946).
-        val effectiveKind = if (s.list.firestoreId == LIST_SHOPPING_ID) "checklist" else kind
+        val effectiveKind = if (s.list.listKind == "checklist") "checklist" else kind
         viewModelScope.launch {
             val now = Clock.System.now()
             val id = "local-item-${Uuid.random()}"

@@ -5,8 +5,11 @@ package coredevices.ring.agent.builtin_servlets.notes
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
+import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.dao.CachedItemDao
+import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.ItemFactory
 import kotlinx.coroutines.flow.Flow
@@ -42,9 +45,27 @@ class LocalNoteClientTest {
         }
     }
 
-    private fun fixture(): Pair<LocalNoteClient, FakeCachedItemDao> {
+    private class FakeCachedListDao(val lists: List<CachedList>) : CachedListDao {
+        override suspend fun upsert(list: CachedList) = error("unused")
+        override suspend fun upsertAll(lists: List<CachedList>) = error("unused")
+        override suspend fun getById(id: String): CachedList? = lists.firstOrNull { it.firestoreId == id }
+        override fun getByIdFlow(id: String): Flow<CachedList?> = flowOf(lists.firstOrNull { it.firestoreId == id })
+        override fun getAllFlow(): Flow<List<CachedList>> = flowOf(lists)
+        override fun getAllForSyncFlow(): Flow<List<CachedList>> = flowOf(lists)
+        override suspend fun getBySeed(seed: String): CachedList? = lists.firstOrNull { it.seed == seed }
+        override suspend fun count(): Int = lists.size
+        override suspend fun deleteById(id: String) = error("unused")
+        override suspend fun deleteAll() = error("unused")
+        override suspend fun countLocked(): Int = 0
+    }
+
+    private fun fixture(notesListKind: String = "note"): Pair<LocalNoteClient, FakeCachedItemDao> {
         val itemDao = FakeCachedItemDao()
-        return LocalNoteClient(ItemFactory(), ItemRepository(itemDao, cancelReminder = {})) to itemDao
+        val lists = listOf(
+            CachedList(firestoreId = LIST_NOTES_SELF_ID, title = "Notes to self", listKind = notesListKind, seed = "notes_self"),
+        )
+        val factory = ItemFactory(ListRepository(FakeCachedListDao(lists)))
+        return LocalNoteClient(factory, ItemRepository(itemDao, cancelReminder = {})) to itemDao
     }
 
     @Test
@@ -64,6 +85,13 @@ class LocalNoteClientTest {
         assertEquals(createdAt, item.createdAt)
         assertEquals("call-1", item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Note)
+    }
+
+    @Test
+    fun createNoteInChecklistKindNotesListMakesChecklistItem() = runBlocking {
+        val (client, itemDao) = fixture(notesListKind = "checklist")
+        val id = client.createNote("Buy stamps")
+        assertTrue(itemDao.items.getValue(id).toDocument().metadata is ItemMetadata.Checklist)
     }
 
     @Test

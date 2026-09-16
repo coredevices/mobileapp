@@ -5,8 +5,11 @@ package coredevices.ring.agent.integrations
 import PlatformUiContext
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
+import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.dao.CachedItemDao
+import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -43,6 +46,20 @@ class DelegatedIntegrationItemsTest {
         }
     }
 
+    private class EmptyCachedListDao : CachedListDao {
+        override suspend fun upsert(list: CachedList) = error("unused")
+        override suspend fun upsertAll(lists: List<CachedList>) = error("unused")
+        override suspend fun getById(id: String): CachedList? = null
+        override fun getByIdFlow(id: String): Flow<CachedList?> = flowOf(null)
+        override fun getAllFlow(): Flow<List<CachedList>> = flowOf(emptyList())
+        override fun getAllForSyncFlow(): Flow<List<CachedList>> = flowOf(emptyList())
+        override suspend fun getBySeed(seed: String): CachedList? = null
+        override suspend fun count(): Int = 0
+        override suspend fun deleteById(id: String) = error("unused")
+        override suspend fun deleteAll() = error("unused")
+        override suspend fun countLocked(): Int = 0
+    }
+
     private class FakeNoteIntegration(private val result: String?) : NoteIntegration {
         override suspend fun createNote(content: String, source: ItemSource?): String? = result
         override suspend fun signIn(uiContext: PlatformUiContext): Boolean = true
@@ -69,7 +86,7 @@ class DelegatedIntegrationItemsTest {
     private val source = ItemSource(recordingFirestoreId = "rec-1", createdAt = now, toolCallId = "call-1")
 
     private fun writer(dao: FakeCachedItemDao) =
-        DelegatedIntegrationItems(ItemFactory(), ItemRepository(dao, cancelReminder = {}))
+        DelegatedIntegrationItems(ItemFactory(ListRepository(EmptyCachedListDao())), ItemRepository(dao, cancelReminder = {}))
 
     @Test
     fun noteDecoratorRecordsDelegatedItemOnSuccess() = runBlocking {

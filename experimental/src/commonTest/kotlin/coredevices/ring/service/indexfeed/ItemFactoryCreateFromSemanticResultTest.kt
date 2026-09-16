@@ -5,9 +5,15 @@ package coredevices.ring.service.indexfeed
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.data.entity.room.indexfeed.CachedList
+import coredevices.ring.database.room.dao.CachedListDao
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +26,28 @@ import kotlin.time.ExperimentalTime
 
 class ItemFactoryCreateFromSemanticResultTest {
 
-    private val factory = ItemFactory()
+    private class FakeCachedListDao(val lists: List<CachedList>) : CachedListDao {
+        override suspend fun upsert(list: CachedList) = error("unused")
+        override suspend fun upsertAll(lists: List<CachedList>) = error("unused")
+        override suspend fun getById(id: String): CachedList? = lists.firstOrNull { it.firestoreId == id }
+        override fun getByIdFlow(id: String): Flow<CachedList?> = flowOf(lists.firstOrNull { it.firestoreId == id })
+        override fun getAllFlow(): Flow<List<CachedList>> = flowOf(lists)
+        override fun getAllForSyncFlow(): Flow<List<CachedList>> = flowOf(lists)
+        override suspend fun getBySeed(seed: String): CachedList? = lists.firstOrNull { it.seed == seed }
+        override suspend fun count(): Int = lists.size
+        override suspend fun deleteById(id: String) = error("unused")
+        override suspend fun deleteAll() = error("unused")
+        override suspend fun countLocked(): Int = 0
+    }
+
+    private val lists = listOf(
+        CachedList(firestoreId = LIST_NOTES_SELF_ID, title = "Notes to self", seed = "notes_self"),
+        CachedList(firestoreId = LIST_SHOPPING_ID, title = "Shopping list", listKind = "checklist", seed = "shopping"),
+        CachedList(firestoreId = "list_camping", title = "Camping", listKind = "checklist"),
+        CachedList(firestoreId = "list_journal", title = "Journal", listKind = "note"),
+    )
+
+    private val factory = ItemFactory(ListRepository(FakeCachedListDao(lists)))
     private val recordingId = "rec-1"
     private val createdAt = Clock.System.now()
     private val toolCallId = "call-abc"
@@ -89,7 +116,7 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun noteItemRoutesToResolvedList() {
+    fun noteItemRoutesToResolvedList() = runBlocking {
         val item = factory.noteItem(
             recordingId, createdAt, "Milk", listHint = null, toolCallId = null, resolvedListId = "list_custom",
         )
@@ -101,13 +128,13 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun noteItemWithoutListFallsBackToNotesList() {
+    fun noteItemWithoutListFallsBackToNotesList() = runBlocking {
         val item = factory.noteItem(recordingId, createdAt, "Idea", listHint = null, toolCallId = null)
         assertEquals(listOf(LIST_NOTES_SELF_ID), item.parentListIds)
     }
 
     @Test
-    fun noteItemRoutedToShoppingBecomesChecklist() {
+    fun noteItemRoutedToShoppingBecomesChecklist() = runBlocking {
         val item = factory.noteItem(
             recordingId, createdAt, "Milk", listHint = "Shopping", toolCallId = null, resolvedListId = LIST_SHOPPING_ID,
         )
@@ -117,13 +144,32 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun noteItemRoutedToShoppingByHintBecomesChecklist() {
+    fun noteItemRoutedToShoppingByHintBecomesChecklist() = runBlocking {
         // No resolvedListId: pickNoteList sends "shopping"/"grocery" hints to the
         // shopping list, and those items should be checklist items too.
         val item = factory.noteItem(recordingId, createdAt, "Eggs", listHint = "grocery", toolCallId = null)
 
         assertEquals(listOf(LIST_SHOPPING_ID), item.parentListIds)
         assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
+    fun noteItemRoutedToChecklistKindListBecomesChecklist() = runBlocking {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Tent pegs", listHint = null, toolCallId = null, resolvedListId = "list_camping",
+        )
+
+        assertEquals(listOf("list_camping"), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
+    fun noteItemRoutedToNoteKindListStaysNote() = runBlocking {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Slept well", listHint = null, toolCallId = null, resolvedListId = "list_journal",
+        )
+
+        assertTrue(item.metadata is ItemMetadata.Note)
     }
 
     @Test

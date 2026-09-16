@@ -361,6 +361,14 @@ internal fun ListView(
                                             startTitleEdit()
                                         },
                                     )
+                                    val isChecklistList = s.list.listKind == "checklist"
+                                    DropdownMenuItem(
+                                        text = { Text(if (isChecklistList) "Switch to notes" else "Switch to checklist") },
+                                        onClick = {
+                                            menuOpen = false
+                                            vm.setListKind(if (isChecklistList) "note" else "checklist")
+                                        },
+                                    )
                                 }
                                 if (!isCoreList) {
                                     DropdownMenuItem(

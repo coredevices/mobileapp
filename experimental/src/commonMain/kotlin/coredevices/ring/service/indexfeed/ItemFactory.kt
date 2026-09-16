@@ -5,6 +5,7 @@ package coredevices.ring.service.indexfeed
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
@@ -14,7 +15,7 @@ import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-class ItemFactory {
+class ItemFactory(private val listRepo: ListRepository) {
 
     internal fun simpleUid(): String =
         ((Clock.System.now().toEpochMilliseconds() and 0xFFFFFF).toString(36)) +
@@ -86,7 +87,7 @@ class ItemFactory {
         }
     }
 
-    fun noteItem(
+    suspend fun noteItem(
         sourceRecordingId: String?,
         createdAt: Instant,
         title: String,
@@ -95,9 +96,7 @@ class ItemFactory {
         resolvedListId: String? = null,
     ): ItemDocument {
         val parentId = resolvedListId ?: pickNoteList(listHint)
-        // Items dictated into the Shopping list become checklist items so they
-        // can be ticked off, matching the list's checklist type (MOB-8946).
-        val metadata = if (parentId == LIST_SHOPPING_ID) ItemMetadata.Checklist else ItemMetadata.Note
+        val metadata = if (listRepo.getById(parentId)?.listKind == "checklist") ItemMetadata.Checklist else ItemMetadata.Note
         return createItem(
             createdAt = createdAt,
             title = title,

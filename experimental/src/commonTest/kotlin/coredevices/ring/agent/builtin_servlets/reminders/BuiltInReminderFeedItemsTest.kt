@@ -75,10 +75,11 @@ class BuiltInReminderFeedItemsTest {
 
     private fun fixture(lists: List<CachedList> = defaultLists): Pair<BuiltInReminderFeedItems, FakeCachedItemDao> {
         val itemDao = FakeCachedItemDao()
+        val listRepo = ListRepository(FakeCachedListDao(lists))
         val feedItems = BuiltInReminderFeedItems(
-            ItemFactory(),
+            ItemFactory(listRepo),
             ItemRepository(itemDao, cancelReminder = {}),
-            ListRepository(FakeCachedListDao(lists)),
+            listRepo,
         )
         return feedItems to itemDao
     }
@@ -101,6 +102,23 @@ class BuiltInReminderFeedItemsTest {
         assertEquals(now, item.createdAt)
         assertEquals("call-note", item.sourceToolCallId)
         assertTrue(item.metadata is ItemMetadata.Note)
+    }
+
+    @Test
+    fun createFeedItemWithChecklistKindListIdMakesChecklistItem() = runBlocking {
+        val camping = CachedList(firestoreId = "list_camping", title = "Camping", listKind = "checklist")
+        val (feedItems, itemDao) = fixture(defaultLists + camping)
+        feedItems.createFeedItem(
+            localReminderId = 6,
+            title = "Tent pegs",
+            deadline = null,
+            listId = "list_camping",
+            notifyBefore = null,
+            source = null,
+        )
+        val item = itemDao.items.values.single().toDocument()
+        assertEquals(listOf("list_camping"), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
     }
 
     @Test
