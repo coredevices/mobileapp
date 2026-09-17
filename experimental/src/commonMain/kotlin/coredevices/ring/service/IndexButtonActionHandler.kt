@@ -23,6 +23,7 @@ class IndexButtonActionHandler(
             when (gestureRouting.destinationFor(gesture)) {
                 GestureDestination.PlayPause -> onPlayPause()
                 GestureDestination.NextTrack -> onNextTrack()
+                GestureDestination.PreviousTrack -> onPreviousTrack()
                 else -> return@collect
             }
             logger.i("Handled button action for sequence: ${buttonPresses.joinToString(", ") { it.name }}")
