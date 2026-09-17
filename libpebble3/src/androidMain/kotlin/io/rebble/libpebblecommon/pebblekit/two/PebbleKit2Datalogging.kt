@@ -11,7 +11,9 @@ import io.rebble.pebblekit2.common.model.DataLogSession
 import io.rebble.pebblekit2.common.model.ReceiveResult
 import io.rebble.pebblekit2.common.model.WatchIdentifier
 import io.rebble.pebblekit2.server.DefaultPebbleListenerConnector
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
@@ -64,10 +66,10 @@ class PebbleKit2Datalogging(
         }
     }
 
-    private suspend fun companionPackagesFor(uuid: Uuid): List<String> {
-        val entry = locker.getApp(uuid) ?: return emptyList()
+    private suspend fun companionPackagesFor(uuid: Uuid): List<String> = withContext(Dispatchers.IO) {
+        val entry = locker.getApp(uuid) ?: return@withContext emptyList()
         val pbwPath = lockerPBWCache.getPBWFileForApp(entry.id, entry.version, locker)
-        return PbwApp(pbwPath).info.companionApp?.android?.apps.orEmpty().mapNotNull { it.pkg }
+        PbwApp(pbwPath).info.companionApp?.android?.apps.orEmpty().mapNotNull { it.pkg }
     }
 }
 
