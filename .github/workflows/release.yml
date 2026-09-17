@@ -13,7 +13,7 @@ jobs:
         with:
           java-version: 21
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Cache build deps
         uses: actions/cache@v4
         with:
@@ -46,7 +46,7 @@ jobs:
           echo RELEASE_CHECKSUM=$(swift package compute-checksum build/xcframework.zip) >> $GITHUB_ENV
 
       - name: Checkout master
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
         with:
           ref: 'master'
 
@@ -82,7 +82,7 @@ jobs:
           key: build-deps-${{ hashFiles('~/.gradle/**') }}-${{ hashFiles('~/.konan/**') }}
 
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
 
       - name: Publish artifact
         env:
