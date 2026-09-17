@@ -437,6 +437,35 @@ class RecordingProcessingQueueTest {
     }
 
     @Test
+    fun localAudioProcessing_transcriptionNetworkError_keepsRetryingUntilServiceReturns() = runBlocking {
+        val fileId = "test-audio-txn-prolonged-offline"
+        createFakeAudioFile(fileId)
+
+        fakeTranscription.enqueue(
+            FakeTranscriptionService.Behavior.NetworkError,
+            FakeTranscriptionService.Behavior.NetworkError,
+            FakeTranscriptionService.Behavior.NetworkError,
+            FakeTranscriptionService.Behavior.Success("Transcribed after reconnect")
+        )
+        fakeNenya.enqueue(
+            FakeNenyaClient.NenyaResponse.SuccessWithToolCalls,
+            FakeNenyaClient.NenyaResponse.SuccessFinal
+        )
+
+        queue.queueLocalAudioProcessing(fileId)
+        awaitTaskDone(taskId = 1)
+
+        val task = taskDao.getTaskById(1)!!
+        assertEquals(TaskStatus.Success, task.status)
+        assertEquals(4, task.attempts)
+
+        val entries = entryDao.getEntriesForRecording(1).first()
+        assertEquals(1, entries.size)
+        assertEquals(RecordingEntryStatus.completed, entries[0].status)
+        assertEquals("Transcribed after reconnect", entries[0].transcription)
+    }
+
+    @Test
     fun localAudioProcessing_transcriptionBusy_deferredThenSucceeds() = runBlocking {
         val fileId = "test-audio-txn-busy"
         createFakeAudioFile(fileId)

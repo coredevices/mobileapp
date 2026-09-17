@@ -24,7 +24,6 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
     private val scope: CoroutineScope,
     label: String,
     private val rescheduleDelay: Duration = 1.minutes,
-    private val maxAttempts: Int = 3,
     private val maxConcurrency: Int = 1,
 ): AutoCloseable {
     private val logger = Logger.withTag("Queue-$label")
@@ -42,11 +41,6 @@ abstract class PersistentQueueScheduler<T : QueueTask>(
                 val task = repository.getTaskById(id) ?: error("Task with id $id not found")
                 if (task.status != TaskStatus.Pending) {
                     logger.w { "Task with id $id is not pending (status: ${task.status}), skipping" }
-                    return@flow
-                }
-                if (task.attempts >= maxAttempts) {
-                    logger.e { "Task with id $id has reached max attempts ($maxAttempts), marking as failed" }
-                    repository.updateStatus(id, TaskStatus.Failed)
                     return@flow
                 }
                 repository.incrementAttempts(id)
