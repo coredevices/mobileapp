@@ -3,11 +3,22 @@ package io.rebble.libpebblecommon.health.parsers
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.health.OverlayType
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
 
 private val logger = Logger.withTag("HealthDataParser")
+
+/**
+ * Result of parsing an ActivityMinuteData (tag 81) payload. Step/HR/overlay data goes into
+ * [healthData]; any per-minute SpO2 readings (version 14+ only, where spo2_percent > 0) go into
+ * [spo2Readings] keyed by their minute timestamp.
+ */
+data class ParsedHealthData(
+    val healthData: List<HealthDataEntity>,
+    val spo2Readings: List<Spo2ReadingEntity>,
+)
 
 /**
  * Parses step/movement data from the watch's health payload.
@@ -18,19 +29,21 @@ private val logger = Logger.withTag("HealthDataParser")
  * - Firmware 4.0 (version 7) - adds heart rate data
  * - Firmware 4.1 (version 8) - adds heart rate weight
  * - Firmware 4.3 (version 13) - adds heart rate zone
+ * - Firmware 4.4 (version 14) - adds SpO2 (spo2_percent + spo2_quality)
  *
  * @param payload Raw byte array from the watch
  * @param itemSize Size of each data item in bytes
- * @return List of parsed health data entities ready for database insertion
+ * @return Parsed health data entities (steps/HR) plus any SpO2 readings, ready for database insertion
  */
-fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity> {
+fun parseStepsData(payload: ByteArray, itemSize: UShort): ParsedHealthData {
     if (payload.isEmpty() || itemSize.toInt() == 0) {
         logger.w { "Cannot parse steps data: empty payload or zero item size" }
-        return emptyList()
+        return ParsedHealthData(emptyList(), emptyList())
     }
 
     val buffer = DataBuffer(payload.toUByteArray())
     val records = mutableListOf<HealthDataEntity>()
+    val spo2Readings = mutableListOf<Spo2ReadingEntity>()
 
     if (payload.size % itemSize.toInt() != 0) {
         logger.w {
@@ -85,6 +98,8 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
             var heartRate = 0
             var heartRateWeight = 0
             var heartRateZone = 0
+            var spo2Percent = 0
+            var spo2Quality = 0
 
             if (version >= VERSION_FW_3_11) {
                 restingGramCalories = buffer.getUShort().toInt()
@@ -104,6 +119,11 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
                 heartRateZone = buffer.getUByte().toInt()
             }
 
+            if (version >= VERSION_FW_4_4) {
+                spo2Percent = buffer.getUByte().toInt()
+                spo2Quality = buffer.getUByte().toInt()
+            }
+
             records.add(
                 HealthDataEntity(
                     timestamp = currentTimestamp.toLong(),
@@ -121,6 +141,17 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
                 )
             )
 
+            // Only persist SpO2 samples with an actual reading; most minutes carry 0.
+            if (spo2Percent > 0) {
+                spo2Readings.add(
+                    Spo2ReadingEntity(
+                        timestamp = currentTimestamp.toLong(),
+                        spo2Percent = spo2Percent,
+                        quality = spo2Quality,
+                    )
+                )
+            }
+
             currentTimestamp += 60u
         }
 
@@ -135,11 +166,11 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
                 break
             }
         } else if (consumed > expected) {
-            logger.w { "Health steps item over-read: consumed=$consumed, expected=$expected" }
+            logger.w { "Health steps item over-read: consumed=$consumed, expected=$expected"             }
         }
     }
 
-    return records
+    return ParsedHealthData(records, spo2Readings)
 }
 
 /**
@@ -245,10 +276,12 @@ private val VERSION_FW_3_11: UShort = 6u
 private val VERSION_FW_4_0: UShort = 7u
 private val VERSION_FW_4_1: UShort = 8u
 private val VERSION_FW_4_3: UShort = 13u
+private val VERSION_FW_4_4: UShort = 14u
 private val SUPPORTED_STEP_VERSIONS = setOf(
     VERSION_FW_3_10_AND_BELOW,
     VERSION_FW_3_11,
     VERSION_FW_4_0,
     VERSION_FW_4_1,
-    VERSION_FW_4_3
+    VERSION_FW_4_3,
+    VERSION_FW_4_4,
 )
