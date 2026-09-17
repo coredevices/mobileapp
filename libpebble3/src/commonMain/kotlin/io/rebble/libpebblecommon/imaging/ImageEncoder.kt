@@ -2,11 +2,15 @@ package io.rebble.libpebblecommon.imaging
 
 /**
  * Encodes an ARGB image as the watch's 4-bpp palettized [EncodedImage]: choose a 16-colour palette
- * by median cut over the watch's 64-colour (GColor8) space, Floyd–Steinberg dither to that palette,
- * and pack two 4-bit indices per byte (even x = high nibble, matching the firmware).
+ * by median cut over the watch's 64 screen colors, Floyd–Steinberg dither to that palette, and
+ * pack two 4-bit indices per byte (even x = high nibble, matching the firmware).
  *
  * Transparency is binary, and costs a palette slot when present. The watch only skips these
  * pixels when it draws with `GCompOpSet`; under the default `GCompOpAssign` they come out black.
+ *
+ * Both the palette and the per-pixel match are decided against what the panel actually shows (see
+ * ScreenColors.kt), not the nominal 0/85/170/255 the GColor8 bits suggest. The bytes on the wire
+ * are still GColor8 codes.
  */
 object ImageEncoder {
     private const val MAX_COLORS = 16
@@ -19,23 +23,20 @@ object ImageEncoder {
 
     private fun alphaOf(argb: Int): Int = (argb ushr 24) and 0xFF
 
-    // 8-bit channel (0..255) -> 2-bit GColor8 channel (0..3), rounded to nearest of 0/85/170/255.
-    private fun quant2(v: Int): Int = (v.coerceIn(0, 255) * 3 + 127) / 255
-    private fun expand2(c: Int): Int = c * 85
-    private fun gcolor8(r: Int, g: Int, b: Int): Int = (0x3 shl 6) or (r shl 4) or (g shl 2) or b
+    // Screen color index (0..63) -> the GColor8 byte sent to the watch, always fully opaque.
+    private fun gcolor8(code: Int): Int = 0xC0 or code
 
-    private class Color(val r: Int, val g: Int, val b: Int, val count: Int)
+    private class Entry(val code: Int, val count: Int)
 
     /** Encodes an ARGB8888 pixel array (row-major, [width] * [height]). */
     fun encode(argb: IntArray, width: Int, height: Int): EncodedImage {
         val hasTransparency = argb.any { alphaOf(it) < OPAQUE_ALPHA }
         val colors = medianCutPalette(argb, if (hasTransparency) MAX_COLORS - 1 else MAX_COLORS)
-        val palR = IntArray(colors.size) { expand2((colors[it] shr 4) and 0x3) }
-        val palG = IntArray(colors.size) { expand2((colors[it] shr 2) and 0x3) }
-        val palB = IntArray(colors.size) { expand2(colors[it] and 0x3) }
+        val palR = IntArray(colors.size) { SCREEN_R[colors[it]] }
+        val palG = IntArray(colors.size) { SCREEN_G[colors[it]] }
+        val palB = IntArray(colors.size) { SCREEN_B[colors[it]] }
         // Past the colours, so `nearest` can never land an opaque black pixel on it.
         val transparentIdx = colors.size
-        val palette = if (hasTransparency) colors + TRANSPARENT else colors
 
         val stride = (width + 1) / 2
         val pixels = UByteArray(stride * height)
@@ -69,7 +70,9 @@ object ImageEncoder {
             val tmp = curErr; curErr = nextErr; nextErr = tmp
             nextErr.fill(0f)
         }
-        val paletteBytes = UByteArray(palette.size) { palette[it].toUByte() }
+        val paletteBytes = UByteArray(if (hasTransparency) colors.size + 1 else colors.size) {
+            if (it == transparentIdx) TRANSPARENT.toUByte() else gcolor8(colors[it]).toUByte()
+        }
         return EncodedImage(width, height, paletteBytes, pixels)
     }
 
@@ -83,44 +86,61 @@ object ImageEncoder {
         }
     }
 
-    // Median cut over the GColor8-reduced histogram of the opaque pixels. Returns up to
-    // [maxColors] distinct GColor8 palette bytes. Box choice and split point are weighted by pixel
+    // Median cut over the screen colors the image's opaque pixels land on. Returns up to
+    // [maxColors] distinct screen color indices. Box choice and split point are weighted by pixel
     // count, so a large flat region doesn't lose a palette slot to a handful of stray pixels.
     private fun medianCutPalette(argb: IntArray, maxColors: Int): List<Int> {
         val counts = HashMap<Int, Int>()
         for (p in argb) {
             if (alphaOf(p) < OPAQUE_ALPHA) continue
-            val key = (quant2((p shr 16) and 0xFF) shl 4) or
-                (quant2((p shr 8) and 0xFF) shl 2) or quant2(p and 0xFF)
-            counts[key] = (counts[key] ?: 0) + 1
+            val code = nearestScreenColor((p shr 16) and 0xFF, (p shr 8) and 0xFF, p and 0xFF)
+            counts[code] = (counts[code] ?: 0) + 1
         }
-        val initial = counts.entries.map {
-            Color((it.key shr 4) and 0x3, (it.key shr 2) and 0x3, it.key and 0x3, it.value)
-        }.toMutableList()
+        val initial = counts.entries.map { Entry(it.key, it.value) }.toMutableList()
         val boxes = mutableListOf(initial)
         while (boxes.size < maxColors) {
             val bi = boxes.indices.filter { boxes[it].size > 1 }
-                .maxByOrNull { spread(boxes[it]) * population(boxes[it]) } ?: break
+                .maxByOrNull { spread(boxes[it]).toLong() * population(boxes[it]) } ?: break
             val box = boxes[bi]
             val axis = longestAxis(box)
-            box.sortBy { when (axis) { 0 -> it.r; 1 -> it.g; else -> it.b } }
+            box.sortBy { channel(it.code, axis) }
             val mid = weightedMedian(box)
             boxes[bi] = box.subList(0, mid).toMutableList()
             boxes.add(box.subList(mid, box.size).toMutableList())
         }
         return boxes.filter { it.isNotEmpty() }.map { box ->
-            var sr = 0L; var sg = 0L; var sb = 0L; var sn = 0L
-            for (c in box) { sr += c.r.toLong() * c.count; sg += c.g.toLong() * c.count; sb += c.b.toLong() * c.count; sn += c.count }
-            gcolor8(round(sr, sn), round(sg, sn), round(sb, sn))
-        }.distinct().ifEmpty { listOf(gcolor8(0, 0, 0)) }
+            // Screen colors can't be averaged into a new entry the way nominal 2-bit components
+            // could, so take the one nearest the box's count-weighted centroid.
+            var sumR = 0L
+            var sumG = 0L
+            var sumB = 0L
+            var totalCount = 0L
+            for (entry in box) {
+                sumR += SCREEN_R[entry.code].toLong() * entry.count
+                sumG += SCREEN_G[entry.code].toLong() * entry.count
+                sumB += SCREEN_B[entry.code].toLong() * entry.count
+                totalCount += entry.count
+            }
+            nearestScreenColor(
+                round(sumR, totalCount),
+                round(sumG, totalCount),
+                round(sumB, totalCount),
+            )
+        }.distinct().ifEmpty { listOf(nearestScreenColor(0, 0, 0)) }
     }
 
     private fun round(sum: Long, count: Long): Int = ((sum * 2 + count) / (count * 2)).toInt()
 
-    private fun population(box: List<Color>): Long = box.sumOf { it.count.toLong() }
+    private fun channel(code: Int, axis: Int): Int = when (axis) {
+        0 -> SCREEN_R[code]
+        1 -> SCREEN_G[code]
+        else -> SCREEN_B[code]
+    }
+
+    private fun population(box: List<Entry>): Long = box.sumOf { it.count.toLong() }
 
     // Split index that puts half the box's pixels either side, keeping both halves non-empty.
-    private fun weightedMedian(box: List<Color>): Int {
+    private fun weightedMedian(box: List<Entry>): Int {
         val half = population(box) / 2
         var acc = 0L
         for (i in box.indices) {
@@ -130,25 +150,29 @@ object ImageEncoder {
         return box.size - 1
     }
 
-    private fun spread(box: List<Color>): Int {
-        var rl = 3; var rh = 0; var gl = 3; var gh = 0; var bl = 3; var bh = 0
-        for (c in box) {
-            if (c.r < rl) rl = c.r; if (c.r > rh) rh = c.r
-            if (c.g < gl) gl = c.g; if (c.g > gh) gh = c.g
-            if (c.b < bl) bl = c.b; if (c.b > bh) bh = c.b
+    // Side lengths of the box's bounding cuboid, one per RGB channel, in screen colors.
+    private fun extents(box: List<Entry>): IntArray {
+        val lowest = intArrayOf(255, 255, 255)
+        val highest = intArrayOf(0, 0, 0)
+        for (entry in box) {
+            for (axis in 0..2) {
+                val value = channel(entry.code, axis)
+                if (value < lowest[axis]) lowest[axis] = value
+                if (value > highest[axis]) highest[axis] = value
+            }
         }
-        return maxOf(rh - rl, gh - gl, bh - bl)
+        return IntArray(3) { highest[it] - lowest[it] }
     }
 
-    private fun longestAxis(box: List<Color>): Int {
-        var rl = 3; var rh = 0; var gl = 3; var gh = 0; var bl = 3; var bh = 0
-        for (c in box) {
-            if (c.r < rl) rl = c.r; if (c.r > rh) rh = c.r
-            if (c.g < gl) gl = c.g; if (c.g > gh) gh = c.g
-            if (c.b < bl) bl = c.b; if (c.b > bh) bh = c.b
+    private fun spread(box: List<Entry>): Int = extents(box).max()
+
+    private fun longestAxis(box: List<Entry>): Int {
+        val extent = extents(box)
+        return when {
+            extent[0] >= extent[1] && extent[0] >= extent[2] -> 0
+            extent[1] >= extent[2] -> 1
+            else -> 2
         }
-        val dr = rh - rl; val dg = gh - gl; val db = bh - bl
-        return if (dr >= dg && dr >= db) 0 else if (dg >= db) 1 else 2
     }
 
     private fun diffuse(err: FloatArray, x: Int, r: Float, g: Float, b: Float, w: Float) {
