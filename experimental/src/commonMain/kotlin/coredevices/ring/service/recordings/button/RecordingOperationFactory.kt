@@ -8,18 +8,18 @@ import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
-import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
 import coredevices.ring.service.ButtonPress
+import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.recordings.RecordingProcessingQueue
-import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 
 class RecordingOperationFactory(
@@ -27,12 +27,12 @@ class RecordingOperationFactory(
     private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val gestureRouting: GestureRoutingPreferences,
-    private val indexWebhookApi: IndexWebhookApi,
+    private val indexWebhookQueue: IndexWebhookDeliveryQueue,
     private val indexWebhookPreferences: IndexWebhookPreferences,
-    private val recordingStorage: RecordingStorage,
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
+    private val recordingBackgroundScope: RecordingBackgroundScope,
 ) {
     suspend fun createForButtonSequence(
         recordingId: Long,
@@ -77,13 +77,13 @@ class RecordingOperationFactory(
             inner
         }
         return IndexWebhookUploadRecordingOperation(
-            webhookApi = indexWebhookApi,
+            enqueue = indexWebhookQueue::enqueue,
             webhookPreferences = indexWebhookPreferences,
-            recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
             gesture = gesture,
             decorated = decorated,
+            backgroundScope = recordingBackgroundScope,
         )
     }
 

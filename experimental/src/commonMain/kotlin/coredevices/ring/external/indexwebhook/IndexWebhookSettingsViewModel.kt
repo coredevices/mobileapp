@@ -29,6 +29,7 @@ class IndexWebhookSettingsViewModel(
     private val webhookApi: IndexWebhookApi,
     private val runRepository: IndexWebhookRunRepository,
     private val signingSecretStorage: IndexWebhookSigningSecretStorage,
+    private val deliveryQueue: IndexWebhookDeliveryQueue,
 ) : ViewModel() {
 
     private val _gesture = MutableStateFlow<RingGesture?>(null)
@@ -220,6 +221,11 @@ class IndexWebhookSettingsViewModel(
                 _saving.value = false
             }
         }
+    }
+
+    fun retry(run: IndexWebhookRun) {
+        val deliveryId = run.deliveryId ?: return
+        viewModelScope.launch { deliveryQueue.retry(deliveryId) }
     }
 
     private fun loadDraft(config: IndexWebhookConfig, secretGesture: RingGesture) {
