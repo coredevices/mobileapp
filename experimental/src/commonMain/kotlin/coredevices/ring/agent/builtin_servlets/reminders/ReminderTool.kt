@@ -212,9 +212,16 @@ class ReminderTool: BuiltInMcpTool(
             remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
         }
 
+        val rawText = runCatching { context.userMessageText.await() }.getOrNull()
+
         return try {
             val reminderId = reminderIntegrationFactory.createReminderIntegration()
-                .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
+                .createReminder(
+                    remindArgs.message,
+                    instant,
+                    notifyBefore = notifyBefore,
+                    source = context.itemSource(rawText),
+                )
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
                 SemanticResult.TaskCreation(

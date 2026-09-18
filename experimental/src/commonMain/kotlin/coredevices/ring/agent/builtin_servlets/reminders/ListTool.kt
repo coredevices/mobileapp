@@ -208,11 +208,12 @@ class ListTool: BuiltInMcpTool(
         return try {
             val integration = reminderIntegrationFactory.createReminderIntegration()
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
+            val rawText = runCatching { context.userMessageText.await() }.getOrNull()
             val reminderId = integration.createReminder(
                 listItemArgs.message,
                 instant,
                 listId = list?.id,
-                source = context.itemSource(),
+                source = context.itemSource(rawText),
             )
             val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(

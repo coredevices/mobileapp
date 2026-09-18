@@ -15,10 +15,9 @@ actual fun createTaskerReminderIntegration(): ReminderIntegration = TaskerRemind
 
 /**
  * Routes reminders to Tasker via [TaskerEndpoint]. The reminder text is sent as the payload with a
- * `messageType=reminder` extra, plus the optional `deadline`, `notify_before_seconds` and `list`
- * extras so the Tasker side can branch on them. Tasker has no native list concept, so
- * [searchForList] echoes the requested name back and it is forwarded verbatim as the `list` extra;
- * honouring the lead time is up to the user's Tasker profile.
+ * `messageType=reminder` extra, plus the [taskerReminderExtras] (due date, list, raw transcript).
+ * Tasker has no native list concept, so [searchForList] echoes the requested name back and it is
+ * forwarded verbatim as the `list` extra; honouring the lead time is up to the user's Tasker profile.
  */
 class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
     private val tokenStorage: IntegrationTokenStorage by inject()
@@ -29,19 +28,11 @@ class TaskerReminderIntegration : ReminderIntegration, KoinComponent {
         listId: String?,
         notifyBefore: Duration?,
         source: ItemSource?,
-    ): String {
-        // The due date goes to Tasker as a UTC timestamp: kotlin.time.Instant.toString() renders
-        // the absolute due-time in ISO-8601 UTC (e.g. 2026-06-18T16:00:00Z), regardless of local
-        // timezone. The lead time (when set alongside a due date) is passed as whole seconds.
-        val extras = buildMap {
-            deadline?.let {
-                put("deadline", it.toString())
-                notifyBefore?.let { lead -> put("notify_before_seconds", lead.inWholeSeconds.toString()) }
-            }
-            listId?.let { put("list", it) }
-        }
-        return TaskerEndpoint.send(title, messageType = "reminder", extras = extras)
-    }
+    ): String = TaskerEndpoint.send(
+        title,
+        messageType = "reminder",
+        extras = taskerReminderExtras(deadline, listId, notifyBefore, source?.rawText),
+    )
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> =
         listOf(ReminderListEntry(id = listName, title = listName))
