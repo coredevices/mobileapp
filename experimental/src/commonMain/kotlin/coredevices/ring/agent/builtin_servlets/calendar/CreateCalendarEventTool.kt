@@ -257,6 +257,7 @@ class CreateCalendarEventTool : BuiltInMcpTool(
                     endTime = safeEnd,
                     location = args.location,
                     description = args.description,
+                    calendarId = preferences.phoneCalendarId.value,
                 )
             ) ?: return ToolCallResult(
                 JsonSnake.encodeToString(CreateEventResult(success = false, errorMessage = "Could not create the event. The calendar may not be accessible.")),

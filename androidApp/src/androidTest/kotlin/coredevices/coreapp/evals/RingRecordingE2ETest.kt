@@ -713,6 +713,7 @@ private class E2EPreferences : Preferences {
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val phoneCalendarEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+    override val phoneCalendarId: StateFlow<String?> = MutableStateFlow(null)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
     override val encryptionKeyFingerprint: StateFlow<String?> = MutableStateFlow(null)
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
@@ -737,6 +738,7 @@ private class E2EPreferences : Preferences {
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}
+    override fun setPhoneCalendarId(platformId: String?) {}
     override fun setUseEncryption(enabled: Boolean) {}
     override fun setEncryptionKeyFingerprint(fingerprint: String?) {}
     override fun setLastWipedRing(id: String?) {}
