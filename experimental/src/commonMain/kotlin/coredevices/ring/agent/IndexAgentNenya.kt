@@ -15,6 +15,12 @@ class IndexAgentNenya(
 ): AgentNenya(nenyaClient, agentContext(captureType), NenyaModel.Default, conversation) {
     override val label = "Nenya"
 
+    override val maxToolRounds: Int
+        get() = when (model) {
+            NenyaModel.Default, NenyaModel.Search -> super.maxToolRounds
+            NenyaModel.HighCapability -> 8
+        }
+
     override val logger: Logger = Logger.withTag("IndexAgentNenya")
     companion object {
         fun agentContext(captureType: DefaultCaptureType): String {

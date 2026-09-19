@@ -9,30 +9,18 @@
 
 var LINK_BUTTON_NOT_PRESSED = 101;
 
-// Promise wrapper over the host's XMLHttpRequest. Resolves to { ok, status, json, error } and
-// never rejects, so every caller below can branch on `ok`.
-function http(url, options) {
-  var opts = options || {};
-  return new Promise(function (resolve) {
-    var request = new XMLHttpRequest();
-    request.open(opts.method || 'GET', url, true);
-    Object.keys(opts.headers || {}).forEach(function (header) {
-      request.setRequestHeader(header, opts.headers[header]);
-    });
-    request.onload = function () {
-      var json = null;
-      try { json = JSON.parse(request.responseText); } catch (e) { /* not json */ }
-      resolve({
-        ok: request.status >= 200 && request.status < 300,
-        status: request.status,
-        json: json,
-      });
-    };
-    request.onerror = function () {
-      resolve({ ok: false, status: 0, json: null, error: 'request failed' });
-    };
-    request.send(opts.body === undefined ? null : opts.body);
-  });
+// Resolves to { ok, status, json, error } and never rejects, so every caller below can branch
+// on `ok`. A status of 0 means the request didn't happen at all — no bridge, or a host this
+// plugin wasn't granted.
+async function http(url, options) {
+  try {
+    var response = await fetch(url, options);
+    var json = null;
+    try { json = await response.json(); } catch (e) { /* not json */ }
+    return { ok: response.ok, status: response.status, json: json };
+  } catch (e) {
+    return { ok: false, status: 0, json: null, error: 'request failed' };
+  }
 }
 
 var STORE_KEY = 'hue';

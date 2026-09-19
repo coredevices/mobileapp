@@ -28,11 +28,11 @@ abstract class IterativeAgent(
         sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
-    ) = withToolSession(input, mcpSession) { tools ->
+    ) = withToolSession(input, mcpSession) {
         var round = 0
         val executed = mutableSetOf<AgentToolCall>()
         while (true) {
-            val assistantMessage = inferAndEmit(input, tools, mcpSession, sessionContext, includePromptsFromMcps)
+            val assistantMessage = inferAndEmit(input, mcpSession, sessionContext, includePromptsFromMcps)
             val toolCalls = decodeToolCalls(assistantMessage)
             if (toolCalls.isEmpty() || skipToolExecution) return@withToolSession
             if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")

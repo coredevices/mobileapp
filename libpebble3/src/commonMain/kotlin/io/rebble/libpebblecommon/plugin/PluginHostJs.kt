@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.plugin
 /**
  * The JS shim evaluated into every plugin session before the plugin's own script. Defines the
  * surface a plugin author writes against — `Pebble.registerSourceHandler`,
- * `Pebble.registerActionHandler` and `console`. `XMLHttpRequest` and `localStorage` come from
+ * `Pebble.registerActionHandler` and `console`. `fetch` and `localStorage` come from
  * the engine itself and are already in scope — a plugin persists state exactly the way a PKJS
  * app does, in the same store.
  *

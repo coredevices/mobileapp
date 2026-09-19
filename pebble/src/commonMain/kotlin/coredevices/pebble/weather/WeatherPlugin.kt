@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.plugin.LongTextShape
 import io.rebble.libpebblecommon.plugin.NumericValueShape
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.PluginPermission
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.plugin.ShortTextShape
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.SourceEnvelope
@@ -88,7 +89,7 @@ class WeatherPlugin(
                 ),
             ),
             supportsMultiple = true,
-            usesPermissions = listOf(PluginPermission("Location")),
+            callerPermissions = listOf(PluginPermission(PluginPermissions.LOCATION)),
             suggestedRefreshIntervalSec = 900,
         ),
         SourceDeclaration(
@@ -104,7 +105,7 @@ class WeatherPlugin(
                 PROPERTY_CONDITION_CODE to listOf(SourceShapeNames.LONG_TEXT),
             ),
             supportsMultiple = true,
-            usesPermissions = listOf(PluginPermission("Location")),
+            callerPermissions = listOf(PluginPermission(PluginPermissions.LOCATION)),
             suggestedRefreshIntervalSec = 900,
         ),
     )

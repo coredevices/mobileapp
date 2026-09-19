@@ -55,6 +55,7 @@ class BuiltInReminderFeedItems(
                 listHint = null,
                 toolCallId = source?.toolCallId,
                 resolvedListId = listId,
+                parentListKind = listRepository.getById(listId)?.listKind,
             )
         } else {
             itemFactory.reminderItem(

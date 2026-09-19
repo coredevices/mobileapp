@@ -60,7 +60,7 @@ actual class ModelDownloadManager {
     }
 
     private fun download(modelInfo: ModelInfo, isStt: Boolean, allowMetered: Boolean): Boolean {
-        if (_downloadStatus.value is ModelDownloadStatus.Downloading) {
+        if (_downloadStatus.value.inProgress) {
             return false
         }
         val modelUrl = modelInfo.url
@@ -74,7 +74,7 @@ actual class ModelDownloadManager {
         task.taskDescription = "${if (isStt) "stt" else "lm"}:${modelInfo.slug}"
         task.resume()
 
-        updateDownloadStatus(ModelDownloadStatus.Downloading(modelInfo.slug))
+        updateDownloadStatus(ModelDownloadStatus.Scheduled(modelInfo.slug))
         return true
     }
 

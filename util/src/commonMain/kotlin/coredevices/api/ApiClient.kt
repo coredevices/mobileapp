@@ -84,6 +84,17 @@ abstract class ApiClient(
         }
     }
 
+    protected suspend fun HttpRequestBuilder.maybeFirebaseAuth() {
+        val token = try {
+            requireUserToken()
+        } catch (e: Exception) {
+            null
+        }
+        token?.let {
+            bearerAuth(token)
+        }
+    }
+
     protected suspend fun HttpRequestBuilder.firebaseAuth() {
         val token = requireUserToken()
         bearerAuth(token)

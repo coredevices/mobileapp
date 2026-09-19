@@ -1,6 +1,7 @@
 package coredevices.util
 
 import PlatformUiContext
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.le.ScanFilter
 import android.companion.AssociationInfo
@@ -193,6 +194,44 @@ class AndroidCompanionDevice(
     override fun hasApprovedDevice(identifier: IndexIdentifier): Boolean {
         val service = context.getSystemService(CompanionDeviceManager::class.java)
         return service.hasApprovedMac(identifier.asPlatformAddress)
+    }
+
+    private fun bondRemovableAssociation(identifier: IndexIdentifier): AssociationInfo? {
+        if (coreConfigFlow.value.disableCompanionDeviceManager) {
+            return null
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) {
+            return null
+        }
+        val service = context.getSystemService(CompanionDeviceManager::class.java) ?: return null
+        return try {
+            service.myAssociations.firstOrNull {
+                it.deviceMacAddress?.toString().equals(identifier.asPlatformAddress, ignoreCase = true)
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "Failed to read CDM associations" }
+            null
+        }
+    }
+
+    override fun canRemoveBond(identifier: IndexIdentifier): Boolean =
+        bondRemovableAssociation(identifier) != null
+
+    @SuppressLint("MissingPermission")
+    override fun removeBond(identifier: IndexIdentifier): Boolean {
+        val association = bondRemovableAssociation(identifier) ?: return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) {
+            return false
+        }
+        val service = context.getSystemService(CompanionDeviceManager::class.java) ?: return false
+        return try {
+            service.removeBond(association.id).also {
+                logger.d { "CompanionDeviceManager removeBond(${association.id}) result=$it" }
+            }
+        } catch (e: Exception) {
+            logger.w(e) { "CompanionDeviceManager removeBond failed" }
+            false
+        }
     }
 
     override fun cdmPreviouslyCrashed(): Boolean {

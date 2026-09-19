@@ -711,21 +711,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         )
                     }
                     (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
-                        PropertyRow(
-                            name = "SOURCE CODE",
-                            nameModifier = propertyNameModifier,
-                            value = "External Link",
-                            onClick = { urlLauncher.open(sourceLink) }
-                        )
+                        if (sourceLink.isNotEmpty()) {
+                            PropertyRow(
+                                name = "SOURCE CODE",
+                                nameModifier = propertyNameModifier,
+                                value = "External Link",
+                                onClick = { urlLauncher.open(sourceLink) }
+                            )
+                        }
                     }
 
                     commonAppStore?.developerLink?.let { developerLink ->
-                        PropertyRow(
-                            name = "WEBSITE LINK",
-                            nameModifier = propertyNameModifier,
-                            value = "External Link",
-                            onClick = { urlLauncher.open(developerLink) }
-                        )
+                        if (developerLink.isNotEmpty()) {
+                            PropertyRow(
+                                name = "WEBSITE LINK",
+                                nameModifier = propertyNameModifier,
+                                value = "External Link",
+                                onClick = { urlLauncher.open(developerLink) }
+                            )
+                        }
                     }
                     val contactStoreId = entry.storeId
                     if (

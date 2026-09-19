@@ -1,5 +1,6 @@
 package coredevices.ring
 
+import coredevices.mcp.client.McpServerCache
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.McpSessionFactory
@@ -18,6 +19,7 @@ import org.koin.dsl.module
 
 internal val mcpModule = module {
     singleOf(::BuiltinServletRepository)
+    single { McpServerCache() }
     singleOf(::McpSessionFactory)
     single {
         IndexActionsRepository(

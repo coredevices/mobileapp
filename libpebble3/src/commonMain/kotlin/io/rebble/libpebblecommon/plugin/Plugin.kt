@@ -29,6 +29,13 @@ interface Plugin {
         get() = emptyList()
 
     /**
+     * What the user has to let this plugin do. The network ones are enforced for every request a
+     * plugin makes; the rest are declared and not yet checked.
+     */
+    val usesPermissions: List<PluginPermission>
+        get() = emptyList()
+
+    /**
      * Observe one kind of thing. The returned flow emits whenever the underlying data changes;
      * each emission is a complete envelope (zero or more instances, every property of each).
      *

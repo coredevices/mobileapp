@@ -67,6 +67,10 @@ class NotionNoteClientIntegrationTest {
             TODO("Not yet implemented")
         }
 
+        override suspend fun signOut() {
+            TODO("Not yet implemented")
+        }
+
         override fun init() {
             TODO("Not yet implemented")
         }

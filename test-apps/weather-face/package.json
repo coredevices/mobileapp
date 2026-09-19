@@ -51,6 +51,9 @@
     },
     "capabilities": [
       "configurable"
+    ],
+    "usesPermissions": [
+      "Location"
     ]
   }
 }

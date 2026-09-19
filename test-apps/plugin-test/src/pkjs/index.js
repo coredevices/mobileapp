@@ -283,6 +283,16 @@ function unsubscribeAll() {
   subscriptions = [];
 }
 
+/**
+ * The instance a tile is pinned to. A stored index is a position, not an id, and the list it
+ * indexes can shrink — a notification is dismissed, a saved location removed — so fall back to
+ * the last one rather than showing nothing.
+ */
+function instanceAt(list, wanted) {
+  if (!list || !list.length) return null;
+  return list[wanted < list.length ? wanted : list.length - 1];
+}
+
 /** The catalogue entry a quadrant's saved choice points at. */
 function sourceOf(entry) {
   return catalogue().filter(function (option) {
@@ -338,7 +348,7 @@ function render(index, entry, envelope) {
     return action.name;
   });
 
-  var instance = envelope.instances[entry.instanceIndex];
+  var instance = instanceAt(envelope.instances, entry.instanceIndex);
   var payloads = instance && instance.properties && instance.properties[property];
   if (!payloads) {
     shapes[index] = declared.properties[property] || [];
@@ -628,7 +638,7 @@ function refresh(index) {
     subscribeAll();
     return;
   }
-  var instance = envelope.instances[entry.instanceIndex];
+  var instance = instanceAt(envelope.instances, entry.instanceIndex);
   var property = entry.property || defaultProperty(properties[index]);
   if (instance && !(instance.properties || {})[property]) {
     subscribeAll();
@@ -959,11 +969,11 @@ Pebble.addEventListener('appmessage', function (e) {
     cycle(index, entry, tap.cycle);
     return;
   }
-  var instance = instances[index][entry.instanceIndex];
+  var instance = instanceAt(instances[index], entry.instanceIndex);
   if (!instance) return;
   var action = tap.action;
   var envelope = envelopes[index];
-  var live = envelope && envelope.instances[entry.instanceIndex];
+  var live = envelope && instanceAt(envelope.instances, entry.instanceIndex);
   var args = actionArgs(action, entry, instance.id, live && live.properties,
                         activeProperties[index]);
   log('tap on quadrant ' + index + ': ' + action.name + ' ' + JSON.stringify(args));

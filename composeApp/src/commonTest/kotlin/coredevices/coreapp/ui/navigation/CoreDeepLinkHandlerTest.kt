@@ -1,5 +1,6 @@
 package coredevices.coreapp.ui.navigation
 
+import CommonRoutes
 import com.eygraber.uri.Uri
 import coredevices.ring.ui.navigation.RingRoutes
 import kotlin.test.Test
@@ -40,6 +41,17 @@ class CoreDeepLinkHandlerTest {
         val route = handler.objectRouteFor(Uri.parse(RingRoutes.objectDeepLink("firestore-doc-1")))
         assertNotNull(route)
         assertEquals("firestore-doc-1", route.objectId)
+    }
+
+    @Test
+    fun speechModelDeepLinkOpensTheDownloadDialog() {
+        assertNotNull(handler.speechModelRouteFor(Uri.parse(CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK)))
+    }
+
+    @Test
+    fun speechModelDeepLinkWithWrongSchemeOrPathDoesNotParse() {
+        assertNull(handler.speechModelRouteFor(Uri.parse("pebble://deep-link/speech-model")))
+        assertNull(handler.speechModelRouteFor(Uri.parse("pebblecore://deep-link/recording?id=1")))
     }
 
     @Test

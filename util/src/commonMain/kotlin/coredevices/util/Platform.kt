@@ -15,6 +15,10 @@ interface Platform {
      * Runs on default dispatcher.
      */
     suspend fun runWithBgTask(name: String, task: suspend () -> Unit)
+
+    /** Running under a secondary Android user/profile (work profile, Secure Folder, Private Space).
+     *  Bluetooth bonds are shared with the main profile, so a second app instance there races it for the ring. */
+    val isSecondaryProfile: Boolean get() = false
     companion object {
         /**
          * Channel for URI intents

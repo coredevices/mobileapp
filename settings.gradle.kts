@@ -16,9 +16,13 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
+        if (properties.getProperty("USE_MAVEN_LOCAL") == "true") {
+            mavenLocal()
+        }
         google()
         mavenCentral()
         maven(url = "https://jitpack.io")
+        mavenLocal()
     }
 }
 

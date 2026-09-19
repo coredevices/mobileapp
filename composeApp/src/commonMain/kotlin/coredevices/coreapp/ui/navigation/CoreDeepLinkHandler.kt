@@ -17,6 +17,7 @@ class CoreDeepLinkHandler {
         logger.d { "handle: uri = $uri" }
         objectRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         recordingRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
+        speechModelRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
     }
 
@@ -41,6 +42,15 @@ class CoreDeepLinkHandler {
         val id = uri.getQueryParameter(RingRoutes.OBJECT_DEEP_LINK_ID_PARAM)?.toLongOrNull()
             ?: return null
         return RingRoutes.RecordingDetails(id)
+    }
+
+    /** `pebblecore://deep-link/speech-model` opens the speech model download dialog over the
+     *  current screen (used by the download-required notification). */
+    internal fun speechModelRouteFor(uri: Uri): CommonRoutes.SpeechModelDownloadDialog? {
+        if (uri.scheme != SCHEME) return null
+        if (uri.host != HOST) return null
+        if (uri.pathSegments.firstOrNull() != CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH) return null
+        return CommonRoutes.SpeechModelDownloadDialog
     }
 
     fun clearPendingDeepLink() {

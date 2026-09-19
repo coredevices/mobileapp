@@ -4,6 +4,10 @@
   "description": "Philips Hue lights on the user's local bridge. Reads whether a light, a room or the whole home is on and how bright it is; turns them on and off and dims them.",
   "script": "hue-plugin.js",
   "configPage": "hue-config.html",
+  "usesPermissions": [
+    "LocalNetwork",
+    { "name": "Internet", "parameters": { "domains": ["discovery.meethue.com"] } }
+  ],
   "sources": [
     {
       "category": "home",
@@ -14,10 +18,6 @@
         "brightness": ["numericValue", "shortText"]
       },
       "supportsMultiple": true,
-      "usesPermissions": [
-        "LocalNetwork",
-        { "name": "Internet", "parameters": { "domains": ["discovery.meethue.com"] } }
-      ],
       "suggestedRefreshIntervalSec": 30
     },
     {
@@ -29,10 +29,6 @@
         "brightness": ["numericValue", "shortText"]
       },
       "supportsMultiple": false,
-      "usesPermissions": [
-        "LocalNetwork",
-        { "name": "Internet", "parameters": { "domains": ["discovery.meethue.com"] } }
-      ],
       "suggestedRefreshIntervalSec": 30
     }
   ],
@@ -49,8 +45,7 @@
         },
         "required": ["item", "instanceId", "on"]
       },
-      "targets": ["home/home_lights/on", "home/room_lights/on", "home/light/on"],
-      "usesPermissions": ["LocalNetwork"]
+      "targets": ["home/home_lights/on", "home/room_lights/on", "home/light/on"]
     },
     {
       "name": "set_brightness",
@@ -64,8 +59,7 @@
         },
         "required": ["item", "instanceId", "percent"]
       },
-      "targets": ["home/home_lights/brightness", "home/room_lights/brightness", "home/light/brightness"],
-      "usesPermissions": ["LocalNetwork"]
+      "targets": ["home/home_lights/brightness", "home/room_lights/brightness", "home/light/brightness"]
     }
   ]
 }

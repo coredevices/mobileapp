@@ -261,6 +261,10 @@ class PluginManifestTest {
               "name": "Hue",
               "description": "lights",
               "script": "plugin.js",
+              "usesPermissions": [
+                "LocalNetwork",
+                {"name": "Internet", "parameters": {"domains": ["discovery.meethue.com"]}}
+              ],
               "sources": [
                 {
                   "category": "home",
@@ -270,10 +274,6 @@ class PluginManifestTest {
                     "on": ["boolean", "shortText"]
                   },
                   "supportsMultiple": true,
-                  "usesPermissions": [
-                    "LocalNetwork",
-                    {"name": "Internet", "parameters": {"domains": ["discovery.meethue.com"]}}
-                  ],
                   "callerPermissions": ["HomeControl"],
                   "suggestedRefreshIntervalSec": 30
                 }
@@ -313,7 +313,7 @@ class PluginManifestTest {
                     mapOf("domains" to listOf("discovery.meethue.com")),
                 ),
             ),
-            manifest.sources[0].usesPermissions,
+            manifest.usesPermissions,
         )
         assertEquals(
             listOf(PluginPermission("HomeControl")),
@@ -328,13 +328,13 @@ class PluginManifestTest {
     }
 
     @Test
-    fun aSourceNeedsNoPermissionsAtAll() {
+    fun aPluginNeedsNoPermissionsAtAll() {
         val manifest = Json.decodeFromString(
             PluginManifest.serializer(),
             """{"uuid":"$UUID_A","name":"Stocks","sources":[{"category":"finance",
                "items":["stock"],"properties":{"price":["shortText"]}}]}""",
         )
-        assertTrue(manifest.sources[0].usesPermissions.isEmpty())
+        assertTrue(manifest.usesPermissions.isEmpty())
         assertTrue(manifest.sources[0].callerPermissions.isEmpty())
     }
 

@@ -1,5 +1,6 @@
 package coredevices.ring.service
 
+import CommonRoutes
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
@@ -22,6 +23,8 @@ import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.transcription.LocalTranscriptionService
+import coredevices.util.transcription.SpeechModelPrompt
 import io.ktor.utils.io.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -86,6 +89,9 @@ sealed interface NotificationProgress {
     data class Determinate(val progress: Float): NotificationProgress
 }
 
+// Fixed id so repeated prompts replace the visible notification rather than stack.
+internal const val SPEECH_MODEL_PROMPT_NOTIFICATION_ID = 5
+
 expect class PlatformIndexNotificationManager{
     fun notify(notification: GenericNotification)
     fun cancel(notificationId: Int)
@@ -98,13 +104,15 @@ class IndexNotificationManager(
     private val platformIndexNotificationManager: PlatformIndexNotificationManager,
     private val prefs: Preferences,
     private val trace: RingTraceSession,
-    private val platform: Platform
+    private val platform: Platform,
+    private val localTranscription: LocalTranscriptionService?,
 ) {
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
         private const val DEEP_LINK_URI = "pebble://navbar/index"
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
+        private val SPEECH_MODEL_PROMPT_DEBOUNCE = 5.minutes
         private val ACTION_NOTIFICATION_TIMEOUT = 5.minutes
     }
     private val mapMutex = Mutex() // Guards the three mutable maps below
@@ -112,6 +120,7 @@ class IndexNotificationManager(
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
     private var lastBugReportPrompt: Instant? = null
     private var lastPairingIssuePrompt: Instant? = null
+    private var lastSpeechModelPrompt: Pair<SpeechModelPrompt, Instant>? = null
     private val transferToRecordingId = mutableMapOf<Long, Long?>()
 
 
@@ -535,6 +544,7 @@ class IndexNotificationManager(
 
     @OptIn(FlowPreview::class)
     suspend fun startNotificationProcessingJob(scope: CoroutineScope) {
+        localTranscription?.let { scope.launch { processSpeechModelPrompts(it) } }
         val lastTimestamp = MutableStateFlow(ringTransferRepo.getMostRecentTransfer()?.createdAt ?: Instant.DISTANT_PAST)
 
         lastTimestamp.flatMapLatest {
@@ -555,6 +565,19 @@ class IndexNotificationManager(
         // causing confusion/spam
         if (platform.isAndroid) {
             launch { processPairingIssueNotifications(events) }
+        }
+    }
+
+    // The processing queue retries a recording while its model is missing, so the same prompt
+    // arrives repeatedly; a changed prompt (e.g. download started) gets through immediately.
+    private suspend fun processSpeechModelPrompts(service: LocalTranscriptionService) {
+        service.modelPrompts.collect { prompt ->
+            val now = Clock.System.now()
+            lastSpeechModelPrompt?.let { (last, at) ->
+                if (last == prompt && now - at < SPEECH_MODEL_PROMPT_DEBOUNCE) return@collect
+            }
+            lastSpeechModelPrompt = prompt to now
+            platformIndexNotificationManager.notify(speechModelPromptNotification(prompt))
         }
     }
 
@@ -633,3 +656,21 @@ class IndexNotificationManager(
             }
     }
 }
+
+internal fun speechModelPromptNotification(prompt: SpeechModelPrompt): GenericNotification = when (prompt) {
+    is SpeechModelPrompt.DownloadRequired -> GenericNotification(
+        id = SPEECH_MODEL_PROMPT_NOTIFICATION_ID,
+        title = "Speech model download required",
+        contentText = "Recordings can't be transcribed on this phone until the speech model is " +
+            "downloaded. Tap to download it.",
+        deepLink = CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK,
+    )
+    is SpeechModelPrompt.DownloadPending -> GenericNotification(
+        id = SPEECH_MODEL_PROMPT_NOTIFICATION_ID,
+        title = "Speech model still downloading",
+        contentText = "Recordings can't be transcribed until the download finishes. Check you " +
+            "aren't on a metered connection, or switch to cloud speech recognition until it completes.",
+        deepLink = CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK,
+    )
+}
+

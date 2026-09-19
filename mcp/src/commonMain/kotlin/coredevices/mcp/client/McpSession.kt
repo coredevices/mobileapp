@@ -10,7 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.json.JsonElement
 
-class McpSession(
+open class McpSession(
     private val integrations: List<McpIntegration>,
     private val scope: CoroutineScope
 ) {
@@ -22,7 +22,6 @@ class McpSession(
     suspend fun openSession() {
         for (integration in integrations) {
             try {
-                integration.resetCache()
                 integration.connect()
             } catch (e: Exception) {
                 // Log and continue with other integrations
@@ -37,7 +36,7 @@ class McpSession(
         }
     }
 
-    suspend fun listTools(): List<McpSessionTool> {
+    open suspend fun listTools(): List<McpSessionTool> {
         return integrations.map {
             scope.async {
                 try {
@@ -57,7 +56,7 @@ class McpSession(
             .flatten()
     }
 
-    suspend fun getExtraContext(context: SessionContext?, includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
+    open suspend fun getExtraContext(context: SessionContext?, includePromptsFrom: Map<String, Set<String>> = emptyMap()): String? {
         return integrations
             .map {
                 scope.async {
@@ -84,7 +83,7 @@ class McpSession(
      * @param requireExists If true, throws an exception if the integration is not found.
      * @return ToolCallResult indicating success or failure of the tool call.
      */
-    suspend fun callTool(
+    open suspend fun callTool(
         integrationName: String,
         toolName: String,
         jsonInput: Map<String, JsonElement>,

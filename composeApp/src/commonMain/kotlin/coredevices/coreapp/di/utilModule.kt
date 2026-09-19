@@ -7,6 +7,8 @@ import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.RealCoreAnalytics
+import coredevices.api.EngDashOtaApi
+import coredevices.api.EngDashOtaApiImpl
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
 import coredevices.pebble.health.HealthSyncTracker
@@ -26,12 +28,14 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
+import coredevices.util.transcription.LocalTranscriptionService
 import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.transcription.WisprFlowRESTTranscriptionService
@@ -44,6 +48,7 @@ import dev.gitlive.firebase.firestore.persistentCacheSettings
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import theme.RealThemeProvider
 import theme.ThemeProvider
@@ -71,6 +76,7 @@ val utilModule = module {
     singleOf(::EnableExperimentalDevices)
     singleOf(::AppResumed)
     singleOf(::DoneInitialOnboarding)
+    single { SecondaryProfileWarning(get(), get<coredevices.util.Platform>().isSecondaryProfile) }
     singleOf(::AppUpdateTracker)
     singleOf(::RealCoreAnalytics) bind CoreAnalytics::class
     single { getCoreRoomDatabase(get()) }
@@ -101,16 +107,18 @@ val utilModule = module {
                 override fun initTelemetry() {}
             },
             get(),
-            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost()
+            getOrNull<coredevices.util.transcription.InferenceBoost>() ?: coredevices.util.transcription.NoOpInferenceBoost(),
+            get(),
         )
     }
     singleOf(::PlatformSpeechRecognizer)
     single {
-        HybridTranscriptionService(get(), get(), get(), get(), get(), get())
-    } bind TranscriptionService::class
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get())
+    } binds arrayOf(TranscriptionService::class, LocalTranscriptionService::class)
     singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get(), get(), get(), get()) }
     singleOf(::HealthSyncTracker)
     singleOf(::PlatformHealthSync)
+    single { EngDashOtaApiImpl() } bind EngDashOtaApi::class
 }

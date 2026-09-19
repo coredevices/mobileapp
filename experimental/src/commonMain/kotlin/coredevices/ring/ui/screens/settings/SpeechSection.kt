@@ -29,6 +29,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalUriHandler
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.inProgressSlug
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
@@ -51,7 +52,12 @@ import androidx.compose.material3.TextButton
 import coredevices.ui.M3Dialog
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.transcription.SpeechModelAvailability
 import coredevices.util.transcription.SpokenLanguageOptions
+import coredevices.util.transcription.platformModelNeedsDownload
+import coredevices.util.transcription.platformModelState
+import coredevices.util.transcription.spokenLanguageLabel
 
 /** Cloud transcription is provided by Wispr Flow; the row is informational. */
 private const val WISPR_URL = "https://wispr.ai/"
@@ -106,19 +112,23 @@ internal fun speechEngineNeedsDownload(
     mode: CactusSTTMode,
     onDeviceSupported: Boolean,
     hasOfflineModels: Boolean,
-): Boolean = mode.needsLocalModel() && onDeviceSupported && !hasOfflineModels
+    platformModelNeedsDownload: Boolean,
+): Boolean = when {
+    mode == CactusSTTMode.PlatformOnly -> platformModelNeedsDownload
+    else -> mode.needsLocalModel() && onDeviceSupported && !hasOfflineModels
+}
+
+internal fun platformModelSubtitle(
+    spokenLanguage: String?,
+    availability: SpeechModelAvailability,
+    download: ModelDownloadStatus,
+): String = "${spokenLanguageLabel(spokenLanguage)} · ${platformModelState(availability, download)}"
 
 internal fun speechModelDetail(model: ModelInfo, downloaded: Boolean): String =
     listOfNotNull(
         model.intendedTask,
         if (downloaded) "Downloaded" else "${model.sizeInMB} MB download",
     ).joinToString(" · ")
-
-/** [spokenLanguage] is an ISO code, or null for automatic detection. */
-internal fun spokenLanguageLabel(spokenLanguage: String?): String =
-    spokenLanguage?.let { code ->
-        SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code
-    } ?: "Automatic"
 
 /** The language can only be chosen when the model doing the transcribing understands more than one. */
 internal fun spokenLanguageSelectable(mode: CactusSTTMode, model: ModelInfo?): Boolean =
@@ -141,6 +151,8 @@ fun SpeechSection(
     onSelectModel: (String) -> Unit,
     onSelectLanguage: (String?) -> Unit,
     onRequireSignIn: () -> Unit,
+    /** Opens the routed speech model download dialog for the configured engine. */
+    onShowModelDownload: () -> Unit,
 ) {
     var showEngineSheet by remember { mutableStateOf(false) }
     var showModelSheet by remember { mutableStateOf(false) }
@@ -148,6 +160,7 @@ fun SpeechSection(
     var pendingDownloadMode by remember { mutableStateOf<CactusSTTMode?>(null) }
     var pendingDownloadModel by remember { mutableStateOf<ModelInfo?>(null) }
     val modelManager = koinInject<ModelManager>()
+    val platformSpeechRecognizer = koinInject<PlatformSpeechRecognizer>()
     val scope = rememberCoroutineScope()
     val recommendedModel = remember { modelManager.getRecommendedSTTModel() }
     val currentModel = selectedModel ?: recommendedModel.modelSlug
@@ -163,6 +176,20 @@ fun SpeechSection(
     }
     // The parent's [hasOfflineModels] can't see a delete made from the model sheet.
     val localModelReady = hasOfflineModels && (deletions == 0 || currentModel in downloadedSlugs)
+    val platformDownloadStatus by platformSpeechRecognizer.downloadStatus.collectAsState()
+    val platformModelAvailability by produceState(
+        SpeechModelAvailability.Unsupported,
+        spokenLanguage,
+        platformDownloadStatus,
+        platformSttAvailable,
+    ) {
+        value = if (platformSttAvailable) {
+            withContext(Dispatchers.Default) { platformSpeechRecognizer.modelAvailability(spokenLanguage) }
+        } else {
+            SpeechModelAvailability.Unsupported
+        }
+    }
+    val platformNeedsDownload = platformModelNeedsDownload(platformModelAvailability, platformDownloadStatus)
 
     SettingsRow(
         title = "Speech Engine",
@@ -182,6 +209,14 @@ fun SpeechSection(
             onClick = { showModelSheet = true },
         )
     }
+    if (mode == CactusSTTMode.PlatformOnly) {
+        SettingsRow(
+            title = "Speech Model",
+            subtitle = platformModelSubtitle(spokenLanguage, platformModelAvailability, platformDownloadStatus),
+            enabled = platformNeedsDownload,
+            onClick = onShowModelDownload,
+        )
+    }
     val uriHandler = LocalUriHandler.current
     Text(
         "Cloud speech recognition by Wispr Flow",
@@ -198,11 +233,16 @@ fun SpeechSection(
             onDeviceSupported = onDeviceSupported,
             platformSttAvailable = platformSttAvailable,
             hasOfflineModels = localModelReady,
+            platformModelNeedsDownload = platformNeedsDownload,
             signedIn = signedIn,
             onSelect = { selected, needsDownload ->
                 showEngineSheet = false
                 when {
                     selected.needsSignIn() && !signedIn -> onRequireSignIn()
+                    selected == CactusSTTMode.PlatformOnly -> {
+                        onSelectMode(selected)
+                        if (needsDownload) onShowModelDownload()
+                    }
                     needsDownload -> pendingDownloadMode = selected
                     else -> onSelectMode(selected)
                 }
@@ -269,9 +309,17 @@ fun SpeechSection(
     if (showLanguageSheet) {
         SpokenLanguageSheet(
             current = spokenLanguage,
-            onSelect = {
-                onSelectLanguage(it)
+            onSelect = { language ->
+                onSelectLanguage(language)
                 showLanguageSheet = false
+                if (mode == CactusSTTMode.PlatformOnly) {
+                    scope.launch {
+                        val availability = platformSpeechRecognizer.modelAvailability(language)
+                        if (platformModelNeedsDownload(availability, platformDownloadStatus)) {
+                            onShowModelDownload()
+                        }
+                    }
+                }
             },
             onDismiss = { showLanguageSheet = false },
         )
@@ -285,6 +333,7 @@ private fun SpeechEngineSheet(
     onDeviceSupported: Boolean,
     platformSttAvailable: Boolean,
     hasOfflineModels: Boolean,
+    platformModelNeedsDownload: Boolean,
     signedIn: Boolean,
     onSelect: (CactusSTTMode, Boolean) -> Unit,
     onDismiss: () -> Unit,
@@ -314,6 +363,7 @@ private fun SpeechEngineSheet(
                     mode = mode,
                     onDeviceSupported = onDeviceSupported,
                     hasOfflineModels = hasOfflineModels,
+                    platformModelNeedsDownload = platformModelNeedsDownload,
                 )
                 val reason = blocked
                     ?: "Sign in to use cloud speech recognition"
@@ -394,7 +444,7 @@ private fun SpeechModelSheet(
                 val selected = info.slug == current
                 val downloaded = info.slug in downloadedSlugs
                 val downloading =
-                    (downloadStatus as? ModelDownloadStatus.Downloading)?.modelSlug == info.slug
+                    downloadStatus.inProgressSlug == info.slug
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

@@ -1,6 +1,7 @@
 package coredevices.coreapp.transcription
 
 import androidx.test.platform.app.InstrumentationRegistry
+import com.russhwolf.settings.Settings
 import coredevices.coreapp.testsupport.NoopAnalytics
 import coredevices.coreapp.testsupport.ReadOnlyModelPathProvider
 import coredevices.ring.model.CactusModelProvider
@@ -96,6 +97,7 @@ class CactusColdStartRaceTest {
                         modelProvider = provider,
                         analytics = NoopAnalytics,
                         inferenceBoost = NoOpInferenceBoost(),
+                        settings = Settings()
                     )
                     runBlocking {
                         svc.earlyInit()

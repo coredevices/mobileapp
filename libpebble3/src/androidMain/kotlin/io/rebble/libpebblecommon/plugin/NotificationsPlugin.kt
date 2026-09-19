@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
@@ -50,7 +51,7 @@ class NotificationsPlugin(
                 PROPERTY_APP_ICON to listOf(SourceShapeNames.IMAGE),
             ),
             supportsMultiple = true,
-            usesPermissions = listOf(PluginPermission(PERMISSION)),
+            callerPermissions = listOf(PluginPermission(PluginPermissions.NOTIFICATIONS)),
             suggestedRefreshIntervalSec = 30,
         ),
     )
@@ -66,15 +67,23 @@ class NotificationsPlugin(
             ?.takeIf { properties == null || PROPERTY_APP_ICON in properties }
         return connection.shadeChanged
             .onStart { emit(Unit) }
-            .map { toEnvelope(shadeContents(), iconSize) }
+            .map { readShade() }
+            // Nothing rather than an empty envelope when the shade can't be read: "no
+            // notifications" is a claim, and a subscriber would draw it as one.
+            .filterNotNull()
+            .map { toEnvelope(it, iconSize) }
             .distinctUntilChanged()
     }
 
-    private fun shadeContents(): List<ShadeNotification> =
+    /**
+     * The shade, or null if the listener isn't accepting calls — Android binds it a moment after
+     * the process comes back, and a call before then throws. No retry here: the connection
+     * reports a shade change when the listener binds, which re-reads.
+     */
+    private fun readShade(): List<ShadeNotification>? =
         connection.activeNotifications()
-            .orEmpty()
-            .mapNotNull { it.toShadeNotification() }
-            .sortedByDescending { it.postedAt }
+            ?.mapNotNull { it.toShadeNotification() }
+            ?.sortedByDescending { it.postedAt }
 
     private suspend fun toEnvelope(
         notifications: List<ShadeNotification>,
@@ -151,8 +160,8 @@ class NotificationsPlugin(
         const val PROPERTY_APP = "app"
         const val PROPERTY_APP_ICON = "app_icon"
 
-        private const val PERMISSION = "Notifications"
         private const val MAX_ICON_CACHE_CHARS = 256 * 1024
+
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
 

@@ -72,32 +72,33 @@ abstract class ToolCallingAgent(
 
     // ---- shared tool-calling helpers ----
 
-    /** Open the MCP session, emit the user message, hand the available tools to
-     *  [block], and always close the session afterwards. */
+    /** Open the MCP session, emit the user message, run [block], and always close
+     *  the session afterwards. */
     protected suspend fun <T> withToolSession(
         input: String,
         mcpSession: McpSession,
-        block: suspend (tools: List<McpSessionTool>) -> T,
+        block: suspend () -> T,
     ): T {
         prepare()
         mcpSession.openSession()
         return try {
             emit(ConversationMessageDocument(role = MessageRole.user, content = input))
-            block(mcpSession.listTools())
+            block()
         } finally {
             mcpSession.closeSession()
         }
     }
 
-    /** Run one inference round and emit the assistant message it produced. */
+    /** Run one inference round and emit the assistant message it produced. Tools are
+     *  listed afresh each round: a session may offer different tools after a call
+     *  (see [coredevices.mcp.client.LazyLoadingMcpSession]). */
     protected suspend fun inferAndEmit(
         input: String,
-        tools: List<McpSessionTool>,
         mcpSession: McpSession,
         sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
     ): ConversationMessageDocument =
-        runInference(input, currentConversation(), tools, mcpSession, sessionContext, includePromptsFromMcps)
+        runInference(input, currentConversation(), mcpSession.listTools(), mcpSession, sessionContext, includePromptsFromMcps)
             .also { emit(it) }
 
     /** Dispatch [toolCalls], emit their results, and return `true` if a
@@ -139,8 +140,8 @@ abstract class ToolCallingAgent(
         sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
-    ) = withToolSession(input, mcpSession) { tools ->
-        val assistantMessage = inferAndEmit(input, tools, mcpSession, sessionContext, includePromptsFromMcps)
+    ) = withToolSession(input, mcpSession) {
+        val assistantMessage = inferAndEmit(input, mcpSession, sessionContext, includePromptsFromMcps)
         val toolCalls = decodeToolCalls(assistantMessage)
         if (toolCalls.isEmpty() || skipToolExecution) return@withToolSession
         executeToolCalls(toolCalls, mcpSession, sessionContext)

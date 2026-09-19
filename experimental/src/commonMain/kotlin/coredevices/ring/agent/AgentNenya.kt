@@ -37,7 +37,7 @@ import kotlin.time.Clock
 open class AgentNenya(
     private val nenyaClient: NenyaClient,
     private val context: String,
-    private val model: NenyaModel,
+    protected val model: NenyaModel,
     conversation: List<ConversationMessageDocument>,
 ): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"

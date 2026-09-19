@@ -10,7 +10,8 @@ import io.rebble.libpebblecommon.js.JsEngineInterface
 import io.rebble.libpebblecommon.js.JsEngineLocalStorage
 import io.rebble.libpebblecommon.js.XMLHTTPRequestManager
 import io.rebble.libpebblecommon.js.BASE64_JS
-import io.rebble.libpebblecommon.js.XML_HTTP_REQUEST_JS
+import io.rebble.libpebblecommon.js.FETCH_JS
+import io.rebble.libpebblecommon.js.FETCH_REGISTRY
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -159,6 +160,9 @@ class JsPlugin(
         }
     }
 
+    /** Derived once: the manifest is fixed for the life of the plugin. */
+    private val networkPolicy = PluginNetworkPolicy(manifest.usesPermissions)
+
     private fun newSession(): Session {
         // XHR drives the JS side by evaluating statements that must land in order — readyState
         // before the response body before the events — so callbacks queue rather than race.
@@ -169,6 +173,8 @@ class JsPlugin(
             httpInterceptorManager = httpInterceptorManager,
             appUuid = pluginUuid,
             client = httpClient,
+            networkPolicy = networkPolicy,
+            jsTarget = FETCH_REGISTRY,
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
@@ -192,7 +198,7 @@ class JsPlugin(
             engine.start()
             engine.eval(localStorage.installJs)
             engine.eval(BASE64_JS)
-            engine.eval(XML_HTTP_REQUEST_JS)
+            engine.eval(FETCH_JS)
             engine.eval(PLUGIN_HOST_JS)
             engine.eval(script)
         }

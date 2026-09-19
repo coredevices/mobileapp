@@ -9,5 +9,7 @@ interface CompanionDevice {
     suspend fun registerDevice(identifier: PebbleIdentifier, uiContext: PlatformUiContext)
     fun hasApprovedDevice(identifier: PebbleIdentifier): Boolean
     fun hasApprovedDevice(identifier: IndexIdentifier): Boolean
+    fun canRemoveBond(identifier: IndexIdentifier): Boolean
+    fun removeBond(identifier: IndexIdentifier): Boolean
     fun cdmPreviouslyCrashed(): Boolean
 }

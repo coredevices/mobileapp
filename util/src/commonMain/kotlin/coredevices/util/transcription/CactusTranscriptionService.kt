@@ -8,6 +8,8 @@ import com.cactus.cactusSetBackend
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.analytics.CoreAnalytics
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -82,10 +85,12 @@ class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val modelProvider: CactusModelPathProvider,
     private val analytics: CoreAnalytics,
-    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
+    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost(),
+    private val settings: Settings
 ) {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
+        private const val INIT_IN_PROGRESS_KEY = "cactus_stt_init_in_progress"
     }
 
     private val transcriptionMutex = Mutex()
@@ -107,11 +112,14 @@ class CactusTranscriptionService(
     )
 
     init {
-        sttConfig.onEach {
-            logger.i { "Cactus STT config changed: $it" }
-            if (it.modelName != lastInitedModel) {
-                initJob = performInit()
+        sttConfig.withIndex().onEach { (index, config) ->
+            logger.i { "Cactus STT config changed: $config" }
+            if (config.modelName == lastInitedModel) return@onEach
+            if (index == 0 && settings.getBoolean(INIT_IN_PROGRESS_KEY, false)) {
+                logger.w { "Previous Cactus STT init did not complete, skipping auto-init" }
+                return@onEach
             }
+            initJob = performInit()
         }.launchIn(scope)
     }
 
@@ -232,7 +240,9 @@ class CactusTranscriptionService(
             if (modelHandle == 0L) {
                 val modelPath = modelProvider.getSTTModelPath(sttModelName)
                 cactusSetBackend("cpu")
+                settings[INIT_IN_PROGRESS_KEY] = true
                 modelHandle = cactusInit(modelPath, null, false)
+                settings.remove(INIT_IN_PROGRESS_KEY)
                 lastInitedModel = config.modelName
                 val initDuration = Clock.System.now() - start
                 logger.d { "Cactus STT model initialized in $initDuration" }

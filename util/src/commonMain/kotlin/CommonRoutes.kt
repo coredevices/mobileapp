@@ -44,6 +44,14 @@ object CommonRoutes {
     data object WatchOnboardingRoute : CoreRoute
     @Serializable
     data object RingOnboardingRoute : CoreRoute
+
+    /** Dialog offering to download the on-device speech model the configured engine needs.
+     *  Routed so it can be opened from a notification on top of whatever screen is showing. */
+    @Serializable
+    data object SpeechModelDownloadDialog : CoreRoute
+
+    const val SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH = "speech-model"
+    const val SPEECH_MODEL_DOWNLOAD_DEEP_LINK = "pebblecore://deep-link/$SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH"
 }
 
 @Stable

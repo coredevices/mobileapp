@@ -16,11 +16,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
 import co.touchlab.kermit.Logger
-import coredevices.EnableExperimentalDevices
-import coredevices.ExperimentalDevices
 import coredevices.ring.ui.navigation.RingRoute
+import coredevices.coreapp.ui.SpeechModelDownloadDialog
 import coredevices.coreapp.ui.screens.BugReportScreen
 import coredevices.coreapp.ui.screens.BugReportsListScreen
 import coredevices.coreapp.ui.screens.OnboardingScreen
@@ -30,6 +30,8 @@ import coredevices.coreapp.ui.screens.WatchOnboardingScreen
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
+import coredevices.ring.ui.navigation.addRingRoutes
+import coredevices.ring.ui.screens.IndexScreen
 import coredevices.ui.GenericWebViewScreen
 import coredevices.util.CommonBuildKonfig
 import kotlinx.coroutines.flow.filterNotNull
@@ -107,22 +109,22 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
         }
     }
-    val experimentalDevices: ExperimentalDevices = koinInject()
     NavHost(navController, startDestination = startDestination) {
-        experimentalDevices.addExperimentalRoutes(this, coreNav)
+        addRingRoutes(coreNav)
         addPebbleRoutes(
             coreNav,
             indexScreen = { topBarParams, navBarNav, scopedCoreNav ->
-                // Use the inner-scoped CoreNav so detail navigations
-                // (RecordingDetails, ObjectDetails, FullFeed, ...) stay
-                // inside the bottom-nav chrome.
-                experimentalDevices.IndexScreen(scopedCoreNav, topBarParams)
+                // Use the inner-scoped CoreNav so inner navigations stay inside the bottom-nav.
+                IndexScreen(scopedCoreNav, topBarParams)
             },
             addExperimentalRoutes = { scopedCoreNav ->
-                experimentalDevices.addExperimentalRoutes(this, scopedCoreNav)
+                addRingRoutes(scopedCoreNav)
             },
             isInnerScopedRoute = { it is RingRoute },
         )
+        dialog<CommonRoutes.SpeechModelDownloadDialog> {
+            SpeechModelDownloadDialog(onDismiss = { coreNav.goBack() })
+        }
         if (CommonBuildKonfig.QA) {
             composable<CommonRoutes.BugReport>(
                 deepLinks = listOf(
@@ -198,11 +200,4 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             }
         }
     }
-}
-
-@Composable
-fun experimentsEnabled(): Boolean {
-    val enableExperimentalDevices: EnableExperimentalDevices = koinInject()
-    val enableExperiments by enableExperimentalDevices.enabled.collectAsState()
-    return enableExperiments
 }

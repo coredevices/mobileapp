@@ -57,6 +57,21 @@ class SourceDispatcher(
             return
         }
 
+        val declaration = plugin.sources.firstOrNull { it.serves(request.category, request.item) }
+        val missing = declaration
+            ?.let { requiredOfCaller(it) - grantedToCaller(jsRunner.appInfo.usesPermissions) }
+            .orEmpty()
+        if (missing.isNotEmpty()) {
+            scope.launch {
+                emitError(
+                    subscriptionId,
+                    PluginErrors.PERMISSION_DENIED,
+                    "${jsRunner.appInfo.shortName} did not ask for ${missing.sorted().joinToString()}",
+                )
+            }
+            return
+        }
+
         val job = plugin
             .observe(request.category, request.item, request.properties, request.iconPixelSize)
             .onEach { envelope ->

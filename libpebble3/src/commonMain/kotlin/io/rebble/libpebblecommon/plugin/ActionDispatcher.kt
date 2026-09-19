@@ -50,6 +50,14 @@ class ActionDispatcher(
                 PluginErrors.PLUGIN_UNAVAILABLE,
                 "${plugin.name} has no action ${request.action}",
             )
+        val ungranted =
+            requiredOfCaller(declaration) - grantedToCaller(jsRunner.appInfo.usesPermissions)
+        if (ungranted.isNotEmpty()) {
+            return ActionResult.error(
+                PluginErrors.PERMISSION_DENIED,
+                "${jsRunner.appInfo.shortName} did not ask for ${ungranted.sorted().joinToString()}",
+            )
+        }
         val args = request.args ?: JsonObject(emptyMap())
         val missing = declaration.requiredParams.filterNot { args.containsKey(it) }
         if (missing.isNotEmpty()) {

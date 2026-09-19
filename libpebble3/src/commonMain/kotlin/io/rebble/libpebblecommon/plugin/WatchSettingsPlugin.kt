@@ -8,7 +8,9 @@ import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting
 import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
+import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
+import io.rebble.libpebblecommon.database.entity.ScheduleWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.plugin.ActionDeclaration.Companion.PARAM_INSTANCE_ID
 import io.rebble.libpebblecommon.timeline.TimelineColor
@@ -40,7 +42,8 @@ private enum class SettingKind(val item: String, val shape: String) {
 private fun WatchPref<*>.kind(): SettingKind = when (this) {
     is BoolWatchPref -> SettingKind.Switch
     is NumberWatchPref -> SettingKind.Number
-    is EnumWatchPref, is ColorWatchPref, is RgbColorWatchPref -> SettingKind.Text
+    is EnumWatchPref, is ColorWatchPref, is RgbColorWatchPref, is ScheduleWatchPref ->
+        SettingKind.Text
     is QuicklaunchWatchPref -> SettingKind.App
 }
 
@@ -86,8 +89,9 @@ class WatchSettingsPlugin(
         ActionDeclaration(
             name = ACTION_SET_VALUE,
             description = "Set a setting to a value: `on`/`off` for a switch, one of the " +
-                "choices by the name it is shown under, a number, or the uuid of the app a " +
-                "quick-launch button should open — empty to leave the button unassigned.",
+                "choices by the name it is shown under, a number, a time range like " +
+                "`22:00-07:00`, or the uuid of the app a quick-launch button should open — " +
+                "empty to leave the button unassigned.",
             parameters = schema(
                 """
                 "$PARAM_INSTANCE_ID":{"type":"string","description":"Id from any $CATEGORY source."},
@@ -159,6 +163,7 @@ class WatchSettingsPlugin(
             is EnumWatchPref -> text(pref.castParent(preference).valueOrDefault().displayName)
             is RgbColorWatchPref -> text(hex(pref.castParent(preference).valueOrDefault()))
             is ColorWatchPref -> text(pref.castParent(preference).valueOrDefault().displayName)
+            is ScheduleWatchPref -> text(pref.castParent(preference).valueOrDefault().encode())
             is QuicklaunchWatchPref -> mapOf(
                 SourceShapeNames.LONG_TEXT to
                     encode(LongTextShape(pref.castParent(preference).valueOrDefault().app()))
@@ -204,6 +209,11 @@ class WatchSettingsPlugin(
                     .firstOrNull { it.displayName.equals(value, true) }
                     ?: return invalid(pref, value, "a colour name")
                 write(pref, color, color.displayName)
+            }
+            is ScheduleWatchPref -> {
+                val schedule = QuietTimeSchedule.parse(value.filterNot { it.isWhitespace() })
+                    ?: return invalid(pref, value, "a time range like 22:00-07:00")
+                write(pref, schedule, schedule.encode())
             }
             is QuicklaunchWatchPref -> {
                 if (value.isBlank()) {

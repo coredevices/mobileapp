@@ -47,6 +47,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.inProgress
 import coredevices.util.models.ModelManager
 import coredevices.ring.ui.components.chat.ChatBubble
 import coredevices.ring.ui.components.chat.RecordingChatBubble
@@ -169,15 +170,14 @@ internal fun RingDemo(nav: CoreNav) {
             when {
                 transfer == null -> {
                     val isLocalOnly = coreConfig.sttConfig.mode == CactusSTTMode.LocalOnly
-                    val downloading = downloadStatus as? ModelDownloadStatus.Downloading
-                    if (isLocalOnly && downloading != null) {
+                    if (isLocalOnly && downloadStatus.inProgress) {
                         Text(
                             "Downloading speech model\u2026",
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.height(8.dp))
-                        val progress = downloading.progress
+                        val progress = (downloadStatus as? ModelDownloadStatus.Downloading)?.progress
                         if (progress != null) {
                             LinearProgressIndicator(
                                 progress = { progress },

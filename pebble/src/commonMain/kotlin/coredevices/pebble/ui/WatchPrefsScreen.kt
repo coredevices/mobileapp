@@ -1,15 +1,23 @@
 package coredevices.pebble.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDialog
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +40,9 @@ import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting
 import io.rebble.libpebblecommon.database.entity.QuicklaunchWatchPref
+import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.database.entity.RgbColorWatchPref
+import io.rebble.libpebblecommon.database.entity.ScheduleWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefEnum
 import io.rebble.libpebblecommon.locker.AppType
@@ -61,13 +71,27 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
+private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
+    BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
+    BoolWatchPref.QuietTimeWeekendScheduleEnabled to ScheduleWatchPref.QuietTimeWeekendSchedule,
+)
+
+/** Schedule hours sit directly under the toggle they belong to, and only while it is on. */
+internal fun List<WatchPreference<*>>.groupQuietTimeScheduleHours(): List<WatchPreference<*>> {
+    val hours = filter { it.pref is ScheduleWatchPref }
+    return filterNot { it.pref is ScheduleWatchPref }.flatMap { item ->
+        val pref = SCHEDULE_HOURS[item.pref]?.takeIf { item.valueOrDefault() == true }
+        listOfNotNull(item, hours.firstOrNull { it.pref == pref })
+    }
+}
+
 @Composable
 fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs().map { item ->
+        settings.hidePresetManagedBacklightPrefs().groupQuietTimeScheduleHours().map { item ->
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
@@ -75,6 +99,7 @@ fun watchPrefs(): List<SettingsItem> {
                 is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
                 is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
                 is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
+                is ScheduleWatchPref -> schedulePref(pref.castParent(item), libPebble)
             }
         }
     }
@@ -146,6 +171,10 @@ fun WatchPref<*>.section(): Section = when (this) {
     EnumWatchPref.VibeScoreAlarms -> Section.Notifications
     BoolWatchPref.QuietTimeManuallyEnabled -> Section.QuietTime
     BoolWatchPref.CalendarAwareQuietTime -> Section.QuietTime
+    BoolWatchPref.QuietTimeWeekdayScheduleEnabled -> Section.QuietTime
+    BoolWatchPref.QuietTimeWeekendScheduleEnabled -> Section.QuietTime
+    ScheduleWatchPref.QuietTimeWeekdaySchedule -> Section.QuietTime
+    ScheduleWatchPref.QuietTimeWeekendSchedule -> Section.QuietTime
     BoolWatchPref.AlternativeNotificationStyle -> Section.Notifications
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
@@ -230,6 +259,100 @@ private fun basicSettingsNumberSecondsItem(
     valueFormatter = valueFormatter,
     steps = steps,
 )
+
+private fun schedulePref(
+    item: WatchPreference<QuietTimeSchedule>,
+    libPebble: LibPebble,
+): SettingsItem {
+    val pref = item.pref as ScheduleWatchPref
+    return SettingsItem(
+        id = pref.id,
+        title = pref.displayName,
+        topLevelType = pref.topLevelType(),
+        section = pref.section(),
+        item = {
+            ListItem(
+                headlineContent = {
+                    Text(pref.displayName)
+                },
+                supportingContent = {
+                    Column {
+                        pref.description?.let { description ->
+                            Text(description, fontSize = 11.sp)
+                        }
+                        SelectTimeRange(
+                            schedule = item.valueOrDefault(),
+                            onChangeSchedule = { schedule ->
+                                libPebble.setWatchPref(item.copy(value = schedule))
+                            },
+                        )
+                    }
+                },
+                shadowElevation = 2.dp,
+            )
+        },
+        isDebugSetting = pref.isDebugSetting,
+    )
+}
+
+private enum class ScheduleEdge(val title: String) {
+    From("Start time"),
+    To("End time"),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectTimeRange(
+    schedule: QuietTimeSchedule,
+    onChangeSchedule: (QuietTimeSchedule) -> Unit,
+) {
+    var editing by remember { mutableStateOf<ScheduleEdge?>(null) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("From", fontSize = 14.sp)
+        TextButton(onClick = { editing = ScheduleEdge.From }) {
+            Text(schedule.fromTime())
+        }
+        Text("to", fontSize = 14.sp)
+        TextButton(onClick = { editing = ScheduleEdge.To }) {
+            Text(schedule.toTime())
+        }
+    }
+    val edge = editing ?: return
+    val state = rememberTimePickerState(
+        initialHour = if (edge == ScheduleEdge.From) schedule.fromHour else schedule.toHour,
+        initialMinute = if (edge == ScheduleEdge.From) schedule.fromMinute else schedule.toMinute,
+    )
+    TimePickerDialog(
+        onDismissRequest = { editing = null },
+        title = { Text(edge.title) },
+        dismissButton = {
+            TextButton(onClick = { editing = null }) {
+                Text("Cancel")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                editing = null
+                onChangeSchedule(
+                    when (edge) {
+                        ScheduleEdge.From -> schedule.copy(
+                            fromHour = state.hour,
+                            fromMinute = state.minute,
+                        )
+                        ScheduleEdge.To -> schedule.copy(
+                            toHour = state.hour,
+                            toMinute = state.minute,
+                        )
+                    }
+                )
+            }) {
+                Text("Set")
+            }
+        },
+    ) {
+        TimePicker(state = state)
+    }
+}
 
 private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as ColorWatchPref

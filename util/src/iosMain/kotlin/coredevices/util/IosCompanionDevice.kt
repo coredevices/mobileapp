@@ -26,6 +26,14 @@ class IosCompanionDevice : CompanionDevice {
         return true
     }
 
+    override fun canRemoveBond(identifier: IndexIdentifier): Boolean {
+        return false
+    }
+
+    override fun removeBond(identifier: IndexIdentifier): Boolean {
+        return false
+    }
+
     override fun cdmPreviouslyCrashed(): Boolean {
         return false
     }

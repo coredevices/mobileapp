@@ -4,6 +4,7 @@ import coredevices.util.AudioEncoding
 import kotlin.time.Duration
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 
 interface TranscriptionService {
     /**
@@ -41,6 +42,12 @@ interface TranscriptionService {
     val onInitialized: Channel<Boolean>
 }
 
+/** A [TranscriptionService] that can run on-device engines whose models the user may need to download. */
+interface LocalTranscriptionService : TranscriptionService {
+    /** Raised when a recording needed an on-device model the user still has to download. */
+    val modelPrompts: SharedFlow<SpeechModelPrompt>
+}
+
 sealed interface STTLanguage {
     /**
      * STT Provider guesses language
@@ -66,6 +73,12 @@ sealed interface STTLanguage {
  * Pairs are (code, English display name).
  */
 expect val SpokenLanguageOptions: List<Pair<String, String>>
+
+/** Display name for a [SpokenLanguageOptions] code; null means automatic detection. */
+fun spokenLanguageLabel(spokenLanguage: String?): String =
+    spokenLanguage?.let { code ->
+        SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code
+    } ?: "Automatic"
 
 /**
  * Qualify a bare ISO 639-1 [languageCode] with a [region] (e.g. the device region from

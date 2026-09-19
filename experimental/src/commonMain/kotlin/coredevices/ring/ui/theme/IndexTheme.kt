@@ -1,5 +1,7 @@
 package coredevices.ring.ui.theme
 
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -155,3 +157,12 @@ fun IndexThemeHost(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun IndexTheme.toggleButtonColors() = ToggleButtonDefaults.toggleButtonColors(
+    containerColor = colors.surfaceContainerLow,
+    checkedContainerColor = colors.primaryContainer,
+    contentColor = colors.onSurfaceVariant,
+    checkedContentColor = colors.onPrimaryContainer
+)

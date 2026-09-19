@@ -4,12 +4,15 @@ import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.FunctionToolCall
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
+import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.McpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpIntegration
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.ToolCallResult
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -27,10 +30,10 @@ class IterativeAgentTest {
         override val name = "fake"
         val calls = mutableListOf<Pair<String, Map<String, JsonElement>>>()
         val contexts = mutableListOf<SessionContext>()
-        override suspend fun resetCache() {}
+        var tools = emptyList<McpTool>()
         override suspend fun connect() {}
         override suspend fun close() {}
-        override suspend fun listTools(): List<McpTool> = emptyList()
+        override suspend fun listTools(): List<McpTool> = tools
         override suspend fun callTool(
             toolName: String,
             json: Map<String, JsonElement>,
@@ -49,6 +52,7 @@ class IterativeAgentTest {
     ) : IterativeAgent(emptyList()) {
         override val label = "test"
         var inferences = 0
+        val toolsSeen = mutableListOf<List<String>>()
 
         override suspend fun runInference(
             input: String,
@@ -59,6 +63,7 @@ class IterativeAgentTest {
             includePromptsFromMcps: Map<String, Set<String>>,
         ): ConversationMessageDocument {
             inferences++
+            toolsSeen += tools.map { it.tool.definition.name }
             val calls = if (script.isNotEmpty()) script.removeAt(0) else emptyList()
             return ConversationMessageDocument(role = MessageRole.assistant, tool_calls = calls)
         }
@@ -178,6 +183,35 @@ class IterativeAgentTest {
         agent.send("input", McpSession(listOf(integration), this), sessionContext())
 
         assertEquals(listOf("c1", "c2"), integration.contexts.map { it.toolCallId })
+    }
+
+    @Test
+    fun toolsAreListedAfreshEachRound() = runTest {
+        val integration = FakeIntegration()
+        val agent = ScriptedAgent(
+            mutableListOf(listOf(toolCall("c1", args = """{"message":"Buy milk"}""")))
+        )
+        val session = object : McpSession(listOf(integration), this@runTest) {
+            override suspend fun callTool(
+                integrationName: String,
+                toolName: String,
+                jsonInput: Map<String, JsonElement>,
+                context: SessionContext,
+                requireExists: Boolean
+            ): ToolCallResult {
+                integration.tools = listOf(FakeTool("unlocked"))
+                return super.callTool(integrationName, toolName, jsonInput, context, requireExists)
+            }
+        }
+        agent.send("input", session, sessionContext())
+
+        assertEquals(listOf(emptyList(), listOf("unlocked")), agent.toolsSeen)
+    }
+
+    private class FakeTool(name: String) : BuiltInMcpTool(
+        definition = Tool(name = name, inputSchema = ToolSchema())
+    ) {
+        override suspend fun call(jsonInput: String, context: SessionContext) = ToolCallResult("ok", null)
     }
 
     @Test

@@ -51,7 +51,9 @@ class CalendarPlugin(
                 PROPERTY_CALENDAR to listOf(SourceShapeNames.SHORT_TEXT),
             ),
             supportsMultiple = true,
-            usesPermissions = listOf(PluginPermission(PERMISSION)),
+            // Nobody grants the calendar to the calendar: this plugin is the root of the data,
+            // so the permission it is named after is what it asks of whoever reads it.
+            callerPermissions = listOf(PluginPermission(PluginPermissions.CALENDAR)),
             suggestedRefreshIntervalSec = 300,
         ),
     )
@@ -159,7 +161,6 @@ class CalendarPlugin(
         const val PROPERTY_ALL_DAY = "all_day"
         const val PROPERTY_CALENDAR = "calendar"
 
-        private const val PERMISSION = "Calendar"
         private const val ALL_DAY_LABEL = "All day"
         private const val MAX_EVENTS = 10
         private val WINDOW = 7.days

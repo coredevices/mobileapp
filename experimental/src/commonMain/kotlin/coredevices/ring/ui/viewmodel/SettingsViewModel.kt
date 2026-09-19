@@ -208,8 +208,16 @@ class SettingsViewModel(
     }
 
     fun setActionEnabled(name: String, enabled: Boolean) {
-        viewModelScope.launch { indexActionsRepository.setActionEnabled(name, enabled) }
+        viewModelScope.launch(Dispatchers.IO) { indexActionsRepository.setActionEnabled(name, enabled) }
     }
+
+    fun togglePendingIntentScanEnabled() {
+        viewModelScope.launch(Dispatchers.IO) {
+            preferences.setUsePendingIntentScan(!preferences.usePendingIntentScan.value)
+        }
+    }
+
+    val pendingIntentScanEnabled = preferences.usePendingIntentScan
 
     fun beginDiagnostics(): Job {
         _diagnosticsState.value = DiagnosticsState.Running

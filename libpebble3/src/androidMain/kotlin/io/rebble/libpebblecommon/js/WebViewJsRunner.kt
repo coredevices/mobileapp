@@ -11,6 +11,7 @@ import android.webkit.GeolocationPermissions
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.PermissionRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -37,7 +38,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -75,11 +75,14 @@ class WebViewJsRunner(
         const val PRIVATE_API_NAMESPACE = "_$API_NAMESPACE"
         const val STARTUP_URL = "file:///android_asset/webview_startup.html"
         private val PAGE_LOAD_TIMEOUT = 15.seconds
+        private val LOCAL_STORAGE_PERSIST_TIMEOUT = 5.seconds
         private val logger = Logger.withTag(WebViewJsRunner::class.simpleName!!)
     }
 
     private var webView: WebView? = null
-    private val pageLoaded = CompletableDeferred<Unit>()
+
+    /** True once the startup page loaded; false if it failed. */
+    private val pageLoaded = CompletableDeferred<Boolean>()
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
@@ -112,7 +115,7 @@ class WebViewJsRunner(
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
             logger.d { "Page finished loading: $url" }
-            pageLoaded.complete(Unit)
+            pageLoaded.complete(true)
         }
 
         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -124,6 +127,16 @@ class WebViewJsRunner(
                     "Error loading page: ${error?.toString()}"
                 }
             }
+            if (request?.isForMainFrame == true) {
+                pageLoaded.complete(false)
+            }
+        }
+
+        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+            logger.e { "WebView render process gone (crashed=${detail?.didCrash()}): PKJS for ${appInfo.longName} is dead" }
+            _readyState.value = false
+            pageLoaded.complete(false)
+            return true
         }
 
         override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
@@ -291,13 +304,14 @@ class WebViewJsRunner(
         check(webView != null) { "WebView not initialized" }
         logger.d { "WebView initialized (provider=${webViewProvider()})" }
         loadApp(jsPath.toString())
-        scope.launch {
-            if (withTimeoutOrNull(PAGE_LOAD_TIMEOUT) { pageLoaded.await() } == null) {
-                logger.e {
-                    "Startup page never loaded (provider=${webViewProvider()}): PKJS for " +
-                            "${appInfo.longName} will never become ready"
-                }
+        // Caller must see this fail, otherwise the session is kept as the current PKJS session
+        // while permanently stuck not-ready.
+        if (withTimeoutOrNull(PAGE_LOAD_TIMEOUT) { pageLoaded.await() } != true) {
+            logger.e {
+                "Startup page never loaded (provider=${webViewProvider()}): PKJS for " +
+                        "${appInfo.longName} will never become ready"
             }
+            error("PKJS startup page failed to load for ${appInfo.longName}")
         }
     }
 
@@ -337,7 +351,11 @@ class WebViewJsRunner(
                 // still empty and persisting it would clear the user's stored settings
                 // (saveState() does a clear() first). MOB-6881.
                 if (restoreCompleted) {
-                    persistLocalStorage()
+                    // evaluateJavascript never calls back if the renderer is gone or wedged, and
+                    // this runs NonCancellable: without a timeout stop() never reaches destroy().
+                    if (withTimeoutOrNull(LOCAL_STORAGE_PERSIST_TIMEOUT) { persistLocalStorage() } == null) {
+                        logger.w { "persistLocalStorage timed out; tearing down anyway" }
+                    }
                 } else {
                     logger.d { "Skipping persistLocalStorage: restore did not complete" }
                 }

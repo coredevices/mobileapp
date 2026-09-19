@@ -4,6 +4,9 @@
   "description": "Share prices for the tickers the user picked in settings. Each ticker is an instance carrying its price, the day's change in cash and the same change as a percentage.",
   "script": "stocks-plugin.js",
   "configPage": "stocks-config.html",
+  "usesPermissions": [
+    { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
+  ],
   "sources": [
     {
       "category": "finance",
@@ -16,9 +19,6 @@
         "day_change_percent": ["shortText", "longText"]
       },
       "supportsMultiple": true,
-      "usesPermissions": [
-        { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
-      ],
       "suggestedRefreshIntervalSec": 60
     }
   ]

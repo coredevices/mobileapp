@@ -2,6 +2,7 @@ package coredevices.coreapp.transcription
 
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import com.russhwolf.settings.Settings
 import coredevices.analytics.CoreAnalytics
 import coredevices.coreapp.testsupport.ReadOnlyModelPathProvider
 import coredevices.ring.model.CactusModelProvider
@@ -115,6 +116,7 @@ class CactusLocalCancellationTest {
                         modelProvider = provider,
                         analytics = analytics,
                         inferenceBoost = NoOpInferenceBoost(),
+                        settings = Settings()
                     )
                     runBlocking {
                         svc.earlyInit()

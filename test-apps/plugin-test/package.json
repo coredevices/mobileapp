@@ -49,6 +49,11 @@
     ],
     "resources": {
       "media": []
-    }
+    },
+    "usesPermissions": [
+      "Calendar",
+      "Notifications",
+      "Location"
+    ]
   }
 }

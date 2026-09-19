@@ -42,6 +42,12 @@ class BugApi(
     }
 
     @Serializable
+    data class IndexRebootLog(
+        val timestamp: String,
+        val reason: String,
+    )
+
+    @Serializable
     private data class BugReport(
         val bugReportDetails: String,
         val username: String,
@@ -50,7 +56,8 @@ class BugApi(
         val summary: String,
         val latestLogs: String,
         val googleIdToken: String? = null,
-        val sourceIsExperimentalDevice: Boolean = false
+        val sourceIsExperimentalDevice: Boolean = false,
+        val indexRebootLogs: List<IndexRebootLog>? = null
     )
 
     @Serializable
@@ -129,7 +136,8 @@ class BugApi(
         summary: String,
         latestLogs: String,
         googleIdToken: String? = null,
-        sourceIsExperimentalDevice: Boolean = false
+        sourceIsExperimentalDevice: Boolean = false,
+        indexRebootLogs: List<IndexRebootLog>? = null,
     ): BugReportResult {
         val url = "$baseUrl/bug-reports/create"
         
@@ -150,7 +158,8 @@ class BugApi(
                     summary = summary,
                     latestLogs = latestLogs,
                     googleIdToken = null, // Don't send in body anymore
-                    sourceIsExperimentalDevice = sourceIsExperimentalDevice
+                    sourceIsExperimentalDevice = sourceIsExperimentalDevice,
+                    indexRebootLogs = indexRebootLogs,
                 ))
             }
             

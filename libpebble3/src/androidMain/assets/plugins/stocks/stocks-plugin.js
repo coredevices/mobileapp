@@ -13,19 +13,16 @@ var CURRENCY = { USD: '$', GBP: '£', EUR: '€', JPY: '¥' };
 // Shown until the user picks their own. Emptying the list keeps it empty.
 var DEFAULT = [{ symbol: '^GSPC', name: 'S&P 500' }];
 
-// Promise wrapper over the host's XMLHttpRequest. Resolves to { ok, json } and never rejects.
-function http(url) {
-  return new Promise(function (resolve) {
-    var request = new XMLHttpRequest();
-    request.open('GET', url, true);
-    request.onload = function () {
-      var json = null;
-      try { json = JSON.parse(request.responseText); } catch (e) { /* not json */ }
-      resolve({ ok: request.status >= 200 && request.status < 300, json: json });
-    };
-    request.onerror = function () { resolve({ ok: false, json: null }); };
-    request.send(null);
-  });
+// Resolves to { ok, json } and never rejects: a blocked host, a dead network and a bad body are
+// all the same thing to the caller — no quote.
+async function http(url) {
+  try {
+    var response = await fetch(url);
+    if (!response.ok) return { ok: false, json: null };
+    return { ok: true, json: await response.json() };
+  } catch (e) {
+    return { ok: false, json: null };
+  }
 }
 
 /** The user's picks, in the order they added them: [{ symbol, name }]. */

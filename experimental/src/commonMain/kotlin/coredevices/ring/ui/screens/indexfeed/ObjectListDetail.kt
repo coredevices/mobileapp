@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -43,6 +44,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
@@ -99,6 +103,8 @@ import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel
+import coredevices.ui.M3Dialog
+import coredevices.ui.textContextMenuItem
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -123,6 +129,7 @@ internal fun ListView(
     val colors = IndexTheme.colors
     val isTodos = s.list.firestoreId == LIST_TODOS_ID
     val inlineNoteEditor = !isTodos
+    val isChecklistList = s.list.listKind == "checklist"
     // Core seed lists (Notes to self, Todos, Shopping) are recreated by
     // DefaultListsBootstrap on next auth event if deleted, and ingest
     // routes items to them by stable id — soft-deleting them from the
@@ -131,6 +138,7 @@ internal fun ListView(
     var searching by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var deleteDialogOpen by remember { mutableStateOf(false) }
+    var entryTypeDialogOpen by remember { mutableStateOf(false) }
     var deleteAction by remember(s.list.firestoreId) { mutableStateOf(DeleteListAction.MoveItems) }
     var deleteTargetListId by remember(s.list.firestoreId) { mutableStateOf(LIST_NOTES_SELF_ID) }
     var editing by remember(s.list.firestoreId) { mutableStateOf(startEditing && !isTodos) }
@@ -361,6 +369,13 @@ internal fun ListView(
                                             startTitleEdit()
                                         },
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text("Change list type") },
+                                        onClick = {
+                                            menuOpen = false
+                                            entryTypeDialogOpen = true
+                                        },
+                                    )
                                 }
                                 if (!isCoreList) {
                                     DropdownMenuItem(
@@ -409,6 +424,7 @@ internal fun ListView(
             if (inlineNoteEditor && s.query.isBlank() && s.sort == ObjectDetailViewModel.ListSort.Newest) {
                 item("new-note-editor-top") {
                     NewNoteRow(
+                        placeholder = if (isChecklistList) "Add item" else "Add note",
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
@@ -434,6 +450,13 @@ internal fun ListView(
                         onOpen = {
                             coreNav.navigateTo(RingRoutes.ObjectDetails(child.firestoreId))
                         },
+                        onToggleKind = { text ->
+                            vm.patchChildItem(
+                                child.firestoreId,
+                                title = text.trim().ifBlank { null },
+                                kind = if (child.kind == "checklist") "note" else "checklist",
+                            )
+                        },
                     )
                 } else {
                     ListChildRow(
@@ -447,6 +470,7 @@ internal fun ListView(
             if (inlineNoteEditor && s.query.isBlank() && s.sort != ObjectDetailViewModel.ListSort.Newest) {
                 item("new-note-editor-bottom") {
                     NewNoteRow(
+                        placeholder = if (isChecklistList) "Add item" else "Add note",
                         requestFocus = focusItemId == NEW_NOTE_FOCUS_ID,
                         onFocusConsumed = { focusItemId = null },
                         onCreate = { text ->
@@ -470,6 +494,17 @@ internal fun ListView(
             }
             item { Spacer(Modifier.height(80.dp)) }
         }
+    }
+
+    if (entryTypeDialogOpen) {
+        EntryTypeDialog(
+            listKind = s.list.listKind,
+            onSelect = { kind ->
+                entryTypeDialogOpen = false
+                vm.setListKind(kind)
+            },
+            onDismiss = { entryTypeDialogOpen = false },
+        )
     }
 
     if (deleteDialogOpen) {
@@ -499,6 +534,67 @@ internal fun ListView(
 }
 
 private enum class DeleteListAction { MoveItems, DeleteItems }
+
+@Composable
+private fun EntryTypeDialog(
+    listKind: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    M3Dialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "List Type",
+                color = colors.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        contents = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Select a default type for new entries:",
+                    color = colors.onSurfaceVariant,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                EntryTypeButton(
+                    selected = listKind != "checklist",
+                    label = "Note",
+                    onClick = { onSelect("note") },
+                )
+                EntryTypeButton(
+                    selected = listKind == "checklist",
+                    label = "Checkbox",
+                    onClick = { onSelect("checklist") },
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun EntryTypeButton(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+) {
+    val modifier = Modifier.fillMaxWidth()
+    FilledTonalButton(onClick = onClick, modifier = modifier) {
+        Text(
+            buildString {
+                if (selected) {
+                    append("Keep as ")
+                } else {
+                    append("Switch to ")
+                }
+                append(label)
+            }
+        )
+    }
+}
 
 @Composable
 private fun DeleteListDialog(
@@ -535,7 +631,7 @@ private fun DeleteListDialog(
                     )
                     Spacer(Modifier.height(14.dp))
                     if (targetLists.isNotEmpty()) {
-                        DeleteChoiceRow(
+                        ChoiceRow(
                             selected = selectedAction == DeleteListAction.MoveItems,
                             title = "Move subitems",
                             subtitle = "Add them to another list before deleting this one.",
@@ -593,7 +689,7 @@ private fun DeleteListDialog(
                         }
                         Spacer(Modifier.height(6.dp))
                     }
-                    DeleteChoiceRow(
+                    ChoiceRow(
                         selected = selectedAction == DeleteListAction.DeleteItems,
                         title = "Delete all subitems",
                         subtitle = "Remove every subitem in this list.",
@@ -616,7 +712,7 @@ private fun DeleteListDialog(
 }
 
 @Composable
-private fun DeleteChoiceRow(
+private fun ChoiceRow(
     selected: Boolean,
     title: String,
     subtitle: String?,
@@ -629,7 +725,7 @@ private fun DeleteChoiceRow(
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, onClick = onClick)
         Column(modifier = Modifier.weight(1f).padding(top = 2.dp)) {
@@ -898,6 +994,7 @@ private fun EditableNoteRow(
     onDelete: () -> Unit,
     onEnter: (String) -> Unit,
     onOpen: () -> Unit,
+    onToggleKind: (String) -> Unit,
 ) {
     val colors = IndexTheme.colors
     var draft by remember(child.firestoreId) { mutableStateOf(child.title) }
@@ -1003,6 +1100,15 @@ private fun EditableNoteRow(
                         }
                         else -> false
                     }
+                }
+                .appendTextContextMenuComponents {
+                    textContextMenuItem(
+                        key = ToggleCheckboxMenuKey,
+                        label = if (isChecklist) "Remove Checkbox" else "Add Checkbox",
+                    ) {
+                        onToggleKind(draft)
+                        close()
+                    }
                 },
             textStyle = TextStyle(
                 color = colors.onSurface,
@@ -1039,8 +1145,11 @@ private fun EditableNoteRow(
     }
 }
 
+private data object ToggleCheckboxMenuKey
+
 @Composable
 private fun NewNoteRow(
+    placeholder: String,
     requestFocus: Boolean,
     onFocusConsumed: () -> Unit,
     onCreate: (String) -> Unit,
@@ -1109,7 +1218,7 @@ private fun NewNoteRow(
             decorationBox = { inner ->
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
                     if (draft.isEmpty()) {
-                        Text("Add note", color = colors.onSurfaceVariant.copy(alpha = 0.58f), fontSize = 15.sp)
+                        Text(placeholder, color = colors.onSurfaceVariant.copy(alpha = 0.58f), fontSize = 15.sp)
                     }
                     inner()
                 }

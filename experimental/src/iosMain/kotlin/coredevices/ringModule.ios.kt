@@ -3,29 +3,27 @@ package coredevices
 
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import coredevices.ring.agent.integrations.obsidian.IosObsidianVault
-import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.RingDelegate
-import coredevices.util.integrations.IntegrationTokenStorage
+import coredevices.ring.agent.integrations.obsidian.IosObsidianVault
+import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.ring.database.IntegrationTokenStorageImpl
-import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.encryption.EncryptionKeyManager
+import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.service.BackgroundRingService
 import coredevices.ring.service.PlatformIndexNotificationManager
+import coredevices.ring.service.RingOta
 import coredevices.ring.service.RingSync
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
+import coredevices.util.integrations.IntegrationTokenStorage
+import coredevices.util.transcription.CactusModelPathProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
-import org.koin.core.module.dsl.viewModelOf
-import coredevices.ring.model.CactusModelProvider
-import coredevices.util.transcription.CactusModelPathProvider
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import platform.Foundation.NSDocumentDirectory
@@ -51,14 +49,19 @@ actual val platformRingModule = module {
     } bind RoomDatabase.Builder::class
     single {
         val prefs = get<Preferences>()
+        val ringOTA = get<RingOta>()
         KMPHaversineSatelliteManager(
             pairedSatelliteIdProvider = { prefs.ringPaired.value },
             debugDelegate = get(),
             hacksDelegate = get(),
             collectionIndexStorage = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,
-            scope = CoroutineScope(Dispatchers.Default)
+            scope = CoroutineScope(Dispatchers.Default),
+            updateJsonProvider = { it?.let { ringOTA.getLatestFirmware(it) } }
         )
+    }
+    single {
+        RingOta(get(), get(), get())
     }
     singleOf(::PlatformIndexNotificationManager)
     singleOf(::BackgroundRingService)

@@ -93,10 +93,14 @@ object IOSDelegate : KoinComponent {
         isSupported: () -> Boolean,
         cancelTranscription: () -> Unit,
         transcribeWavFile: (String, String?, (String?, String?) -> Unit) -> Unit,
+        assetStatus: (String?, (String) -> Unit) -> Unit,
+        downloadAssets: (String?, (Double) -> Unit, (String?) -> Unit) -> Unit,
     ) {
         NativeSpeechAnalyzerBridge.isSupported = isSupported
         NativeSpeechAnalyzerBridge.cancelTranscription = cancelTranscription
         NativeSpeechAnalyzerBridge.transcribeWavFile = transcribeWavFile
+        NativeSpeechAnalyzerBridge.assetStatus = assetStatus
+        NativeSpeechAnalyzerBridge.downloadAssets = downloadAssets
     }
 
     fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {

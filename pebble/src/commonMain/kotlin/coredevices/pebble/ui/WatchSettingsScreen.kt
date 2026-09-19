@@ -106,6 +106,9 @@ import co.touchlab.kermit.Logger
 import com.cactus.isCactusSupported
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
+import coreapp.pebble.generated.resources.Res
+import coreapp.pebble.generated.resources.wispr_flow_logo_black
+import coreapp.pebble.generated.resources.wispr_flow_logo_white
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
@@ -113,6 +116,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.analytics.setUser
 import coredevices.coreapp.util.AppUpdate
 import coredevices.coreapp.util.AppUpdateState
+import coredevices.firestore.UsersDao
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.Platform
 import coredevices.pebble.account.BootConfigProvider
@@ -144,9 +148,14 @@ import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
+import coredevices.util.models.inProgress
 import coredevices.util.rememberUiContext
 import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.transcription.SpeechModelAvailability
 import coredevices.util.transcription.SpokenLanguageOptions
+import coredevices.util.transcription.platformModelNeedsDownload
+import coredevices.util.transcription.platformModelState
+import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -164,9 +173,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import coreapp.pebble.generated.resources.Res
-import coreapp.pebble.generated.resources.wispr_flow_logo_black
-import coreapp.pebble.generated.resources.wispr_flow_logo_white
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -357,6 +363,26 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     var showSpokenLanguageDialog by remember { mutableStateOf(false) }
     val recommendedSTTModel = modelManager.getRecommendedSTTModel()
     val modelDownloadState by modelManager.modelDownloadStatus.collectAsState()
+    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
+    val platformSttAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
+    }
+    val platformDownloadStatus by platformSpeechRecognizer.downloadStatus.collectAsState()
+    val platformModelAvailability by produceState(
+        SpeechModelAvailability.Unsupported,
+        coreConfig.sttConfig.spokenLanguage,
+        platformDownloadStatus,
+        platformSttAvailable,
+    ) {
+        value = if (platformSttAvailable) {
+            withContext(Dispatchers.Default) {
+                platformSpeechRecognizer.modelAvailability(coreConfig.sttConfig.spokenLanguage)
+            }
+        } else {
+            SpeechModelAvailability.Unsupported
+        }
+    }
+    val platformNeedsDownload = platformModelNeedsDownload(platformModelAvailability, platformDownloadStatus)
     if (showSpokenLanguageDialog) {
         SpokenLanguagePickerDialog(
             selectedCode = coreConfig.sttConfig.spokenLanguage,
@@ -367,6 +393,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     )
                 )
                 showSpokenLanguageDialog = false
+                if (coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly) {
+                    scope.launch {
+                        val availability = platformSpeechRecognizer.modelAvailability(code)
+                        if (platformModelNeedsDownload(availability, platformDownloadStatus)) {
+                            navBarNav?.navigateTo(CommonRoutes.SpeechModelDownloadDialog)
+                        }
+                    }
+                }
             },
             onDismissRequest = { showSpokenLanguageDialog = false },
         )
@@ -448,6 +482,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val missingPermissions by permissionRequester.missingPermissions.collectAsState()
     val uiContext = rememberUiContext()
     val analyticsBackend: AnalyticsBackend = koinInject()
+    val usersDao: UsersDao = koinInject()
     val enableFirebase = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)) }
     val enableMemfault = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)) }
     val enableMixpanel = remember { mutableStateOf(settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)) }
@@ -461,10 +496,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         }
     }
     val cactusSupported = remember { isCactusSupported() }
-    val platformSpeechRecognizer: PlatformSpeechRecognizer = koinInject()
-    val platformSttAvailable by produceState(false) {
-        value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
-    }
     val bootConfigProvider: BootConfigProvider = koinInject()
     val rebbleVoiceAvailable by produceState(false, loggedIn) {
         value = withContext(Dispatchers.Default) {
@@ -1435,21 +1466,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
-                basicSettingsToggleItem(
-                    title = "Use Core OTA service",
-                    description = "Check Core Devices service for Core watch firmware updates instead of Memfault (falls back to Memfault on failure)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
-                    checked = coreConfig.useEngDashOta,
-                    onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                useEngDashOta = it,
-                            )
-                        )
-                    },
-                    isDebugSetting = true,
-                ),
                 basicSettingsDropdownItem(
                     id = OfflineSpeechRecognition,
                     title = "Offline Speech Recognition",
@@ -1503,6 +1519,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                                     )
                                 }
                             }
+                            if (isPlatform && platformNeedsDownload) {
+                                navBarNav?.navigateTo(CommonRoutes.SpeechModelDownloadDialog)
+                            }
                         }
                     },
                     itemText = { mode ->
@@ -1518,13 +1537,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         }
                     },
                     extraSupportingContent = {
-                        (modelDownloadState as? ModelDownloadStatus.Downloading)?.let { state ->
+                        modelDownloadState.takeIf { it.inProgress }?.let { state ->
                             Column {
                                 Text(
                                     text = "Downloading in the background...",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                                state.progress?.let { progress ->
+                                (state as? ModelDownloadStatus.Downloading)?.progress?.let { progress ->
                                     CoreLinearProgressIndicator(
                                         progress = { progress },
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
@@ -1559,11 +1578,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(PebbleNavBarRoutes.OfflineModelsRoute)
                     },
                 ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "System Speech Model",
+                    description = "${spokenLanguageLabel(coreConfig.sttConfig.spokenLanguage)} · " +
+                        platformModelState(platformModelAvailability, platformDownloadStatus),
+                    keywords = "system stt speech recognition model download language",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Speech,
+                    show = { coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly },
+                    action = { nav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) }
+                        .takeIf { platformNeedsDownload },
+                ) },
                 basicSettingsActionItem(
                     title = "Spoken Language",
-                    description = coreConfig.sttConfig.spokenLanguage
-                        ?.let { code -> SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code }
-                        ?: "Automatic",
+                    description = spokenLanguageLabel(coreConfig.sttConfig.spokenLanguage),
                     keywords = "language stt speech recognition locale iso",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
@@ -1928,7 +1956,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     action = {
                         scope.launch {
                             try {
-                                Firebase.auth.signOut()
+                                usersDao.signOut()
                                 libPebble.requestLockerSync()
                                 analyticsBackend.setUser(email = null)
                                 logger.d { "User signed out" }

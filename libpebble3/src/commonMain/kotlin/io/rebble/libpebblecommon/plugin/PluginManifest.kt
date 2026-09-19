@@ -1,13 +1,7 @@
 package io.rebble.libpebblecommon.plugin
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -27,6 +21,12 @@ data class PluginManifest(
      * bundled filename.
      */
     val configPage: String? = null,
+    /**
+     * What the user has to let this plugin do. Declared once for the whole plugin rather than
+     * per source: a plugin reaches its API the same way whichever of its sources is being read,
+     * and the network permissions are enforced at the plugin's one way out.
+     */
+    val usesPermissions: List<PluginPermission> = emptyList(),
     val sources: List<SourceDeclaration> = emptyList(),
     val actions: List<ActionDeclaration> = emptyList(),
 )
@@ -39,8 +39,6 @@ data class SourceDeclaration(
     /** Property name -> the shapes it can be rendered as, in the plugin's preferred order. */
     val properties: Map<String, List<String>> = emptyMap(),
     val supportsMultiple: Boolean = false,
-    /** What the user has to let this plugin do for the source to work at all. */
-    val usesPermissions: List<PluginPermission> = emptyList(),
     /** What a caller has to have been granted before it may read this source. */
     val callerPermissions: List<PluginPermission> = emptyList(),
     val suggestedRefreshIntervalSec: Int = DEFAULT_REFRESH_SEC,
@@ -66,8 +64,6 @@ data class ActionDeclaration(
     val targets: List<String> = emptyList(),
     val destructive: Boolean = false,
     val requiresConfirmation: Boolean = false,
-    /** What the user has to let this plugin do for the action to work at all. */
-    val usesPermissions: List<PluginPermission> = emptyList(),
     /** What a caller has to have been granted before it may invoke this action. */
     val callerPermissions: List<PluginPermission> = emptyList(),
 ) {
@@ -88,47 +84,6 @@ data class ActionDeclaration(
     companion object {
         const val PARAM_INSTANCE_ID = "instanceId"
         const val PARAM_ITEM = "item"
-    }
-}
-
-/**
- * A permission, and whatever arguments narrow it: `Internet` for one domain rather than for the
- * web at large. Written in a manifest either as the bare name or as an object, and always read
- * back as an object, so a consumer never has to handle both.
- *
- * ```jsonc
- * "usesPermissions": [
- *   "LocalNetwork",
- *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
- * ]
- * ```
- */
-@Serializable(with = PluginPermissionSerializer::class)
-data class PluginPermission(
-    val name: String,
-    val parameters: Map<String, List<String>> = emptyMap(),
-)
-
-@Serializable
-private data class PermissionObject(
-    val name: String,
-    val parameters: Map<String, List<String>> = emptyMap(),
-)
-
-internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
-    override val descriptor: SerialDescriptor = PermissionObject.serializer().descriptor
-
-    override fun deserialize(decoder: Decoder): PluginPermission {
-        val input = decoder as? JsonDecoder ?: return PluginPermission(decoder.decodeString())
-        val element = input.decodeJsonElement()
-        if (element is JsonPrimitive) return PluginPermission(element.content)
-        val parsed = input.json.decodeFromJsonElement(PermissionObject.serializer(), element)
-        return PluginPermission(parsed.name, parsed.parameters)
-    }
-
-    override fun serialize(encoder: Encoder, value: PluginPermission) {
-        PermissionObject.serializer()
-            .serialize(encoder, PermissionObject(value.name, value.parameters))
     }
 }
 

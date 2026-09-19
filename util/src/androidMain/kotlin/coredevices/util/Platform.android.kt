@@ -2,6 +2,7 @@ package coredevices.util
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.UserManager
 import androidx.core.net.toUri
 import kotlinx.coroutines.flow.MutableSharedFlow
 
@@ -19,6 +20,11 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) {
         task()
+    }
+
+    override val isSecondaryProfile: Boolean by lazy {
+        val userManager = context.getSystemService(UserManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) userManager.isProfile else !userManager.isSystemUser
     }
 
     companion object {

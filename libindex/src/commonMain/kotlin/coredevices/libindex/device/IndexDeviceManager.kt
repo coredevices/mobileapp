@@ -3,6 +3,7 @@ package coredevices.libindex.device
 import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.haversine.KMPHaversineSatelliteManager
+import coredevices.haversine.KMPHaversineSatelliteState
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.Rings
 import coredevices.libindex.database.BasePreferences
@@ -10,19 +11,22 @@ import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
 
 class IndexDeviceManager(
     private val satelliteManager: KMPHaversineSatelliteManager,
@@ -67,7 +71,11 @@ class IndexDeviceManager(
         }
     }
 
-    private fun updateRing(satellite: KMPHaversineSatellite, isUpdating: Boolean? = null) {
+    private fun updateRing(
+        satellite: KMPHaversineSatellite,
+        state: KMPHaversineSatelliteState? = satellite.state.value,
+        isUpdating: Boolean? = null,
+    ) {
         _rings.update { prev ->
             val existingIdx = prev.indexOfFirst { satellite.id.equals(it.identifier.asString, ignoreCase = true) }
             val existing = if (existingIdx != -1) prev[existingIdx] as? KnownIndexDevice else null
@@ -85,7 +93,7 @@ class IndexDeviceManager(
                                 name = existing.name,
                                 isPaired = true,
                                 satellite = satellite,
-                                satelliteState = satellite.state.value ?: run {
+                                satelliteState = state ?: run {
                                     logger.w { "State is stale for ring update, ignoring" }
                                     return@update prev
                                 },
@@ -100,6 +108,7 @@ class IndexDeviceManager(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun init() {
         scope.launch {
             // Re-reconcile on every change so the stored ring can't get stuck out of sync
@@ -179,16 +188,16 @@ class IndexDeviceManager(
                 }
             }.launchIn(scope)
         satelliteManager.lastRing
-            .onEach {
-                if (it != null) {
-                    // Wait for state to be non-null, just in case
-                    withTimeoutOrNull(1.seconds) {
-                        it.state.filterNotNull().first()
-                    } ?: return@onEach
-
-                    updateRing(it, isUpdating = null)
-                }
-            }.launchIn(scope)
+            .flatMapLatest { satellite ->
+                satellite?.state
+                    ?.filterNotNull()
+                    ?.filter { it.serialNumber.isNotBlank() }
+                    ?.distinctUntilChangedBy { InterviewedFields.from(satellite, it) }
+                    ?.map { satellite to it }
+                    ?: emptyFlow()
+            }
+            .onEach { (satellite, state) -> updateRing(satellite, state) }
+            .launchIn(scope)
     }
 
     // Without any CompanionDeviceManager association the app loses companion background privileges
@@ -201,7 +210,7 @@ class IndexDeviceManager(
     }
 
     fun markFirmwareUpdatingState(identifier: KMPHaversineSatellite, isUpdating: Boolean) {
-        updateRing(identifier, isUpdating)
+        updateRing(identifier, isUpdating = isUpdating)
     }
 
     fun addScanResult(result: IndexScanResult) {
@@ -225,6 +234,23 @@ class IndexDeviceManager(
         _rings.update { prev ->
             prev.filterNot { it.isScanned }
         }
+    }
+}
+
+/** The satellite state fields an [InterviewedIndexDevice] snapshots; other state changes (rssi, nearby) don't rebuild it. */
+internal data class InterviewedFields(
+    val name: String?,
+    val firmwareVersion: String,
+    val serialNumber: String,
+    val programmedSerialNumber: String?,
+) {
+    companion object {
+        fun from(satellite: KMPHaversineSatellite, state: KMPHaversineSatelliteState) = InterviewedFields(
+            name = satellite.name,
+            firmwareVersion = state.firmwareVersion,
+            serialNumber = state.serialNumber,
+            programmedSerialNumber = state.programmedSerialNumber,
+        )
     }
 }
 

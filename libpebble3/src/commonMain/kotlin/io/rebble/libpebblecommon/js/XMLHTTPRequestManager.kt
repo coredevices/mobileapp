@@ -13,6 +13,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
+import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,6 +39,18 @@ class XMLHTTPRequestManager(
     private val httpInterceptorManager: HttpInterceptorManager,
     private val appUuid: Uuid,
     private val client: HttpClient,
+    /**
+     * What this context is allowed to reach. A plugin gets the policy its manifest declared;
+     * PKJS and the app's own JS are unrestricted, being the user's own apps rather than
+     * something a plugin author wrote.
+     */
+    private val networkPolicy: PluginNetworkPolicy = PluginNetworkPolicy.unrestricted,
+    /**
+     * The JS object responses are delivered into: `<jsTarget>._instances.get(id)`. PKJS gets the
+     * `XMLHttpRequest` class it writes against; a plugin gets `fetch`'s own registry, so nothing
+     * has to hand a plugin an XHR just to carry a reply back.
+     */
+    private val jsTarget: String = "XMLHttpRequest",
 ): JsEngineInterface, AutoCloseable {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
@@ -121,7 +135,7 @@ class XMLHTTPRequestManager(
         private val headers = mutableMapOf<String, Any>()
         var requestJob: Job? = null
 
-        private val jsInstance = "XMLHttpRequest._instances.get($id)"
+        private val jsInstance = "$jsTarget._instances.get($id)"
 
         private fun changeReadyState(newState: Int) {
             eval("$jsInstance.readyState = $newState")
@@ -158,6 +172,14 @@ class XMLHTTPRequestManager(
             suspend fun execute() {
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
+                }
+                // Before anything else, including interception: a plugin must not reach a host
+                // it never declared, whoever would have served it.
+                val verdict = networkPolicy.check(url!!)
+                if (verdict is PluginNetworkVerdict.Denied) {
+                    logger.w { "$appUuid blocked: ${verdict.reason}" }
+                    dispatchError()
+                    return
                 }
                 if (httpInterceptorManager.shouldIntercept(url!!)) {
                     val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)

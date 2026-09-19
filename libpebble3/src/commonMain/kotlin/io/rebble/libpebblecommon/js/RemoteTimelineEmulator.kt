@@ -18,11 +18,16 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Layout.Companion.fromCode
+import io.rebble.libpebblecommon.timeline.TimelineColor
+import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.PebbleColor
+import io.rebble.libpebblecommon.util.toPebbleColor
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNames
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -126,7 +131,7 @@ class RemoteTimelineEmulator(
     }
 }
 
-private fun asReminder(jsonReminder: TimelineReminderJson, pinUuid: Uuid): TimelineReminder? {
+internal fun asReminder(jsonReminder: TimelineReminderJson, pinUuid: Uuid): TimelineReminder? {
     val timelineLayout = fromCode(jsonReminder.layout.type)
     if (timelineLayout == null) {
         logger.w { "Unknown layout type: ${jsonReminder.layout.type}" }
@@ -151,7 +156,7 @@ private fun asReminder(jsonReminder: TimelineReminderJson, pinUuid: Uuid): Timel
     }
 }
 
-private fun asPin(jsonPin: TimelinePinJson, appUuid: Uuid, pinUuid: Uuid): TimelinePin? {
+internal fun asPin(jsonPin: TimelinePinJson, appUuid: Uuid, pinUuid: Uuid): TimelinePin? {
     val timelineLayout = fromCode(jsonPin.layout.type)
     if (timelineLayout == null) {
         logger.w { "Unknown layout type: ${jsonPin.layout.type}" }
@@ -199,6 +204,13 @@ private fun AttributesListBuilder.applyAttributesFrom(timelineLayoutJson: Timeli
     timelineLayoutJson.title?.let { title { it } }
     timelineLayoutJson.subtitle?.let { subtitle { it } }
     timelineLayoutJson.body?.let { body { it } }
+    timelineLayoutJson.shortTitle?.let { string(TimelineAttribute.ShortTitle) { it } }
+    timelineLayoutJson.shortSubtitle?.let { string(TimelineAttribute.ShortSubtitle) { it } }
+    timelineLayoutJson.locationName?.let { location { it } }
+    timelineLayoutJson.sender?.let { sender { it } }
+    timelineLayoutJson.subtitleTemplateString?.let {
+        string(TimelineAttribute.SubtitleTemplateString) { it }
+    }
     timelineLayoutJson.tinyIcon?.asTimelineIcon()?.let { tinyIcon { it } }
     timelineLayoutJson.smallIcon?.asTimelineIcon()?.let { smallIcon { it } }
     timelineLayoutJson.largeIcon?.asTimelineIcon()?.let { largeIcon { it } }
@@ -208,6 +220,22 @@ private fun AttributesListBuilder.applyAttributesFrom(timelineLayoutJson: Timeli
     timelineLayoutJson.headings?.let { stringList(TimelineAttribute.Headings) { it } }
     timelineLayoutJson.paragraphs?.let { stringList(TimelineAttribute.Paragraphs) { it } }
     timelineLayoutJson.lastUpdated?.let { lastUpdated { it } }
+    timelineLayoutJson.displayTime?.asDisplayTime()?.let { uByte(TimelineAttribute.DisplayTime) { it } }
+    timelineLayoutJson.displayRecurring?.asDisplayRecurring()?.let {
+        uByte(TimelineAttribute.DisplayRecurring) { it }
+    }
+    timelineLayoutJson.rankAway?.let { string(TimelineAttribute.RankAway) { it } }
+    timelineLayoutJson.rankHome?.let { string(TimelineAttribute.RankHome) { it } }
+    timelineLayoutJson.nameAway?.let { string(TimelineAttribute.NameAway) { it } }
+    timelineLayoutJson.nameHome?.let { string(TimelineAttribute.NameHome) { it } }
+    timelineLayoutJson.recordAway?.let { string(TimelineAttribute.RecordAway) { it } }
+    timelineLayoutJson.recordHome?.let { string(TimelineAttribute.RecordHome) { it } }
+    timelineLayoutJson.scoreAway?.let { string(TimelineAttribute.ScoreAway) { it } }
+    timelineLayoutJson.scoreHome?.let { string(TimelineAttribute.ScoreHome) { it } }
+    timelineLayoutJson.sportsGameState?.asSportsGameState()?.let {
+        uByte(TimelineAttribute.SportsGameState) { it }
+    }
+    timelineLayoutJson.broadcaster?.let { string(TimelineAttribute.Broadcaster) { it } }
 }
 
 
@@ -217,11 +245,54 @@ private fun String.asActionType(): TimelineItem.Action.Type? = when (this) {
     else -> null
 }
 
-private fun String.asTimelineIcon(): TimelineIcon? = TimelineIcon.fromCode(this)
+private fun String.asTimelineIcon(): TimelineIcon? =
+    TimelineIcon.fromCode(this).also {
+        if (it == null) logger.w { "Unknown timeline icon: $this" }
+    }
 
+/** `#RRGGBB`/`#AARRGGBB`, or one of [TimelineColor]'s names. */
 private fun String.asPebbleColor(): PebbleColor? {
-    // TODO
-    return null
+    TimelineColor.findByName(this)?.let { return it.toPebbleColor() }
+    val hex = removePrefix("#")
+    val value = hex.takeIf { h -> h.all { it.digitToIntOrNull(16) != null } }?.toLongOrNull(16)
+    val argb = when {
+        value == null -> null
+        hex.length == 6 -> value.toInt() or 0xFF000000.toInt()
+        hex.length == 8 -> value.toInt()
+        else -> null
+    }
+    if (argb == null) {
+        logger.w { "Unknown color: $this" }
+        return null
+    }
+    return argb.toPebbleColor()
+}
+
+private fun String.asSportsGameState(): UByte? = when (this) {
+    "pre-game" -> 0u
+    "in-game" -> 1u
+    else -> {
+        logger.w { "Unknown sportsGameState: $this" }
+        null
+    }
+}
+
+private fun String.asDisplayTime(): UByte? = when (this) {
+    "none" -> 0u
+    "pin" -> 1u
+    else -> {
+        logger.w { "Unknown displayTime: $this" }
+        null
+    }
+}
+
+private fun String.asDisplayRecurring(): UByte? = when (this) {
+    "none" -> 0u
+    "recurring" -> 1u
+    else -> {
+        logger.w { "Unknown displayRecurring: $this" }
+        null
+    }
 }
 
 @Serializable
@@ -257,19 +328,42 @@ data class TimelineActionJson(
     val launchCode: UInt? = null,
 )
 
+/**
+ * Every layout attribute the timeline web API accepts, in one flat shape - the same way the SDK's
+ * layouts.json models it. Which of these a pin actually renders is the watch's business.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class TimelineLayoutJson(
     val type: String,
     val title: String? = null,
     val subtitle: String? = null,
     val body: String? = null,
+    val shortTitle: String? = null,
+    val shortSubtitle: String? = null,
+    val locationName: String? = null,
+    val sender: String? = null,
+    val subtitleTemplateString: String? = null,
     val tinyIcon: String? = null,
     val smallIcon: String? = null,
     val largeIcon: String? = null,
+    @JsonNames("foregroundColor")
     val primaryColor: String? = null,
     val secondaryColor: String? = null,
     val backgroundColor: String? = null,
     val headings: List<String>? = null,
     val paragraphs: List<String>? = null,
     val lastUpdated: Instant? = null,
+    val displayTime: String? = null,
+    val displayRecurring: String? = null,
+    val rankAway: String? = null,
+    val rankHome: String? = null,
+    val nameAway: String? = null,
+    val nameHome: String? = null,
+    val recordAway: String? = null,
+    val recordHome: String? = null,
+    val scoreAway: String? = null,
+    val scoreHome: String? = null,
+    val sportsGameState: String? = null,
+    val broadcaster: String? = null,
 )

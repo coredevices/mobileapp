@@ -5,8 +5,10 @@ import io.rebble.libpebblecommon.SystemAppIDs.CALENDAR_APP_UUID
 import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
+import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
+import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -34,6 +36,7 @@ class TimelineActionManager(
     private val notificationDao: TimelineNotificationRealDao,
     private val actionOverrides: ActionOverrides,
     private val pinDao: TimelinePinRealDao,
+    private val reminderDao: TimelineReminderRealDao,
 ) {
     companion object {
         private val logger = Logger.withTag(TimelineActionManager::class.simpleName!!)
@@ -70,6 +73,30 @@ class TimelineActionManager(
         }
     }
 
+    private suspend fun handleReminderAction(
+        reminder: TimelineReminder,
+        invocation: TimelineService.TimelineActionInvocation,
+    ): TimelineActionResult {
+        val action = reminder.content.actions.firstOrNull { it.actionID == invocation.actionId }
+            ?: run {
+                logger.w {
+                    "Action ${invocation.actionId} missing on reminder ${invocation.itemId}"
+                }
+                return failedResult()
+            }
+        return when (action.type) {
+            // The reminder popup's Dismiss (and the dismiss the firmware fires by
+            // itself after a snooze) is remote: the watch dismisses the popup on a
+            // successful response and there is nothing else for the phone to do.
+            TimelineItem.Action.Type.Dismiss -> TimelineActionResult(
+                success = true,
+                icon = TimelineIcon.ResultDismissed,
+                title = "Dismissed",
+            )
+            else -> failedResult()
+        }
+    }
+
     private suspend fun handleNotificationAction(
         notification: TimelineNotification,
         invocation: TimelineService.TimelineActionInvocation,
@@ -96,8 +123,11 @@ class TimelineActionManager(
             actionOverrides.actionHandlerOverrides[itemId]?.get(actionId)?.invoke(invocation.attributes)
                 ?: run {
                     val pin = pinDao.getEntry(itemId)
+                    val reminder = if (pin == null) reminderDao.getEntry(itemId) else null
                     if (pin != null) {
                         handlePinAction(pin, invocation)
+                    } else if (reminder != null) {
+                        handleReminderAction(reminder, invocation)
                     } else {
                         val notification = notificationDao.getEntry(itemId)
                         if (notification != null) {
