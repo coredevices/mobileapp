@@ -4,6 +4,8 @@ import PlatformUiContext
 import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.database.room.repository.ItemRepository
+import coredevices.ring.database.room.repository.ListRepository
+import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.ItemFactory
 import kotlin.time.Clock
 
@@ -11,6 +13,7 @@ import kotlin.time.Clock
 class LocalNoteClient(
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
+    private val listRepository: ListRepository,
 ) : NoteIntegration {
     override suspend fun createNote(content: String, source: ItemSource?): String {
         val id = itemFactory.simpleUid()
@@ -22,6 +25,8 @@ class LocalNoteClient(
                 title = content,
                 listHint = null,
                 toolCallId = source?.toolCallId,
+                resolvedListId = LIST_NOTES_SELF_ID,
+                parentListKind = listRepository.getById(LIST_NOTES_SELF_ID)?.listKind,
             ),
         )
         return id

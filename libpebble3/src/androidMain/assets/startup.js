@@ -138,6 +138,7 @@ navigator.geolocation.clearWatch = (id) => {
         APP_MESSAGE_NACK: 'appmessage_nack',
         GET_TIMELINE_TOKEN_SUCCESS: 'getTimelineTokenSuccess',
         GET_TIMELINE_TOKEN_FAILURE: 'getTimelineTokenFailure',
+        CONFIG_MESSAGE: 'configmessage',
     };
     Object.freeze(PebbleEventTypes);
     const DEFAULT_TIMEOUT = 5000; // 5 seconds
@@ -212,6 +213,15 @@ navigator.geolocation.clearWatch = (id) => {
     const appMessageAckCallbacks = new Map();
     const appMessageNackCallbacks = new Map();
 
+    // Source subscriptions (see new-plugin-api.md). subscriptionId is minted by the JS
+    // side as a monotonically increasing integer; host echoes it back on every update.
+    const sourceSubscriptions = new Map();
+    let sourceSubscriptionIdCounter = 0;
+
+    // Pending Pebble.invokeAction calls, keyed by the id echoed back by the host.
+    const actionCalls = new Map();
+    let actionCallIdCounter = 0;
+
     const dispatchPebbleEvent = (type, detail = {}) => {
         const event = {type: type, bubbles: false, cancelable: false};
         Object.assign(event, detail);
@@ -237,6 +247,24 @@ navigator.geolocation.clearWatch = (id) => {
     global.signalWebviewClosedEvent = (data) => {
         dispatchPebbleEvent(PebbleEventTypes.WEBVIEW_CLOSED, { response: data });
     }
+    // A message from this app's config page, while it is open. `respond` settles the page's
+    // promise; calling it more than once, or not at all, is the app's problem to avoid.
+    global.signalConfigMessageEvent = (requestId, data) => {
+        let settled = false;
+        const respond = (reply) => {
+            if (settled) return;
+            settled = true;
+            try {
+                _Pebble.configMessageReply(requestId, JSON.stringify(reply === undefined ? null : reply));
+            } catch (e) {
+                console.error("Pebble JS Bridge: Error replying to config message", e);
+            }
+        };
+        const delivered = dispatchPebbleEvent(PebbleEventTypes.CONFIG_MESSAGE, { data, respond });
+        if (!delivered) {
+            respond({ error: 'no configmessage listener registered' });
+        }
+    }
     global.signalReady = (data) => {
         const success = dispatchPebbleEvent(PebbleEventTypes.READY, { ready: data });
         try {
@@ -255,6 +283,36 @@ navigator.geolocation.clearWatch = (id) => {
 
         if (payload.data !== undefined && payload.data.transactionId !== undefined) {
             removeAppMessageCallbacksForTransactionId(payload.data.transactionId);
+        }
+    }
+    global._signalSourceUpdate = (subscriptionId, payloadJson) => {
+        const sub = sourceSubscriptions.get(subscriptionId);
+        if (!sub) return;
+        try {
+            const envelope = JSON.parse(payloadJson);
+            if (sub.onData) sub.onData(envelope);
+        } catch (e) {
+            console.error("Pebble JS Bridge: Error in source onData callback", e);
+        }
+    }
+    global._signalSourceError = (subscriptionId, errorJson) => {
+        const sub = sourceSubscriptions.get(subscriptionId);
+        if (!sub) return;
+        try {
+            const err = JSON.parse(errorJson);
+            if (sub.onError) sub.onError(err);
+        } catch (e) {
+            console.error("Pebble JS Bridge: Error in source onError callback", e);
+        }
+    }
+    global._signalActionResult = (callId, resultJson) => {
+        const call = actionCalls.get(callId);
+        if (!call) return;
+        actionCalls.delete(callId);
+        try {
+            call(JSON.parse(resultJson));
+        } catch (e) {
+            call({ ok: false, code: "UNKNOWN", message: "malformed host response" });
         }
     }
     global.signalAppMessageNack = (data) => {
@@ -383,6 +441,76 @@ navigator.geolocation.clearWatch = (id) => {
         deleteTimelinePin: (id) => {
             _Pebble.deleteTimelinePin(id);
         },
+        subscribeToSource: (config) => {
+            if (!config || typeof config !== 'object') {
+                throw new Error("Pebble.subscribeToSource: config object required");
+            }
+            if (!config.category || !config.item) {
+                throw new Error("Pebble.subscribeToSource: category and item required");
+            }
+            const subscriptionId = ++sourceSubscriptionIdCounter;
+            sourceSubscriptions.set(subscriptionId, {
+                onData: config.onData,
+                onError: config.onError,
+            });
+            const request = {
+                category: config.category,
+                item: config.item,
+                properties: config.properties,
+                plugin: config.plugin,
+                maxStalenessMs: config.maxStalenessMs,
+                iconPixelSize: config.iconPixelSize,
+            };
+            try {
+                _Pebble.subscribeToSource(subscriptionId, JSON.stringify(request));
+            } catch (e) {
+                sourceSubscriptions.delete(subscriptionId);
+                throw e;
+            }
+            return {
+                unsubscribe: () => {
+                    if (!sourceSubscriptions.has(subscriptionId)) return;
+                    sourceSubscriptions.delete(subscriptionId);
+                    try {
+                        _Pebble.unsubscribeSource(subscriptionId);
+                    } catch (e) {
+                        console.error("Pebble JS Bridge: unsubscribe failed", e);
+                    }
+                },
+            };
+        },
+        enumeratePlugins: () => {
+            try {
+                return JSON.parse(_Pebble.enumeratePlugins());
+            } catch (e) {
+                console.error("Pebble JS Bridge: enumeratePlugins failed", e);
+                return [];
+            }
+        },
+        invokeAction: (config) => {
+            if (!config || typeof config !== 'object') {
+                throw new Error("Pebble.invokeAction: config object required");
+            }
+            if (!config.plugin || !config.action) {
+                throw new Error("Pebble.invokeAction: plugin and action required");
+            }
+            const callId = ++actionCallIdCounter;
+            const request = {
+                plugin: config.plugin,
+                action: config.action,
+                args: config.args || {},
+                timeoutMs: config.timeoutMs,
+            };
+            return new Promise((resolve) => {
+                actionCalls.set(callId, resolve);
+                try {
+                    _Pebble.invokeAction(callId, JSON.stringify(request));
+                } catch (e) {
+                    actionCalls.delete(callId);
+                    resolve({ ok: false, code: "UNKNOWN", message: String(e) });
+                }
+            });
+        },
     }
     global.Pebble.addEventListener = PebbleAPI.addEventListener;
     global.Pebble.removeEventListener = PebbleAPI.removeEventListener;
@@ -395,6 +523,13 @@ navigator.geolocation.clearWatch = (id) => {
     global.Pebble.appGlanceReload = PebbleAPI.appGlanceReload;
     global.Pebble.insertTimelinePin = PebbleAPI.insertTimelinePin;
     global.Pebble.deleteTimelinePin = PebbleAPI.deleteTimelinePin;
+    global.Pebble.subscribeToSource = PebbleAPI.subscribeToSource;
+    global.Pebble.enumeratePlugins = PebbleAPI.enumeratePlugins;
+    global.Pebble.invokeAction = PebbleAPI.invokeAction;
+    /** Push at this app's config page, while it is open. No reply. */
+    global.Pebble.sendConfigMessage = (message) => {
+        _Pebble.sendConfigMessage(JSON.stringify(message === undefined ? null : message));
+    };
 
     // Enable intercepting XHR calls (on Android - this doesn't work on iOS so we don't add
     // shouldIntercept to the PKJS interface there).

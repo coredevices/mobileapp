@@ -31,6 +31,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,12 +54,14 @@ import coreapp.composeapp.generated.resources.pebble_logo
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.PreviewWrapper
 import coredevices.ui.PebbleElevatedButton
+import coredevices.ui.SecondaryProfileWarningDialog
 import coredevices.ui.SignInButtons
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.name
 import coredevices.util.rememberUiContext
 import coredevices.util.requestIsFullScreen
@@ -121,6 +125,24 @@ fun OnboardingScreen(
     val scope = rememberCoroutineScope()
     val settings: Settings = koinInject()
     val doneInitialOnboarding: DoneInitialOnboarding = koinInject()
+    val secondaryProfileWarning: SecondaryProfileWarning = koinInject()
+    var showSecondaryProfileWarning by remember { mutableStateOf(false) }
+
+    fun chooseIndexDevice(choice: DeviceChoice) {
+        viewModel.setIndexEnabled(true)
+        viewModel.deviceChoice.value = choice
+        if (secondaryProfileWarning.pending) {
+            showSecondaryProfileWarning = true
+        } else {
+            viewModel.stage.value = OnboardingStage.Permissions
+        }
+    }
+    if (showSecondaryProfileWarning) {
+        SecondaryProfileWarningDialog {
+            showSecondaryProfileWarning = false
+            viewModel.stage.value = OnboardingStage.Permissions
+        }
+    }
 
     fun exitOnboarding() {
         logger.v { "exitOnboarding" }
@@ -188,22 +210,14 @@ fun OnboardingScreen(
                             DeviceChoiceCard(
                                 label = "Index 01",
                                 icon = Icons.Default.RadioButtonUnchecked,
-                                onClick = {
-                                    viewModel.setIndexEnabled(true)
-                                    viewModel.deviceChoice.value = DeviceChoice.Index01
-                                    viewModel.stage.value = OnboardingStage.Permissions
-                                },
+                                onClick = { chooseIndexDevice(DeviceChoice.Index01) },
                             )
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         DeviceChoiceCard(
                             label = "Both",
                             icon = Icons.Default.Devices,
-                            onClick = {
-                                viewModel.setIndexEnabled(true)
-                                viewModel.deviceChoice.value = DeviceChoice.Both
-                                viewModel.stage.value = OnboardingStage.Permissions
-                            },
+                            onClick = { chooseIndexDevice(DeviceChoice.Both) },
                         )
                     }
                 }

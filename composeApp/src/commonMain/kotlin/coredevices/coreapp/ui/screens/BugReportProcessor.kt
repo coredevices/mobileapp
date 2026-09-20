@@ -59,6 +59,7 @@ import kotlinx.serialization.json.JsonObject
 import org.koin.mp.KoinPlatform
 import size
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
 data class BugReportGenerationParams(
@@ -348,7 +349,12 @@ class BugReportProcessor(
                         summary = summaryWithAttachmentCount,
                         latestLogs = lastNLines,
                         googleIdToken = userIdToken,
-                        sourceIsExperimentalDevice = params.includeExperimentalDebugInfo
+                        sourceIsExperimentalDevice = params.includeExperimentalDebugInfo,
+                        indexRebootLogs = if (params.includeExperimentalDebugInfo) {
+                            experimentalDevices.rebootLog().map {
+                                BugApi.IndexRebootLog(timestamp = it.timestamp.toString(), reason = it.reason)
+                            }
+                        } else null,
                     )
                 } catch (e: Exception) {
                     Logger.e(e) { "Failed to send bug report" }

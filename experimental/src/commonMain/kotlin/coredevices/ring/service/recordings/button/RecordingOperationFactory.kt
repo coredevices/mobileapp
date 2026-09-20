@@ -9,6 +9,7 @@ import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
 import coredevices.ring.service.ButtonPress
@@ -68,7 +69,13 @@ class RecordingOperationFactory(
         destination: GestureDestination.Recording,
         inner: RecordingOperation,
     ): RecordingOperation {
-        if (!indexWebhookPreferences.configFor(gesture).sendsFor(destination)) return inner
+        val config = indexWebhookPreferences.configFor(gesture)
+        if (!config.sendsFor(destination)) return inner
+        val decorated = if (webhookNeedsOwnTranscription(config.payloadMode, inner, fileId)) {
+            TranscribeOnlyRecordingOperation(fileId!!)
+        } else {
+            inner
+        }
         return IndexWebhookUploadRecordingOperation(
             webhookApi = indexWebhookApi,
             webhookPreferences = indexWebhookPreferences,
@@ -76,7 +83,7 @@ class RecordingOperationFactory(
             fileId = fileId,
             recordingId = recordingId,
             gesture = gesture,
-            decorated = inner,
+            decorated = decorated,
         )
     }
 
@@ -197,6 +204,15 @@ class RecordingOperationFactory(
 private object NoAgentRecordingOperation : RecordingOperation {
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) = Unit
 }
+
+/** The payload wants a transcript that no other part of the operation will produce. */
+internal fun webhookNeedsOwnTranscription(
+    payloadMode: IndexWebhookPayloadMode,
+    inner: RecordingOperation,
+    fileId: String?,
+): Boolean = fileId != null &&
+    payloadMode != IndexWebhookPayloadMode.RecordingOnly &&
+    inner !is TranscribingRecordingOperation
 
 /** Text has no audio to deliver, so webhook-only and disabled routes still run the agent. */
 internal fun textChatModeFor(

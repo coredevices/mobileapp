@@ -652,8 +652,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             name = "COMPANION",
                             nameModifier = propertyNameModifier,
                             value = entry.androidCompanion.name,
-                            onClick = {
-                                urlLauncher.open(entry.androidCompanion.url)
+                            onClick = entry.androidCompanion.url?.let { url ->
+                                { urlLauncher.open(url); Unit }
                             },
                         )
                     }
@@ -711,21 +711,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         )
                     }
                     (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
-                        PropertyRow(
-                            name = "SOURCE CODE",
-                            nameModifier = propertyNameModifier,
-                            value = "External Link",
-                            onClick = { urlLauncher.open(sourceLink) }
-                        )
+                        if (sourceLink.isNotEmpty()) {
+                            PropertyRow(
+                                name = "SOURCE CODE",
+                                nameModifier = propertyNameModifier,
+                                value = "External Link",
+                                onClick = { urlLauncher.open(sourceLink) }
+                            )
+                        }
                     }
 
                     commonAppStore?.developerLink?.let { developerLink ->
-                        PropertyRow(
-                            name = "WEBSITE LINK",
-                            nameModifier = propertyNameModifier,
-                            value = "External Link",
-                            onClick = { urlLauncher.open(developerLink) }
-                        )
+                        if (developerLink.isNotEmpty()) {
+                            PropertyRow(
+                                name = "WEBSITE LINK",
+                                nameModifier = propertyNameModifier,
+                                value = "External Link",
+                                onClick = { urlLauncher.open(developerLink) }
+                            )
+                        }
                     }
                     val contactStoreId = entry.storeId
                     if (
@@ -805,9 +809,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     }
 
                     storeSource?.let { storeSource ->
-                        val onClick = if (entry.appstoreSource?.url == PEBBLE_FEED_URL) {
+                        val storeId = entry.storeId
+                        val onClick = if (storeId != null && entry.appstoreSource?.url == PEBBLE_FEED_URL) {
                             {
-                                urlLauncher.open("https://apps.repebble.com/${entry.storeId}")
+                                urlLauncher.open("https://apps.repebble.com/$storeId")
                                 Unit
                             }
                         } else {
@@ -1003,10 +1008,10 @@ suspend fun CommonApp.showSettings(
                     return
                 }
                 logger.d { "Got app settings URL" }
-                WatchappSettingsUrlCache.put(watch.identifier.asString, url)
+                WatchappSettingsUrlCache.put(uuid.toString(), url)
                 navBarNav.navigateTo(
                     PebbleRoutes.WatchappSettingsRoute(
-                        watchIdentifier = watch.identifier.asString,
+                        uuid = uuid.toString(),
                         title = title,
                     )
                 )

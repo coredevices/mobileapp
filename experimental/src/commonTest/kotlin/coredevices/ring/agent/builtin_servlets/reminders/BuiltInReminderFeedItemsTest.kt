@@ -104,6 +104,23 @@ class BuiltInReminderFeedItemsTest {
     }
 
     @Test
+    fun createFeedItemInChecklistListMakesChecklistItem() = runBlocking {
+        val checklist = CachedList(firestoreId = "list_chk", title = "Packing", listKind = "checklist")
+        val (feedItems, itemDao) = fixture(defaultLists + checklist)
+        feedItems.createFeedItem(
+            localReminderId = 5,
+            title = "Umbrella",
+            deadline = null,
+            listId = "list_chk",
+            notifyBefore = null,
+            source = null,
+        )
+        val item = itemDao.items.values.single().toDocument()
+        assertEquals(listOf("list_chk"), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
     fun createFeedItemWithoutListIdMakesReminderInTodos() = runBlocking {
         val (feedItems, itemDao) = fixture()
         val deadline = now + 5.minutes

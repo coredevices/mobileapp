@@ -1,7 +1,6 @@
 package coredevices.util.models
 
 import co.touchlab.kermit.Logger
-import coredevices.util.CommonBuildKonfig
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,7 +60,7 @@ actual class ModelDownloadManager {
     }
 
     private fun download(modelInfo: ModelInfo, isStt: Boolean, allowMetered: Boolean): Boolean {
-        if (_downloadStatus.value is ModelDownloadStatus.Downloading) {
+        if (_downloadStatus.value.inProgress) {
             return false
         }
         val modelUrl = modelInfo.url
@@ -75,7 +74,7 @@ actual class ModelDownloadManager {
         task.taskDescription = "${if (isStt) "stt" else "lm"}:${modelInfo.slug}"
         task.resume()
 
-        updateDownloadStatus(ModelDownloadStatus.Downloading(modelInfo.slug))
+        updateDownloadStatus(ModelDownloadStatus.Scheduled(modelInfo.slug))
         return true
     }
 
@@ -150,7 +149,7 @@ private class DownloadDelegate(private val manager: ModelDownloadManager) : NSOb
             val outputDirIo = IoPath(outputDir.toString())
             promoteSingleRootDir(outputDirIo)
             SystemFileSystem.sink(IoPath(outputDirIo, ".cactus_version")).buffered().use {
-                it.write(CommonBuildKonfig.CACTUS_WEIGHTS_VERSION.encodeToByteArray())
+                it.write(weightsVersionFor(slug).encodeToByteArray())
             }
             logger.i {"Model $slug downloaded and extracted to $outputDir"}
             manager.updateDownloadStatus(ModelDownloadStatus.Idle)

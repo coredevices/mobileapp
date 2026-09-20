@@ -145,6 +145,17 @@ fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
     }
 }
 
+/** Writes only the units entry, leaving the other health settings untouched. */
+suspend fun HealthSettingsEntryDao.setImperialUnits(imperialUnits: Boolean) {
+    insertOrReplace(
+        HealthSettingsEntry(
+            id = KEY_UNITS_DISTANCE,
+            value = UnitsDistanceValue(imperialUnits = imperialUnits).encodeToString(),
+            timestamp = Clock.System.now().asMillisecond(),
+        )
+    )
+}
+
 suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettings) {
     val now = Clock.System.now().asMillisecond()
     insertOrReplace(

@@ -97,6 +97,21 @@ data class WatchPrefItem(
                     endianness = Endian.Little
                 ).toBytes()
 
+                WatchPrefType.TypeSchedule -> {
+                    val schedule = QuietTimeSchedule.parse(value)
+                    if (schedule == null) {
+                        logger.w { "Invalid schedule value: $value" }
+                        null
+                    } else {
+                        ubyteArrayOf(
+                            schedule.fromHour.toUByte(),
+                            schedule.fromMinute.toUByte(),
+                            schedule.toHour.toUByte(),
+                            schedule.toMinute.toUByte(),
+                        )
+                    }
+                }
+
                 WatchPrefType.TypeQuickLaunch -> {
                     val setting = QuickLaunchSetting.fromJson(value)
                     val struct = QLMappable(
@@ -141,6 +156,7 @@ enum class WatchPrefType {
     TypeUInt32,
     TypeQuickLaunch,
     TypeColor,
+    TypeSchedule,
 }
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -165,6 +181,41 @@ class QLMappable(
     val uuid = SUUID(m, uuid ?: NULL_UUID)
 }
 
+/**
+ * A daily window in the watch's local time. A window whose end is before its start runs overnight
+ * (e.g. 22:00 to 07:00).
+ */
+@Immutable
+data class QuietTimeSchedule(
+    val fromHour: Int,
+    val fromMinute: Int,
+    val toHour: Int,
+    val toMinute: Int,
+) {
+    fun fromTime(): String = time(fromHour, fromMinute)
+    fun toTime(): String = time(toHour, toMinute)
+    fun encode(): String = "${fromTime()}-${toTime()}"
+
+    companion object {
+        private fun time(hour: Int, minute: Int): String =
+            "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
+
+        fun parse(value: String): QuietTimeSchedule? {
+            val times = value.split('-')
+            if (times.size != 2) return null
+            val (from, to) = times.map { parseTime(it) ?: return null }
+            return QuietTimeSchedule(from.first, from.second, to.first, to.second)
+        }
+
+        private fun parseTime(value: String): Pair<Int, Int>? {
+            val parts = value.trim().split(':')
+            if (parts.size != 2) return null
+            val hour = parts[0].toIntOrNull()?.takeIf { it in 0..23 } ?: return null
+            val minute = parts[1].toIntOrNull()?.takeIf { it in 0..59 } ?: return null
+            return hour to minute
+        }
+    }
+}
 
 sealed interface WatchPref<T> {
     val id: String
@@ -184,6 +235,7 @@ sealed interface WatchPref<T> {
             .plus(ColorWatchPref.entries)
             .plus(RgbColorWatchPref.entries)
             .plus(NumberWatchPref.entries)
+            .plus(ScheduleWatchPref.entries)
 
         fun from(id: String): WatchPref<*>? = enumeratePrefs().find { it.id == id }
     }
@@ -206,6 +258,8 @@ enum class BoolWatchPref(
     TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
     QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
     CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
+    QuietTimeWeekdayScheduleEnabled("dndWeekdayScheduleEnabled", "Quiet Time - Weekday Schedule", false, description = "Automatically enable Quiet Time during the scheduled hours, Monday to Friday"),
+    QuietTimeWeekendScheduleEnabled("dndWeekendScheduleEnabled", "Quiet Time - Weekend Schedule", false, description = "Automatically enable Quiet Time during the scheduled hours, Saturday and Sunday"),
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
@@ -254,6 +308,32 @@ enum class QuicklaunchWatchPref(
         defaultValue
     }
     override fun encodeValue(value: QuickLaunchSetting): String = value.toJson()
+}
+
+enum class ScheduleWatchPref(
+    override val id: String,
+    override val displayName: String,
+    override val defaultValue: QuietTimeSchedule,
+    override val isDebugSetting: Boolean = false,
+    override val description: String? = null,
+) : WatchPref<QuietTimeSchedule> {
+    QuietTimeWeekdaySchedule(
+        "dndWeekdaySchedule",
+        "Quiet Time - Weekday Hours",
+        QuietTimeSchedule(0, 0, 6, 0),
+    ),
+    QuietTimeWeekendSchedule(
+        "dndWeekendSchedule",
+        "Quiet Time - Weekend Hours",
+        QuietTimeSchedule(0, 0, 6, 0),
+    ),
+    ;
+
+    override val type = WatchPrefType.TypeSchedule
+    override fun decodeValue(value: String): QuietTimeSchedule =
+        QuietTimeSchedule.parse(value) ?: defaultValue
+
+    override fun encodeValue(value: QuietTimeSchedule): String = value.encode()
 }
 
 sealed interface WatchPrefEnum {
@@ -335,6 +415,13 @@ enum class MenuScrollVibeBehaviour(override val code: UByte, override val displa
     NoVibe(0u, "No Vibe"),
     VibeOnWrapAround(1u, "Vibe On Wrap Around"),
     VibeOnLocked(2u, "Vibe On Locked"),
+}
+
+/** Wind is labelled separately from distance so the UK (metric, but mph wind) is expressible. */
+enum class WindUnits(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    FromDistance(0u, "Automatic"),
+    KmH(1u, "km/h"),
+    Mph(2u, "mph"),
 }
 
 enum class MotionSensitivityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -512,6 +599,13 @@ enum class EnumWatchPref(
         description = "Turn on backlight when tapping the screen",
         defaultValue = BacklightTouchWakeMode.DoubleTap,
         options = BacklightTouchWakeMode.entries,
+    ),
+    WindSpeed(
+        id = "unitsWind",
+        displayName = "Wind Speed",
+        description = "Automatic follows the Imperial Units setting.",
+        defaultValue = WindUnits.FromDistance,
+        options = WindUnits.entries,
     ),
     Language(
         id = "language",
@@ -696,10 +790,6 @@ enum class ColorWatchPref(
 - hrmPreferences (see HealthSettingsEntry)
 - heartRatePreferences (see HealthSettingsEntry)
 - workerId (need UI to figure out which apps are eligible)
-- dndWeekdaySchedule (need to figure out how to do this)
-- dndWeekdayScheduleEnabled
-- dndWeekendSchedule (need to figure out how to do this)
-- dndWeekendScheduleEnabled
  */
 
 private val logger = Logger.withTag("WatchPrefItem")
@@ -736,6 +826,13 @@ fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
                         DataBuffer(value)
                     )
                 }.get().toString()
+
+                WatchPrefType.TypeSchedule -> QuietTimeSchedule(
+                    fromHour = value[0].toInt(),
+                    fromMinute = value[1].toInt(),
+                    toHour = value[2].toInt(),
+                    toMinute = value[3].toInt(),
+                ).encode()
 
                 WatchPrefType.TypeQuickLaunch -> {
                     val struct = QLMappable().apply { fromBytes(DataBuffer(value)) }

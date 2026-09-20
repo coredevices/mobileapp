@@ -160,8 +160,14 @@ private object PreferencesTestImpl: Preferences {
     override val lastBackupCount: StateFlow<Int?>
         get() = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
+    override val usePendingIntentScan: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
 
     override suspend fun setLlmMode(mode: LlmMode) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setUsePendingIntentScan(enabled: Boolean) {
         TODO("Not yet implemented")
     }
 
@@ -249,6 +255,16 @@ private object UsersDaoTestImpl: UsersDao {
         serial: String,
         count: Int
     ) {
+    }
+
+    override suspend fun updateRingBatteryVoltage(
+        serial: String,
+        voltageMilliV: Int
+    ) {
+    }
+
+    override suspend fun signOut() {
+        TODO("Not yet implemented")
     }
 
     override fun init() {

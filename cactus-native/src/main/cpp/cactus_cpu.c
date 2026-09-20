@@ -4,5 +4,7 @@
 
 JNIEXPORT jboolean JNICALL
 Java_com_cactus_CactusCpuJNI_nativeIsCactusSupported(JNIEnv *env, jclass clazz) {
-    return (getauxval(AT_HWCAP) & HWCAP_ASIMDHP) != 0 ? JNI_TRUE : JNI_FALSE;
+    const unsigned long hwcap = getauxval(AT_HWCAP);
+    const unsigned long required = HWCAP_ASIMDHP | HWCAP_ASIMDDP;
+    return (hwcap & required) == required ? JNI_TRUE : JNI_FALSE;
 }

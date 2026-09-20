@@ -26,6 +26,16 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 
+class TestMcpServer(
+    val mcp: Server,
+    private val ktor: EmbeddedServer<*, *>,
+    private val sessions: Map<String, ServerSession>,
+) {
+    suspend fun notifyToolListChanged() = sessions.values.forEach { it.sendToolListChanged() }
+
+    fun stop() = ktor.stop(100, 300)
+}
+
 private fun configureServer(): Server {
     val server = Server(
         Implementation(
@@ -66,7 +76,7 @@ private fun configureServer(): Server {
     return server
 }
 
-fun runSseMcpServer(port: Int, wait: Boolean = true): EmbeddedServer<*, *> {
+fun runSseMcpServer(port: Int, wait: Boolean = true): TestMcpServer {
     val serverSessions = ConcurrentMap<String, ServerSession>()
 
     val server = configureServer()
@@ -103,5 +113,5 @@ fun runSseMcpServer(port: Int, wait: Boolean = true): EmbeddedServer<*, *> {
         }
     }.start(wait = wait)
 
-    return ktorServer
+    return TestMcpServer(server, ktorServer, serverSessions)
 }

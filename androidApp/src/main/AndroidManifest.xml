@@ -91,6 +91,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/filepaths" />
         </provider>
+        <!-- Eager WorkManager init crashes the process on devices whose framework JobScheduler
+             lacks forNamespace() despite reporting API 34+; init it on demand instead. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                tools:node="remove" />
+        </provider>
         <service
             android:name=".BugReportService"
             android:enabled="true"

@@ -1,6 +1,7 @@
 package coredevices.coreapp.transcription
 
 import androidx.test.platform.app.InstrumentationRegistry
+import com.russhwolf.settings.Settings
 import coredevices.coreapp.testsupport.NoopAnalytics
 import coredevices.coreapp.testsupport.ReadOnlyModelPathProvider
 import coredevices.ring.model.CactusModelProvider
@@ -82,7 +83,7 @@ class CactusColdStartRaceTest {
                 val provider = ReadOnlyModelPathProvider(modelsDir, MODEL_NAME)
                 if (!provider.isModelDownloaded(MODEL_NAME)) {
                     println("[cold-start] model missing — downloading $MODEL_NAME (one-time)…")
-                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath() } }
+                    runBlocking { withTimeout(20.minutes) { CactusModelProvider().getSTTModelPath(MODEL_NAME) } }
                 }
                 modelPresent = provider.isModelDownloaded(MODEL_NAME)
 
@@ -96,6 +97,7 @@ class CactusColdStartRaceTest {
                         modelProvider = provider,
                         analytics = NoopAnalytics,
                         inferenceBoost = NoOpInferenceBoost(),
+                        settings = Settings()
                     )
                     runBlocking {
                         svc.earlyInit()

@@ -3,6 +3,7 @@ package coredevices.libindex.device
 import co.touchlab.kermit.Logger
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.haversine.KMPHaversineSatelliteManager
+import coredevices.haversine.KMPHaversineSatelliteState
 import coredevices.libindex.IndexDevices
 import coredevices.libindex.Rings
 import coredevices.libindex.database.BasePreferences
@@ -10,19 +11,22 @@ import coredevices.libindex.database.PrefsCollectionIndexStorage
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.libindex.di.LibIndexCoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration.Companion.seconds
 
 class IndexDeviceManager(
     private val satelliteManager: KMPHaversineSatelliteManager,
@@ -45,20 +49,33 @@ class IndexDeviceManager(
         private val logger = Logger.withTag("IndexDeviceRepository")
     }
 
-    fun update(indexDevice: IndexDevice) {
+    /**
+     * Moves the ring's scanned entry to [pairingState].
+     */
+    fun setPairingState(identifier: IndexIdentifier, name: String, pairingState: IndexPairingState) {
         _rings.update { prev ->
-            val existingIdx = prev.indexOfFirst { indexDevice.identifier.asString.equals(it.identifier.asString, ignoreCase = true) }
-            if (existingIdx != -1) {
-                prev
-                    .toMutableList()
-                    .apply { set(existingIdx, indexDevice) }
-            } else {
-                prev + indexDevice
-            }
+            val existing = prev.getByIDNamePair(identifier, name) as? PairableIndexDevice
+                ?: return@update prev
+            val updated = deviceFactory.create(
+                identifier = existing.identifier,
+                name = existing.name,
+                scanResult = IndexScanResult(
+                    identifier = existing.identifier,
+                    name = existing.name,
+                    rssi = existing.rssi,
+                    currentImage = existing.currentImage,
+                ),
+                pairingState = pairingState,
+            )
+            prev.map { if (it === existing) updated else it }
         }
     }
 
-    private fun updateRing(satellite: KMPHaversineSatellite, isUpdating: Boolean? = null) {
+    private fun updateRing(
+        satellite: KMPHaversineSatellite,
+        state: KMPHaversineSatelliteState? = satellite.state.value,
+        isUpdating: Boolean? = null,
+    ) {
         _rings.update { prev ->
             val existingIdx = prev.indexOfFirst { satellite.id.equals(it.identifier.asString, ignoreCase = true) }
             val existing = if (existingIdx != -1) prev[existingIdx] as? KnownIndexDevice else null
@@ -76,7 +93,7 @@ class IndexDeviceManager(
                                 name = existing.name,
                                 isPaired = true,
                                 satellite = satellite,
-                                satelliteState = satellite.state.value ?: run {
+                                satelliteState = state ?: run {
                                     logger.w { "State is stale for ring update, ignoring" }
                                     return@update prev
                                 },
@@ -91,6 +108,7 @@ class IndexDeviceManager(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun init() {
         scope.launch {
             // Re-reconcile on every change so the stored ring can't get stuck out of sync
@@ -170,16 +188,16 @@ class IndexDeviceManager(
                 }
             }.launchIn(scope)
         satelliteManager.lastRing
-            .onEach {
-                if (it != null) {
-                    // Wait for state to be non-null, just in case
-                    withTimeoutOrNull(1.seconds) {
-                        it.state.filterNotNull().first()
-                    } ?: return@onEach
-
-                    updateRing(it, isUpdating = null)
-                }
-            }.launchIn(scope)
+            .flatMapLatest { satellite ->
+                satellite?.state
+                    ?.filterNotNull()
+                    ?.filter { it.serialNumber.isNotBlank() }
+                    ?.distinctUntilChangedBy { InterviewedFields.from(satellite, it) }
+                    ?.map { satellite to it }
+                    ?: emptyFlow()
+            }
+            .onEach { (satellite, state) -> updateRing(satellite, state) }
+            .launchIn(scope)
     }
 
     // Without any CompanionDeviceManager association the app loses companion background privileges
@@ -192,22 +210,21 @@ class IndexDeviceManager(
     }
 
     fun markFirmwareUpdatingState(identifier: KMPHaversineSatellite, isUpdating: Boolean) {
-        updateRing(identifier, isUpdating)
+        updateRing(identifier, isUpdating = isUpdating)
     }
 
     fun addScanResult(result: IndexScanResult) {
         _rings.update { prev ->
-            val matching = prev.filter { it.isSameRing(result.identifier, result.name) }
+            val existing = prev.getByIDNamePair(result.identifier, result.name)
             // A paired ring keeps its entry; a scan result must not turn it back into a
             // scanned one, nor add a second row for it.
-            if (matching.any { !it.isScanned }) return@update prev
+            if (existing != null && !existing.isScanned) return@update prev
             prev.upsertRing(
                 deviceFactory.create(
                     identifier = result.identifier,
                     name = result.name,
                     scanResult = result,
-                    pairingState = matching.filterIsInstance<DiscoveredIndexDevice>()
-                        .firstOrNull()?.pairingState ?: IndexPairingState.NotPaired,
+                    pairingState = existing.inheritedPairingState(),
                 )
             )
         }
@@ -220,9 +237,26 @@ class IndexDeviceManager(
     }
 }
 
+/** The satellite state fields an [InterviewedIndexDevice] snapshots; other state changes (rssi, nearby) don't rebuild it. */
+internal data class InterviewedFields(
+    val name: String?,
+    val firmwareVersion: String,
+    val serialNumber: String,
+    val programmedSerialNumber: String?,
+) {
+    companion object {
+        fun from(satellite: KMPHaversineSatellite, state: KMPHaversineSatelliteState) = InterviewedFields(
+            name = satellite.name,
+            firmwareVersion = state.firmwareVersion,
+            serialNumber = state.serialNumber,
+            programmedSerialNumber = state.programmedSerialNumber,
+        )
+    }
+}
+
 /** Built from a scan result, so superseded by the next one and dropped when the scan ends. */
 internal val IndexDevice.isScanned: Boolean
-    get() = this is DiscoveredIndexDevice || this is RepairableIndexDevice
+    get() = this is DiscoveredIndexDevice
 
 /**
  * A ring entering failsafe advertises a slightly different address but keeps its name, so a
@@ -231,6 +265,19 @@ internal val IndexDevice.isScanned: Boolean
 internal fun IndexDevice.isSameRing(identifier: IndexIdentifier, name: String): Boolean =
     this.identifier.asString.equals(identifier.asString, ignoreCase = true) ||
         (isScanned && this.name == name)
+
+/**
+ * Get entry by identifier & name.
+ * Required because failsafe can have a different identifier.
+ */
+internal fun List<IndexDevice>.getByIDNamePair(identifier: IndexIdentifier, name: String): IndexDevice? =
+    firstOrNull { it.isSameRing(identifier, name) }
+
+/**
+ * Get pairing state to be inherited for updating device entry type, resets if e.g. Failsafe occurs
+ */
+internal fun IndexDevice?.inheritedPairingState(): IndexPairingState =
+    (this as? PairableIndexDevice)?.pairingState ?: IndexPairingState.NotPaired
 
 /**
  * Inserts [device] in place of every entry for the same ring. The devices screen keys its rows by
@@ -248,11 +295,13 @@ internal fun List<IndexDevice>.upsertRing(device: IndexDevice): List<IndexDevice
     }
 }
 
+@Suppress("ArrayInDataClass")
 data class IndexScanResult(
     val identifier: IndexIdentifier,
     val name: String,
     val rssi: Int,
-    val currentImage: IndexImage
+    val currentImage: IndexImage,
+    val manufacturerData: ByteArray? = null,
 )
 
 internal data class StoredPairing(val id: String?, val name: String?)

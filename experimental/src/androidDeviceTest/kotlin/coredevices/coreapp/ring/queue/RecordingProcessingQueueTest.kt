@@ -107,6 +107,7 @@ class FakePreferences : Preferences {
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
+    override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(true)
 
     override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -132,6 +133,8 @@ class FakePreferences : Preferences {
         TODO("Not yet implemented")
     }
     override fun setPlatformSttDefaulted() {}
+    override fun setUsePendingIntentScan(enabled: Boolean) {}
+
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
@@ -265,6 +268,8 @@ class RecordingProcessingQueueTest {
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
+                    signRequests: Boolean,
+                    signingSecret: String?,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )

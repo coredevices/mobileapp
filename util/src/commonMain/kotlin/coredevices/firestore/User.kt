@@ -35,5 +35,7 @@ data class User(
     val lastConnectedWatch: String? = null,
     @SerialName("ring_lifetime_collection_counts")
     val ringLifetimeCollectionCounts: Map<String, Int>? = null,
+    @SerialName("ring_voltages")
+    val ringVoltages: Map<String, Int>? = null,
     val encryption: EncryptionInfo? = null,
 )

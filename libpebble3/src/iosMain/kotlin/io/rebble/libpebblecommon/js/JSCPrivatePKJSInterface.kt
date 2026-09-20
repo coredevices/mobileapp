@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -18,7 +19,8 @@ class JSCPrivatePKJSInterface(
     remoteTimelineEmulator: RemoteTimelineEmulator,
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow), RegisterableJsInterface {
+    pluginRegistry: PluginRegistry,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(
@@ -46,6 +48,12 @@ class JSCPrivatePKJSInterface(
         "getActivePebbleWatchInfo" to this::getActivePebbleWatchInfo,
         "insertTimelinePin" to this::insertTimelinePin,
         "deleteTimelinePin" to this::deleteTimelinePin,
+        "subscribeToSource" to this::subscribeToSource,
+        "unsubscribeSource" to this::unsubscribeSource,
+        "invokeAction" to this::invokeAction,
+        "enumeratePlugins" to this::enumeratePlugins,
+        "configMessageReply" to this::configMessageReply,
+        "sendConfigMessage" to this::sendConfigMessage,
     )
 
     override val name: String = "_Pebble"
@@ -95,6 +103,30 @@ class JSCPrivatePKJSInterface(
         "getActivePebbleWatchInfo" -> getActivePebbleWatchInfo()
         "insertTimelinePin" -> { insertTimelinePin(args[0].toString()); null }
         "deleteTimelinePin" -> { deleteTimelinePin(args[0].toString()); null }
+        "subscribeToSource" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("subscribeToSource: bad id")
+            val json = args.getOrNull(1)?.toString() ?: error("subscribeToSource: bad json")
+            subscribeToSource(id, json)
+            null
+        }
+        "unsubscribeSource" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("unsubscribeSource: bad id")
+            unsubscribeSource(id)
+            null
+        }
+        "invokeAction" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("invokeAction: bad id")
+            val json = args.getOrNull(1)?.toString() ?: error("invokeAction: bad json")
+            invokeAction(id, json)
+            null
+        }
+        "enumeratePlugins" -> enumeratePlugins()
+        "configMessageReply" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("configMessageReply: bad id")
+            configMessageReply(id, args.getOrNull(1)?.toString() ?: "null")
+            null
+        }
+        "sendConfigMessage" -> { sendConfigMessage(args.getOrNull(0)?.toString() ?: "null"); null }
         else -> error("Unknown method: $method")
     }
 

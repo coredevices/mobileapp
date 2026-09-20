@@ -9,10 +9,13 @@ import coredevices.ring.database.firestore.dao.FirestoreKnownRingsDao
 import coredevices.ring.database.firestore.dao.documentId
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 interface FirestoreKnownRingsSync {
     fun init()
@@ -26,6 +29,7 @@ class FirestoreKnownRingsSyncImpl(
         private val logger = Logger.withTag("FirestoreKnownRingsSync")
     }
     private val lastSynced = mutableMapOf<String, FirestoreKnownRing>()
+    @OptIn(FlowPreview::class)
     override fun init() {
         GlobalScope.launch {
             Firebase.auth.authStateChanged.collectLatest { user ->
@@ -43,6 +47,7 @@ class FirestoreKnownRingsSyncImpl(
 
                 libIndex.rings
                     .catch { e -> logger.w(e) { "error in rings flow" } }
+                    .debounce(5.seconds)
                     .collect { rings ->
                         val snapshot = rings
                             .filterIsInstance<InterviewedIndexDevice>()

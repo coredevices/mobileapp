@@ -106,10 +106,12 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.M3Dialog
+import coredevices.ui.SecondaryProfileWarningDialog
 import coredevices.util.CoreConfigFlow
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
+import coredevices.util.SecondaryProfileWarning
 import coredevices.util.description
 import coredevices.util.name
 import coredevices.util.rememberUiContext
@@ -445,6 +447,12 @@ fun WatchHomeScreen(
                     Text(permission.description())
                 }
             }
+        }
+
+        val secondaryProfileWarning = koinInject<SecondaryProfileWarning>()
+        var secondaryProfileWarningPending by remember { mutableStateOf(secondaryProfileWarning.pending) }
+        if (secondaryProfileWarningPending) {
+            SecondaryProfileWarningDialog { secondaryProfileWarningPending = false }
         }
 
         val watchesFlow = remember {

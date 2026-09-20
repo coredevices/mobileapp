@@ -14,6 +14,15 @@ import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+/** Plain notes added to a checklist list (or Shopping, which is always one)
+ *  are created as checklist items so they get a tickable circle. */
+internal fun defaultChildKind(listId: String, listKind: String, requestedKind: String): String =
+    if (requestedKind == "note" && (listKind == "checklist" || listId == LIST_SHOPPING_ID)) {
+        "checklist"
+    } else {
+        requestedKind
+    }
+
 class ItemFactory {
 
     internal fun simpleUid(): String =
@@ -93,11 +102,11 @@ class ItemFactory {
         listHint: String?,
         toolCallId: String?,
         resolvedListId: String? = null,
+        parentListKind: String? = null,
     ): ItemDocument {
         val parentId = resolvedListId ?: pickNoteList(listHint)
-        // Items dictated into the Shopping list become checklist items so they
-        // can be ticked off, matching the list's checklist type (MOB-8946).
-        val metadata = if (parentId == LIST_SHOPPING_ID) ItemMetadata.Checklist else ItemMetadata.Note
+        val kind = defaultChildKind(parentId, parentListKind ?: "note", "note")
+        val metadata = if (kind == "checklist") ItemMetadata.Checklist else ItemMetadata.Note
         return createItem(
             createdAt = createdAt,
             title = title,

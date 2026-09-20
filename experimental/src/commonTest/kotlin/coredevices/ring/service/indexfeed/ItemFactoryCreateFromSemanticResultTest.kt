@@ -117,6 +117,17 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
+    fun noteItemRoutedToChecklistListBecomesChecklist() {
+        val item = factory.noteItem(
+            recordingId, createdAt, "Milk", listHint = null, toolCallId = null,
+            resolvedListId = "list_custom", parentListKind = "checklist",
+        )
+
+        assertEquals(listOf("list_custom"), item.parentListIds)
+        assertTrue(item.metadata is ItemMetadata.Checklist)
+    }
+
+    @Test
     fun noteItemRoutedToShoppingByHintBecomesChecklist() {
         // No resolvedListId: pickNoteList sends "shopping"/"grocery" hints to the
         // shopping list, and those items should be checklist items too.

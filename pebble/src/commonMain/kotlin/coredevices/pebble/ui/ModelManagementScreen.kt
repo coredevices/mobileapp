@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,6 +54,8 @@ import coredevices.ui.M3Dialog
 import coredevices.util.CoreConfigHolder
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
+import coredevices.util.models.inProgressSlug
+import coredevices.util.models.inProgress
 import coredevices.util.models.ModelInfo
 import coredevices.util.models.ModelManager
 import coredevices.util.models.RecommendedModel
@@ -87,7 +90,7 @@ class ModelManagementScreenViewModel(
     init {
         viewModelScope.launch {
             modelDownloadState.drop(1).collect {
-                if (it !is ModelDownloadStatus.Downloading) {
+                if (!it.inProgress) {
                     refreshDownloadedModels()
                 }
             }
@@ -237,7 +240,7 @@ fun ModelDownloadPromptDialog(
                 if (isLite) {
                     Text("Download lite model: ${downloadSizeInMb}MB")
                 } else {
-                    Text("Download offline model: ${downloadSizeInMb}MB")
+                    Text("Download model (${downloadSizeInMb}MB)")
                 }
             }
             TextButton(
@@ -280,12 +283,7 @@ fun ModelManagementScreen(
         topBarParams.actions {}
     }
     val downloadingModelSlug by remember {
-        derivedStateOf {
-            when (val status = downloadStatus.value) {
-                is ModelDownloadStatus.Downloading -> status.modelSlug
-                else -> null
-            }
-        }
+        derivedStateOf { downloadStatus.value.inProgressSlug }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Scaffold { paddingValues ->
@@ -386,7 +384,7 @@ private fun ModelListItem(
             },
         overlineContent = { if (isRecommended) { Text("Recommended for your device") } },
         headlineContent = { Text(model.slug) },
-        supportingContent = { Text("${model.sizeInMB} MB") },
+        supportingContent = { model.intendedTask?.let { Text(it) } },
         leadingContent = {
             RadioButton(
                 selected = isSelected && downloadState == DownloadState.Downloaded,
@@ -395,52 +393,58 @@ private fun ModelListItem(
             )
         },
         trailingContent = {
-            when(downloadState) {
-                is DownloadState.Downloading -> {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (downloadState.progress != null) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(26.dp),
-                                strokeWidth = 2.dp,
-                                progress = { downloadState.progress },
-                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                            )
-                        } else {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(26.dp),
-                                strokeWidth = 2.dp
-                            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                when(downloadState) {
+                    is DownloadState.Downloading -> {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (downloadState.progress != null) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .size(26.dp),
+                                    strokeWidth = 2.dp,
+                                    progress = { downloadState.progress },
+                                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .size(26.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            IconButton(
+                                onClick = onDownloadCancel,
+                            ) {
+                                Icon(Icons.Default.Cancel, contentDescription = "Download")
+                            }
                         }
+                    }
+                    DownloadState.NotDownloaded -> {
                         IconButton(
-                            onClick = onDownloadCancel,
+                            onClick = { onDownload?.invoke() },
+                            enabled = onDownload != null
                         ) {
-                            Icon(Icons.Default.Cancel, contentDescription = "Download")
+                            Icon(Icons.Default.Download, contentDescription = "Download")
+                        }
+                    }
+                    DownloadState.Downloaded -> {
+                        IconButton(
+                            onClick = onDelete
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
-                DownloadState.NotDownloaded -> {
-                    IconButton(
-                        onClick = { onDownload?.invoke() },
-                        enabled = onDownload != null
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = "Download")
-                    }
-                }
-                DownloadState.Downloaded -> {
-                    IconButton(
-                        onClick = onDelete
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
+                Text("${model.sizeInMB} MB", modifier = Modifier.offset(y = (-8).dp))
             }
         }
     )
@@ -489,9 +493,8 @@ fun ModelManagementScreenPreview() {
             availableSTTModels = mutableStateOf(
                 ModelManagementScreenViewModel.AvailableModelsState.Success(
                     listOf(
-                        ModelInfo(createdAt = Clock.System.now(), slug = "whisper-base", sizeInMB = 74, url = ""),
-                        ModelInfo(createdAt = Clock.System.now(), slug = "whisper-small", sizeInMB = 244, url = ""),
-                        ModelInfo(createdAt = Clock.System.now(), slug = "whisper-medium-pro", sizeInMB = 769, url = ""),
+                        ModelInfo(createdAt = Clock.System.now(), slug = "parakeet-tdt-0.6b-v3"),
+                        ModelInfo(createdAt = Clock.System.now(), slug = "parakeet-tdt-0.6b-v2", intendedTask = "Higher accuracy for English")
                     )
                 )
             ),

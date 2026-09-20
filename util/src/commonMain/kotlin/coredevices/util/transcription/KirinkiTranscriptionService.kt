@@ -67,6 +67,7 @@ class KirinkiTranscriptionService : ApiClient(CommonBuildKonfig.USER_AGENT_VERSI
         contentContext: String?,
         encoding: AudioEncoding,
         initialTimeout: Duration?,
+        totalTimeout: Duration?,
     ): Flow<TranscriptionSessionStatus> = flow {
         val url = CommonBuildKonfig.KIRINKI_URL
             ?: throw TranscriptionException.TranscriptionServiceUnavailable(MODEL_USED)

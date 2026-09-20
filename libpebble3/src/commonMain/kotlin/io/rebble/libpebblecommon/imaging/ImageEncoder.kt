@@ -4,9 +4,20 @@ package io.rebble.libpebblecommon.imaging
  * Encodes an ARGB image as the watch's 4-bpp palettized [EncodedImage]: choose a 16-colour palette
  * by median cut over the watch's 64-colour (GColor8) space, Floyd–Steinberg dither to that palette,
  * and pack two 4-bit indices per byte (even x = high nibble, matching the firmware).
+ *
+ * Transparency is binary, and costs a palette slot when present. The watch only skips these
+ * pixels when it draws with `GCompOpSet`; under the default `GCompOpAssign` they come out black.
  */
 object ImageEncoder {
     private const val MAX_COLORS = 16
+
+    /** At or above this, a source pixel keeps its colour; below it, it becomes transparent. */
+    private const val OPAQUE_ALPHA = 128
+
+    /** GColor8 with all bits clear: alpha 0, which the firmware draws as nothing. */
+    private const val TRANSPARENT = 0
+
+    private fun alphaOf(argb: Int): Int = (argb ushr 24) and 0xFF
 
     // 8-bit channel (0..255) -> 2-bit GColor8 channel (0..3), rounded to nearest of 0/85/170/255.
     private fun quant2(v: Int): Int = (v.coerceIn(0, 255) * 3 + 127) / 255
@@ -17,10 +28,14 @@ object ImageEncoder {
 
     /** Encodes an ARGB8888 pixel array (row-major, [width] * [height]). */
     fun encode(argb: IntArray, width: Int, height: Int): EncodedImage {
-        val palette = medianCutPalette(argb)
-        val palR = IntArray(palette.size) { expand2((palette[it] shr 4) and 0x3) }
-        val palG = IntArray(palette.size) { expand2((palette[it] shr 2) and 0x3) }
-        val palB = IntArray(palette.size) { expand2(palette[it] and 0x3) }
+        val hasTransparency = argb.any { alphaOf(it) < OPAQUE_ALPHA }
+        val colors = medianCutPalette(argb, if (hasTransparency) MAX_COLORS - 1 else MAX_COLORS)
+        val palR = IntArray(colors.size) { expand2((colors[it] shr 4) and 0x3) }
+        val palG = IntArray(colors.size) { expand2((colors[it] shr 2) and 0x3) }
+        val palB = IntArray(colors.size) { expand2(colors[it] and 0x3) }
+        // Past the colours, so `nearest` can never land an opaque black pixel on it.
+        val transparentIdx = colors.size
+        val palette = if (hasTransparency) colors + TRANSPARENT else colors
 
         val stride = (width + 1) / 2
         val pixels = UByteArray(stride * height)
@@ -29,18 +44,18 @@ object ImageEncoder {
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val p = argb[y * width + x]
+                if (hasTransparency && alphaOf(p) < OPAQUE_ALPHA) {
+                    writeIndex(pixels, stride, x, y, transparentIdx)
+                    // Nothing is drawn here, so there is no error to carry into the neighbours.
+                    continue
+                }
                 // Clamp pixel+error into gamut before matching, and diffuse the residual from the
                 // clamped value; otherwise error compounds at saturated edges (dither worms).
                 val r = (((p shr 16) and 0xFF) + curErr[x * 3].toInt()).coerceIn(0, 255)
                 val g = (((p shr 8) and 0xFF) + curErr[x * 3 + 1].toInt()).coerceIn(0, 255)
                 val b = ((p and 0xFF) + curErr[x * 3 + 2].toInt()).coerceIn(0, 255)
                 val idx = nearest(r, g, b, palR, palG, palB)
-                val bi = y * stride + (x shr 1)
-                pixels[bi] = if (x and 1 == 0) {
-                    ((pixels[bi].toInt() and 0x0F) or (idx shl 4)).toUByte()
-                } else {
-                    ((pixels[bi].toInt() and 0xF0) or idx).toUByte()
-                }
+                writeIndex(pixels, stride, x, y, idx)
                 val er = (r - palR[idx]).toFloat()
                 val eg = (g - palG[idx]).toFloat()
                 val eb = (b - palB[idx]).toFloat()
@@ -58,12 +73,23 @@ object ImageEncoder {
         return EncodedImage(width, height, paletteBytes, pixels)
     }
 
-    // Median cut over the GColor8-reduced histogram. Returns up to 16 distinct GColor8 palette
-    // bytes. Box choice and split point are weighted by pixel count, so a large flat region doesn't
-    // lose a palette slot to a handful of stray pixels.
-    private fun medianCutPalette(argb: IntArray): List<Int> {
+    /** Even x is the high nibble, matching the firmware's packing. */
+    private fun writeIndex(pixels: UByteArray, stride: Int, x: Int, y: Int, idx: Int) {
+        val bi = y * stride + (x shr 1)
+        pixels[bi] = if (x and 1 == 0) {
+            ((pixels[bi].toInt() and 0x0F) or (idx shl 4)).toUByte()
+        } else {
+            ((pixels[bi].toInt() and 0xF0) or idx).toUByte()
+        }
+    }
+
+    // Median cut over the GColor8-reduced histogram of the opaque pixels. Returns up to
+    // [maxColors] distinct GColor8 palette bytes. Box choice and split point are weighted by pixel
+    // count, so a large flat region doesn't lose a palette slot to a handful of stray pixels.
+    private fun medianCutPalette(argb: IntArray, maxColors: Int): List<Int> {
         val counts = HashMap<Int, Int>()
         for (p in argb) {
+            if (alphaOf(p) < OPAQUE_ALPHA) continue
             val key = (quant2((p shr 16) and 0xFF) shl 4) or
                 (quant2((p shr 8) and 0xFF) shl 2) or quant2(p and 0xFF)
             counts[key] = (counts[key] ?: 0) + 1
@@ -72,7 +98,7 @@ object ImageEncoder {
             Color((it.key shr 4) and 0x3, (it.key shr 2) and 0x3, it.key and 0x3, it.value)
         }.toMutableList()
         val boxes = mutableListOf(initial)
-        while (boxes.size < MAX_COLORS) {
+        while (boxes.size < maxColors) {
             val bi = boxes.indices.filter { boxes[it].size > 1 }
                 .maxByOrNull { spread(boxes[it]) * population(boxes[it]) } ?: break
             val box = boxes[bi]

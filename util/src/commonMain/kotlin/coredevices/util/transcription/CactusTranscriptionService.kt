@@ -8,25 +8,36 @@ import com.cactus.cactusSetBackend
 import com.cactus.cactusStop
 import com.cactus.cactusTranscribe
 import com.cactus.isCactusSupported
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.analytics.CoreAnalytics
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.writeWavHeader
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.withIndex
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
@@ -74,10 +85,12 @@ class CactusTranscriptionService(
     private val coreConfigFlow: CoreConfigFlow,
     private val modelProvider: CactusModelPathProvider,
     private val analytics: CoreAnalytics,
-    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost()
+    private val inferenceBoost: InferenceBoost = NoOpInferenceBoost(),
+    private val settings: Settings
 ) {
     companion object {
         private val logger = Logger.withTag("CactusTranscriptionService")
+        private const val INIT_IN_PROGRESS_KEY = "cactus_stt_init_in_progress"
     }
 
     private val transcriptionMutex = Mutex()
@@ -85,25 +98,28 @@ class CactusTranscriptionService(
     private var initJob: Job? = null
     private var lastInitedModel: String? = null
     private val scope = CoroutineScope(Dispatchers.Default)
+    private val nativeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cacheDir = Path(SystemTemporaryDirectory, "cactus_stt")
 
     val lastModelUsed get() = lastInitedModel
     val isModelReady get() = modelHandle != 0L
-    val configuredModel get() = sttConfig.value.modelName
     val onInitialized = Channel<Boolean>(Channel.RENDEZVOUS)
 
     private val sttConfig = coreConfigFlow.flow.map { it.sttConfig }.stateIn(
         scope,
-        started = kotlinx.coroutines.flow.SharingStarted.Lazily,
+        started = SharingStarted.Eagerly,
         initialValue = coreConfigFlow.value.sttConfig
     )
 
     init {
-        sttConfig.onEach {
-            logger.i { "Cactus STT config changed: $it" }
-            if (it.modelName != lastInitedModel) {
-                initJob = performInit()
+        sttConfig.withIndex().onEach { (index, config) ->
+            logger.i { "Cactus STT config changed: $config" }
+            if (config.modelName == lastInitedModel) return@onEach
+            if (index == 0 && settings.getBoolean(INIT_IN_PROGRESS_KEY, false)) {
+                logger.w { "Previous Cactus STT init did not complete, skipping auto-init" }
+                return@onEach
             }
+            initJob = performInit()
         }.launchIn(scope)
     }
 
@@ -112,20 +128,25 @@ class CactusTranscriptionService(
     private val silentPcm = ByteArray(32_000) // 1s, 16kHz, int16 mono
 
     /**
-     * Calls cactusStop() if the calling coroutine is cancelled while [block] runs.
+     * Runs the blocking native [block]; if the calling coroutine is cancelled meanwhile, cactusStop()
+     * is called so the native call returns early.
      */
-    private suspend fun <T> withCactusStopOnCancel(handle: Long, block: () -> T): T {
-        val callerJob = kotlin.coroutines.coroutineContext[Job]
-        val completionHandle = callerJob?.invokeOnCompletion { cause ->
-            if (cause != null) {
-                logger.d { "Calling cactusStop() due to cancellation: ${cause.message}" }
-                cactusStop(handle)
+    private suspend fun <T> withCactusStopOnCancel(handle: Long, block: () -> T): T = coroutineScope {
+        ensureActive()
+        val stopper = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                if (!this@coroutineScope.isActive) {
+                    logger.d { "Calling cactusStop() due to cancellation" }
+                    cactusStop(handle)
+                }
             }
         }
-        return try {
+        try {
             block()
         } finally {
-            completionHandle?.dispose()
+            stopper.cancel()
         }
     }
 
@@ -192,15 +213,7 @@ class CactusTranscriptionService(
             val handle = modelHandle
             if (handle == 0L) return
             withHighPriorityThread {
-                try {
-                    withTimeout(2.seconds) {
-                        withCactusStopOnCancel(handle) {
-                            cactusTranscribe(handle, null, "", null, null, silentPcm)
-                        }
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    logger.w { "Cactus STT warmup timed out" }
-                }
+                cactusTranscribe(handle, null, "", null, null, silentPcm)
             }
         } finally {
             modelMutex.unlock()
@@ -211,7 +224,7 @@ class CactusTranscriptionService(
         val config = sttConfig.value
         if (config.mode == CactusSTTMode.RemoteOnly) return
         if (!isCactusSupported()) return
-        val sttModelName = CommonBuildKonfig.CACTUS_STT_MODEL
+        val sttModelName = sttConfig.value.modelName ?: CommonBuildKonfig.CACTUS_STT_MODEL
         if (!modelProvider.isModelDownloaded(sttModelName) ||
             sttModelName in modelProvider.getIncompatibleModels()
         ) {
@@ -219,23 +232,25 @@ class CactusTranscriptionService(
             return
         }
         val start = Clock.System.now()
-        if (config.modelName != lastInitedModel) {
-            if (modelHandle != 0L) {
+        modelMutex.withLock {
+            if (config.modelName != lastInitedModel && modelHandle != 0L) {
                 cactusDestroy(modelHandle)
                 modelHandle = 0L
             }
-        }
-        if (modelHandle == 0L) {
-            val modelPath = modelProvider.getSTTModelPath()
-            cactusSetBackend("cpu")
-            modelHandle = cactusInit(modelPath, null, false)
-            lastInitedModel = config.modelName
-            val initDuration = Clock.System.now() - start
-            logger.d { "Cactus STT model initialized in $initDuration" }
+            if (modelHandle == 0L) {
+                val modelPath = modelProvider.getSTTModelPath(sttModelName)
+                cactusSetBackend("cpu")
+                settings[INIT_IN_PROGRESS_KEY] = true
+                modelHandle = cactusInit(modelPath, null, false)
+                settings.remove(INIT_IN_PROGRESS_KEY)
+                lastInitedModel = config.modelName
+                val initDuration = Clock.System.now() - start
+                logger.d { "Cactus STT model initialized in $initDuration" }
+            }
         }
     }
 
-    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(CommonBuildKonfig.CACTUS_STT_MODEL)
+    private fun modelExists(): Boolean = modelProvider.isModelDownloaded(sttConfig.value.modelName ?: CommonBuildKonfig.CACTUS_STT_MODEL)
 
     private fun performInit(): Job {
         return scope.launch(Dispatchers.IO) {
@@ -286,7 +301,7 @@ class CactusTranscriptionService(
         }
     }
 
-    private suspend fun runLocalTranscribe(path: Path, timeout: Duration? = null): String {
+    private suspend fun runLocalTranscribe(path: Path): String {
         try {
             val handle = modelHandle
             if (handle == 0L) {
@@ -297,17 +312,12 @@ class CactusTranscriptionService(
             }
             inferenceBoost.acquire()
             val text = try {
-                withMaybeTimeout(timeout) {
-                    cancellableTranscribe(handle, path.toString())
-                }
+                cancellableTranscribe(handle, path.toString())
             } finally {
                 inferenceBoost.release()
             }
             analytics.logTranscriptionSuccess("cactus")
             return text
-        } catch (e: TimeoutCancellationException) {
-            analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
-            throw e
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -331,27 +341,37 @@ class CactusTranscriptionService(
         timeout: Duration? = null,
         initTimeout: Duration = 10.seconds,
     ): String {
-        ensureInit(initTimeout)
-        val path = getCacheFilePath()
-        if (!transcriptionMutex.tryLock()) {
-            throw TranscriptionException.TranscriptionInProgress(modelUsed = sttConfig.value.modelName)
-        }
+        var work: Deferred<String>? = null
         return try {
-            withContext(Dispatchers.IO) {
-                SystemFileSystem.sink(path).buffered().use { sink ->
-                    sink.writeWavHeader(sampleRate, audioSize = audio.size)
-                    sink.write(audio)
+            withMaybeTimeout(timeout) {
+                ensureInit(initTimeout)
+                val path = getCacheFilePath()
+                val started = nativeScope.async {
+                    if (!transcriptionMutex.tryLock()) {
+                        throw TranscriptionException.TranscriptionInProgress(modelUsed = sttConfig.value.modelName)
+                    }
+                    try {
+                        SystemFileSystem.sink(path).buffered().use { sink ->
+                            sink.writeWavHeader(sampleRate, audioSize = audio.size)
+                            sink.write(audio)
+                        }
+                        modelMutex.withLock { runLocalTranscribe(path) }
+                    } finally {
+                        try { SystemFileSystem.delete(path) } catch (e: Exception) {
+                            logger.w(e) { "Failed to delete temp file $path" }
+                        }
+                        transcriptionMutex.unlock()
+                    }
                 }
+                work = started
+                started.await()
             }
-            try {
-                modelMutex.withLock { runLocalTranscribe(path, timeout) }
-            } finally {
-                try { SystemFileSystem.delete(path) } catch (e: Exception) {
-                    logger.w(e) { "Failed to delete temp file $path" }
-                }
+        } catch (e: CancellationException) {
+            if (e is TimeoutCancellationException) {
+                analytics.logTranscriptionFailure("cactus", transcriptionFailureReason(e), e.message)
             }
-        } finally {
-            transcriptionMutex.unlock()
+            work?.cancel()
+            throw e
         }
     }
 
@@ -365,12 +385,12 @@ class CactusTranscriptionService(
     suspend fun transcribeLocalForFallback(
         audio: ByteArray,
         sampleRate: Int,
-        timeout: Duration = Duration.INFINITE,
+        timeout: Duration,
     ): String {
         val text = transcribeLocal(
             audio = audio,
             sampleRate = sampleRate,
-            timeout = timeout.takeIf { it.isFinite() },
+            timeout = timeout,
             initTimeout = 20.seconds,
         )
         return text.takeIf { it.isNotBlank() }

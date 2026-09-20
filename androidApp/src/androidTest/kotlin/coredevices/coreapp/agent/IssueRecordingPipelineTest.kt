@@ -6,6 +6,7 @@ import com.cactus.cactusDestroy
 import com.cactus.cactusInit
 import com.cactus.cactusSetBackend
 import com.cactus.isCactusSupported
+import com.russhwolf.settings.Settings
 import coredevices.coreapp.testsupport.NeedleTestTools
 import coredevices.coreapp.testsupport.NoopAnalytics
 import coredevices.coreapp.testsupport.ReadOnlyModelPathProvider
@@ -74,6 +75,7 @@ class IssueRecordingPipelineTest {
                 modelProvider = provider,
                 analytics = NoopAnalytics,
                 inferenceBoost = NoOpInferenceBoost(),
+                settings = Settings()
             )
             val needlePath = runBlocking {
                 svc.earlyInit()

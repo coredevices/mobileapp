@@ -31,7 +31,7 @@ import kotlin.time.Duration.Companion.minutes
  * text -> tool calls is the correct layer — STT is not involved).
  *
  * Runs the actual native model. If the needle LM isn't present it's downloaded on demand (one-time,
- * from the `CACTUS_WEIGHTS_VERSION` release). Skips on CPUs where Cactus is unsupported (e.g. some
+ * from the `CACTUS_LM_WEIGHTS_VERSION` release). Skips on CPUs where Cactus is unsupported (e.g. some
  * emulators). Run against a persistent install so the model isn't wiped between runs:
  *
  *   adb shell am instrument -w \

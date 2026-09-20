@@ -55,6 +55,7 @@ import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
+import coredevices.ring.external.indexwebhook.IndexWebhookSigningSecretStorage
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
 import coredevices.ring.firestoreModule
@@ -83,6 +84,7 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
+import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
@@ -208,11 +210,13 @@ val experimentalModule = module {
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
     singleOf(::IndexWebhookPreferences)
+    singleOf(::IndexWebhookSigningSecretStorage)
     singleOf(::IndexWebhookRunRepository)
     singleOf(::GestureRoutingPreferences)
     singleOf(::ObsidianPreferences)
     single {
         IndexWebhookApiImpl(
+            get(),
             get(),
             get(),
             get(),
@@ -229,9 +233,10 @@ val experimentalModule = module {
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
-    singleOf(::IndexNotificationManager)
+    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), getOrNull()) }
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
+    singleOf(::IndexRebootLogStore)
     singleOf(::ExperimentalDevices)
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }

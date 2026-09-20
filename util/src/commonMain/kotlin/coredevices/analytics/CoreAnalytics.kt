@@ -25,6 +25,7 @@ interface CoreAnalytics {
     fun updateLastConnectedSerial(serial: String?)
     fun updateRingTransferDurationMetric(duration: Duration)
     fun updateRingLifetimeCollectionCount(serial: String, count: Int)
+    fun updateRingBatteryVoltage(voltageMilliV: Int)
 }
 
 expect fun createAnalyticsCache(): Settings
@@ -33,6 +34,7 @@ private const val KEY_RING_TRANSFER_DURATION_TOTAL_MS = "coreanalytics_ring_tran
 private const val KEY_RING_TRANSFER_DURATION_START_TIMESTAMP = "coreanalytics_ring_transfer_start_timestamp"
 private const val KEY_RING_LIFETIME_COLLECTION_COUNT = "coreanalytics_ring_lifetime_collection_count"
 private const val KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL = "coreanalytics_ring_lifetime_collection_count_serial"
+private const val KEY_RING_BATTERY_VOLTAGE = "coreanalytics_ring_battery_voltage"
 
 class RealCoreAnalytics(
     private val analyticsBackend: AnalyticsBackend,
@@ -82,6 +84,12 @@ class RealCoreAnalytics(
                     withContext(Dispatchers.IO) {
                         cache.getStringOrNull(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL) ?: "<none>"
                     }
+                ) +
+                HeartbeatMetric(
+                    "ring.battery_voltage_mv",
+                    withContext(Dispatchers.IO) {
+                        cache.getInt(KEY_RING_BATTERY_VOLTAGE, -1)
+                    }
                 )
         logger.d { "processHeartbeat: $heartbeatMetrics" }
         withContext(Dispatchers.IO) {
@@ -89,6 +97,7 @@ class RealCoreAnalytics(
             cache.remove(KEY_RING_TRANSFER_DURATION_START_TIMESTAMP)
             cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT)
             cache.remove(KEY_RING_LIFETIME_COLLECTION_COUNT_SERIAL)
+            cache.remove(KEY_RING_BATTERY_VOLTAGE)
         }
         logEvent("heartbeat", heartbeatMetrics.associate { it.name to it.value })
     }
@@ -118,6 +127,10 @@ class RealCoreAnalytics(
                 cache[KEY_RING_LIFETIME_COLLECTION_COUNT] = count
             }
         }
+    }
+
+    override fun updateRingBatteryVoltage(voltageMilliV: Int) {
+        cache[KEY_RING_BATTERY_VOLTAGE] = voltageMilliV
     }
 
     private suspend fun heartbeatDuration(): Duration {

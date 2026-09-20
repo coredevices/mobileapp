@@ -2,7 +2,6 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.request
@@ -14,7 +13,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
-import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -25,8 +25,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import platform.Foundation.NSNull
-import platform.JavaScriptCore.JSValue
 import kotlin.uuid.Uuid
 
 private const val UNSENT = 0
@@ -37,20 +35,33 @@ private const val DONE = 4
 
 class XMLHTTPRequestManager(
     private val scope: CoroutineScope,
-    private val eval: (String) -> JSValue?,
+    private val eval: (String) -> Unit,
     private val httpInterceptorManager: HttpInterceptorManager,
-    private val appInfo: PbwAppInfo,
-): RegisterableJsInterface {
+    private val appUuid: Uuid,
+    private val client: HttpClient,
+    /**
+     * What this context is allowed to reach. A plugin gets the policy its manifest declared;
+     * PKJS and the app's own JS are unrestricted, being the user's own apps rather than
+     * something a plugin author wrote.
+     */
+    private val networkPolicy: PluginNetworkPolicy = PluginNetworkPolicy.unrestricted,
+    /**
+     * The JS object responses are delivered into: `<jsTarget>._instances.get(id)`. PKJS gets the
+     * `XMLHttpRequest` class it writes against; a plugin gets `fetch`'s own registry, so nothing
+     * has to hand a plugin an XHR just to carry a reply back.
+     */
+    private val jsTarget: String = "XMLHttpRequest",
+): JsEngineInterface, AutoCloseable {
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
-    private val client = HttpClient(Darwin)
     private val logger = Logger.withTag("XMLHTTPRequestManager")
-    override val interf = mapOf(
-        "getXHRInstanceID" to this::getXHRInstanceID,
-        "open" to this::open,
-        "setRequestHeader" to this::setRequestHeader,
-        "send" to this::send,
-        "abort" to this::abort,
+
+    override val methods = listOf(
+        "getXHRInstanceID",
+        "open",
+        "setRequestHeader",
+        "send",
+        "abort",
     )
 
     override val name = "_XMLHTTPRequestManager"
@@ -102,7 +113,7 @@ class XMLHTTPRequestManager(
         val bytes = when (data) {
             is ByteArray -> data
             is String -> data.encodeToByteArray()
-            is NSNull, null -> null
+            null -> null
             else -> {
                 logger.e { "Invalid data type for send: ${data::class.simpleName}" }
                 null
@@ -124,7 +135,7 @@ class XMLHTTPRequestManager(
         private val headers = mutableMapOf<String, Any>()
         var requestJob: Job? = null
 
-        private val jsInstance = "XMLHttpRequest._instances.get($id)"
+        private val jsInstance = "$jsTarget._instances.get($id)"
 
         private fun changeReadyState(newState: Int) {
             eval("$jsInstance.readyState = $newState")
@@ -146,7 +157,6 @@ class XMLHTTPRequestManager(
             if (!this.async) {
                 logger.w { "Synchronous XHR opened" }
             }
-            changeReadyState(OPENED)
         }
 
         fun setRequestHeader(header: String, value: Any) {
@@ -163,8 +173,15 @@ class XMLHTTPRequestManager(
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
                 }
+                // Before anything else, including interception: a plugin must not reach a host
+                // it never declared, whoever would have served it.
+                val verdict = networkPolicy.check(url!!)
+                if (verdict is PluginNetworkVerdict.Denied) {
+                    logger.w { "$appUuid blocked: ${verdict.reason}" }
+                    dispatchError()
+                    return
+                }
                 if (httpInterceptorManager.shouldIntercept(url!!)) {
-                    val appUuid = Uuid.parse(appInfo.uuid)
                     val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)
                     scope.launch {
                         val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
@@ -267,7 +284,6 @@ class XMLHTTPRequestManager(
     }
 
     override fun close() {
-        client.close()
         instances.values.forEach { it.requestJob?.cancel("Closing") }
         instances.clear()
     }

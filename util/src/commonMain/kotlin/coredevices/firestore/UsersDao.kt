@@ -43,7 +43,10 @@ interface UsersDao {
     suspend fun initUserDevToken(rebbleUserToken: String?)
     suspend fun updateLastConnectedWatch(serial: String)
     suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int)
+    suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int)
     suspend fun updateEncryptionInfo(info: EncryptionInfo) {}
+    /** Sign out of Firebase. Must be used instead of calling Firebase.auth.signOut() directly. */
+    suspend fun signOut()
     fun init()
 }
 
@@ -89,9 +92,10 @@ class UsersDaoImpl(
         get() = settings.getString(KEY_LAST_SIGN_IN_PROVIDERS, "")
         set(value) { settings[KEY_LAST_SIGN_IN_PROVIDERS] = value }
 
-    // True only during initial startup, before we've seen the first non-null user.
-    // Prevents the long delay from applying on explicit sign-out.
-    private var isInitialStartup = true
+    // Set by signOut() so a deliberate sign-out skips the restoration wait below. Any other
+    // route to a null user is a spontaneous auth loss and must try to recover: conceding it
+    // clears hadNonAnonymousAccount, and the next locker sync then deletes the user's apps.
+    private var explicitSignOut = false
 
     override fun init() {
         GlobalScope.launch {
@@ -103,7 +107,7 @@ class UsersDaoImpl(
                     val userInfo = firebaseUser?.let { "uid=${it.uid.take(8)} isAnonymous=${it.isAnonymous}" } ?: "null"
                     logger.v { "User changed: $userInfo" }
                     if (firebaseUser == null) {
-                        if (isInitialStartup) {
+                        if (!explicitSignOut) {
                             if (hadNonAnonymousAccount || hadAnonymousAccount) {
                                 // Previously had an account (anon or real) — don't create a new
                                 // anonymous user, that would orphan the previous UID's Firestore
@@ -171,7 +175,7 @@ class UsersDaoImpl(
                                             logger.w { "Still waiting for auth restoration, attempt=$attempt (anon=$hadAnonymousAccount, nonAnon=$hadNonAnonymousAccount)" }
                                             if (shouldAttemptSilentReauth(attempt, silentAttempts, lastSignInProviders)) {
                                                 silentAttempts++
-                                                trySilentReauth("startup_wait")
+                                                trySilentReauth("restore_wait")
                                             }
                                             if (shouldGiveUpWaitingForAuth(attempt, silentAttempts, lastSignInProviders)) {
                                                 resumeJob?.cancel()
@@ -197,9 +201,8 @@ class UsersDaoImpl(
                                 logger.w { "Delay expired without user arriving, falling back to anonymous sign-in" }
                             }
                         } else {
-                            if (hadNonAnonymousAccount) {
-                                logger.i { "User became null post-startup, hadNonAnonymousAccount: true→false" }
-                            }
+                            logger.i { "Explicit sign-out, not waiting for auth restoration" }
+                            explicitSignOut = false
                             hadNonAnonymousAccount = false
                         }
                         _user.emit(null)
@@ -213,7 +216,6 @@ class UsersDaoImpl(
                         }
                         flowOf(null)
                     } else {
-                        isInitialStartup = false
                         if (firebaseUser.isAnonymous) {
                             if (!hadAnonymousAccount) {
                                 logger.i { "Anonymous user observed, setting hadAnonymousAccount=true" }
@@ -312,9 +314,34 @@ class UsersDaoImpl(
         userDoc?.update(mapOf("ring_lifetime_collection_counts" to merged))
     }
 
+    override suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int) {
+        val user = user.first()
+        if (user == null) {
+            logger.w { "updateRingBatteryVoltage: user is null" }
+            return
+        }
+        val existing = user.user.ringVoltages.orEmpty()
+        if ((existing[serial] ?: -1) == voltageMilliV) return
+        val merged = existing + (serial to voltageMilliV)
+        userDoc?.update(mapOf("ring_voltages" to merged))
+    }
+
     override suspend fun updateEncryptionInfo(info: EncryptionInfo) {
         val doc = userDoc ?: throw IllegalStateException("Not signed in — cannot store encryption info")
         doc.update("encryption" to info)
+    }
+
+    override suspend fun signOut() {
+        explicitSignOut = true
+        // Restoring the anonymous session that replaces this one must not silently re-auth
+        // back into the account the user just signed out of.
+        lastSignInProviders = ""
+        try {
+            Firebase.auth.signOut()
+        } catch (e: Exception) {
+            explicitSignOut = false
+            throw e
+        }
     }
 }
 

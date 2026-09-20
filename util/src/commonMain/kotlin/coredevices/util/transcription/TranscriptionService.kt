@@ -4,6 +4,7 @@ import coredevices.util.AudioEncoding
 import kotlin.time.Duration
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 
 interface TranscriptionService {
     /**
@@ -23,6 +24,7 @@ interface TranscriptionService {
      * Transcribe audio stream frames to text.
      * @param audioStreamFrames Audio stream frames to transcribe (in PCM format). If null, transcription will use default mic (and requires permission).
      * @param initialTimeout Optional override for the initial transcription attempt timeout; when null the service's own default is used.
+     * @param totalTimeout The overall budget the caller enforces around the call, so a mode with a fallback leg can leave it time to run.
      * @return Flow of transcription session status.
      */
     suspend fun transcribe(
@@ -34,9 +36,16 @@ interface TranscriptionService {
         contentContext: String? = null,
         encoding: AudioEncoding = AudioEncoding.PCM_16BIT,
         initialTimeout: Duration? = null,
+        totalTimeout: Duration? = null,
     ): Flow<TranscriptionSessionStatus>
 
     val onInitialized: Channel<Boolean>
+}
+
+/** A [TranscriptionService] that can run on-device engines whose models the user may need to download. */
+interface LocalTranscriptionService : TranscriptionService {
+    /** Raised when a recording needed an on-device model the user still has to download. */
+    val modelPrompts: SharedFlow<SpeechModelPrompt>
 }
 
 sealed interface STTLanguage {
@@ -64,6 +73,12 @@ sealed interface STTLanguage {
  * Pairs are (code, English display name).
  */
 expect val SpokenLanguageOptions: List<Pair<String, String>>
+
+/** Display name for a [SpokenLanguageOptions] code; null means automatic detection. */
+fun spokenLanguageLabel(spokenLanguage: String?): String =
+    spokenLanguage?.let { code ->
+        SpokenLanguageOptions.firstOrNull { it.first == code }?.second ?: code
+    } ?: "Automatic"
 
 /**
  * Qualify a bare ISO 639-1 [languageCode] with a [region] (e.g. the device region from

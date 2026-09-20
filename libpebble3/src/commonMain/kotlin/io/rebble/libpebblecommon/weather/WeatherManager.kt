@@ -16,6 +16,8 @@ class WeatherManager(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appPrefsEntryDao: AppPrefsEntryDao,
 ): Weather {
+    override val currentWeather = weatherAppEntryDao.getAllFlow()
+
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
         libPebbleCoroutineScope.launch {
             val existing = weatherAppEntryDao.getAll()

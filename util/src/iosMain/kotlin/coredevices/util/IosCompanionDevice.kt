@@ -7,7 +7,8 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 class IosCompanionDevice : CompanionDevice {
     override suspend fun registerDevice(
         identifier: IndexIdentifier,
-        uiContext: PlatformUiContext
+        uiContext: PlatformUiContext,
+        useClassicAssociation: Boolean
     ) {
     }
 
@@ -23,6 +24,14 @@ class IosCompanionDevice : CompanionDevice {
 
     override fun hasApprovedDevice(identifier: IndexIdentifier): Boolean {
         return true
+    }
+
+    override fun canRemoveBond(identifier: IndexIdentifier): Boolean {
+        return false
+    }
+
+    override fun removeBond(identifier: IndexIdentifier): Boolean {
+        return false
     }
 
     override fun cdmPreviouslyCrashed(): Boolean {

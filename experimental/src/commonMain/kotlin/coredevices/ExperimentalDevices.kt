@@ -19,6 +19,8 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.ring.bugreport.IndexRebootLogEntry
+import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.pebble.ui.TopBarParams
@@ -37,6 +39,8 @@ import coredevices.ring.ui.screens.home.IndexFeedScreen
 import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
+import coredevices.util.Platform
+import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.auth.FirebaseUser
@@ -79,6 +83,8 @@ class ExperimentalDevices(
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val indexSettingsSummary: IndexSettingsSummary,
+    private val rebootLogStore: IndexRebootLogStore,
+    private val platform: Platform,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -133,84 +139,7 @@ class ExperimentalDevices(
     fun handleDeepLink(uri: Uri): Boolean {
         return shortcutActionHandler.handleDeepLink(uri)
     }
-
-    fun addExperimentalRoutes(builder: NavGraphBuilder, coreNav: CoreNav) {
-        builder.addRingRoutes(coreNav)
-    }
-
     fun badCollectionsDir(): Path? = RingSync.badCollectionsDir
-
-    @Composable
-    fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
-        val recordingQueue = koinInject<RecordingProcessingQueue>()
-        val recordingRepo = koinInject<RecordingRepository>()
-        val recordingStorage = koinInject<RecordingStorage>()
-        val prefs = koinInject<Preferences>()
-        val isDebugEnabled by prefs.debugDetailsEnabled.collectAsStateWithLifecycle()
-        val scope = rememberCoroutineScope()
-        val launchWavImportDialog = rememberOpenDocumentLauncher {
-            it?.firstOrNull()?.let { file ->
-                val id = "imported-${Clock.System.now()}"
-                scope.launch(Dispatchers.IO) {
-                    recordingStorage.openRecordingSink(
-                        id = id,
-                        sampleRate = 16000,
-                        mimeType = "audio/wav",
-                    ).buffered().use { sink ->
-                        file.source.buffered().use {
-                            it.skip(44) // Skip WAV header
-                            it.transferTo(sink)
-                        }
-                    }
-                    recordingQueue.queueLocalAudioProcessing(id)
-                    topBarParams.showSnackbar("Imported WAV file")
-                }
-            }
-        }
-        // The chrome's TopAppBar is hidden tab-wide by WatchHomeScreen
-        // whenever currentTab == Index, so we don't manage `setHidden`
-        // here — doing it per-screen would race with detail screens
-        // (their own DetailTopBar + the chrome would show double until
-        // the next compositional pass).
-        androidx.compose.runtime.DisposableEffect(Unit) {
-            topBarParams.title("")
-            topBarParams.searchAvailable(null)
-            topBarParams.actions { /* moved into IndexFeedScreen.IndexHeader */ }
-            onDispose { /* nothing to clean up */ }
-        }
-        IndexThemeHost {
-            IndexFeedScreen(
-                coreNav = coreNav,
-                scrollToTop = topBarParams.scrollToTop,
-                headerActions = {
-                    BugReportButton(
-                        coreNav,
-                        pebble = false,
-                        screenContext = mapOf("screen" to "IndexFeed"),
-                    )
-                    if (isDebugEnabled) {
-                        IconButton(
-                            onClick = { launchWavImportDialog(listOf("audio/*")) },
-                        ) {
-                            Icon(Icons.Default.AudioFile, contentDescription = "Debug")
-                        }
-                    }
-                    IconButton(
-                        onClick = { coreNav.navigateTo(RingRoutes.Settings) },
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                },
-            )
-        }
-        // (Legacy `FeedTabContents` is no longer referenced from here.
-        // It used to be kept-alive via a `::FeedTabContents` callable
-        // reference, but Kotlin/Native 2.3 crashes during IR lowering on
-        // `@Composable` function references whose arity exceeds Function6
-        // — KT-bug, "Unexpected number of type arguments". The function
-        // is public top-level so no static analysis will drop it; the
-        // callable-ref keep-alive was always cosmetic.)
-    }
 
     suspend fun exportOutput(id: String): List<DocumentAttachment> {
         val logger = co.touchlab.kermit.Logger.withTag("ExperimentalDevices")
@@ -292,6 +221,8 @@ class ExperimentalDevices(
         attachments
     }
 
+    fun rebootLog(): List<IndexRebootLogEntry> = rebootLogStore.entries()
+
     suspend fun debugSummary(): String {
         return buildString {
             ringSync.lastRingSummary()?.let {
@@ -299,6 +230,10 @@ class ExperimentalDevices(
                 append("\n")
             }
             append("Index Debug enabled: ${preferences.debugDetailsEnabled.value}\n")
+            append("Secondary profile: ${platform.isSecondaryProfile}\n")
+            if (platform.isAndroid) {
+                append("PendingIntent scan enabled: ${preferences.usePendingIntentScan.value}\n")
+            }
             append("LLM mode: ${preferences.llmMode.value}\n")
             append(runCatching { indexSettingsSummary.summary() }
                 .getOrElse { "\nIndex Settings unavailable: ${it.message}" })

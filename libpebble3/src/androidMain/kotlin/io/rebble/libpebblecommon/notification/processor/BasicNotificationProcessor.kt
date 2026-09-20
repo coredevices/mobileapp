@@ -23,6 +23,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.Notifica
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.people
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.vibrationPattern
 import io.rebble.libpebblecommon.notification.extractAttachment
+import io.rebble.libpebblecommon.notification.extractSender
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.argbColor
@@ -90,6 +91,7 @@ class BasicNotificationProcessor(
             key = sbn.key,
             title = title,
             body = body,
+            sender = sbn.extractSender(),
             icon = icon,
             // Clamp to postTime so messaging apps that set `when` to thread-start time
             // don't get filtered out by BlobDB's `onlyInsertAfter` sync threshold (MOB-7284).

@@ -11,10 +11,6 @@ import kotlinx.serialization.json.JsonElement
 
 open class BuiltInMcpIntegration(override val name: String, protected val tools: List<McpTool>) : McpIntegration {
     private val toolMap: Map<String, McpTool> = tools.associateBy { it.definition.name }
-    override suspend fun resetCache() {
-        // no-op
-    }
-
     override suspend fun connect() {
         // no-op
     }

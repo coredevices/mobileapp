@@ -51,8 +51,10 @@ import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.KirinkiTranscriptionService
+import coredevices.util.transcription.LocalTranscriptionService
 import coredevices.util.transcription.NoOpInferenceBoost
 import coredevices.util.transcription.PlatformSpeechRecognizer
+import coredevices.util.models.ModelDownloadManager
 import coredevices.util.transcription.TranscriptionService
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -90,6 +92,7 @@ import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import java.io.File
 import kotlin.time.Duration
@@ -581,21 +584,23 @@ class RingRecordingE2ETest {
                 override fun updateLastConnectedSerial(serial: String?) {}
                 override fun updateRingTransferDurationMetric(duration: kotlin.time.Duration) {}
                 override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+                override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
             }
         }
         single {
-            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost())
+            CactusTranscriptionService(get(), get<CactusModelPathProvider>(), get(), NoOpInferenceBoost(), get())
         }
+        single { ModelDownloadManager(context) }
         single {
-            HybridTranscriptionService(get(), get(), get(), get(), get(), PlatformSpeechRecognizer())
-        } bind TranscriptionService::class
+            HybridTranscriptionService(get(), get(), get(), get(), get(), PlatformSpeechRecognizer(), get())
+        } binds arrayOf(TranscriptionService::class, LocalTranscriptionService::class)
 
         // MCP tools
         singleOf(::BuiltinServletRepository) bind ServletRepository::class
         singleOf(::McpSessionFactory)
         factory { coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool(get()) }
         factory { coredevices.ring.agent.integrations.NotionIntegration(get(), get(), get()) }
-        factory { coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient(get(), get()) }
+        factory { coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient(get(), get(), get()) }
         single { coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory(get(), get()) }
         single<coredevices.firestore.UsersDao> {
             object : coredevices.firestore.UsersDao {
@@ -608,6 +613,10 @@ class RingRecordingE2ETest {
                 override suspend fun updateRingLifetimeCollectionCount(
                     serial: String,
                     count: Int
+                ) {}
+                override suspend fun updateRingBatteryVoltage(
+                    serial: String,
+                    voltageMilliV: Int
                 ) {}
 
                 override fun init() {}
@@ -667,6 +676,8 @@ class RingRecordingE2ETest {
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
+                    signRequests: Boolean,
+                    signingSecret: String?,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
@@ -707,6 +718,7 @@ private class E2EPreferences : Preferences {
     override val lastWipedRing: StateFlow<String?> = MutableStateFlow(null)
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
+    override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(false)
 
     override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
@@ -730,6 +742,8 @@ private class E2EPreferences : Preferences {
     override fun setLastWipedRing(id: String?) {}
     override fun setLastBackupCount(count: Int?) {}
     override fun setPlatformSttDefaulted() {}
+    override fun setUsePendingIntentScan(enabled: Boolean) {}
+
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}

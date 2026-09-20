@@ -30,6 +30,9 @@ import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.plugin.PhoneBatteryMonitor
+import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
+import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
@@ -62,6 +65,10 @@ actual val platformModule: Module = module {
     singleOf(::OtherPebbleIosApps) bind OtherPebbleApps::class
     singleOf(::IosSystemContacts) bind SystemContacts::class
     singleOf(::IosLegacyPhoneReceiver) bind LegacyPhoneReceiver::class
+    singleOf(::PhoneBatteryMonitor)
+    singleOf(::PhoneNetworkMonitor)
+    // No media session equivalent on iOS.
+    single { PlatformPlugins(emptySet()) }
     single { PlatformConfig(syncNotificationApps = true) }
     single { BlePlatformConfig(
         pinAddress = false,

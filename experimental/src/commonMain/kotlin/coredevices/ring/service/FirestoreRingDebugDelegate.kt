@@ -5,6 +5,7 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineDebugInfo
 import coredevices.haversine.KMPHaversineSatellite
+import coredevices.ring.bugreport.IndexRebootLogStore
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.Timestamp
@@ -29,7 +30,8 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 class FirestoreRingDebugDelegate(
-    private val analytics: CoreAnalytics
+    private val analytics: CoreAnalytics,
+    private val rebootLogStore: IndexRebootLogStore,
 ): KMPHaversineDebugDelegate {
     companion object {
         private val logger = Logger.withTag("FirestoreRingDebugDelegate")
@@ -48,13 +50,20 @@ class FirestoreRingDebugDelegate(
             val uploads = pendingUploads.toList()
             pendingUploads.clear()
             uploads.forEach { info ->
-                handleHaversineDebugInfo(info)
+                upload(info)
             }
         }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     override fun handleHaversineDebugInfo(info: KMPHaversineDebugInfo) {
+        GlobalScope.launch(Dispatchers.IO) {
+            rebootLogStore.record(info.timestamp, info.dump.rebootReasons)
+        }
+        upload(info)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun upload(info: KMPHaversineDebugInfo) {
         if (Firebase.auth.currentUser == null) {
             logger.w { "No authenticated user, adding to pending uploads." }
             pendingUploads.add(info)

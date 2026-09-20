@@ -4,11 +4,33 @@ import co.touchlab.kermit.Logger
 import coredevices.analytics.CoreAnalytics
 import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.Memfault
-import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
-import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.*
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_BOBBY_SMILES
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_BIGBOARD_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_EV_1
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_EV_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_EV_2_3
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_EV_2_4
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ONE_POINT_FIVE
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ROBERT_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ROBERT_BIGBOARD_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_ROBERT_EVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SILK
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SILK_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SILK_BIGBOARD_2_PLUS
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SILK_EVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SNOWY_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SNOWY_BIGBOARD_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SNOWY_DVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SNOWY_EVT_2
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SPALDING_BIGBOARD
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SPALDING_EVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_SPALDING_PVT
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.PEBBLE_TWO_POINT_ZERO
+import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform.UNKNOWN
 import io.rebble.libpebblecommon.services.WatchInfo
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,28 +97,8 @@ class FirmwareUpdateCheck(
 
     private suspend fun doCheck(watch: WatchInfo): FirmwareUpdateCheckResult = when {
         watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed("Unknown platform")
-        watch.platform.isCoreDevice() -> coreDeviceCheck(watch)
+        watch.platform.isCoreDevice() -> engDashOta.getLatestFirmware(watch)
         else -> cohorts.getLatestFirmware(watch)
-    }
-
-    private fun engDashOtaEnabled(): Boolean =
-        CommonBuildKonfig.BUG_URL != null && coreConfig.value.useEngDashOta
-
-    /** Prefer eng-dash when opted in, falling back to whichever source we'd otherwise have used. */
-    private suspend fun coreDeviceCheck(watch: WatchInfo): FirmwareUpdateCheckResult {
-        if (engDashOtaEnabled()) {
-            val result = engDashOta.getLatestFirmware(watch)
-            if (result !is FirmwareUpdateCheckResult.UpdateCheckFailed) {
-                return result
-            }
-            logger.w { "eng-dash OTA check failed (${result.error}); falling back" }
-            coreAnalytics.logEvent("core_ota_failed")
-        }
-        return if (CommonBuildKonfig.MEMFAULT_TOKEN != null) {
-            memfault.getLatestFirmware(watch)
-        } else {
-            cohorts.getLatestFirmware(watch)
-        }
     }
 
     companion object {

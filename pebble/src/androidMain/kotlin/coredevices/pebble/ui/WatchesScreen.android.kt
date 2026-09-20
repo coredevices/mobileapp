@@ -9,15 +9,18 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
 import co.touchlab.kermit.Logger
 import coredevices.libindex.device.KnownIndexDevice
+import coredevices.util.CompanionDevice
 import coredevices.util.Permission
 import io.rebble.libpebblecommon.connection.AppContext
 import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
+import org.koin.compose.koinInject
 
 actual fun ImageBitmap.toPngBytes(): ByteArray {
     val out = ByteArrayOutputStream()
@@ -67,10 +70,16 @@ actual fun RemovePairingMenuItem(
     onHideMenu: () -> Unit
 ) {
     val context = LocalContext.current
+    val companionDevice = koinInject<CompanionDevice>()
+    val canForget = remember(ring.identifier) { companionDevice.canRemoveBond(ring.identifier) }
     DropdownMenuItem(
-        text = { Text("Remove in Android settings") },
+        text = { Text(if (canForget) "Forget" else "Remove in Android settings") },
         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
         onClick = {
+            if (canForget && companionDevice.removeBond(ring.identifier)) {
+                onHideMenu()
+                return@DropdownMenuItem
+            }
             val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             try {

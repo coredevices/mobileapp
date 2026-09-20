@@ -3,6 +3,7 @@ package coredevices.ring.ui.screens.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -109,14 +110,27 @@ internal fun captureDestinationLabel(
     DefaultCaptureType.Reminder -> reminderProvider.settingsTitle
 }
 
-internal data class DestOption<T>(val provider: T, val title: String, val connected: Boolean)
+internal data class DestOption<T>(
+    val provider: T,
+    val title: String,
+    val connected: Boolean,
+    val configurable: Boolean = false,
+)
 
 internal fun noteDestOptions(
     available: List<NoteProvider>,
     isAndroid: Boolean,
 ): List<DestOption<NoteProvider>> = NoteProvider.entries
     .filter { it != NoteProvider.Tasker || isAndroid }
-    .map { DestOption(it, it.settingsTitle, it in available) }
+    .map {
+        val connected = it in available
+        DestOption(
+            provider = it,
+            title = it.settingsTitle,
+            connected = connected,
+            configurable = connected && noteConfigureDialog(it) != null,
+        )
+    }
 
 internal fun reminderDestOptions(
     available: List<ReminderProvider>,
@@ -148,6 +162,13 @@ internal fun reminderConnectDialog(provider: ReminderProvider): ActionsDialog? =
     ReminderProvider.GoogleTasks -> ActionsDialog.GoogleTasks
     ReminderProvider.Tasker -> ActionsDialog.Tasker
     ReminderProvider.BuiltIn, ReminderProvider.IOSReminders -> null
+}
+
+/** Connected providers with their own settings reopen them from a hold on their sheet row. */
+internal fun noteConfigureDialog(provider: NoteProvider): ActionsDialog? = when (provider) {
+    NoteProvider.Notion -> ActionsDialog.NotionPage
+    NoteProvider.Obsidian -> ActionsDialog.Obsidian
+    NoteProvider.Tasker, NoteProvider.Builtin -> null
 }
 
 private data class ActionPresentation(val icon: ImageVector, val title: String, val example: String)
@@ -182,7 +203,9 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
 }
 
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
-internal enum class ActionsDialog { AddServer, Sideload, Notion, GoogleTasks, Obsidian, Tasker, PhoneCalendar }
+internal enum class ActionsDialog {
+    AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar
+}
 
 @Composable
 fun IndexActionsSection(
@@ -329,6 +352,7 @@ fun IndexActionsSection(
                 pendingNoteConnect = provider
                 noteConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
             },
+            onConfigure = { provider -> noteConfigureDialog(provider)?.let { dialog = it } },
             onDismiss = { sheet = null },
         )
         ActionsSheet.ReminderDestination -> DestinationSheet(
@@ -366,6 +390,7 @@ fun IndexActionsSection(
         }
         ActionsDialog.Sideload -> SideloadDialog(onDismiss = { dialog = null })
         ActionsDialog.Notion -> NotionDialog(onDismiss = closeConnectDialog)
+        ActionsDialog.NotionPage -> NotionPageDialog(onDismiss = { dialog = null })
         ActionsDialog.GoogleTasks -> GTasksDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Obsidian -> ObsidianDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Tasker -> TaskerDialog(onDismiss = closeConnectDialog)
@@ -661,6 +686,7 @@ private fun SheetOptionRow(
     onClick: () -> Unit,
     icon: ImageVector? = null,
     subtitle: String? = null,
+    onLongClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     val colors = IndexTheme.colors
@@ -669,7 +695,7 @@ private fun SheetOptionRow(
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .selectedSheetRowBackground(selected)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -715,6 +741,7 @@ private fun <T> DestinationSheet(
     onSelect: (T) -> Unit,
     onConnect: (T) -> Unit,
     onDismiss: () -> Unit,
+    onConfigure: (T) -> Unit = {},
 ) {
     val colors = IndexTheme.colors
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
@@ -742,9 +769,18 @@ private fun <T> DestinationSheet(
                     onDismiss()
                     onConnect(option.provider)
                 }
+                val configure = {
+                    onDismiss()
+                    onConfigure(option.provider)
+                }
                 SheetOptionRow(
                     title = option.title,
-                    subtitle = "Not connected".takeIf { !option.connected },
+                    subtitle = when {
+                        !option.connected -> "Not connected"
+                        option.configurable -> "Hold to reconfigure"
+                        else -> null
+                    },
+                    onLongClick = configure.takeIf { option.configurable },
                     selected = option.provider == selected,
                     onClick = {
                         if (option.connected) {

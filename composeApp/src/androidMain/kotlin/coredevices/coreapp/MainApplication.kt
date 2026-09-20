@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.StrictMode
 import androidx.annotation.RequiresApi
+import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -52,13 +53,16 @@ import kotlin.time.toJavaDuration
 
 private val logger = Logger.withTag("MainApplication")
 
-class MainApplication : Application(), SingletonImageLoader.Factory {
+class MainApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
 
     override fun onCreate() {
         super.onCreate()
@@ -107,12 +111,13 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val am =
                 getSystemService(ActivityManager::class.java)
-            val reasons =
-                am.getHistoricalProcessExitReasons(packageName, 0, 5)
-            reasons.firstOrNull()?.let { info ->
+            // The newest record is often an isolated child (WebView), so log them all.
+            val reasons = am.getHistoricalProcessExitReasons(packageName, 0, 0)
+            reasons.forEach { info ->
                 val time = Instant.fromEpochMilliseconds(info.timestamp)
                 logger.i {
-                    "Previous exit @ $time reason=${reasonName(info.reason)} " +
+                    "Previous exit @ $time process=${info.processName} " +
+                            "reason=${reasonName(info.reason)} " +
                             "description=${info.description} importance=${info.importance} " +
                             "pss=${info.pss} rss=${info.rss} status=${info.status}"
                 }
@@ -217,9 +222,14 @@ fun scheduleBackgroundJob(appContext: AppContext, coreConfig: CoreConfig) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
     ).build()
-    WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
-        uniqueWorkName = "core_refresh",
-        existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
-        request = workRequest,
-    )
+    try {
+        WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
+            uniqueWorkName = "core_refresh",
+            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+            request = workRequest,
+        )
+    } catch (e: Throwable) {
+        // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
+        logger.e(e) { "Failed to schedule background job" }
+    }
 }

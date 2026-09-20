@@ -2,7 +2,6 @@
 
 package coredevices.ring.ui.screens.indexfeed
 
-import coredevices.ring.ui.relativeTime
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,41 +9,37 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
+import androidx.compose.material.icons.automirrored.outlined.StickyNote2
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -69,27 +63,25 @@ import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.fields
 import coredevices.ring.data.entity.room.indexfeed.fieldsJson
 import coredevices.ring.data.entity.room.indexfeed.kind
-import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
-import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_SHOPPING_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.ui.navigation.RingRoutes
+import coredevices.ring.ui.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
+import coredevices.ring.ui.theme.toggleButtonColors
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 // Item kind detail (hero card view) — split out of ObjectDetail.kt
 // to keep that file focused on the route entry + chrome.
@@ -145,6 +137,27 @@ internal fun ItemView(
     val latestOriginalTitle = androidx.compose.runtime.rememberUpdatedState(it.title)
     val latestOriginalBody = androidx.compose.runtime.rememberUpdatedState(it.body)
     val latestDeleting = androidx.compose.runtime.rememberUpdatedState(deleting)
+
+    val changeKind: (String) -> Unit = { newKind ->
+        // Only relocate parents when the kind crosses the todos-domain
+        // boundary, comparing against the CURRENT draft kind so a multi-step
+        // change like note → reminder → checklist relocates on each cross.
+        // Switching note ↔ checklist keeps the user's actual parent list.
+        val oldKind = draftKind
+        draftKind = newKind
+        kindTouched = true
+        val isTodoDomain: (String) -> Boolean = { k ->
+            k == "reminder" || k == "scheduled"
+        }
+        if (isTodoDomain(oldKind) != isTodoDomain(newKind)) {
+            listsTouched = true
+            draftParentListIds = defaultParentListsForKind(newKind)
+        }
+        if (newKind != "reminder" && newKind != "scheduled") {
+            draftDueAt = null
+            dueAtTouched = true
+        }
+    }
 
     val flushDraft: () -> Unit = flushDraft@{
         if (latestDeleting.value) return@flushDraft
@@ -226,33 +239,7 @@ internal fun ItemView(
                     onRemoveExtraNotification = { vm.removeExtraNotification() },
                     allLists = allLists,
                     selectedListIds = draftParentListIds,
-                    onKind = { newKind ->
-                        // Only relocate parents when the kind crosses
-                        // the todos-domain boundary. Switching between
-                        // note ↔ checklist (both notes-domain) used to
-                        // forcibly snap the item to LIST_NOTES_SELF_ID,
-                        // wiping the user's actual parent list (e.g.
-                        // "Index Features"). The fix compares the
-                        // CURRENT draft kind, not the original `it.kind`,
-                        // so a multi-step change like
-                        // note → reminder → checklist correctly relocates
-                        // out of Todos and back into a notes-domain list
-                        // on each boundary cross.
-                        val oldKind = draftKind
-                        draftKind = newKind
-                        kindTouched = true
-                        val isTodoDomain: (String) -> Boolean = { k ->
-                            k == "reminder" || k == "scheduled"
-                        }
-                        if (isTodoDomain(oldKind) != isTodoDomain(newKind)) {
-                            listsTouched = true
-                            draftParentListIds = defaultParentListsForKind(newKind)
-                        }
-                        if (newKind != "reminder" && newKind != "scheduled") {
-                            draftDueAt = null
-                            dueAtTouched = true
-                        }
-                    },
+                    onKind = changeKind,
                     onTitle = { draftTitle = it },
                     onBody = { draftBody = it },
                     onCreatedAt = { newCreatedAt ->
@@ -435,8 +422,8 @@ private fun ItemHeroCard(
 /** Inline edit form for an item's title, body, due-at and list membership.
  *  Mirrors the prototype's ObjectDetail edit mode. */
 @OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class,
+    ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class,
 )
 @Composable
 private fun ItemHeroEdit(
@@ -474,10 +461,6 @@ private fun ItemHeroEdit(
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(18.dp))
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
-        // Title leads — multi-line, long titles wrap and the field grows
-        // downward. Used to live below the kind/due rows with a redundant
-        // "REMINDER" / "NOTE" tag stacked above the kind dropdown — both
-        // dropped (May 8) since the kind row itself already labels the type.
         BasicTextField(
             value = title,
             onValueChange = onTitle,
@@ -498,8 +481,6 @@ private fun ItemHeroEdit(
                 inner()
             },
         )
-        Spacer(Modifier.height(14.dp))
-        ItemKindRow(kind = kind, onChange = onKind)
         Spacer(Modifier.height(10.dp))
         if (showsDue) {
             DueAtRow(label = "Due", dueAt = dueAt, onChange = onDueAt)
@@ -516,6 +497,56 @@ private fun ItemHeroEdit(
             TimestampRow(timestamp = createdAt, onChange = onCreatedAt)
         }
         if (!showsDue && listOptions.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "TYPE",
+                color = colors.onSurfaceVariant,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp,
+            )
+            if (kind in setOf("note", "checklist")) {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                    maxLines = 1,
+                ) {
+                    ToggleButton(
+                        kind == "note",
+                        onCheckedChange = { onKind("note") },
+                        shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                        colors = IndexTheme.toggleButtonColors()
+                    ) {
+                        Icon(
+                            if (kind == "note") {
+                                Icons.AutoMirrored.Filled.StickyNote2
+                            } else {
+                                Icons.AutoMirrored.Outlined.StickyNote2
+                            },
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                        Text("Note")
+                    }
+                    ToggleButton(
+                        kind == "checklist",
+                        onCheckedChange = { onKind("checklist") },
+                        shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                        colors = IndexTheme.toggleButtonColors()
+                    ) {
+                        Icon(
+                            if (kind == "checklist") {
+                                Icons.Filled.CheckCircle
+                            } else {
+                                Icons.Outlined.CheckCircle
+                            },
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                        Text("Checkbox")
+                    }
+                }
+            }
             Spacer(Modifier.height(14.dp))
             Text(
                 "LISTS",
@@ -557,6 +588,8 @@ private fun ItemHeroEdit(
                     }
                 }
             }
+            Spacer(Modifier.height(14.dp))
+
         }
         Spacer(Modifier.height(14.dp))
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.outlineVariant))
@@ -579,47 +612,6 @@ private fun ItemHeroEdit(
                 inner()
             },
         )
-    }
-}
-
-@Composable
-private fun ItemKindRow(kind: String, onChange: (String) -> Unit) {
-    val colors = IndexTheme.colors
-    var expanded by remember { mutableStateOf(false) }
-    val options = listOf(
-        "note" to "Note",
-        "checklist" to "Checklist",
-        "reminder" to "Reminder",
-    )
-    Box {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp))
-                .clickable { expanded = true }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Text("Type", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
-            Text(
-                options.firstOrNull { it.first == kind }?.second ?: kindLabel(kind),
-                color = colors.onSurface,
-                fontSize = 14.sp,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { (value, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        expanded = false
-                        onChange(value)
-                    },
-                )
-            }
-        }
     }
 }
 

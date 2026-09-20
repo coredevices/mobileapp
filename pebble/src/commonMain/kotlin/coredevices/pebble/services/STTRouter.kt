@@ -14,10 +14,14 @@ import io.rebble.libpebblecommon.voice.TranscriptionWord
 import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * Mode-aware [TranscriptionProvider] dispatching between [HybridTranscription] (cloud/local via
@@ -38,6 +42,7 @@ class STTRouter(
             CactusSTTMode.RebbleFirst,
             CactusSTTMode.RebbleFallback,
         )
+        private val rebbleFallbackReserve = 7.seconds
     }
 
     override suspend fun canServeSession(): Boolean {
@@ -65,6 +70,9 @@ class STTRouter(
             "Rebble routing only supports Speex encoding, got ${encoderInfo::class.simpleName}"
         }
 
+        val start = TimeSource.Monotonic.markNow()
+        fun remaining() = (PEBBLE_TRANSCRIPTION_BUDGET - start.elapsedNow()).coerceAtLeast(Duration.ZERO)
+
         val frames: List<UByteArray> = audioFrames.toList()
         if (frames.isEmpty()) {
             return TranscriptionResult.Error("No audio frames received")
@@ -86,10 +94,14 @@ class STTRouter(
                     return rebbleResult
                 }
                 logger.w { "Rebble ASR returned $rebbleResult, falling back to local" }
-                runLocalFromSpeex(encoderInfo, frames)
+                runLocalFromSpeex(encoderInfo, frames, timeout = remaining())
             }
             CactusSTTMode.RebbleFallback -> {
-                val localResult = runLocalFromSpeex(encoderInfo, frames)
+                val localResult = runLocalFromSpeex(
+                    encoderInfo,
+                    frames,
+                    timeout = (remaining() - rebbleFallbackReserve).coerceAtLeast(Duration.ZERO),
+                )
                 if (localResult is TranscriptionResult.Success && localResult.words.isNotEmpty()) {
                     return localResult
                 }
@@ -108,16 +120,20 @@ class STTRouter(
     private suspend fun runLocalFromSpeex(
         encoderInfo: VoiceEncoderInfo.Speex,
         frames: List<UByteArray>,
+        timeout: Duration,
     ): TranscriptionResult {
         val pcm = decodeSpeex(encoderInfo, frames)
         return try {
             val text = cactusService.transcribeLocalForFallback(
                 audio = pcm,
                 sampleRate = encoderInfo.sampleRate.toInt(),
+                timeout = timeout,
             )
             TranscriptionResult.Success(
                 words = text.trim().split(" ").map { TranscriptionWord(it, 0.9f) }
             )
+        } catch (_: TimeoutCancellationException) {
+            TranscriptionResult.Error("Local transcription timed out")
         } catch (e: CancellationException) {
             throw e
         } catch (_: TranscriptionException.NoSpeechDetected) {

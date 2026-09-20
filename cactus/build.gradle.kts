@@ -49,6 +49,12 @@ kotlin {
         }
     }
 
+    // cinterop doesn't track `staticLibraries` as task inputs, so a re-vendored archive would
+    // otherwise be ignored and the stale one relinked from the cached klib.
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.CInteropProcess>().configureEach {
+        inputs.dir(iosLibDir).withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(libs.serialization)

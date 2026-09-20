@@ -28,6 +28,7 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
 import coredevices.ring.model.CactusModelProvider
+import coredevices.ring.service.RingOta
 import coredevices.ring.transcription.AndroidInferenceBoostProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
@@ -40,6 +41,7 @@ actual val platformRingModule = module {
     singleOf(::RingDelegate)
     single {
         val prefs = get<Preferences>()
+        val ringOTA = get<RingOta>()
         KMPHaversineSatelliteManager(
             pairedSatelliteIdProvider = { prefs.ringPaired.value?.replace(":", "") },
             debugDelegate = get(),
@@ -47,8 +49,13 @@ actual val platformRingModule = module {
             collectionIndexStorage = get(),
             context = get(),
             hwVersion = RingSync.SATELLITE_HW_VER,
-            CoroutineScope(Dispatchers.Default)
+            CoroutineScope(Dispatchers.Default),
+            useScanReceiver = prefs.usePendingIntentScan.value,
+            updateJsonProvider = { it?.let { ringOTA.getLatestFirmware(it) } }
         )
+    }
+    single {
+        RingOta(get(), get(), get())
     }
     singleOf(::PlatformIndexNotificationManager)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class

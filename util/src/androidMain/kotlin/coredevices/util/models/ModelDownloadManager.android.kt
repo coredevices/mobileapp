@@ -180,7 +180,9 @@ actual class ModelDownloadManager(
             networkRequest = buildNetworkRequest(allowMetered),
             allowMetered = allowMetered
         )
-        return jobScheduler.schedule(info) == JobScheduler.RESULT_SUCCESS
+        val scheduled = jobScheduler.schedule(info) == JobScheduler.RESULT_SUCCESS
+        if (scheduled) updateDownloadStatus(ModelDownloadStatus.Scheduled(modelInfo.slug))
+        return scheduled
     }
 
     actual fun downloadSTTModel(modelInfo: ModelInfo, allowMetered: Boolean): Boolean =
@@ -313,7 +315,7 @@ class ModelDownloadService : JobService(), KoinComponent {
     private suspend fun downloadModel(modelSlug: String, stt: Boolean) {
         val modelProvider: CactusModelPathProvider by inject()
         if (stt) {
-            modelProvider.getSTTModelPath()
+            modelProvider.getSTTModelPath(modelSlug)
         } else {
             modelProvider.getLMModelPath()
         }

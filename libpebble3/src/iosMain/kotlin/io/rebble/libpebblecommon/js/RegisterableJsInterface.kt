@@ -2,9 +2,8 @@ package io.rebble.libpebblecommon.js
 
 import platform.JavaScriptCore.JSContext
 
-interface RegisterableJsInterface: AutoCloseable {
+interface RegisterableJsInterface : JsEngineInterface, AutoCloseable {
     val interf: Map<String, *>
-    val name: String
-    fun dispatch(method: String, args: List<Any?>): Any?
+    override val methods: List<String> get() = interf.keys.toList()
     fun onRegister(jsContext: JSContext) {}
 }
