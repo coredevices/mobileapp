@@ -94,6 +94,7 @@ class FakePreferences : Preferences {
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
+    override val customTranscriptionDictionary: StateFlow<List<String>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val secondaryModeMcpGroupId: StateFlow<Long?> = MutableStateFlow(null)
     override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
@@ -118,6 +119,7 @@ class FakePreferences : Preferences {
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
+    override suspend fun setCustomTranscriptionDictionary(words: List<String>) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setSecondaryModeMcpGroupId(groupId: Long?) {}
     override fun setReminderProvider(provider: ReminderProvider) {}
