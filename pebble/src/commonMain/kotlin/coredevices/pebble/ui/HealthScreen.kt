@@ -51,6 +51,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     val act by vm.activity.collectAsState()
     val slp by vm.sleep.collectAsState()
     val hr by vm.heartRate.collectAsState()
+    val spo2 by vm.spo2.collectAsState()
     val dl by vm.dateLabel.collectAsState()
     val imperial by vm.imperialUnits.collectAsState()
     val hasHrmWatch by vm.hasHrmWatch.collectAsState()
@@ -73,6 +74,7 @@ fun HealthScreen(topBarParams: TopBarParams, nav: NavBarNav) {
             ActivityCard(act, vm.selectedTimeRange, imperial)
             SleepCard(slp, vm.selectedTimeRange)
             if (hasHrmWatch) HeartRateCard(hr, vm.selectedTimeRange)
+            if (hasHrmWatch) BloodOxygenCard(spo2, vm.selectedTimeRange)
             TextButton(
                 onClick = {
                     nav.navigateTo(
@@ -332,6 +334,53 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
                 DayScrubStrip(st.restingHRLabels, rhrScrub, tm)
             }
             if (st.zoneMinutes.isNotEmpty()) HRZoneBar(st.zoneMinutes)
+        }
+    }
+}
+
+@Composable
+private fun BloodOxygenCard(st: Spo2UiState, range: HealthTimeRange) {
+    val scrub = rememberScrubState()
+    val idx = scrub.scrubIndex
+    val minPerBucket = if (st.spo2Samples.isNotEmpty()) 1440 / st.spo2Samples.size else 60
+    // Snap scrub to nearest non-null sample within ~1 hour, like the HR card.
+    val sv = if (idx != null && idx < st.spo2Samples.size) {
+        val maxDist = (60 / minPerBucket).coerceAtLeast(1)
+        var found: Double? = null
+        for (d in 0..maxDist) {
+            found = st.spo2Samples.getOrNull(idx - d) ?: st.spo2Samples.getOrNull(idx + d)
+            if (found != null) break
+        }
+        found?.roundToInt()
+    } else null
+    val tStr = if (idx != null) { val m = idx * minPerBucket; "${m / 60}:${(m % 60).toString().padStart(2, '0')}" } else ""
+
+    val headerLabel = when (range) { HealthTimeRange.Daily -> "latest"; else -> "average" }
+    val hv = when { sv != null -> "$sv%"; st.latestSpo2 != null && range == HealthTimeRange.Daily -> "${st.latestSpo2}%"; st.averageSpo2 != null -> "${st.averageSpo2}%"; else -> "--" }
+    val hs = when {
+        sv != null && idx != null -> "% at $tStr"
+        idx != null -> "no data at $tStr"
+        range == HealthTimeRange.Daily -> "SpO2 · latest reading"
+        else -> "SpO2 · average"
+    }
+
+    HealthCard(SpO2BgColor) {
+        CardHeader(
+            color = SpO2HeaderColor,
+            cardName = "Blood Oxygen",
+            label = headerLabel,
+            subtitle = hs,
+            mainValue = hv,
+            secondLabel = st.averageSpo2?.let { "Avg" },
+            secondValue = st.averageSpo2?.let { "$it%" },
+        )
+        if (st.isLoading) { ChartPlaceholder("Loading...", "") }
+        else if (st.averageSpo2 == null && st.latestSpo2 == null) {
+            ChartPlaceholder("No blood oxygen data", "Enable Blood Oxygen in Health Settings, then wear your watch")
+        } else {
+            if (range == HealthTimeRange.Daily && st.spo2Samples.any { it != null }) {
+                val tm = rememberTextMeasurer(); Spo2LineChart(st.spo2Samples, scrub, tm)
+            }
         }
     }
 }
