@@ -1,10 +1,13 @@
 package io.rebble.libpebblecommon.di
 
 import android.app.Application
+import android.app.NotificationManager
 import io.rebble.libpebblecommon.calendar.AndroidCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.AndroidSystemCalendar
 import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calls.CallDoNotDisturbFilter
+import io.rebble.libpebblecommon.calls.InCallServiceCallCoordinator
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
 import io.rebble.libpebblecommon.calls.SystemCallLog
@@ -82,6 +85,11 @@ actual val platformModule: Module = module {
     singleOf(::AndroidSystemContacts) bind SystemContacts::class
     singleOf(::AndroidPhoneReceiver) bind LegacyPhoneReceiver::class
     singleOf(::NotificationCallDetector)
+    singleOf(::InCallServiceCallCoordinator)
+    single {
+        val notificationManager = get<NotificationManager>()
+        CallDoNotDisturbFilter(get(), get()) { notificationManager.currentInterruptionFilter }
+    }
     singleOf(::PhoneBatteryMonitor)
     singleOf(::PhoneNetworkMonitor)
     singleOf(::MusicPlugin)
@@ -89,6 +97,7 @@ actual val platformModule: Module = module {
     single { PlatformPlugins(setOf(get<MusicPlugin>(), get<NotificationsPlugin>())) }
     single { get<AppContext>().context }
     single { get<AppContext>().context as Application }
+    single { get<Application>().getSystemService(NotificationManager::class.java) }
     single { NotificationHandler(setOf(get<BasicNotificationProcessor>()), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::BasicNotificationProcessor)
     singleOf(::NotificationImageStore) bind NotificationImageProvider::class
