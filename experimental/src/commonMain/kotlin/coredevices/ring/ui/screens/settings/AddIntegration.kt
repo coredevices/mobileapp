@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,8 @@ import coredevices.util.PermissionResult
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -202,6 +205,8 @@ fun PhoneCalendarDialog(
 
     M3Dialog(
         onDismissRequest = onDismiss,
+        // The calendar list shown once connected can be long.
+        scrollableContent = true,
         title = { Text(PHONE_CALENDAR_TITLE) },
         buttons = {
             TextButton(onClick = onDismiss) {
@@ -256,10 +261,72 @@ fun PhoneCalendarDialog(
                 }
             }
             is SignInState.Success -> {
-                Text("Phone Calendar connected.")
+                Column {
+                    Text("Phone Calendar connected.")
+                    Spacer(Modifier.height(16.dp))
+                    PhoneCalendarPicker()
+                }
             }
             is SignInState.Error -> {
                 Text(s.message, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+/** Picks which of the phone's calendars Index adds events to. */
+@Composable
+fun PhoneCalendarPicker() {
+    val preferences = koinInject<Preferences>()
+    val libPebble = koinInject<LibPebble>()
+    val selectedId by preferences.phoneCalendarId.collectAsState()
+    var calendars by remember { mutableStateOf<List<CalendarEntity>?>(null) }
+    LaunchedEffect(Unit) {
+        calendars = libPebble.writableCalendars()
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Add events to", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        val loaded = calendars
+        when {
+            loaded == null -> Box(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+            loaded.isEmpty() -> Text("No calendars found that Index can add events to.")
+            else -> {
+                // Same fallback as event creation: without a choice - or when the chosen
+                // calendar is gone - the first one is what the phone would use anyway.
+                val effectiveId = loaded.firstOrNull { it.platformId == selectedId }?.platformId
+                    ?: loaded.first().platformId
+                loaded.forEach { calendar ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { preferences.setPhoneCalendarId(calendar.platformId) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = calendar.platformId == effectiveId,
+                            onClick = { preferences.setPhoneCalendarId(calendar.platformId) },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(calendar.name, style = MaterialTheme.typography.bodyLarge)
+                            if (calendar.ownerName != calendar.name) {
+                                Text(
+                                    calendar.ownerName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
