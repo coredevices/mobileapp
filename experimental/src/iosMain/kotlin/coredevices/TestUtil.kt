@@ -135,6 +135,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
         get() = TODO("Not yet implemented")
+    override val customTranscriptionDictionary: StateFlow<List<String>>
+        get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
     override val secondaryModeMcpGroupId: StateFlow<Long?>
@@ -200,6 +202,10 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun setCustomTranscriptionDictionary(words: List<String>) {
         TODO("Not yet implemented")
     }
 

@@ -171,6 +171,7 @@ class SettingsViewModel(
     private val _showNoteShortcutDialog = MutableStateFlow(false)
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
+    val customTranscriptionDictionary = preferences.customTranscriptionDictionary
     val autoDismissActionNotifications = preferences.autoDismissActionNotifications
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
@@ -348,6 +349,23 @@ class SettingsViewModel(
 
     fun setNoteShortcut(shortcut: NoteShortcutType) {
         preferences.setNoteShortcut(shortcut)
+    }
+
+    /** Splits comma/newline-separated input, trims, and appends any words not already present
+     *  (case-insensitive). No-op for input that adds nothing. */
+    fun addTranscriptionDictionaryWords(input: String) {
+        val existing = preferences.customTranscriptionDictionary.value
+        val seen = existing.mapTo(mutableSetOf()) { it.lowercase() }
+        val additions = input.split(',', '\n')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && seen.add(it.lowercase()) }
+        if (additions.isEmpty()) return
+        viewModelScope.launch { preferences.setCustomTranscriptionDictionary(existing + additions) }
+    }
+
+    fun removeTranscriptionDictionaryWord(word: String) {
+        val next = preferences.customTranscriptionDictionary.value.filterNot { it == word }
+        viewModelScope.launch { preferences.setCustomTranscriptionDictionary(next) }
     }
 
     fun showContactsDialog() {

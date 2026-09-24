@@ -25,6 +25,7 @@ interface Preferences: BasePreferences {
     val musicControlMode: StateFlow<MusicControlMode>
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
+    val customTranscriptionDictionary: StateFlow<List<String>>
     val secondaryMode: StateFlow<SecondaryMode>
     /** Sandbox group used when [secondaryMode] is [SecondaryMode.McpSandbox]. */
     val secondaryModeMcpGroupId: StateFlow<Long?>
@@ -54,6 +55,7 @@ interface Preferences: BasePreferences {
     fun setMusicControlMode(mode: MusicControlMode)
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
+    suspend fun setCustomTranscriptionDictionary(words: List<String>)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setSecondaryModeMcpGroupId(groupId: Long?)
     fun setReminderProvider(provider: ReminderProvider)
@@ -137,6 +139,16 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         } ?: emptyList()
     )
     override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
+    private val _customTranscriptionDictionary = MutableStateFlow(
+        settings.getStringOrNull("custom_transcription_dictionary")?.let { raw ->
+            try {
+                Json.decodeFromString<List<String>>(raw)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        } ?: emptyList()
+    )
+    override val customTranscriptionDictionary = _customTranscriptionDictionary.asStateFlow()
     private val _secondaryMode = MutableStateFlow(
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
@@ -243,6 +255,17 @@ class PreferencesImpl(private val settings: Settings): Preferences {
                 settings.remove("approved_beeper_contacts")
             }
             _approvedBeeperContacts.value = contacts ?: emptyList()
+        }
+    }
+
+    override suspend fun setCustomTranscriptionDictionary(words: List<String>) {
+        withContext(Dispatchers.IO) {
+            if (words.isNotEmpty()) {
+                settings.putString("custom_transcription_dictionary", Json.encodeToString(words))
+            } else {
+                settings.remove("custom_transcription_dictionary")
+            }
+            _customTranscriptionDictionary.value = words
         }
     }
 
