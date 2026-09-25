@@ -17,7 +17,7 @@ import org.jetbrains.skia.Image
 import org.jetbrains.skia.EncodedImageFormat
 
 actual class PlatformShareLauncher() {
-    actual fun share(text: String?, file: Path) {
+    actual fun share(text: String?, file: Path, mimeType: String) {
         val viewController = UIApplication.sharedApplication.keyWindow?.rootViewController!!
         val activityViewController = UIActivityViewController(listOf(file.toNSURL()), null)
         viewController.presentViewController(activityViewController, true, null)
