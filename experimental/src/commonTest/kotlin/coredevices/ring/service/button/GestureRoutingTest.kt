@@ -49,6 +49,25 @@ class GestureRoutingTest {
     }
 
     @Test
+    fun mergedRapidClicksDecodeAsRepeatedDoubleClicks() {
+        assertEquals(0, repeatedDoubleClickCount(emptyList()))
+        assertEquals(0, repeatedDoubleClickCount(List(1) { ButtonPress.Short }))
+        assertEquals(0, repeatedDoubleClickCount(List(2) { ButtonPress.Short }))
+        assertEquals(0, repeatedDoubleClickCount(List(3) { ButtonPress.Short }))
+        assertEquals(2, repeatedDoubleClickCount(List(4) { ButtonPress.Short }))
+        assertEquals(2, repeatedDoubleClickCount(List(5) { ButtonPress.Short }))
+        assertEquals(3, repeatedDoubleClickCount(List(6) { ButtonPress.Short }))
+        assertEquals(6, repeatedDoubleClickCount(List(12) { ButtonPress.Short }))
+        assertEquals(0, repeatedDoubleClickCount(List(4) { ButtonPress.Long }))
+        assertEquals(
+            0,
+            repeatedDoubleClickCount(
+                listOf(ButtonPress.Short, ButtonPress.Short, ButtonPress.Short, ButtonPress.Long)
+            )
+        )
+    }
+
+    @Test
     fun musicControlModeDisabledMigratesToNothing() {
         val routes = routing(MusicControlMode.Disabled).routes.value
 

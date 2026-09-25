@@ -10,3 +10,7 @@ actual fun onPlayPause() {
 actual fun onNextTrack() {
     //no-op
 }
+
+actual fun onPreviousTrack() {
+    //no-op
+}
