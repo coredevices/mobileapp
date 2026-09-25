@@ -19,6 +19,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.util.R
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -42,11 +43,19 @@ class AndroidAppUpdate(
 ) : AppUpdate {
     private val logger = Logger.withTag("AndroidAppUpdate")
 
-    override val updateAvailable: StateFlow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
-        .onStart {
-            logger.d { "Checking for app update - installed via ${resolveInstaller()}" }
-            emit(AppUpdateResult.NotAvailable) // Emit a loading state initially
+    override val updateAvailable: StateFlow<AppUpdateState> = run {
+        val installer = resolveInstaller()
+        logger.d { "Checking for app update - installed via $installer" }
+        if (installer == PLAY_STORE_PACKAGE) {
+            playUpdateFlow()
+        } else {
+            logger.d { "Not installed via Play Store (installer: $installer) - skipping Play update check" }
+            MutableStateFlow(AppUpdateState.NoUpdateAvailable)
         }
+    }
+
+    private fun playUpdateFlow(): StateFlow<AppUpdateState> = appUpdateManager.requestUpdateFlow()
+        .onStart { emit(AppUpdateResult.NotAvailable) } // Emit a loading state initially
         .catch { exception ->
             Logger.w(exception) { "Failed to check for CoreApp updates" }
             emit(AppUpdateResult.NotAvailable)
