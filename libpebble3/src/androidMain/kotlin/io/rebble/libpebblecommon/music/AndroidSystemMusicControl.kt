@@ -5,9 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.MediaRoute2Info
+import android.media.MediaRouter2
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.core.net.toUri
@@ -24,14 +27,20 @@ import io.rebble.libpebblecommon.imaging.encodeForWatch
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.NotificationHandler
 import io.rebble.libpebblecommon.music.PlaybackStatus
 import io.rebble.libpebblecommon.music.PlayerInfo
+import io.rebble.libpebblecommon.music.MusicOutputRoute
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
+import io.rebble.libpebblecommon.music.MusicOutputRouteStatus
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.music.SystemMusicControl
+import io.rebble.libpebblecommon.music.hasMediaRoutingControlPermission
 import io.rebble.libpebblecommon.music.isActive
 import io.rebble.libpebblecommon.music.matchesTruncated
 import io.rebble.libpebblecommon.notification.LibPebbleNotificationListener
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,7 +54,11 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -113,6 +126,46 @@ internal fun skipBehaviour(
 private fun PlaybackState?.seeksWithinTrack(watchConfig: WatchConfig, packageName: String?): Boolean =
     skipBehaviour(this?.actions ?: 0L, forward = true, watchConfig, packageName).seeksWithinTrack
 
+internal fun <T, K> combineOutputRoutes(
+    selectedRoutes: List<T>,
+    controllerRoutes: List<T>,
+    discoveredRoutes: List<T>,
+    routeId: (T) -> K,
+): List<T> = (selectedRoutes + controllerRoutes + discoveredRoutes).distinctBy(routeId)
+
+internal class OutputRouteSelectionCache<T>(
+    private val maxSnapshots: Int,
+) {
+    private data class Snapshot<T>(
+        val packageName: String,
+        val routes: Map<UByte, T>,
+    )
+
+    private var generation: UByte = 0u
+    private val snapshots = linkedMapOf<UByte, Snapshot<T>>()
+
+    fun store(packageName: String, routes: List<T>): UByte {
+        do {
+            generation = (generation + 1u).toUByte()
+        } while (generation in snapshots)
+        snapshots[generation] = Snapshot(
+            packageName,
+            routes.mapIndexed { index, route -> index.toUByte() to route }.toMap(),
+        )
+        while (snapshots.size > maxSnapshots) {
+            snapshots.remove(snapshots.keys.first())
+        }
+        return generation
+    }
+
+    fun route(generation: UByte, packageName: String, routeId: UByte): T? =
+        snapshots[generation]?.takeIf { it.packageName == packageName }?.routes?.get(routeId)
+
+    fun removePackage(packageName: String) {
+        snapshots.entries.removeAll { it.value.packageName == packageName }
+    }
+}
+
 /** [PlaybackState.getPosition] is only accurate as of [PlaybackState.getLastPositionUpdateTime]. */
 private fun PlaybackState.currentPosition(): Long = if (state == PlaybackState.STATE_PLAYING) {
     position + ((SystemClock.elapsedRealtime() - lastPositionUpdateTime) * playbackSpeed).toLong()
@@ -153,6 +206,9 @@ class AndroidSystemMusicControl(
     private val notificationServiceComponent = LibPebbleNotificationListener.componentName(context)
     private val packageMostRecentlyStartedPlayingAt: MutableMap<String, Instant> = mutableMapOf()
     private val appNameForPackage: MutableMap<String, String> = mutableMapOf()
+    private val outputRouters = mutableMapOf<String, MediaRouter2>()
+    private val outputRouteSelections =
+        OutputRouteSelectionCache<MediaRoute2Info>(MAX_OUTPUT_ROUTE_SNAPSHOTS)
     private val _albumArtUpdated = MutableSharedFlow<Unit>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -415,6 +471,155 @@ class AndroidSystemMusicControl(
         audioManager.adjustVolume(AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
     }
 
+    override suspend fun getOutputRoutes(): MusicOutputRoutes {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return MusicOutputRoutes(MusicOutputRouteStatus.Unsupported)
+        }
+        if (!hasOutputRoutingPermission()) {
+            return MusicOutputRoutes(MusicOutputRouteStatus.PermissionRequired)
+        }
+        val packageName = targetSession.value?.controller?.packageName
+            ?: return MusicOutputRoutes(MusicOutputRouteStatus.NoPlayer)
+
+        return withContext(Dispatchers.Main) {
+            try {
+                val router = outputRouterFor(packageName)
+                val scanToken = router.requestScan(
+                    MediaRouter2.ScanRequest.Builder()
+                        .setScreenOffScan(true)
+                        .build(),
+                )
+                val discoveredRoutes = try {
+                    delay(OUTPUT_ROUTE_SCAN_DURATION_MS)
+                    router.routes
+                } finally {
+                    router.cancelScanRequest(scanToken)
+                }
+                val controllers = router.controllers
+                val controller = controllers.lastOrNull()
+                    ?: return@withContext MusicOutputRoutes(MusicOutputRouteStatus.Error)
+                val selectedIds = controller.selectedRoutes.mapTo(mutableSetOf()) { it.id }
+                val controllerRoutes = controllers.flatMap {
+                    it.selectedRoutes + it.transferableRoutes
+                }
+                val routes = combineOutputRoutes(
+                    controller.selectedRoutes,
+                    controllerRoutes,
+                    discoveredRoutes,
+                ) { it.id }
+                    .take(MAX_OUTPUT_ROUTES)
+
+                val generation = outputRouteSelections.store(packageName, routes)
+
+                MusicOutputRoutes(
+                    status = MusicOutputRouteStatus.Available,
+                    generation = generation,
+                    routes = routes.mapIndexed { index, route ->
+                        MusicOutputRoute(
+                            id = index.toUByte(),
+                            name = route.name.toString(),
+                            selected = route.id in selectedIds,
+                        )
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SecurityException) {
+                logger.w(e) { "Media output routing permission denied" }
+                MusicOutputRoutes(MusicOutputRouteStatus.PermissionRequired)
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to get media output routes" }
+                MusicOutputRoutes(MusicOutputRouteStatus.Error)
+            }
+        }
+    }
+
+    override suspend fun selectOutputRoute(generation: UByte, routeId: UByte): Boolean =
+        withContext(Dispatchers.Main) {
+            if (!hasOutputRoutingPermission()) {
+                return@withContext false
+            }
+            val packageName = targetSession.value?.controller?.packageName
+                ?: return@withContext false
+            val router = outputRouters[packageName] ?: return@withContext false
+            val route = outputRouteSelections.route(generation, packageName, routeId)
+                ?: return@withContext false
+            if (router.controllers.lastOrNull()?.selectedRoutes?.any { it.id == route.id } == true) {
+                return@withContext true
+            }
+            try {
+                transferOutputRoute(router, route)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to select media output route" }
+                false
+            }
+        }
+
+    private fun hasOutputRoutingPermission(): Boolean =
+        context.hasMediaRoutingControlPermission()
+
+    private fun outputRouterFor(packageName: String): MediaRouter2 {
+        outputRouters[packageName]?.let { return it }
+        var createdRouter: MediaRouter2? = null
+        val router = MediaRouter2.getInstance(
+            context,
+            packageName,
+            context.mainExecutor,
+            Runnable {
+                if (outputRouters[packageName] === createdRouter) {
+                    outputRouters.remove(packageName)
+                    outputRouteSelections.removePackage(packageName)
+                }
+            },
+        )
+        createdRouter = router
+        outputRouters[packageName] = router
+        return router
+    }
+
+    private suspend fun transferOutputRoute(
+        router: MediaRouter2,
+        route: MediaRoute2Info,
+    ): Boolean = withTimeoutOrNull(OUTPUT_ROUTE_TRANSFER_TIMEOUT_MS) {
+        suspendCancellableCoroutine { continuation ->
+            lateinit var callback: MediaRouter2.TransferCallback
+            fun complete(result: Boolean) {
+                router.unregisterTransferCallback(callback)
+                if (continuation.isActive) {
+                    continuation.resume(result)
+                }
+            }
+            callback = object : MediaRouter2.TransferCallback() {
+                override fun onTransfer(
+                    oldController: MediaRouter2.RoutingController,
+                    newController: MediaRouter2.RoutingController,
+                ) {
+                    if (newController.selectedRoutes.any { it.id == route.id }) {
+                        complete(true)
+                    }
+                }
+
+                override fun onTransferFailure(requestedRoute: MediaRoute2Info) {
+                    if (requestedRoute.id == route.id) {
+                        complete(false)
+                    }
+                }
+            }
+            router.registerTransferCallback(context.mainExecutor, callback)
+            continuation.invokeOnCancellation {
+                router.unregisterTransferCallback(callback)
+            }
+            try {
+                router.transferTo(route)
+            } catch (e: Exception) {
+                router.unregisterTransferCallback(callback)
+                continuation.resumeWithException(e)
+            }
+        }
+    } ?: false
+
     override val supportsAlbumArt: Boolean = true
 
     override suspend fun getAlbumArt(title: String, artist: String, width: Int, height: Int): EncodedImage? =
@@ -473,6 +678,11 @@ private val ALBUM_ART_URI_KEYS = listOf(
 )
 
 private val ALBUM_ART_KEYS = ALBUM_ART_BITMAP_KEYS + ALBUM_ART_URI_KEYS
+
+private const val MAX_OUTPUT_ROUTES = 8
+private const val MAX_OUTPUT_ROUTE_SNAPSHOTS = 8
+private const val OUTPUT_ROUTE_SCAN_DURATION_MS = 1_500L
+private const val OUTPUT_ROUTE_TRANSFER_TIMEOUT_MS = 5_000L
 
 // containsKey, not getBitmap: getBitmap decodes the whole bitmap, and this runs on every metadata change.
 private fun MediaMetadata.hasAlbumArt() = ALBUM_ART_KEYS.any { containsKey(it) }

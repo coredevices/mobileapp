@@ -12,6 +12,8 @@ import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.music.MusicAction
+import io.rebble.libpebblecommon.music.MusicOutputRouteSelection
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -215,8 +217,11 @@ object ConnectedPebble {
         )
         suspend fun updatePlayerInfo(packageId: String, name: String)
         suspend fun updateVolumeInfo(volumePercent: UByte)
+        suspend fun updateOutputRoutes(routes: MusicOutputRoutes)
         val musicActions: Flow<MusicAction>
         val updateRequestTrigger: Flow<Unit>
+        val outputRouteRequests: Flow<Unit>
+        val outputRouteSelections: Flow<MusicOutputRouteSelection>
     }
 
     interface LanguageInstall {
