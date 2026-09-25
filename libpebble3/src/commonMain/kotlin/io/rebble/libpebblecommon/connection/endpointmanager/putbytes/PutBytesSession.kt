@@ -123,7 +123,10 @@ class PutBytesSession(
 
     suspend fun sendInstall(cookie: UInt) {
         val installResponse = putBytesService.sendInstall(cookie)
-        // TODO this fired?
-//        check(installResponse.cookie.get() == cookie) { "Received response for wrong cookie" }
+        val responseCookie = installResponse.cookie.get()
+        // Older firmware answers an install with cookie 0; newer firmware echoes the real cookie.
+        check(responseCookie == cookie || responseCookie == 0u) {
+            "Received response for wrong cookie"
+        }
     }
 }
