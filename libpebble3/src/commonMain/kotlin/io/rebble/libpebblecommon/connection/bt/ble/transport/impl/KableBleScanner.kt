@@ -41,7 +41,8 @@ class KableBleScanner(
                     identifier = it.identifier.asPebbleBleIdentifier(),
                     name = name,
                     rssi = it.rssi,
-                    manufacturerData = manufacturerData
+                    manufacturerCode = manufacturerData.code,
+                    manufacturerData = manufacturerData.data,
                 )
             }
     }
