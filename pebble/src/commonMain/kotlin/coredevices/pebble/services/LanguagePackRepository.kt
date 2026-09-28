@@ -1909,73 +1909,73 @@ private val LanguagePacksJson = """
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "asterix",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_evt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_dvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_pvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_evt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_dvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_dvt2",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     }
   ]
 }
