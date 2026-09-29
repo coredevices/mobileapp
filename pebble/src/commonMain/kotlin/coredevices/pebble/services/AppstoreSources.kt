@@ -1,17 +1,15 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private val logger = Logger.withTag("AppstoreSources")
 const val PEBBLE_FEED_URL = "https://appstore-api.repebble.com/api"
 const val REBBLE_FEED_URL = "https://appstore-api.rebble.io/api"
+private const val REBBLE_ENABLED_WITHOUT_LOGIN_KEY = "rebbleAppstoreEnabledWithoutLogin"
 
 val INITIAL_APPSTORE_SOURCES = listOf(
     AppstoreSource(
@@ -35,7 +33,7 @@ fun AppstoreSource.isPebbleFeed(): Boolean = url == PEBBLE_FEED_URL
 
 class AppstoreSourceInitializer(
     private val appstoreSourceDao: AppstoreSourceDao,
-    private val pebbleAccount: PebbleAccountProvider,
+    private val settings: Settings,
     private val appstoreCache: AppstoreCache
 ) {
     suspend fun initAppstoreSourcesDB() {
@@ -61,15 +59,14 @@ class AppstoreSourceInitializer(
             logger.d { "Appstore sources database already initialized" }
         }
 
-        GlobalScope.launch {
+        // Older versions disabled Rebble when logged out. Enable it once on upgrade,
+        // then preserve the user's source toggle independently of their login state.
+        if (!settings.getBoolean(REBBLE_ENABLED_WITHOUT_LOGIN_KEY, false)) {
             val rebbleSource = appstoreSourceDao.getAllSources().first()
                 .firstOrNull { it.isRebbleFeed() }
-            if (rebbleSource == null) {
-                return@launch
-            }
-            pebbleAccount.get().loggedIn.collect {
-                val loggedIn = it != null
-                appstoreSourceDao.setSourceEnabled(rebbleSource.id, loggedIn)
+            if (rebbleSource != null) {
+                appstoreSourceDao.setSourceEnabled(rebbleSource.id, true)
+                settings.putBoolean(REBBLE_ENABLED_WITHOUT_LOGIN_KEY, true)
             }
         }
     }
