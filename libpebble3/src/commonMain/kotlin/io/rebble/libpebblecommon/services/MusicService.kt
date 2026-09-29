@@ -6,6 +6,8 @@ import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.toPacket
 import io.rebble.libpebblecommon.music.MusicAction
+import io.rebble.libpebblecommon.music.MusicOutputRouteSelection
+import io.rebble.libpebblecommon.music.MusicOutputRoutes
 import io.rebble.libpebblecommon.music.PlaybackState
 import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.packets.MusicControl
@@ -41,6 +43,22 @@ class MusicService(private val protocolHandler: PebbleProtocolHandler) : Protoco
             }
         }
 
+    override val outputRouteRequests: Flow<Unit> = protocolHandler.inboundMessages
+        .filterIsInstance<MusicControl>()
+        .mapNotNull {
+            if (it.message == MusicControl.Message.GetOutputRoutes) Unit else null
+        }
+
+    override val outputRouteSelections: Flow<MusicOutputRouteSelection> =
+        protocolHandler.inboundMessages
+            .filterIsInstance<MusicControl.SelectOutputRoute>()
+            .mapNotNull {
+                MusicOutputRouteSelection(
+                    generation = it.generation.get(),
+                    routeId = it.routeId.get(),
+                )
+            }
+
     override suspend fun updatePlayerInfo(packageId: String, name: String) {
         send(
             MusicControl.UpdatePlayerInfo(
@@ -74,6 +92,10 @@ class MusicService(private val protocolHandler: PebbleProtocolHandler) : Protoco
 
     override suspend fun updateVolumeInfo(volumePercent: UByte) {
         send(MusicControl.UpdateVolumeInfo(volumePercent))
+    }
+
+    override suspend fun updateOutputRoutes(routes: MusicOutputRoutes) {
+        send(MusicControl.UpdateOutputRoutes(routes))
     }
 
     suspend fun send(packet: MusicControl) {

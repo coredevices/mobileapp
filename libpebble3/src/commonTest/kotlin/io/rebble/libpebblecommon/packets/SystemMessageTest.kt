@@ -31,7 +31,8 @@ internal class SystemMessageTest {
             ProtocolCapsFlag.SupportsHealthInsights,
             ProtocolCapsFlag.SupportsLocalization,
             ProtocolCapsFlag.SupportsUnreadCoreDump,
-            ProtocolCapsFlag.SupportsWorkoutApp
+            ProtocolCapsFlag.SupportsWorkoutApp,
+            ProtocolCapsFlag.SupportsMusicOutputRouting,
         )
 
         val originalMessage = PhoneAppVersion.AppVersionResponse(

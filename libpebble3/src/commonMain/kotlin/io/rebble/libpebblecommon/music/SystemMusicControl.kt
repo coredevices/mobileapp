@@ -32,6 +32,11 @@ interface SystemMusicControl {
      * artwork return an empty flow.
      */
     val albumArtUpdated: Flow<Unit>
+
+    suspend fun getOutputRoutes(): MusicOutputRoutes =
+        MusicOutputRoutes(MusicOutputRouteStatus.Unsupported)
+
+    suspend fun selectOutputRoute(generation: UByte, routeId: UByte): Boolean = false
 }
 
 /**
@@ -44,6 +49,31 @@ fun matchesTruncated(full: String?, truncated: String): Boolean =
 data class PlayerInfo(
     val packageId: String,
     val name: String,
+)
+
+enum class MusicOutputRouteStatus(val protocolValue: UByte) {
+    Available(0u),
+    Unsupported(1u),
+    PermissionRequired(2u),
+    NoPlayer(3u),
+    Error(4u),
+}
+
+data class MusicOutputRoute(
+    val id: UByte,
+    val name: String,
+    val selected: Boolean,
+)
+
+data class MusicOutputRoutes(
+    val status: MusicOutputRouteStatus,
+    val generation: UByte = 0u,
+    val routes: List<MusicOutputRoute> = emptyList(),
+)
+
+data class MusicOutputRouteSelection(
+    val generation: UByte,
+    val routeId: UByte,
 )
 
 data class PlaybackStatus(

@@ -38,6 +38,7 @@ fun Permission.name(): String = when (this) {
     Permission.BatteryOptimization -> "Exempt from Battery Optimizations"
     Permission.Beeper -> "Access Beeper"
     Permission.Reminders -> "Access Reminders"
+    Permission.MediaRouting -> "Change Media Output"
 }
 
 fun Permission.description(): String = when (this) {
@@ -57,6 +58,7 @@ fun Permission.description(): String = when (this) {
     Permission.BatteryOptimization -> "To handle recordings in the background"
     Permission.Beeper -> "To send messages via Beeper"
     Permission.Reminders -> "To create reminders"
+    Permission.MediaRouting -> "To select your phone's media output from your Pebble"
 }
 
 abstract class PermissionRequester(
