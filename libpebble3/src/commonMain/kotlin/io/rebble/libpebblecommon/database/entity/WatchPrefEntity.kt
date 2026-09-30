@@ -342,25 +342,35 @@ sealed interface WatchPrefEnum {
     val displayName: String
 }
 
-fun UByte.applyOffsetForSendToWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
-    // Apply offset for obelix/etc so we can keep the same base enum in the app
-    EnumWatchPref.TextSize.id -> (this + watchType.textSizeOffset()).toUByte()
+/** Matches NumPreferredContentSizes / NotificationContentSizeSystem in PebbleOS. */
+const val CONTENT_SIZE_FOLLOW_SYSTEM_CODE: UByte = 4u
+
+private val CONTENT_SIZE_PREF_IDS = setOf(
+    EnumWatchPref.SystemTextSize.id,
+    EnumWatchPref.NotificationTextSize.id,
+)
+
+fun UByte.applyOffsetForSendToWatch(prefId: String, watchType: WatchType): UByte = when {
+    // Apply offset for obelix/etc so we can keep the same base enum in the app. The "Same as
+    // System" sentinel is never offset.
+    prefId in CONTENT_SIZE_PREF_IDS && this < CONTENT_SIZE_FOLLOW_SYSTEM_CODE ->
+        (this + watchType.textSizeOffset()).toUByte()
     else -> this
 }
 
-fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
-    // Apply offset for obelix/etc so we can keep the same base enum in the app
-    EnumWatchPref.TextSize.id -> (this - watchType.textSizeOffset()).toUByte().let {
-        // Also add check so that we don't write an invalid enum value, e.g. for a new watch type
-        if (it > ContentSize.Larger.code) {
+fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): UByte = when {
+    prefId !in CONTENT_SIZE_PREF_IDS -> this
+    this >= CONTENT_SIZE_FOLLOW_SYSTEM_CODE -> this
+    else -> {
+        val adjusted = (this - watchType.textSizeOffset()).toUByte()
+        if (adjusted > ContentSize.Larger.code) {
             ContentSize.Larger.code
-        } else if (it < ContentSize.Smaller.code) {
+        } else if (adjusted < ContentSize.Smaller.code) {
             ContentSize.Smaller.code
         } else {
-            it
+            adjusted
         }
     }
-    else -> this
 }
 
 // These watch types use a different set of enum values (e.g. 1,2,3 instead of 0,1,2). So that we
@@ -376,6 +386,14 @@ enum class ContentSize(override val code: UByte, override val displayName: Strin
     Smaller(0u, "Smaller"),
     Default(1u, "Default"),
     Larger(2u, "Larger"),
+}
+
+enum class NotificationContentSize(override val code: UByte, override val displayName: String) :
+    WatchPrefEnum {
+    Smaller(0u, "Smaller"),
+    Default(1u, "Default"),
+    Larger(2u, "Larger"),
+    SameAsSystem(CONTENT_SIZE_FOLLOW_SYSTEM_CODE, "Same as System"),
 }
 
 enum class AlertMask(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -496,7 +514,20 @@ enum class EnumWatchPref(
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
 ) : WatchPref<WatchPrefEnum> {
-    TextSize("textStyle", "Text Size", ContentSize.Default, ContentSize.entries),
+    SystemTextSize(
+        "systemTextSize",
+        "Text Size",
+        ContentSize.Default,
+        ContentSize.entries,
+        description = "Text size for system menus and the launcher",
+    ),
+    NotificationTextSize(
+        "notifTextSize",
+        "Text Size",
+        NotificationContentSize.Default,
+        NotificationContentSize.entries,
+        description = "Text size for notifications",
+    ),
     NotificationFilter(
         "mask",
         "Notification Filter",
@@ -795,9 +826,16 @@ enum class ColorWatchPref(
 
 private val logger = Logger.withTag("WatchPrefItem")
 
+/** Pre-v4.38 phone/watch sync key; superseded by systemTextSize and notifTextSize. */
+internal const val LEGACY_TEXT_STYLE_PREF_ID = "textStyle"
+
 fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
     try {
         val id = key.asByteArray().decodeToString().trimEnd('\u0000')
+        if (id == LEGACY_TEXT_STYLE_PREF_ID) {
+            logger.d { "Ignoring legacy textStyle blobdb record" }
+            return null
+        }
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w("Unknown watch pref type from blobdb: $id")
