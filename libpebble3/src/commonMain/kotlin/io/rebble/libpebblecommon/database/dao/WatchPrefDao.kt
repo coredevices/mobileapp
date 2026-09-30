@@ -108,7 +108,10 @@ private fun legacyTextSizePreference(
         dbPrefs.none { it.id == EnumWatchPref.NotificationTextSize.id } &&
         legacyTextStyle != null
     ) {
-        return WatchPreference(pref, pref.decodeValue(legacyTextStyle))
+        return WatchPreference(
+            EnumWatchPref.NotificationTextSize,
+            EnumWatchPref.NotificationTextSize.decodeValue(legacyTextStyle),
+        )
     }
     return WatchPreference(pref, null)
 }
