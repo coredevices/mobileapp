@@ -42,7 +42,6 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.isPebbleFeed
 import coredevices.pebble.services.isRebbleFeed
@@ -122,10 +121,8 @@ fun AppstoreSettingsScreen(
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
     val collections by viewModel.collections.collectAsState()
-    val pebbleAccount: PebbleAccount = koinInject()
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()
-    val pebbleLoggedIn = pebbleAccount.loggedIn
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {
@@ -147,17 +144,9 @@ fun AppstoreSettingsScreen(
         onSourceAdded = viewModel::addSource,
         onSourceEnableChange = { sourceId, isEnabled ->
             scope.launch {
-                if (sources.firstOrNull {
-                        parseUrl(it.url)?.host?.endsWith("rebble.io") ?: false
-                    }?.id == sourceId && isEnabled && pebbleLoggedIn.value == null) {
-                        if (!uriHandler.open(REBBLE_LOGIN_URI)) {
-                            topBarParams.showSnackbar("Couldn't open login page")
-                        }
-                } else {
-                    sourceDao.setSourceEnabled(sourceId, isEnabled)
-                    if (isEnabled) {
-                        viewModel.updateCollections()
-                    }
+                sourceDao.setSourceEnabled(sourceId, isEnabled)
+                if (isEnabled) {
+                    viewModel.updateCollections()
                 }
             }
         },

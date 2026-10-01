@@ -975,7 +975,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
                 }
             },
             iconResourceId = app.iconResourceId ?: FALLBACK_ICON_RESOURCE_ID,
-            releaseId = ""
+            releaseId = app.latestRelease.id
         ),
         links = LockerEntryLinks("", "", ""),
         capabilities = app.capabilities,
