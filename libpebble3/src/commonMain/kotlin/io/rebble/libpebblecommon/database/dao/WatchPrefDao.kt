@@ -7,6 +7,8 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.WatchPrefs
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.asMillisecond
+import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.LEGACY_TEXT_STYLE_PREF_ID
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefItem
 import io.rebble.libpebblecommon.database.entity.WatchPrefItemDao
@@ -73,16 +75,19 @@ class RealWatchPrefs(
 ) : WatchPrefs {
     private val logger = Logger.withTag("RealWatchPrefs")
     override val watchPrefs: Flow<List<WatchPreference<*>>> = watchPrefRealDao.getAllFlow().map { dbPrefs ->
+        val legacyTextStyle = dbPrefs.firstOrNull { it.id == LEGACY_TEXT_STYLE_PREF_ID }?.value
         val dbValues = dbPrefs.mapNotNull { pref ->
             val prefType = WatchPref.from(pref.id)
             if (prefType == null) {
-                logger.w { "Don't know how to encode watch pref key: ${pref.id}" }
+                if (pref.id != LEGACY_TEXT_STYLE_PREF_ID) {
+                    logger.w { "Don't know how to encode watch pref key: ${pref.id}" }
+                }
                 return@mapNotNull null
             }
             prefType.toWatchPreference(pref.value)
         }
-        WatchPref.enumeratePrefs().map {
-            dbValues.firstOrNull { pref -> pref.pref == it } ?: WatchPreference(it, null)
+        WatchPref.enumeratePrefs().map { pref ->
+            dbValues.firstOrNull { it.pref == pref } ?: legacyTextSizePreference(pref, dbPrefs, legacyTextStyle)
         }
     }
 
@@ -92,6 +97,23 @@ class RealWatchPrefs(
             watchPrefRealDao.insertOrReplace(item)
         }
     }
+}
+
+private fun legacyTextSizePreference(
+    pref: WatchPref<*>,
+    dbPrefs: List<WatchPrefItem>,
+    legacyTextStyle: String?,
+): WatchPreference<*> {
+    if (pref == EnumWatchPref.NotificationTextSize &&
+        dbPrefs.none { it.id == EnumWatchPref.NotificationTextSize.id } &&
+        legacyTextStyle != null
+    ) {
+        return WatchPreference(
+            EnumWatchPref.NotificationTextSize,
+            EnumWatchPref.NotificationTextSize.decodeValue(legacyTextStyle),
+        )
+    }
+    return WatchPreference(pref, null)
 }
 
 private fun <T> WatchPref<T>.toWatchPreference(rawValue: String): WatchPreference<T> {
