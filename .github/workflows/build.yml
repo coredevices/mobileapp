@@ -16,7 +16,7 @@ jobs:
           distribution: 'temurin'
           java-version: 17
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
@@ -46,7 +46,7 @@ jobs:
           distribution: 'temurin'
           java-version: 17
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Cache build deps
