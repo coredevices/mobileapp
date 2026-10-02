@@ -30,12 +30,16 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlin.concurrent.atomics.AtomicReference
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+
+private val FIRMWARE_UPDATE_START_TIMEOUT = 15.seconds
 
 sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
     Exception(message, cause) {
@@ -476,10 +480,17 @@ class RealFirmwareUpdater(
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle()
                 return
             }
-            val result = systemService.sendFirmwareUpdateStart(
-                bytesAlreadyTransferred = resume.total,
-                bytesToSend = totalBytes.toUInt() - resume.total,
-            )
+            // Not withTimeout: a TimeoutCancellationException would be caught
+            // below as a cancellation and reported as a download failure.
+            val result = withTimeoutOrNull(FIRMWARE_UPDATE_START_TIMEOUT) {
+                systemService.sendFirmwareUpdateStart(
+                    bytesAlreadyTransferred = resume.total,
+                    bytesToSend = totalBytes.toUInt() - resume.total,
+                )
+            }
+            if (result == null) {
+                error("The watch did not answer the firmware update start within $FIRMWARE_UPDATE_START_TIMEOUT")
+            }
             if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
                 error("Failed to start firmware update: $result")
             }
