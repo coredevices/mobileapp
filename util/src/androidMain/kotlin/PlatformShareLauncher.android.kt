@@ -7,13 +7,13 @@ import kotlinx.io.files.Path
 import java.io.File
 
 actual class PlatformShareLauncher(private val context: Context) {
-    actual fun share(text: String?, file: Path) {
+    actual fun share(text: String?, file: Path, mimeType: String) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(file.toString()))
         val intent = Intent().apply {
             action = Intent.ACTION_SEND
             if (text != null) putExtra(Intent.EXTRA_TEXT, text)
             putExtra(Intent.EXTRA_STREAM, uri)
-            type = "audio/wav"
+            type = mimeType
         }
         context.startActivity(
             Intent.createChooser(intent, null)
