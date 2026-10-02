@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - name: Cache build deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -50,7 +50,7 @@ jobs:
         with:
           submodules: recursive
       - name: Cache build deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
