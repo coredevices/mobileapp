@@ -195,6 +195,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
+    val customTranscriptionDictionary by viewModel.customTranscriptionDictionary.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
@@ -451,6 +452,9 @@ fun IndexSettings(coreNav: CoreNav) {
                     },
                     onRequireSignIn = { showSignInDialog = true },
                     onShowModelDownload = { coreNav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) },
+                    customDictionary = customTranscriptionDictionary,
+                    onAddDictionaryWords = { viewModel.addTranscriptionDictionaryWords(it) },
+                    onRemoveDictionaryWord = { viewModel.removeTranscriptionDictionaryWord(it) },
                 )
             }
             item {
