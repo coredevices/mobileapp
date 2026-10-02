@@ -19,6 +19,10 @@ enum class RingGesture(val sequence: List<ButtonPress>, val kind: GestureKind) {
     }
 }
 
+/** Rapid repeated clicks arrive merged into one all-Short record; 2k Shorts (k >= 2) are k double clicks. */
+fun repeatedDoubleClickCount(sequence: List<ButtonPress>): Int =
+    if (sequence.size >= 4 && sequence.all { it == ButtonPress.Short }) sequence.size / 2 else 0
+
 /** Where a gesture sends its input. [Music] destinations are only valid for
  *  [GestureKind.Music] gestures, [Recording] destinations only for [GestureKind.Recording]. */
 sealed interface GestureDestination {
@@ -27,6 +31,7 @@ sealed interface GestureDestination {
 
     data object PlayPause : Music
     data object NextTrack : Music
+    data object PreviousTrack : Music
     data object IndexAgent : Recording
     data object WebSearch : Recording
     data class McpSandbox(val groupId: Long?) : Recording
