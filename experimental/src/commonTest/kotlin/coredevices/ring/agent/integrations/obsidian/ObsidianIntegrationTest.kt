@@ -117,6 +117,25 @@ class ObsidianIntegrationTest {
     }
 
     @Test
+    fun savedAppendPrefixIsUsedAfterReload() = runTest {
+        val vault = FakeVault()
+        vault.files["Inbox.md"] = "existing"
+        val settings = MapSettings()
+        val prefs = ObsidianPreferences(settings).apply { setVault("h", "vault") }
+        integration(vault, prefs).saveConfig(
+            mode = ObsidianMode.NAMED_NOTE,
+            targetNote = "Inbox",
+            subfolder = "",
+            customTag = "",
+            appendPrefix = "- [[YYYY-MM-DD]] HH:mm: ",
+        )
+
+        integration(vault, ObsidianPreferences(settings)).createNote("buy milk")
+
+        assertEquals("existing\n\n- [[2026-06-18]] 14:05: buy milk\n", vault.files["Inbox.md"])
+    }
+
+    @Test
     fun namedNoteModeAppendsToTarget() = runTest {
         val vault = FakeVault()
         val prefs = ObsidianPreferences(MapSettings()).apply {
