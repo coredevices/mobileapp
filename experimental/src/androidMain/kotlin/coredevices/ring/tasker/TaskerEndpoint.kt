@@ -9,23 +9,26 @@ import org.koin.core.component.inject
 
 /**
  * Shared Android plumbing for routing Index content (notes, reminders) to
- * [Tasker](https://tasker.joaoapps.com/) via an `ACTION_SEND` intent. Users pick the payload up with
- * a "Received Share" event profile filtered to this app and fan it out wherever they like — for
- * example, appending to an Obsidian vault.
+ * [Tasker](https://tasker.joaoapps.com/). Every item goes out two ways, and the user wires up
+ * whichever suits them (setting up both double-processes the item):
  *
- * The content is sent as [Intent.EXTRA_TEXT]; `messageType`, `timestamp`, and any caller-supplied
- * extras ride alongside so the Tasker side can branch on them.
+ * - an `ACTION_SEND` activity intent, picked up with a "Received Share" event profile — the content
+ *   arrives in `%rs_text` and custom extras are dropped;
+ * - an [ACTION_INDEX_ITEM] broadcast, picked up with an "Intent Received" event profile — every
+ *   extra (`text`, `message_type`, `timestamp`, and caller extras like `deadline`) arrives as its
+ *   own Tasker variable. An explicit broadcast is also exempt from the background-activity-launch
+ *   restrictions that make the activity path unreliable behind a locked screen.
  *
  * There is no remote auth — "connecting" simply records that the user opted in (see
  * [IntegrationTokenStorage] usage in the note/reminder clients), and Tasker is only treated as
  * available while its package is installed.
- *
- * Note: `startActivity` from a background context is subject to Android's background-activity-launch
- * restrictions, so delivery while the screen is locked is not guaranteed.
  */
 internal object TaskerEndpoint : KoinComponent {
     const val PACKAGE = "net.dinglisch.android.taskerm"
     const val TOKEN_STORAGE_KEY = "tasker"
+
+    /** Action of the broadcast that feeds a Tasker "Intent Received" profile; users type this in. */
+    const val ACTION_INDEX_ITEM = "coredevices.coreapp.INDEX_ITEM"
 
     private val context: Context by inject()
     private val logger = Logger.withTag("TaskerEndpoint")
@@ -56,6 +59,19 @@ internal object TaskerEndpoint : KoinComponent {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
+
+        // "Received Share" (above) hides custom extras; this broadcast feeds "Intent Received",
+        // where every extra becomes a Tasker variable.
+        context.sendBroadcast(
+            Intent(ACTION_INDEX_ITEM).apply {
+                setPackage(PACKAGE)
+                putExtra("text", text)
+                putExtra("message_type", messageType)
+                putExtra("timestamp", timestamp)
+                extras.forEach { (key, value) -> putExtra(key, value) }
+            }
+        )
+
         logger.i { "Sent $messageType to Tasker (${text.length} chars)" }
         return timestamp
     }

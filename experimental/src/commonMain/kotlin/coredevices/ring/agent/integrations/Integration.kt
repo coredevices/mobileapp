@@ -83,13 +83,15 @@ interface NoteIntegration : Integration {
 /**
  * Identifies the recording a tool-created object came from, so builtin integrations can stamp
  * the feed items they create (feed grouping and reminder deep links rely on it). External
- * integrations ignore it.
+ * integrations ignore everything here except [rawText], the unaltered transcript, which the Tasker
+ * integration forwards for recipes that parse the spoken phrasing themselves.
  */
 data class ItemSource(
     val recordingFirestoreId: String?,
     val createdAt: Instant?,
     val toolCallId: String?,
+    val rawText: String? = null,
 )
 
-fun SessionContext.itemSource(): ItemSource =
-    ItemSource(recordingFirestoreId, timeBase, toolCallId)
+fun SessionContext.itemSource(rawText: String? = null): ItemSource =
+    ItemSource(recordingFirestoreId, timeBase, toolCallId, rawText)
