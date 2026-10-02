@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.connection
 
 import co.touchlab.kermit.Logger
-import com.juul.kable.ManufacturerData
 import com.oldguy.common.getShortAt
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.WatchConfigFlow
@@ -28,7 +27,8 @@ data class BleScanResult(
     val identifier: PebbleBleIdentifier,
     val name: String,
     val rssi: Int,
-    val manufacturerData: ManufacturerData,
+    val manufacturerCode: Int,
+    val manufacturerData: ByteArray,
 )
 
 data class PebbleScanResult(
@@ -82,10 +82,10 @@ class RealScanning(
             }
             try {
                 scanResults.collect {
-                    if (it.manufacturerData.code !in VENDOR_IDS) {
+                    if (it.manufacturerCode !in VENDOR_IDS) {
                         return@collect
                     }
-                    val pebbleScanRecord = it.manufacturerData.data.decodePebbleScanRecord()
+                    val pebbleScanRecord = it.manufacturerData.decodePebbleScanRecord()
                     if (shouldHideLegacyClassicWatch(pebbleScanRecord)) {
                         return@collect
                     }
