@@ -13,9 +13,11 @@ import io.ktor.http.ContentType
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
@@ -57,7 +59,13 @@ data class IndexWebhookRunResult(
     val detail: String,
     val byteSize: Long,
     val durationMs: Long,
+    /** Whether another delivery attempt could plausibly succeed. */
+    val retryable: Boolean = false,
 )
+
+/** Null means no HTTP response was received (network error, timeout, ...). */
+internal fun isRetryableStatus(httpStatus: Int?): Boolean =
+    httpStatus == null || httpStatus == 408 || httpStatus == 429 || httpStatus >= 500
 
 /** Value of the `X-Index-Trigger` header. Endpoints key off these, do not rename them. */
 val RingGesture.webhookTriggerValue: String
@@ -73,6 +81,9 @@ internal const val WEBHOOK_TRIGGER_HEADER = "X-Index-Trigger"
 internal const val WEBHOOK_TEST_HEADER = "X-Index-Test"
 internal const val WEBHOOK_TEST_TRIGGER = "test-event"
 internal const val WEBHOOK_TEST_TRANSCRIPTION = "Index webhook test event"
+
+/** Delays between delivery attempts; list size is the max retry count. */
+internal val WEBHOOK_RETRY_BACKOFF = listOf(1.seconds, 2.seconds, 5.seconds)
 
 /**
  * Generic webhook API client for uploading Index recording data.
@@ -119,7 +130,7 @@ class IndexWebhookApiImpl(
                     }
                 } else null
 
-                val result = post(
+                var result = post(
                     url = url,
                     headers = config.headers,
                     signRequests = config.signRequests,
@@ -132,6 +143,24 @@ class IndexWebhookApiImpl(
                     recordedAt = recordedAt,
                     isTest = false,
                 )
+                for (backoff in WEBHOOK_RETRY_BACKOFF) {
+                    if (result.ok || !result.retryable) break
+                    logger.d { "Retrying webhook upload for $recordingId in $backoff (${result.status})" }
+                    delay(backoff)
+                    result = post(
+                        url = url,
+                        headers = config.headers,
+                        signRequests = config.signRequests,
+                        signingSecret = signingSecret,
+                        deliveryId = recordingId,
+                        triggerValue = gesture.webhookTriggerValue,
+                        audioData = m4aData,
+                        filename = "$recordingId.m4a",
+                        transcription = transcription,
+                        recordedAt = recordedAt,
+                        isTest = false,
+                    )
+                }
                 runRepository.record(
                     gesture = gesture,
                     ok = result.ok,
@@ -261,6 +290,7 @@ class IndexWebhookApiImpl(
                     detail = response.bodyAsText().take(200).ifBlank { response.status.description },
                     byteSize = bodyBytes.size.toLong(),
                     durationMs = elapsed,
+                    retryable = isRetryableStatus(response.status.value),
                 )
             }
         } catch (e: Exception) {
@@ -271,6 +301,7 @@ class IndexWebhookApiImpl(
                 detail = e.message ?: "unknown error",
                 byteSize = bodyBytes.size.toLong(),
                 durationMs = started.elapsedNow().inWholeMilliseconds,
+                retryable = true,
             )
         }
     }
