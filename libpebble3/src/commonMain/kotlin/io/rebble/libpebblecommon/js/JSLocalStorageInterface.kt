@@ -11,19 +11,42 @@ internal expect fun createJSSettings(appContext: AppContext, id: String): Settin
 abstract class JSLocalStorageInterface(
     scopedSettingsUuid: String,
     appContext: AppContext,
+    private val settings: Settings = createJSSettings(appContext, scopedSettingsUuid),
 ) {
-    private val settings = createJSSettings(appContext, scopedSettingsUuid)
+    companion object {
+        private val logger = Logger.withTag(JSLocalStorageInterface::class.simpleName!!)
+    }
 
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size
 
+    /**
+     * Replace the stored keys with [data], a JSON object of key to value.
+     *
+     * The store never passes through an empty state on the way: the new values are written
+     * first and only then are the keys missing from [data] removed, so a process death part way
+     * through (a reboot with a PKJS session open) leaves the old or the new contents on disk
+     * rather than nothing.
+     *
+     * An empty [data] against a non-empty store is refused. An app that really called
+     * `localStorage.clear()` has already emptied the store through the shim, so an empty
+     * snapshot while keys are still stored means the DOM copy was lost, not cleared.
+     */
     open fun saveState(data: Any?) {
         if (data !is String) return
         val map = Json.decodeFromString<Map<String, String?>>(data)
-        clear()
-        for ((key, value) in map) {
-            setItem(key, value)
+        val stored = settings.keys
+        if (map.isEmpty() && stored.isNotEmpty()) {
+            logger.w { "Refusing to replace ${stored.size} stored keys with an empty snapshot" }
+            return
         }
+        for ((key, value) in map) {
+            settings.putString(key, value ?: "null")
+        }
+        for (key in stored - map.keys) {
+            settings.remove(key)
+        }
+        setLength(settings.keys.size)
     }
 
     open fun restoreState(): String {
