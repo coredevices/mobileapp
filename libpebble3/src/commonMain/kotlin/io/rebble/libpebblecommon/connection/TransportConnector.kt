@@ -50,6 +50,8 @@ import kotlin.time.Instant.Companion.DISTANT_PAST
 
 enum class ConnectionFailureReason {
     RegisterGattServer,
+    RequiresWatchHostedTransport,
+    WatchHostedTransportFailed,
     FailedToConnect,
     ConnectTimeout,
     SubscribeConnectivity,

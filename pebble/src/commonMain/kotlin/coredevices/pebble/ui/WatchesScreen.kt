@@ -315,7 +315,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
 
     Scaffold(
         floatingActionButton = {
-            if (!bluetoothEnabled.enabled()) {
+            if (!bluetoothEnabled.enabled() && !usesGuidedWatchEnrollment()) {
                 FloatingActionButton(
                     onClick = { topBarParams.showSnackbar("Enable Bluetooth to connect a Pebble") }
                 ) {
@@ -352,7 +352,9 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     FloatingActionButtonMenuItem(
                         onClick = {
                             addFabExpanded = false
-                            if (uiContext != null) {
+                            if (usesGuidedWatchEnrollment()) {
+                                openGuidedWatchEnrollment()
+                            } else if (uiContext != null) {
                                 scan(uiContext)
                             }
                         },
@@ -474,7 +476,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     ) {
                         Text(
-                            text = "Enable bluetooth to connect to your watch.",
+                            text = if (usesGuidedWatchEnrollment()) "Use Add watch to authorize and connect your watch." else "Enable bluetooth to connect to your watch.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(15.dp)
@@ -571,7 +573,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     }
                 } else {
                     if (watches.isEmpty() && rings.isEmpty()) {
-                        if (!pebbleFeatures.supportsDetectingOtherPebbleApps()) {
+                        if (!usesGuidedWatchEnrollment() && !pebbleFeatures.supportsDetectingOtherPebbleApps()) {
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1262,6 +1264,9 @@ expect fun postTestNotification(appContext: AppContext)
 
 expect fun openSystemBluetoothSettings(appContext: AppContext)
 
+@Composable
+internal expect fun SecureNotificationsMenuItem(selectedWatchIdentifier: String, onHideMenu: () -> Unit)
+
 expect fun ImageBitmap.toPngBytes(): ByteArray
 
 @Composable
@@ -1426,8 +1431,11 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                         }
                     )
                 }
-                HorizontalDivider()
             }
+            if (watch is KnownPebbleDevice) {
+                SecureNotificationsMenuItem(watch.identifier.asString) { showMenu = false }
+            }
+            if (watch is ConnectedPebbleDevice) HorizontalDivider()
 
             if (watch is KnownPebbleDevice) {
                 DropdownMenuItem(
@@ -2327,3 +2335,7 @@ fun Int.batteryIcon() = when {
     this >= 5 -> Icons.Default.Battery1Bar
     else -> Icons.Default.Battery0Bar
 }
+
+// iOS owns the explicit ASK-to-signed-session flow; Android keeps scanning.
+internal expect fun usesGuidedWatchEnrollment(): Boolean
+internal expect fun openGuidedWatchEnrollment()

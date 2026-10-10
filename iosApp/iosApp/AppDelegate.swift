@@ -4,6 +4,7 @@ import ComposeApp
 import Mixpanel
 import FirebaseCore
 import FirebaseAuth
+import PebbleProtocol
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
@@ -44,6 +45,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // so this is safe to keep in release builds for CI.
         if let qemuAddress = UserDefaults.standard.string(forKey: "qemu") {
             IOSDelegate.shared.addQemuWatch(address: qemuAddress)
+        }
+        if #available(iOS 26.5, *), NotificationBridgeConfiguration.enabled {
+            PairedManualEnrollmentController.restoreAuthorizationObservation()
         }
         return res
     }
@@ -110,6 +114,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 class SceneDelegate: NSObject, UIWindowSceneDelegate, ObservableObject {
     func sceneDidBecomeActive(_ scene: UIScene) {
         IOSDelegate.shared.sceneDidBecomeActive()
+        if #available(iOS 26.5, *), NotificationBridgeConfiguration.enabled {
+            PairedManualEnrollmentController.restoreAuthorizationObservation()
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

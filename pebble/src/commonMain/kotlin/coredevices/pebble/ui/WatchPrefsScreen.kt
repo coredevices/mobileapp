@@ -86,13 +86,17 @@ internal fun List<WatchPreference<*>>.groupQuietTimeScheduleHours(): List<WatchP
 }
 
 @Composable
+internal expect fun phoneNotificationDismissalSetting(): SettingsItem?
+
+@Composable
 fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs().groupQuietTimeScheduleHours().map { item ->
-            when (val pref = item.pref) {
+    val phoneDismissal = phoneNotificationDismissalSetting()
+    val mapped = remember(settings, quickLaunchOptions, phoneDismissal) {
+        settings.hidePresetManagedBacklightPrefs().groupQuietTimeScheduleHours().flatMap { item ->
+            val setting = when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
                 is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
@@ -101,6 +105,7 @@ fun watchPrefs(): List<SettingsItem> {
                 is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
                 is ScheduleWatchPref -> schedulePref(pref.castParent(item), libPebble)
             }
+            listOfNotNull(setting, phoneDismissal.takeIf { item.pref == BoolWatchPref.NotificationBacklight })
         }
     }
     val showConfirmReset = remember { mutableStateOf(false) }

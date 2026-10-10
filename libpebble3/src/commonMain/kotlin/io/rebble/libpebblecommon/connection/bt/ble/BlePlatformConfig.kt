@@ -7,6 +7,7 @@ import kotlin.time.Duration
 
 data class BlePlatformConfig(
     val pinAddress: Boolean = true,
+    val allowPhoneGattServer: Boolean = platformAllowsPhoneGattServer(),
     val phoneRequestsPairing: Boolean = true,
     val writeConnectivityTrigger: Boolean = true,
     val initialMtu: Int = DEFAULT_MTU,

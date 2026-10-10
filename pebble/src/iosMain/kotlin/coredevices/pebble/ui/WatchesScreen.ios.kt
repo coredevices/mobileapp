@@ -133,3 +133,16 @@ actual fun RemovePairingMenuItem(
         },
     )
 }
+@Composable
+internal actual fun SecureNotificationsMenuItem(selectedWatchIdentifier: String, onHideMenu: () -> Unit) {
+    // Notification preferences live in watch settings; no diagnostic overflow entry.
+}
+
+internal actual fun usesGuidedWatchEnrollment(): Boolean = coredevices.pebble.supportsGuidedPebbleEnrollment()
+internal actual fun openGuidedWatchEnrollment() {
+    platform.Foundation.NSNotificationCenter.defaultCenter.postNotificationName(
+        coredevices.pebble.notificationBridgeName("selected-watch-secure-notifications"),
+        `object` = null,
+        userInfo = mapOf("intent" to "add-watch"),
+    )
+}

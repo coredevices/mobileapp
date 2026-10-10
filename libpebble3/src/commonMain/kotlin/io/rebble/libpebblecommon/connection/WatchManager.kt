@@ -147,6 +147,7 @@ private data class CombinedState(
     val active: Map<PebbleIdentifier, ActivePebbleState>,
     val previousActive: Map<PebbleIdentifier, ActivePebbleState>,
     val btstate: BluetoothState,
+    val authorizedAccessories: Set<PebbleBleIdentifier>,
 )
 
 class WatchManager(
@@ -345,13 +346,14 @@ class WatchManager(
                 allWatches,
                 activeConnectionStates,
                 bluetoothStateProvider.state,
-            ) { watches, active, btState ->
-                CombinedState(watches, active, emptyMap(), btState)
+                accessoryAuthorizationFlow(),
+            ) { watches, active, btState, authorizedAccessories ->
+                CombinedState(watches, active, emptyMap(), btState, authorizedAccessories)
             }.runningReduce { previous, current ->
                 current.copy(previousActive = previous.active)
             }.mapNotNull { state ->
                 // State can be null for the first scan emission
-                val (watches, active, previousActive, btState) = state
+                val (watches, active, previousActive, btState, authorizedAccessories) = state
                 if (watchConfig.value.verboseWatchManagerLogging) {
                     logger.d { "combine: watches=$watches / active=$active / btstate=$btState / activeConnections=$activeConnections" }
                 }
@@ -375,7 +377,7 @@ class WatchManager(
                     }
 
                     // Goals
-                    val btUsable = btState.enabled() || !identifier.requiresBluetooth()
+                    val btUsable = admitsBluetoothConnection(identifier, btState.enabled(), authorizedAccessories)
                     if (device.connectGoal && !hasConnectionAttempt && btUsable) {
                         if (watchConfig.value.multipleConnectedWatchesSupported) {
                             connectTo(device)

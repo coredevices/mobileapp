@@ -93,3 +93,11 @@ actual fun RemovePairingMenuItem(
         },
     )
 }
+
+@Composable
+internal actual fun SecureNotificationsMenuItem(selectedWatchIdentifier: String, onHideMenu: () -> Unit) {
+    // Personal iOS entry; preserve the Android menu.
+}
+
+internal actual fun usesGuidedWatchEnrollment(): Boolean = false
+internal actual fun openGuidedWatchEnrollment() {}
