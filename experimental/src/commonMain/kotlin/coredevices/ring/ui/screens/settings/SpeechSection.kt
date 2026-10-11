@@ -16,6 +16,12 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -153,10 +159,14 @@ fun SpeechSection(
     onRequireSignIn: () -> Unit,
     /** Opens the routed speech model download dialog for the configured engine. */
     onShowModelDownload: () -> Unit,
+    customDictionary: List<String>,
+    onAddDictionaryWords: (String) -> Unit,
+    onRemoveDictionaryWord: (String) -> Unit,
 ) {
     var showEngineSheet by remember { mutableStateOf(false) }
     var showModelSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var showDictionarySheet by remember { mutableStateOf(false) }
     var pendingDownloadMode by remember { mutableStateOf<CactusSTTMode?>(null) }
     var pendingDownloadModel by remember { mutableStateOf<ModelInfo?>(null) }
     val modelManager = koinInject<ModelManager>()
@@ -225,6 +235,12 @@ fun SpeechSection(
         modifier = Modifier
             .clickable { uriHandler.openUrlSafely(WISPR_URL) }
             .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+
+    SettingsRow(
+        title = "Custom words",
+        subtitle = customDictionarySubtitle(customDictionary),
+        onClick = { showDictionarySheet = true },
     )
 
     if (showEngineSheet) {
@@ -322,6 +338,15 @@ fun SpeechSection(
                 }
             },
             onDismiss = { showLanguageSheet = false },
+        )
+    }
+
+    if (showDictionarySheet) {
+        CustomDictionarySheet(
+            words = customDictionary,
+            onAdd = onAddDictionaryWords,
+            onRemove = onRemoveDictionaryWord,
+            onDismiss = { showDictionarySheet = false },
         )
     }
 }
@@ -603,5 +628,128 @@ private fun SpeechModelDownloadDialog(
             fontSize = 14.sp,
             color = IndexTheme.colors.onSurfaceVariant,
         )
+    }
+}
+
+/** Row subtitle for the custom-words setting: a count, or a hint when empty. */
+internal fun customDictionarySubtitle(words: List<String>): String = when (words.size) {
+    0 -> "Names and terms speech recognition should get right"
+    1 -> "1 word"
+    else -> "${words.size} words"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CustomDictionarySheet(
+    words: List<String>,
+    onAdd: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    var input by remember { mutableStateOf("") }
+    // Last-removed word, offered for one-tap restore after an accidental delete.
+    var lastRemoved by remember { mutableStateOf<String?>(null) }
+
+    fun commit() {
+        if (input.isNotBlank()) {
+            onAdd(input)
+            input = ""
+        }
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
+        Column(modifier = Modifier.padding(bottom = 28.dp)) {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                Text(
+                    "Custom words",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.onSurface,
+                )
+                Text(
+                    "Names and terms to bias transcription toward. Separate multiple with commas. " +
+                        "Applies to cloud speech recognition.",
+                    fontSize = 12.sp,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    singleLine = true,
+                    placeholder = { Text("Add words") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { commit() }),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { commit() }, enabled = input.isNotBlank()) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Add words",
+                        tint = if (input.isNotBlank()) colors.primary else colors.outline,
+                    )
+                }
+            }
+            lastRemoved?.let { removed ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onAdd(removed)
+                            lastRemoved = null
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Undo,
+                        contentDescription = null,
+                        tint = colors.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text("Restore \"$removed\"", fontSize = 13.sp, color = colors.primary)
+                }
+            }
+            if (words.isEmpty()) {
+                Text(
+                    "No custom words yet.",
+                    fontSize = 13.sp,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp).padding(top = 8.dp)) {
+                    itemsIndexed(words) { _, word ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(word, fontSize = 15.sp, color = colors.onSurface, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                onRemove(word)
+                                lastRemoved = word
+                            }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove $word",
+                                    tint = colors.error,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

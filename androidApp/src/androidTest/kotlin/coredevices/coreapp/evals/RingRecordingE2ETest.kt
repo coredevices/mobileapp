@@ -701,6 +701,7 @@ private class E2EPreferences : Preferences {
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
+    override val customTranscriptionDictionary: StateFlow<List<String>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
@@ -724,6 +725,7 @@ private class E2EPreferences : Preferences {
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
+    override suspend fun setCustomTranscriptionDictionary(words: List<String>) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProviderId(id: String) {}
     override fun setNoteProviderId(id: String) {}

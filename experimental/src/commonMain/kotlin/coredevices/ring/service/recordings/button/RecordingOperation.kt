@@ -88,6 +88,7 @@ open class DefaultRecordingOperation(
             add(it.name)
             it.nickname?.let { nick -> add(nick) }
         }
+        addAll(prefs.customTranscriptionDictionary.value)
     }
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
