@@ -16,7 +16,7 @@ private val logger = Logger.withTag("HealthDataParser")
  * - Firmware 3.10 and below (version 5)
  * - Firmware 3.11 (version 6) - adds calorie and distance data
  * - Firmware 4.0 (version 7) - adds heart rate data
- * - Firmware 4.1 (version 8) - adds heart rate weight
+ * - Firmware 4.1 (version 12) - adds heart rate weight
  * - Firmware 4.3 (version 13) - adds heart rate zone
  *
  * @param payload Raw byte array from the watch
@@ -47,10 +47,11 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
         val version = buffer.getUShort()
         val timestamp = buffer.getUInt()
         buffer.getByte() // unused
-        buffer.getUByte() // recordLength
+        val sampleSize = buffer.getUByte().toInt()
         val recordNum = buffer.getUByte()
 
-        if (!SUPPORTED_STEP_VERSIONS.contains(version)) {
+        val isNewerVersion = version > VERSION_FW_4_3 && sampleSize >= VERSION_FW_4_3_SAMPLE_SIZE
+        if (!SUPPORTED_STEP_VERSIONS.contains(version) && !isNewerVersion) {
             logger.w {
                 "Unsupported health steps record version=$version, skipping packet $i of $packetCount"
             }
@@ -64,7 +65,8 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
         var currentTimestamp = timestamp
 
         for (j in 0 until recordNum.toInt()) {
-            if (buffer.remaining < 5) { // minimum bytes per record: steps(1)+orientation(1)+intensity(2)+lightIntensity(1)
+            val sampleStart = buffer.readPosition
+            if (buffer.remaining < maxOf(sampleSize, 5)) {
                 logger.w { "Buffer exhausted during steps parsing at record $j/$recordNum in packet $i" }
                 break
             }
@@ -103,6 +105,10 @@ fun parseStepsData(payload: ByteArray, itemSize: UShort): List<HealthDataEntity>
             if (version >= VERSION_FW_4_3) {
                 heartRateZone = buffer.getUByte().toInt()
             }
+
+            // Newer versions append fields to each sample
+            val unread = sampleSize - (buffer.readPosition - sampleStart)
+            if (unread > 0) buffer.getBytes(unread)
 
             records.add(
                 HealthDataEntity(
@@ -180,10 +186,12 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
         val rawType = buffer.getUShort().toInt()
         val type = OverlayType.fromValue(rawType)
 
-        if (type == null) {
+        // Firmware clears bit 0 of the version for layout changes that aren't append-only
+        val compatibleVersion = (version.toInt() and 1) != 0
+        if (type == null || !compatibleVersion) {
             val remaining = itemSize.toInt() - 6 // already consumed 6 bytes
             if (remaining > 0) buffer.getBytes(remaining)
-            logger.w { "Unknown overlay type: $rawType, skipping packet $i" }
+            logger.w { "Unsupported overlay type=$rawType version=$version, skipping packet $i" }
             continue
         }
 
@@ -203,8 +211,8 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
             }
         } else {
             steps = buffer.getUShort().toInt()
-            restingKiloCalories = buffer.getUShort().toInt()
             activeKiloCalories = buffer.getUShort().toInt()
+            restingKiloCalories = buffer.getUShort().toInt()
             distanceCm = buffer.getUShort().toInt()
         }
 
@@ -243,8 +251,9 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort): List<OverlayDataEnti
 private val VERSION_FW_3_10_AND_BELOW: UShort = 5u
 private val VERSION_FW_3_11: UShort = 6u
 private val VERSION_FW_4_0: UShort = 7u
-private val VERSION_FW_4_1: UShort = 8u
+private val VERSION_FW_4_1: UShort = 12u
 private val VERSION_FW_4_3: UShort = 13u
+private const val VERSION_FW_4_3_SAMPLE_SIZE = 16
 private val SUPPORTED_STEP_VERSIONS = setOf(
     VERSION_FW_3_10_AND_BELOW,
     VERSION_FW_3_11,

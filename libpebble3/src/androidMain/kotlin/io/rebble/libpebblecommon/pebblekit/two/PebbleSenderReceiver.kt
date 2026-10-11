@@ -12,6 +12,10 @@ import io.rebble.libpebblecommon.js.TimelineLayoutJson
 import io.rebble.libpebblecommon.js.TimelinePinJson
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.pebbleKit2Packages
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.permissions.pebbleKit2Key
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.pebblekit2.common.model.PebbleDictionary
 import io.rebble.pebblekit2.common.model.TimelinePin
@@ -40,6 +44,7 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
     private val locker: Locker = getKoin().get()
     private val lockerPBWCache: LockerPBWCache = getKoin().get()
     private val remoteTimelineEmulator: RemoteTimelineEmulator = getKoin().get()
+    private val permissions: AppPermissions = getKoin().get()
     override val coroutineScope: LibPebbleCoroutineScope = getKoin().get()
 
     override suspend fun sendDataToPebble(
@@ -90,7 +95,9 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
         watchappUUID: UUID,
         timelinePin: TimelinePin
     ): TimelineResult {
-        if (!isAllowedToCommunicate(callingPackage, watchappUUID)) {
+        if (!isAllowedToCommunicate(callingPackage, watchappUUID) ||
+            !remoteTimelineEmulator.mayAddPins(watchappUUID.toKotlinUuid())
+        ) {
             return TimelineResult.FailedNoPermissions
         }
 
@@ -159,7 +166,8 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
             )
         )
 
-        return pbwInfo.info.companionApp?.android?.apps.orEmpty().any { it.pkg == pkg }
+        return pkg in pbwInfo.info.pebbleKit2Packages() &&
+            permissions.request(uuid.toKotlinUuid(), pebbleKit2Key(pkg)) == PermissionDecision.Granted
     }
 }
 

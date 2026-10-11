@@ -3,10 +3,7 @@ package coredevices.ring.agent.integrations
 import co.touchlab.kermit.Logger
 import coredevices.indexai.data.notion.NotionBlock
 import coredevices.indexai.data.notion.NotionSearchFilter
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.api.NotionApi
-import coredevices.ring.data.IntegrationDefinition
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.util.integrations.IntegrationAuthException
 import coredevices.util.integrations.OAuthIntegration
@@ -27,11 +24,6 @@ class NotionIntegration(
     override val oauthPathSegment: String = "notion"
     companion object {
         private const val TOKEN_STORAGE_KEY = "notion"
-        val DEFINITION = IntegrationDefinition(
-            title = "Notion",
-            reminder = null,
-            notes = NoteProvider.Notion
-        )
         private val logger = Logger.withTag("NotionIntegration")
     }
 

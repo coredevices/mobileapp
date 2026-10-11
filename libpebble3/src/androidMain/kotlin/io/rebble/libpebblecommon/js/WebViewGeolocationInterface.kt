@@ -4,11 +4,12 @@ import android.webkit.JavascriptInterface
 import io.rebble.libpebblecommon.js.GeolocationInterface
 import io.rebble.libpebblecommon.js.JsRunner
 import kotlinx.coroutines.CoroutineScope
+import kotlin.uuid.Uuid
 
 class WebViewGeolocationInterface(
     scope: CoroutineScope,
     jsRunner: JsRunner
-): GeolocationInterface(scope, jsRunner) {
+): GeolocationInterface(scope, jsRunner::eval, Uuid.parse(jsRunner.appInfo.uuid)) {
 
     @JavascriptInterface
     override fun getCurrentPosition(

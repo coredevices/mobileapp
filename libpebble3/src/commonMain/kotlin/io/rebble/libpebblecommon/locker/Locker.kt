@@ -6,6 +6,7 @@ import com.russhwolf.settings.set
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.CancellationException
 import io.ktor.utils.io.readRemaining
@@ -28,8 +29,17 @@ import io.rebble.libpebblecommon.database.entity.LockerEntryAppstoreData
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
+import io.rebble.libpebblecommon.disk.pbw.hasWatchappBuild
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.AppPermissionStatus
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.storage.pluginSecureStorage
+import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.permissions.requestedPermissions
+import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
 import kotlinx.coroutines.TimeoutCancellationException
@@ -59,8 +69,13 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+import kotlinx.serialization.json.Json
 
 class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
+
+interface AppFileReader {
+    suspend fun getAppFile(uuid: Uuid, name: String): String?
+}
 
 class Locker(
     private val watchManager: WatchManager,
@@ -75,19 +90,23 @@ class Locker(
     private val errorTracker: ErrorTracker,
     private val coroutineScope: LibPebbleCoroutineScope,
     private val settings: Settings,
-) : LockerApi {
+    private val permissions: AppPermissions,
+    private val appContext: AppContext,
+) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
     private val timelineReminderDao = database.timelineReminderDao()
+    private val appPermissionDao = database.lockerAppPermissionDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
+        private const val PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS = "have_backfilled_declared_permissions"
     }
 
-    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean): Boolean =
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean?>): Boolean =
         try {
-            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch)
+            sideloadApp(pbwApp = PbwApp(pbwPath), loadOnWatch = loadOnWatch, granted = granted)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -105,7 +124,9 @@ class Locker(
         searchQuery: String?,
         limit: Int
     ): Flow<List<LockerWrapper>> =
-        lockerEntryDao.getAllFlow(type.code, searchQuery, limit)
+        // The Plugins tab shows every pbw that carries a plugin, watchapp-hosted ones included.
+        (if (type == AppType.Plugin) lockerEntryDao.getPluginEntriesFlow(searchQuery, limit)
+        else lockerEntryDao.getAllFlow(type.code, searchQuery, limit))
             .map { entries ->
                 entries.mapNotNull { app ->
                     app.wrap(config)
@@ -133,6 +154,29 @@ class Locker(
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
+
+    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>> = permissions.statuses(id)
+
+    private suspend fun pbwFor(uuid: Uuid): PbwApp? {
+        val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null
+        return try {
+            PbwApp(lockerPBWCache.getPBWFileForApp(uuid, version, this))
+        } catch (e: Exception) {
+            logger.w(e) { "no cached pbw for $uuid" }
+            null
+        }
+    }
+
+    override suspend fun appConfigPageUrl(uuid: Uuid): String? {
+        // V2 config pages won't work with plugins disabled (no messaging channel)
+        if (!config.value.enablePlugins) return null
+        val page = lockerEntryDao.getEntryFlow(uuid).first()?.configPage ?: return null
+        if (page.startsWith("http://") || page.startsWith("https://")) return page
+        // A bundled page still needs its HTML from the pbw, delivered as a data URL.
+        return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
+    }
+
+    override suspend fun getAppFile(uuid: Uuid, name: String): String? = pbwFor(uuid)?.getTextFile(name)
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
         libPebbleCoroutineScope.async {
@@ -163,7 +207,10 @@ class Locker(
         }
     }
 
-    override suspend fun removeApp(id: Uuid): Boolean {
+    override suspend fun removeApp(id: Uuid): Boolean = removeApp(id, keepSecrets = false)
+
+    /** [keepSecrets] for an app that is about to be reinstalled. */
+    suspend fun removeApp(id: Uuid, keepSecrets: Boolean): Boolean {
         val lockerEntry = lockerEntryDao.getEntry(id)
         if (lockerEntry == null) {
             logger.e { "removeApp: not found: $id" }
@@ -181,6 +228,7 @@ class Locker(
         }
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
+        if (!keepSecrets) deletePluginSecrets(listOf(id))
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -189,9 +237,46 @@ class Locker(
         return true
     }
 
-    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry) {
+    override suspend fun reviewSideload(pbwPath: Path): InstallReview? = try {
+        val pbwApp = PbwApp(pbwPath)
+        val info = pbwApp.info
+        reviewInstall(Uuid.parse(info.uuid), info.longName.ifBlank { info.shortName }, pbwApp.requestedPermissions())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "Couldn't read pbw to review its permissions" }
+        null
+    }
+
+    override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? {
+        val toReview = permissions.toReview(appUuid, requested)
+        return if (toReview.isEmpty()) null else InstallReview(appUuid, appName, toReview)
+    }
+
+    internal suspend fun recordDeclaredPermissions(appId: Uuid, pbwPath: Path) {
+        val entry = lockerEntryDao.getEntry(appId)
+        val pbw = PbwApp(pbwPath)
+        permissions.recordRequested(appId, pbw.info.requestedPermissions(pbw.hasPKJS, companionsOf = entry).all)
+    }
+
+    /** For apps installed before declarations were recorded, whose pbws won't be fetched again. */
+    private suspend fun backfillDeclaredPermissions() {
+        lockerEntryDao.getAll().filterNot { it.systemApp }.forEach { entry ->
+            val pbw = lockerPBWCache.cachedPBWFileForApp(entry.id, entry.version) ?: return@forEach
+            try {
+                recordDeclaredPermissions(entry.id, pbw)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "Couldn't record what ${entry.id} declares" }
+            }
+        }
+    }
+
+    override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry, granted: Map<String, Boolean?>) {
         val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
         lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
+        permissions.setDecisions(Uuid.parse(app.uuid), granted)
     }
 
     override suspend fun addAppsToLocker(apps: List<io.rebble.libpebblecommon.web.LockerEntry>) {
@@ -242,7 +327,18 @@ class Locker(
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
+        deletePluginSecrets(toDelete)
         performCacheCleanup()
+    }
+
+    private suspend fun deletePluginSecrets(ids: List<Uuid>) = ids.forEach { id ->
+        try {
+            pluginSecureStorage(appContext, id).destroy()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(e) { "Couldn't delete secrets for $id" }
+        }
     }
 
     /**
@@ -251,9 +347,13 @@ class Locker(
      * @param pbwApp The app to sideload.
      * @param loadOnWatch Whether to fully install the app on the watch (launch it). Defaults to true.
      */
-    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean): Boolean {
+    suspend fun sideloadApp(pbwApp: PbwApp, loadOnWatch: Boolean, granted: Map<String, Boolean?> = emptyMap()): Boolean {
         logger.d { "Sideloading app ${pbwApp.info.longName}" }
-        val type = if (pbwApp.info.watchapp.watchface) AppType.Watchface else AppType.Watchapp
+        val type = when {
+            pbwApp.info.loadablePlugin != null && !pbwApp.hasWatchappBuild() -> AppType.Plugin
+            pbwApp.info.watchapp.watchface -> AppType.Watchface
+            else -> AppType.Watchapp
+        }
         val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type))
         lockerPBWCache.deleteApp(lockerEntry.id)  // Clear old version(s) if re-sideloading
         pbwApp.source().buffered().use {
@@ -276,6 +376,9 @@ class Locker(
             null
         }
         lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimitV2)
+        // After the insert: requests are only shown for installed apps.
+        permissions.recordRequested(lockerEntry.id, pbwApp.requestedPermissions().all)
+        permissions.setDecisions(lockerEntry.id, granted)
         performCacheCleanup()
         return try {
             withTimeout(40.seconds) {
@@ -300,6 +403,15 @@ class Locker(
                 !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
             settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
             insertSystemApps(force = needToInsertAllSystemApps)
+            // Only at startup, so that removing and reinstalling an app keeps its decisions.
+            appPermissionDao.deleteForRemovedApps()
+        }
+        if (!settings.getBoolean(PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS, false)) {
+            coroutineScope.launch {
+                config.flow.first { it.watchConfig.enablePlugins }
+                backfillDeclaredPermissions()
+                settings[PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS] = true
+            }
         }
         coroutineScope.launch {
             libPebble.watches.map { watches -> watches.filterIsInstance<ConnectedPebbleDevice>().firstOrNull() }
@@ -435,6 +547,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
             storeId = appstoreData?.storeId,
             sourceLink = appstoreData?.sourceLink,
             capabilities = AppCapability.fromString(capabilities),
+            pbwUrl = appstoreData?.pbwLink,
         ),
         sideloaded = sideloaded,
         configurable = configurable,
@@ -505,6 +618,9 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
             capabilities?.let { addAll(it) }
             if (isTimelineEnabled == true) { add(AppCapability.Timeline.code) }
         },
+        pluginManifest = loadablePluginManifest(),
+        configPage = configPage,
+        manifestVersion = manifestVersion,
     )
 }
 
@@ -649,9 +765,20 @@ abstract class LockerPBWCache(private val context: AppContext) {
         } else {
             // Delete any other cached versions for this app
             deleteApp(appId)
-            handleCacheMiss(appId, version, locker) ?: error("Failed to find PBW file for app $appId")
+            val fetched = handleCacheMiss(appId, version, locker) ?: error("Failed to find PBW file for app $appId")
+            try {
+                locker.recordDeclaredPermissions(appId, fetched)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.w(e) { "Couldn't record what $appId declares" }
+            }
+            fetched
         }
     }
+
+    fun cachedPBWFileForApp(appId: Uuid, version: String): Path? =
+        pathForApp(appId, version).takeIf { SystemFileSystem.exists(it) }
 
     fun addPBWFileForApp(appId: Uuid, version: String, source: Source) {
         val targetPath = pathForApp(appId, version)
@@ -709,4 +836,17 @@ abstract class LockerPBWCache(private val context: AppContext) {
 fun orderIndexForInsert(type: AppType) = when (type) {
     AppType.Watchface -> -1
     AppType.Watchapp -> SystemApps.entries.size
+    AppType.Plugin -> 0
+}
+
+private val storePluginJson = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+
+/** As a pbw's `loadablePlugin`, re-encoded the same way; a manifest the app can't read is dropped. */
+private fun io.rebble.libpebblecommon.web.LockerEntry.loadablePluginManifest(): String? {
+    val raw = pluginManifest
+    if (raw == null || isLegacy(manifestVersion)) return null
+    val manifest = runCatching { storePluginJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
+        .onFailure { Logger.w(it) { "unreadable plugin manifest for $uuid" } }
+        .getOrNull() ?: return null
+    return storePluginJson.encodeToString(PluginManifest.serializer(), manifest)
 }

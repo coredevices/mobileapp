@@ -8,6 +8,7 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlin.uuid.Uuid
@@ -48,6 +49,10 @@ data class LockerEntry(
     val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null,
     val source: String? = null,
+    // Might not be present from all stores.
+    @SerialName("manifest_version") val manifestVersion: Int = 1,
+    @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
+    @SerialName("config_page") val configPage: String? = null,
 )
 
 @Serializable

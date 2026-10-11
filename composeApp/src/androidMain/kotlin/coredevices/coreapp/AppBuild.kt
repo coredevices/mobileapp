@@ -1,7 +1,6 @@
 package coredevices.coreapp
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.os.Build
 
 // The KMP Android library plugin generates no BuildConfig, so read the same values off the package.
@@ -18,6 +17,3 @@ val Context.appVersionCode: Long
             it.versionCode.toLong()
         }
     }
-
-val Context.isDebuggableBuild: Boolean
-    get() = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0

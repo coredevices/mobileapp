@@ -51,7 +51,7 @@ class LazyLoadingMcpSessionTest {
     @Test
     fun smallToolSetsAreListedInFull() = runBlocking {
         val session = LazyLoadingMcpSession(
-            listOf(integration("notes", 2), integration("remote", 5)), this, eagerIntegrations = setOf("notes"), maxEagerTools = 7
+            listOf(integration("notes", 2), integration("remote", 5)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 8
         )
         val tools = session.listTools()
         assertEquals(7, tools.size)
@@ -62,7 +62,7 @@ class LazyLoadingMcpSessionTest {
     @Test
     fun largeToolSetsListEagerToolsAndTheLoader() = runBlocking {
         val session = LazyLoadingMcpSession(
-            listOf(integration("notes", 2), integration("crm", 5), integration("wiki", 4)), this, eagerIntegrations = setOf("notes"), maxEagerTools = 10
+            listOf(integration("notes", 2), integration("crm", 5), integration("wiki", 4)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 11
         )
         val tools = session.listTools()
         assertEquals(listOf("notes__tool_0", "notes__tool_1", "tool_loader__load_tools"), tools.names())
@@ -78,7 +78,7 @@ class LazyLoadingMcpSessionTest {
     @Test
     fun loadingAGroupExposesItsToolsForTheRestOfTheSession() = runBlocking {
         val session = LazyLoadingMcpSession(
-            listOf(integration("notes", 2), integration("crm", 5), integration("wiki", 4)), this, eagerIntegrations = setOf("notes"), maxEagerTools = 10
+            listOf(integration("notes", 2), integration("crm", 5), integration("wiki", 4)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 11
         )
         session.listTools()
         val result = session.callTool(
@@ -86,7 +86,6 @@ class LazyLoadingMcpSessionTest {
             mapOf("group" to JsonPrimitive("wiki")), sessionContext()
         )
         val supporting = assertIs<SemanticResult.SupportingData>(result.semanticResult)
-        assertTrue(supporting.assistiveOnly)
         assertContains(result.resultString, "Loaded 4 tools from 'wiki'")
 
         val tools = session.listTools()
@@ -105,7 +104,7 @@ class LazyLoadingMcpSessionTest {
     fun loaderIsReusedUntilTheDeferrableToolsChange() = runBlocking {
         val crm = ToggleableIntegration("crm", 5)
         val session = LazyLoadingMcpSession(
-            listOf(integration("notes", 2), crm), this, eagerIntegrations = setOf("notes"), maxEagerTools = 3
+            listOf(integration("notes", 2), crm), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 4
         )
         val first = session.listTools().loader().tool
         assertSame(first, session.listTools().loader().tool)
@@ -119,7 +118,7 @@ class LazyLoadingMcpSessionTest {
     @Test
     fun unknownGroupIsARecoverableFailure() = runBlocking {
         val session = LazyLoadingMcpSession(
-            listOf(integration("crm", 5)), this, eagerIntegrations = emptySet(), maxEagerTools = 1
+            listOf(integration("crm", 5)), this, eagerIntegrations = emptySet(), lazyLoadThreshold = 2
         )
         session.listTools()
         val result = session.callTool(
@@ -134,10 +133,27 @@ class LazyLoadingMcpSessionTest {
     @Test
     fun unlistedToolsAreStillServedWhenCalledDirectly() = runBlocking {
         val session = LazyLoadingMcpSession(
-            listOf(integration("crm", 5)), this, eagerIntegrations = emptySet(), maxEagerTools = 1
+            listOf(integration("crm", 5)), this, eagerIntegrations = emptySet(), lazyLoadThreshold = 2
         )
         session.listTools()
         assertEquals("called tool_0", session.callTool("crm", "tool_0", emptyMap(), sessionContext()).resultString)
+    }
+
+    @Test
+    fun describedGroupsLeadWithTheDescriptionAndSampleToolNamesOnly() = runBlocking {
+        val todoist = object : BuiltInMcpIntegration(
+            "todoist", listOf(FakeTool("create_reminder", "Create a Todoist task."))
+        ) {
+            override val description = "Creates Todoist tasks as reminders. "
+        }
+        val session = LazyLoadingMcpSession(
+            listOf(integration("notes", 2), todoist, integration("crm", 5)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 5
+        )
+
+        val loader = session.listTools().loader().tool.definition
+        assertContains(loader.description!!, "- todoist (1 tools): Creates Todoist tasks as reminders. Tools: create_reminder\n")
+        assertFalse(loader.description!!.contains("Create a Todoist task."))
+        assertContains(loader.description!!, "- crm (5 tools): tool_0 (Does thing 0)")
     }
 
     @Test

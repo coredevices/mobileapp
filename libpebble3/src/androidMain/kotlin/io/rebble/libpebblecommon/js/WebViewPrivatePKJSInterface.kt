@@ -5,6 +5,8 @@ import android.webkit.JavascriptInterface
 import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -23,7 +25,9 @@ class WebViewPrivatePKJSInterface(
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
     pluginRegistry: PluginRegistry,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry) {
+    permissions: AppPermissions,
+    runningApps: RunningApps,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps) {
 
     companion object {
         private val logger = Logger.withTag(WebViewPrivatePKJSInterface::class.simpleName!!)

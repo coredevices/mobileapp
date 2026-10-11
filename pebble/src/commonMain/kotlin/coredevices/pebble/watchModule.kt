@@ -61,8 +61,10 @@ import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.plugin.HostedPluginOAuthApi
 import coredevices.pebble.weather.WeatherPlugin
 import coredevices.pebble.weather.YahooWeatherInterceptor
+import coredevices.pebble.permissions.PermissionRequestNotifier
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.jordond.compass.geocoder.Geocoder
@@ -81,6 +83,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.Plugins
+import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.connection.WebServices
@@ -121,8 +124,11 @@ val watchModule = module {
                 .stateIn(GlobalScope, started = SharingStarted.Lazily, initialValue = null),
             get(),
             get(),
+            get(),
         )
     } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
+
+    singleOf(::HostedPluginOAuthApi) bind PluginOAuthApi::class
 
     includes(platformWatchModule)
 
@@ -208,8 +214,9 @@ val watchModule = module {
     factoryOf(::WeatherFetcher)
     singleOf(::WeatherPlugin)
     singleOf(::ConfigPageSessions)
-    factoryOf(::LanguagePackRepository)
+    singleOf(::LanguagePackRepository)
     factoryOf(::NativeLockerAddUtil)
+    singleOf(::PermissionRequestNotifier)
     singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)

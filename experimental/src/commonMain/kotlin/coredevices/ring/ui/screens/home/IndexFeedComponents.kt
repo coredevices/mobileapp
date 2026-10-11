@@ -2,7 +2,7 @@
 
 package coredevices.ring.ui.screens.home
 
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -97,6 +98,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryErrorType
+import coredevices.libindex.database.entity.RingTransfer
+import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.data.entity.room.indexfeed.kind
@@ -376,9 +379,15 @@ internal fun PeekStrip(
     peeks: List<IndexFeedViewModel.UiState.RecordingPeek>,
     onOpenRecording: (LocalRecording) -> Unit,
     onRetryRecording: (LocalRecording, RecordingEntryEntity) -> Unit,
+    pendingTransfers: List<RingTransfer> = emptyList(),
 ) {
-    val visiblePeeks = peeks.take(5)
-    val firstId = visiblePeeks.firstOrNull()?.recording?.id
+    val visibleCards = (
+        pendingTransfers.map { PeekStripCard.Transfer(it) } +
+            peeks.map { PeekStripCard.Recording(it) }
+        )
+        .sortedByDescending { it.timestamp.toEpochMilliseconds() }
+        .take(5)
+    val firstId = visibleCards.firstOrNull()?.key
     val listState = rememberLazyListState()
     // When a new recording shows up at the front, LazyRow's default
     // anchoring keeps the previously-visible items pinned to their pixel
@@ -398,27 +407,92 @@ internal fun PeekStrip(
         contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(items = visiblePeeks, key = { it.recording.id }) { peek ->
+        items(items = visibleCards, key = { it.key }) { card ->
             // LazyRow + animateItem(fadeInSpec, placementSpec) is doing
             // the work: when a new key enters the list it fades in
             // while existing keys spring rightward to their new layout
             // positions. Combined with the LaunchedEffect above
             // scroll-resetting to 0, the new card visibly takes the
             // leading slot and shoves the rest rightward.
-            PeekCard(
-                peek = peek,
-                onClick = { onOpenRecording(peek.recording) },
-                onRetry = { peek.retryEntry?.let { onRetryRecording(peek.recording, it) } },
-                modifier = Modifier.animateItem(
-                    fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    placementSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            val animation = Modifier.animateItem(
+                fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                placementSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
                 ),
+                fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            )
+            when (card) {
+                is PeekStripCard.Transfer -> PendingTransferPeekCard(
+                    transfer = card.transfer,
+                    modifier = animation,
+                )
+                is PeekStripCard.Recording -> PeekCard(
+                    peek = card.peek,
+                    onClick = { onOpenRecording(card.peek.recording) },
+                    onRetry = { card.peek.retryEntry?.let { onRetryRecording(card.peek.recording, it) } },
+                    modifier = animation,
+                )
+            }
+        }
+    }
+}
+
+private sealed class PeekStripCard {
+    abstract val timestamp: kotlin.time.Instant
+    abstract val key: String
+
+    data class Transfer(val transfer: RingTransfer) : PeekStripCard() {
+        override val timestamp get() = transfer.createdAt
+        override val key get() = "transfer-${transfer.id}"
+    }
+
+    data class Recording(val peek: IndexFeedViewModel.UiState.RecordingPeek) : PeekStripCard() {
+        override val timestamp get() = peek.recording.localTimestamp
+        override val key get() = "rec-${peek.recording.id}"
+    }
+}
+
+@Composable
+internal fun PendingTransferPeekCard(
+    transfer: RingTransfer,
+    modifier: Modifier = Modifier,
+) {
+    val colors = IndexTheme.colors
+    Column(
+        modifier = modifier
+            .width(220.dp)
+            .height(108.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfaceContainerLow)
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.height(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(13.dp), contentAlignment = Alignment.Center) {
+                RingGlyph(size = 13.dp, color = colors.primary)
+            }
+            Spacer(Modifier.width(6.dp))
+            Text(
+                relativeTime(transfer.createdAt).uppercase(),
+                color = colors.primary,
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.6.sp,
             )
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (transfer.status == RingTransferStatus.Completed) "Processing…" else "Transferring…",
+            color = colors.onSurfaceVariant,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            letterSpacing = (-0.05).sp,
+        )
     }
 }
 
@@ -456,6 +530,15 @@ internal fun PeekCard(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.6.sp,
             )
+            if (peek.processedOffline) {
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    Icons.Outlined.CloudOff,
+                    contentDescription = "Processed offline",
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -967,4 +1050,4 @@ internal fun RingGlyph(size: Dp, color: Color) {
     }
 }
 
-// `relativeTime` lives in `coredevices.ring.ui.util` (single source of truth).
+// `relativeTime` lives in `coredevices.util` (single source of truth).

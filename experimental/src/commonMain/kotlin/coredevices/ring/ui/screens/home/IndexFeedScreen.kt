@@ -182,7 +182,7 @@ fun IndexFeedScreen(
                 }
             }
 
-            if (state.recordings.isNotEmpty()) {
+            if (state.recordings.isNotEmpty() || state.pendingTransfers.isNotEmpty()) {
                 item("peek-header") {
                     PeekSectionHeader(
                         title = "Index feed",
@@ -193,6 +193,7 @@ fun IndexFeedScreen(
                 item("peek-strip") {
                     PeekStrip(
                         peeks = state.recordings.take(8),
+                        pendingTransfers = state.pendingTransfers,
                         onOpenRecording = { coreNav.navigateTo(RingRoutes.RecordingDetails(it.id)) },
                         onRetryRecording = { rec, entry -> vm.retryRecording(rec.id, entry) },
                     )

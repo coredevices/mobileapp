@@ -1,5 +1,6 @@
 package coredevices.ring.ui.screens.settings
 
+import CommonRoutes
 import CoreNav
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,12 +29,10 @@ fun RingButtonSection(viewModel: SettingsViewModel) {
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val webhookPreferences = koinInject<IndexWebhookPreferences>()
     val gestureRoutes by viewModel.gestureRoutes.collectAsState()
-    val sandboxGroups by viewModel.sandboxGroups.collectAsState()
     val webhookConfigs by webhookPreferences.configs.collectAsState()
 
     ButtonSwitchboard(
         routes = gestureRoutes,
-        sandboxGroups = sandboxGroups,
         musicEnabled = platform.isAndroid,
         webhookConfigFor = { webhookConfigs[it] ?: IndexWebhookConfig() },
         onSetRoute = viewModel::setGestureRoute,
@@ -56,18 +55,31 @@ fun IndexWebhookSheetHost() {
 fun IndexAgentActionsSection(coreNav: CoreNav, viewModel: SettingsViewModel, showHeader: Boolean = true) {
     val actions by viewModel.indexActions.collectAsState()
     val httpMcpDisabledReason by viewModel.httpMcpDisabledReason.collectAsState()
+    val plugins by viewModel.plugins.collectAsState()
+    val httpMcpServers by viewModel.httpMcpServers.collectAsState()
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
+    val configurablePlugins by viewModel.configurablePlugins.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
     IndexActionsSection(
         showHeader = showHeader,
         actions = actions,
+        plugins = plugins,
+        httpMcpServers = httpMcpServers,
         httpMcpDisabledReason = httpMcpDisabledReason,
         availableNoteProviders = availableNoteProviders,
         availableReminderProviders = availableReminderProviders,
+        configurablePlugins = configurablePlugins,
         onSetActionEnabled = viewModel::setActionEnabled,
+        onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,
+        onSetHttpServerEnabled = viewModel::setHttpServerEnabled,
+        onSaveHttpServer = viewModel::saveHttpServer,
+        onDeleteHttpServer = viewModel::deleteHttpServer,
         onAddIntegration = { coreNav.navigateTo(RingRoutes.AddIntegration) },
+        onConfigurePlugin = { uuid, title ->
+            coreNav.navigateTo(CommonRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title))
+        },
         onOpenBeeperContacts = viewModel::showContactsDialog,
         onGetMoreActions = {},
         onProvidersChanged = viewModel::refreshAvailableProviders,

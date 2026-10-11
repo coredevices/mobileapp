@@ -21,7 +21,6 @@ import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
-import coredevices.ring.ui.screens.settings.mcp.McpSandboxGroups
 import coredevices.ring.ui.theme.IndexThemeHost
 
 /** Marker for routes that belong to the Index/Ring feature. The
@@ -56,8 +55,6 @@ object RingRoutes {
     data object ListenDialog : RingRoute
     @Serializable
     data object RingSyncInspector : RingRoute
-    @Serializable
-    data object McpSandboxGroups : RingRoute
     @Serializable
     data object AddIntegration : RingRoute
 
@@ -126,9 +123,6 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     }
     indexComposable<RingRoutes.RingSyncInspector> {
         RingSyncInspectorScreen(coreNav)
-    }
-    indexComposable<RingRoutes.McpSandboxGroups> {
-        McpSandboxGroups(coreNav)
     }
     indexComposable<RingRoutes.AddIntegration> {
         AddIntegration(coreNav)

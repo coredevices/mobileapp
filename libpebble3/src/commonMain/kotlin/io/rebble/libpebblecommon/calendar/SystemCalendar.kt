@@ -12,11 +12,14 @@ interface SystemCalendar {
     fun hasPermission(): Boolean
 
     /**
-     * Create an event in the device's primary/default calendar.
+     * Create an event in the specified calendar.
      * @return the platform id of the created event, or null if creation failed (no permission,
      *         no writable calendar, or a platform error).
      */
-    suspend fun createEvent(event: NewCalendarEvent): String?
+    suspend fun createEvent(calendarId: String, event: NewCalendarEvent): String?
+
+    /** Platform id of the calendar the OS would create new events in by default, if any. */
+    suspend fun defaultCalendarPlatformId(): String?
 
     /**
      * Whether this platform can execute write-back pin actions (RSVP, cancel event).

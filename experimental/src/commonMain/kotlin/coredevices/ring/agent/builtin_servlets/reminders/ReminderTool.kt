@@ -10,6 +10,8 @@ import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.externalDestination
 import coredevices.ring.ui.isLocale24HourFormat
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -70,7 +72,7 @@ class ReminderTool: BuiltInMcpTool(
         Only pass times to 'create_reminder' that the user actually said. If the user started to specify a reminder time but it was cut off, do not guess one and do not create the reminder; tell the user the time was missing. Omit the time fields entirely for reminders without a time.
     """.trimIndent()
 ), KoinComponent {
-    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
+    private val providers: IntegrationProviderRepository by inject()
 
     companion object Companion {
         const val TOOL_NAME = "create_reminder"
@@ -213,7 +215,8 @@ class ReminderTool: BuiltInMcpTool(
         }
 
         return try {
-            val reminderId = reminderIntegrationFactory.createReminderIntegration()
+            val provider = providers.selectedReminderProvider.value
+            val reminderId = providers.reminderIntegration(provider)
                 .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(RemindResult(success = true, reminderId = reminderId)),
@@ -222,6 +225,7 @@ class ReminderTool: BuiltInMcpTool(
                     deadline = instant,
                     localReminderId = reminderId.toIntOrNull(),
                     notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
+                    destination = provider.externalDestination,
                 )
             )
         } catch (e: Exception) {
@@ -233,7 +237,7 @@ class ReminderTool: BuiltInMcpTool(
                         errorMessage = e.message
                     )
                 ),
-                SemanticResult.GenericFailure("Failed to create reminder: ${e.message}")
+                SemanticResult.GenericFailure(e.message)
             )
         }
     }

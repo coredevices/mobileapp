@@ -13,12 +13,10 @@ import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.DefaultCaptureType
-import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.api.ApiConfig
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaClientImpl
@@ -29,7 +27,8 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.McpServerRepository
+import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.encryption.DocumentEncryptor
@@ -353,10 +352,6 @@ class RingRecordingE2ETest {
         entryDao = koin.get()
         messageDao = koin.get()
         queue = koin.get()
-
-        runBlocking {
-            koin.get<McpSandboxRepository>().seedDatabase()
-        }
     }
 
     @After
@@ -523,19 +518,19 @@ class RingRecordingE2ETest {
         single { get<RingDatabase>().recordingEntryDao() }
         single { get<RingDatabase>().conversationMessageDao() }
         single { get<RingDatabase>().ringTransferDao() }
-        single { get<RingDatabase>().builtinMcpGroupAssociationDao() }
-        single { get<RingDatabase>().httpMcpGroupAssociationDao() }
         single { get<RingDatabase>().httpMcpServerDao() }
-        single { get<RingDatabase>().mcpSandboxGroupDao() }
+        single { get<RingDatabase>().disabledBuiltinMcpDao() }
         single { get<RingDatabase>().recordingProcessingTaskDao() }
         single { get<RingDatabase>().traceSessionDao() }
         single { get<RingDatabase>().traceEntryDao() }
+        single { get<RingDatabase>().pluginGrantDao() }
 
         // Repositories
         singleOf(::RecordingProcessingTaskRepository)
         singleOf(::RecordingRepository)
         singleOf(::RingTransferRepository)
-        singleOf(::McpSandboxRepository)
+        singleOf(::McpServerRepository)
+        singleOf(::PluginGrantRepository)
 
         // HTTP engine
         factory<HttpClientEngine> { params ->
@@ -585,6 +580,7 @@ class RingRecordingE2ETest {
                 override fun updateRingTransferDurationMetric(duration: kotlin.time.Duration) {}
                 override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
                 override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
+                override fun incrementHeartbeatCounter(name: String) {}
             }
         }
         single {
@@ -601,13 +597,14 @@ class RingRecordingE2ETest {
         factory { coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool(get()) }
         factory { coredevices.ring.agent.integrations.NotionIntegration(get(), get(), get()) }
         factory { coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient(get(), get(), get()) }
-        single { coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory(get(), get()) }
+        single { coredevices.ring.agent.integrations.providers.IntegrationProviderRepository(get(), get(), get(), get()) }
         single<coredevices.firestore.UsersDao> {
             object : coredevices.firestore.UsersDao {
                 override val user = kotlinx.coroutines.flow.flowOf<coredevices.firestore.PebbleUser?>(null)
                 override val loginEvents: Flow<PebbleUser> = emptyFlow()
 
                 override suspend fun updateTodoBlockId(todoBlockId: String) {}
+                override suspend fun signOut() {}
                 override suspend fun initUserDevToken(rebbleUserToken: String?) {}
                 override suspend fun updateLastConnectedWatch(serial: String) {}
                 override suspend fun updateRingLifetimeCollectionCount(
@@ -695,7 +692,6 @@ class RingRecordingE2ETest {
 }
 
 private class E2EPreferences : Preferences {
-    override val llmMode: StateFlow<LlmMode> = MutableStateFlow(LlmMode.RemoteOnly)
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
@@ -706,9 +702,8 @@ private class E2EPreferences : Preferences {
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
-    override val secondaryModeMcpGroupId: StateFlow<Long?> = MutableStateFlow(null)
-    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
-    override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
+    override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
+    override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
@@ -719,8 +714,8 @@ private class E2EPreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(false)
+    override val scanByPairedAddress: StateFlow<Boolean> = MutableStateFlow(true)
 
-    override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
@@ -730,9 +725,8 @@ private class E2EPreferences : Preferences {
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
-    override fun setSecondaryModeMcpGroupId(groupId: Long?) {}
-    override fun setReminderProvider(provider: ReminderProvider) {}
-    override fun setNoteProvider(provider: NoteProvider) {}
+    override fun setReminderProviderId(id: String) {}
+    override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
@@ -743,8 +737,11 @@ private class E2EPreferences : Preferences {
     override fun setLastBackupCount(count: Int?) {}
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
+    override fun setScanByPairedAddress(enabled: Boolean) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
+    override val targetCalendar: StateFlow<Int?> = MutableStateFlow(null)
+    override fun setTargetCalendar(calendarId: Int?) {}
 }

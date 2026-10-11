@@ -8,11 +8,14 @@ import coredevices.ring.agent.builtin_servlets.calendar.phoneCalendarConnected
 import coredevices.ring.agent.builtin_servlets.messaging.beeperUnavailableReason
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.McpServerRepository
+import coredevices.ring.database.room.repository.PluginGrantRepository
+import coredevices.ring.service.button.GestureRoutingPreferences
+import coredevices.ring.service.button.routesOnlyToLocalAgent
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
+import io.rebble.libpebblecommon.connection.Plugins
+import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -24,11 +27,14 @@ internal val mcpModule = module {
     single {
         IndexActionsRepository(
             servletRepository = get(),
-            defaultGroupEntries = get<McpSandboxRepository>()::defaultGroupEntriesFlow,
-            setEnabledInDefaultGroup = get<McpSandboxRepository>()::setBuiltinEnabledInDefaultGroup,
-            llmMode = get<Preferences>().llmMode,
+            disabledBuiltins = get<McpServerRepository>()::disabledBuiltinsFlow,
+            setBuiltinEnabled = get<McpServerRepository>()::setBuiltinEnabled,
+            localAgentOnly = get<GestureRoutingPreferences>().routes.map { it.routesOnlyToLocalAgent() },
             calendarConnected = phoneCalendarConnected(get(), get()),
             beeperUnavailable = beeperUnavailableReason(get()),
+            installedPlugins = get<Plugins>()::getAllPlugins,
+            disabledPlugins = get<PluginGrantRepository>()::disabledPlugins,
+            persistPluginGrantEnabled = get<PluginGrantRepository>()::setPluginGrantEnabled,
         )
     }
     factoryOf(::CreateNoteTool)
@@ -38,7 +44,6 @@ internal val mcpModule = module {
     // parameter from the graph and fail on kotlinx.datetime.TimeZone.
     factory { ObsidianIntegration(get(), get()) }
     factoryOf(::LocalNoteClient)
-    singleOf(::NoteIntegrationFactory)
 }
 
 expect fun isBeeperAvailable(): Boolean

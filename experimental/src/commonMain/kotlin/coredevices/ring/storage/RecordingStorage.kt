@@ -4,8 +4,13 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.audio.M4aDecoder
 import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
+import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
+import coredevices.ring.encryption.AesCbcHmacCrypto
+import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.util.openReadChannel
+import coredevices.util.queue.RecoverableTaskException
+import coredevices.util.sync.SyncManager
 import coredevices.util.writeWavHeader
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -14,6 +19,7 @@ import dev.gitlive.firebase.storage.FirebaseStorageMetadata
 import dev.gitlive.firebase.storage.storage
 import io.ktor.utils.io.exhausted
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
@@ -80,11 +86,19 @@ interface RecordingStorage {
     suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo>?
 
     /**
-     * Moves a recording from cache to persistent data storage,
+     * Stages a completed recording for upload and queues it with the offline-tolerant syncer,
      * should be used once recording is complete & validated
      * @param id unique identifier for the recording
      */
     suspend fun persistRecording(id: String)
+
+    /**
+     * Uploads a recording staged by [persistRecording]. Throws [RecoverableTaskException] when the
+     * upload should be retried later.
+     */
+    suspend fun uploadStagedRecording(upload: StagedRecordingUpload)
+
+    fun deleteStagedRecording(id: String)
 
     suspend fun uploadRecordingPcm(
         id: String,
@@ -144,14 +158,16 @@ interface RecordingStorage {
  */
 class RealRecordingStorage(
     private val cachedMetadataDao: CachedRecordingMetadataDao,
-    private val documentEncryptor: coredevices.ring.encryption.DocumentEncryptor,
-    private val preferences: coredevices.ring.database.Preferences,
+    private val documentEncryptor: DocumentEncryptor,
+    private val preferences: Preferences,
+    private val syncManager: SyncManager,
 ) : RecordingStorage {
     companion object {
         private val logger = Logger.withTag(RealRecordingStorage::class.simpleName!!)
         private const val FS_WRITE_BUFFER_SIZE = 8192
         private const val PCM_MIME = "audio/raw"
         private const val M4A_MIME = "audio/mp4"
+        private const val UPLOADS_DIR = "uploads"
     }
 
     private val m4aEncoder = M4aEncoder()
@@ -164,7 +180,10 @@ class RealRecordingStorage(
         val data = getRecordingsDataDirectory()
         SystemFileSystem.createDirectories(cache, false)
         SystemFileSystem.createDirectories(data, false)
+        SystemFileSystem.createDirectories(Path(data, UPLOADS_DIR), false)
     }
+
+    private fun stagedUploadPath(id: String) = Path(getRecordingsDataDirectory(), UPLOADS_DIR, "$id.m4a")
 
     override fun getCacheDirectory(): Path = getRecordingsCacheDirectory()
 
@@ -290,6 +309,14 @@ class RealRecordingStorage(
     }
 
     override suspend fun persistRecording(id: String) = withContext(Dispatchers.IO) {
+        if (!preferences.backupEnabled.value) {
+            logger.d { "Backups disabled, not staging recording $id for upload" }
+            return@withContext
+        }
+        if (Firebase.auth.currentUser == null) {
+            logger.d { "Not signed in, not staging recording $id for upload" }
+            return@withContext
+        }
         val encrypt = preferences.useEncryption.value
         val encryptionKey = if (encrypt) documentEncryptor.getKey() else null
         if (encrypt && encryptionKey == null) {
@@ -297,6 +324,10 @@ class RealRecordingStorage(
         }
 
         for (idToMove in listOf(id, "$id-original")) {
+            if (syncManager.hasPending(RecordingUploadSyncHandler.TYPE, idToMove)) {
+                logger.d { "Upload of $idToMove already pending, not staging again" }
+                continue
+            }
             val source = Path(getRecordingsCacheDirectory(), idToMove)
             val cachedMetadata = cachedMetadataDao.get(idToMove)
                 ?: error("Cached metadata for recording $idToMove not found")
@@ -304,13 +335,14 @@ class RealRecordingStorage(
                 "Recording $idToMove does not exist in cache"
             }
 
-            val samples = readPcmFile(source)
-            uploadRecordingSamples(
+            val staged = stageUpload(
                 id = idToMove,
                 sampleRate = cachedMetadata.sampleRate,
-                samples = samples,
+                samples = readPcmFile(source),
                 encryptionKey = encryptionKey,
             )
+            logger.d { "Queueing staged upload ${staged.id}" }
+            syncManager.enqueue(RecordingUploadSyncHandler.TYPE, staged.encode(), dedupeKey = idToMove)
         }
     }
 
@@ -320,12 +352,18 @@ class RealRecordingStorage(
         pcmBytes: ByteArray,
         encryptionKey: String?,
     ) = withContext(Dispatchers.IO) {
-        uploadRecordingSamples(
+        val staged = stageUpload(
             id = id,
             sampleRate = sampleRate,
             samples = withContext(Dispatchers.Default) { pcmBytesToShortArray(pcmBytes) },
             encryptionKey = encryptionKey,
         )
+        try {
+            uploadStagedRecording(staged)
+        } catch (e: RecoverableTaskException) {
+            deleteStagedRecording(id)
+            throw IllegalStateException(e.message, e.cause)
+        }
     }
 
     /**
@@ -359,46 +397,56 @@ class RealRecordingStorage(
         return samples
     }
 
-    private suspend fun uploadRecordingSamples(
+    private suspend fun stageUpload(
         id: String,
         sampleRate: Int,
         samples: ShortArray,
         encryptionKey: String?,
-    ) {
-        val destination = "recordings/${Firebase.auth.currentUser!!.uid}/$id"
+    ): StagedRecordingUpload {
         val m4aBytes = m4aEncoder.encode(samples, sampleRate)
         val uploadBytes = if (encryptionKey != null) {
             documentEncryptor.encryptAudio(m4aBytes, encryptionKey)
         } else {
             m4aBytes
         }
-
-        val m4aTempPath = Path(getRecordingsCacheDirectory(), "$id.upload.m4a")
-        SystemFileSystem.sink(m4aTempPath).buffered().use { it.write(uploadBytes) }
-
-        val customMeta = mutableMapOf(
-            "sampleRate" to sampleRate.toString()
+        SystemFileSystem.sink(stagedUploadPath(id)).buffered().use { it.write(uploadBytes) }
+        return StagedRecordingUpload(
+            id = id,
+            sampleRate = sampleRate,
+            keyFingerprint = encryptionKey?.let { AesCbcHmacCrypto.keyFingerprint(it) },
         )
-        if (encryptionKey != null) {
-            customMeta["encrypted"] = "true"
-            customMeta["keyFingerprint"] =
-                coredevices.ring.encryption.AesCbcHmacCrypto.keyFingerprint(encryptionKey)
-        }
+    }
 
+    override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = withContext(Dispatchers.IO) {
+        val path = stagedUploadPath(upload.id)
+        check(SystemFileSystem.exists(path)) { "Staged upload for ${upload.id} is missing" }
+        val uid = Firebase.auth.currentUser?.uid
+            ?: throw RecoverableTaskException("Not signed in, cannot upload ${upload.id}")
+        logger.d { "Uploading staged recording ${upload.id}" }
+        val customMeta = mutableMapOf("sampleRate" to upload.sampleRate.toString())
+        if (upload.keyFingerprint != null) {
+            customMeta["encrypted"] = "true"
+            customMeta["keyFingerprint"] = upload.keyFingerprint
+        }
         try {
-            Firebase.storage.reference(destination)
+            Firebase.storage.reference("recordings/$uid/${upload.id}")
                 .putFile(
-                    getFirebaseStorageFile(m4aTempPath),
+                    getFirebaseStorageFile(path),
                     FirebaseStorageMetadata(
                         contentType = M4A_MIME,
                         customMetadata = customMeta
                     )
                 )
-        } finally {
-            if (SystemFileSystem.exists(m4aTempPath)) {
-                SystemFileSystem.delete(m4aTempPath)
-            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw RecoverableTaskException("Upload of ${upload.id} failed: ${e.message}", e)
         }
+        SystemFileSystem.delete(path)
+    }
+
+    override fun deleteStagedRecording(id: String) {
+        SystemFileSystem.delete(stagedUploadPath(id), mustExist = false)
     }
 
     override fun deleteRecording(id: String) {

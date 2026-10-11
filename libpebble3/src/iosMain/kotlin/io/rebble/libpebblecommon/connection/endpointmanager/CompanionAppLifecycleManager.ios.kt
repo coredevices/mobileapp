@@ -10,6 +10,7 @@ actual fun createPlatformSpecificCompanionAppControl(
     device: CompanionAppDevice,
     appInfo: PbwAppInfo,
     pkjsRunning: Boolean,
+    legacyPebbleKitEnabled: Boolean,
     libPebbleCoroutineScope: LibPebbleCoroutineScope,
     connectionCoroutineScope: ConnectionCoroutineScope,
 ): CompanionApp? {

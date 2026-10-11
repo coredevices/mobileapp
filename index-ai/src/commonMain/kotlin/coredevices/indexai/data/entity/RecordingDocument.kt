@@ -86,6 +86,8 @@ data class RecordingEntryEntity(
     val transcription: String? = null,
     @ColumnInfo(defaultValue = "NULL")
     val transcribedUsingModel: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val transcribedViaLocalFallback: Boolean = false,
     val error: String? = null,
     @ColumnInfo(defaultValue = "NULL")
     val errorType: RecordingEntryErrorType? = null,
@@ -145,6 +147,7 @@ data class RecordingEntry(
     val status: RecordingEntryStatus = RecordingEntryStatus.pending,
     val transcription: String? = null,
     val transcribedUsingModel: String? = null,
+    val transcribedViaLocalFallback: Boolean = false,
     val error: String? = null,
     val errorType: RecordingEntryErrorType? = null,
     val ringTransferInfo: RingTransferInfo? = null,

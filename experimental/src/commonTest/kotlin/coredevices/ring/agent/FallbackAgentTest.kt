@@ -1,6 +1,7 @@
 package coredevices.ring.agent
 
 import coredevices.indexai.agent.Agent
+import coredevices.indexai.agent.AgentIteration
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.SessionContext
@@ -27,12 +28,15 @@ class FallbackAgentTest {
     private class FakeAgent(
         override val label: String,
         initial: List<ConversationMessageDocument> = emptyList(),
+        override val isCloud: Boolean = false,
         private val onSend: suspend FakeAgent.() -> Unit,
     ) : Agent {
         private val _conversation = MutableSharedFlow<List<ConversationMessageDocument>>(
             replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
         ).apply { tryEmit(initial) }
         override val conversation: SharedFlow<List<ConversationMessageDocument>> get() = _conversation
+        val iterationsOut = MutableSharedFlow<AgentIteration>()
+        override val iterations: SharedFlow<AgentIteration> get() = iterationsOut
 
         var sendCount = 0
             private set
@@ -143,6 +147,26 @@ class FallbackAgentTest {
 
         // Each update reaches collectors as it happens, with no duplicate final emission.
         assertEquals(listOf(0, 1, 2), seen)
+    }
+
+    @Test
+    fun relaysIterationsFromTheActiveAgent() = runTest(UnconfinedTestDispatcher()) {
+        val primary = FakeAgent("Nenya") {
+            iterationsOut.emit(AgentIteration("Nenya", emptyList(), emptyList()))
+            throw AgentNetworkException("offline")
+        }
+        val fallback = FakeAgent("Cactus") {
+            iterationsOut.emit(AgentIteration("Cactus", emptyList(), emptyList()))
+            addMessage(message(MessageRole.assistant, "noted"))
+        }
+        val agent = FallbackAgent(primary, fallback, emptyList())
+        val seen = mutableListOf<String>()
+        val watcher = backgroundScope.launch { agent.iterations.collect { seen += it.agent } }
+
+        agent.sendTestInput(backgroundScope)
+        watcher.cancel()
+
+        assertEquals(listOf("Nenya", "Cactus"), seen)
     }
 
     @Test

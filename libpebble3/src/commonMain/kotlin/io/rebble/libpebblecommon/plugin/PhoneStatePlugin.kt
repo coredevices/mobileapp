@@ -18,9 +18,10 @@ import kotlin.uuid.Uuid
 class PhoneStatePlugin(
     private val phoneBattery: PhoneBatteryMonitor,
     private val phoneNetwork: PhoneNetworkMonitor,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_PHONE_STATE_UUID
     override val name: String = "Phone"
+    override val description: String = "The phone's battery level and network connectivity."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

@@ -13,11 +13,15 @@ import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
+import io.rebble.libpebblecommon.js.InterceptResponse.Companion.FORBIDDEN
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.OK
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Layout.Companion.fromCode
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.PebbleColor
@@ -39,6 +43,7 @@ class RemoteTimelineEmulator(
     private val json: Json,
     private val timelinePinRealDao: TimelinePinRealDao,
     private val timelineReminderRealDao: TimelineReminderRealDao,
+    private val permissions: AppPermissions,
 ) : HttpInterceptor {
     override fun shouldIntercept(url: String): Boolean {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
@@ -65,6 +70,7 @@ class RemoteTimelineEmulator(
 //        logger.v { "onIntercepted: uri=$uri method=$method body=$body" }
         if (method == "PUT" || method == "POST") {
             logger.v { "onIntercepted: PUT/POST; inserting pin" }
+            if (!mayAddPins(appUuid)) return FORBIDDEN
             insertPin(body, appUuid)
         } else if (method == "DELETE") {
             val pinIdentifer = uri.path?.substringAfter("/user/pins/")
@@ -93,6 +99,7 @@ class RemoteTimelineEmulator(
         insertPin(appUuid, pin)
     }
 
+    /** Callers check the app may add pins (`mayAddPins`). */
     suspend fun insertPin(appUuid: Uuid, pin: TimelinePinJson) {
         val existingPin = timelinePinRealDao.getPinsForWatchapp(appUuid).find { it.backingId == pin.id }
         val pinUuid = existingPin?.itemId ?: Uuid.random()
@@ -111,6 +118,9 @@ class RemoteTimelineEmulator(
             timelineReminder?.let { timelineReminderRealDao.insertOrReplace(it) }
         }
     }
+
+    suspend fun mayAddPins(appUuid: Uuid): Boolean =
+        permissions.request(appUuid, PluginPermissions.TIMELINE) == PermissionDecision.Granted
 
     suspend fun deletePin(appUuid: Uuid, pinIdentifier: String): Boolean {
         logger.v { "deletePin: pinIdentifier=$pinIdentifier" }

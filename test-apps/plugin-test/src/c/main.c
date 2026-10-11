@@ -10,6 +10,7 @@
 //   m|<label>|<w>x<h>                      an icon or artwork, whose pixels arrive in
 //                                          their own message
 //                                          (imgQuad/imgWidth/imgHeight/imgPalette/imgPixels)
+//   d|<label>                              today's date, from the watch's own clock
 //
 // Nothing on the watch can scale a bitmap, so the size artwork is useful at is the watch's to
 // decide: it sends `artSize` — as much of the tile as is left under a title — on load and
@@ -295,6 +296,13 @@ static void update_quadrant(Layer *layer, GContext *ctx) {
     graphics_context_set_text_color(ctx, ink());
     body_top = TITLE_HEIGHT;
   }
+  char date[FIELD_MAX];
+  const char *text = quadrant->text;
+  if (quadrant->shape == 'd') {
+    time_t now = time(NULL);
+    strftime(date, sizeof(date), "%a %e %b", localtime(&now));
+    text = date;
+  }
   // Artwork is sized to the tile under its title, so it wants every pixel below that.
   int body_height = bounds.size.h - body_top - (quadrant->shape == 'm' ? 0 : 2);
   GRect body = GRect(4, body_top, bounds.size.w - 8, body_height);
@@ -326,9 +334,9 @@ static void update_quadrant(Layer *layer, GContext *ctx) {
                s_art_mono[quadrant->index]);
       break;
     default: {
-      GFont font = fonts_get_system_font(body_font(quadrant->text, body.size.w));
-      int used = measure(quadrant->text, font, body, GTextOverflowModeWordWrap);
-      graphics_draw_text(ctx, quadrant->text, font,
+      GFont font = fonts_get_system_font(body_font(text, body.size.w));
+      int used = measure(text, font, body, GTextOverflowModeWordWrap);
+      graphics_draw_text(ctx, text, font,
                          GRect(body.origin.x, body.origin.y + (body_height - used) / 2,
                                body.size.w, used),
                          GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
@@ -542,6 +550,10 @@ static void window_unload(Window *window) {
   }
 }
 
+static void on_day(struct tm *now, TimeUnits changed) {
+  mark_page_dirty();
+}
+
 static void init(void) {
   s_dark = persist_read_bool(PERSIST_DARK);
   s_quick_slot = persist_read_int(PERSIST_QUICK);
@@ -557,10 +569,12 @@ static void init(void) {
   // Artwork is 4-bpp: a 96x96 tile is 4608 bytes of pixels plus its palette.
   app_message_open(app_message_inbox_size_maximum(), 128);
   touch_service_subscribe(touch_handler, NULL);
+  tick_timer_service_subscribe(DAY_UNIT, on_day);
   window_stack_push(s_window, true);
 }
 
 static void deinit(void) {
+  tick_timer_service_unsubscribe();
   touch_service_unsubscribe();
   window_destroy(s_window);
 }

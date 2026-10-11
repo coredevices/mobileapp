@@ -19,25 +19,12 @@ class IntegrationTokenStorageImplTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
-        // Clear any leftover prefs from previous test runs
-        context.applicationContext
-            .getSharedPreferences("integration_tokens", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .commit()
         storage = IntegrationTokenStorageImpl(context)
-        // Ensure the encryption key is cleared before each test to avoid cross-test contamination
-        storage.clearKey()
+        runBlocking { storage.clear() }
     }
 
     @After
-    fun tearDown() {
-        context.applicationContext
-            .getSharedPreferences("integration_tokens", Context.MODE_PRIVATE)
-            .edit()
-            .clear()
-            .commit()
-    }
+    fun tearDown() = runBlocking { storage.clear() }
 
     @Test
     fun saveAndRetrieveToken() = runBlocking {

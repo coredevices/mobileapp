@@ -17,13 +17,11 @@ class GestureRoutingTest {
     private fun routing(
         musicControlMode: MusicControlMode? = null,
         secondaryMode: SecondaryMode? = null,
-        mcpGroupId: Long? = null,
         stored: MapSettings = MapSettings(),
     ): GestureRoutingPreferences {
         val legacy = MapSettings()
         musicControlMode?.let { legacy.putInt("music_control_mode", it.id) }
         secondaryMode?.let { legacy.putInt("ring_secondary_mode", it.id) }
-        mcpGroupId?.let { legacy.putLong("ring_secondary_mode_mcp_group", it) }
         return GestureRoutingPreferences(stored, PreferencesImpl(legacy))
     }
 
@@ -85,15 +83,23 @@ class GestureRoutingTest {
             GestureDestination.WebSearch,
             routing(secondaryMode = SecondaryMode.Search).destinationFor(RingGesture.ClickHold)
         )
+    }
+
+    /** The removed sandbox mode ran a chosen group's agent over the ring's recordings; the Index
+     *  agent is the nearest thing left, whether the route came from the legacy pref or was stored. */
+    @Test
+    fun legacySandboxRoutesMigrateToTheIndexAgent() {
         assertEquals(
-            GestureDestination.McpSandbox(7L),
-            routing(secondaryMode = SecondaryMode.McpSandbox, mcpGroupId = 7L)
-                .destinationFor(RingGesture.ClickHold)
-        )
-        assertEquals(
-            GestureDestination.McpSandbox(null),
+            GestureDestination.IndexAgent,
             routing(secondaryMode = SecondaryMode.McpSandbox).destinationFor(RingGesture.ClickHold)
         )
+        val stored = MapSettings(
+            "ring_gesture_route_Hold" to "mcp_sandbox:7",
+            "ring_gesture_route_ClickHold" to "mcp_sandbox:",
+        )
+        val routing = routing(secondaryMode = SecondaryMode.Search, stored = stored)
+        assertEquals(GestureDestination.IndexAgent, routing.destinationFor(RingGesture.Hold))
+        assertEquals(GestureDestination.IndexAgent, routing.destinationFor(RingGesture.ClickHold))
     }
 
     /** The removed webhook mode kept sending to the webhook and ran no agent; a webhook-only
@@ -137,7 +143,7 @@ class GestureRoutingTest {
         val routes = routing().routes.value
 
         assertEquals(
-            migratedRoutes(MusicControlMode.DoubleClick, SecondaryMode.Search, null),
+            migratedRoutes(MusicControlMode.DoubleClick, SecondaryMode.Search),
             routes
         )
     }
@@ -152,15 +158,17 @@ class GestureRoutingTest {
             assertTrue(it.accepts(GestureDestination.NextTrack))
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.IndexAgent))
+            assertFalse(it.accepts(GestureDestination.LocalAgent))
+            assertFalse(it.accepts(GestureDestination.RemoteAgent))
             assertFalse(it.accepts(GestureDestination.WebSearch))
             assertFalse(it.accepts(GestureDestination.WebhookOnly))
-            assertFalse(it.accepts(GestureDestination.McpSandbox(1L)))
         }
         recording.forEach {
             assertTrue(it.accepts(GestureDestination.IndexAgent))
+            assertTrue(it.accepts(GestureDestination.LocalAgent))
+            assertTrue(it.accepts(GestureDestination.RemoteAgent))
             assertTrue(it.accepts(GestureDestination.WebSearch))
             assertTrue(it.accepts(GestureDestination.WebhookOnly))
-            assertTrue(it.accepts(GestureDestination.McpSandbox(1L)))
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.PlayPause))
             assertFalse(it.accepts(GestureDestination.NextTrack))
@@ -184,17 +192,125 @@ class GestureRoutingTest {
         val stored = MapSettings()
         routing(stored = stored).apply {
             setRoute(RingGesture.Click, GestureDestination.PlayPause)
-            setRoute(RingGesture.Hold, GestureDestination.McpSandbox(42L))
-            setRoute(RingGesture.ClickHold, GestureDestination.WebhookOnly)
+            setRoute(RingGesture.DoubleClick, GestureDestination.NextTrack)
+            setRoute(RingGesture.Hold, GestureDestination.RemoteAgent)
+            setRoute(RingGesture.ClickHold, GestureDestination.LocalAgent)
         }
 
         // A fresh instance ignores the legacy prefs for gestures with a stored route.
         val reloaded = routing(MusicControlMode.Disabled, SecondaryMode.Search, stored = stored)
 
         assertEquals(GestureDestination.PlayPause, reloaded.destinationFor(RingGesture.Click))
-        assertEquals(GestureDestination.McpSandbox(42L), reloaded.destinationFor(RingGesture.Hold))
-        assertEquals(GestureDestination.WebhookOnly, reloaded.destinationFor(RingGesture.ClickHold))
-        assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.DoubleClick))
+        assertEquals(GestureDestination.RemoteAgent, reloaded.destinationFor(RingGesture.Hold))
+        assertEquals(GestureDestination.LocalAgent, reloaded.destinationFor(RingGesture.ClickHold))
+        assertEquals(GestureDestination.NextTrack, reloaded.destinationFor(RingGesture.DoubleClick))
+        assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.TripleClick))
+    }
+
+    /** The app-wide "Local LLM" mode this replaced: id 1 was local-only, 0 cloud, 2 cloud-first. */
+    @Test
+    fun legacyLocalOnlyLlmModeMigratesIndexAgentRoutesToTheLocalAgent() {
+        val stored = MapSettings("llm_mode" to 1, "ring_gesture_route_ClickHold" to "index_agent")
+
+        val routing = routing(secondaryMode = SecondaryMode.Search, stored = stored)
+
+        assertEquals(GestureDestination.LocalAgent, routing.destinationFor(RingGesture.Hold))
+        assertEquals(GestureDestination.LocalAgent, routing.destinationFor(RingGesture.ClickHold))
+        assertEquals("local_agent", stored.getStringOrNull("ring_gesture_route_Hold"))
+        assertEquals("local_agent", stored.getStringOrNull("ring_gesture_route_ClickHold"))
+        assertFalse(stored.hasKey("llm_mode"))
+    }
+
+    @Test
+    fun legacyLocalOnlyLlmModeLeavesOtherRoutesAlone() {
+        val stored = MapSettings("llm_mode" to 1)
+
+        val routing = routing(secondaryMode = SecondaryMode.Search, stored = stored)
+
+        assertEquals(GestureDestination.WebSearch, routing.destinationFor(RingGesture.ClickHold))
+    }
+
+    @Test
+    fun legacyCloudOnlyLlmModeMigratesToTheRemoteAgent() {
+        val stored = MapSettings("llm_mode" to 0)
+
+        val routing = routing(stored = stored)
+
+        assertEquals(GestureDestination.RemoteAgent, routing.destinationFor(RingGesture.Hold))
+        assertEquals("remote_agent", stored.getStringOrNull("ring_gesture_route_Hold"))
+        assertFalse(stored.hasKey("llm_mode"))
+    }
+
+    @Test
+    fun legacyCloudFirstLlmModeAndNoModeStayOnTheHybridAgent() {
+        listOf(MapSettings("llm_mode" to 2), MapSettings()).forEach { stored ->
+            val routing = routing(stored = stored)
+
+            assertEquals(GestureDestination.IndexAgent, routing.destinationFor(RingGesture.Hold))
+            assertFalse(stored.hasKey("llm_mode"))
+        }
+    }
+
+    @Test
+    fun legacyLocalLlmSwitchMigratesLikeLocalOnlyMode() {
+        val stored = MapSettings("use_cactus_agent" to true)
+
+        val routing = routing(stored = stored)
+
+        assertEquals(GestureDestination.LocalAgent, routing.destinationFor(RingGesture.Hold))
+        assertFalse(stored.hasKey("use_cactus_agent"))
+    }
+
+    @Test
+    fun migrationRunsOnceSoALaterHybridChoiceSticks() {
+        val stored = MapSettings("llm_mode" to 1)
+        routing(stored = stored).setRoute(RingGesture.Hold, GestureDestination.IndexAgent)
+
+        assertEquals(GestureDestination.IndexAgent, routing(stored = stored).destinationFor(RingGesture.Hold))
+    }
+
+    @Test
+    fun rerouteAllMovesEveryMatchingGesture() {
+        val routing = routing(secondaryMode = SecondaryMode.Disabled)
+        routing.setRoutes(
+            mapOf(
+                RingGesture.Hold to GestureDestination.LocalAgent,
+                RingGesture.ClickHold to GestureDestination.LocalAgent,
+            )
+        )
+
+        assertTrue(routing.rerouteAll(GestureDestination.LocalAgent, GestureDestination.IndexAgent))
+
+        assertEquals(GestureDestination.IndexAgent, routing.destinationFor(RingGesture.Hold))
+        assertEquals(GestureDestination.IndexAgent, routing.destinationFor(RingGesture.ClickHold))
+        assertFalse(routing.rerouteAll(GestureDestination.LocalAgent, GestureDestination.IndexAgent))
+    }
+
+    @Test
+    fun onlyLocalAgentIsRoutedWhenNoGestureReachesTheHybridAgent() {
+        assertTrue(
+            mapOf(
+                RingGesture.Hold to GestureDestination.LocalAgent,
+                RingGesture.ClickHold to GestureDestination.WebSearch,
+            ).routesOnlyToLocalAgent()
+        )
+        assertFalse(
+            mapOf(
+                RingGesture.Hold to GestureDestination.LocalAgent,
+                RingGesture.ClickHold to GestureDestination.IndexAgent,
+            ).routesOnlyToLocalAgent()
+        )
+        assertFalse(
+            mapOf(
+                RingGesture.Hold to GestureDestination.LocalAgent,
+                RingGesture.ClickHold to GestureDestination.RemoteAgent,
+            ).routesOnlyToLocalAgent()
+        )
+        assertFalse(
+            mapOf<RingGesture, GestureDestination>(
+                RingGesture.Hold to GestureDestination.WebSearch,
+            ).routesOnlyToLocalAgent()
+        )
     }
 
     @Test

@@ -43,6 +43,7 @@ import coredevices.pebble.watchModule
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.R
+import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
@@ -66,7 +67,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
 
     override fun onCreate() {
         super.onCreate()
-        if (isDebuggableBuild) {
+        if (AppContext(this).isDebugBuild()) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
         }
         startKoin {
@@ -82,7 +83,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
             )
         }
         initLogging()
-        logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (isDebuggableBuild) "debug" else "release"}" }
+        logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (AppContext(this).isDebugBuild()) "debug" else "release"}" }
         dumpPreviousExitInfo()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         registerReceiver(object : BroadcastReceiver() {
@@ -145,7 +146,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     }
 
     private fun configureStrictMode() {
-        if (isDebuggableBuild) {
+        if (AppContext(this).isDebugBuild()) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy.Builder()
                     .detectDiskReads()

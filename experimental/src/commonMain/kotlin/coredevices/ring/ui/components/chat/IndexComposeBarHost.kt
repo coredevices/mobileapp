@@ -32,9 +32,6 @@ import kotlin.uuid.Uuid
  * (mic permission, audio file capture, queueLocalAudioProcessing) so any
  * screen that needs the prototype's "Type or hold to record…" pill can
  * just drop this in and pass an [onTextSubmit].
- *
- * Lifted out of `FeedTabContents` so the new IndexFeed home + FullFeed
- * (and any future screen) reuses the same battle-tested mic path.
  */
 @Composable
 fun IndexComposeBarHost(

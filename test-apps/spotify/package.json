@@ -1,0 +1,486 @@
+{
+  "name": "spotify",
+  "author": "Pebble",
+  "version": "1.0.1",
+  "pebble": {
+    "displayName": "Spotify",
+    "uuid": "f7c51b03-6b8f-4ce8-9ce4-7a406dcf8ca7",
+    "sdkVersion": "3",
+    "configPage": "config.html",
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.spotify.com",
+            "accounts.spotify.com"
+          ]
+        }
+      }
+    ],
+    "plugin": {
+      "description": "Reads Spotify playback and controls Spotify Connect devices. Can resume or pause, skip, seek, change volume/shuffle/repeat, search Spotify, play tracks, albums, artists or playlists, queue a track, and transfer playback.",
+      "script": "plugin.js",
+      "sources": [
+        {
+          "category": "music",
+          "items": [
+            "track"
+          ],
+          "properties": {
+            "title": [
+              "shortText"
+            ],
+            "artist": [
+              "shortText"
+            ],
+            "album": [
+              "shortText"
+            ],
+            "playing": [
+              "boolean",
+              "shortText"
+            ],
+            "progress": [
+              "numericValue",
+              "shortText"
+            ],
+            "duration": [
+              "numericValue",
+              "shortText"
+            ],
+            "device": [
+              "shortText"
+            ],
+            "shuffle": [
+              "boolean",
+              "shortText"
+            ],
+            "repeat": [
+              "shortText"
+            ],
+            "url": [
+              "longText"
+            ]
+          },
+          "supportsMultiple": false,
+          "callerPermissions": [],
+          "suggestedRefreshIntervalSec": 15
+        },
+        {
+          "category": "music",
+          "items": [
+            "device"
+          ],
+          "properties": {
+            "name": [
+              "shortText"
+            ],
+            "type": [
+              "shortText"
+            ],
+            "active": [
+              "boolean",
+              "shortText"
+            ],
+            "restricted": [
+              "boolean",
+              "shortText"
+            ],
+            "volume": [
+              "numericValue",
+              "shortText"
+            ],
+            "supports_volume": [
+              "boolean"
+            ]
+          },
+          "supportsMultiple": true,
+          "callerPermissions": [],
+          "suggestedRefreshIntervalSec": 30
+        }
+      ],
+      "actions": [
+        {
+          "name": "set_playing",
+          "description": "Resume Spotify when on is true or pause it when false, on the explicitly supplied device or the device selected in Spotify plugin settings.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "on": {
+                "type": "boolean",
+                "description": "True to resume, false to pause."
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional Spotify Connect device ID. Plugin settings provide the default."
+              }
+            },
+            "required": [
+              "on"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track/playing"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "play",
+          "description": "Resume Spotify, or find and play one track, album, artist, or playlist. Prefer an exact Spotify URI/URL when the user supplied one; otherwise provide query and type. The configured Spotify Connect device is used unless device_id is supplied.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name or Spotify search query. Omit to resume current playback."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "track",
+                  "album",
+                  "artist",
+                  "playlist"
+                ],
+                "description": "Content type; defaults to track for a text query."
+              },
+              "uri": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Exact spotify: URI or open.spotify.com URL; preferred over query."
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "position_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Optional starting position for a track."
+              }
+            },
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "play_playlist",
+          "description": "Play a Spotify playlist by name, Spotify URI, or open.spotify.com URL on the configured device.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "playlist": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Playlist name, spotify:playlist URI, or Spotify URL."
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "playlist"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "pause",
+          "description": "Pause Spotify on the explicitly supplied or configured device.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track/playing"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "next_track",
+          "description": "Skip to the next Spotify track.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "previous_track",
+          "description": "Return to the previous Spotify track.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "seek",
+          "description": "Seek within the current Spotify track to an absolute position in milliseconds.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "position_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "position_ms"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track/progress"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "set_volume",
+          "description": "Set Spotify playback volume from 0 to 100 percent on the explicitly supplied or configured device.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "volume_percent": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "volume_percent"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/device/volume"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "set_shuffle",
+          "description": "Enable or disable shuffle for Spotify playback.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track/shuffle"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "set_repeat",
+          "description": "Set Spotify repeat mode to off, context, or track.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "context",
+                  "track"
+                ]
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track/repeat"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "search",
+          "description": "Search Spotify for tracks, albums, artists, or playlists and return the best matches with names and Spotify URIs. This does not start playback.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "track",
+                  "album",
+                  "artist",
+                  "playlist"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "query",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "add_to_queue",
+          "description": "Find a track by name or use an exact Spotify track URI/URL, then add it to the end of the Spotify queue.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "device_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "query"
+                ]
+              },
+              {
+                "required": [
+                  "uri"
+                ]
+              }
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/track"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        },
+        {
+          "name": "transfer_playback",
+          "description": "Transfer Spotify playback to a Spotify Connect device. Supply its exact ID or case-insensitive name from music/device.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "device": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Spotify device ID or device name."
+              },
+              "play": {
+                "type": "boolean",
+                "description": "Whether playback should start after transfer."
+              }
+            },
+            "required": [
+              "device"
+            ],
+            "additionalProperties": false
+          },
+          "targets": [
+            "music/device"
+          ],
+          "destructive": false,
+          "requiresConfirmation": false,
+          "callerPermissions": []
+        }
+      ],
+      "oauth": {
+        "spotify": {}
+      }
+    }
+  }
+}

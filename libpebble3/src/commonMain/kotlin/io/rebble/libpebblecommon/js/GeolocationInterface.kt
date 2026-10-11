@@ -2,8 +2,9 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.http.quote
-import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
-import io.rebble.libpebblecommon.database.entity.LockerAppPermissionType
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -18,10 +19,11 @@ import kotlin.uuid.Uuid
 
 abstract class GeolocationInterface(
     private val scope: CoroutineScope,
-    private val jsRunner: JsRunner,
+    private val eval: suspend (String) -> Unit,
+    private val appUuid: Uuid,
 ): LibPebbleKoinComponent {
     private val logger = Logger.withTag("GeolocationInterface")
-    private val permissionDao: LockerAppPermissionDao by inject()
+    private val permissions: AppPermissions by inject()
     private val systemGeolocation: SystemGeolocation by inject()
     private var requestIDs = (1..Int.MAX_VALUE).iterator()
     private var watchIDs = (1..Int.MAX_VALUE).iterator()
@@ -49,11 +51,11 @@ abstract class GeolocationInterface(
         when (result) {
             is GeolocationPositionResult.Success -> {
                 Logger.i { "Geolocation get position success" }
-                jsRunner.eval("_PebbleGeoCB._resultGetSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
+                eval("_PebbleGeoCB._resultGetSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
             }
             is GeolocationPositionResult.Error -> {
                 Logger.w { "Geolocation get position error: ${result.message}" }
-                jsRunner.eval("_PebbleGeoCB._resultGetError($id, ${result.message.quote()})")
+                eval("_PebbleGeoCB._resultGetError($id, ${result.message.quote()})")
             }
         }
     }
@@ -61,19 +63,17 @@ abstract class GeolocationInterface(
     private suspend fun triggerPositionResultWatch(id: Int, result: GeolocationPositionResult) {
         when (result) {
             is GeolocationPositionResult.Success -> {
-                jsRunner.eval("_PebbleGeoCB._resultWatchSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
+                eval("_PebbleGeoCB._resultWatchSuccess($id, ${result.latitude}, ${result.longitude}, ${result.accuracy}, ${result.altitude}, ${result.heading}, ${result.speed})")
             }
             is GeolocationPositionResult.Error -> {
-                jsRunner.eval("_PebbleGeoCB._resultWatchError($id, ${result.message.quote()})")
+                eval("_PebbleGeoCB._resultWatchError($id, ${result.message.quote()})")
             }
         }
     }
 
     private suspend fun geolocationPermissionGranted(): Boolean =
-        permissionDao.getByAppUuidAndPermission(
-            Uuid.parse(jsRunner.appInfo.uuid),
-            LockerAppPermissionType.Location
-        )?.granted != false //TODO: deny by default?
+        permissions.request(appUuid, PluginPermissions.LOCATION, wait = true) ==
+            PermissionDecision.Granted
 
     open fun getRequestCallbackID() = getNextRequestID()
     open fun getWatchCallbackID() = getNextWatchID()
@@ -118,5 +118,34 @@ abstract class GeolocationInterface(
     open fun clearWatch(id: Int) {
         logger.d { "clearWatch()" }
         watchJobs.remove(id)?.cancel("Watch cleared")
+    }
+
+    /** For engines that pass arguments as a list. */
+    fun dispatchCall(method: String, args: List<Any?>): Int? {
+        fun num(i: Int) = args.getOrNull(i) as? Number
+        return when (method) {
+            "getCurrentPosition" -> {
+                val id = num(0)?.toDouble() ?: return null
+                val maxAge = num(1)?.toDouble() ?: -1.0
+                val timeout = num(2)?.toDouble() ?: -1.0
+                val highAccuracy = num(3)?.toDouble() ?: 0.0
+                getCurrentPosition(id, maxAge, timeout, highAccuracy)
+            }
+            "watchPosition" -> {
+                val id = num(0)?.toDouble() ?: return null
+                val interval = num(1)?.toDouble() ?: 500.0
+                val highAccuracy = num(2)?.toDouble() ?: 0.0
+                watchPosition(id, interval, highAccuracy)
+            }
+            "clearWatch" -> { num(0)?.toInt()?.let { clearWatch(it) }; null }
+            "getRequestCallbackID" -> getRequestCallbackID()
+            "getWatchCallbackID" -> getWatchCallbackID()
+            else -> error("Unknown method: $method")
+        }
+    }
+
+    fun clearAllWatches() {
+        watchJobs.values.forEach { it.cancel() }
+        watchJobs.clear()
     }
 }

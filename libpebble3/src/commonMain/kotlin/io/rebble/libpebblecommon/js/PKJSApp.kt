@@ -178,11 +178,13 @@ class PKJSApp(
             return null
         }
         // Apps can declare "configurable" and never call Pebble.openURL(), so this must be bounded.
-        return withTimeoutOrNull(CONFIGURATION_URL_TIMEOUT) { url.await() } ?: run {
+        val received = withTimeoutOrNull(CONFIGURATION_URL_TIMEOUT) { url.await() }
+        if (received == null) {
             url.cancel()
             logger.e { "Timed out waiting for configuration URL" }
-            null
+            return null
         }
+        return if (jsRunner.mayOpen(received)) received else null
     }
 
     private fun injectJsRunner(scope: CoroutineScope): JsRunner =

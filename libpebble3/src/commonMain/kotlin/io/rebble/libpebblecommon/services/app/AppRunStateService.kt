@@ -21,6 +21,9 @@ class AppRunStateService(
     private val _runningApp = MutableStateFlow<Uuid?>(null)
     private val initialRunningApp = CompletableDeferred<Uuid?>()
     override val runningApp: StateFlow<Uuid?> = _runningApp
+    private val _previousApp = MutableStateFlow<Uuid?>(null)
+    override val previousApp: StateFlow<Uuid?> = _previousApp
+    private var lastStarted: Uuid? = null
 
     override suspend fun launchApp(uuid: Uuid) {
         protocolHandler.send(AppRunStateMessage.AppRunStateStart(uuid))
@@ -41,7 +44,11 @@ class AppRunStateService(
         protocolHandler.inboundMessages.onEach { packet ->
             when (packet) {
                 is AppRunStateMessage.AppRunStateStart -> {
-                    _runningApp.value = packet.uuid.get()
+                    val uuid = packet.uuid.get()
+                    // Switching apps may send a stop first, so compare with the last start, not runningApp.
+                    lastStarted?.takeIf { it != uuid }?.let { _previousApp.value = it }
+                    lastStarted = uuid
+                    _runningApp.value = uuid
                     if (!initialRunningApp.isCompleted) {
                         initialRunningApp.complete(packet.uuid.get())
                     }

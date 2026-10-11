@@ -43,13 +43,6 @@ iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, no
 - Project follows DRY principles; attempt to use shared code and split out to platform-specific when required or more performant. The `util` module can be used for potentially reusable generic utilities, even if it isn't reused now.
 - Changes should reuse existing code where possible and loosely follow clean coding principles, this is a big project which requires production-level maintainable code and good separation of concerns to stay manageable.
 - Write tests for new logic, and consider test coverage when modifying existing code. Try to stick to unit tests where possible.
-- Never use kotlin class `init()` blocks. These are invoked on class creation (happens during DI graph init and could block main thread/happen at an unexpected time). Use an explicit initialization method if needed, called from somewhere sensible.
-- We don't need every method documents with comments describing exactly what it does in detail. Just comment if something is interesting/not obvious.
-- More on comments: you write comments which are far too verbose - please don't. Don't write a comment against code unless it's really required for someone to understand the code. Specifically banned:
-  - "X, not Y" comments naming a rejected alternative — X is already in the code; nobody cares about Y.
-  - Ticket/issue references (MOB-1234) in comments — the commit message carries that.
-  - Comments defending why the change is correct — that's for the reviewer, and it's noise after merge.
-  - Default to no comment on a fix. If the code has a genuine landmine someone would reintroduce later, one line stating the constraint itself; the full story goes in the commit message.
 
 ## Code Guidelines
 
@@ -102,6 +95,26 @@ Non-trivial new logic (parsers, encoders, state machines) must have unit tests. 
 ### 9. Prefer simple architectures over clever ones
 
 When adding a new format/encoding, prefer keeping the local storage format unchanged and converting at the boundary (upload/download). Don't introduce MIME-type dispatch, dual playback paths, or multi-step file replacement schemes when you can encode on upload and decode on download.
+
+### 10. Prefer simple architectures over clever ones
+
+Never use kotlin class `init()` blocks. These are invoked on class creation (happens during DI graph init and could block main thread/happen at an unexpected time). Use an explicit initialization method if needed, called from somewhere sensible.
+
+### 11. Minimal comments
+
+We don't need every method documented with comments describing exactly what it does in detail. Just comment if something is interesting/not obvious.
+
+Comments should be concise. Specifically:
+    - No "X, not Y" comments naming a rejected alternative — X is already in the code; nobody cares about Y.
+    - No ticket/issue references (MOB-1234) in comments — the commit message carries that.
+    - No comments defending why the change is correct — that's for the reviewer, and it's noise after merge.
+    - Default to no comment on a fix. If the code has a genuine landmine someone would reintroduce later, one line stating the constraint itself; the full story goes in the commit message.
+    - Comments describing inner workings of a method easily become stale when the code changes; don't write them in the first place unless really needed.
+    - Keep any comments which *are* required minimal and concise.
+
+### 12. Imports
+
+Always use imports where possible, rather than fully-qualified references in the code. Don't ever use wildcard imports.
 
 ## Useful references
 

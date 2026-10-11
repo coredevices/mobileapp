@@ -29,6 +29,21 @@ interface LockerEntryRealDao : LockerEntryDao {
     fun getAllUuidsFlow(): Flow<List<Uuid>>
 
     @Query("""
+        SELECT * FROM LockerEntryEntity
+        WHERE deleted = 0 AND pluginManifest IS NOT NULL
+    """)
+    fun getPluginEntriesFlow(): Flow<List<LockerEntry>>
+
+    @Query("""
+        SELECT * FROM LockerEntryEntity
+        WHERE deleted = 0 AND pluginManifest IS NOT NULL
+        AND (:searchQuery IS NULL OR title LIKE '%' || :searchQuery || '%' OR developerName LIKE '%' || :searchQuery || '%')
+        ORDER BY orderIndex ASC, title ASC
+        LIMIT :limit
+    """)
+    fun getPluginEntriesFlow(searchQuery: String?, limit: Int): Flow<List<LockerEntry>>
+
+    @Query("""
         SELECT id FROM LockerEntryEntity
         WHERE deleted = 0
         AND type = :type
@@ -65,6 +80,11 @@ interface LockerEntryRealDao : LockerEntryDao {
         SELECT * FROM LockerEntryEntity WHERE deleted = 0
     """)
     suspend fun getAll(): List<LockerEntry>
+
+    @Query("""
+        SELECT * FROM LockerEntryEntity WHERE deleted = 0 AND id IN (:ids)
+    """)
+    fun getEntriesFlow(ids: List<Uuid>): Flow<List<LockerEntry>>
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
@@ -146,6 +166,7 @@ interface LockerEntryRealDao : LockerEntryDao {
         UPDATE LockerEntryEntity
         SET sync = CASE
             WHEN systemApp = 1 THEN 0
+            WHEN type = 'plugin' THEN 0
             WHEN orderIndex < :syncLimit THEN 1
             ELSE 0
         END

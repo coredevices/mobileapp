@@ -48,6 +48,9 @@ enum class WatchHardwarePlatform(val protocolNumber: UByte, private val _watchTy
     PEBBLE_ROBERT_BIGBOARD_2(247u, WatchType.EMERY, "robert_bb2"),
     CORE_OBELIX_BIGBOARD(244u, WatchType.EMERY, "obelix_bb"),
     CORE_OBELIX_BIGBOARD_2(243u, WatchType.EMERY, "obelix_bb2"),
+    CORE_QEMU_FLINT(246u, WatchType.FLINT, "qemu_flint"),
+    CORE_QEMU_EMERY(245u, WatchType.EMERY, "qemu_emery"),
+    CORE_QEMU_GABBRO(242u, WatchType.GABBRO, "qemu_gabbro"),
     ;
 
     val watchType: WatchType

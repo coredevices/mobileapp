@@ -7,6 +7,10 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.pebbleKit2Packages
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.permissions.pebbleKit2Key
 import io.rebble.pebblekit2.common.model.DataLogSession
 import io.rebble.pebblekit2.common.model.ReceiveResult
 import io.rebble.pebblekit2.common.model.WatchIdentifier
@@ -28,6 +32,7 @@ class PebbleKit2Datalogging(
     private val locker: Locker,
     private val lockerPBWCache: LockerPBWCache,
     private val coroutineScope: LibPebbleCoroutineScope,
+    private val permissions: AppPermissions,
 ) {
     private val delivery = DatalogDelivery(coroutineScope, ::senderFor)
 
@@ -69,7 +74,8 @@ class PebbleKit2Datalogging(
     private suspend fun companionPackagesFor(uuid: Uuid): List<String> = withContext(Dispatchers.IO) {
         val entry = locker.getApp(uuid) ?: return@withContext emptyList()
         val pbwPath = lockerPBWCache.getPBWFileForApp(entry.id, entry.version, locker)
-        PbwApp(pbwPath).info.companionApp?.android?.apps.orEmpty().mapNotNull { it.pkg }
+        PbwApp(pbwPath).info.pebbleKit2Packages()
+            .filter { permissions.request(uuid, pebbleKit2Key(it)) == PermissionDecision.Granted }
     }
 }
 

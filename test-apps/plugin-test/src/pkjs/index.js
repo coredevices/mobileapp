@@ -33,11 +33,16 @@ var TITLE_READING_NAME = 'reading_name';
 var CYCLE_PROPERTY = 'cycle_property';
 var CYCLE_INSTANCE = 'cycle_instance';
 var NO_ACTION = 'none';
+// The catalogue's pseudo-category for tiles that are just a button: an action taking no
+// arguments, with no reading behind it. Capitalised, so it can't be a real plugin's category.
+var ACTION_CATEGORY = 'Actions';
+// Tiles the watch fills itself, with no plugin behind them.
+var WATCH_CATEGORY = 'Clock';
 
 // What fills each quadrant until the user says otherwise: a category/item/property, and
 // optionally the title it wears (a property name, or `custom` with the text) and what a tap
 // does. Left out, the title is the thing's name and a tap invokes whichever action the plugin
-// binds to the reading.
+// binds to the reading. An entry with only an `action` is an action tile.
 var DEFAULTS = [
   { source: 'weather/location/temperature', action: CYCLE_INSTANCE },
   {
@@ -48,7 +53,7 @@ var DEFAULTS = [
   { source: 'music/track/artwork', title: { mode: 'title' }, action: 'set_playing' },
   { source: 'calendar/event/name', title: { mode: 'starts_at' } },
   { source: 'notifications/notification/app_icon', action: CYCLE_INSTANCE },
-  { source: 'home/room_lights/on' },
+  { action: 'launch_previous_app', title: { mode: 'custom', text: 'Back' } },
   { source: 'weather/location/temperature', title: { mode: 'reading_name' }, action: CYCLE_PROPERTY },
 ];
 
@@ -206,8 +211,84 @@ function catalogue() {
         });
       });
     });
+    plugin.actions.filter(takesNoArguments).forEach(function (action) {
+      entries.push({
+        value: plugin.uuid + '|' + ACTION_CATEGORY + '|' + action.name,
+        plugin: plugin.uuid,
+        pluginName: plugin.name,
+        category: ACTION_CATEGORY,
+        item: action.name,
+        properties: {},
+        multiple: false,
+      });
+    });
+  });
+  entries.push({
+    value: '|' + WATCH_CATEGORY + '|date',
+    plugin: '',
+    pluginName: 'Watch',
+    category: WATCH_CATEGORY,
+    item: 'date',
+    properties: {},
+    multiple: false,
   });
   return entries;
+}
+
+function takesNoArguments(action) {
+  return !((action.parameters && action.parameters.required) || []).length;
+}
+
+function isActionTile(entry) {
+  return entry.category === ACTION_CATEGORY;
+}
+
+/** The action an action tile fires, if its plugin still has it. */
+function tileAction(entry) {
+  var plugin = Pebble.enumeratePlugins().filter(function (candidate) {
+    return candidate.uuid === entry.plugin;
+  })[0];
+  return plugin && plugin.actions.filter(function (action) {
+    return action.name === entry.item && takesNoArguments(action);
+  })[0];
+}
+
+/** `launch_previous_app` -> "Launch previous app". */
+function actionLabel(name) {
+  var words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function renderWatchTile(index, entry) {
+  instances[index] = [];
+  properties[index] = [];
+  shapes[index] = [];
+  current[index] = null;
+  activeProperties[index] = '';
+  activeShapes[index] = '';
+  activeActions[index] = [];
+  previews[index] = {};
+  var config = titles()[index] || {};
+  show(index, ['d', config.mode === 'custom' ? config.text || '' : ''].join('|'));
+}
+
+function renderActionTile(index, entry) {
+  instances[index] = [];
+  properties[index] = [];
+  shapes[index] = [];
+  current[index] = null;
+  activeProperties[index] = '';
+  activeShapes[index] = '';
+  activeActions[index] = [];
+  previews[index] = {};
+  var action = tileAction(entry);
+  if (!action) {
+    show(index, text('', 'Not available'));
+    return;
+  }
+  var config = titles()[index] || {};
+  var title = config.mode === 'custom' && config.text ? config.text : sourceOf(entry).pluginName;
+  show(index, tag(text(title, actionLabel(action.name)), { action: action }));
 }
 
 // "<plugin>|<category>|<item>" from the catalogue, plus which instance to show — a weather
@@ -261,6 +342,12 @@ function chosen() {
 
   var entries = catalogue();
   return DEFAULTS.map(function (wanted) {
+    if (!wanted.source) {
+      var button = entries.filter(function (entry) {
+        return entry.category === ACTION_CATEGORY && entry.item === wanted.action;
+      })[0];
+      return button ? button.value : '';
+    }
     var parts = wanted.source.split('/');
     var match = entries.filter(function (entry) {
       return entry.category === parts[0] && entry.item === parts[1];
@@ -441,6 +528,11 @@ function actionsFor(entry, property) {
 
 /** What a tap on this quadrant does: fire an action, cycle what it shows, or nothing. */
 function tapFor(entry, property) {
+  if (entry.category === WATCH_CATEGORY) return null;
+  if (isActionTile(entry)) {
+    var action = tileAction(entry);
+    return action ? { action: action } : null;
+  }
   if (entry.action === NO_ACTION) return null;
   if (entry.action === CYCLE_PROPERTY || entry.action === CYCLE_INSTANCE) {
     return { cycle: entry.action };
@@ -577,6 +669,14 @@ function subscribeAll() {
       show(index, text('', 'Not set'));
       return;
     }
+    if (isActionTile(entry)) {
+      renderActionTile(index, entry);
+      return;
+    }
+    if (entry.category === WATCH_CATEGORY) {
+      renderWatchTile(index, entry);
+      return;
+    }
     var declared = sourceOf(entry) || { properties: {} };
     properties[index] = Object.keys(declared.properties);
     activeProperties[index] = entry.property || defaultProperty(properties[index]);
@@ -647,292 +747,6 @@ function refresh(index) {
   render(index, entry, envelope);
 }
 
-// ---------------------------------------------------------------- settings page
-
-function configPage() {
-  return '<!doctype html><html><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>Plugin Demo: Dashboard</title>' +
-    '<style>' +
-    ':root{color-scheme:light dark}' +
-    'body{font:16px system-ui,-apple-system,sans-serif;margin:0;padding:20px}' +
-    // Each quadrant is introduced by its own name and a map of where it is on the watch.
-    '.head{display:flex;align-items:center;gap:10px;margin:28px 0 8px;' +
-    'padding-top:16px;border-top:1px solid rgba(128,128,128,.25)}' +
-    '.head h2{font-size:19px;margin:0;font-weight:600}' +
-    '.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;' +
-    'width:24px;height:24px;flex:0 0 auto}' +
-    '.grid i{background:rgba(128,128,128,.55);border-radius:2px}' +
-    '.grid i.on{background:#ff6b00}' +
-    'select{width:100%;padding:10px;font-size:16px;border-radius:8px;' +
-    'border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit}' +
-    '.value{margin-top:6px;padding:8px 10px;border-radius:8px;font-size:14px;' +
-    'background:rgba(128,128,128,.15);white-space:pre-line;min-height:18px}' +
-    '.hint{font-size:13px;opacity:.7;margin:0}' +
-    // Everything below the thing itself is a labelled row: which reading, in which shape, under
-    // which title, and what a tap does.
-    '.row{display:flex;align-items:center;gap:8px;margin-top:8px}' +
-    '.row span{font-size:12px;opacity:.6;text-transform:uppercase;' +
-    'letter-spacing:.05em;flex:0 0 auto;width:64px}' +
-    'select.small{font-size:13px;padding:6px 8px;flex:1;width:auto}' +
-    'input[type=text]{width:100%;box-sizing:border-box;padding:10px;font-size:16px;' +
-    'margin-top:6px;border-radius:8px;border:1px solid rgba(128,128,128,.5);' +
-    'background:transparent;color:inherit}' +
-    // The pages the watch flips between with UP and DOWN, as tabs.
-    '.tabs{display:flex;gap:8px;margin:18px 0 4px}' +
-    '.tabs button{flex:1;padding:10px;font-size:15px;font-weight:600;border-radius:8px;' +
-    'border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit}' +
-    '.tabs button.on{background:#ff6b00;border-color:#ff6b00;color:#fff}' +
-    'button.danger{width:100%;margin:28px 0 8px;padding:12px;font-size:15px;' +
-    'border-radius:8px;border:1px solid rgba(200,60,60,.6);background:transparent;color:#c83c3c}' +
-    '</style></head><body>' +
-    '<h1>Plugin Demo: Dashboard</h1><p id="status">Waiting for the app…</p>' +
-    '<div class="row"><span>Theme</span>' +
-    '<select id="theme" class="small"><option value="light">Light</option>' +
-    '<option value="dark">Dark</option></select></div>' +
-    '<p class="hint">Put this app on a quick-launch button in the watch\'s settings and that ' +
-    'button pages forward while the other one backs out, as the timeline does — only when it ' +
-    'was opened that way.</p>' +
-    '<div class="tabs" id="tabs"></div>' +
-    '<div id="fields"></div>' +
-    '<button id="reset" class="danger">Reset to defaults</button>' +
-    '<script>' +
-    'var corners=["Top left","Top right","Bottom left","Bottom right"];' +
-    'var PAGES=' + PAGES + ';' +
-    'var pickers=[];var propertyPickers=[];var shapePickers=[];' +
-    'var titlePickers=[];var titleTexts=[];var actionPickers=[];' +
-    'var rows={property:[],shape:[],action:[]};' +
-    'var boxes=[];var chosen=[];var titles=[];var previews=[];var items=[];' +
-    'var options=[];var propertyLists=[];var instanceLists=[];' +
-    'var sections=[];var shown=0;' +
-    // Things that declare supportsMultiple keep their picker even while they only return one,
-    // so "which one" stays visible for a plugin the user is still setting up.
-    'var multi=[];' +
-    // Relabelled in place as values change, so a dropdown never rebuilds under the user.
-    'function syncOptions(picker,entries,selected){' +
-    'var values=entries.map(function(e){return e.value;}).join("|");' +
-    'if(picker.dataset.values!==values){' +
-    'picker.dataset.values=values;picker.innerHTML="";' +
-    'entries.forEach(function(entry){' +
-    'var element=document.createElement("option");element.value=entry.value;' +
-    'element.textContent=entry.label;picker.appendChild(element);});}' +
-    // What is selected follows the app, not the last time the list was rebuilt: the watch can
-    // move a quadrant on by itself, and a fresh pick lands before the reading it settles on.
-    'entries.forEach(function(entry,position){' +
-    'var option=picker.children[position];if(!option)return;' +
-    'option.textContent=entry.label;option.selected=entry.value===selected;});}' +
-    'function labelled(name,preview){return preview?name+": "+preview:name;}' +
-    'function labelledRow(caption,picker){' +
-    'var row=document.createElement("div");row.className="row";' +
-    'var span=document.createElement("span");span.textContent=caption;' +
-    'picker.className="small";' +
-    'row.appendChild(span);row.appendChild(picker);return row;}' +
-    'function entryFor(catalogue,value){' +
-    'return catalogue.filter(function(option){return option.value===value;})[0];}' +
-    // `name` is the instance label rather than the reading the tile is for.
-    'function firstProperty(entry){' +
-    'var names=Object.keys((entry&&entry.properties)||{});' +
-    'return names.filter(function(name){return name!=="name";})[0]||names[0]||"";}' +
-    // A thing there can be several of - weather locations, Hue rooms - gets a second dropdown.
-    // A single-instance thing doesn't, so the common case stays one choice.
-    'function fillInstances(index,list){' +
-    'instanceLists[index]=list||[];' +
-    'var picker=pickers[index];if(!picker)return;' +
-    'if(!list||!list.length||(list.length<2&&!multi[index])){' +
-    'picker.style.display="none";return;}' +
-    'picker.style.display="block";' +
-    'var current=String(parseInt((chosen[index]||"").split("|")[3],10)||0);' +
-    'syncOptions(picker,list.map(function(label,position){' +
-    'return {value:String(position),label:(position+1)+". "+label};}),current);}' +
-    // Which reading of the thing the tile shows, labelled with what each one currently says.
-    'function fillProperties(index,list,active){' +
-    'propertyLists[index]=list||[];' +
-    'var picker=propertyPickers[index];if(!picker)return;' +
-    'var current=(chosen[index]||"").split("|")[4]||active||"";' +
-    'if(current)items[index]=current;' +
-    'if(!list||list.length<2){rows.property[index].style.display="none";return;}' +
-    'rows.property[index].style.display="flex";' +
-    'var preview=(previews[index]||{}).property||{};' +
-    'syncOptions(picker,list.map(function(property){' +
-    'return {value:property,label:labelled(property,preview[property])};}),current);}' +
-    // Same idea for shapes: a reading usually offers several renderings of itself.
-    'function fillShapes(index,list,active){' +
-    'var picker=shapePickers[index];if(!picker)return;' +
-    'if(!list||list.length<2){rows.shape[index].style.display="none";return;}' +
-    'rows.shape[index].style.display="flex";' +
-    'var preview=(previews[index]||{}).shape||{};' +
-    // The stored choice, or whichever one the app defaulted to and is actually drawing.
-    'var current=(chosen[index]||"").split("|")[5]||active||"";' +
-    'syncOptions(picker,list.map(function(shape){' +
-    'return {value:shape,label:labelled(shape,preview[shape])};}),current);}' +
-    // What a tap does: fire one of the actions bound to this reading, or move the tile on to
-    // the next reading or the next instance.
-    'function fillActions(index,names){' +
-    'var picker=actionPickers[index];if(!picker)return;' +
-    'var entries=[{value:"none",label:"No action"}];' +
-    '(names||[]).forEach(function(name){entries.push({value:name,label:name});});' +
-    'if((propertyLists[index]||[]).length>1)' +
-    'entries.push({value:"cycle_property",label:"Cycle property"});' +
-    'if((instanceLists[index]||[]).length>1)' +
-    'entries.push({value:"cycle_instance",label:"Cycle instance"});' +
-    'rows.action[index].style.display=entries.length>1?"flex":"none";' +
-    'var stored=(chosen[index]||"").split("|")[6]||"";' +
-    'syncOptions(picker,entries,stored||(names||[])[0]||"none");}' +
-    // Which reading heads the tile, per quadrant. `custom` reveals a field, prefilled with the
-    // property name.
-    'function fillTitle(index,item){' +
-    'var picker=titlePickers[index];var field=titleTexts[index];' +
-    'var config=titles[index]||{};' +
-    'var preview=(previews[index]||{}).property||{};' +
-    'var list=propertyLists[index]||[];' +
-    'var mode=config.mode||(list.indexOf("name")!==-1?"name":"none");' +
-    'var entries=[{value:"none",label:"No title"}].concat(list.map(function(property){' +
-    'return {value:property,label:labelled(property,preview[property])};}));' +
-    'entries.push({value:"reading_name",label:labelled("reading name",item)});' +
-    'entries.push({value:"custom",label:"custom"});' +
-    'syncOptions(picker,entries,mode);' +
-    'if(field.value!==(config.text||""))field.value=config.text||"";' +
-    'field.placeholder=item;' +
-    'field.style.display=mode==="custom"?"block":"none";}' +
-    'function sendTitle(index,item){' +
-    'var mode=titlePickers[index].value;' +
-    'var field=titleTexts[index];' +
-    'if(mode==="custom"&&!field.value)field.value=item;' +
-    'field.style.display=mode==="custom"?"block":"none";' +
-    'titles[index]={mode:mode,text:field.value};' +
-    'Pebble.sendMessage("pkjs",{type:"setTitle",index:index,mode:mode,text:field.value});}' +
-    'function showPage(page){' +
-    'shown=page;' +
-    'sections.forEach(function(section,index){' +
-    'section.style.display=Math.floor(index/corners.length)===page?"block":"none";});' +
-    'Array.prototype.forEach.call(document.getElementById("tabs").children,' +
-    'function(tab,index){tab.className=index===page?"on":"";});}' +
-    'function buildTabs(){' +
-    'var tabs=document.getElementById("tabs");tabs.innerHTML="";' +
-    'if(PAGES<2)return;' +
-    'for(var page=0;page<PAGES;page++)(function(page){' +
-    'var tab=document.createElement("button");tab.textContent="Page "+(page+1);' +
-    'tab.onclick=function(){showPage(page);};' +
-    'tabs.appendChild(tab);})(page);}' +
-    'function build(catalogue,current){' +
-    'options=catalogue;chosen=current.slice();sections=[];' +
-    'var fields=document.getElementById("fields");fields.innerHTML="";' +
-    'for(var index=0;index<corners.length*PAGES;index++)(function(index){' +
-    'var corner=corners[index%corners.length];' +
-    'var head=document.createElement("div");head.className="head";' +
-    'var grid=document.createElement("div");grid.className="grid";' +
-    'for(var cell=0;cell<4;cell++){' +
-    'var box=document.createElement("i");' +
-    'if(cell===index%corners.length)box.className="on";' +
-    'grid.appendChild(box);}' +
-    'var heading=document.createElement("h2");' +
-    'heading.textContent=PAGES>1?corner+" · page "+(Math.floor(index/corners.length)+1):corner;' +
-    'head.appendChild(grid);head.appendChild(heading);' +
-    'var select=document.createElement("select");' +
-    'var itemSelect=document.createElement("select");' +
-    'var source=(chosen[index]||"").split("|").slice(0,3).join("|");' +
-    'var chosenEntry=entryFor(catalogue,source);' +
-    'multi[index]=!!(chosenEntry&&chosenEntry.multiple);' +
-    'function fillCategories(){' +
-    'var seen={};var entries=[{value:"",label:"Nothing"}];' +
-    'catalogue.forEach(function(option){' +
-    'if(seen[option.category])return;seen[option.category]=true;' +
-    'entries.push({value:option.category,label:option.category});});' +
-    'syncOptions(select,entries,chosenEntry?chosenEntry.category:"");}' +
-    'function fillItems(category){' +
-    'var inCategory=catalogue.filter(function(option){' +
-    'return option.category===category;});' +
-    'itemSelect.style.display=inCategory.length?"block":"none";' +
-    'if(!inCategory.length)return;' +
-    'syncOptions(itemSelect,inCategory.map(function(option){' +
-    'return {value:option.value,' +
-    'label:option.pluginName+": "+option.item};}),source);}' +
-    'function pick(value){' +
-    'chosen[index]=value;source=value;' +
-    'chosenEntry=entryFor(catalogue,value);' +
-    'multi[index]=!!(chosenEntry&&chosenEntry.multiple);' +
-    'items[index]=firstProperty(chosenEntry);' +
-    // Applied the moment it changes: the watch repaints while this page is still open.
-    'Pebble.sendMessage("pkjs",{type:"setQuadrant",index:index,value:value});}' +
-    'select.onchange=function(){' +
-    'var first=catalogue.filter(function(option){' +
-    'return option.category===select.value;})[0];' +
-    'pick(first?first.value:"");fillItems(select.value);' +
-    'if(first)itemSelect.value=first.value;};' +
-    'itemSelect.onchange=function(){pick(itemSelect.value);};' +
-    'fillCategories();fillItems(chosenEntry?chosenEntry.category:"");' +
-    'var picker=document.createElement("select");picker.style.display="none";' +
-    'picker.onchange=function(){' +
-    'Pebble.sendMessage("pkjs",{type:"setInstance",index:index,' +
-    'instanceIndex:parseInt(picker.value,10)});};' +
-    'var propertyPicker=document.createElement("select");' +
-    'propertyPicker.onchange=function(){' +
-    'items[index]=propertyPicker.value;' +
-    'Pebble.sendMessage("pkjs",{type:"setProperty",index:index,' +
-    'property:propertyPicker.value});};' +
-    'var shapePicker=document.createElement("select");' +
-    'shapePicker.onchange=function(){' +
-    'Pebble.sendMessage("pkjs",{type:"setShape",index:index,shape:shapePicker.value});};' +
-    'var titlePicker=document.createElement("select");' +
-    'var titleText=document.createElement("input");titleText.type="text";' +
-    'titleText.style.display="none";' +
-    'var actionPicker=document.createElement("select");' +
-    'actionPicker.onchange=function(){' +
-    'Pebble.sendMessage("pkjs",{type:"setAction",index:index,action:actionPicker.value});};' +
-    'var item=((chosen[index]||"").split("|")[4])||firstProperty(chosenEntry);' +
-    'items[index]=item;' +
-    'titlePicker.onchange=function(){sendTitle(index,items[index]);};' +
-    'titleText.onchange=function(){sendTitle(index,items[index]);};' +
-    'var propertyRow=labelledRow("Reading",propertyPicker);' +
-    'var shapeRow=labelledRow("Shape",shapePicker);' +
-    'var titleRow=labelledRow("Title",titlePicker);' +
-    'var actionRow=labelledRow("Tap",actionPicker);' +
-    'rows.property[index]=propertyRow;rows.shape[index]=shapeRow;' +
-    'rows.action[index]=actionRow;' +
-    'var box=document.createElement("div");box.className="value";' +
-    'var quad=document.createElement("div");' +
-    'quad.appendChild(head);quad.appendChild(select);quad.appendChild(itemSelect);' +
-    'quad.appendChild(picker);quad.appendChild(propertyRow);quad.appendChild(shapeRow);' +
-    'quad.appendChild(titleRow);quad.appendChild(titleText);' +
-    'quad.appendChild(actionRow);quad.appendChild(box);' +
-    'fields.appendChild(quad);sections[index]=quad;' +
-    'pickers[index]=picker;propertyPickers[index]=propertyPicker;' +
-    'shapePickers[index]=shapePicker;actionPickers[index]=actionPicker;' +
-    'titlePickers[index]=titlePicker;titleTexts[index]=titleText;' +
-    'boxes[index]=box;fillTitle(index,item);})(index);' +
-    'buildTabs();showPage(shown);}' +
-    'function update(data){' +
-    'previews=data.previews||previews;' +
-    // The watch can move a quadrant on by itself, so its choices come back with every update.
-    'if(data.chosen)chosen=data.chosen.slice();' +
-    '(data.values||[]).forEach(function(value,index){' +
-    'if(boxes[index])boxes[index].textContent=value;});' +
-    '(data.instances||[]).forEach(function(list,index){fillInstances(index,list);});' +
-    '(data.properties||[]).forEach(function(list,index){' +
-    'fillProperties(index,list,(data.activeProperties||[])[index]);});' +
-    '(data.shapes||[]).forEach(function(list,index){' +
-    'fillShapes(index,list,(data.activeShapes||[])[index]);});' +
-    '(data.actions||[]).forEach(function(names,index){fillActions(index,names);});' +
-    'items.forEach(function(item,index){' +
-    'if(titlePickers[index])fillTitle(index,item);});}' +
-    'var themePicker=document.getElementById("theme");' +
-    'themePicker.onchange=function(){' +
-    'Pebble.sendMessage("pkjs",{type:"setTheme",theme:themePicker.value});};' +
-    'document.getElementById("reset").onclick=function(){' +
-    'Pebble.sendMessage("pkjs",{type:"reset"}).then(function(reply){' +
-    'titles=reply.titles||[];build(reply.catalogue,reply.chosen);update(reply);});};' +
-    'Pebble.addEventListener("message",function(event){' +
-    'if(event.data&&event.data.type==="values")update(event.data);});' +
-    'Pebble.addEventListener("ready",function(event){' +
-    'if(event.target!=="pkjs")return;' +
-    'document.getElementById("status").textContent="Live — changes apply straight away.";' +
-    'Pebble.sendMessage("pkjs",{type:"catalogue"}).then(function(reply){' +
-    'titles=reply.titles||[];themePicker.value=reply.theme||"light";' +
-    'build(reply.catalogue,reply.chosen);' +
-    'update(reply);});});' +
-    '</script></body></html>';
-}
-
 // ---------------------------------------------------------------- lifecycle
 
 Pebble.addEventListener('ready', function () {
@@ -969,6 +783,10 @@ Pebble.addEventListener('appmessage', function (e) {
     cycle(index, entry, tap.cycle);
     return;
   }
+  if (isActionTile(entry)) {
+    invoke(entry, tap.action, {});
+    return;
+  }
   var instance = instanceAt(instances[index], entry.instanceIndex);
   if (!instance) return;
   var action = tap.action;
@@ -977,6 +795,10 @@ Pebble.addEventListener('appmessage', function (e) {
   var args = actionArgs(action, entry, instance.id, live && live.properties,
                         activeProperties[index]);
   log('tap on quadrant ' + index + ': ' + action.name + ' ' + JSON.stringify(args));
+  invoke(entry, action, args);
+});
+
+function invoke(entry, action, args) {
   Pebble.invokeAction({
     plugin: entry.plugin,
     action: action.name,
@@ -984,11 +806,7 @@ Pebble.addEventListener('appmessage', function (e) {
   }).then(function (result) {
     log(action.name + (result.ok ? ' ok: ' + result.text : ' failed: ' + result.code));
   });
-});
-
-Pebble.addEventListener('showConfiguration', function () {
-  Pebble.openURL('data:text/html;charset=utf-8,' + encodeURIComponent(configPage()));
-});
+}
 
 Pebble.addEventListener('configmessage', function (e) {
   var message = e.data || {};

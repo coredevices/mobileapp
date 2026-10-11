@@ -28,6 +28,9 @@ import coredevices.util.integrations.IosOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadManager
+import coredevices.util.sync.IosSyncScheduler
+import coredevices.util.sync.SyncManager
+import coredevices.util.sync.SyncScheduler
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.Darwin
 import io.rebble.libpebblecommon.connection.AppContext
@@ -59,6 +62,7 @@ val iosDefaultModule = module {
     singleOf(::IosPermissionRequester) bind PermissionRequester::class
     singleOf(::IosCompanionDevice) bind CompanionDevice::class
     singleOf(::IosAppUpdate) bind AppUpdate::class
+    single { IosSyncScheduler(lazy { get<SyncManager>() }, get()) } bind SyncScheduler::class
     single {
         val version = platform.Foundation.NSBundle.mainBundle.infoDictionary?.get("CFBundleShortVersionString") as? String ?: "unknown"
         val build = (platform.Foundation.NSBundle.mainBundle.infoDictionary?.get("CFBundleVersion") as? String)?.toInt() ?: 0

@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,8 @@ import platform.JavaScriptCore.JSGlobalContextRef
 import platform.JavaScriptCore.JSValue
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.NetworkGate
 import kotlin.uuid.Uuid
 
 class JavascriptCoreJsRunner(
@@ -55,9 +58,12 @@ class JavascriptCoreJsRunner(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val pluginRegistry: PluginRegistry,
     private val httpClient: HttpClient,
+    private val permissions: AppPermissions,
+    private val runningApps: RunningApps,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
+    override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val interfaces = mutableMapOf<String, JsEngineInterface>()
     private var dispatcherRef: StableRef<*>? = null
     private var navigatorRef: StableRef<JSValue>? = null
@@ -85,11 +91,12 @@ class JavascriptCoreJsRunner(
                 httpInterceptorManager = httpInterceptorManager,
                 appUuid = Uuid.parse(appInfo.uuid),
                 client = httpClient,
+                networkAccess = networkAccess,
             ),
             JSTimeout(interfacesScope, evalRawFn),
-            WebSocketManager(interfacesScope, evalFn),
+            WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
@@ -186,8 +193,8 @@ class JavascriptCoreJsRunner(
     private fun evaluateStandardLib() {
         runBlocking(threadContext) { jsContext?.evalCatching(BASE64_JS) }
         runBlocking(threadContext) { jsContext?.evalCatching(XML_HTTP_REQUEST_JS) }
+        runBlocking(threadContext) { jsContext?.evalCatching(WEBSOCKET_JS) }
         evaluateInternalScript("JSTimeout")
-        evaluateInternalScript("WebSocket")
     }
 
     private fun setupNavigator() {

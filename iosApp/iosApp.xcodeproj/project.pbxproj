@@ -15,9 +15,7 @@
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
-		677B8EF52DBFE88C0060DBE1 /* plugins in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBE2 /* plugins */; };
 		677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBE4 /* bundled-apps */; };
-		67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */ = {isa = PBXBuildFile; fileRef = 67A3BC012F0A123400ABCDEF /* WebSocket.js */; };
 		67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */; };
 		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
@@ -37,9 +35,7 @@
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		677B8EF52DBFE88C0060DBD6 /* startup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = startup.js; path = ../libpebble3/src/androidMain/assets/startup.js; sourceTree = SOURCE_ROOT; };
-		677B8EF52DBFE88C0060DBE2 /* plugins */ = {isa = PBXFileReference; lastKnownFileType = folder; name = plugins; path = ../libpebble3/src/androidMain/assets/plugins; sourceTree = SOURCE_ROOT; };
 		677B8EF52DBFE88C0060DBE4 /* bundled-apps */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bundled-apps"; path = "bundled-apps"; sourceTree = SOURCE_ROOT; };
-		67A3BC012F0A123400ABCDEF /* WebSocket.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = WebSocket.js; path = ../libpebble3/src/iosMain/kotlin/io/rebble/libpebblecommon/js/WebSocket.js; sourceTree = SOURCE_ROOT; };
 		67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		67EA51BF2EF988F7003958BE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		67F184432D7F650200F47423 /* HaversineSatelliteLibrary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = HaversineSatelliteLibrary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -133,9 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				67555A952E0212D1006BB488 /* JSTimeout.js */,
-				67A3BC012F0A123400ABCDEF /* WebSocket.js */,
 				677B8EF52DBFE88C0060DBD6 /* startup.js */,
-				677B8EF52DBFE88C0060DBE2 /* plugins */,
 				677B8EF52DBFE88C0060DBE4 /* bundled-apps */,
 				67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */,
 				058557BA273AAA24004C7B11 /* Assets.xcassets */,
@@ -226,9 +220,7 @@
 				671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */,
 				67555A962E0212D1006BB488 /* JSTimeout.js in Resources */,
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
-				677B8EF52DBFE88C0060DBE1 /* plugins in Resources */,
 				677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */,
-				67A3BC022F0A123400ABCDEF /* WebSocket.js in Resources */,
 				058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */,
 				058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */,
 			);

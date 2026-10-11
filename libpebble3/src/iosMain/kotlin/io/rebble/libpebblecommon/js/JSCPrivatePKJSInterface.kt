@@ -2,6 +2,8 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -20,7 +22,9 @@ class JSCPrivatePKJSInterface(
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
     pluginRegistry: PluginRegistry,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry), RegisterableJsInterface {
+    permissions: AppPermissions,
+    runningApps: RunningApps,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(

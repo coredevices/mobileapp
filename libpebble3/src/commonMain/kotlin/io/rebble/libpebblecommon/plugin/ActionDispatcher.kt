@@ -2,6 +2,9 @@ package io.rebble.libpebblecommon.plugin
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.js.JsRunner
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.invokeActionKey
+import io.rebble.libpebblecommon.permissions.refusalMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -10,6 +13,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlin.uuid.Uuid
 
 /**
  * Per-PKJS-session dispatcher for `Pebble.invokeAction`. One-shot rather than flow-based:
@@ -20,6 +24,7 @@ class ActionDispatcher(
     private val registry: PluginRegistry,
     private val jsRunner: JsRunner,
     private val scope: CoroutineScope,
+    private val permissions: AppPermissions,
 ) {
     private val logger = Logger.withTag("ActionDispatcher")
 
@@ -36,7 +41,15 @@ class ActionDispatcher(
             }
             return
         }
-        scope.launch { respond(callId, run(request)) }
+        scope.launch {
+            val result = run(request)
+            // Args can carry user data, so only their names.
+            logger.i {
+                "${jsRunner.appInfo.shortName} (${jsRunner.appInfo.uuid}) invoked ${request.plugin}/${request.action}" +
+                    " with ${request.args?.keys.orEmpty()}: ${if (result.ok) "ok" else "${result.code} ${result.message}"}"
+            }
+            respond(callId, result)
+        }
     }
 
     private suspend fun run(request: InvokeRequest): ActionResult {
@@ -50,12 +63,18 @@ class ActionDispatcher(
                 PluginErrors.PLUGIN_UNAVAILABLE,
                 "${plugin.name} has no action ${request.action}",
             )
-        val ungranted =
-            requiredOfCaller(declaration) - grantedToCaller(jsRunner.appInfo.usesPermissions)
-        if (ungranted.isNotEmpty()) {
+        val subject = permissions.subjectOf(Uuid.parse(jsRunner.appInfo.uuid))
+            ?: return ActionResult.error(PluginErrors.PERMISSION_DENIED, "${jsRunner.appInfo.shortName} isn't installed")
+        val required = requiredOfCaller(declaration).toMutableSet()
+        // The args can carry the caller's data, which the plugin could send off the phone.
+        if (plugin.pluginUuid != subject.appUuid && permissions.canExfiltrate(plugin.pluginUuid)) {
+            required += invokeActionKey(plugin.pluginUuid)
+        }
+        val refused = permissions.requestAll(subject, required, wait = true)
+        if (refused.isNotEmpty()) {
             return ActionResult.error(
                 PluginErrors.PERMISSION_DENIED,
-                "${jsRunner.appInfo.shortName} did not ask for ${ungranted.sorted().joinToString()}",
+                refusalMessage(jsRunner.appInfo.shortName, refused),
             )
         }
         val args = request.args ?: JsonObject(emptyMap())

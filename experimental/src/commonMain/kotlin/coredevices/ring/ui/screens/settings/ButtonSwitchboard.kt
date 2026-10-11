@@ -18,18 +18,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Webhook
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,7 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureKind
@@ -84,38 +83,39 @@ val RingGesture.glyph: List<Dp>
         RingGesture.ClickHold -> listOf(DOT, 26.dp)
     }
 
-fun destinationsFor(kind: GestureKind, hasSandboxGroups: Boolean): List<GestureDestination> = when (kind) {
+fun destinationsFor(kind: GestureKind): List<GestureDestination> = when (kind) {
     GestureKind.Music -> listOf(
         GestureDestination.PlayPause,
         GestureDestination.NextTrack,
         GestureDestination.Nothing,
     )
-    GestureKind.Recording -> buildList {
-        add(GestureDestination.IndexAgent)
-        add(GestureDestination.WebSearch)
-        add(GestureDestination.WebhookOnly)
-        if (hasSandboxGroups) add(GestureDestination.McpSandbox(null))
-        add(GestureDestination.Nothing)
-    }
+    GestureKind.Recording -> listOf(
+        GestureDestination.IndexAgent,
+        GestureDestination.RemoteAgent,
+        GestureDestination.LocalAgent,
+        GestureDestination.WebSearch,
+        GestureDestination.WebhookOnly,
+        GestureDestination.Nothing,
+    )
 }
 
-/** True while the sheet still shows something to configure below the choice — the sandbox
- *  group list, or the webhook row. Otherwise picking a destination is the whole interaction
- *  and the sheet closes itself. Mirrors what [GestureDestinationSheet] renders. */
+/** True while the sheet still shows something to configure below the choice — the webhook row.
+ *  Otherwise picking a destination is the whole interaction and the sheet closes itself.
+ *  Mirrors what [GestureDestinationSheet] renders. */
 internal fun gestureSheetStaysOpenFor(
     gesture: RingGesture,
     destination: GestureDestination,
-): Boolean = destination is GestureDestination.McpSandbox ||
-    (gesture.kind == GestureKind.Recording && destination != GestureDestination.Nothing)
+): Boolean = gesture.kind == GestureKind.Recording && destination != GestureDestination.Nothing
 
 val GestureDestination.tileLabel: String
     get() = when (this) {
         GestureDestination.PlayPause -> "Play/Pause"
         GestureDestination.NextTrack -> "Next track"
-        GestureDestination.IndexAgent -> "Index agent"
+        GestureDestination.IndexAgent -> "Hybrid Index agent"
+        GestureDestination.LocalAgent -> "Local agent"
+        GestureDestination.RemoteAgent -> "Remote Index agent"
         GestureDestination.WebSearch -> "Web search"
         GestureDestination.WebhookOnly -> "Webhook only"
-        is GestureDestination.McpSandbox -> "MCP sandbox"
         GestureDestination.Nothing -> "Nothing"
     }
 
@@ -128,10 +128,11 @@ private val GestureDestination.optionLabel: String
 
 private val GestureDestination.optionSub: String?
     get() = when (this) {
-        GestureDestination.IndexAgent -> "Transcribes and takes actions for you"
+        GestureDestination.IndexAgent -> "Takes actions for you in the cloud, on this phone when offline"
+        GestureDestination.LocalAgent -> "Runs on this phone only. Experimental, supports fewer actions"
+        GestureDestination.RemoteAgent -> "Takes actions for you in the cloud, needs a connection"
         GestureDestination.WebSearch -> "Answer lands in your feed"
         GestureDestination.WebhookOnly -> "Raw recording to your endpoint, nothing else"
-        is GestureDestination.McpSandbox -> "Runs a chosen sandbox group's model and tools"
         else -> null
     }
 
@@ -140,21 +141,16 @@ private val GestureDestination.icon: ImageVector
         GestureDestination.PlayPause -> Icons.Default.PlayArrow
         GestureDestination.NextTrack -> Icons.Default.SkipNext
         GestureDestination.IndexAgent -> Icons.Default.GraphicEq
+        GestureDestination.LocalAgent -> Icons.Default.Smartphone
+        GestureDestination.RemoteAgent -> Icons.Default.Cloud
         GestureDestination.WebSearch -> Icons.Default.Search
         GestureDestination.WebhookOnly -> Icons.Default.Webhook
-        is GestureDestination.McpSandbox -> Icons.Default.Extension
         GestureDestination.Nothing -> Icons.Default.Block
     }
-
-/** Sandbox routes differ by group id, so option identity ignores it. */
-private fun GestureDestination.isSameChoiceAs(other: GestureDestination): Boolean =
-    if (this is GestureDestination.McpSandbox && other is GestureDestination.McpSandbox) true
-    else this == other
 
 @Composable
 fun ButtonSwitchboard(
     routes: Map<RingGesture, GestureDestination>,
-    sandboxGroups: List<McpSandboxGroupEntity>,
     musicEnabled: Boolean,
     webhookConfigFor: (RingGesture) -> IndexWebhookConfig,
     onSetRoute: (RingGesture, GestureDestination) -> Unit,
@@ -193,7 +189,6 @@ fun ButtonSwitchboard(
         GestureDestinationSheet(
             gesture = gesture,
             current = routes[gesture] ?: GestureDestination.Nothing,
-            sandboxGroups = sandboxGroups,
             webhookUrl = webhookConfigFor(gesture).takeIf { it.isActive }?.url,
             webhookCopyOn = webhookCopies(gesture),
             onSelect = {
@@ -225,7 +220,9 @@ private fun GestureRow(
     onEdit: () -> Unit,
 ) {
     val recording = gesture.kind == GestureKind.Recording
-    val isIndexAgent = destination == GestureDestination.IndexAgent
+    val isIndexAgent = destination == GestureDestination.IndexAgent ||
+        destination == GestureDestination.LocalAgent ||
+        destination == GestureDestination.RemoteAgent
     val colors = IndexTheme.colors
     val accent = colors.primary
     Row(
@@ -356,7 +353,6 @@ private fun WebhookCopyRow(onClick: () -> Unit) {
 private fun GestureDestinationSheet(
     gesture: RingGesture,
     current: GestureDestination,
-    sandboxGroups: List<McpSandboxGroupEntity>,
     webhookUrl: String?,
     webhookCopyOn: Boolean,
     onSelect: (GestureDestination) -> Unit,
@@ -387,39 +383,12 @@ private fun GestureDestinationSheet(
                 color = colors.onSurface,
             )
         }
-        destinationsFor(gesture.kind, sandboxGroups.isNotEmpty()).forEach { option ->
-            val selected = option.isSameChoiceAs(current)
+        destinationsFor(gesture.kind).forEach { option ->
             DestinationOption(
                 option = option,
-                selected = selected,
-                onClick = {
-                    onSelect(
-                        if (option is GestureDestination.McpSandbox) {
-                            current as? GestureDestination.McpSandbox
-                                ?: GestureDestination.McpSandbox(sandboxGroups.firstOrNull()?.id)
-                        } else {
-                            option
-                        }
-                    )
-                },
+                selected = option == current,
+                onClick = { onSelect(option) },
             )
-            if (selected && option is GestureDestination.McpSandbox) {
-                sandboxGroups.forEach { group ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(GestureDestination.McpSandbox(group.id)) }
-                            .padding(start = 48.dp, end = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = (current as? GestureDestination.McpSandbox)?.groupId == group.id,
-                            onClick = { onSelect(GestureDestination.McpSandbox(group.id)) },
-                        )
-                        Text(group.title, fontSize = 15.sp)
-                    }
-                }
-            }
         }
         if (gesture.kind == GestureKind.Recording &&
             current != GestureDestination.WebhookOnly &&

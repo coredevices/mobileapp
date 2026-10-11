@@ -19,20 +19,12 @@ interface Plugin {
     /** Display name, shown to the user and to an LLM caller. */
     val name: String
 
-    /** Page to open when the user configures this plugin, already resolved to a loadable URL. */
-    val configPageUrl: String?
-        get() = null
+    /** Description of the plugin. */
+    val description: String
 
     val sources: List<SourceDeclaration>
 
     val actions: List<ActionDeclaration>
-        get() = emptyList()
-
-    /**
-     * What the user has to let this plugin do. The network ones are enforced for every request a
-     * plugin makes; the rest are declared and not yet checked.
-     */
-    val usesPermissions: List<PluginPermission>
         get() = emptyList()
 
     /**
@@ -167,3 +159,9 @@ data class ImageShape(
 data class BooleanShape(
     val value: Boolean,
 )
+
+/** A native plugin operation that failed with one of the [PluginErrors] codes. */
+class PluginNativeException(
+    val code: String,
+    message: String,
+) : Exception(message)

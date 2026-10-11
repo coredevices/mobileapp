@@ -8,7 +8,7 @@ import kotlin.time.Instant
 /**
  * Manages reminders for one provider. Like [NoteIntegration], implementations are singletons that
  * manage reminders on a platform/service — not objects representing a single reminder. Obtain the
- * active provider's instance from `ReminderIntegrationFactory`.
+ * active provider's instance from `IntegrationProviderRepository`.
  */
 interface ReminderIntegration : Integration {
     /**

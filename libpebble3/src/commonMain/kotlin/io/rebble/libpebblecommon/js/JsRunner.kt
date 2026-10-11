@@ -1,7 +1,10 @@
 package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.database.entity.LockerEntry
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.update
@@ -22,6 +25,8 @@ abstract class JsRunner(
     val device: CompanionAppDevice,
     private val urlOpenRequests: Channel<String>,
 ) {
+    protected abstract val networkAccess: NetworkAccess
+
     abstract suspend fun start()
     abstract suspend fun stop()
     abstract suspend fun loadAppJs(jsUrl: String)
@@ -41,8 +46,21 @@ abstract class JsRunner(
         _readyState.value = true
     }
 
-    suspend fun loadUrl(url: String) {
+    /** Called from JS, which blocks until it returns, so the URL is checked later, by [mayOpen]. */
+    fun loadUrl(url: String) {
         urlOpenRequests.trySend(url)
+    }
+
+    /** Config page URLs can carry data off the phone, so are checked like a request. */
+    suspend fun mayOpen(url: String): Boolean {
+        val scheme = url.substringBefore(':').lowercase()
+        if (scheme != "http" && scheme != "https") return true
+        val verdict = networkAccess.check(url, wait = true)
+        if (verdict is PluginNetworkVerdict.Denied) {
+            Logger.w("JsRunner") { "Not opening ${appInfo.shortName}'s page: ${verdict.reason}" }
+            return false
+        }
+        return true
     }
 
     /**

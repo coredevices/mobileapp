@@ -8,7 +8,6 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
@@ -26,10 +25,8 @@ open class TextOnlyRecordingOperation(
     private val recordingId: Long,
     private val chatAgent: Agent,
     private val text: String,
-    private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
-    private val sandboxGroupId: Long? = null,
 ) : TranscribingRecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("TextOnlyRecordingOperation")
@@ -61,10 +58,7 @@ open class TextOnlyRecordingOperation(
         }
         onTranscriptionPersisted?.invoke(text)
         coroutineScope {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
-                this
-            )
+            val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = chatAgent.isCloud)
             try {
                 recordingProcessor.processText(
                     recordingId = recordingId,

@@ -6,6 +6,8 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
 
 /**
  * Tolerant serializer for the optional, display-only `semantic_result` field.
@@ -24,14 +26,20 @@ object TolerantSemanticResultSerializer : KSerializer<SemanticResult?> {
     private val delegate = SemanticResult.serializer()
     override val descriptor: SerialDescriptor = delegate.descriptor
 
-    override fun deserialize(decoder: Decoder): SemanticResult? =
-        try {
-            decoder.decodeSerializableValue(delegate)
+    override fun deserialize(decoder: Decoder): SemanticResult? {
+        // Consume the whole element first: a failed streaming decode leaves the lexer
+        // mid-object, which then fails the enclosing decode anyway.
+        val json = decoder as? JsonDecoder ?: return decoder.decodeSerializableValue(delegate)
+        val element = json.decodeJsonElement()
+        if (element is JsonNull) return null
+        return try {
+            json.json.decodeFromJsonElement(delegate, element)
         } catch (e: Exception) {
             Logger.withTag("SemanticResult")
                 .w { "Unknown/undecodable semantic_result, dropping: ${e.message}" }
             null
         }
+    }
 
     override fun serialize(encoder: Encoder, value: SemanticResult?) {
         if (value == null) encoder.encodeNull()

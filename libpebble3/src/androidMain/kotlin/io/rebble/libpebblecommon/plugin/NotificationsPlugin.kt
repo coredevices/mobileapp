@@ -36,9 +36,10 @@ class NotificationsPlugin(
     private val connection: AndroidPebbleNotificationListenerConnection,
     private val notificationAppDao: NotificationAppRealDao,
     private val appContext: AppContext,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_NOTIFICATIONS_UUID
     override val name: String = "Notifications"
+    override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

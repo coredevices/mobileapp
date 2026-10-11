@@ -7,6 +7,8 @@
 var HOURS = 3;
 var UNKNOWN = -1;
 var THEME_KEY = 'theme';
+// Until the app has a setting for the user's weather plugin, the face picks one itself.
+var PLUGIN_KEY = 'plugin';
 
 // Until the watch says how much room it has. The hero disc and the small hourly ones are
 // different sizes, so they are different subscriptions.
@@ -21,6 +23,21 @@ var subscriptions = [];
 /** Light unless the user says otherwise; the watch keeps its own copy for offline launches. */
 function theme() {
   return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+}
+
+/** Every installed plugin serving `weather/location`: [{ uuid, name }]. */
+function weatherPlugins() {
+  return Pebble.enumeratePlugins().filter(function (plugin) {
+    return plugin.sources.some(function (source) {
+      return source.category === 'weather' && source.items.indexOf('location') >= 0;
+    });
+  });
+}
+
+/** The chosen plugin's uuid, or undefined to let the app pick while it's not installed. */
+function chosenPlugin() {
+  var uuid = localStorage.getItem(PLUGIN_KEY);
+  return weatherPlugins().some(function (plugin) { return plugin.uuid === uuid; }) ? uuid : undefined;
 }
 
 function log(message) {
@@ -121,15 +138,24 @@ function configPage() {
     '<div class="row"><span>Theme</span>' +
     '<select id="theme"><option value="light">Light</option>' +
     '<option value="dark">Dark</option></select></div>' +
+    '<div class="row"><span>Weather</span><select id="plugin">' +
+    weatherPlugins().map(function (plugin) {
+      var name = plugin.name.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      return '<option value="' + plugin.uuid + '">' + name + '</option>';
+    }).join('') +
+    '</select></div>' +
     '<script>' +
     'var picker=document.getElementById("theme");' +
+    'var pluginPicker=document.getElementById("plugin");' +
     'picker.onchange=function(){' +
     'Pebble.sendMessage("pkjs",{type:"setTheme",theme:picker.value});};' +
+    'pluginPicker.onchange=function(){' +
+    'Pebble.sendMessage("pkjs",{type:"setPlugin",plugin:pluginPicker.value});};' +
     'Pebble.addEventListener("ready",function(event){' +
     'if(event.target!=="pkjs")return;' +
     'document.getElementById("status").textContent="Applies straight away.";' +
     'Pebble.sendMessage("pkjs",{type:"theme"}).then(function(reply){' +
-    'picker.value=reply.theme;});});' +
+    'picker.value=reply.theme;if(reply.plugin)pluginPicker.value=reply.plugin;});});' +
     '</script></body></html>';
 }
 
@@ -141,13 +167,19 @@ Pebble.addEventListener('configmessage', function (e) {
   var message = e.data || {};
   switch (message.type) {
     case 'theme':
-      e.respond({ theme: theme() });
+      e.respond({ theme: theme(), plugin: chosenPlugin() });
       return;
     case 'setTheme':
       localStorage.setItem(THEME_KEY, message.theme === 'dark' ? 'dark' : 'light');
       snapshot.theme = theme() === 'dark' ? 1 : 0;
       push();
       log('theme: ' + theme());
+      e.respond({ ok: true });
+      return;
+    case 'setPlugin':
+      localStorage.setItem(PLUGIN_KEY, message.plugin);
+      log('weather from: ' + message.plugin);
+      subscribe();
       e.respond({ ok: true });
       return;
     default:
@@ -180,6 +212,7 @@ function subscribe() {
   subscriptions.push(Pebble.subscribeToSource({
     category: 'weather',
     item: 'location',
+    plugin: chosenPlugin(),
     properties: ['name', 'temperature', 'high', 'low', 'condition', 'uv_index', 'precipitation'],
     iconPixelSize: { w: iconSize.hero, h: iconSize.hero },
     onData: onLocation,
@@ -192,6 +225,7 @@ function subscribe() {
   subscriptions.push(Pebble.subscribeToSource({
     category: 'weather',
     item: 'hour',
+    plugin: chosenPlugin(),
     properties: ['temperature', 'condition'],
     iconPixelSize: { w: iconSize.hour, h: iconSize.hour },
     onData: onHours,

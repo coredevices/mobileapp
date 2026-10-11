@@ -20,7 +20,7 @@ abstract class IterativeAgent(
     override val logger = Logger.withTag("IterativeAgent")
 
     /** Max tool-execution rounds before erroring. */
-    protected open val maxToolRounds: Int get() = 3
+    protected open val maxToolRounds: Int get() = 8
 
     override suspend fun send(
         input: String,
@@ -29,12 +29,31 @@ abstract class IterativeAgent(
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
     ) = withToolSession(input, mcpSession) {
+        toolLoop(input, mcpSession, sessionContext, includePromptsFromMcps, skipToolExecution)
+    }
+
+    override suspend fun resume(
+        mcpSession: McpSession,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>,
+    ) = withToolSession(null, mcpSession) {
+        val input = currentConversation().lastOrNull { it.role == MessageRole.user }?.content.orEmpty()
+        toolLoop(input, mcpSession, sessionContext, includePromptsFromMcps, skipToolExecution = false)
+    }
+
+    private suspend fun toolLoop(
+        input: String,
+        mcpSession: McpSession,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>,
+        skipToolExecution: Boolean,
+    ) {
         var round = 0
         val executed = mutableSetOf<AgentToolCall>()
         while (true) {
             val assistantMessage = inferAndEmit(input, mcpSession, sessionContext, includePromptsFromMcps)
             val toolCalls = decodeToolCalls(assistantMessage)
-            if (toolCalls.isEmpty() || skipToolExecution) return@withToolSession
+            if (toolCalls.isEmpty() || skipToolExecution) return
             if (round >= maxToolRounds) throw Exception("Exceeded maximum tool iterations")
             val (repeats, fresh) = toolCalls.partition { it.copy(id = "") in executed }
             if (repeats.isNotEmpty()) {
@@ -43,9 +62,9 @@ abstract class IterativeAgent(
                             repeats.joinToString { "${it.integrationName}__${it.toolName}" }
                 }
                 emitAll(repeats.map { duplicateToolResponse(it) })
-                if (fresh.isEmpty()) return@withToolSession
+                if (fresh.isEmpty()) return
             }
-            if (executeToolCalls(fresh, mcpSession, sessionContext)) return@withToolSession
+            if (executeToolCalls(fresh, mcpSession, sessionContext)) return
             executed += fresh.map { it.copy(id = "") }
             round++
         }

@@ -2,13 +2,28 @@ package coredevices.pebble.services
 
 import androidx.compose.ui.text.intl.Locale
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.pebble.firmware.isCoreDevice
+import io.ktor.client.HttpClient
+import io.ktor.client.request.prepareGet
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
+import io.rebble.libpebblecommon.locker.getLockerPBWCacheDirectory
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readByteArray
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -16,8 +31,20 @@ import kotlinx.serialization.json.Json
 
 class LanguagePackRepository(
     private val json: Json,
+    private val httpClient: HttpClient,
+    private val settings: Settings,
+    private val appContext: AppContext,
 ) {
     private val logger = Logger.withTag("LanguagePackRepository")
+
+    private val manifestJson = Json(json) { ignoreUnknownKeys = true }
+    private var fetchedPacks: List<PublishedLanguagePack>? = null
+    private val cachedPacks by lazy {
+        settings.getStringOrNull(MANIFEST_CACHE_KEY)?.let { cached ->
+            runCatching { decodeLanguageManifest(manifestJson, cached).languages }.getOrNull()
+        }.orEmpty()
+    }
+    private val publishedPacks get() = fetchedPacks ?: cachedPacks
 
     private val languagePacks by lazy {
         try {
@@ -33,39 +60,65 @@ class LanguagePackRepository(
     }
 
     suspend fun languagePacksForWatch(watch: ConnectedPebbleDevice): List<LanguagePack> = withContext(Dispatchers.IO) {
-        val locale = Locale.current.toLanguageTag()
-        val platform = watch.watchInfo.platform
-        val revision = platform.revision
-        val fallbackRevision = platform.languagePackPlatform().revision
-
-        // Prefer packs built for this exact hardware; fall back to the silk-compatible
-        // pack for any locale the exact hardware doesn't provide.
-        val exactLocales = languagePacks.filter { it.hardware == revision }.map { it.isoLocal }.toSet()
-        languagePacks
-            .filter {
-                when (it.hardware) {
-                    revision -> true
-                    null, fallbackRevision -> it.isoLocal !in exactLocales
-                    else -> false
+        if (watch.watchInfo.platform.isCoreDevice()) {
+            try {
+                val text = withTimeoutOrNull(10_000) {
+                    downloadBytes(LANGUAGE_MANIFEST_URL, 1_048_576).decodeToString()
                 }
+                if (text != null) {
+                    val manifest = decodeLanguageManifest(manifestJson, text)
+                    settings.putString(MANIFEST_CACHE_KEY, text)
+                    fetchedPacks = manifest.languages
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "Using cached language catalog" }
             }
-            .sortedByDescending { it.isoLocal.take(2) == locale.take(2) }
-            .sortedByDescending { it.isoLocal == locale }
+        }
+        cachedLanguagePacksForWatch(watch)
     }
+
+    fun cachedLanguagePacksForWatch(watch: ConnectedPebbleDevice): List<LanguagePack> =
+        selectLanguagePacks(languagePacks, publishedPacks, watch.watchInfo.platform,
+            Locale.current.toLanguageTag())
+
+    suspend fun prepareDownload(pack: LanguagePack): Path = withContext(Dispatchers.IO) {
+        val published = requireNotNull(pack.published)
+        withTimeout(30_000) {
+            val bytes = downloadBytes(pack.file, published.size)
+            published.verify(bytes)
+            val directory = getLockerPBWCacheDirectory(appContext)
+            SystemFileSystem.createDirectories(directory)
+            val path = Path(directory, "language.pbl")
+            SystemFileSystem.sink(path).buffered().use { it.write(bytes) }
+            path
+        }
+    }
+
+    private suspend fun downloadBytes(url: String, maxSize: Long): ByteArray =
+        httpClient.prepareGet(url).execute { response ->
+            check(response.status.isSuccess()) { "Language download failed" }
+            val bytes = response.bodyAsChannel().readRemaining(maxSize + 1).readByteArray()
+            require(bytes.size.toLong() <= maxSize) { "Language download exceeds expected size" }
+            bytes
+        }
 
     /**
      * Friendly display name for a language pack read back from the watch, which only reports the
      * raw ISO locale + version.
      */
     fun displayNameForInstalled(installed: InstalledLanguagePack): String {
-        val pack = languagePacks.firstOrNull { it.isoLocal == installed.isoLocal && it.version == installed.version }
+        // The watch reports no source identifier, so never infer update status from its version.
+        val pack = publishedPacks.firstOrNull { canonicalLocale(it.locale) == canonicalLocale(installed.isoLocal) }?.asLanguagePack()
+            ?: languagePacks.firstOrNull { it.isoLocal == installed.isoLocal && it.version == installed.version }
             ?: languagePacks.firstOrNull { it.isoLocal == installed.isoLocal }
         return pack?.let { "${it.localName} (${it.name}) v${installed.version}" }
             ?: "${installed.isoLocal} (v${installed.version})"
     }
 }
 
-private fun WatchHardwarePlatform.languagePackPlatform(): WatchHardwarePlatform = when {
+internal fun WatchHardwarePlatform.languagePackPlatform(): WatchHardwarePlatform = when {
     isCoreDevice() -> WatchHardwarePlatform.PEBBLE_SILK
     else -> this
 }
@@ -87,9 +140,20 @@ data class LanguagePack(
     val name: String,
     val version: Int,
     val id: String,
+    val published: PublishedLanguagePack? = null,
 )
 
-fun LanguagePack.displayName() = "${localName} (${name}) v$version"
+fun LanguagePack.description(): String = when {
+    isEnglishFontPack(isoLocal) -> "English with additional fonts"
+    published != null -> published.completionLabel()
+    else -> "Older community pack"
+}
+
+fun LanguagePack.canContribute() = published != null && !isEnglishFontPack(isoLocal)
+
+fun LanguagePack.displayName() = published?.let {
+    "$localName ($name) · ${it.updatedAt.take(10)}"
+} ?: "$localName ($name) v$version"
 
 @Serializable
 data class LanguagePackFile(
@@ -1909,73 +1973,73 @@ private val LanguagePacksJson = """
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "asterix",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_evt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_dvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "obelix_pvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_evt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_dvt",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     },
     {
       "ISOLocal": "ar_SA",
-      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v1/ar_SA.pbl",
+      "file": "https://github.com/kaluaim/PebbleOS/releases/download/ar_SA-v2/ar_SA.pbl",
       "firmware": "4.0.0",
       "hardware": "getafix_dvt2",
-      "id": "ar_SA_v1",
+      "id": "ar_SA_v2",
       "localName": "العربية",
       "name": "Arabic",
-      "version": 1
+      "version": 2
     }
   ]
 }

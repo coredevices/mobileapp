@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import CoreNav
 import CoreRoute
 import androidx.compose.animation.AnimatedContentScope
@@ -26,13 +27,6 @@ object PebbleRoutes {
 
     @Serializable
     data class FirmwareSideloadRoute(val identifier: String) : CoreRoute
-
-    /** Settings for whatever is registered under [uuid]: a watchapp, a plugin, or both. */
-    @Serializable
-    data class WatchappSettingsRoute(
-        val uuid: String,
-        val title: String,
-    ) : CoreRoute
 
     @Serializable
     data class ContactDeveloperRoute(
@@ -297,8 +291,8 @@ fun NavGraphBuilder.addPebbleRoutes(
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()
         DebugFirmwareSideload(route.identifier, coreNav)
     }
-    composable<PebbleRoutes.WatchappSettingsRoute> {
-        val route: PebbleRoutes.WatchappSettingsRoute = it.toRoute()
+    composable<CommonRoutes.WatchappSettingsRoute> {
+        val route: CommonRoutes.WatchappSettingsRoute = it.toRoute()
         WatchappSettingsScreen(
             coreNav = coreNav,
             uuid = route.uuid,

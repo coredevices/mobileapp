@@ -1,6 +1,5 @@
 package coredevices.indexai.database.dao
 
-import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -40,12 +39,6 @@ interface LocalRecordingDao {
 
     @Query("SELECT count(*) FROM LocalRecording")
     fun getRecordingsCount(): Flow<Int>
-
-    @Query("SELECT * FROM RecordingFeedItem ORDER BY localTimestamp DESC")
-    fun getPaginatedFeedItems(): PagingSource<Int, RecordingFeedItem>
-
-    @Query("SELECT * FROM RecordingFeedItem WHERE rootRecordingId = :recordingId")
-    fun getFeedItemByIdFlow(recordingId: Long): Flow<RecordingFeedItem?>
 
     @Query("SELECT * FROM LocalRecording ORDER BY localTimestamp DESC LIMIT 1")
     suspend fun getMostRecentTimestamp(): LocalRecording?

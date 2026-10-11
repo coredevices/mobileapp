@@ -531,6 +531,21 @@ navigator.geolocation.clearWatch = (id) => {
         _Pebble.sendConfigMessage(JSON.stringify(message === undefined ? null : message));
     };
 
+    // The WebView's WebSocket can't be intercepted natively.
+    if (typeof _PebbleNet !== 'undefined' && typeof WebSocket !== 'undefined') {
+        const NativeWebSocket = WebSocket;
+        const GatedWebSocket = function (url, protocols) {
+            if (!_PebbleNet.allowed(String(url))) {
+                throw new DOMException("This app may not connect to " + url, "SecurityError");
+            }
+            return protocols === undefined ? new NativeWebSocket(url) : new NativeWebSocket(url, protocols);
+        };
+        GatedWebSocket.prototype = NativeWebSocket.prototype;
+        Object.defineProperty(NativeWebSocket.prototype, "constructor", { value: GatedWebSocket });
+        ["CONNECTING", "OPEN", "CLOSING", "CLOSED"].forEach((key) => { GatedWebSocket[key] = NativeWebSocket[key]; });
+        global.WebSocket = GatedWebSocket;
+    }
+
     // Enable intercepting XHR calls (on Android - this doesn't work on iOS so we don't add
     // shouldIntercept to the PKJS interface there).
     XMLHttpRequest.prototype.originalOpen = XMLHttpRequest.prototype.open;

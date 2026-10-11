@@ -12,12 +12,9 @@ import kotlin.time.Instant
 
 /**
  * Items repository — Room-only. Reads come from the local cache table; writes
- * land in Room and are pushed to Firestore in a single place via the manual
- * "Sync now" pipeline (`SettingsViewModel.downloadFeedHistory`), which mirrors
- * how recordings already work. There is no per-call Firestore write-through
- * here so that we have ONE auto-sync mechanism (the existing recording
- * observer) and ONE manual sync path — same pattern across all three
- * collections.
+ * land in Room and are pushed to Firestore by the IndexFeedSyncService
+ * observer. There is no per-call Firestore write-through here so that we
+ * have ONE sync mechanism — same pattern across all three collections.
  */
 class ItemRepository(
     private val cacheDao: CachedItemDao,

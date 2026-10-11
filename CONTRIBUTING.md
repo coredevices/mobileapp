@@ -23,3 +23,7 @@ After you make a PR a comment from @CLAassistant will appear asking you to sign 
 Alternatively, you can sign off before opening a PR by going to https://cla-assistant.io/coredevices/libpebble3.
 
 We accept contributions under a legally identifiable name, such as your name on government documentation or common-law names (names claimed by legitimate usage or repute). Unfortunately, we cannot accept anonymous contributions at this time.
+
+### Testing
+
+Please state what testing has been done on the PR. Please don't submit untested code unless there's a reason you can't test it.

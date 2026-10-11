@@ -37,8 +37,31 @@ data class ConversationMessageDocument(
     val language_model_used: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     @ColumnInfo(defaultValue = "0")
-    val is_forced_tool: Boolean = false
+    val is_forced_tool: Boolean = false,
+    /** Null means an ordinary message with no special handling. */
+    @SerialName("message_tags")
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @Serializable(with = TolerantMessageTagListSerializer::class)
+    @ColumnInfo(name = "message_tags")
+    val messageTags: List<MessageTag>? = null,
 )
+
+/** An assistant message tagged as the answer to the user's query. */
+val ConversationMessageDocument.isAnswer: Boolean get() = answerTag != null
+
+val ConversationMessageDocument.answerTag: MessageTag.AnswerResponse? get() =
+    if (role == MessageRole.assistant) messageTags?.firstNotNullOfOrNull { it as? MessageTag.AnswerResponse } else null
+
+@Serializable
+sealed class MessageTag {
+    /**
+     * The assistant's final message answers the user's query rather than reporting an action.
+     * @param itemId The answer feed item, when one was created (only search answers have one)
+     */
+    @Serializable
+    @SerialName("AnswerResponse")
+    data class AnswerResponse(val itemId: String? = null) : MessageTag()
+}
 
 @Serializable
 @Entity(

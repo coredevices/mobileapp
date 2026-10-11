@@ -4,6 +4,7 @@ import android.os.Process
 import android.os.Process.THREAD_PRIORITY_URGENT_AUDIO
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 
 actual suspend fun withHighPriorityThread(block: suspend () -> Unit) {
@@ -18,12 +19,19 @@ actual suspend fun withHighPriorityThread(block: suspend () -> Unit) {
     }
 }
 
-actual suspend fun getFreeMemoryMB(): Long {
-    // get available memory in MB
-    val runtime = Runtime.getRuntime()
-    val usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-    val maxMemory = runtime.maxMemory() / (1024 * 1024)
-    return maxMemory - usedMemory
+actual suspend fun getFreeMemoryMB(): Long = withContext(Dispatchers.IO) {
+    parseMemAvailableMB(File("/proc/meminfo").readText())
+        ?: throw IllegalStateException("MemAvailable missing from /proc/meminfo")
 }
 
-actual val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long = 20
+/** The kernel's estimate of memory usable without swapping, the same figure ActivityManager reports. */
+internal fun parseMemAvailableMB(meminfo: String): Long? =
+    meminfo.lineSequence()
+        .firstOrNull { it.startsWith("MemAvailable:") }
+        ?.substringAfter(':')
+        ?.trim()
+        ?.substringBefore(' ')
+        ?.toLongOrNull()
+        ?.let { it / 1024 }
+
+actual val PLATFORM_MIN_TRANSCRIPTION_MEMORY_MB: Long = 40

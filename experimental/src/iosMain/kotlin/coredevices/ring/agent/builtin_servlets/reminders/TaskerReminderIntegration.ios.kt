@@ -9,7 +9,7 @@ import kotlin.time.Instant
 
 /**
  * Tasker is Android-only and is never offered as a provider on iOS. Should it ever be reached
- * (e.g. a persisted or deep-linked `ReminderProvider.Tasker`), the stub reports unauthorized and
+ * (e.g. a persisted or deep-linked Tasker provider id), the stub reports unauthorized and
  * throws an `Exception` (not an `Error`) from its operations so callers' `catch (Exception)`
  * failure handling applies.
  */

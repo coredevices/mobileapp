@@ -5,6 +5,9 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.PKJSToken
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.services.WatchInfo
 import okio.Buffer
 import kotlin.uuid.Uuid
@@ -13,6 +16,7 @@ class JsTokenUtil(
     private val tokenProvider: TokenProvider,
     private val lockerEntryDao: LockerEntryDao,
     private val watchConfigFlow: WatchConfigFlow,
+    private val permissions: AppPermissions,
 ): PKJSToken {
     companion object {
         private const val ACCOUNT_TOKEN_SALT =
@@ -46,6 +50,7 @@ class JsTokenUtil(
     }
 
     suspend fun getTimelineToken(uuid: Uuid): String? {
+        if (permissions.request(uuid, PluginPermissions.TIMELINE, wait = true) != PermissionDecision.Granted) return null
         val realToken = lockerEntryDao.getEntry(uuid)?.appstoreData?.userToken
         val fallback = if (watchConfigFlow.value.emulateRemoteTimeline) {
             "emulated-dummy-token"

@@ -168,7 +168,7 @@ fun AppStoreCollectionScreen(
                             }
                         }
                     }
-                    AppType.Watchapp -> {
+                    AppType.Watchapp, AppType.Plugin -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(4.dp),

@@ -188,6 +188,7 @@ kotlin {
                 implementation(compose.components.resources)
                 implementation(libs.androidx.navigation.compose)
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.kmpio)
                 implementation(libs.kermit)
                 implementation(project(":util"))
                 implementation(libs.serialization)
@@ -248,6 +249,7 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.test.runner)
                 implementation(libs.kotlin.test)
+                implementation(libs.settings.test)
             }
         }
 

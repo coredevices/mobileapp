@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -398,26 +400,33 @@ class ObjectDetailViewModel(
         }
     }
 
+    /** Child edits and deletes are whole-document read-modify-writes launched
+     *  concurrently in [appScope] (e.g. a swiped row's draft flush racing its
+     *  delete), so they must run one at a time or a late edit un-deletes. */
+    private val childWriteMutex = Mutex()
+
     fun patchChildItem(childId: String, title: String?, body: String? = null, kind: String? = null) {
         // appScope: flushed from the inline note row's onDispose on navigate-away
         // (same scope-cancellation race as [patchItem]).
         appScope.launch {
-            val existing = itemRepo.getById(childId) ?: return@launch
-            val trimmed = title?.trim()
-            if (trimmed != null && trimmed.isBlank()) return@launch
-            val nextKind = kind ?: existing.kind
-            val updated = existing.toDocument().copy(
-                title = trimmed ?: existing.title,
-                body = body ?: existing.body,
-                metadata = metadataForKind(nextKind, existing = existing.metadata),
-                parentListIds = normalizeParentLists(
-                    kind = nextKind,
-                    requestedParents = null,
-                    currentParents = existing.parentListIds(),
-                ),
-                updatedAt = Clock.System.now(),
-            )
-            itemRepo.setItem(childId, updated)
+            childWriteMutex.withLock {
+                val existing = itemRepo.getById(childId) ?: return@launch
+                val trimmed = title?.trim()
+                if (trimmed != null && trimmed.isBlank()) return@launch
+                val nextKind = kind ?: existing.kind
+                val updated = existing.toDocument().copy(
+                    title = trimmed ?: existing.title,
+                    body = body ?: existing.body,
+                    metadata = metadataForKind(nextKind, existing = existing.metadata),
+                    parentListIds = normalizeParentLists(
+                        kind = nextKind,
+                        requestedParents = null,
+                        currentParents = existing.parentListIds(),
+                    ),
+                    updatedAt = Clock.System.now(),
+                )
+                itemRepo.setItem(childId, updated)
+            }
         }
     }
 
@@ -454,7 +463,7 @@ class ObjectDetailViewModel(
 
     fun deleteChildItem(childId: String) {
         appScope.launch {
-            itemRepo.softDelete(childId)
+            childWriteMutex.withLock { itemRepo.softDelete(childId) }
         }
     }
 

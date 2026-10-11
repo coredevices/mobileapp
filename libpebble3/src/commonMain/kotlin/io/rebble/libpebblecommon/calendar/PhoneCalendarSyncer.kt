@@ -122,6 +122,7 @@ class PhoneCalendarSyncer(
                     color = matchingCalendar.color,
                     syncEvents = matchingCalendar.syncEvents,
                     visible = matchingCalendar.visible,
+                    writable = matchingCalendar.writable,
                 )
                 calendarDao.update(updateCal)
             } else {
@@ -244,8 +245,15 @@ class PhoneCalendarSyncer(
 
     override fun calendars(): Flow<List<CalendarEntity>> = calendarDao.getFlow()
 
-    override suspend fun createEvent(event: NewCalendarEvent): String? =
-        systemCalendar.createEvent(event)
+    override suspend fun createEvent(calendarId: Int, event: NewCalendarEvent): String? {
+        val platformId = calendarDao.getAll().find { it.id == calendarId }?.platformId ?: return null
+        return systemCalendar.createEvent(platformId, event)
+    }
+
+    override suspend fun defaultCalendar(): CalendarEntity? {
+        val platformId = systemCalendar.defaultCalendarPlatformId() ?: return null
+        return calendarDao.getAll().find { it.platformId == platformId }
+    }
 
     override fun updateCalendarEnabled(calendarId: Int, enabled: Boolean) {
         libPebbleCoroutineScope.launch {

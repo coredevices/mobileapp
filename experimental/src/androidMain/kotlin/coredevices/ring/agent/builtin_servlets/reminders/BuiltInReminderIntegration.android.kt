@@ -14,7 +14,7 @@ actual fun createRemindersAppIntegration(): ReminderIntegration = DisabledRemind
 
 /**
  * The Reminders app is iOS-only and is never offered as a provider on Android. Should it ever be
- * reached (e.g. a persisted or deep-linked `ReminderProvider.IOSReminders`), the stub reports
+ * reached (e.g. a persisted or deep-linked iPhone Reminders provider id), the stub reports
  * unauthorized and throws an `Exception` from its operations so callers' `catch (Exception)`
  * failure handling applies.
  */

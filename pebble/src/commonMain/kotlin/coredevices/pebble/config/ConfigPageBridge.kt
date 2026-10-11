@@ -1,6 +1,8 @@
 package coredevices.pebble.config
 
 import co.touchlab.kermit.Logger
+import kotlin.concurrent.Volatile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -27,6 +29,11 @@ class ConfigPageBridge(
 
     /** Set as the page's scripts are resolved; the bridge itself outlives them. */
     var scripts: Map<String, ConfigScript> = emptyMap()
+
+    /** Runs a full-screen web sign-in; null (the default) means this app isn't allowed one. */
+    // Written on the main thread, read on the WebView's JS-interface thread in onCall.
+    @Volatile
+    var webSignIn: (suspend (WebSignInRequest) -> Map<String, String>?)? = null
 
     private val readyTargets = mutableSetOf<String>()
 
@@ -68,6 +75,50 @@ class ConfigPageBridge(
                     val answer = script.target.onConfigMessage(call.message.toString())
                         ?: error("${script.name} did not answer")
                     reply(call.id, answer)
+                }
+            }
+            "webSignIn" -> {
+                val handler = webSignIn
+                if (handler == null) {
+                    reply(call.id, error("web sign-in is not available for this app"))
+                    return
+                }
+                val request = try {
+                    LENIENT.decodeFromJsonElement(WebSignInRequest.serializer(), call.message)
+                } catch (e: Exception) {
+                    reply(call.id, error("webSignIn needs { url, cookies, domain }"))
+                    return
+                }
+                if (request.url.isBlank() || request.domain.isBlank() || request.cookies.isEmpty()) {
+                    reply(call.id, error("webSignIn needs a url, a domain, and at least one cookie name"))
+                    return
+                }
+                // A non-http(s) url or a domain that isn't a bare host never yields a cookie match,
+                // so reject up front instead of leaving the sign-in hanging until the user cancels.
+                if (!request.url.startsWith("https://") && !request.url.startsWith("http://")) {
+                    reply(call.id, error("webSignIn url must be http(s)"))
+                    return
+                }
+                if (request.domain.any { it == '/' || it == ':' || it.isWhitespace() }) {
+                    reply(call.id, error("webSignIn domain must be a bare host, e.g. 'example.com'"))
+                    return
+                }
+                scope.launch {
+                    val cookies = try {
+                        handler(request)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        logger.w(e) { "web sign-in failed" }
+                        reply(call.id, error("sign-in failed"))
+                        return@launch
+                    }
+                    // Cancel resolves the page's promise to null; a bare map would collide with the
+                    // {error} envelope, so success is wrapped.
+                    if (cookies == null) reply(call.id, "null")
+                    else reply(call.id, Json.encodeToString(JsonObject.serializer(), buildJsonObject {
+                        put("cookies", buildJsonObject { cookies.forEach { (name, value) -> put(name, value) } })
+                    }))
                 }
             }
             else -> reply(call.id, error("unknown method '${call.method}'"))
@@ -126,6 +177,8 @@ class ConfigPageBridge(
         val TARGETS = ListSerializer(Target.serializer())
         val HELLO = Hello.serializer()
         val STRING = String.serializer()
+        // A config page may pass extra options; tolerate them rather than reject the call.
+        val LENIENT = Json { ignoreUnknownKeys = true }
     }
 }
 
@@ -184,6 +237,21 @@ val CONFIG_PAGE_SHIM_JS = """
 
   /** [{ id, name }] — what this page is allowed to talk to. */
   global.Pebble.targets = function () { return call('targets'); };
+
+  /**
+   * Show the provider's real sign-in page full-screen, then resolve with the named cookies for
+   * its domain once they all exist: webSignIn({ url, cookies: ['a', 'b'], domain: 'example.com' }).
+   */
+  global.Pebble.webSignIn = function (options) {
+    if (!options || typeof options.url !== 'string' || !Array.isArray(options.cookies) ||
+        typeof options.domain !== 'string') {
+      return Promise.reject(new Error('webSignIn({ url, cookies, domain })'));
+    }
+    return call('webSignIn', '', options).then(function (result) {
+      if (result && result.error) throw new Error(result.error);
+      return result ? result.cookies : null;
+    });
+  };
 
   /** Scripts that have already reported ready, for a page that listens late. */
   global.Pebble.readyTargets = function () { return readyTargets.slice(); };

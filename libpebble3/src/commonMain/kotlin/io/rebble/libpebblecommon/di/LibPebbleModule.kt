@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.di
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
 import io.rebble.libpebblecommon.BleConfigFlow
 import io.rebble.libpebblecommon.ErrorTracker
 import io.rebble.libpebblecommon.Housekeeping
@@ -48,6 +49,7 @@ import io.rebble.libpebblecommon.connection.TransportConnector
 import io.rebble.libpebblecommon.connection.WatchConnector
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.connection.WatchPrefs
+import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.RealBluetoothStateProvider
@@ -115,6 +117,7 @@ import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.js.JsTokenUtil
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.imaging.ImagingService
+import io.rebble.libpebblecommon.locker.AppFileReader
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
@@ -123,12 +126,20 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import io.rebble.libpebblecommon.plugin.BundledPluginLoader
+import io.rebble.libpebblecommon.plugin.BundledAppInstaller
+import io.rebble.libpebblecommon.plugin.JsPluginFactory
 import io.rebble.libpebblecommon.plugin.CalendarPlugin
 import io.rebble.libpebblecommon.plugin.PhoneStatePlugin
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.permissions.InstalledApps
+import io.rebble.libpebblecommon.permissions.LockerInstalledApps
 import io.rebble.libpebblecommon.plugin.PlatformPlugins
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.NativePlugin
+import io.rebble.libpebblecommon.plugin.LockerPluginLoader
+import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.services.AppFetchService
 import io.rebble.libpebblecommon.services.AppReorderService
@@ -327,6 +338,7 @@ fun initKoin(
     proxyTokenProvider: StateFlow<String?>,
     transcriptionProvider: TranscriptionProvider,
     injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
+    pluginOAuthApi: PluginOAuthApi? = null,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -370,11 +382,12 @@ fun initKoin(
                 single { get<Database>().weatherAppDao() }
                 single { get<Database>().appPrefsDao() }
                 singleOf(::LegacyBtClassicMigrator)
-                singleOf(::WatchManager) bind WatchConnector::class
+                singleOf(::WatchManager) binds arrayOf(WatchConnector::class, Watches::class)
                 single { bleScanner(get()) }
                 singleOf(::RealScanning) bind Scanning::class
                 single { libPebbleScope }
                 singleOf(::Locker)
+                single<AppFileReader> { get<Locker>() }
                 singleOf(::PrivateLogger)
                 singleOf(::Housekeeping)
                 singleOf(::RemoteTimelineEmulator)
@@ -390,6 +403,8 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
+                        get(),
+                        get(), // lockerPluginLoader
                         get(),
                         get(),
                         get(),
@@ -437,7 +452,7 @@ fun initKoin(
                         token = proxyTokenProvider
                     )
                 }
-                single { HttpClient() }
+                single { HttpClient { install(WebSockets) } }
                 factory { HackyProvider { get<Scanning>() } }
                 factory<Clock> { Clock.System }
                 factory<kotlin.time.Clock> { kotlin.time.Clock.System }
@@ -448,15 +463,22 @@ fun initKoin(
                 singleOf(::PhoneStatePlugin)
                 singleOf(::CalendarPlugin)
                 singleOf(::WatchSettingsPlugin)
-                single<Set<Plugin>> {
+                singleOf(::WatchStatePlugin)
+                single<Set<NativePlugin>> {
                     setOf(
                         get<PhoneStatePlugin>(),
                         get<CalendarPlugin>(),
                         get<WatchSettingsPlugin>(),
+                        get<WatchStatePlugin>(),
                     ) + get<PlatformPlugins>().plugins
                 }
                 singleOf(::PluginRegistry)
-                singleOf(::BundledPluginLoader)
+                singleOf(::RunningApps)
+                singleOf(::LockerInstalledApps) bind InstalledApps::class
+                singleOf(::AppPermissions)
+                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
+                singleOf(::BundledAppInstaller)
+                singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)
                 singleOf(::InterruptedFirmwareUpdates)
                 singleOf(::JsTokenUtil)

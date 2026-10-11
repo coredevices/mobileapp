@@ -12,6 +12,8 @@ import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.agent.integrations.fuzzyFilter
 import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.externalDestination
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
@@ -68,7 +70,7 @@ class ListTool: BuiltInMcpTool(
         Never guess 'reminder_date_time_human' — only pass a time the user actually said, otherwise omit it.
     """.trimIndent()
 ), KoinComponent {
-    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
+    private val providers: IntegrationProviderRepository by inject()
     private val listRepo: ListRepository by inject()
 
     companion object Companion {
@@ -206,7 +208,8 @@ class ListTool: BuiltInMcpTool(
         }
 
         return try {
-            val integration = reminderIntegrationFactory.createReminderIntegration()
+            val provider = providers.selectedReminderProvider.value
+            val integration = providers.reminderIntegration(provider)
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
             val reminderId = integration.createReminder(
                 listItemArgs.message,
@@ -222,6 +225,7 @@ class ListTool: BuiltInMcpTool(
                     listUsed = list?.title,
                     remindAt = instant,
                     resolvedListId = resolvedListId,
+                    destination = provider.externalDestination,
                 )
             )
         } catch (e: Exception) {
@@ -233,7 +237,7 @@ class ListTool: BuiltInMcpTool(
                         errorMessage = e.message
                     )
                 ),
-                SemanticResult.GenericFailure("Failed to create reminder: ${e.message}")
+                SemanticResult.GenericFailure(e.message)
             )
         }
     }

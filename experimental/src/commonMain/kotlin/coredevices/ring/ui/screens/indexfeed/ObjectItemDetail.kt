@@ -67,7 +67,7 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_N
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.ui.navigation.RingRoutes
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.theme.toggleButtonColors

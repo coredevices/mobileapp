@@ -35,10 +35,12 @@ sealed interface InflightIndexNotification {
         val userText: String,
         val pressToRXLatency: Duration?,
         val actionsTaken: List<SemanticResult>,
-        val shortcutAction: NoteShortcutType
+        val shortcutAction: NoteShortcutType,
+        /** The agent's tagged answer, when it gave one. */
+        val answer: String? = null,
     ): InflightIndexNotification {
         override fun toString(): String {
-            return "AgentComplete(id=$id, pressedTimestamp=$pressedTimestamp, recordingId=$recordingId, userText=<${userText.length} chars>, pressToRXLatency=$pressToRXLatency, actionsTaken=<${actionsTaken.size}>, shortcutAction=$shortcutAction)"
+            return "AgentComplete(id=$id, pressedTimestamp=$pressedTimestamp, recordingId=$recordingId, userText=<${userText.length} chars>, pressToRXLatency=$pressToRXLatency, actionsTaken=<${actionsTaken.size}>, answer=<${answer?.length ?: 0} chars>, shortcutAction=$shortcutAction)"
         }
     }
 

@@ -27,16 +27,3 @@ actual fun readBundledApp(appContext: AppContext, fileName: String): ByteArray? 
     }
 }
 
-actual fun readBundledPluginFile(
-    appContext: AppContext,
-    pluginDir: String,
-    fileName: String,
-): String? {
-    val resources = NSBundle.mainBundle.resourcePath ?: return null
-    val path = "$resources/plugins/$pluginDir/$fileName"
-    return try {
-        SystemFileSystem.source(Path(path)).buffered().use { it.readString() }
-    } catch (e: Exception) {
-        null
-    }
-}

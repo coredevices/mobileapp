@@ -16,7 +16,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * ```jsonc
  * "usesPermissions": [
  *   "LocalNetwork",
- *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } }
+ *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } },
+ *   { "name": "HomeControl", "plugin": "<plugin uuid>" }
  * ]
  * ```
  */
@@ -24,12 +25,15 @@ import kotlinx.serialization.json.JsonPrimitive
 data class PluginPermission(
     val name: String,
     val parameters: Map<String, List<String>> = emptyMap(),
+    /** Set for a permission another plugin defines. */
+    val plugin: String? = null,
 )
 
 @Serializable
 private data class PermissionObject(
     val name: String,
     val parameters: Map<String, List<String>> = emptyMap(),
+    val plugin: String? = null,
 )
 
 internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
@@ -40,24 +44,32 @@ internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
         val element = input.decodeJsonElement()
         if (element is JsonPrimitive) return PluginPermission(element.content)
         val parsed = input.json.decodeFromJsonElement(PermissionObject.serializer(), element)
-        return PluginPermission(parsed.name, parsed.parameters)
+        return PluginPermission(parsed.name, parsed.parameters, parsed.plugin)
     }
 
     override fun serialize(encoder: Encoder, value: PluginPermission) {
         PermissionObject.serializer()
-            .serialize(encoder, PermissionObject(value.name, value.parameters))
+            .serialize(encoder, PermissionObject(value.name, value.parameters, value.plugin))
     }
 }
 
-/** Permission names a manifest can declare. Only the network ones are enforced today. */
 object PluginPermissions {
     const val INTERNET = "Internet"
     const val LOCAL_NETWORK = "LocalNetwork"
+    /** Legacy apps only. */
+    const val GLOBAL_INTERNET = "GlobalInternet"
     const val LOCATION = "Location"
     const val NOTIFICATIONS = "Notifications"
     const val CALENDAR = "Calendar"
-    const val HEALTH = "Health"
     const val CONTACTS = "Contacts"
+    const val TIMELINE = "Timeline"
+    const val READ_WATCH_SETTINGS = "ReadWatchSettings"
+    const val WRITE_WATCH_SETTINGS = "WriteWatchSettings"
+    const val READ_MUSIC = "ReadMusic"
+    const val CONTROL_MUSIC = "ControlMusic"
+    const val LAUNCH_APPS = "LaunchApps"
+    const val LEGACY_PEBBLEKIT = "LegacyPebbleKit"
+    const val PEBBLEKIT_2 = "PebbleKit2"
 
     const val PARAM_DOMAINS = "domains"
 }
@@ -72,6 +84,3 @@ fun requiredOfCaller(source: SourceDeclaration): Set<String> =
 
 fun requiredOfCaller(action: ActionDeclaration): Set<String> =
     action.callerPermissions.map { it.name }.toSet()
-
-/** What the caller declared, by name. */
-fun grantedToCaller(caller: List<PluginPermission>): Set<String> = caller.map { it.name }.toSet()

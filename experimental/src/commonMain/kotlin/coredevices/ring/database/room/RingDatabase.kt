@@ -13,28 +13,32 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import co.touchlab.kermit.Logger
+import coredevices.indexai.agent.ToolDeclarationRecord
+import coredevices.indexai.data.entity.AgentIterationEntity
+import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.ConversationMessageEntity
+import coredevices.indexai.data.entity.MessageTag
+import coredevices.indexai.data.entity.TolerantMessageTagListSerializer
+import coredevices.indexai.data.entity.TolerantSemanticResultSerializer
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RingTransferInfo
 import coredevices.indexai.data.entity.ToolCall
-import coredevices.indexai.data.entity.mcp_sandbox.BuiltinMcpGroupAssociation
-import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpGroupAssociation
-import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
-import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
-import coredevices.indexai.database.dao.BuiltinMcpGroupAssociationDao
+import coredevices.indexai.data.entity.mcp.DisabledBuiltinMcp
+import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
+import coredevices.indexai.database.dao.AgentIterationDao
 import coredevices.indexai.database.dao.ConversationMessageDao
-import coredevices.indexai.database.dao.HttpMcpGroupAssociationDao
+import coredevices.indexai.database.dao.DisabledBuiltinMcpDao
 import coredevices.indexai.database.dao.HttpMcpServerDao
 import coredevices.indexai.database.dao.LocalRecordingDao
-import coredevices.indexai.database.dao.McpSandboxGroupDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
+import coredevices.ring.data.entity.room.PluginGrantDenial
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -47,6 +51,7 @@ import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
+import coredevices.ring.database.room.dao.PluginGrantDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
 import coredevices.libindex.database.dao.RingTransferDao
@@ -71,21 +76,21 @@ import kotlin.uuid.Uuid
         ConversationMessageEntity::class,
         RecordingEntryEntity::class,
         RingTransfer::class,
-        BuiltinMcpGroupAssociation::class,
-        HttpMcpGroupAssociation::class,
         HttpMcpServerEntity::class,
-        McpSandboxGroupEntity::class,
+        DisabledBuiltinMcp::class,
         RecordingProcessingTaskEntity::class,
         TraceSessionEntity::class,
         TraceEntryEntity::class,
         CachedItem::class,
         CachedList::class,
+        PluginGrantDenial::class,
+        AgentIterationEntity::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 34,
+    version = 39,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -123,6 +128,15 @@ import kotlin.uuid.Uuid
         // 32→33: adds RecordingEntryEntity.errorType (classification of `error`).
         AutoMigration(from = 32, to = 33),
         // 33→34 is Migrate33To34, added to the builder in experimentalModule.
+        // 34→35: adds PluginGrantDenial.
+        AutoMigration(from = 34, to = 35),
+        // 35→36: adds ConversationMessageEntity.message_tags.
+        AutoMigration(from = 35, to = 36),
+        // 36→37 is Migrate36To37, added to the builder in experimentalModule.
+        // 37→38: adds AgentIterationEntity.
+        AutoMigration(from = 37, to = 38),
+        // 38→39: adds RecordingEntryEntity.transcribedViaLocalFallback.
+        AutoMigration(from = 38, to = 39),
     ]
 )
 @TypeConverters(Converters::class)
@@ -135,15 +149,15 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun conversationMessageDao(): ConversationMessageDao
     abstract fun recordingEntryDao(): RecordingEntryDao
     abstract fun ringTransferDao(): RingTransferDao
-    abstract fun builtinMcpGroupAssociationDao(): BuiltinMcpGroupAssociationDao
-    abstract fun httpMcpGroupAssociationDao(): HttpMcpGroupAssociationDao
     abstract fun httpMcpServerDao(): HttpMcpServerDao
-    abstract fun mcpSandboxGroupDao(): McpSandboxGroupDao
+    abstract fun disabledBuiltinMcpDao(): DisabledBuiltinMcpDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
     abstract fun traceSessionDao(): TraceSessionDao
     abstract fun traceEntryDao(): TraceEntryDao
     abstract fun cachedItemDao(): CachedItemDao
     abstract fun cachedListDao(): CachedListDao
+    abstract fun pluginGrantDao(): PluginGrantDao
+    abstract fun agentIterationDao(): AgentIterationDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -202,6 +216,54 @@ class Migrate33To34(isAndroid: Boolean) : Migration(33, 34) {
         } finally {
             statement.close()
         }
+    }
+}
+
+/**
+ * Replaces MCP sandbox groups with a flat server list. A server that was in the default (first)
+ * group is enabled; every other server is kept but disabled.
+ */
+class Migrate36To37(isAndroid: Boolean) : Migration(36, 37) {
+    private val builtinMcpNames = buildList {
+        add("builtin_note")
+        add("builtin_reminder")
+        add("builtin_calendar")
+        if (isAndroid) {
+            add("builtin_clock")
+            add("builtin_messaging")
+        }
+    }
+
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `DisabledBuiltinMcp` " +
+                "(`builtinMcpName` TEXT NOT NULL, PRIMARY KEY(`builtinMcpName`))"
+        )
+        connection.execSQL(
+            "ALTER TABLE `HttpMcpServerEntity` ADD COLUMN `enabled` INTEGER NOT NULL DEFAULT 1"
+        )
+        val defaultGroup = "(SELECT id FROM McpSandboxGroupEntity ORDER BY id LIMIT 1)"
+        connection.execSQL(
+            "UPDATE HttpMcpServerEntity SET enabled = 0 WHERE id NOT IN " +
+                "(SELECT httpMcpId FROM HttpMcpGroupAssociation WHERE groupId = $defaultGroup)"
+        )
+        val statement = connection.prepare(
+            "INSERT OR IGNORE INTO DisabledBuiltinMcp (builtinMcpName) SELECT ? WHERE ? NOT IN " +
+                "(SELECT builtinMcpName FROM BuiltinMcpGroupAssociation WHERE groupId = $defaultGroup)"
+        )
+        try {
+            builtinMcpNames.forEach { name ->
+                statement.bindText(1, name)
+                statement.bindText(2, name)
+                statement.step()
+                statement.reset()
+            }
+        } finally {
+            statement.close()
+        }
+        connection.execSQL("DROP TABLE `BuiltinMcpGroupAssociation`")
+        connection.execSQL("DROP TABLE `HttpMcpGroupAssociation`")
+        connection.execSQL("DROP TABLE `McpSandboxGroupEntity`")
     }
 }
 
@@ -286,7 +348,31 @@ class Converters {
 
     @TypeConverter
     fun StringToSemanticResult(string: String?) = string?.let {
-        JsonSnake.decodeFromString<SemanticResult>(it)
+        JsonSnake.decodeFromString(TolerantSemanticResultSerializer, it)
+    }
+
+    @TypeConverter
+    fun MessageTagListToString(tags: List<MessageTag>?) = tags?.let { JsonSnake.encodeToString(it) }
+
+    @TypeConverter
+    fun StringToMessageTagList(string: String?) = string?.let {
+        JsonSnake.decodeFromString(TolerantMessageTagListSerializer, it)
+    }
+
+    @TypeConverter
+    fun ToolDeclarationListToString(list: List<ToolDeclarationRecord>?) = list?.let { JsonSnake.encodeToString(it) }
+
+    @TypeConverter
+    fun StringToToolDeclarationList(string: String?) = string?.let {
+        JsonSnake.decodeFromString<List<ToolDeclarationRecord>>(it)
+    }
+
+    @TypeConverter
+    fun ConversationToString(messages: List<ConversationMessageDocument>?) = messages?.let { JsonSnake.encodeToString(it) }
+
+    @TypeConverter
+    fun StringToConversation(string: String?) = string?.let {
+        JsonSnake.decodeFromString<List<ConversationMessageDocument>>(it)
     }
 
     @TypeConverter

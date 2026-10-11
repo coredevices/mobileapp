@@ -19,7 +19,7 @@ expect class PhoneNetworkMonitor {
 }
 
 /** How the phone is reaching the internet, if it is. */
-internal object Connections {
+object Connections {
     const val NONE = "None"
     const val WIFI = "Wi-Fi"
     const val CELLULAR = "Cellular"

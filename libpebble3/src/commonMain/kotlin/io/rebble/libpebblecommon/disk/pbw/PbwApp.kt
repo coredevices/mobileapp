@@ -11,6 +11,8 @@ import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwPKJSFile
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.metadata.pbw.manifest.PbwManifest
+import io.rebble.libpebblecommon.plugin.PluginManifest
+import kotlinx.serialization.json.Json
 import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.files.FileSystem
@@ -44,6 +46,7 @@ class PbwApp(private val path: Path) {
     fun getPKJSFile(): Source {
         return requirePbwPKJSFile(path)
     }
+    fun getTextFile(name: String): String? = DiskUtil.getPbwTextFile(path, name)
     fun source(fileSystem: FileSystem = SystemFileSystem): RawSource {
         return fileSystem.source(path)
     }
@@ -54,6 +57,9 @@ class PbwApp(private val path: Path) {
  */
 fun PbwApp.bestVariantFor(watchType: WatchType): WatchType? =
     watchType.getCompatibleAppVariants().firstOrNull { getManifest(it) != null }
+
+/** False for a plugin-only pbw (a plugin, no watchapp binary for any platform). */
+fun PbwApp.hasWatchappBuild(): Boolean = WatchType.entries.any { getManifest(it) != null }
 
 fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
     val uuid = Uuid.parse(info.uuid)
@@ -72,9 +78,16 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         id = uuid,
         version = info.versionLabel,
         title = info.longName.ifBlank { info.shortName },
-        type = if (info.watchapp.watchface) "watchface" else "watchapp",
+        // A pbw with a plugin but no watchapp build is plugin-only: its own type, so it stays out
+        // of the app lists and off the watch (see AppType.Plugin).
+        type = when {
+            info.loadablePlugin != null && !hasWatchappBuild() -> "plugin"
+            info.watchapp.watchface -> "watchface"
+            else -> "watchapp"
+        },
         developerName = info.companyName,
-        configurable = info.capabilities.any { it == "configurable" },
+        // A config page makes an app configurable, even without the legacy "configurable" capability.
+        configurable = info.configPage != null || info.capabilities.any { it == "configurable" },
         pbwVersionCode = info.versionCode.toString(),
         sideloaded = true,
         sideloadeTimestamp = now.asMillisecond(),
@@ -82,5 +95,11 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         appstoreData = null,
         orderIndex = orderIndex,
         capabilities = info.capabilities,
+        pluginManifest = info.loadablePlugin
+            ?.let { pbwPluginJson.encodeToString(PluginManifest.serializer(), it) },
+        configPage = info.configPage,
+        manifestVersion = info.manifestVersion,
     )
 }
+
+private val pbwPluginJson = Json { encodeDefaults = true }

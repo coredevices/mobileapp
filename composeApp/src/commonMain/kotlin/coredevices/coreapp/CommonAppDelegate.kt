@@ -25,6 +25,7 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.sync.SyncManager
 import coredevices.util.transcription.CactusModelPathProvider
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -64,6 +65,7 @@ class CommonAppDelegate(
     private val firestoreKnownWatchesSync: FirestoreKnownWatchesSync,
     private val libPebble: LibPebble,
     private val platformHealthSync: PlatformHealthSync,
+    private val syncManager: SyncManager,
 ) : CoreBackgroundSync {
     private val logger = Logger.withTag("CommonAppDelegate")
     private val syncInProgress = MutableStateFlow(false)
@@ -172,6 +174,9 @@ class CommonAppDelegate(
         firestoreKnownWatchesSync.init()
         oneTimeSetLockerOrderMode()
         platformHealthSync.startAutoSync(GlobalScope)
+        GlobalScope.launch(Dispatchers.Default) {
+            syncManager.resume()
+        }
         if (settings.getBoolean(SHOWN_ONBOARDING, false)) {
             doneInitialOnboarding.onDoneInitialOnboarding()
         }

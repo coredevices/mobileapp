@@ -27,7 +27,10 @@ import coredevices.coreapp.util.initLogging
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.util.isDebugBuild
+import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
+import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
 import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
 import coredevices.ring.reminders.ReminderCompleter
@@ -36,6 +39,7 @@ import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
+import coredevices.util.sync.IosSyncScheduler
 import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -46,8 +50,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.experimental.ExperimentalNativeApi
-import kotlin.native.Platform
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
 import okio.ByteString.Companion.toByteString
@@ -232,6 +234,8 @@ object IOSDelegate : KoinComponent {
             }
         }
 
+        get<IosSyncScheduler>().install()
+
         requestBgRefresh(force = false, coreConfigHolder.config.value)
         val appVersion = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleVersion") as? String ?: "Unknown"
         val appVersionShort = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "Unknown"
@@ -282,6 +286,11 @@ object IOSDelegate : KoinComponent {
         logger.d { "userNotificationCenterDidReceive" }
         val userInfo = response.notification.request.content.userInfo ?: emptyMap<Any?, Any?>()
 
+        val permissionAnswer = handlePermissionNotificationResponse(get(), response.actionIdentifier, userInfo) {
+            bgTaskScope.launch(Dispatchers.Main) { completionHandler() }
+        }
+        if (permissionAnswer) return
+
         // Reminder notifications carry only the reminder id; the feed item to deep link to
         // isn't linked when the notification is scheduled, so resolve it now (at tap time).
         val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
@@ -320,10 +329,9 @@ object IOSDelegate : KoinComponent {
         completionHandler()
     }
 
-    @OptIn(ExperimentalNativeApi::class)
     private fun setupCrashlytics() {
         // Debug builds never upload their dSYMs, so their crashes can't be symbolicated.
-        if (Platform.isDebugBinary) {
+        if (AppContext().isDebugBuild()) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
             return
         }

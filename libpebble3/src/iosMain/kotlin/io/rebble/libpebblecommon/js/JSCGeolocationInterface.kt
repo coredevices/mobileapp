@@ -4,11 +4,12 @@ import io.rebble.libpebblecommon.js.GeolocationInterface
 import io.rebble.libpebblecommon.js.JsRunner
 import io.rebble.libpebblecommon.js.RegisterableJsInterface
 import kotlinx.coroutines.CoroutineScope
+import kotlin.uuid.Uuid
 
 class JSCGeolocationInterface(
     scope: CoroutineScope,
     jsRunner: JsRunner
-): GeolocationInterface(scope, jsRunner), RegisterableJsInterface {
+): GeolocationInterface(scope, jsRunner::eval, Uuid.parse(jsRunner.appInfo.uuid)), RegisterableJsInterface {
     override val interf = mapOf(
         "getCurrentPosition" to this::getCurrentPosition,
         "watchPosition" to this::watchPosition,
@@ -18,28 +19,7 @@ class JSCGeolocationInterface(
     )
     override val name = "_PebbleGeo"
 
-    override fun dispatch(method: String, args: List<Any?>): Int? {
-        fun num(i: Int) = args.getOrNull(i) as? Number
-        return when (method) {
-            "getCurrentPosition" -> {
-                val id = num(0)?.toDouble() ?: return null
-                val maxAge = num(1)?.toDouble() ?: -1.0
-                val timeout = num(2)?.toDouble() ?: -1.0
-                val highAccuracy = num(3)?.toDouble() ?: 0.0
-                getCurrentPosition(id, maxAge, timeout, highAccuracy)
-            }
-            "watchPosition" -> {
-                val id = num(0)?.toDouble() ?: return null
-                val interval = num(1)?.toDouble() ?: 500.0
-                val highAccuracy = num(2)?.toDouble() ?: 0.0
-                watchPosition(id, interval, highAccuracy)
-            }
-            "clearWatch" -> { num(0)?.toInt()?.let { clearWatch(it) }; null }
-            "getRequestCallbackID" -> getRequestCallbackID()
-            "getWatchCallbackID" -> getWatchCallbackID()
-            else -> error("Unknown method: $method")
-        }
-    }
+    override fun dispatch(method: String, args: List<Any?>): Int? = dispatchCall(method, args)
 
     override fun close() {
 

@@ -6,10 +6,12 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryErrorType
 import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.indexai.data.entity.isAnswer
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.data.IndexTimestamp
 import coredevices.ring.data.InflightIndexNotification
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.data.NoteShortcutType
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.database.entity.RingTransferStatus
@@ -81,7 +83,9 @@ enum class IndexNotificationChannel {
 
 data class NotificationAction(
     val title: String,
-    val deepLink: String
+    val deepLink: String,
+    /** Handle the deep link without bringing the app to the foreground. */
+    val background: Boolean = false,
 )
 
 sealed interface NotificationProgress {
@@ -103,6 +107,7 @@ class IndexNotificationManager(
     private val conversationMessageDao: ConversationMessageDao,
     private val platformIndexNotificationManager: PlatformIndexNotificationManager,
     private val prefs: Preferences,
+    private val providers: IntegrationProviderRepository,
     private val trace: RingTraceSession,
     private val platform: Platform,
     private val localTranscription: LocalTranscriptionService?,
@@ -190,9 +195,11 @@ class IndexNotificationManager(
         val actions = messages
             .filter { it.document.role == MessageRole.tool }
             .mapNotNull { it.document.semantic_result }
+            .filter { it !is SemanticResult.RequiresConfirmation }
+        val answer = messages.lastOrNull { it.document.isAnswer }?.document?.content?.takeIf { it.isNotBlank() }
 
         return when {
-            (lastMessageRole ?: MessageRole.user) == MessageRole.assistant || actions.any { it !is SemanticResult.SupportingData || !it.assistiveOnly } -> {
+            (lastMessageRole ?: MessageRole.user) == MessageRole.assistant || actions.any { it !is SemanticResult.SupportingData } -> {
                 val rxComplete = transfer.transferInfo?.transferCompleted
                 val pressToRxLatency = if (remoteTimestamp != null && rxComplete != null) {
                     Instant.fromEpochMilliseconds(rxComplete) - remoteTimestamp
@@ -200,7 +207,7 @@ class IndexNotificationManager(
                     null
                 }
 
-                if (actions.isEmpty()) {
+                if (actions.isEmpty() && answer == null) {
                     InflightIndexNotification.AgentRunning(
                         notifId,
                         timestamp,
@@ -214,7 +221,8 @@ class IndexNotificationManager(
                         entry.transcription ?: "<No text>",
                         pressToRxLatency,
                         actions,
-                        prefs.noteShortcut.value
+                        prefs.noteShortcut.value,
+                        answer,
                     )
                 }
 
@@ -342,7 +350,7 @@ class IndexNotificationManager(
                                             .toString(DurationUnit.SECONDS, 1)
                                         appendLine("Press->RX: $latencyInSeconds")
                                     }
-                                    if (notification.actionsTaken.isNotEmpty()) {
+                                    if (notification.actionsTaken.isNotEmpty() || notification.answer != null) {
                                         if (prefs.debugDetailsEnabled.value) {
                                             val actionNames = notification.actionsTaken
                                                 .map { it.actionText() }
@@ -350,6 +358,8 @@ class IndexNotificationManager(
                                             appendLine("Actions taken: $actionNames")
                                             appendLine()
                                             appendLine(buildNotifTimestamp(notification))
+                                        } else if (notification.answer != null) {
+                                            appendLine(notification.answer)
                                         } else {
                                             when (val lastAction = notification.actionsTaken.lastOrNull()) {
                                                 is SemanticResult.GenericFailure -> {
@@ -393,16 +403,6 @@ class IndexNotificationManager(
                                                         appendLine("Timer set to end at ${time.time.format(UITimeUtil.timeFormat())}")
                                                     }
                                                 }
-                                                is SemanticResult.SupportingData -> {
-                                                    if (!lastAction.summary.isNullOrBlank()) {
-                                                        appendLine(lastAction.summary)
-                                                    } else {
-                                                        appendLine(notification.userText)
-                                                    }
-                                                }
-                                                is SemanticResult.Response -> {
-                                                    appendLine(lastAction.text)
-                                                }
                                                 is SemanticResult.MessageSent -> {
                                                     appendLine(lastAction.text)
                                                 }
@@ -415,10 +415,10 @@ class IndexNotificationManager(
                                 }.trim()
                                 GenericNotification(
                                     id = notification.id,
-                                    title = if (prefs.debugDetailsEnabled.value) {
-                                        notification.userText
-                                    } else {
-                                        notification.actionsTaken.lastOrNull()?.actionText()
+                                    title = when {
+                                        prefs.debugDetailsEnabled.value -> notification.userText
+                                        notification.answer != null -> "Answered"
+                                        else -> notification.actionsTaken.lastOrNull()?.actionText()
                                             ?: "Assistant complete"
                                     },
                                     contentText = contentText,
@@ -439,12 +439,12 @@ class IndexNotificationManager(
                                                     "pebblecore://index-link/send-to-me?recordingId=${notification.recordingId}"
                                                 )
                                                 is NoteShortcutType.SendToNoteProvider -> NotificationAction(
-                                                    "Send to ${action.provider.title}",
-                                                    "pebblecore://index-link/send-to-note-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
+                                                    "Send to ${providers.shortcutDestinationTitle(action)}",
+                                                    "pebblecore://index-link/send-to-note-provider?recordingId=${notification.recordingId}&provider=${action.providerId}"
                                                 )
                                                 is NoteShortcutType.SendToReminderProvider -> NotificationAction(
-                                                    "Send to ${action.provider.title}",
-                                                    "pebblecore://index-link/send-to-reminder-provider?recordingId=${notification.recordingId}&provider=${action.provider.id}"
+                                                    "Send to ${providers.shortcutDestinationTitle(action)}",
+                                                    "pebblecore://index-link/send-to-reminder-provider?recordingId=${notification.recordingId}&provider=${action.providerId}"
                                                 )
                                             }
                                         }

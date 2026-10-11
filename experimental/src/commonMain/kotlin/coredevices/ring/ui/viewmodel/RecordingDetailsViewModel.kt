@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.database.dao.ConversationMessageDao
+import coredevices.ring.agent.confirmation.AgentUserConfirmation
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -50,6 +51,7 @@ class RecordingDetailsViewModel(
     private val ringTransferDao: RingTransferDao,
     private val itemRepo: ItemRepository,
     private val listRepo: ListRepository,
+    private val agentUserConfirmation: AgentUserConfirmation,
 ): ViewModel() {
     companion object {
         private val logger = Logger.withTag(RecordingDetailsViewModel::class.simpleName!!)
@@ -281,6 +283,10 @@ class RecordingDetailsViewModel(
                 }
             }
         }
+    }
+
+    fun respondToConfirmation(toolCallId: String, approved: Boolean) {
+        agentUserConfirmation.respond(recordingId, toolCallId, approved)
     }
 
     fun beginRecordingReply() {

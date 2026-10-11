@@ -7,8 +7,6 @@ import coredevices.firestore.User
 import coredevices.firestore.UsersDao
 import coredevices.mcp.client.McpSession
 import coredevices.ring.agent.BuiltinServletRepository
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
@@ -18,7 +16,6 @@ import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.util.Platform
 import coredevices.ring.agent.DefaultCaptureType
-import coredevices.ring.agent.LlmMode
 import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuthException
@@ -115,8 +112,6 @@ object TestUtil {
 }
 
 private object PreferencesTestImpl: Preferences {
-    override val llmMode: StateFlow<LlmMode>
-        get() = MutableStateFlow(LlmMode.RemoteOnly)
     override val useCactusTranscription: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
     override val cactusMode: CactusSTTMode
@@ -137,11 +132,9 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
-    override val secondaryModeMcpGroupId: StateFlow<Long?>
+    override val reminderProviderId: StateFlow<String>
         get() = TODO("Not yet implemented")
-    override val reminderProvider: StateFlow<ReminderProvider>
-        get() = TODO("Not yet implemented")
-    override val noteProvider: StateFlow<NoteProvider>
+    override val noteProviderId: StateFlow<String>
         get() = TODO("Not yet implemented")
     override val noteShortcut: StateFlow<NoteShortcutType>
         get() = TODO("Not yet implemented")
@@ -162,12 +155,14 @@ private object PreferencesTestImpl: Preferences {
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean>
         get() = MutableStateFlow(false)
+    override val scanByPairedAddress: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
 
-    override suspend fun setLlmMode(mode: LlmMode) {
+    override fun setUsePendingIntentScan(enabled: Boolean) {
         TODO("Not yet implemented")
     }
 
-    override fun setUsePendingIntentScan(enabled: Boolean) {
+    override fun setScanByPairedAddress(enabled: Boolean) {
         TODO("Not yet implemented")
     }
 
@@ -207,15 +202,11 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
-    override fun setSecondaryModeMcpGroupId(groupId: Long?) {
+    override fun setReminderProviderId(id: String) {
         TODO("Not yet implemented")
     }
 
-    override fun setReminderProvider(provider: ReminderProvider) {
-        TODO("Not yet implemented")
-    }
-
-    override fun setNoteProvider(provider: NoteProvider) {
+    override fun setNoteProviderId(id: String) {
         TODO("Not yet implemented")
     }
 
@@ -235,6 +226,8 @@ private object PreferencesTestImpl: Preferences {
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
+    override val targetCalendar: StateFlow<Int?> = MutableStateFlow(null)
+    override fun setTargetCalendar(calendarId: Int?) {}
 }
 
 private object UsersDaoTestImpl: UsersDao {

@@ -175,7 +175,7 @@ fun MyCollectionScreen(
                 }
             }
 
-            AppType.Watchapp -> {
+            AppType.Watchapp, AppType.Plugin -> {
                 LazyColumn(
                     state = lazyListState,
                     modifier = Modifier.fillMaxSize(),

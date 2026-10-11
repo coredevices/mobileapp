@@ -10,8 +10,8 @@ import io.rebble.libpebblecommon.imaging.EncodedImage
 import io.rebble.libpebblecommon.plugin.IconShape
 import io.rebble.libpebblecommon.plugin.ImageShape
 import io.rebble.libpebblecommon.plugin.LongTextShape
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.NumericValueShape
-import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.plugin.ShortTextShape
@@ -62,10 +62,11 @@ class WeatherPlugin(
     private val weatherLocationDao: WeatherLocationDao,
     private val libPebble: LibPebble,
     private val clock: Clock,
-) : Plugin {
+) : NativePlugin {
 
     override val pluginUuid: Uuid = BUILT_IN_WEATHER_UUID
     override val name: String = "Weather"
+    override val description: String = "Current conditions and forecast for the user's saved weather locations."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

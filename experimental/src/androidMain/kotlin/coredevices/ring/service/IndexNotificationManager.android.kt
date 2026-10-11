@@ -65,24 +65,39 @@ actual class PlatformIndexNotificationManager(
                 }
                 notification.actions.forEach { act ->
                     addAction(
-                        0,
-                        act.title,
-                        PendingIntentCompat.getActivity(
-                            context,
-                            0,
-                            Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
-                                data = act.deepLink.toUri()
-                                action = Intent.ACTION_VIEW
-                                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            },
-                            PendingIntent.FLAG_UPDATE_CURRENT,
-                            false
-                        )
+                        NotificationCompat.Action.Builder(0, act.title, actionPendingIntent(act))
+                            .setShowsUserInterface(!act.background)
+                            .build()
                     )
                 }
             }
             .build()
         notificationManager.notify(notification.id, notif)
+    }
+
+    private fun actionPendingIntent(act: NotificationAction): PendingIntent? = if (act.background) {
+        PendingIntentCompat.getBroadcast(
+            context,
+            0,
+            Intent(context, IndexNotificationActionReceiver::class.java).apply {
+                data = act.deepLink.toUri()
+                action = Intent.ACTION_VIEW
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
+    } else {
+        PendingIntentCompat.getActivity(
+            context,
+            0,
+            Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
+                data = act.deepLink.toUri()
+                action = Intent.ACTION_VIEW
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
     }
 
     actual fun cancel(notificationId: Int) {

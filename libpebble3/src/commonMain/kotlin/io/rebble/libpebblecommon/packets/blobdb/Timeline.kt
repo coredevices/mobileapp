@@ -309,6 +309,9 @@ enum class TimelineAttribute(val id: UByte, val maxLength: Int = -1) {
 
     /** Height/width of the image the phone holds for this item, in sixteenths. */
     ImageAspectRatio(0x34u),
+
+    /** Kind of weather pin, so the watch can show a translated title: 1 = sunrise, 2 = sunset. */
+    WeatherPinKind(0x35u),
     ;
 
     companion object {

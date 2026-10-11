@@ -53,6 +53,14 @@ interface RingTransferDao {
     @Query("SELECT * FROM RingTransfer WHERE createdAt > :timestamp")
     fun getTransfersAfterFlow(timestamp: Instant): Flow<List<RingTransfer>>
 
+    @Query("""
+        SELECT * FROM RingTransfer
+        WHERE isCurrentIndexIteration = 1 AND recordingId IS NULL
+        AND status IN ('Started', 'Saving', 'Completed')
+        ORDER BY createdAt
+    """)
+    fun getPendingTransfersFlow(): Flow<List<RingTransfer>>
+
     @Query("UPDATE RingTransfer SET fileId = :fileId WHERE id = :id")
     suspend fun updateTransferFileId(
         id: Long,
@@ -138,6 +146,7 @@ data class TransferInfoUpdate(
             RF.fileName AS feedItem_fileName,
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
+            RF.transcribedViaLocalFallback AS feedItem_transcribedViaLocalFallback,
             RF.error AS feedItem_error,
             RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,
@@ -171,6 +180,7 @@ data class TransferInfoUpdate(
             RF.fileName AS feedItem_fileName,
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
+            RF.transcribedViaLocalFallback AS feedItem_transcribedViaLocalFallback,
             RF.error AS feedItem_error,
             RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,

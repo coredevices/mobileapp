@@ -2,10 +2,12 @@ package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
+import coredevices.indexai.agent.AgentIteration
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
@@ -33,10 +35,13 @@ class FallbackAgent(
     ).apply { tryEmit(initialConversation) }
     override val conversation: SharedFlow<List<ConversationMessageDocument>> get() = _conversation
     private var published: List<ConversationMessageDocument> = initialConversation
+    private val _iterations = MutableSharedFlow<AgentIteration>()
+    override val iterations: SharedFlow<AgentIteration> get() = _iterations
 
     private val initialSize = initialConversation.size
     private var active: Agent = primary
     override val label get() = active.label
+    override val isCloud get() = active.isCloud
 
     override suspend fun send(
         input: String,
@@ -44,11 +49,21 @@ class FallbackAgent(
         sessionContext: SessionContext,
         includePromptsFromMcps: Map<String, Set<String>>,
         skipToolExecution: Boolean,
-    ) {
+    ) = withFallback {
+        it.send(input, mcpSession, sessionContext, includePromptsFromMcps, skipToolExecution)
+    }
+
+    override suspend fun resume(
+        mcpSession: McpSession,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>>,
+    ) = withFallback {
+        it.resume(mcpSession, sessionContext, includePromptsFromMcps)
+    }
+
+    private suspend fun withFallback(turn: suspend (Agent) -> Unit) {
         try {
-            runRelaying(primary) {
-                it.send(input, mcpSession, sessionContext, includePromptsFromMcps, skipToolExecution)
-            }
+            runRelaying(primary, turn)
             return
         } catch (e: CancellationException) {
             throw e
@@ -57,9 +72,7 @@ class FallbackAgent(
             if (primary.conversation.first().drop(initialSize).any { it.role == MessageRole.tool }) throw e
             logger.w(e) { "${primary.label} agent failed, falling back to ${fallback.label}: ${e.message}" }
         }
-        runRelaying(fallback) {
-            it.send(input, mcpSession, sessionContext, includePromptsFromMcps, skipToolExecution)
-        }
+        runRelaying(fallback, turn)
     }
 
     override suspend fun addMessage(message: ConversationMessageDocument) {
@@ -72,10 +85,14 @@ class FallbackAgent(
         active = agent
         coroutineScope {
             val relay = launch { agent.conversation.collect { publish(it) } }
+            val iterationRelay = launch(start = CoroutineStart.UNDISPATCHED) {
+                agent.iterations.collect { _iterations.emit(it) }
+            }
             try {
                 block(agent)
             } finally {
                 withContext(NonCancellable) {
+                    iterationRelay.cancelAndJoin()
                     relay.cancelAndJoin()
                     // The relay may not have drained the last emission before it was
                     // cancelled, and callers read the conversation once send() returns.

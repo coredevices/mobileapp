@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Todoist</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+           margin: 0; padding: 20px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { line-height: 1.45; }
+    label { display: block; font-size: 14px; font-weight: 600; margin: 20px 0 6px; }
+    input { box-sizing: border-box; width: 100%; padding: 11px 12px; font-size: 15px;
+            border: 1px solid rgba(128,128,128,.45); border-radius: 8px;
+            background: transparent; color: inherit; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    button, .button { box-sizing: border-box; display: inline-block; padding: 10px 16px;
+                      border: 0; border-radius: 8px; font: 15px inherit;
+                      background: #dc4c3e; color: white; text-decoration: none; }
+    button.secondary { background: rgba(128,128,128,.2); color: inherit; }
+    #status { margin-top: 16px; padding: 10px 12px; border-radius: 8px;
+              background: rgba(128,128,128,.15); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Todoist</h1>
+
+  <div class="buttons">
+    <button id="connect" type="button">Sign in with Todoist</button>
+    <button id="test" class="secondary" type="button">Test connection</button>
+    <button id="unlink" class="secondary" type="button">Unlink</button>
+  </div>
+  <div id="status">Starting the Todoist plugin…</div>
+
+  <script>
+    var statusElement = document.getElementById('status');
+
+    function send(message) {
+      return Pebble.sendMessage('plugin', message);
+    }
+
+    function showConfigured(configured, projectCount) {
+      if (!configured) {
+        statusElement.textContent = 'Todoist is not connected.';
+        return;
+      }
+      statusElement.textContent = typeof projectCount === 'number'
+        ? 'Todoist is connected. Found ' + projectCount + ' project' + (projectCount === 1 ? '.' : 's.')
+        : 'Todoist is connected on this phone.';
+    }
+
+    document.getElementById('connect').onclick = async function () {
+      statusElement.textContent = 'Opening Todoist sign-in…';
+      var result = await send({ type: 'connect' });
+      if (result.error) {
+        statusElement.textContent = result.error;
+        return;
+      }
+      showConfigured(result.configured, result.projectCount);
+    };
+
+    document.getElementById('test').onclick = async function () {
+      statusElement.textContent = 'Testing…';
+      var result = await send({ type: 'testConnection' });
+      if (result.error) {
+        statusElement.textContent = result.error;
+        return;
+      }
+      showConfigured(result.configured, result.projectCount);
+    };
+
+    document.getElementById('unlink').onclick = async function () {
+      showConfigured((await send({ type: 'unlink' })).configured);
+    };
+
+    Pebble.addEventListener('ready', async function (event) {
+      if (event.target !== 'plugin') return;
+      showConfigured((await send({ type: 'status' })).configured);
+    });
+  </script>
+</body>
+</html>

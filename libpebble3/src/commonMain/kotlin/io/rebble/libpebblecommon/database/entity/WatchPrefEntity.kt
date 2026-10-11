@@ -38,6 +38,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -470,21 +471,11 @@ enum class BacklightPresetMode(override val code: UByte, override val displayNam
     Advanced(3u, "Advanced"),
 }
 
-// Built-in firmware languages. Codes MUST match the ShellLanguage enum in
-// pebble-firmware:src/fw/shell/prefs.h. "Custom" (0) means the watch uses whatever language pack
-// was uploaded via PutBytes (see LanguagePackInstaller); the rest are baked into the firmware.
-// Labels mirror the on-watch Settings > Display > Language menu.
+// Codes MUST match the ShellLanguage enum in pebble-firmware:fw/shell/prefs.h. "Custom" (0) means
+// the watch uses whatever language pack was uploaded via PutBytes (see LanguagePackInstaller).
 enum class WatchLanguage(override val code: UByte, override val displayName: String) : WatchPrefEnum {
     Custom(0u, "Custom (Language Pack)"),
     English(1u, "English"),
-    Catalan(2u, "Català"),
-    German(3u, "Deutsch"),
-    Spanish(4u, "Español"),
-    French(5u, "Français"),
-    Italian(6u, "Italiano"),
-    Dutch(7u, "Nederlands"),
-    Portuguese(8u, "Português"),
-    Polish(9u, "Polski"),
 }
 
 enum class EnumWatchPref(
@@ -610,7 +601,7 @@ enum class EnumWatchPref(
     Language(
         id = "language",
         displayName = "Language",
-        description = "Built-in firmware language. Choose Custom to use an uploaded language pack.",
+        description = "Choose Custom to use the installed language pack.",
         defaultValue = WatchLanguage.Custom,
         options = WatchLanguage.entries,
     ),
@@ -671,7 +662,7 @@ enum class NumberWatchPref(
         description = "Notifications time out (disappear) after this period (unless Quiet Time is enabled)",
         defaultValue = 3.minutes.inWholeMilliseconds,
         type = WatchPrefType.TypeUInt32,
-        min = 0,
+        min = 15.seconds.inWholeMilliseconds.toInt(),
         max = 10.minutes.inWholeMilliseconds.toInt(),
         unit = "ms",
     ),

@@ -73,7 +73,7 @@ actual class PlatformIndexNotificationManager {
                 UNNotificationAction.actionWithIdentifier(
                     identifier = "action-$index",
                     title = action.title,
-                    options = UNNotificationActionOptionForeground
+                    options = if (action.background) 0u else UNNotificationActionOptionForeground,
                 )
             }
             val category = UNNotificationCategory.categoryWithIdentifier(

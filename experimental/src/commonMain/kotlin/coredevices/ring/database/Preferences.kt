@@ -3,10 +3,9 @@ package coredevices.ring.database
 import com.russhwolf.settings.Settings
 import coredevices.libindex.database.BasePreferences
 import coredevices.ring.agent.DefaultCaptureType
-import coredevices.ring.agent.LlmMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
+import coredevices.ring.agent.integrations.providers.LegacyProviderIds
 import coredevices.ring.data.NoteShortcutType
 import coredevices.util.models.CactusSTTMode
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +17,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 interface Preferences: BasePreferences {
-    val llmMode: StateFlow<LlmMode>
     val useCactusTranscription: StateFlow<Boolean>
     val cactusMode: CactusSTTMode
     val ringPairedOld: StateFlow<Boolean>
@@ -26,10 +24,10 @@ interface Preferences: BasePreferences {
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
     val secondaryMode: StateFlow<SecondaryMode>
-    /** Sandbox group used when [secondaryMode] is [SecondaryMode.McpSandbox]. */
-    val secondaryModeMcpGroupId: StateFlow<Long?>
-    val reminderProvider: StateFlow<ReminderProvider>
-    val noteProvider: StateFlow<NoteProvider>
+    /** Ids of [coredevices.ring.agent.integrations.providers.IntegrationProvider]s; resolve them
+     *  through `IntegrationProviderRepository`, which also handles a selection that no longer exists. */
+    val reminderProviderId: StateFlow<String>
+    val noteProviderId: StateFlow<String>
     val noteShortcut: StateFlow<NoteShortcutType>
     val autoDismissActionNotifications: StateFlow<Boolean>
     val backupEnabled: StateFlow<Boolean>
@@ -48,16 +46,14 @@ interface Preferences: BasePreferences {
     /** Android only: always false on iOS, where setting it throws. */
     val usePendingIntentScan: StateFlow<Boolean>
 
-    suspend fun setLlmMode(mode: LlmMode)
     suspend fun setUseCactusTranscription(useCactus: Boolean)
     fun setCactusMode(mode: CactusSTTMode)
     fun setMusicControlMode(mode: MusicControlMode)
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
     fun setSecondaryMode(mode: SecondaryMode)
-    fun setSecondaryModeMcpGroupId(groupId: Long?)
-    fun setReminderProvider(provider: ReminderProvider)
-    fun setNoteProvider(provider: NoteProvider)
+    fun setReminderProviderId(id: String)
+    fun setNoteProviderId(id: String)
     fun setNoteShortcut(shortcut: NoteShortcutType)
     fun setAutoDismissActionNotifications(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
@@ -68,25 +64,14 @@ interface Preferences: BasePreferences {
     fun setLastBackupCount(count: Int?)
     fun setPlatformSttDefaulted()
     fun setUsePendingIntentScan(enabled: Boolean)
-
     val defaultCaptureType: StateFlow<DefaultCaptureType>
     fun setDefaultCaptureType(type: DefaultCaptureType)
+    val targetCalendar: StateFlow<Int?>
+    fun setTargetCalendar(calendarId: Int?)
 }
 
 class PreferencesImpl(private val settings: Settings): Preferences {
 
-    private val _llmMode = MutableStateFlow(
-        LlmMode.fromId(
-            settings.getIntOrNull("llm_mode")
-                // Migrated from the "use local LLM" switch this preference replaced.
-                ?: if (settings.getBoolean("use_cactus_agent", false)) {
-                    LlmMode.LocalOnly.id
-                } else {
-                    LlmMode.RemoteOnly.id
-                }
-        )
-    )
-    override val llmMode = _llmMode.asStateFlow()
     private val _useCactusTranscription = MutableStateFlow(settings.getBoolean("use_cactus_transcription", true))
     override val useCactusTranscription = _useCactusTranscription.asStateFlow()
     override val cactusMode get() = CactusSTTMode.fromId(settings.getInt("cactus_mode", 0))
@@ -140,22 +125,20 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
     override val secondaryMode = _secondaryMode.asStateFlow()
-    private val _secondaryModeMcpGroupId = MutableStateFlow(
-        settings.getLongOrNull("ring_secondary_mode_mcp_group")
+    private val _reminderProviderId = MutableStateFlow(
+        settings.getStringOrNull("reminder_provider_id")
+            ?: settings.getIntOrNull("reminder_provider")?.let(LegacyProviderIds::reminderProviderId)
+            ?: BuiltInIntegrationProviders.Index.id
     )
-    override val secondaryModeMcpGroupId = _secondaryModeMcpGroupId.asStateFlow()
-    private val _reminderProvider = MutableStateFlow(
-        settings.getInt("reminder_provider", ReminderProvider.BuiltIn.id)
-            .let { ReminderProvider.fromId(it)!! }
+    override val reminderProviderId = _reminderProviderId.asStateFlow()
+    private val _noteProviderId = MutableStateFlow(
+        settings.getStringOrNull("note_provider_id")
+            ?: settings.getIntOrNull("note_provider")?.let(LegacyProviderIds::noteProviderId)
+            ?: BuiltInIntegrationProviders.Index.id
     )
-    override val reminderProvider = _reminderProvider.asStateFlow()
-    private val _noteProvider = MutableStateFlow(
-        settings.getInt("note_provider", NoteProvider.Builtin.id)
-            .let { NoteProvider.fromId(it)!! }
-    )
-    override val noteProvider = _noteProvider.asStateFlow()
+    override val noteProviderId = _noteProviderId.asStateFlow()
     private val _noteShortcut = MutableStateFlow<NoteShortcutType>(settings.getStringOrNull("note_shortcut")
-        ?.let { Json.decodeFromString(it) } ?: NoteShortcutType.SendToMe)
+        ?.let { LegacyProviderIds.migrate(Json.decodeFromString(it)) } ?: NoteShortcutType.SendToMe)
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
     private val _autoDismissActionNotifications = MutableStateFlow(settings.getBoolean("auto_dismiss_action_notifications", true))
     override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
@@ -179,13 +162,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
-
-    override suspend fun setLlmMode(mode: LlmMode) {
-        withContext(Dispatchers.IO) {
-            settings.putInt("llm_mode", mode.id)
-            _llmMode.value = mode
-        }
-    }
+    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", true))
+    override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
 
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {
         withContext(Dispatchers.IO) {
@@ -250,23 +228,14 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _secondaryMode.value = mode
     }
 
-    override fun setSecondaryModeMcpGroupId(groupId: Long?) {
-        if (groupId != null) {
-            settings.putLong("ring_secondary_mode_mcp_group", groupId)
-        } else {
-            settings.remove("ring_secondary_mode_mcp_group")
-        }
-        _secondaryModeMcpGroupId.value = groupId
+    override fun setReminderProviderId(id: String) {
+        settings.putString("reminder_provider_id", id)
+        _reminderProviderId.value = id
     }
 
-    override fun setReminderProvider(provider: ReminderProvider) {
-        settings.putInt("reminder_provider", provider.id)
-        _reminderProvider.value = provider
-    }
-
-    override fun setNoteProvider(provider: NoteProvider) {
-        settings.putInt("note_provider", provider.id)
-        _noteProvider.value = provider
+    override fun setNoteProviderId(id: String) {
+        settings.putString("note_provider_id", id)
+        _noteProviderId.value = id
     }
 
     override fun setNoteShortcut(shortcut: NoteShortcutType) {
@@ -334,6 +303,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         _usePendingIntentScan.value = enabled
     }
 
+    override fun setScanByPairedAddress(enabled: Boolean) {
+        settings.putBoolean("scan_by_paired_address", enabled)
+        _scanByPairedAddress.value = enabled
+    }
+
     private val _defaultCaptureType = MutableStateFlow(
         DefaultCaptureType.fromId(
             settings.getInt("default_capture_type", DefaultCaptureType.Note.id)
@@ -344,6 +318,19 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setDefaultCaptureType(type: DefaultCaptureType) {
         settings.putInt("default_capture_type", type.id)
         _defaultCaptureType.value = type
+    }
+
+    private val _targetCalendar = MutableStateFlow(
+        settings.getIntOrNull("target_calendar")
+    )
+    override val targetCalendar: StateFlow<Int?> = _targetCalendar.asStateFlow()
+
+    override fun setTargetCalendar(calendarId: Int?) {
+        calendarId?.let {
+            settings.putInt("target_calendar", calendarId)
+        } ?: settings.remove("target_calendar")
+
+        _targetCalendar.value = calendarId
     }
 }
 
@@ -364,7 +351,7 @@ enum class MusicControlMode(val id: Int) {
 enum class SecondaryMode(val id: Int) {
     Disabled(0),
     Search(1),
-    /** No longer selectable; only ever read back to migrate to a webhook-only gesture route. */
+    /** No longer selectable; only ever read back to migrate to a gesture route. */
     IndexWebhook(2),
     McpSandbox(3);
 

@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
@@ -269,6 +270,7 @@ class WeatherFetcher(
             }.ifEmpty { null }?.joinToString("\n—\n")
             createTimelinePin(
                 title = "Sunrise",
+                kind = WeatherPinKind.Sunrise,
                 subtitle = "${primaryForecast.day.temp}°/${primaryForecast.night.temp}°",
                 dayOrNight = primaryForecast.day,
                 timestamp = primaryForecast.sunrise,
@@ -292,6 +294,7 @@ class WeatherFetcher(
         }.ifEmpty { null }?.joinToString("\n—\n")
         createTimelinePin(
             title = "Sunset",
+            kind = WeatherPinKind.Sunset,
             subtitle = "$dayTempString/${primaryForecast.night.temp}°",
             dayOrNight = primaryForecast.night,
             timestamp = primaryForecast.sunset,
@@ -304,6 +307,7 @@ class WeatherFetcher(
     private fun createTimelinePin(
         uuid: Uuid,
         title: String,
+        kind: WeatherPinKind,
         subtitle: String,
         dayOrNight: DailyDayNight,
         timestamp: Instant,
@@ -329,6 +333,7 @@ class WeatherFetcher(
                     headings { listOf(" ") }
                     paragraphs { listOf(it) }
                 }
+                uByte(TimelineAttribute.WeatherPinKind) { kind.value }
             }
             actions {
                 action(TimelineItem.Action.Type.OpenWatchapp) {
@@ -350,6 +355,11 @@ fun Place.usefulName(): String? {
 //            "postalCode=$postalCode administrativeArea=$administrativeArea subAdministrativeArea=$subAdministrativeArea " +
 //            "locality=$locality subLocality=$subLocality thoroughfare=$thoroughfare subThoroughfare=$subThoroughfare" }
     return locality ?: street
+}
+
+internal enum class WeatherPinKind(val value: UByte) {
+    Sunrise(1u),
+    Sunset(2u),
 }
 
 enum class Day(

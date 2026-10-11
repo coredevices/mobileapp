@@ -87,6 +87,7 @@ class IosSystemCalendar(
                 ownerId = it.source?.sourceIdentifier ?: "unknown",
                 color = it.CGColor?.cgColorToInt() ?: 0,
                 enabled = true,
+                writable = it.allowsContentModifications,
             )
         }
     }
@@ -186,11 +187,14 @@ class IosSystemCalendar(
         return EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent) == EKAuthorizationStatusAuthorized
     }
 
-    override suspend fun createEvent(event: NewCalendarEvent): String? {
+    override suspend fun defaultCalendarPlatformId(): String? =
+        eventStore()?.defaultCalendarForNewEvents?.calendarIdentifier
+
+    override suspend fun createEvent(calendarId: String, event: NewCalendarEvent): String? {
         val ek = eventStore() ?: return null
-        val calendar = ek.defaultCalendarForNewEvents
+        val calendar = ek.calendarWithIdentifier(calendarId)
         if (calendar == null) {
-            logger.e { "No default calendar for new events" }
+            logger.e { "Calendar not found to create event" }
             return null
         }
         val ekEvent = EKEvent.eventWithEventStore(ek)

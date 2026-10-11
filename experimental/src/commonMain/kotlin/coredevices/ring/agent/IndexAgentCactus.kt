@@ -18,6 +18,7 @@ import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.util.CoreConfigFlow
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
+import io.rebble.libpebblecommon.connection.Plugins
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -36,9 +37,16 @@ import kotlin.time.Clock
 class IndexAgentCactus(
     private val modelProvider: CactusModelProvider,
     conversation: List<ConversationMessageDocument>,
+    private val plugins: Plugins,
     private val inferenceBoost: InferenceBoostProvider = NoOpInferenceBoostProvider()
 ) : KoinComponent, ToolCallingAgent(conversation) {
     override val label = "Cactus"
+    override val isCloud = false
+
+    companion object {
+        /** Prefix of `language_model_used` on assistant messages this agent produced. */
+        const val LANGUAGE_MODEL_PREFIX = "cactus-"
+    }
 
     override val logger = Logger.withTag("AgentCactus")
 
@@ -70,7 +78,8 @@ class IndexAgentCactus(
     // runs inference on the secondary part, regardless of how the tool is named.
     private fun prepareTools(tools: List<McpSessionTool>): CactusTools {
         val parentMap = mutableMapOf<String, String>()
-        val tools = tools.filterNot { it.integrationName in LOCAL_MODEL_UNSUPPORTED_SERVLETS }
+        val unsupported = LOCAL_MODEL_UNSUPPORTED_SERVLETS + plugins.getAllPlugins().map { it.name }
+        val tools = tools.filterNot { it.integrationName in unsupported }
         val toolsJson = buildJsonArray {
             tools.forEach { (parentName, tool) ->
                 val definition = tool.definition
@@ -171,7 +180,7 @@ class IndexAgentCactus(
                     function = FunctionToolCall(name = name, arguments = args.toString())
                 )
             },
-            language_model_used = "cactus-${modelProvider.getLMModelPath().substringAfterLast("/")}"
+            language_model_used = LANGUAGE_MODEL_PREFIX + modelProvider.getLMModelPath().substringAfterLast("/")
         )
     }
 

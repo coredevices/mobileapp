@@ -76,6 +76,15 @@ object DiskUtil {
         }
     }
 
+    fun getPbwTextFile(pbwPath: Path, fileName: String): String? {
+        return try {
+            openZip(pbwPath).source(fileName.toPath()).asKotlinxIoRawSource().buffered()
+                .use { it.readString() }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
     fun requirePbwPKJSFile(pbwPath: Path): Source {
         val source = try {
             openZip(pbwPath).source("pebble-js-app.js".toPath()).asKotlinxIoRawSource()

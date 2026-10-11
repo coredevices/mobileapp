@@ -1,11 +1,15 @@
 package coredevices.ring.bugreport
 
+import coredevices.indexai.agent.ToolDeclarationRecord
+import coredevices.indexai.data.entity.AgentIterationEntity
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
+import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +18,8 @@ import kotlin.time.Instant
 class RecentRecordingsExportTest {
 
     @Test
-    fun serializesRecordingEntriesAndMessagesRoundTrip() {
+    fun serializesRecordingEntriesMessagesAndIterationsRoundTrip() {
+        val userMessage = ConversationMessageDocument(role = MessageRole.user, content = "hello")
         val export = RecentRecordingExport(
             recording = LocalRecording(
                 id = 7,
@@ -40,7 +45,19 @@ class RecentRecordingsExportTest {
                     id = 1,
                     recordingId = 7,
                     timestamp = Instant.fromEpochMilliseconds(1_600),
-                    document = ConversationMessageDocument(role = MessageRole.user, content = "hello"),
+                    document = userMessage,
+                )
+            ),
+            iterations = listOf(
+                AgentIterationEntity(
+                    id = 1,
+                    recordingId = 7,
+                    timestamp = Instant.fromEpochMilliseconds(1_700),
+                    agent = "Nenya",
+                    toolDeclarations = listOf(
+                        ToolDeclarationRecord("fake", Tool(name = "create_note", inputSchema = ToolSchema()))
+                    ),
+                    conversation = listOf(userMessage),
                 )
             ),
         )
@@ -62,5 +79,11 @@ class RecentRecordingsExportTest {
         val message = decoded.messages.single()
         assertEquals(MessageRole.user, message.document.role)
         assertEquals("hello", message.document.content)
+
+        val iteration = decoded.iterations.single()
+        assertEquals("Nenya", iteration.agent)
+        assertEquals(Instant.fromEpochMilliseconds(1_700), iteration.timestamp)
+        assertEquals("fake" to "create_note", iteration.toolDeclarations.single().let { it.integrationName to it.definition.name })
+        assertEquals(listOf(userMessage), iteration.conversation)
     }
 }

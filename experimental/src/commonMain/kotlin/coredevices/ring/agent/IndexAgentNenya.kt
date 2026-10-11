@@ -15,12 +15,6 @@ class IndexAgentNenya(
 ): AgentNenya(nenyaClient, agentContext(captureType), NenyaModel.Default, conversation) {
     override val label = "Nenya"
 
-    override val maxToolRounds: Int
-        get() = when (model) {
-            NenyaModel.Default, NenyaModel.Search -> super.maxToolRounds
-            NenyaModel.HighCapability -> 8
-        }
-
     override val logger: Logger = Logger.withTag("IndexAgentNenya")
     companion object {
         fun agentContext(captureType: DefaultCaptureType): String {
@@ -36,8 +30,7 @@ help with a multitude of tasks in addition to this too.
  - A request that pairs a future date or time with a task is a reminder request even without the word 'remind', for example 'Thursday at 2pm to try the agent SDK', 'tomorrow: call the bank', or 'in 20 minutes take the bread out' should create reminders. A bare duration with no task (e.g. just '20 minutes') stays a note unless a timer was requested.
  - 'Remember to <do something>' means the same as 'remind me to <do something>': create a reminder, without a time if none was given. For example 'Remember to put the birthday on the calendar' should create a reminder with the message 'Put the birthday on the calendar'. Only 'remember' followed by a fact rather than an action to take, for example 'remember that the gate code is 4321', stays a note.
  - Prioritise the first action a user requests, for example 'remind me tomorrow to message John' should create a reminder and not attempt a message.
- - When users provide multiple items, for example 'remind me to buy milk and bread tomorrow', or 'add Apple and China to my book list', take a single action with
-both as the content unless it's clearly two separate actions, for example 'remind me to buy milk tomorrow and bread the day after' should create two reminders.
+ - When the user provides a list of items intended to be added to the same list, you may perform multiple calls to achieve adding separate items if required.
  - When fulfilling a user request, do not also passively take a $capture if you have already taken another requested action.
 
 ## Response and action guidelines:

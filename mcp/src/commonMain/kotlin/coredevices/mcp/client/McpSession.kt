@@ -43,7 +43,8 @@ open class McpSession(
                     it.listTools().map { tool ->
                         McpSessionTool(
                             integrationName = it.name,
-                            tool = tool
+                            tool = tool,
+                            integrationDescription = it.description,
                         )
                     }
                 } catch (e: Exception) {
@@ -105,7 +106,8 @@ open class McpSession(
 
 data class McpSessionTool(
     val integrationName: String,
-    val tool: McpTool
+    val tool: McpTool,
+    val integrationDescription: String? = null,
 )
 
 /**

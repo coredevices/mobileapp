@@ -17,8 +17,8 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /**
- * An [McpSession] that keeps the tool list offered to the model small. Once the session holds more
- * than [maxEagerTools] tools, only the [eagerIntegrations] are listed directly; every other
+ * An [McpSession] that keeps the tool list offered to the model small. Once the session holds at
+ * least [lazyLoadThreshold] tools, only the [eagerIntegrations] are listed directly; every other
  * integration becomes a group the model can pull in through a synthetic `load_tools` tool, whose
  * description catalogues the groups with a few sample tools each. Loaded groups stay loaded for
  * the life of the session.
@@ -32,14 +32,14 @@ class LazyLoadingMcpSession(
     integrations: List<McpIntegration>,
     scope: CoroutineScope,
     private val eagerIntegrations: Set<String>,
-    private val maxEagerTools: Int = DEFAULT_MAX_EAGER_TOOLS,
+    private val lazyLoadThreshold: Int = DEFAULT_LAZY_LOAD_THRESHOLD,
 ) : McpSession(integrations, scope) {
     private val loadedGroups = mutableSetOf<String>()
     private var loader: LoadToolsTool? = null
 
     override suspend fun listTools(): List<McpSessionTool> {
         val allTools = super.listTools()
-        if (allTools.size <= maxEagerTools) {
+        if (allTools.size < lazyLoadThreshold) {
             loader = null
             return allTools
         }
@@ -88,15 +88,12 @@ class LazyLoadingMcpSession(
         val names = tools.joinToString(", ") { it.tool.definition.name }
         return ToolCallResult(
             "Loaded ${tools.size} tools from '$group', now available to call: $names",
-            SemanticResult.SupportingData(
-                "Loaded MCP $group with ${tools.size} tools",
-                assistiveOnly = true
-            )
+            SemanticResult.SupportingData("Loaded MCP $group with ${tools.size} tools")
         )
     }
 
     companion object {
-        const val DEFAULT_MAX_EAGER_TOOLS = 20
+        const val DEFAULT_LAZY_LOAD_THRESHOLD = 15
         const val LOADER_INTEGRATION_NAME = "tool_loader"
         const val LOAD_TOOLS_NAME = "load_tools"
         private const val LOADER_EXTRA_CONTEXT =
@@ -107,8 +104,9 @@ class LazyLoadingMcpSession(
 
 /**
  * Tools grouped by integration, with a short sample of each group for the loader's description.
- * Tools named `namespace__tool` are sampled round-robin across namespaces so the sample hints at
- * the group's full breadth.
+ * A group whose integration describes itself leads with that and samples tool names only; otherwise
+ * each sample carries its own description. Tools named `namespace__tool` are sampled round-robin
+ * across namespaces so the sample hints at the group's full breadth.
  */
 internal class ToolCatalog(
     tools: List<McpSessionTool>,
@@ -120,13 +118,22 @@ internal class ToolCatalog(
 
     fun describes(tools: List<McpSessionTool>): Boolean = definitions == tools.definitions()
 
-    private fun List<McpSessionTool>.definitions() = map { it.integrationName to it.tool.definition }
+    private fun List<McpSessionTool>.definitions() =
+        map { Triple(it.integrationName, it.integrationDescription, it.tool.definition) }
 
     fun describe(): String = groups.entries.joinToString("\n") { (group, tools) ->
-        val samples = sample(tools).joinToString(", ") { describeSample(it.tool.definition) }
+        "- $group (${tools.size} tools): ${describeGroup(tools)}"
+    }
+
+    private fun describeGroup(tools: List<McpSessionTool>): String {
+        val description = tools.firstNotNullOfOrNull { it.integrationDescription?.trim()?.takeIf(String::isNotEmpty) }
+        val samples = sample(tools).joinToString(", ") {
+            if (description != null) it.tool.definition.name else describeSample(it.tool.definition)
+        }
         val remaining = tools.size - minOf(tools.size, samplesPerGroup)
         val more = if (remaining > 0) " and $remaining more" else ""
-        "- $group (${tools.size} tools): $samples$more"
+        val intro = description?.let { "${it.trimEnd('.')}. Tools: " }.orEmpty()
+        return intro + samples + more
     }
 
     private fun sample(tools: List<McpSessionTool>): List<McpSessionTool> {

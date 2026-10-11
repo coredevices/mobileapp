@@ -3,8 +3,8 @@ package coredevices.ring.agent
 import com.russhwolf.settings.MapSettings
 import coredevices.indexai.util.JsonSnake
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderTool
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.database.PreferencesImpl
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -42,11 +42,11 @@ class DefaultCaptureTypeTest {
     fun reminderCapturesGoToIndexRemindersUntilTheUserPicksSomethingElse() {
         val settings = MapSettings()
 
-        assertEquals(ReminderProvider.BuiltIn, PreferencesImpl(settings).reminderProvider.value)
+        assertEquals(BuiltInIntegrationProviders.Index.id, PreferencesImpl(settings).reminderProviderId.value)
 
-        PreferencesImpl(settings).setReminderProvider(ReminderProvider.GoogleTasks)
+        PreferencesImpl(settings).setReminderProviderId(BuiltInIntegrationProviders.GoogleTasks.id)
 
-        assertEquals(ReminderProvider.GoogleTasks, PreferencesImpl(settings).reminderProvider.value)
+        assertEquals(BuiltInIntegrationProviders.GoogleTasks.id, PreferencesImpl(settings).reminderProviderId.value)
     }
 
     @Test

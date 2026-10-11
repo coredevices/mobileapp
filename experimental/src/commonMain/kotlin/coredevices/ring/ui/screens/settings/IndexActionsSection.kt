@@ -1,5 +1,10 @@
 package coredevices.ring.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,18 +14,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ExpandMore
@@ -29,21 +38,29 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withCompositionLocal
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -53,97 +70,100 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.IndexAction
+import coredevices.ring.agent.IndexPlugin
 import coredevices.ring.agent.NOT_CONNECTED_REASON
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
+import coredevices.ring.agent.pebble_plugin.PluginGrant
+import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.screens.settings.mcp.HttpServerEditDialog
 import coredevices.ring.ui.theme.IndexTheme
+import coredevices.ring.ui.theme.toggleButtonColors
 import coredevices.ui.M3Dialog
-import coredevices.util.Platform
-import coredevices.util.isAndroid
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import kotlin.uuid.Uuid
 
-/** Actions are only reachable through the Index agent, so they are off when no gesture routes there. */
+/** Actions are only reachable through an Index agent, so they are off when no gesture routes to one. */
 internal fun nothingRoutesToIndexAgent(routes: Map<RingGesture, GestureDestination>): Boolean =
-    routes.values.none { it is GestureDestination.IndexAgent }
+    routes.values.none {
+        it == GestureDestination.IndexAgent ||
+            it == GestureDestination.LocalAgent ||
+            it == GestureDestination.RemoteAgent
+    }
 
 internal fun captureTypeLabel(type: DefaultCaptureType): String = type.title.lowercase()
-
-/** The built-in providers are branded "Index Notes" / "Index Reminders" on this screen. The enum
- *  titles are shown verbatim elsewhere, so this stays display-only. */
-internal val NoteProvider.settingsTitle: String
-    get() = if (this == NoteProvider.Builtin) "Index Notes" else title
-
-internal val ReminderProvider.settingsTitle: String
-    get() = if (this == ReminderProvider.BuiltIn) "Index Reminders" else title
 
 internal fun contactsBadge(count: Int): String =
     "$count ${if (count == 1) "contact" else "contacts"}"
 
 internal fun captureDestinationLabel(
     type: DefaultCaptureType,
-    noteProvider: NoteProvider,
-    reminderProvider: ReminderProvider,
+    noteProvider: IntegrationProvider,
+    reminderProvider: IntegrationProvider,
 ): String = when (type) {
-    DefaultCaptureType.Note -> noteProvider.settingsTitle
-    DefaultCaptureType.Reminder -> reminderProvider.settingsTitle
+    DefaultCaptureType.Note -> noteProvider.notesTitle
+    DefaultCaptureType.Reminder -> reminderProvider.remindersTitle
 }
 
-internal data class DestOption<T>(
-    val provider: T,
+internal data class DestOption(
+    val provider: IntegrationProvider,
     val title: String,
     val connected: Boolean,
     val configurable: Boolean = false,
 )
 
+/** [providers] is every note provider on this platform; [available] the connected subset. */
 internal fun noteDestOptions(
-    available: List<NoteProvider>,
-    isAndroid: Boolean,
-): List<DestOption<NoteProvider>> = NoteProvider.entries
-    .filter { it != NoteProvider.Tasker || isAndroid }
-    .map {
-        val connected = it in available
-        DestOption(
-            provider = it,
-            title = it.settingsTitle,
-            connected = connected,
-            configurable = connected && noteConfigureDialog(it) != null,
-        )
-    }
+    providers: List<IntegrationProvider>,
+    available: List<IntegrationProvider>,
+    configurablePlugins: Set<Uuid> = emptySet(),
+): List<DestOption> = providers.map {
+    val connected = it in available
+    DestOption(
+        provider = it,
+        title = it.notesTitle,
+        connected = connected,
+        configurable = connected &&
+            (noteConfigureDialog(it) != null || it.isConfigurablePlugin(configurablePlugins)),
+    )
+}
 
 internal fun reminderDestOptions(
-    available: List<ReminderProvider>,
-    isAndroid: Boolean,
-): List<DestOption<ReminderProvider>> = ReminderProvider.entries
-    .filter {
-        when (it) {
-            ReminderProvider.Tasker -> isAndroid
-            ReminderProvider.IOSReminders -> !isAndroid
-            else -> true
-        }
-    }
-    .map { DestOption(it, it.settingsTitle, it in available) }
+    providers: List<IntegrationProvider>,
+    available: List<IntegrationProvider>,
+    configurablePlugins: Set<Uuid> = emptySet(),
+): List<DestOption> = providers.map {
+    val connected = it in available
+    DestOption(it, it.remindersTitle, connected, connected && it.isConfigurablePlugin(configurablePlugins))
+}
+
+/** Plugins with a config page reopen it, as the locker's Settings button does. */
+internal fun IntegrationProvider.isConfigurablePlugin(configurablePlugins: Set<Uuid>): Boolean =
+    this is PblPluginIntegrationProvider && pluginUuid in configurablePlugins
 
 /** Actions that are switched off because they still need linking get a Connect button. */
 internal fun actionConnectDialog(action: IndexAction): ActionsDialog? =
@@ -151,24 +171,25 @@ internal fun actionConnectDialog(action: IndexAction): ActionsDialog? =
         action.name == CalendarServlet.NAME && action.disabledReason == NOT_CONNECTED_REASON
     }
 
-internal fun noteConnectDialog(provider: NoteProvider): ActionsDialog? = when (provider) {
-    NoteProvider.Notion -> ActionsDialog.Notion
-    NoteProvider.Obsidian -> ActionsDialog.Obsidian
-    NoteProvider.Tasker -> ActionsDialog.Tasker
-    NoteProvider.Builtin -> null
+/** Plugins connect from their own settings page; built-ins without a flow here fall back to the integration list. */
+internal fun noteConnectDialog(provider: IntegrationProvider): ActionsDialog? = when (provider) {
+    BuiltInIntegrationProviders.Notion -> ActionsDialog.Notion
+    BuiltInIntegrationProviders.Obsidian -> ActionsDialog.Obsidian
+    BuiltInIntegrationProviders.Tasker -> ActionsDialog.Tasker
+    else -> null
 }
 
-internal fun reminderConnectDialog(provider: ReminderProvider): ActionsDialog? = when (provider) {
-    ReminderProvider.GoogleTasks -> ActionsDialog.GoogleTasks
-    ReminderProvider.Tasker -> ActionsDialog.Tasker
-    ReminderProvider.BuiltIn, ReminderProvider.IOSReminders -> null
+internal fun reminderConnectDialog(provider: IntegrationProvider): ActionsDialog? = when (provider) {
+    BuiltInIntegrationProviders.GoogleTasks -> ActionsDialog.GoogleTasks
+    BuiltInIntegrationProviders.Tasker -> ActionsDialog.Tasker
+    else -> null
 }
 
 /** Connected providers with their own settings reopen them from a hold on their sheet row. */
-internal fun noteConfigureDialog(provider: NoteProvider): ActionsDialog? = when (provider) {
-    NoteProvider.Notion -> ActionsDialog.NotionPage
-    NoteProvider.Obsidian -> ActionsDialog.Obsidian
-    NoteProvider.Tasker, NoteProvider.Builtin -> null
+internal fun noteConfigureDialog(provider: IntegrationProvider): ActionsDialog? = when (provider) {
+    BuiltInIntegrationProviders.Notion -> ActionsDialog.NotionPage
+    BuiltInIntegrationProviders.Obsidian -> ActionsDialog.Obsidian
+    else -> null
 }
 
 private data class ActionPresentation(val icon: ImageVector, val title: String, val example: String)
@@ -202,19 +223,72 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
     else -> ActionPresentation(Icons.Default.Extension, action.title, "")
 }
 
+private fun presentationFor(server: HttpMcpServerEntity) = ActionPresentation(
+    Icons.Default.Dns,
+    server.cachedTitle.ifBlank { server.name },
+    "MCP Server",
+)
+
+internal fun grantLabel(grant: PluginGrant): String = when (grant) {
+    PluginGrant.Actions -> "Use actions"
+    PluginGrant.Sources -> "Use data sources"
+}
+
+private fun grantNoun(grant: PluginGrant, count: Int): String = when (grant) {
+    PluginGrant.Actions -> if (count == 1) "action" else "actions"
+    PluginGrant.Sources -> if (count == 1) "data source" else "data sources"
+}
+
+/** Collapsed-row summary, e.g. "2 actions · 1 data source". */
+internal fun pluginSummary(plugin: IndexPlugin): String =
+    plugin.grants.entries.joinToString(" · ") { (grant, state) ->
+        "${state.names.size} ${grantNoun(grant, state.names.size)}"
+    }
+
+/** The parent checkbox reflects every grant, allowed or not by the user. */
+internal fun pluginToggleState(plugin: IndexPlugin): ToggleableState {
+    val enabled = plugin.grants.values.map { it.enabled }
+    return when {
+        enabled.all { it } -> ToggleableState.On
+        enabled.none { it } -> ToggleableState.Off
+        else -> ToggleableState.Indeterminate
+    }
+}
+
+/**
+ * Tapping the parent turns every changeable grant on unless all are already on, in which case
+ * it turns them all off. Returns the grants that would change and their new value.
+ */
+internal fun pluginToggleChanges(plugin: IndexPlugin): List<Pair<PluginGrant, Boolean>> {
+    val target = pluginToggleState(plugin) != ToggleableState.On
+    return plugin.grants
+        .filterValues { it.disabledReason == null && it.enabled != target }
+        .keys
+        .map { it to target }
+}
+
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
 internal enum class ActionsDialog {
-    AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar
+    AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar,
+    TargetCalendar,
 }
 
 @Composable
 fun IndexActionsSection(
     actions: List<IndexAction>,
+    plugins: List<IndexPlugin>,
+    httpMcpServers: List<HttpMcpServerEntity>,
     httpMcpDisabledReason: String?,
-    availableNoteProviders: List<NoteProvider>,
-    availableReminderProviders: List<ReminderProvider>,
+    availableNoteProviders: List<IntegrationProvider>,
+    availableReminderProviders: List<IntegrationProvider>,
+    configurablePlugins: Set<Uuid>,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
+    onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
+    onSetHttpServerEnabled: (server: HttpMcpServerEntity, enabled: Boolean) -> Unit,
+    onSaveHttpServer: (server: HttpMcpServerEntity) -> Unit,
+    onDeleteHttpServer: (server: HttpMcpServerEntity) -> Unit,
     onAddIntegration: () -> Unit,
+    onConfigurePlugin: (uuid: Uuid, title: String) -> Unit,
     onOpenBeeperContacts: () -> Unit,
     onGetMoreActions: () -> Unit,
     onProvidersChanged: () -> Unit,
@@ -228,21 +302,20 @@ fun IndexActionsSection(
     }
 
     val preferences = koinInject<Preferences>()
-    val sandboxRepository = koinInject<McpSandboxRepository>()
-    val isAndroid = koinInject<Platform>().isAndroid
-    val scope = rememberCoroutineScope()
+    val providers = koinInject<IntegrationProviderRepository>()
     val colors = IndexTheme.colors
 
     val captureType by preferences.defaultCaptureType.collectAsState()
-    val noteProvider by preferences.noteProvider.collectAsState()
-    val reminderProvider by preferences.reminderProvider.collectAsState()
+    val noteProvider by providers.selectedNoteProvider.collectAsState()
+    val reminderProvider by providers.selectedReminderProvider.collectAsState()
     val approvedContacts by preferences.approvedBeeperContacts.collectAsState()
     var sheet by remember { mutableStateOf<ActionsSheet?>(null) }
     var dialog by remember { mutableStateOf<ActionsDialog?>(null) }
+    var editingServer by remember { mutableStateOf<HttpMcpServerEntity?>(null) }
     // Connecting from a destination sheet is a pick as well as a connect, but the connect dialogs
     // only report dismissal, so the choice is applied once the provider shows up as available.
-    var pendingNoteConnect by remember { mutableStateOf<NoteProvider?>(null) }
-    var pendingReminderConnect by remember { mutableStateOf<ReminderProvider?>(null) }
+    var pendingNoteConnect by remember { mutableStateOf<IntegrationProvider?>(null) }
+    var pendingReminderConnect by remember { mutableStateOf<IntegrationProvider?>(null) }
     val closeConnectDialog = {
         dialog = null
         onProvidersChanged()
@@ -250,13 +323,13 @@ fun IndexActionsSection(
 
     LaunchedEffect(availableNoteProviders) {
         pendingNoteConnect?.takeIf { it in availableNoteProviders }?.let {
-            preferences.setNoteProvider(it)
+            providers.selectNoteProvider(it)
             pendingNoteConnect = null
         }
     }
     LaunchedEffect(availableReminderProviders) {
         pendingReminderConnect?.takeIf { it in availableReminderProviders }?.let {
-            preferences.setReminderProvider(it)
+            providers.selectReminderProvider(it)
             pendingReminderConnect = null
         }
     }
@@ -268,7 +341,7 @@ fun IndexActionsSection(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 2.dp),
             )
             Text(
-                "Select which actions Index Agent can perform.",
+                "Select what Index Agent can read and do.",
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = colors.onSurfaceVariant,
@@ -288,13 +361,14 @@ fun IndexActionsSection(
         )
         actions.forEach { action ->
             ActionRow(
-                action = action,
+                enabled = action.enabled,
+                disabledReason = action.disabledReason,
                 presentation = presentationFor(action),
                 badge = contactsBadge(approvedContacts.size)
                     .takeIf { action.name == MessagingServlet.name && approvedContacts.isNotEmpty() },
                 destinationLabel = when (action.name) {
-                    NoteServlet.NAME -> noteProvider.settingsTitle
-                    ReminderServlet.NAME -> reminderProvider.settingsTitle
+                    NoteServlet.NAME -> noteProvider.notesTitle
+                    ReminderServlet.NAME -> reminderProvider.remindersTitle
                     else -> null
                 },
                 onDestinationClick = {
@@ -304,10 +378,42 @@ fun IndexActionsSection(
                         ActionsSheet.ReminderDestination
                     }
                 },
-                onSettings = onOpenBeeperContacts
-                    .takeIf { action.name == MessagingServlet.name && action.disabledReason == null },
+                onSettings = when {
+                    action.disabledReason != null -> null
+                    action.name == MessagingServlet.name -> onOpenBeeperContacts
+                    action.name == CalendarServlet.NAME -> {
+                        { dialog = ActionsDialog.TargetCalendar }
+                    }
+                    else -> null
+                },
                 onConnect = actionConnectDialog(action)?.let { target -> { dialog = target } },
                 onToggle = { onSetActionEnabled(action.name, it) },
+            )
+        }
+        plugins.forEach { plugin ->
+            PluginRow(
+                plugin = plugin,
+                onConfigure = if (plugin.pluginUuid in configurablePlugins) {
+                    { onConfigurePlugin(plugin.pluginUuid, plugin.title) }
+                } else {
+                    null
+                },
+                onSetGrantEnabled = { grant, enabled ->
+                    onSetPluginGrantEnabled(plugin.pluginUuid, grant, enabled)
+                },
+            )
+        }
+        httpMcpServers.forEach { server ->
+            ActionRow(
+                enabled = server.enabled && httpMcpDisabledReason == null,
+                disabledReason = httpMcpDisabledReason,
+                presentation = presentationFor(server),
+                badge = null,
+                destinationLabel = null,
+                onDestinationClick = {},
+                onSettings = { editingServer = server },
+                onConnect = null,
+                onToggle = { onSetHttpServerEnabled(server, it) },
             )
         }
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -342,59 +448,95 @@ fun IndexActionsSection(
         ActionsSheet.NoteDestination -> DestinationSheet(
             icon = Icons.Default.EditNote,
             title = "Where notes save",
-            options = noteDestOptions(availableNoteProviders, isAndroid),
+            options = noteDestOptions(
+                providers.providers(IntegrationSupport.Note),
+                availableNoteProviders,
+                configurablePlugins,
+            ),
             selected = noteProvider,
             onSelect = {
                 pendingNoteConnect = null
-                preferences.setNoteProvider(it)
+                providers.selectNoteProvider(it)
             },
             onConnect = { provider ->
                 pendingNoteConnect = provider
-                noteConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
+                when (provider) {
+                    is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
+                    else -> noteConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
+                }
             },
-            onConfigure = { provider -> noteConfigureDialog(provider)?.let { dialog = it } },
+            onConfigure = { provider ->
+                when (provider) {
+                    is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
+                    else -> noteConfigureDialog(provider)?.let { dialog = it }
+                }
+            },
             onDismiss = { sheet = null },
         )
         ActionsSheet.ReminderDestination -> DestinationSheet(
             icon = Icons.Default.Checklist,
             title = "Where reminders save",
-            options = reminderDestOptions(availableReminderProviders, isAndroid),
+            options = reminderDestOptions(
+                providers.providers(IntegrationSupport.Reminder),
+                availableReminderProviders,
+                configurablePlugins,
+            ),
             selected = reminderProvider,
             onSelect = {
                 pendingReminderConnect = null
-                preferences.setReminderProvider(it)
+                providers.selectReminderProvider(it)
             },
             onConnect = { provider ->
                 pendingReminderConnect = provider
-                reminderConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
+                when (provider) {
+                    is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
+                    else -> reminderConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
+                }
+            },
+            onConfigure = { provider ->
+                if (provider is PblPluginIntegrationProvider) onConfigurePlugin(provider.pluginUuid, provider.title)
             },
             onDismiss = { sheet = null },
         )
         null -> {}
     }
 
+    editingServer?.let { server ->
+        HttpServerEditDialog(
+            initialServer = server,
+            onDismiss = { editingServer = null },
+            onConfirm = {
+                onSaveHttpServer(it)
+                editingServer = null
+            },
+            onDelete = {
+                onDeleteHttpServer(server)
+                editingServer = null
+            },
+        )
+    }
+
     when (dialog) {
-        ActionsDialog.AddServer -> {
-            val groups by sandboxRepository.getAllGroupsFlow().collectAsState(emptyList())
-            HttpServerEditDialog(
-                initialServer = null,
-                allGroups = groups,
-                initialGroupIds = setOfNotNull(groups.firstOrNull()?.id),
-                onDismiss = { dialog = null },
-                onConfirm = { server, groupIds ->
-                    scope.launch { sandboxRepository.addOrUpdateHttpServer(server, groupIds) }
-                    dialog = null
-                },
-                onDelete = null,
-            )
-        }
+        ActionsDialog.AddServer -> HttpServerEditDialog(
+            initialServer = null,
+            onDismiss = { dialog = null },
+            onConfirm = { server ->
+                onSaveHttpServer(server)
+                dialog = null
+            },
+            onDelete = null,
+        )
         ActionsDialog.Sideload -> SideloadDialog(onDismiss = { dialog = null })
         ActionsDialog.Notion -> NotionDialog(onDismiss = closeConnectDialog)
         ActionsDialog.NotionPage -> NotionPageDialog(onDismiss = { dialog = null })
         ActionsDialog.GoogleTasks -> GTasksDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Obsidian -> ObsidianDialog(onDismiss = closeConnectDialog)
         ActionsDialog.Tasker -> TaskerDialog(onDismiss = closeConnectDialog)
-        ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(onDismiss = { dialog = null })
+        ActionsDialog.PhoneCalendar -> PhoneCalendarDialog(
+            onDismiss = { dialog = null },
+            onConnected = { dialog = ActionsDialog.TargetCalendar },
+        )
+        ActionsDialog.TargetCalendar -> TargetCalendarDialog(onDismiss = { dialog = null })
         null -> {}
     }
 }
@@ -450,7 +592,8 @@ private fun SentenceLink(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun ActionRow(
-    action: IndexAction,
+    enabled: Boolean,
+    disabledReason: String?,
     presentation: ActionPresentation,
     badge: String?,
     destinationLabel: String?,
@@ -459,34 +602,159 @@ private fun ActionRow(
     onConnect: (() -> Unit)?,
     onToggle: (Boolean) -> Unit,
 ) {
+    val interactive = disabledReason == null
+    AgentRow(
+        icon = presentation.icon,
+        title = presentation.title,
+        summary = disabledReason ?: presentation.example,
+        interactive = interactive,
+        // A connectable row is actionable, so it stays legible rather than dimmed.
+        dimmed = !interactive && onConnect == null,
+        onClick = { onToggle(!enabled) },
+        badge = badge,
+        onSettings = onSettings,
+        extra = destinationLabel?.let { label ->
+            { DestinationChip(label, interactive, onDestinationClick) }
+        },
+        trailing = {
+            if (onConnect != null) {
+                TextButton(onClick = onConnect) { Text("Connect") }
+            } else {
+                Checkbox(
+                    checked = enabled,
+                    enabled = interactive,
+                    onCheckedChange = { onToggle(it) },
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun DestinationChip(label: String, interactive: Boolean, onClick: () -> Unit) {
     val colors = IndexTheme.colors
-    val interactive = action.disabledReason == null
+    Row(
+        modifier = Modifier
+            .padding(top = 5.dp)
+            .border(
+                1.dp,
+                colors.outlineVariant,
+                RoundedCornerShape(100.dp),
+            )
+            .clickable(enabled = interactive, onClick = onClick)
+            .padding(start = 10.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Saves to",
+            fontSize = 12.sp,
+            color = colors.onSurfaceVariant,
+        )
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.primary,
+        )
+        Icon(
+            Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = colors.primary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PluginRow(
+    plugin: IndexPlugin,
+    onConfigure: (() -> Unit)?,
+    onSetGrantEnabled: (PluginGrant, Boolean) -> Unit,
+) {
+    val motion = MaterialTheme.motionScheme
+    var expanded by remember(plugin.pluginUuid) { mutableStateOf(false) }
+    val interactive = plugin.grants.values.any { it.disabledReason == null }
+    val toggle = {
+        pluginToggleChanges(plugin).forEach { (grant, enabled) -> onSetGrantEnabled(grant, enabled) }
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AgentRow(
+            icon = Icons.Default.Extension,
+            title = plugin.title,
+            summary = pluginSummary(plugin),
+            interactive = interactive,
+            //TODO: expand settings on click when we're ready
+            onClick = toggle,
+            onSettings = onConfigure,
+            trailing = {
+                TriStateCheckbox(
+                    state = pluginToggleState(plugin),
+                    enabled = interactive,
+                    onClick = toggle,
+                )
+            },
+        )
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(motion.fastSpatialSpec()) + fadeIn(motion.fastEffectsSpec()),
+            exit = shrinkVertically(motion.fastSpatialSpec()) + fadeOut(motion.fastEffectsSpec()),
+        ) {
+            Column(modifier = Modifier.padding(bottom = 4.dp)) {
+                plugin.grants.forEach { (grant, state) ->
+                    PluginGrantRow(
+                        label = grantLabel(grant),
+                        supporting = state.disabledReason ?: state.names.joinToString(", "),
+                        checked = state.enabled,
+                        interactive = state.disabledReason == null,
+                        onToggle = { onSetGrantEnabled(grant, it) },
+                    )
+                }
+                if (onConfigure != null) {
+                    ConfigurePluginLink(onClick = onConfigure)
+                }
+            }
+        }
+    }
+}
+
+/** One row of the actions list: a built-in action, an HTTP MCP server, or a plugin. */
+@Composable
+private fun AgentRow(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    interactive: Boolean,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit,
+    badge: String? = null,
+    onSettings: (() -> Unit)? = null,
+    dimmed: Boolean = !interactive,
+    extra: (@Composable () -> Unit)? = null,
+) {
+    val colors = IndexTheme.colors
+    val contentAlpha = if (dimmed) 0.38f else 1f
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = interactive) { onToggle(!action.enabled) }
-            // A connectable row is actionable, so it stays legible rather than dimmed.
-            .alpha(if (interactive || onConnect != null) 1f else 0.38f)
+            .clickable(enabled = interactive, onClick = onClick)
             .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Icon(
-            presentation.icon,
+            icon,
             contentDescription = null,
             tint = colors.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(24.dp).alpha(contentAlpha),
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f).alpha(contentAlpha)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    presentation.title,
-                    fontSize = 16.sp,
-                    color = colors.onSurface,
-                )
+                Text(title, fontSize = 16.sp, color = colors.onSurface)
                 if (badge != null) {
                     Text(
                         badge,
@@ -504,64 +772,113 @@ private fun ActionRow(
                 }
             }
             Text(
-                action.disabledReason ?: presentation.example,
+                summary,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = colors.onSurfaceVariant,
             )
-            if (destinationLabel != null) {
-                Row(
-                    modifier = Modifier
-                        .padding(top = 5.dp)
-                        .border(
-                            1.dp,
-                            colors.outlineVariant,
-                            RoundedCornerShape(100.dp),
-                        )
-                        .clickable(enabled = interactive, onClick = onDestinationClick)
-                        .padding(start = 10.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        "Saves to",
-                        fontSize = 12.sp,
-                        color = colors.onSurfaceVariant,
-                    )
-                    Text(
-                        destinationLabel,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.primary,
-                    )
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = colors.primary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+            extra?.invoke()
         }
         if (onSettings != null) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Settings",
-                tint = colors.onSurfaceVariant,
-                modifier = Modifier
-                    .clickable(onClick = onSettings)
-                    .padding(8.dp)
-                    .size(20.dp),
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings")
+            }
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun ConfigurePluginLink(onClick: () -> Unit) {
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 56.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "Configure plugin",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.primary,
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = null,
+            tint = colors.primary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PluginGrantRow(
+    label: String,
+    supporting: String,
+    checked: Boolean,
+    interactive: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    val colors = IndexTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = interactive) { onToggle(!checked) }
+            .alpha(if (interactive) 1f else 0.38f)
+            .padding(start = 56.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, fontSize = 15.sp, color = colors.onSurface)
+            Text(
+                supporting,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = colors.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (onConnect != null) {
-            TextButton(onClick = onConnect) { Text("Connect") }
-        } else {
-            Checkbox(
-                checked = action.enabled,
+        Row {
+            ToggleButton(
+                checked = !checked,
                 enabled = interactive,
-                onCheckedChange = { onToggle(it) },
-            )
+                onCheckedChange = { onToggle(false) },
+                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                colors = IndexTheme.toggleButtonColors()
+            ) {
+                if (!checked) {
+                    Icon(
+                        Icons.Default.Close,
+                        null,
+                        Modifier.size(ToggleButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+                }
+                Text("Denied")
+            }
+            ToggleButton(
+                checked = checked,
+                enabled = interactive,
+                onCheckedChange = { onToggle(true) },
+                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                colors = IndexTheme.toggleButtonColors()
+            ) {
+                if (checked) {
+                    Icon(
+                        Icons.Default.Check,
+                        null,
+                        Modifier.size(ToggleButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+                }
+                Text("Allowed")
+            }
         }
     }
 }
@@ -627,7 +944,7 @@ private fun NoIndexAgentCard() {
         Text(
             buildAnnotatedString {
                 append("Nothing routes to the Index agent right now, so actions are off. Point a gesture at ")
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Index agent") }
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Hybrid Index agent") }
                 append(" above to turn them back on.")
             },
             fontSize = 13.sp,
@@ -666,7 +983,7 @@ private fun CaptureTypeSheet(
                         DefaultCaptureType.Note -> Icons.Default.EditNote
                         DefaultCaptureType.Reminder -> Icons.Default.Checklist
                     },
-                    title = type.title,
+                    title = { Text(type.title) },
                     subtitle = when (type) {
                         DefaultCaptureType.Note -> "A thought to keep, nothing to do"
                         DefaultCaptureType.Reminder -> "Something you intend to do"
@@ -681,7 +998,7 @@ private fun CaptureTypeSheet(
 
 @Composable
 private fun SheetOptionRow(
-    title: String,
+    title: @Composable () -> Unit,
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector? = null,
@@ -710,7 +1027,15 @@ private fun SheetOptionRow(
             )
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, color = colors.onSurface)
+            withCompositionLocal(
+                LocalTextStyle provides LocalTextStyle.current
+                    .copy(
+                        fontSize = 15.sp,
+                        color = colors.onSurface
+                    )
+            ) {
+                title()
+            }
             if (subtitle != null) {
                 Text(
                     subtitle,
@@ -731,17 +1056,35 @@ private fun SheetOptionRow(
     }
 }
 
+@Composable
+private fun DestOptionTitle(option: DestOption) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(option.title)
+        Spacer(Modifier.width(4.dp))
+        if (option.provider.isExternalPlugin) {
+            Icon(
+                Icons.Default.Extension,
+                contentDescription = "Plugin",
+                modifier = Modifier.size(18.dp),
+                tint = IndexTheme.colors.onSurfaceVariant
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> DestinationSheet(
+private fun DestinationSheet(
     icon: ImageVector,
     title: String,
-    options: List<DestOption<T>>,
-    selected: T,
-    onSelect: (T) -> Unit,
-    onConnect: (T) -> Unit,
+    options: List<DestOption>,
+    selected: IntegrationProvider,
+    onSelect: (IntegrationProvider) -> Unit,
+    onConnect: (IntegrationProvider) -> Unit,
     onDismiss: () -> Unit,
-    onConfigure: (T) -> Unit = {},
+    onConfigure: (IntegrationProvider) -> Unit = {},
 ) {
     val colors = IndexTheme.colors
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
@@ -774,7 +1117,7 @@ private fun <T> DestinationSheet(
                     onConfigure(option.provider)
                 }
                 SheetOptionRow(
-                    title = option.title,
+                    title = { DestOptionTitle(option) },
                     subtitle = when {
                         !option.connected -> "Not connected"
                         option.configurable -> "Hold to reconfigure"

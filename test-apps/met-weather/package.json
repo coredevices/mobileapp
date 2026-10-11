@@ -1,0 +1,100 @@
+{
+  "name": "met-weather",
+  "author": "Pebble",
+  "version": "1.0.1",
+  "pebble": {
+    "displayName": "MET Norway Weather",
+    "uuid": "323dc117-55bd-455f-9ee4-4d0faba56ea1",
+    "sdkVersion": "3",
+    "usesPermissions": [
+      "Location",
+      {
+        "name": "Internet",
+        "parameters": {
+          "domains": [
+            "api.met.no"
+          ]
+        }
+      }
+    ],
+    "plugin": {
+      "description": "Weather where the phone is, from the Norwegian Meteorological Institute (api.met.no). One location instance (the phone's current position) and the hours ahead of it.",
+      "script": "plugin.js",
+      "sources": [
+        {
+          "category": "weather",
+          "items": [
+            "location"
+          ],
+          "properties": {
+            "name": [
+              "shortText"
+            ],
+            "temperature": [
+              "shortText",
+              "longText",
+              "numericValue"
+            ],
+            "feels_like": [
+              "shortText",
+              "longText",
+              "numericValue"
+            ],
+            "high": [
+              "shortText",
+              "longText",
+              "numericValue"
+            ],
+            "low": [
+              "shortText",
+              "longText",
+              "numericValue"
+            ],
+            "condition": [
+              "shortText",
+              "longText",
+              "icon",
+              "image"
+            ],
+            "condition_code": [
+              "longText"
+            ],
+            "uv_index": [
+              "numericValue",
+              "shortText"
+            ]
+          },
+          "callerPermissions": [
+            "Location"
+          ],
+          "suggestedRefreshIntervalSec": 1800
+        },
+        {
+          "category": "weather",
+          "items": [
+            "hour"
+          ],
+          "properties": {
+            "temperature": [
+              "numericValue",
+              "shortText"
+            ],
+            "condition": [
+              "shortText",
+              "icon",
+              "image"
+            ],
+            "condition_code": [
+              "longText"
+            ]
+          },
+          "supportsMultiple": true,
+          "callerPermissions": [
+            "Location"
+          ],
+          "suggestedRefreshIntervalSec": 1800
+        }
+      ]
+    }
+  }
+}

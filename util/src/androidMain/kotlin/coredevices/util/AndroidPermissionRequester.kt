@@ -36,7 +36,7 @@ class AndroidPermissionRequester(
             Permission.SetAlarms -> requestAlarmPermission(uiContext.activity)
             Permission.BatteryOptimization -> requestBatteryOptimizationDisable(uiContext.activity)
             else -> requestAndroidRuntimePermissions(
-                permission.asAndroidPermissions(),
+                permission,
                 uiContext.activity,
             )
         }
@@ -50,9 +50,10 @@ class AndroidPermissionRequester(
         }
 
     private suspend fun requestAndroidRuntimePermissions(
-        permissions: List<String>,
+        permission: Permission,
         activity: Activity
     ): PermissionResult {
+        val permissions = permission.asAndroidPermissions()
         logger.v { "requestAndroidRuntimePermissions: $permissions" }
         val firstPermission = permissions.firstOrNull()
         if (firstPermission == null) {
@@ -68,23 +69,12 @@ class AndroidPermissionRequester(
             val launcher = registry.activityResultRegistry.register(
                 key = "permissions-$firstPermission",
                 contract = ActivityResultContracts.RequestMultiplePermissions(),
-            ) { permissions ->
-                permissions.forEach {
+            ) { results ->
+                results.forEach {
                     logger.d { "Permission ${it.key} granted: ${it.value}" }
                 }
-                val granted = permissions.all { it.value }
-                val result = if (granted) {
-                    PermissionResult.Granted
-                } else {
-                    if (ActivityCompat.shouldShowRequestPermissionRationale(
-                            activity,
-                            permissions.keys.first(),
-                        )
-                    ) {
-                        PermissionResult.Rejected
-                    } else {
-                        PermissionResult.RejectedForever
-                    }
+                val result = permission.resultFor(results) {
+                    ActivityCompat.shouldShowRequestPermissionRationale(activity, it)
                 }
                 logger.v { "result = $result" }
                 if (continuation.isActive) {
@@ -108,9 +98,9 @@ class AndroidPermissionRequester(
     }
 
     private fun permissionGranted(permission: Permission): Boolean =
-        permission.asAndroidPermissions().map {
+        permission.isGrantedBy(permission.asAndroidPermissions().map {
             context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
-        }.all { it }
+        })
 
     private fun hasAlarmPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -182,7 +172,11 @@ class AndroidPermissionRequester(
 }
 
 private fun Permission.asAndroidPermissions(): List<String> = when (this) {
-    Permission.Location -> listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    // Fine alone is dropped without a dialog on Android 13 and 14; both must be in one request.
+    Permission.Location -> listOf(
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+    )
     Permission.BackgroundLocation -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         listOf(ACCESS_BACKGROUND_LOCATION)
     } else emptyList()
@@ -225,4 +219,18 @@ private fun Permission.asAndroidPermissions(): List<String> = when (this) {
         "com.beeper.android.permission.SEND_PERMISSION"
     )
     Permission.Reminders -> throw IllegalArgumentException("Not needed on Android")
+}
+
+internal fun Permission.isGrantedBy(grants: Collection<Boolean>): Boolean =
+    if (this == Permission.Location) grants.any { it } else grants.all { it }
+
+internal fun Permission.resultFor(
+    results: Map<String, Boolean>,
+    showRationale: (String) -> Boolean,
+): PermissionResult = when {
+    // Empty when the dialog was dismissed or the platform dropped the request.
+    results.isEmpty() -> PermissionResult.Rejected
+    isGrantedBy(results.values) -> PermissionResult.Granted
+    showRationale(results.entries.first { !it.value }.key) -> PermissionResult.Rejected
+    else -> PermissionResult.RejectedForever
 }

@@ -368,6 +368,7 @@ fun WatchHomeScreen(
                     it.consumed = true
                     logger.v { "navigateToPebbleDeepLink: $it" }
                     val tab = when (it.route) {
+                        is PebbleNavBarRoutes.WatchfacesRoute -> WatchHomeNavTab.WatchFaces
                         is PebbleNavBarRoutes.LockerAppRoute -> WatchHomeNavTab.WatchFaces
                         is PebbleNavBarRoutes.AppstoreSettingsRoute -> WatchHomeNavTab.WatchFaces
                         is PebbleNavBarRoutes.IndexRoute -> WatchHomeNavTab.Index

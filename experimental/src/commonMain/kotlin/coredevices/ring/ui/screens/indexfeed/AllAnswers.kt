@@ -2,7 +2,7 @@
 
 package coredevices.ring.ui.screens.indexfeed
 
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -257,6 +257,6 @@ private fun AnswersSearchTopBar(value: String, onChange: (String) -> Unit, onCan
     }
 }
 
-// `relativeTime` is shared with ObjectDetail (internal in this package)
+// `relativeTime` is shared with ObjectDetail (in `coredevices.util`)
 // — the duplicate that used to live here was deleted to dodge an
 // overload-resolution ambiguity after the ObjectDetail split.

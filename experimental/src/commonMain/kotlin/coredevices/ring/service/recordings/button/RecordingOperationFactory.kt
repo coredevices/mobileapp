@@ -1,19 +1,19 @@
 package coredevices.ring.service.recordings.button
 
 import coredevices.mcp.SessionContext
-import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.McpSessionFactory
+import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.repository.ItemRepository
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
 import coredevices.ring.service.ButtonPress
-import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
@@ -24,7 +24,6 @@ import coredevices.ring.util.trace.RingTraceSession
 
 class RecordingOperationFactory(
     private val agentFactory: AgentFactory,
-    private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val gestureRouting: GestureRoutingPreferences,
     private val indexWebhookApi: IndexWebhookApi,
@@ -33,6 +32,8 @@ class RecordingOperationFactory(
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
+    private val ringTransferRepository: RingTransferRepository,
+    private val queueTaskRepository: RecordingProcessingTaskRepository,
 ) {
     suspend fun createForButtonSequence(
         recordingId: Long,
@@ -96,14 +97,9 @@ class RecordingOperationFactory(
         // A typed question routes to the search/answer agent and forces no note. Anything else
         // follows wherever Hold & Talk points, so typing stands in for the gesture.
         val destination = gestureRouting.recordingDestinationFor(RingGesture.Hold)
-        val mode = if (isQuestion) {
-            ChatMode.Search
-        } else {
-            textChatModeFor(destination, sandboxGroupFor(destination))
-        }
+        val mode = if (isQuestion) ChatMode.Search else textChatModeFor(destination)
         val agent = agentFactory.createForChatMode(mode)
         val inner = TextOnlyRecordingOperation(
-            mcpSandboxRepository = mcpSandboxRepository,
             mcpSessionFactory = mcpSessionFactory,
             recordingId = recordingId,
             chatAgent = agent,
@@ -119,11 +115,35 @@ class RecordingOperationFactory(
         )
     }
 
-    private suspend fun sandboxGroupFor(destination: GestureDestination.Recording) =
-        (destination as? GestureDestination.McpSandbox)?.groupId
-            ?.let { mcpSandboxRepository.getGroupById(it) }
+    /**
+     * Resumes a recording's conversation after the user answered a confirmation, on the route
+     * the recording took: its ring gesture, or Hold & Talk's for typed and phone-mic input.
+     */
+    suspend fun createConversationResumeOperation(
+        recordingId: Long,
+        toolCallId: String,
+        approved: Boolean,
+    ): RecordingOperation {
+        val transfer = ringTransferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
+        val gesture = if (transfer == null) {
+            RingGesture.Hold
+        } else {
+            queueTaskRepository.getLatestButtonSequenceForTransfer(transfer.id)
+                ?.parseAsButtonSequence()
+                ?.let { RingGesture.forSequence(it) }
+        }
+        val destination = gestureRouting.recordingDestinationFor(gesture)
+        return ConversationResumeOperation(
+            recordingId = recordingId,
+            toolCallId = toolCallId,
+            approved = approved,
+            chatMode = textChatModeFor(destination),
+            agentFactory = agentFactory,
+            mcpSessionFactory = mcpSessionFactory,
+        )
+    }
 
-    private suspend fun createForDestination(
+    private fun createForDestination(
         destination: GestureDestination.Recording,
         recordingId: Long,
         transferId: Long?,
@@ -131,11 +151,12 @@ class RecordingOperationFactory(
         forcedTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult)
     ): RecordingOperation {
         return when (destination) {
-            GestureDestination.IndexAgent -> {
+            GestureDestination.IndexAgent,
+            GestureDestination.LocalAgent,
+            GestureDestination.RemoteAgent -> {
                 DefaultRecordingOperation(
-                    mcpSandboxRepository = mcpSandboxRepository,
                     mcpSessionFactory = mcpSessionFactory,
-                    chatAgent = agentFactory.createForChatMode(ChatMode.Normal),
+                    chatAgent = agentFactory.createForChatMode(textChatModeFor(destination)),
                     recordingId = recordingId,
                     transferId = transferId,
                     fileId = fileId,
@@ -145,7 +166,6 @@ class RecordingOperationFactory(
             }
             GestureDestination.WebSearch -> {
                 DefaultRecordingOperation(
-                    mcpSandboxRepository = mcpSandboxRepository,
                     mcpSessionFactory = mcpSessionFactory,
                     chatAgent = agentFactory.createForChatMode(ChatMode.Search),
                     fileId = fileId,
@@ -157,47 +177,7 @@ class RecordingOperationFactory(
             }
             // maybeWrapWithWebhook layers the webhook send on top of this no-op.
             GestureDestination.WebhookOnly, GestureDestination.Nothing -> NoAgentRecordingOperation
-            is GestureDestination.McpSandbox -> {
-                val group = destination.groupId
-                    ?.let { mcpSandboxRepository.getGroupById(it) }
-                // Fall back to normal behaviour if the configured group was deleted
-                val mode = group?.let { ChatMode.McpSandbox(it) } ?: ChatMode.Normal
-                DefaultRecordingOperation(
-                    mcpSandboxRepository = mcpSandboxRepository,
-                    mcpSessionFactory = mcpSessionFactory,
-                    chatAgent = agentFactory.createForChatMode(mode),
-                    recordingId = recordingId,
-                    transferId = transferId,
-                    fileId = fileId,
-                    trace = trace,
-                    // Sandbox mode doesn't force a note; if the agent only replied
-                    // with a message, capture it as an answer instead
-                    forcedTool = if (group == null) {
-                        { text, _, sessionContext -> forcedTool(text, sessionContext) }
-                    } else {
-                        { text, answer, _ -> forcedAnswerTool(text, answer) }
-                    },
-                    sandboxGroupId = group?.id
-                )
-            }
         }
-    }
-
-    /** Surfaces the agent's plain reply as a tool result (question = transcription).
-     *  No item is created — the reply only shows in the conversation/notification. */
-    private suspend fun forcedAnswerTool(question: String, answer: String?): ToolCallResult {
-        if (answer.isNullOrBlank()) {
-            return ToolCallResult(
-                resultString = "Agent took no action and gave no response",
-                semanticResult = SemanticResult.GenericFailure(
-                    userErrorMessage = "No response from agent"
-                )
-            )
-        }
-        return ToolCallResult(
-            resultString = "",
-            semanticResult = SemanticResult.Response(answer, question = question)
-        )
     }
 }
 
@@ -215,12 +195,10 @@ internal fun webhookNeedsOwnTranscription(
     inner !is TranscribingRecordingOperation
 
 /** Text has no audio to deliver, so webhook-only and disabled routes still run the agent. */
-internal fun textChatModeFor(
-    destination: GestureDestination.Recording,
-    sandboxGroup: McpSandboxGroupEntity?,
-): ChatMode = when (destination) {
+internal fun textChatModeFor(destination: GestureDestination.Recording): ChatMode = when (destination) {
     GestureDestination.WebSearch -> ChatMode.Search
-    is GestureDestination.McpSandbox -> sandboxGroup?.let { ChatMode.McpSandbox(it) } ?: ChatMode.Normal
+    GestureDestination.LocalAgent -> ChatMode.Local
+    GestureDestination.RemoteAgent -> ChatMode.Remote
     GestureDestination.IndexAgent,
     GestureDestination.WebhookOnly,
     GestureDestination.Nothing -> ChatMode.Normal

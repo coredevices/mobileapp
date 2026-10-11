@@ -7,6 +7,8 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.externalDestination
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -16,7 +18,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 
-class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory) : BuiltInMcpTool(
+class CreateNoteTool(private val providers: IntegrationProviderRepository) : BuiltInMcpTool(
     definition = Tool(
         name = TOOL_NAME,
         description = TOOL_DESCRIPTION,
@@ -75,17 +77,17 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
             }
         logger.d { "Creating note with text length: ${text.length}" }
         return try {
-            val noteClient = noteIntegrationFactory.createNoteClient()
-            val noteId = noteClient.createNote(text, context.itemSource())
+            val provider = providers.selectedNoteProvider.value
+            val noteId = providers.noteIntegration(provider).createNote(text, context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
-                SemanticResult.ListItemCreation(text)
+                SemanticResult.ListItemCreation(text, destination = provider.externalDestination)
             )
         } catch (e: Exception) {
             logger.e(e) { "Failed to create note" }
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult()),
-                SemanticResult.GenericFailure("Failed to create note: ${e.message}")
+                SemanticResult.GenericFailure(e.message)
             )
         }
     }

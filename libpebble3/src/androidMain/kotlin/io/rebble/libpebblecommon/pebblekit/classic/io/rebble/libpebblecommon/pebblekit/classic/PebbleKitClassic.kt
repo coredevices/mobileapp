@@ -10,6 +10,10 @@ import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.js.CompanionAppDevice
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.permissions.PermissionSubject
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
@@ -34,6 +38,7 @@ import kotlin.uuid.toKotlinUuid
 class PebbleKitClassic(
     private val device: CompanionAppDevice,
     val appInfo: PbwAppInfo,
+    private val pkjsRunning: Boolean,
     private val connectionScope: ConnectionCoroutineScope,
 ) :
     LibPebbleKoinComponent, CompanionApp {
@@ -45,10 +50,32 @@ class PebbleKitClassic(
     private var runningScope: CoroutineScope? = null
 
     private val context: Context = getKoin().get()
+    private val permissions: AppPermissions = getKoin().get()
+    private var subject: PermissionSubject? = null
+
+    private suspend fun requestPebbleKit(): PermissionDecision {
+        if (!permissions.enforcing) return PermissionDecision.Granted
+        val subject = subject ?: return PermissionDecision.Denied
+        return permissions.request(subject, PluginPermissions.LEGACY_PEBBLEKIT)
+    }
+
+    private suspend fun checkPebbleKit(): PermissionDecision {
+        if (!permissions.enforcing) return PermissionDecision.Granted
+        val subject = subject ?: return PermissionDecision.Denied
+        return permissions.check(subject, PluginPermissions.LEGACY_PEBBLEKIT)
+    }
+
+    /** A legacy PKJS app's messages are probably for its PKJS: list it for the user to allow, don't ask. */
+    private suspend fun onInboundRefused(decision: PermissionDecision) {
+        val subject = subject ?: return
+        if (pkjsRunning && subject.legacy && decision == PermissionDecision.NeedsApproval) {
+            permissions.recordDenied(subject.appUuid, PluginPermissions.LEGACY_PEBBLEKIT)
+        }
+    }
 
     private suspend fun replyNACK(id: UByte) {
         withTimeoutOrNull(1000) {
-            device.sendAppMessageResult(AppMessageResult.ACK(id))
+            device.sendAppMessageResult(AppMessageResult.NACK(id))
         }
     }
 
@@ -61,6 +88,12 @@ class PebbleKitClassic(
     private fun launchIncomingAppMessageHandler(messages: Flow<AppMessageData>, scope: CoroutineScope) {
         messages.onEach { appMessageData ->
             logger.d { "Got inbound message" }
+            // Without PKJS, the message must be for a companion.
+            val decision = if (pkjsRunning) checkPebbleKit() else requestPebbleKit()
+            if (decision != PermissionDecision.Granted) {
+                onInboundRefused(decision)
+                return@onEach
+            }
 
             val pebbleDictionary = appMessageData.data.toPebbleDictionary()
             val intent = Intent(INTENT_APP_RECEIVE).apply {
@@ -108,6 +141,17 @@ class PebbleKitClassic(
                 )
                 val transactionId: Int = intent.getIntExtra(TRANSACTION_ID, 0)
 
+                // Asking here is what surfaces a companion the user hasn't allowed yet. A send for
+                // another app is refused without asking: it isn't this app's companion.
+                if (uuid != this@PebbleKitClassic.uuid || requestPebbleKit() != PermissionDecision.Granted) {
+                    logger.d { "PebbleKit not allowed for ${appInfo.shortName}; dropping message" }
+                    context.sendOrderedBroadcast(
+                        Intent(INTENT_APP_RECEIVE_NACK).putExtra(TRANSACTION_ID, transactionId),
+                        null,
+                    )
+                    return@collect
+                }
+
                 val msg = AppMessageData(transactionId.toUByte(), uuid, dictionary.toAppMessageDict())
                 val result = device.sendAppMessage(msg)
                 logger.d { "Result from the app: $result" }
@@ -133,6 +177,7 @@ class PebbleKitClassic(
         }
         val scope = connectionScope + Job() + CoroutineName("PebbleKitClassic-$uuid") + exceptionHandler
         runningScope = scope
+        subject = permissions.subjectOf(uuid)
         launchIncomingAppMessageHandler(incomingAppMessages, scope)
         launchOutgoingAppMessageHandlers(device, scope)
     }

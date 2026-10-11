@@ -1,5 +1,7 @@
 package coredevices.ring.database.room.repository
 
+import androidx.room.Transactor
+import androidx.room.useWriterConnection
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryErrorType
@@ -45,6 +47,20 @@ class RecordingRepository(
                 updated = updated?.let { Instant.fromEpochMilliseconds(it) } ?: Clock.System.now()
             )
         )
+    }
+
+    /** Inserts the recording and links it to [transferId] in one transaction,
+     *  so observers never see the recording with its transfer still unlinked. */
+    suspend fun createRecordingForTransfer(
+        firestoreId: String,
+        localTimestamp: Instant,
+        transferId: Long,
+    ): Long = db.useWriterConnection { tr ->
+        tr.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) {
+            val id = createRecording(firestoreId = firestoreId, localTimestamp = localTimestamp)
+            db.ringTransferDao().linkRecordingToTransfer(id = transferId, recordingId = id)
+            id
+        }
     }
 
     fun getAllRecordings() =
@@ -100,13 +116,9 @@ class RecordingRepository(
 
     fun getAllEntriesFlow() = recordingEntryDao.getAllEntriesFlow()
 
-    fun getPaginatedFeedItems() =
-        localRecordingDao.getPaginatedFeedItems()
-
-    /** Each recording's latest tool-call semantic result. Lets the home feed label
-     *  actions that don't produce a feed item, e.g. calendar events. */
-    fun getLatestToolSemanticResults() =
-        db.conversationMessageDao().getLatestToolSemanticResults()
+    /** Every recording's tool results (with their calls), which the feeds render as action chips. */
+    fun getToolMessages() =
+        db.conversationMessageDao().getToolMessages()
 
     suspend fun getAllFirestoreIds(): Set<String> =
         localRecordingDao.getAllFirestoreIds().toHashSet()

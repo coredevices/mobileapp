@@ -57,7 +57,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coredevices.ring.service.button.RingGesture
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
 import org.koin.compose.viewmodel.koinViewModel
 

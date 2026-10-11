@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -21,6 +22,8 @@ class InferenceForegroundService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 7631
         private const val CHANNEL_ID = "inference_fg"
+        private const val WAKE_LOCK_TIMEOUT_MS = 1 * 60 * 1000L
+        private val logger = Logger.withTag("InferenceForegroundService")
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
@@ -29,10 +32,13 @@ class InferenceForegroundService : Service() {
         val activityRunning: StateFlow<Boolean> = _activityRunning
 
         private val refCount = AtomicInteger(0)
+        private var wakeLock: PowerManager.WakeLock? = null
 
+        @Synchronized
         fun acquire(context: Context): Boolean {
             val isOuter = refCount.getAndIncrement() == 0
             if (isOuter) {
+                acquireWakeLock(context)
                 val serviceIntent = Intent(context, InferenceForegroundService::class.java)
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -40,7 +46,9 @@ class InferenceForegroundService : Service() {
                     } else {
                         context.startService(serviceIntent)
                     }
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    logger.w(e) { "Unable to start inference foreground service" }
+                }
                 val keyguard = context.getSystemService(KeyguardManager::class.java)
                 val screenLocked = keyguard?.isKeyguardLocked == true
                 if (!screenLocked) {
@@ -58,8 +66,10 @@ class InferenceForegroundService : Service() {
 
         fun hasActiveSessions() = refCount.get() > 0
 
+        @Synchronized
         fun release(context: Context) {
             if (refCount.decrementAndGet() == 0) {
+                releaseWakeLock()
                 // Post to main thread to ensure onStartCommand/startForeground runs first
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     if (refCount.get() == 0) {
@@ -67,6 +77,27 @@ class InferenceForegroundService : Service() {
                     }
                 }
             }
+        }
+
+        private fun acquireWakeLock(context: Context) {
+            try {
+                val powerManager = context.getSystemService(PowerManager::class.java) ?: return
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "coreapp:inference").apply {
+                    setReferenceCounted(false)
+                    acquire(WAKE_LOCK_TIMEOUT_MS)
+                }
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to acquire inference wake lock" }
+            }
+        }
+
+        private fun releaseWakeLock() {
+            try {
+                wakeLock?.takeIf { it.isHeld }?.release()
+            } catch (e: Exception) {
+                logger.w(e) { "Unable to release inference wake lock" }
+            }
+            wakeLock = null
         }
 
         internal fun onActivityRunning(running: Boolean) {
@@ -96,13 +127,18 @@ class InferenceForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            Logger.withTag("InferenceForegroundService").w(e) { "Error starting FG service" }
+            logger.w(e) { "Error starting FG service" }
             stopSelf(startId)
             return START_NOT_STICKY
         }
 
         _running.value = true
         return START_NOT_STICKY
+    }
+
+    override fun onTimeout(startId: Int) {
+        logger.e { "Inference foreground service hit the shortService time limit with a session still active" }
+        stopSelf()
     }
 
     override fun onDestroy() {

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 28px 0 6px; }
+    p { line-height: 1.45; }
+    label { display: block; font-size: 14px; font-weight: 650; margin: 18px 0 6px; }
+    input, textarea, select { box-sizing: border-box; width: 100%; padding: 11px 12px; font: 15px inherit;
+      border: 1px solid rgba(128,128,128,.45); border-radius: 9px; background: transparent; color: inherit; }
+    textarea { min-height: 96px; resize: vertical; }
+    button, .button { box-sizing: border-box; display: inline-block; padding: 10px 16px; border: 0;
+      border-radius: 999px; font: 600 15px inherit; background: #1ed760; color: #07130b; text-decoration: none; }
+    button.secondary { background: rgba(128,128,128,.2); color: inherit; }
+    button.danger { background: rgba(220,60,60,.18); color: #e65b5b; }
+    button:disabled { opacity: .45; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+    .card { margin-top: 18px; padding: 16px; border: 1px solid rgba(128,128,128,.35); border-radius: 14px; }
+    .hint { opacity: .72; font-size: 13px; }
+    .status { margin-top: 16px; padding: 11px 13px; border-radius: 9px; background: rgba(128,128,128,.15); font-size: 14px; }
+    .connected { color: #1ed760; font-weight: 650; }
+    [hidden] { display: none !important; }
+    code { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>Spotify</h1>
+
+  <div id="accountCard" class="card">
+    <strong id="accountTitle">Not connected</strong>
+    <div id="accountDetail" class="hint"></div>
+  </div>
+
+  <section id="setup">
+    <h2>Sign in</h2>
+    <div class="buttons">
+      <button id="connect" type="button">Sign in with Spotify</button>
+      <button id="test" class="secondary" type="button">Test connection</button>
+      <button id="disconnect" class="danger" type="button">Disconnect</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">Playback device</h2>
+    <p class="hint">Choose the default target for Index commands. “Current active device” lets Spotify decide. Devices appear after Spotify is open on them.</p>
+    <label for="device">Default Spotify Connect device</label>
+    <select id="device" disabled><option value="">Current active device</option></select>
+    <div class="buttons">
+      <button id="refreshDevices" class="secondary" type="button" disabled>Refresh devices</button>
+    </div>
+    <div id="deviceStatus" class="hint"></div>
+  </section>
+
+  <div id="status" class="status">Starting the Spotify plugin…</div>
+
+  <script>
+    var status = document.getElementById('status');
+    var device = document.getElementById('device');
+    var deviceStatus = document.getElementById('deviceStatus');
+    var refreshDevices = document.getElementById('refreshDevices');
+    var connected = false;
+    var preferredDevice = null;
+
+    function send(message) { return Pebble.sendMessage('plugin', message); }
+    function say(text) { status.textContent = text; }
+
+    function showAccount(result) {
+      connected = !!(result && result.configured);
+      var title = document.getElementById('accountTitle');
+      var detail = document.getElementById('accountDetail');
+      var profile = result && result.profile;
+      preferredDevice = result && result.preferredDevice || null;
+      if (connected) {
+        title.textContent = 'Connected' + (profile && profile.name ? ' as ' + profile.name : ' to Spotify');
+        title.className = 'connected';
+        detail.textContent = profile && profile.product ? 'Spotify ' + profile.product + ' account' : 'Spotify account connected on this phone.';
+      } else {
+        title.textContent = 'Not connected';
+        title.className = '';
+        detail.textContent = '';
+      }
+      device.disabled = !connected;
+      refreshDevices.disabled = !connected;
+    }
+
+    function showDevices(devices, selected) {
+      var selectedId = selected && selected.id || '';
+      device.textContent = '';
+      var automatic = document.createElement('option');
+      automatic.value = '';
+      automatic.textContent = 'Current active device';
+      device.appendChild(automatic);
+      (Array.isArray(devices) ? devices : []).forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = item.name + (item.is_active ? ' (active)' : '') + (item.is_restricted ? ' — restricted' : '');
+        device.appendChild(option);
+      });
+      if (selectedId && !(Array.isArray(devices) && devices.some(function (item) { return item.id === selectedId; }))) {
+        var unavailable = document.createElement('option');
+        unavailable.value = selectedId;
+        unavailable.textContent = (selected && selected.name || 'Selected device') + ' (currently unavailable)';
+        device.appendChild(unavailable);
+      }
+      device.value = selectedId;
+      deviceStatus.textContent = devices && devices.length ? devices.length + ' Spotify Connect device' + (devices.length === 1 ? '' : 's') + ' available.' : 'No devices available. Open Spotify on a phone, computer, speaker, or TV and refresh.';
+    }
+
+    async function loadDevices() {
+      if (!connected) return;
+      refreshDevices.disabled = true;
+      deviceStatus.textContent = 'Loading Spotify Connect devices…';
+      try {
+        var result = await send({ type: 'listDevices' });
+        if (result.error) { deviceStatus.textContent = result.error; return; }
+        preferredDevice = result.preferredDevice || preferredDevice;
+        showDevices(result.devices, preferredDevice);
+      } catch (error) {
+        deviceStatus.textContent = error.message || 'Could not load devices.';
+      } finally {
+        refreshDevices.disabled = !connected;
+      }
+    }
+
+    document.getElementById('connect').onclick = async function () {
+      say('Opening Spotify sign-in…');
+      try {
+        var result = await send({ type: 'connect' });
+        if (result.error) { say(result.error); return; }
+        showAccount(result);
+        showDevices(result.devices, result.preferredDevice);
+        say('Spotify is connected.');
+      } catch (error) { say(error.message || 'Could not connect Spotify.'); }
+    };
+
+    document.getElementById('test').onclick = async function () {
+      say('Testing Spotify connection…');
+      var result = await send({ type: 'testConnection' });
+      if (result.error) { say(result.error); return; }
+      showAccount(result);
+      showDevices(result.devices, result.preferredDevice);
+      say('Spotify connection is working.');
+    };
+
+    document.getElementById('disconnect').onclick = async function () {
+      var result = await send({ type: 'disconnect' });
+      showAccount(result);
+      showDevices([], null);
+      say('Spotify was disconnected. You can reconnect at any time.');
+    };
+
+    device.onchange = async function () {
+      device.disabled = true;
+      deviceStatus.textContent = 'Saving playback device…';
+      var result = await send({ type: 'selectDevice', deviceId: device.value });
+      device.disabled = !connected;
+      if (result.error) { deviceStatus.textContent = result.error; return; }
+      preferredDevice = result.preferredDevice || null;
+      deviceStatus.textContent = preferredDevice ? 'Index commands will target “' + preferredDevice.name + '”.' : 'Index commands will use Spotify’s current active device.';
+    };
+    refreshDevices.onclick = loadDevices;
+
+    Pebble.addEventListener('ready', async function (event) {
+      if (event.target !== 'plugin') return;
+      var result = await send({ type: 'status' });
+      if (result.error) { say(result.error); return; }
+      showAccount(result);
+      say(result.configured ? 'Spotify is connected.' : 'Spotify is not connected.');
+      if (result.configured) await loadDevices();
+    });
+  </script>
+</body>
+</html>

@@ -2,6 +2,8 @@ package io.rebble.libpebblecommon.notification
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.imaging.EncodedImage
@@ -89,11 +91,30 @@ private fun NotificationImage.decode(context: android.content.Context): Bitmap? 
             source.bitmap.takeIf { sample == 1 } ?: source.bitmap.scaledBy(sample)
         is NotificationImageSource.FromUri -> {
             val options = BitmapFactory.Options().apply { inSampleSize = sample }
-            context.contentResolver.openInputStream(source.uri)?.use {
+            val bitmap = context.contentResolver.openInputStream(source.uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
-            }
+            } ?: return null
+            val orientation = context.contentResolver.openInputStream(source.uri)?.use {
+                ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            } ?: ExifInterface.ORIENTATION_NORMAL
+            bitmap.applyExifOrientation(orientation)
         }
     }
+}
+
+private fun Bitmap.applyExifOrientation(orientation: Int): Bitmap {
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1f, 1f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.setScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> matrix.apply { setRotate(90f); postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90f)
+        ExifInterface.ORIENTATION_TRANSVERSE -> matrix.apply { setRotate(-90f); postScale(-1f, 1f) }
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(-90f)
+        else -> return this
+    }
+    return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
 }
 
 private fun Bitmap.scaledBy(sample: Int): Bitmap =

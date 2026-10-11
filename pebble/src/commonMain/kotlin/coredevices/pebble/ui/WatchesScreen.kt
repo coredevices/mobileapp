@@ -148,6 +148,8 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
+import coredevices.pebble.services.description
+import coredevices.pebble.services.canContribute
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.displayName
 import coredevices.ui.ConfirmDialog
@@ -183,6 +185,7 @@ import io.rebble.libpebblecommon.connection.color
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateErrorStarting
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
+import io.rebble.libpebblecommon.connection.endpointmanager.installing
 import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -192,6 +195,8 @@ import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1851,48 +1856,84 @@ private fun NotificationDialog(
 @Composable
 fun LanguageDialog(watch: ConnectedPebbleDevice, onDismissRequest: () -> Unit) {
     val languagePackRepository: LanguagePackRepository = koinInject()
-    val languagePacks by produceState<List<LanguagePack>>(emptyList()) {
+    val languagePacks by produceState(languagePackRepository.cachedLanguagePacksForWatch(watch), watch) {
         value = languagePackRepository.languagePacksForWatch(watch)
     }
+    val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var selectedLanguagePack: LanguagePack? by remember { mutableStateOf(null) }
+    LaunchedEffect(languagePacks) {
+        selectedLanguagePack = languagePacks.firstOrNull { it.id == selectedLanguagePack?.id }
+    }
+    var preparing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val dismiss = { if (!preparing) onDismissRequest() }
     AlertDialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = dismiss,
         title = { Text("Language Packs") },
         text = {
-            LazyColumn {
-                items(languagePacks, key = { it.id }) { lp ->
-                    val isSelected = selectedLanguagePack == lp
-                    Text(
-                        text = lp.displayName(),
-                        modifier = Modifier.clickable {
-                            selectedLanguagePack = lp
-                        }.border(
-                            width = 2.dp,
-                            color = if (isSelected) coreOrange else Color.Transparent,
-                            shape = RoundedCornerShape(8.dp)
-                        ).padding(9.dp),
-                    )
+            Column {
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    items(languagePacks, key = { it.id }) { lp ->
+                        val isSelected = selectedLanguagePack == lp
+                        Column(
+                            modifier = Modifier.clickable(enabled = !preparing) {
+                                selectedLanguagePack = lp
+                                error = null
+                            }.border(
+                                width = 2.dp,
+                                color = if (isSelected) coreOrange else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            ).padding(9.dp),
+                        ) {
+                            Text(lp.displayName())
+                            Text(
+                                lp.description(),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+                selectedLanguagePack?.takeIf { it.canContribute() }?.published?.let { published ->
+                    TextButton(onClick = { uriHandler.openUri(published.translationUrl) }) {
+                        Text("Help translate")
+                    }
                 }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val lp = selectedLanguagePack
-                    if (lp == null) {
-                        logger.e { "why is selectedLanguagePack null?" }
-                    } else {
-                        watch.installLanguagePack(lp.file, lp.displayName())
+                    val lp = selectedLanguagePack ?: return@TextButton
+                    preparing = true
+                    scope.launch {
+                        try {
+                            if (lp.published != null) {
+                                val path = languagePackRepository.prepareDownload(lp)
+                                watch.installLanguagePack(path, lp.displayName())
+                            } else {
+                                watch.installLanguagePack(lp.file, lp.displayName())
+                            }
+                            onDismissRequest()
+                        } catch (e: TimeoutCancellationException) {
+                            error = "Download timed out. Please try again."
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logger.w(e) { "Language pack download failed" }
+                            error = "Could not download or verify the language pack. Please try again."
+                        } finally {
+                            preparing = false
+                        }
                     }
-                    onDismissRequest()
                 },
-                enabled = selectedLanguagePack != null,
-            ) { Text("Install") }
+                enabled = selectedLanguagePack != null && !preparing &&
+                    watch.languagePackInstallState.installing() == null,
+            ) { Text(if (preparing) "Downloading…" else "Install") }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onDismissRequest()
-            }) { Text("Cancel") }
+            TextButton(onClick = dismiss, enabled = !preparing) { Text("Cancel") }
         }
     )
 }

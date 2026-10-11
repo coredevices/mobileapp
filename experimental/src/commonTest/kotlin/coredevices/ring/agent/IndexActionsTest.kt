@@ -14,12 +14,12 @@ class IndexActionsTest {
 
     private fun actions(
         isAndroid: Boolean,
-        llmMode: LlmMode,
+        localAgentOnly: Boolean = false,
         calendarConnected: Boolean = true,
     ) = builtinServletDefinitions(isAndroid).associate {
         it.name to it.toIndexAction(
             enabled = true,
-            llmMode = llmMode,
+            localAgentOnly = localAgentOnly,
             calendarConnected = calendarConnected,
         )
     }
@@ -39,7 +39,7 @@ class IndexActionsTest {
 
     @Test
     fun anActionUnavailableOnThisPlatformIsNeverEnabled() {
-        val clock = actions(isAndroid = false, llmMode = LlmMode.RemoteOnly)
+        val clock = actions(isAndroid = false)
             .getValue(ClockServlet.name)
 
         assertEquals(ANDROID_ONLY_REASON, clock.disabledReason)
@@ -47,8 +47,8 @@ class IndexActionsTest {
     }
 
     @Test
-    fun localOnlyModeGatesActionsTheOnDeviceModelCannotRun() {
-        val local = actions(isAndroid = true, llmMode = LlmMode.LocalOnly)
+    fun localAgentOnlyGatesActionsTheOnDeviceModelCannotRun() {
+        val local = actions(isAndroid = true, localAgentOnly = true)
 
         assertEquals(LOCAL_MODEL_REASON, local.getValue(CalendarServlet.NAME).disabledReason)
         assertEquals(LOCAL_MODEL_REASON, local.getValue(MessagingServlet.name).disabledReason)
@@ -57,21 +57,21 @@ class IndexActionsTest {
     }
 
     @Test
-    fun remoteFirstModeLeavesEveryActionUsable() {
-        val remoteFirst = actions(isAndroid = true, llmMode = LlmMode.RemoteFirst)
+    fun hybridAgentLeavesEveryActionUsable() {
+        val hybrid = actions(isAndroid = true)
 
-        assertTrue(remoteFirst.values.all { it.disabledReason == null && it.enabled })
+        assertTrue(hybrid.values.all { it.disabledReason == null && it.enabled })
     }
 
     @Test
     fun calendarIsNotConnectedUntilItIsLinkedAndPermitted() {
-        val disconnected = actions(isAndroid = true, llmMode = LlmMode.RemoteOnly, calendarConnected = false)
+        val disconnected = actions(isAndroid = true, calendarConnected = false)
         assertEquals(
             NOT_CONNECTED_REASON,
             disconnected.getValue(CalendarServlet.NAME).disabledReason,
         )
 
-        val connected = actions(isAndroid = true, llmMode = LlmMode.RemoteOnly)
+        val connected = actions(isAndroid = true)
         assertNull(connected.getValue(CalendarServlet.NAME).disabledReason)
     }
 }

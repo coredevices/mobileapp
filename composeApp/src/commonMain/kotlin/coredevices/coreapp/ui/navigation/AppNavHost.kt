@@ -32,6 +32,7 @@ import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.addPebbleRoutes
 import coredevices.ring.ui.navigation.addRingRoutes
 import coredevices.ring.ui.screens.IndexScreen
+import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.ui.GenericWebViewScreen
 import coredevices.util.CommonBuildKonfig
 import kotlinx.coroutines.flow.filterNotNull
@@ -194,9 +195,11 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                 )
             }
             composable<CommonRoutes.RingOnboardingRoute> {
-                RingOnboardingScreen(
-                    coreNav = coreNav,
-                )
+                IndexThemeHost {
+                    RingOnboardingScreen(
+                        coreNav = coreNav,
+                    )
+                }
             }
         }
     }

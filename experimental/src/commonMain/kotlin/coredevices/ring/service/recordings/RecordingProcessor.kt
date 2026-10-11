@@ -2,11 +2,15 @@ package coredevices.ring.service.recordings
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
+import coredevices.indexai.agent.pendingConfirmations
+import coredevices.indexai.data.entity.isAnswer
 import coredevices.util.AudioEncoding
 import coredevices.util.CoreConfigFlow
+import coredevices.indexai.data.entity.AgentIterationEntity
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.MessageRole
+import coredevices.indexai.database.dao.AgentIterationDao
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.transcription.TranscriptionService
@@ -15,8 +19,10 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.mcp.data.withItemId
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
+import coredevices.ring.agent.confirmation.AgentUserConfirmation
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.dao.LocalReminderDao
@@ -27,6 +33,7 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlin.time.Clock
@@ -41,6 +48,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import kotlinx.io.Source
@@ -54,6 +63,7 @@ import kotlin.uuid.Uuid
 class RecordingProcessor(
     private val transcriptionService: TranscriptionService,
     private val conversationMessageDao: ConversationMessageDao,
+    private val agentIterationDao: AgentIterationDao,
     private val recordingEntryDao: RecordingEntryDao,
     private val trace: RingTraceSession,
     private val coreConfigFlow: CoreConfigFlow,
@@ -62,6 +72,7 @@ class RecordingProcessor(
     private val transferRepository: RingTransferRepository,
     private val itemFactory: ItemFactory,
     private val localReminderDao: LocalReminderDao,
+    private val agentUserConfirmation: AgentUserConfirmation,
 ) {
     sealed interface RecordingStatus {
         /**
@@ -91,6 +102,7 @@ class RecordingProcessor(
         private const val AUDIO_STREAM_BUFFER_SIZE = 1024
         internal val TRANSCRIPTION_TIMEOUT = 45.seconds
         private val logger = Logger.withTag("RecordingProcessor")
+        const val DENIED_RESULT = "User denied permission to call this tool"
     }
 
     private suspend fun updateConversation(localRecordingId: Long, conversation: List<ConversationMessageDocument>) {
@@ -190,6 +202,24 @@ class RecordingProcessor(
         }.flowOn(Dispatchers.IO).launchIn(scope)
     }
 
+    // Subscribes before returning so the first round is never missed, and finishes each insert
+    // even once cancelled so the last round is kept.
+    private fun watchAgentIterations(scope: CoroutineScope, agent: Agent, localRecordingId: Long): Job =
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            agent.iterations.collect {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    agentIterationDao.insert(
+                        AgentIterationEntity(
+                            recordingId = localRecordingId,
+                            agent = it.agent,
+                            toolDeclarations = it.toolDeclarations,
+                            conversation = it.conversation,
+                        )
+                    )
+                }
+            }
+        }
+
     suspend fun transcribe(
         audioSource: Source,
         sampleRate: Int,
@@ -220,6 +250,30 @@ class RecordingProcessor(
         )
     }
 
+    private suspend fun sessionContextFor(
+        recordingId: Long,
+        firestoreId: String?,
+        createdAt: Instant,
+        text: String?,
+    ): SessionContext {
+        // Ring recordings only have a true recording time when the ring reported the button
+        // press; other sources (chat, phone mic) stamp the recording at capture time.
+        val ringTransfer = withContext(Dispatchers.IO) {
+            transferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
+        }
+        val timeBase = if (ringTransfer != null) {
+            ringTransfer.transferInfo?.buttonReleased?.let { Instant.fromEpochMilliseconds(it) }
+        } else {
+            createdAt
+        }
+        return SessionContext(
+            timeBase = timeBase,
+            userMessageText = CompletableDeferred(text),
+            recordingFirestoreId = firestoreId,
+            toolCallId = null
+        )
+    }
+
     suspend fun processText(
         recordingId: Long,
         recordingEntryId: Long?,
@@ -231,22 +285,7 @@ class RecordingProcessor(
         val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
         val firestoreId = rec?.firestoreId
         val createdAt = rec?.localTimestamp ?: Clock.System.now()
-        // Ring recordings only have a true recording time when the ring reported the button
-        // press; other sources (chat, phone mic) stamp the recording at capture time.
-        val ringTransfer = withContext(Dispatchers.IO) {
-            transferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
-        }
-        val timeBase = if (ringTransfer != null) {
-            ringTransfer.transferInfo?.buttonReleased?.let { Instant.fromEpochMilliseconds(it) }
-        } else {
-            createdAt
-        }
-        val sessionContext = SessionContext(
-            timeBase = timeBase,
-            userMessageText = CompletableDeferred(text),
-            recordingFirestoreId = firestoreId,
-            toolCallId = null
-        )
+        val sessionContext = sessionContextFor(recordingId, firestoreId, createdAt, text)
 
         trace.markEvent("agent_processing_start",
             TraceEventData.AgentProcessingStart(
@@ -258,12 +297,9 @@ class RecordingProcessor(
         )
         val convEndIdx = agent.conversation.first().size
         persistUserMessageIfAbsent(recordingId, recordingEntryId, text, convEndIdx)
-        val convUpdJob = watchConversationUpdates(
-            CoroutineScope(currentCoroutineContext()),
-            agent,
-            recordingId,
-            recordingEntryId
-        )
+        val scope = CoroutineScope(currentCoroutineContext())
+        val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
+        val iterationJob = watchAgentIterations(scope, agent, recordingId)
         try {
             agent.send(text, mcpSession, sessionContext)
         } catch (e: AgentNetworkException) {
@@ -282,6 +318,7 @@ class RecordingProcessor(
         } catch (e: Throwable) {
             logger.e(e) { "Error during agent processing" }
         } finally {
+            iterationJob.cancelAndJoin()
             convUpdJob.cancelAndJoin()
             updateConversation(recordingId, agent.conversation.first().take(convEndIdx))
         }
@@ -294,48 +331,135 @@ class RecordingProcessor(
         val toolRequestedFallback = conv.drop(convEndIdx).lastOrNull { it.role == MessageRole.tool }?.let {
             it.semantic_result is SemanticResult.GenericFailure && (it.semantic_result as SemanticResult.GenericFailure).forceFallbackTool
         } ?: false
-        if (forcedTool != null && (noToolRan || toolRequestedFallback)) {
-            val lastAssistantMessage = conv.drop(convEndIdx)
-                .lastOrNull { it.role == MessageRole.assistant }
-                ?.content
+        val lastAssistantMessage = conv.drop(convEndIdx).lastOrNull { it.role == MessageRole.assistant }
+        // A tagged answer is the agent's action, so no fallback is needed
+        val answered = lastAssistantMessage?.isAnswer == true
+        val forceTool = !answered && (noToolRan || toolRequestedFallback)
+        if (forcedTool != null && forceTool) {
             // Agent did not take any action, force tool
-            val toolResult = forcedTool(lastAssistantMessage, sessionContext)
+            val forcedCallId = Uuid.random().toString()
+            val toolResult = forcedTool(lastAssistantMessage?.content, sessionContext.copy(toolCallId = forcedCallId))
             logger.w { "Forcing tool call result into conversation" }
             agent.addMessage(
                 ConversationMessageDocument(
                     role = MessageRole.tool,
                     content = toolResult.resultString,
                     semantic_result = toolResult.semanticResult,
-                    tool_call_id = Uuid.random().toString(),
+                    tool_call_id = forcedCallId,
                     language_model_used = null,
                     is_forced_tool = true
                 )
             )
         }
-        // Create feed items from this turn's tool messages, stamping each with the tool_call_id
-        // that produced it. Done centrally (rather than in each tool) because only the tool message
-        // carries the tool_call_id.
-        if (firestoreId != null) {
-            agent.conversation.first().drop(convEndIdx)
-                .filter { it.role == MessageRole.tool }
-                .forEach { msg ->
-                    val item = msg.semantic_result?.let {
-                        itemFactory.createFromSemanticResult(it, firestoreId, createdAt, msg.tool_call_id)
-                    } ?: return@forEach
-                    val itemId = itemFactory.simpleUid()
-                    runCatching { itemRepo.setItem(itemId, item) }
-                        .onFailure { logger.e(it) { "Failed to persist item for tool_call ${msg.tool_call_id}" } }
-                }
-        }
         updateConversation(recordingId, agent.conversation.first())
+        finishTurn(recordingId, firestoreId, createdAt, agent.conversation.first().drop(convEndIdx))
         linkUserMessageToEntry(recordingId, recordingEntryId)
         trace.markEvent("agent_processing_end",
             TraceEventData.AgentProcessingEnd(
                 recordingId = recordingId,
                 recordingEntryId = recordingEntryId,
-                forcedToolUsed = forcedTool != null && noToolRan,
+                forcedToolUsed = forcedTool != null && forceTool,
                 agent = agent.label,
             )
         )
+    }
+
+    /**
+     * Runs the tool call the user answered ([approved], else the denial is the result), as a
+     * second result for [toolCallId], then lets the agent carry on from there.
+     */
+    suspend fun resumeAfterConfirmation(
+        recordingId: Long,
+        recordingEntryId: Long,
+        mcpSession: McpSession,
+        agent: Agent,
+        toolCallId: String,
+        approved: Boolean,
+    ) {
+        val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
+        val firestoreId = rec?.firestoreId
+        val createdAt = rec?.localTimestamp ?: Clock.System.now()
+        val conversation = agent.conversation.first()
+        val request = conversation.pendingConfirmations()
+            .firstOrNull { it.tool_call_id == toolCallId }
+            ?.semantic_result as? SemanticResult.RequiresConfirmation
+        val userText = conversation.lastOrNull { it.role == MessageRole.user }?.content
+        val sessionContext = sessionContextFor(recordingId, firestoreId, createdAt, userText)
+            .copy(toolCallId = toolCallId, userConfirmed = true)
+        val convEndIdx = conversation.size
+        val scope = CoroutineScope(currentCoroutineContext())
+        val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
+        val iterationJob = watchAgentIterations(scope, agent, recordingId)
+        try {
+            if (request != null) {
+                val result = if (approved) {
+                    mcpSession.callTool(request.integrationName, request.toolName, request.arguments, sessionContext)
+                } else {
+                    ToolCallResult(DENIED_RESULT, SemanticResult.UserDenied)
+                }
+                agent.addMessage(
+                    ConversationMessageDocument(
+                        role = MessageRole.tool,
+                        content = result.resultString,
+                        tool_call_id = toolCallId,
+                        semantic_result = result.semanticResult,
+                    )
+                )
+            } else {
+                logger.w { "Tool call $toolCallId is not awaiting confirmation, resuming agent only" }
+            }
+            agent.resume(mcpSession, sessionContext)
+        } catch (e: AgentNetworkException) {
+            logger.e(e) { "Network error while resuming agent" }
+            throw e
+        } catch (e: Throwable) {
+            logger.e(e) { "Error while resuming agent" }
+        } finally {
+            iterationJob.cancelAndJoin()
+            convUpdJob.cancelAndJoin()
+            updateConversation(recordingId, agent.conversation.first())
+        }
+        finishTurn(recordingId, firestoreId, createdAt, agent.conversation.first().drop(convEndIdx))
+    }
+
+    private suspend fun finishTurn(
+        recordingId: Long,
+        firestoreId: String?,
+        createdAt: Instant,
+        turn: List<ConversationMessageDocument>,
+    ) {
+        if (firestoreId != null) {
+            createItemsForTurn(recordingId, firestoreId, createdAt, turn)
+        }
+        turn.pendingConfirmations().forEach { agentUserConfirmation.requestConfirmation(recordingId, it) }
+    }
+
+    /**
+     * Persists the feed items this turn's tool results produced and records each item's id on
+     * its result. Items the tools' own integrations created (notes, reminders) are matched by
+     * the call that created them; the rest are created here from the result.
+     */
+    private suspend fun createItemsForTurn(
+        recordingId: Long,
+        firestoreId: String,
+        createdAt: Instant,
+        turn: List<ConversationMessageDocument>,
+    ) {
+        val itemsByCall = itemRepo.getByRecording(firestoreId)
+            .filter { !it.sourceToolCallId.isNullOrBlank() }
+            .associate { it.sourceToolCallId!! to it.firestoreId }
+            .toMutableMap()
+        turn.filter { it.role == MessageRole.tool }.forEach { msg ->
+            val callId = msg.tool_call_id ?: return@forEach
+            val result = msg.semantic_result ?: return@forEach
+            itemFactory.createFromSemanticResult(result, firestoreId, createdAt, callId)?.let { item ->
+                val itemId = itemFactory.simpleUid()
+                runCatching { itemRepo.setItem(itemId, item) }
+                    .onSuccess { itemsByCall[callId] = itemId }
+                    .onFailure { logger.e(it) { "Failed to persist item for tool_call $callId" } }
+            }
+            val itemId = itemsByCall[callId] ?: return@forEach
+            conversationMessageDao.updateSemanticResult(recordingId, callId, result.withItemId(itemId))
+        }
     }
 }

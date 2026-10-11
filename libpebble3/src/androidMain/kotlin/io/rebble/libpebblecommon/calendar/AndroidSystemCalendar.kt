@@ -33,6 +33,7 @@ private val calendarProjection = arrayOf(
     CalendarContract.Calendars.CALENDAR_COLOR,
     CalendarContract.Calendars.SYNC_EVENTS,
     CalendarContract.Calendars.VISIBLE,
+    CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL
 )
 
 private val instanceUri: Uri = CalendarContract.Instances.CONTENT_URI
@@ -366,6 +367,10 @@ class AndroidSystemCalendar(
                                 cursor.getNullableColumnIndex(CalendarContract.Calendars.VISIBLE)
                                     ?.let { cursor.getInt(it) }
 
+                            val writable =
+                                cursor.getNullableColumnIndex(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
+                                    ?.let { cursor.getInt(it) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR }
+
                             add(
                                 CalendarEntity(
                                     platformId = id.toString(),
@@ -376,6 +381,7 @@ class AndroidSystemCalendar(
                                     enabled = true,
                                     syncEvents = syncEvents == 1,
                                     visible = visible == 1,
+                                    writable = writable == true,
                                 )
                             )
                         }
@@ -468,13 +474,9 @@ class AndroidSystemCalendar(
                     appContext.context.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
     }
 
-    override suspend fun createEvent(event: NewCalendarEvent): String? {
-        val calendarId = findPrimaryWritableCalendarId() ?: run {
-            logger.w("No writable calendar found to create event")
-            return null
-        }
+    override suspend fun createEvent(calendarId: String, event: NewCalendarEvent): String? {
         val values = ContentValues().apply {
-            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+            put(CalendarContract.Events.CALENDAR_ID, calendarId.toInt())
             put(CalendarContract.Events.TITLE, event.title)
             event.description?.let { put(CalendarContract.Events.DESCRIPTION, it) }
             event.location?.let { put(CalendarContract.Events.EVENT_LOCATION, it) }
@@ -494,19 +496,14 @@ class AndroidSystemCalendar(
     }
 
     /**
-     * Best calendar to create events in: the account's own primary calendar
-     * (where ownerAccount == accountName), else the first calendar we can write to.
-     *
-     * Deliberately does NOT order by IS_PRIMARY — that is a computed column that some calendar
-     * providers reject in a sort clause (the query then throws / returns null), which would make
-     * event creation silently fail even when writable calendars exist.
+     * The account's own primary calendar (ownerAccount == accountName). IS_PRIMARY is a computed
+     * column some providers reject in queries, so it isn't used.
      */
-    private fun findPrimaryWritableCalendarId(): Long? {
+    override suspend fun defaultCalendarPlatformId(): String? {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.ACCOUNT_NAME,
             CalendarContract.Calendars.OWNER_ACCOUNT,
-            CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
         )
         return try {
             contentResolver.query(
@@ -516,22 +513,20 @@ class AndroidSystemCalendar(
                 arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
                 null
             )?.use { cursor ->
-                var firstWritable: Long? = null
-                var ownPrimary: Long? = null
                 while (cursor.moveToNext()) {
-                    val id = cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
-                        ?.let { cursor.getLong(it) } ?: continue
-                    if (firstWritable == null) firstWritable = id
                     val account = cursor.getNullableColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
                         ?.let { cursor.getString(it) }
                     val owner = cursor.getNullableColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
                         ?.let { cursor.getString(it) }
-                    if (ownPrimary == null && account != null && account == owner) ownPrimary = id
+                    if (account != null && account == owner) {
+                        return@use cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
+                            ?.let { cursor.getLong(it).toString() }
+                    }
                 }
-                ownPrimary ?: firstWritable
+                null
             }
         } catch (e: Exception) {
-            logger.e(e) { "Error querying calendars for event creation" }
+            logger.e(e) { "Error querying default calendar" }
             null
         }
     }

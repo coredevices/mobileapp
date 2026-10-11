@@ -69,11 +69,10 @@ class AppstoreSettingsScreenViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun updateCollections() {
-        viewModelScope.launch {
-            pebbleWebServices.fetchAppStoreHome(AppType.Watchapp, null, enabledOnly = false, useCache = false)
-        }
-        viewModelScope.launch {
-            pebbleWebServices.fetchAppStoreHome(AppType.Watchface, null, enabledOnly = false, useCache = false)
+        AppType.entries.forEach { type ->
+            viewModelScope.launch {
+                pebbleWebServices.fetchAppStoreHome(type, null, enabledOnly = false, useCache = false)
+            }
         }
     }
 
@@ -270,6 +269,7 @@ fun AppstoreSourceItem(
                             text = when (appType) {
                                 AppType.Watchapp -> "Watchapp Collections"
                                 AppType.Watchface -> "Watchface Collections"
+                                AppType.Plugin -> "Plugin Collections"
                             },
                             modifier = Modifier.padding(start = 32.dp),
                             style = MaterialTheme.typography.labelSmall,

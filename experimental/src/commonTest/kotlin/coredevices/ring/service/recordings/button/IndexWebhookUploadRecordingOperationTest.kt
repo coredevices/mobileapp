@@ -12,6 +12,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.StagedRecordingUpload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineDispatcher
@@ -208,8 +209,6 @@ private object FakeLocalRecordingDao : LocalRecordingDao {
     override fun getAllRecordings() = TODO()
     override fun getAllRecordingsAfter(timestamp: Instant) = TODO()
     override fun getRecordingsCount() = TODO()
-    override fun getPaginatedFeedItems() = TODO()
-    override fun getFeedItemByIdFlow(recordingId: Long) = TODO()
     override suspend fun getMostRecentTimestamp(): LocalRecording? = TODO()
     override suspend fun getRecentRecordings(limit: Int): List<LocalRecording> = TODO()
     override suspend fun getAllFirestoreIds(): List<String> = TODO()
@@ -241,4 +240,6 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteAllCachedMetadata() = TODO()
     override fun clearCacheDirectory() = TODO()
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
+    override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
+    override fun deleteStagedRecording(id: String) = TODO()
 }

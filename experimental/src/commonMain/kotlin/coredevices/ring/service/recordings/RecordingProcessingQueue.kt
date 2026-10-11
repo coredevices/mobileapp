@@ -1,6 +1,7 @@
 package coredevices.ring.service.recordings
 
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.RecordingDocument
 import coredevices.indexai.data.entity.RecordingEntry
@@ -71,11 +72,13 @@ class RecordingProcessingQueue(
     private val scope: RecordingBackgroundScope,
     private val recordingPreprocessor: RecordingPreprocessor,
     private val trace: RingTraceSession,
+    settings: Settings,
     rescheduleDelay: Duration = 1.minutes,
     maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
     repository = queueTaskRepository,
     scope = scope,
+    settings = settings,
     label = "RecordingProcessing",
     rescheduleDelay = rescheduleDelay,
     maxConcurrency = maxConcurrency,
@@ -151,6 +154,7 @@ class RecordingProcessingQueue(
                                     status = it.status,
                                     transcription = it.transcription,
                                     transcribedUsingModel = it.transcribedUsingModel,
+                                    transcribedViaLocalFallback = it.transcribedViaLocalFallback,
                                     error = it.error,
                                     errorType = it.errorType,
                                     ringTransferInfo = it.ringTransferInfo,
@@ -291,11 +295,7 @@ class RecordingProcessingQueue(
      *       remote.
      *    3. Local copy is at-or-newer than remote → no-op.
      *
-     *  Decrypts the document first if it carries an encrypted envelope.
-     *  Public so [coredevices.ring.ui.viewmodel.SettingsViewModel]'s
-     *  manual sync can share the same code path as the auto-pull
-     *  snapshot listener — single source of truth for "ingest a remote
-     *  recording into Room." */
+     *  Decrypts the document first if it carries an encrypted envelope. */
     suspend fun ingestRemoteRecording(firestoreId: String, document: RecordingDocument) {
         val recordingEntryDao: RecordingEntryDao = get()
         val conversationMessageDao: ConversationMessageDao = get()
@@ -352,6 +352,7 @@ class RecordingProcessingQueue(
                         status = entry.status,
                         transcription = entry.transcription,
                         transcribedUsingModel = entry.transcribedUsingModel,
+                        transcribedViaLocalFallback = entry.transcribedViaLocalFallback,
                         error = entry.error,
                         errorType = entry.errorType,
                         ringTransferInfo = entry.ringTransferInfo,
@@ -442,7 +443,8 @@ class RecordingProcessingQueue(
                         recordingEntryDao.updateRecordingEntryTranscription(
                             stagedEntry.id,
                             transcription = "Error: Login required for cloud processing",
-                            modelUsed = stagedEntry.transcribedUsingModel
+                            modelUsed = stagedEntry.transcribedUsingModel,
+                            localFallback = stagedEntry.transcribedViaLocalFallback,
                         )
                     }
                     // The insert path bumps the parent recording; do the same so
@@ -500,12 +502,17 @@ class RecordingProcessingQueue(
                 recordingId = res,
                 transferId = transferId
             ))
+            transferRepository.linkRecordingToTransfer(
+                transferId = transferId,
+                recordingId = res
+            )
             res
         } else {
             val firestoreRecordingsDao: FirestoreRecordingsDao = get()
-            val id = recordingRepository.createRecording(
+            val id = recordingRepository.createRecordingForTransfer(
                 firestoreId = firestoreRecordingsDao.newDocumentId(),
-                localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created
+                localTimestamp = transfer.transferInfo?.buttonPressed?.let { Instant.fromEpochMilliseconds(it) } ?: task.created,
+                transferId = transferId,
             )
             queueTaskRepository.updateTaskRecordingId(
                 taskId = handle.taskId,
@@ -520,10 +527,6 @@ class RecordingProcessingQueue(
             )
             id
         }
-        transferRepository.linkRecordingToTransfer(
-            transferId = transferId,
-            recordingId = recordingId
-        )
         handleRecording(
             handle = handle,
             recordingId = recordingId,

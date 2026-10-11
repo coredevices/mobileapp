@@ -222,6 +222,19 @@ class CreateCalendarEventTool : BuiltInMcpTool(
             )
         }
 
+        val calendarId = preferences.targetCalendar.value ?: return ToolCallResult(
+            JsonSnake.encodeToString(
+                CreateEventResult(
+                    success = false,
+                    errorMessage = "The user has not configured a target for calendar events"
+                )
+            ),
+            SemanticResult.GenericFailure(
+                "No target calendar has been configured",
+                llmRecoverable = false
+            )
+        )
+
         // Decode args only after the guards: a stale/forced call with malformed args must still
         // get the controlled failures above rather than a decode exception.
         val args = try {
@@ -251,6 +264,7 @@ class CreateCalendarEventTool : BuiltInMcpTool(
 
         return try {
             val eventId = libPebble.createEvent(
+                calendarId,
                 NewCalendarEvent(
                     title = args.title,
                     startTime = start,

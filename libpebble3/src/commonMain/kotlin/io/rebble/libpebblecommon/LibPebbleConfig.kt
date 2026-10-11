@@ -6,6 +6,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,6 +86,7 @@ data class WatchConfig(
      * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
      */
     val appMessageToMultipleCompanions: Boolean = true,
+    val enableLegacyPebbleKit: Boolean = true,
     val orderWatchfacesByLastUsed: Boolean = false,
     val unknownWatchTypePlatform: WatchType = WatchType.EMERY,
     /**
@@ -99,6 +101,9 @@ data class WatchConfig(
     val enableWatchSettingsSync: Boolean = true,
     val musicSeekWhenAvailable: Boolean = true,
     val enablePlugins: Boolean = false,
+    val permissionPolicy: PermissionPolicy = PermissionPolicy.AskIfExfiltrating,
+    /** When false, legacy apps keep what they had before permissions (see `isLegacyImplicit`). */
+    val askLegacyAppsForPermissions: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {

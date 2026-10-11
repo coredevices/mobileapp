@@ -10,6 +10,8 @@ import kotlin.uuid.Uuid
 enum class AppType(val code: String) {
     Watchface("watchface"),
     Watchapp("watchapp"),
+    /** A pbw that carries only a plugin (no watchapp binary): registered, never synced to a watch. */
+    Plugin("plugin"),
     ;
 
     companion object {
@@ -21,6 +23,8 @@ enum class AppCapability(val code: String) {
     Health("health"),
     Location("location"),
     Timeline("timeline"),
+    /** Signing in to a web account from the app's config page. Our store only grants it to our own apps. */
+    WebSignIn("web_sign_in"),
     // Not included: "configurable" (separate field in database, doesn't require permission grant)
     ;
 
@@ -56,6 +60,8 @@ data class AppProperties(
     val sourceLink: String?,
     val storeId: String?,
     val capabilities: List<AppCapability>,
+    /** Where the pbw is downloaded from; null when sideloaded. */
+    val pbwUrl: String? = null,
 )
 
 data class AppBasicProperties(

@@ -25,7 +25,7 @@ class IndexWebhookSendDecisionTest {
     fun otherRoutesSendAlongsideTheirMainDestination() {
         assertTrue(configured.sendsFor(GestureDestination.IndexAgent))
         assertTrue(configured.sendsFor(GestureDestination.WebSearch))
-        assertTrue(configured.sendsFor(GestureDestination.McpSandbox(7L)))
+        assertTrue(configured.sendsFor(GestureDestination.LocalAgent))
     }
 
     @Test

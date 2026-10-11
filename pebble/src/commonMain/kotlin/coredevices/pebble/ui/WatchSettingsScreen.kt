@@ -40,7 +40,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
@@ -159,6 +158,7 @@ import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -231,7 +231,6 @@ enum class Section(val title: String, val icon: ImageVector) {
     Other("Other", Icons.Default.MoreHoriz), // watch only
     Diagnostics("Diagnostics", Icons.Default.Timeline),
     Debug("Debug", Icons.Default.BugReport),
-    BundledPlugins("Bundled Plugins", Icons.Default.Extension), // TODO to be removed when we have a better solution
 }
 
 fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
@@ -1913,8 +1912,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
-                    title = "Use experimental plugins",
-                    description = "Enable the new plugins API. This is an experimental feature under development - not recommended unless you know what you are doing (API is unstable, and can expose private data until a permission system is implemented)",
+                    title = "Use experimental plugins / permissions",
+                    description = "Enable the new plugins API, and new permissions system. This is an experimental feature under development - not recommended unless you know what you are doing (API is unstable)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Debug,
                     checked = libPebbleConfig.watchConfig.enablePlugins,
@@ -1929,25 +1928,65 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     isDebugSetting = true,
                 ),
-                *libPebble.configurablePlugins().map { plugin ->
-                    basicSettingsActionItem(
-                        title = "Configure ${plugin.name}",
-                        description = "Settings for the ${plugin.name} plugin",
-                        topLevelType = TopLevelType.Phone,
-                        section = Section.BundledPlugins,
-                        action = {
-                            WatchappSettingsUrlCache.put(plugin.uuid, plugin.configPageUrl)
-                            navBarNav?.navigateTo(
-                                PebbleRoutes.WatchappSettingsRoute(
-                                    uuid = plugin.uuid,
-                                    title = plugin.name,
-                                )
+                basicSettingsDropdownItem(
+                    title = "Ask before apps use permissions",
+                    description = when (libPebbleConfig.watchConfig.permissionPolicy) {
+                        PermissionPolicy.AskIfExfiltrating ->
+                            "Apps ask before going online or changing anything, and before reading your data if they could send it off your phone."
+                        PermissionPolicy.AlwaysAsk -> "Apps ask before using any permission."
+                        PermissionPolicy.NeverAsk -> "Apps can use any permission you haven't turned off on the app's page."
+                    },
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    items = PermissionPolicy.entries,
+                    selectedItem = libPebbleConfig.watchConfig.permissionPolicy,
+                    onItemSelected = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(permissionPolicy = it)
                             )
-                        },
-                        show = { libPebbleConfig.watchConfig.enablePlugins },
-                        isDebugSetting = true,
-                    )
-                }.toTypedArray(),
+                        )
+                    },
+                    itemText = {
+                        when (it) {
+                            PermissionPolicy.AskIfExfiltrating -> "With network access"
+                            PermissionPolicy.AlwaysAsk -> "Always"
+                            PermissionPolicy.NeverAsk -> "Never"
+                        }
+                    },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ),
+                basicSettingsToggleItem(
+                    title = "Legacy PebbleKit",
+                    description = "Lets watchapps talk to phone apps over the original PebbleKit, which shares messages with every app on your phone.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    checked = libPebbleConfig.watchConfig.enableLegacyPebbleKit,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(enableLegacyPebbleKit = it)
+                            )
+                        )
+                    },
+                    // PebbleKit Classic is Android-only.
+                    show = { platform == Platform.Android },
+                ),
+                basicSettingsToggleItem(
+                    title = "Ask before older apps use permissions",
+                    description = "Otherwise apps built before permissions keep the access they've always had.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    checked = libPebbleConfig.watchConfig.askLegacyAppsForPermissions,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(askLegacyAppsForPermissions = it)
+                            )
+                        )
+                    },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ),
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
                     description = "Sign out of your Pebble account ($coreUser)",
@@ -2727,7 +2766,7 @@ fun <T> basicSettingsDropdownItem(
                         Text(
                             text = itemText(selectedItem),
                             modifier = Modifier.widthIn(max = 150.dp),
-                            maxLines = 1,
+                            maxLines = 2,
                         )
                     }
                     DropdownMenu(

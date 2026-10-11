@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.agent.McpSessionFactory
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
@@ -52,16 +51,12 @@ class ListenDialogViewModel(private val dismiss: () -> Unit): ViewModel(), KoinC
     private val recordingProcessor: RecordingProcessor by inject()
     private val recordingRepository: RecordingRepository by inject()
     private val mcpSessionFactory: McpSessionFactory by inject()
-    private val mcpSandboxRepository: McpSandboxRepository by inject()
     private val recordingProcessingQueue: RecordingProcessingQueue by inject()
 
     fun beginManualRecording() {
         //TODO: Replace with recording operation pattern once we have a way to get the state updates out
         recordingJob = viewModelScope.launch {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                mcpSandboxRepository.getDefaultGroupId(),
-                this
-            )
+            val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = false)
             mcpSession.openSession()
             if (!permissionRequester.hasPermission(Permission.RecordAudio)) {
                 onRecordingError("Microphone permission denied")

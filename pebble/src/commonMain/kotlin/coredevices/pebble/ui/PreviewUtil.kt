@@ -348,6 +348,8 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override val requestIndexCompanion: StateFlow<Boolean> = MutableStateFlow(false)
         override val pendingFirmwareSideload: StateFlow<PendingFirmwareSideload?> =
             MutableStateFlow(null)
+        override val pendingAppSideload: StateFlow<Path?> = MutableStateFlow(null)
+        override fun consumePendingAppSideload() {}
         override fun consumeRequestIndexCompanion() {}
         override fun confirmPendingFirmwareSideload() {}
         override fun dismissPendingFirmwareSideload() {}

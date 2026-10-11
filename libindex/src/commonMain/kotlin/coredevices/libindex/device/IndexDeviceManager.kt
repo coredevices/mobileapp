@@ -186,6 +186,9 @@ class IndexDeviceManager(
                     )
                     _rings.update { prev -> prev.upsertRing(known) }
                 }
+                if (prefs.scanByPairedAddress.value) {
+                    satelliteManager.notifyPairedSatelliteChanged()
+                }
             }.launchIn(scope)
         satelliteManager.lastRing
             .flatMapLatest { satellite ->

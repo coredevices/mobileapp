@@ -108,6 +108,13 @@ class PbwAppVariantTest {
         assertEquals(32u, entry.asMetadata(WatchType.CHALK)?.icon?.get())
     }
 
+    @Test
+    fun getTextFileReadsARootEntryAndIsNullWhenAbsent() {
+        val app = PbwApp(loadPbw("variant_root_and_chalk.pbw"))
+        assertNotNull(app.getTextFile("appinfo.json"))
+        assertNull(app.getTextFile("no-such-config.html"))
+    }
+
     private fun loadPbw(resourceName: String): Path {
         val inputStream = javaClass.classLoader.getResourceAsStream(resourceName)
             ?: throw AssertionError("Resource not found: $resourceName")

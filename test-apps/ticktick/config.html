@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TickTick</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { line-height: 1.4; }
+    label { display: block; font-size: 14px; font-weight: 600; margin: 20px 0 6px; }
+    .buttons { display: flex; gap: 8px; margin-top: 12px; }
+    button { padding: 10px 16px; border: 0; border-radius: 8px; font-size: 15px;
+             background: #4772fa; color: white; }
+    button.secondary { background: rgba(128,128,128,.2); color: inherit; }
+    #status { margin-top: 16px; padding: 10px 12px; border-radius: 8px;
+              background: rgba(128,128,128,.15); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>TickTick</h1>
+  <div class="buttons">
+    <button id="connect" type="button">Sign in with TickTick</button>
+    <button id="unlink" class="secondary" type="button">Unlink</button>
+  </div>
+  <div id="status">Starting the TickTick plugin…</div>
+
+  <script>
+    var statusElement = document.getElementById('status');
+
+    function send(message) {
+      return Pebble.sendMessage('plugin', message);
+    }
+
+    function showConfigured(configured) {
+      statusElement.textContent = configured
+        ? 'TickTick is connected on this phone.'
+        : 'TickTick is not connected.';
+    }
+
+    document.getElementById('connect').onclick = async function () {
+      statusElement.textContent = 'Opening TickTick sign-in…';
+      var result = await send({ type: 'connect' });
+      if (result.error) {
+        statusElement.textContent = result.error;
+        return;
+      }
+      showConfigured(result.configured);
+    };
+
+    document.getElementById('unlink').onclick = async function () {
+      showConfigured((await send({ type: 'unlink' })).configured);
+    };
+
+    Pebble.addEventListener('ready', async function (event) {
+      if (event.target !== 'plugin') return;
+      showConfigured((await send({ type: 'status' })).configured);
+    });
+  </script>
+</body>
+</html>

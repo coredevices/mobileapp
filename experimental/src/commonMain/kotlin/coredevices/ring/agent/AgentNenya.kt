@@ -2,6 +2,7 @@ package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.AgentToolCall
+import coredevices.indexai.agent.FinalMessageMarker
 import coredevices.indexai.agent.IterativeAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
@@ -41,6 +42,7 @@ open class AgentNenya(
     conversation: List<ConversationMessageDocument>,
 ): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"
+    override val isCloud = true
 
     override val logger: Logger = Logger.withTag("AgentNenya")
 
@@ -66,11 +68,15 @@ open class AgentNenya(
         return name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_").take(64)
     }
 
-    private fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
+    /** Sanitized composite name -> (integration, tool) as declared on the last inference round. */
+    private val declaredTools = mutableMapOf<String, Pair<String, String>>()
+
+    internal fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
         return tools.mapNotNull {
             val definition = it.tool.definition
             val compositeNameRaw = "${it.integrationName}__${definition.name}"
             val compositeName = sanitizeToolName(compositeNameRaw)
+            declaredTools[compositeName] = it.integrationName to definition.name
             if (compositeName != compositeNameRaw) {
                 logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }
             }
@@ -142,7 +148,8 @@ open class AgentNenya(
             nenyaClient.run(
                 conversationHistory = history,
                 toolSpecs = tools,
-                additionalContext = context + "\n" + currentTimeContext(Clock.System.now()) +
+                additionalContext = context + "\n" + FinalMessageMarker.PROMPT_INSTRUCTION + "\n" +
+                    currentTimeContext(Clock.System.now()) +
                     (locationLine()?.let { "\n" + it } ?: "") + "\n" +
                     mcpSession.getExtraContext(sessionContext, includePromptsFromMcps).orEmpty(),
                 model = model
@@ -171,14 +178,14 @@ open class AgentNenya(
                 logger.w { "Failed to deserialize tool call arguments for tool ${call.function!!.name}" }
                 emptyMap()
             }
-            val composite = call.function!!.name.split("__", limit = 2)
-            if (composite.size != 2) {
-                throw Exception("Invalid tool name: ${call.function!!.name}")
-            }
+            val name = call.function!!.name
+            val (integrationName, toolName) = declaredTools[name]
+                ?: name.split("__", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] }
+                ?: throw Exception("Invalid tool name: $name")
             AgentToolCall(
                 id = call.id,
-                integrationName = composite[0],
-                toolName = composite[1],
+                integrationName = integrationName,
+                toolName = toolName,
                 arguments = args
             )
         }

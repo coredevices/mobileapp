@@ -1,7 +1,7 @@
 package coredevices.mcp.client
 
 import coredevices.mcp.data.McpPrompt
-import io.ktor.util.Digest
+import io.ktor.util.sha1
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -48,9 +48,7 @@ class McpServerCache(private val clock: Clock = Clock.System) {
 }
 
 /** Endpoints include auth headers, so only their digest is ever kept. */
-internal suspend fun McpEndpoint.cacheKey(): String {
-    val digest = Digest("SHA-256")
-    digest += "$url\n$protocol\n${authHeader.orEmpty()}".encodeToByteArray()
-    val bytes = digest.build()
+internal fun McpEndpoint.cacheKey(): String {
+    val bytes = sha1("$url\n$protocol\n${authHeader.orEmpty()}".encodeToByteArray())
     return Base64.UrlSafe.encode(bytes)
 }

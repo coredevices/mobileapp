@@ -57,9 +57,10 @@ private fun WatchPref<*>.kind(): SettingKind = when (this) {
  */
 class WatchSettingsPlugin(
     private val watchPrefs: WatchPrefs,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_WATCH_SETTINGS_UUID
     override val name: String = "Watch Settings"
+    override val description: String = "The watch's own settings, readable and changeable."
 
     override val sources: List<SourceDeclaration> = SettingKind.entries.map { kind ->
         SourceDeclaration(
@@ -70,6 +71,7 @@ class WatchSettingsPlugin(
                 PROPERTY_VALUE to listOf(kind.shape),
             ),
             supportsMultiple = true,
+            callerPermissions = listOf(PluginPermission(PluginPermissions.READ_WATCH_SETTINGS)),
         )
     }
 
@@ -85,6 +87,7 @@ class WatchSettingsPlugin(
                 required = listOf(PARAM_INSTANCE_ID, "on"),
             ),
             targets = listOf("$CATEGORY/$ITEM_SWITCH/$PROPERTY_VALUE"),
+            callerPermissions = WRITE,
         ),
         ActionDeclaration(
             name = ACTION_SET_VALUE,
@@ -100,6 +103,7 @@ class WatchSettingsPlugin(
                 required = listOf(PARAM_INSTANCE_ID, "value"),
             ),
             targets = SettingKind.entries.map { "$CATEGORY/${it.item}/$PROPERTY_VALUE" },
+            callerPermissions = WRITE,
         ),
     )
 
@@ -294,6 +298,7 @@ class WatchSettingsPlugin(
         private const val ON = "On"
         private const val OFF = "Off"
         private const val NOTHING = "Nothing"
+        private val WRITE = listOf(PluginPermission(PluginPermissions.WRITE_WATCH_SETTINGS))
 
         // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
         val BUILT_IN_WATCH_SETTINGS_UUID: Uuid =

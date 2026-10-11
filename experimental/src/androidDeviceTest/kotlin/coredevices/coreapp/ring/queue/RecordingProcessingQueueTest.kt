@@ -4,6 +4,9 @@ import android.content.Context
 import android.os.Build
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import coredevices.analytics.CoreAnalytics
+import com.russhwolf.settings.MapSettings
+import com.russhwolf.settings.Settings
 import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.McpServerDefinition
 import coredevices.indexai.data.entity.MessageRole
@@ -17,21 +20,23 @@ import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.McpSessionFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
+import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
+import coredevices.ring.data.entity.room.RecordingProcessingTaskType
 import coredevices.ring.database.MusicControlMode
 import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.McpServerRepository
+import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -48,7 +53,6 @@ import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.agent.DefaultCaptureType
-import coredevices.ring.agent.LlmMode
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.TranscriptionService
@@ -64,6 +68,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -77,6 +82,8 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 import kotlin.collections.emptyList
+import kotlin.time.Duration
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -84,7 +91,6 @@ import kotlin.time.Instant
 // region Fakes
 
 class FakePreferences : Preferences {
-    override val llmMode: StateFlow<LlmMode> = MutableStateFlow(LlmMode.RemoteOnly)
     override val useCactusTranscription: StateFlow<Boolean> = MutableStateFlow(false)
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
@@ -95,9 +101,8 @@ class FakePreferences : Preferences {
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
-    override val secondaryModeMcpGroupId: StateFlow<Long?> = MutableStateFlow(null)
-    override val reminderProvider: StateFlow<ReminderProvider> = MutableStateFlow(ReminderProvider.BuiltIn)
-    override val noteProvider: StateFlow<NoteProvider> = MutableStateFlow(NoteProvider.Builtin)
+    override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
+    override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
@@ -108,8 +113,8 @@ class FakePreferences : Preferences {
     override val lastBackupCount: StateFlow<Int?> = MutableStateFlow(null)
     override val platformSttDefaulted: Boolean = false
     override val usePendingIntentScan: StateFlow<Boolean> = MutableStateFlow(true)
+    override val scanByPairedAddress: StateFlow<Boolean> = MutableStateFlow(true)
 
-    override suspend fun setLlmMode(mode: LlmMode) {}
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {}
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
@@ -119,9 +124,8 @@ class FakePreferences : Preferences {
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
-    override fun setSecondaryModeMcpGroupId(groupId: Long?) {}
-    override fun setReminderProvider(provider: ReminderProvider) {}
-    override fun setNoteProvider(provider: NoteProvider) {}
+    override fun setReminderProviderId(id: String) {}
+    override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
@@ -134,10 +138,13 @@ class FakePreferences : Preferences {
     }
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
+    override fun setScanByPairedAddress(enabled: Boolean) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)
     override fun setDefaultCaptureType(type: DefaultCaptureType) {}
+    override val targetCalendar: StateFlow<Int?> = MutableStateFlow(null)
+    override fun setTargetCalendar(calendarId: Int?) {}
 }
 
 class FakeServletRepository : ServletRepository {
@@ -178,11 +185,6 @@ class RecordingProcessingQueueTest {
         entryDao = koin.get()
         messageDao = koin.get()
         queue = koin.get()
-
-        // Seed MCP sandbox so getDefaultGroupId() works
-        runBlocking {
-            koin.get<McpSandboxRepository>().seedDatabase()
-        }
     }
 
     @After
@@ -211,19 +213,19 @@ class RecordingProcessingQueueTest {
         single { get<RingDatabase>().recordingEntryDao() }
         single { get<RingDatabase>().conversationMessageDao() }
         single { get<RingDatabase>().ringTransferDao() }
-        single { get<RingDatabase>().builtinMcpGroupAssociationDao() }
-        single { get<RingDatabase>().httpMcpGroupAssociationDao() }
         single { get<RingDatabase>().httpMcpServerDao() }
-        single { get<RingDatabase>().mcpSandboxGroupDao() }
+        single { get<RingDatabase>().disabledBuiltinMcpDao() }
         single { get<RingDatabase>().recordingProcessingTaskDao() }
         single { get<RingDatabase>().traceSessionDao() }
         single { get<RingDatabase>().traceEntryDao() }
+        single { get<RingDatabase>().pluginGrantDao() }
 
         // Repositories
         singleOf(::RecordingProcessingTaskRepository)
         singleOf(::RecordingRepository)
         singleOf(::RingTransferRepository)
-        singleOf(::McpSandboxRepository)
+        singleOf(::McpServerRepository)
+        singleOf(::PluginGrantRepository)
         single { EncryptionKeyManager(context.applicationContext) }
         singleOf(::DocumentEncryptor)
         singleOf(::RealRecordingStorage) bind RecordingStorage::class
@@ -233,6 +235,7 @@ class RecordingProcessingQueueTest {
         single<NenyaClient> { fakeNenya }
         single<TranscriptionService> { fakeTranscription }
         single<Preferences> { FakePreferences() }
+        single<Settings> { MapSettings() }
         single<ServletRepository> { FakeServletRepository() }
         single<Platform> {
             object : Platform {
@@ -247,6 +250,18 @@ class RecordingProcessingQueueTest {
         // because FakeServletRepository
         // seeds no builtins)
         single { BuiltinServletRepository() }
+        single<CoreAnalytics> {
+            object : CoreAnalytics {
+                override fun logEvent(name: String, parameters: Map<String, Any>?) {}
+                override suspend fun logHeartbeatState(name: String, value: Boolean, timestamp: Instant) {}
+                override suspend fun processHeartbeat() {}
+                override fun updateLastConnectedSerial(serial: String?) {}
+                override fun updateRingTransferDurationMetric(duration: Duration) {}
+                override fun updateRingLifetimeCollectionCount(serial: String, count: Int) {}
+                override fun updateRingBatteryVoltage(voltageMilliV: Int) {}
+                override fun incrementHeartbeatCounter(name: String) {}
+            }
+        }
 
         // Agent (uses FakeNenyaClient via Koin)
         factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
@@ -329,6 +344,7 @@ class RecordingProcessingQueueTest {
             scope = RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)),
             recordingPreprocessor = koin.get(),
             trace = koin.get(),
+            settings = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }
@@ -665,5 +681,30 @@ class RecordingProcessingQueueTest {
         val taskAfter = taskDao.getTaskById(1)!!
         assertEquals(TaskStatus.Success, taskAfter.status)
         assertEquals(attemptsBefore, taskAfter.attempts)
+    }
+
+    @Test
+    fun resumeAfterRestart_interruptedTaskMarkedFailed() = runBlocking {
+        taskDao.insertTask(
+            RecordingProcessingTaskEntity(
+                lastAttempt = Clock.System.now(),
+                attempts = 1,
+                type = RecordingProcessingTaskType.TextRecording,
+                buttonSequence = null,
+                transferId = null,
+                fileId = null,
+                transcription = "Crashed last time",
+            )
+        )
+        // As left behind by a previous run that died mid-attempt
+        GlobalContext.get().get<Settings>().putString("queue_RecordingProcessing_in_progress", "1")
+
+        queue.resumePendingTasks()
+        awaitTaskDone(taskId = 1)
+
+        val task = taskDao.getTaskById(1)!!
+        assertEquals(TaskStatus.Failed, task.status)
+        assertEquals(1, task.attempts)
+        assertFalse(GlobalContext.get().get<Settings>().hasKey("queue_RecordingProcessing_in_progress"))
     }
 }

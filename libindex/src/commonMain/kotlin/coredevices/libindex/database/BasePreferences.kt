@@ -11,4 +11,7 @@ interface BasePreferences {
 
     suspend fun setLastSyncIndex(index: Int?)
     val lastSyncIndex: StateFlow<Int?>
+
+    fun setScanByPairedAddress(enabled: Boolean)
+    val scanByPairedAddress: StateFlow<Boolean>
 }

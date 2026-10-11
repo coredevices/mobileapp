@@ -7,15 +7,15 @@ import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
-import coredevices.mcp.data.SemanticResult
+import coredevices.indexai.database.dao.RecordingToolMessage
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
-import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -23,8 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,9 +36,9 @@ import kotlin.time.Instant
 /**
  * Backs the [coredevices.ring.ui.screens.indexfeed.FullFeed] screen.
  * Produces a flat list of `Entry` rows ordered chronologically (oldest →
- * newest) with day-divider rows interleaved between calendar days. Items
- * extracted from each recording become outlined chip pills on the
- * assistant side; same labels/glyphs as the home peek card.
+ * newest) with day-divider rows interleaved between calendar days. Each
+ * recording's tool results become outlined chip pills on the assistant
+ * side; same labels/glyphs as the home peek card.
  */
 class FullFeedViewModel(
     recordingRepo: RecordingRepository,
@@ -63,13 +61,12 @@ class FullFeedViewModel(
         ) { recs, items, lists, entries, q ->
             Inputs(recs, items, lists, entries, q)
         },
-        recordingRepo.getLatestToolSemanticResults()
-            .map { results -> results.associate { it.recordingId to it.semanticResult } }
-            .distinctUntilChanged(),
-    ) { inputs, semanticResults ->
+        recordingRepo.getToolMessages(),
+        ringTransferDao.getPendingTransfersFlow(),
+    ) { inputs, toolMessages, pendingTransfers ->
         compute(
             inputs.recordings, inputs.items, inputs.lists, inputs.entries,
-            inputs.query.trim(), semanticResults,
+            inputs.query.trim(), toolMessages, pendingTransfers,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -134,21 +131,19 @@ class FullFeedViewModel(
             val transcription: String,
             val retryEntry: RecordingEntryEntity?,
             val assistantReply: String?,
-            val chips: List<Chip>,
-            /** Message from a failed action (e.g. a missing permission).
-             *  Failures produce no item, so without this the assistant side
-             *  of the row would be empty. */
+            val chips: List<RecordingAction>,
+            /** Message from the last failed action (e.g. a missing permission). */
             val actionError: String? = null,
         ) : Entry() {
             override val uniqueKey: String get() = "rec-${recording.id}"
         }
-    }
 
-    data class Chip(
-        val itemId: String,
-        val label: String,
-        val glyph: String,
-    )
+        /** A ring transfer still in flight (or queued for processing) that has
+         *  no [LocalRecording] yet — rendered as a "Transferring…" bubble. */
+        data class PendingTransfer(val transfer: RingTransfer) : Entry() {
+            override val uniqueKey: String get() = "transfer-${transfer.id}"
+        }
+    }
 
     companion object {
         internal fun compute(
@@ -157,16 +152,13 @@ class FullFeedViewModel(
             lists: List<CachedList>,
             entries: List<RecordingEntryEntity>,
             query: String,
-            /** Latest tool-call semantic result per recording id, used to surface
-             *  failures — they create no item, so there's no chip to render. */
-            semanticResults: Map<Long, SemanticResult?> = emptyMap(),
+            toolMessages: List<RecordingToolMessage> = emptyList(),
+            pendingTransfers: List<RingTransfer> = emptyList(),
         ): UiState {
             val q = query.lowercase()
             fun match(text: String?) = q.isEmpty() || (text ?: "").lowercase().contains(q)
 
-            val itemsByRecording = items
-                .filter { !it.deleted }
-                .groupBy { it.sourceRecordingId.orEmpty() }
+            val actionsByRec = recordingActions(toolMessages, lists, items)
             val entriesByRec = entries.groupBy { it.recordingId }
 
             val sorted = recordings.sortedBy { it.localTimestamp.toEpochMilliseconds() }
@@ -176,6 +168,32 @@ class FullFeedViewModel(
 
             val out = mutableListOf<Entry>()
             var lastDay: LocalDate? = null
+
+            fun emitDayDivider(ts: Instant) {
+                val day = ts.toLocalDateTime(tz).date
+                if (day != lastDay) {
+                    out += Entry.DayDivider(
+                        label = dayLabel(today, day),
+                        ts = ts.toEpochMilliseconds(),
+                    )
+                    lastDay = day
+                }
+            }
+
+            val pendingSorted = if (q.isEmpty()) {
+                pendingTransfers.sortedBy { it.createdAt.toEpochMilliseconds() }
+            } else emptyList()
+            var pendingIdx = 0
+            fun flushPendingBefore(ts: Instant?) {
+                while (pendingIdx < pendingSorted.size &&
+                    (ts == null || pendingSorted[pendingIdx].createdAt < ts)
+                ) {
+                    val t = pendingSorted[pendingIdx++]
+                    emitDayDivider(t.createdAt)
+                    out += Entry.PendingTransfer(t)
+                }
+            }
+
             for (r in sorted) {
                 val recordingEntries = entriesByRec[r.id].orEmpty()
                     .sortedWith(compareBy<RecordingEntryEntity> { it.timestamp }.thenBy { it.id })
@@ -184,54 +202,26 @@ class FullFeedViewModel(
                     ?: recordingEntries.firstOrNull()?.transcription.orEmpty()
                 val retryEntry = latestEntry?.takeIf { it.isRetryableTranscriptionFailure() }
                 val matchedRec = match(r.assistantTitle) || match(transcription)
-                val recItems = itemsByRecording[r.firestoreId.orEmpty()].orEmpty() +
-                    itemsByRecording["local:${r.id}"].orEmpty()
-                val matchedItems = recItems.filter { match(it.title) || match(it.body) }
-                if (q.isNotEmpty() && !matchedRec && matchedItems.isEmpty()) continue
+                val actions = actionsByRec[r.id].orEmpty().filterNot { it.assistive }
+                val matchedAction = actions.any { match(it.label) || match(it.searchText) }
+                if (q.isNotEmpty() && !matchedRec && !matchedAction) continue
 
-                val recDay = r.localTimestamp.toLocalDateTime(tz).date
-                if (recDay != lastDay) {
-                    out += Entry.DayDivider(
-                        label = dayLabel(today, recDay),
-                        ts = r.localTimestamp.toEpochMilliseconds(),
-                    )
-                    lastDay = recDay
-                }
+                flushPendingBefore(r.localTimestamp)
+                emitDayDivider(r.localTimestamp)
                 out += Entry.RecordingRow(
                     recording = r,
                     transcription = transcription,
                     retryEntry = retryEntry,
                     assistantReply = null, // wire when we mirror assistantReply onto LocalRecording
-                    chips = recItems.take(8).map { item ->
-                        Chip(
-                            itemId = item.firestoreId,
-                            // chipLabel already yields "🔒 Encrypted" for locked
-                            // rows; drop the kind glyph so the lock isn't doubled.
-                            label = IndexFeedViewModel.chipLabel(item, lists).take(64),
-                            glyph = if (item.locked) "" else chipGlyph(item.kind),
-                        )
-                    },
+                    chips = actions.filterNot { it.failed }.take(8),
                     // A retryable transcription failure means the agent never ran
                     // this time round; any stored failure is from an earlier
                     // attempt, so don't surface it.
-                    actionError = (semanticResults[r.id] as? SemanticResult.GenericFailure)
-                        ?.userErrorMessage?.takeIf { it.isNotBlank() && retryEntry == null },
+                    actionError = actions.lastOrNull()?.errorMessage?.takeIf { retryEntry == null },
                 )
             }
+            flushPendingBefore(null)
             return UiState(entries = out)
-        }
-
-        // Mirrors prototype `objectChip` icons (NIcon.alarm/bullets/sparkle/send).
-        private fun chipGlyph(kind: String): String = when (kind) {
-            "reminder" -> "⏰"
-            "scheduled" -> "⏰"
-            "note" -> "≡"
-            "answer" -> "✨"
-            "message" -> "✉"
-            "action_log" -> "✉"
-            "delegated" -> "✉"
-            "calendar_event" -> "📅"
-            else -> "•"
         }
 
         private fun RecordingEntryEntity.isRetryableTranscriptionFailure(): Boolean =

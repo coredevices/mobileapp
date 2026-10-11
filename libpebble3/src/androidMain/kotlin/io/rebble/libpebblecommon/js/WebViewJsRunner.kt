@@ -10,6 +10,7 @@ import android.view.View
 import android.webkit.GeolocationPermissions
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
@@ -31,7 +32,11 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
+import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.NetworkGate
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +56,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 
 class WebViewJsRunner(
@@ -68,6 +74,8 @@ class WebViewJsRunner(
     httpInterceptorManager: HttpInterceptorManager,
     notificationConfigFlow: NotificationConfigFlow,
     pluginRegistry: PluginRegistry,
+    permissions: AppPermissions,
+    runningApps: RunningApps,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -85,8 +93,9 @@ class WebViewJsRunner(
     private val pageLoaded = CompletableDeferred<Boolean>()
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
+    override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(
@@ -100,8 +109,16 @@ class WebViewJsRunner(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
             Pair("_localStorage", localStorageInterface),
-            Pair("_PebbleGeo", geolocationInterface)
+            Pair("_PebbleGeo", geolocationInterface),
+            Pair("_PebbleNet", NetworkInterface()),
     )
+
+    /** Called from startup.js: the WebView's WebSocket can't be intercepted natively. */
+    private inner class NetworkInterface {
+        @JavascriptInterface
+        fun allowed(url: String): Boolean =
+            runBlocking { networkAccess.check(url, wait = false) } is PluginNetworkVerdict.Allowed
+    }
 
     private val webViewClient = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -146,7 +163,7 @@ class WebViewJsRunner(
         }
 
         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-            if (isForbidden(request?.url)) {
+            if (isForbidden(request?.url) || !isNetworkAllowed(request?.url)) {
                 return object : WebResourceResponse("text/plain", "utf-8", null) {
                     override fun getStatusCode(): Int {
                         return 403
@@ -160,6 +177,15 @@ class WebViewJsRunner(
                 return super.shouldInterceptRequest(view, request)
             }
         }
+    }
+
+    /** Called off the main thread, so blocking is fine. */
+    private fun isNetworkAllowed(url: Uri?): Boolean {
+        val scheme = url?.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return true
+        val verdict = runBlocking { networkAccess.check(url.toString(), wait = false) }
+        if (verdict is PluginNetworkVerdict.Denied) logger.w { "Blocked ${url.host}: ${verdict.reason}" }
+        return verdict is PluginNetworkVerdict.Allowed
     }
 
     private fun isForbidden(url: Uri?): Boolean {

@@ -1,0 +1,349 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notion</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 24px 0 8px; }
+    p { line-height: 1.4; }
+    .hint { font-size: 13px; opacity: .72; margin-top: 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    input[type="text"], input[type="password"] { box-sizing: border-box; flex: 1; min-width: 180px;
+      padding: 10px 12px; font-size: 15px; border-radius: 8px;
+      border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit; }
+    button { padding: 10px 16px; font-size: 15px; border-radius: 8px; border: 0;
+      background: #ff6b00; color: #fff; }
+    button.secondary { background: rgba(128,128,128,.22); color: inherit; }
+    button.page { width: 100%; margin-top: 8px; text-align: left; background: transparent;
+      color: inherit; border: 1px solid rgba(128,128,128,.28); }
+    button.page.selected { border-color: #ff6b00; color: #ff6b00; }
+    button:disabled { cursor: wait; opacity: .55; }
+    fieldset { border: 0; margin: 0; padding: 0; }
+    label.option { display: block; padding: 7px 0; }
+    #placementOptions { margin-left: 24px; }
+    #status { margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(128,128,128,.15); font-size: 14px; min-height: 20px; }
+    #pendingSection { margin: 18px 0; padding: 14px; border: 1px solid #d97706;
+      border-radius: 10px; background: rgba(217,119,6,.12); }
+    #pendingSection h2 { margin-top: 0; }
+    #pages { margin-top: 8px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Notion</h1>
+
+  <h2>Account</h2>
+  <div class="row">
+    <button id="connect">Sign in with Notion</button>
+  </div>
+
+  <section id="destinationSection" class="hidden">
+    <h2>How incoming notes save</h2>
+    <fieldset>
+      <label class="option"><input type="radio" name="mode" value="create" checked>
+        Create a new child page each time</label>
+      <label class="option"><input type="radio" name="mode" value="append">
+        Append a new paragraph to one existing page</label>
+    </fieldset>
+    <fieldset id="placementOptions" class="hidden">
+      <p><strong>Paragraph position</strong></p>
+      <label class="option"><input type="radio" name="placement" value="bottom" checked>
+        Bottom of the page</label>
+      <label class="option"><input type="radio" name="placement" value="top">
+        Top of the page</label>
+    </fieldset>
+
+    <h2 id="pageHeading">Parent page</h2>
+    <p id="pageHint" class="hint">The new page will be created beneath this parent. Showing up to
+      10 most recently edited pages shared with the connection.</p>
+    <div class="row">
+      <input id="query" type="text" placeholder="Filter page titles" autocomplete="off">
+      <button id="search" class="secondary">Search</button>
+    </div>
+    <div id="pages"></div>
+    <p><button id="saveDestination">Save destination</button></p>
+  </section>
+
+  <section id="pendingSection" class="hidden">
+    <h2>Check Notion before retrying</h2>
+    <p id="pendingDetails"></p>
+    <p class="hint">A previous save may have reached Notion even though CoreApp did not receive
+      its answer. Inspect the selected page, then choose exactly one result below.</p>
+    <div class="row">
+      <button id="pendingSaved" class="secondary">It was saved — don’t retry</button>
+      <button id="pendingNotSaved">It was not saved — allow retry</button>
+    </div>
+  </section>
+
+  <div id="status">Starting the Notion plugin…</div>
+  <button id="disconnect" class="secondary hidden">Disconnect</button>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var destinationState = {
+    mode: 'create', pageId: null, pageTitle: null, pageUrl: null, placement: 'bottom'
+  };
+  var visiblePages = [];
+  var selectedPageId = null;
+  var pagesPending = false;
+  var savePending = false;
+  var destinationPending = false;
+  var pendingMutationState = null;
+  var pendingTimer = null;
+
+  function send(message) { return Pebble.sendMessage('plugin', message); }
+  function say(text) { $('status').textContent = text; }
+
+  function renderPending(pending) {
+    pendingMutationState = pending || null;
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    $('pendingSection').className = pending ? '' : 'hidden';
+    if (!pending) return;
+    var waitMs = Math.max(0, Number(pending.reviewAfterMs || 0) - Date.now());
+    var waitText = waitMs > 0 ?
+      ' Wait ' + Math.ceil(waitMs / 1000) + ' seconds before resolving it; the request may still be running.' :
+      ' The request has stopped; check Notion now.';
+    $('pendingDetails').textContent = 'Pending ' + pending.kind + ' on “' + pending.pageTitle + '”.' + waitText;
+    $('pendingSaved').disabled = !pending.canAcknowledge;
+    $('pendingNotSaved').disabled = !pending.canAcknowledge;
+    if (waitMs > 0) {
+      pendingTimer = setTimeout(async function () {
+        try {
+          var result = await send({ type: 'status' });
+          renderPending(result.pendingMutation);
+        } catch (error) { say(error.message || String(error)); }
+      }, Math.min(waitMs + 100, 30000));
+    }
+  }
+
+  async function resolvePending(outcome) {
+    var pending = pendingMutationState;
+    if (!pending || !pending.canAcknowledge) return;
+    var saved = outcome === 'saved';
+    var prompt = saved ?
+      'Confirm that the note is already visible in Notion. CoreApp will treat the save as complete and will not send it again.' :
+      'Confirm that you checked Notion and the note is absent. CoreApp will allow this note to be sent again.';
+    if (!window.confirm(prompt)) return;
+    $('pendingSaved').disabled = true;
+    $('pendingNotSaved').disabled = true;
+    try {
+      var result = await send({
+        type: 'resolvePendingMutation',
+        mutationId: pending.id,
+        confirmedChecked: true,
+        outcome: outcome,
+      });
+      if (result.error) {
+        say(result.error);
+        renderPending(result.pendingMutation || pending);
+        return;
+      }
+      renderPending(null);
+      say(saved ? 'Marked the pending save complete; it will not be sent again.' :
+        'Cleared the pending save. Retry only because you confirmed it is absent from Notion.');
+    } catch (error) {
+      say(error.message || String(error));
+      renderPending(pending);
+    }
+  }
+
+  function checkedValue(name) {
+    var selected = document.querySelector('input[name="' + name + '"]:checked');
+    return selected ? selected.value : '';
+  }
+
+  function setChecked(name, value) {
+    var inputs = document.querySelectorAll('input[name="' + name + '"]');
+    for (var i = 0; i < inputs.length; i++) inputs[i].checked = inputs[i].value === value;
+  }
+
+  function showConfigured(configured) {
+    $('destinationSection').className = configured ? '' : 'hidden';
+    $('disconnect').className = configured ? 'secondary' : 'secondary hidden';
+  }
+
+  function updateModeUi() {
+    var append = checkedValue('mode') === 'append';
+    $('placementOptions').className = append ? '' : 'hidden';
+    $('pageHeading').textContent = append ? 'Page to append to' : 'Parent page';
+    $('pageHint').textContent = append ?
+      'The new paragraph will be inserted without replacing existing blocks. Showing up to 10 most recently edited shared pages.' :
+      'The new page will be created beneath this parent. Showing up to 10 most recently edited pages shared with the connection.';
+  }
+
+  function disableDestinationControls(disabled) {
+    var controls = document.querySelectorAll(
+      'input[name="mode"], input[name="placement"], #query, #search, button.page'
+    );
+    for (var i = 0; i < controls.length; i++) controls[i].disabled = disabled;
+  }
+
+  function showDestination(destination) {
+    destinationState = destination || destinationState;
+    selectedPageId = destinationState.pageId || null;
+    setChecked('mode', destinationState.mode === 'append' ? 'append' : 'create');
+    setChecked('placement', destinationState.placement === 'top' ? 'top' : 'bottom');
+    updateModeUi();
+  }
+
+  function setPageSelection(pageId) {
+    selectedPageId = pageId;
+    var buttons = $('pages').querySelectorAll('button.page');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].className = 'page' + (buttons[i].dataset.pageId === pageId ? ' selected' : '');
+    }
+  }
+
+  function addPageButton(page, selectedSuffix) {
+    var button = document.createElement('button');
+    button.className = 'page' + (page.id === selectedPageId ? ' selected' : '');
+    button.dataset.pageId = page.id;
+    button.textContent = page.title + (selectedSuffix || '');
+    button.onclick = function () {
+      setPageSelection(page.id);
+      say('Selected “' + page.title + '”. Save the destination to confirm.');
+    };
+    $('pages').appendChild(button);
+  }
+
+  function drawPages(pages) {
+    visiblePages = pages || [];
+    $('pages').textContent = '';
+    var selectedFound = false;
+    visiblePages.forEach(function (page) {
+      if (page.id === selectedPageId) selectedFound = true;
+      addPageButton(page, '');
+    });
+    if (selectedPageId && !selectedFound && destinationState.pageTitle) {
+      addPageButton({ id: selectedPageId, title: destinationState.pageTitle }, ' (currently selected)');
+    }
+    if (!$('pages').children.length) say('No shared pages found. Share a Notion page with this connection first.');
+  }
+
+  async function loadPages() {
+    if (pagesPending) return;
+    pagesPending = true;
+    $('search').disabled = true;
+    try {
+      say('Loading recently edited shared pages…');
+      var result = await send({ type: 'listPages', query: $('query').value });
+      if (result.error) {
+        say(result.error);
+        return;
+      }
+      if (result.destination) showDestination(result.destination);
+      drawPages(result.pages);
+      if ((result.pages || []).length) say('Choose a page, then save the destination.');
+    } finally {
+      pagesPending = false;
+      $('search').disabled = false;
+    }
+  }
+
+  async function refresh() {
+    var result = await send({ type: 'status' });
+    renderPending(result.pendingMutation);
+    showConfigured(result.configured);
+    showDestination(result.destination);
+    if (!result.configured) {
+      say('Sign in with Notion to connect.');
+      return;
+    }
+    await loadPages();
+    if (result.ready) say('Notion is ready. Current destination: ' + destinationState.pageTitle + '.');
+  }
+
+  $('connect').onclick = async function () {
+    if (savePending) return;
+    savePending = true;
+    $('connect').disabled = true;
+    try {
+      say('Opening Notion sign-in…');
+      var result = await send({ type: 'connect' });
+      if (result.error) {
+        say(result.error);
+        return;
+      }
+      showConfigured(true);
+      renderPending(null);
+      showDestination(result.destination);
+      drawPages(result.pages);
+      say((result.pages || []).length ? 'Notion connected. Choose and save a destination.' :
+        'Notion connected, but no shared pages were found.');
+    } finally {
+      savePending = false;
+      $('connect').disabled = false;
+    }
+  };
+
+  var modeInputs = document.querySelectorAll('input[name="mode"]');
+  for (var modeIndex = 0; modeIndex < modeInputs.length; modeIndex++) {
+    modeInputs[modeIndex].onchange = updateModeUi;
+  }
+
+  $('search').onclick = loadPages;
+  $('query').onkeydown = function (event) {
+    if (event.key === 'Enter') loadPages();
+  };
+
+  $('saveDestination').onclick = async function () {
+    if (destinationPending) return;
+    if (!selectedPageId) {
+      say('Choose a Notion page first.');
+      return;
+    }
+    destinationPending = true;
+    $('saveDestination').disabled = true;
+    disableDestinationControls(true);
+    try {
+      say('Verifying and saving the Notion destination…');
+      var result = await send({
+        type: 'setDestination',
+        mode: checkedValue('mode'),
+        pageId: selectedPageId,
+        placement: checkedValue('placement'),
+      });
+      if (result.error) {
+        say(result.error);
+        return;
+      }
+      showDestination(result.destination);
+      setPageSelection(result.destination.pageId);
+      say(result.destination.mode === 'append' ?
+        'Incoming notes will be added at the ' + result.destination.placement + ' of “' + result.destination.pageTitle + '”.' :
+        'Each incoming note will create a new child page under “' + result.destination.pageTitle + '”.');
+    } finally {
+      destinationPending = false;
+      $('saveDestination').disabled = false;
+      disableDestinationControls(false);
+      $('search').disabled = pagesPending;
+    }
+  };
+
+  $('pendingSaved').onclick = function () { resolvePending('saved'); };
+  $('pendingNotSaved').onclick = function () { resolvePending('not_saved'); };
+
+  $('disconnect').onclick = async function () {
+    var result = await send({ type: 'disconnect' });
+    $('pages').textContent = '';
+    renderPending(result.pendingMutation);
+    showConfigured(false);
+    showDestination({ mode: 'create', pageId: null, pageTitle: null, pageUrl: null, placement: 'bottom' });
+    say('Disconnected Notion on this phone.');
+  };
+
+  Pebble.addEventListener('ready', function (event) {
+    if (event.target !== 'plugin') return;
+    refresh();
+  });
+</script>
+</body>
+</html>

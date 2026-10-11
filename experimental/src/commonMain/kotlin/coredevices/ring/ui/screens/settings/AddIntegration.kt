@@ -43,15 +43,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.notes.TASKER_DEFINITION
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianMode
 import coredevices.ring.agent.integrations.obsidian.ObsidianPreferences
-import coredevices.ring.data.IntegrationDefinition
+import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.supportsNotes
+import coredevices.ring.agent.integrations.providers.supportsReminders
 import coredevices.ring.database.Preferences
 import coredevices.ui.M3Dialog
 import coredevices.util.Permission
@@ -60,6 +61,7 @@ import coredevices.util.PermissionResult
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.rememberUiContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -100,8 +102,7 @@ fun AddIntegration(coreNav: CoreNav) {
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding)) {
             item {
-                val def = remember { GTasksIntegration.DEFINITION }
-                Item(def) {
+                Item(BuiltInIntegrationProviders.GoogleTasks) {
                     dialog = {
                         GTasksDialog(
                             onDismiss = { dialog = null }
@@ -110,8 +111,7 @@ fun AddIntegration(coreNav: CoreNav) {
                 }
             }
             item {
-                val def = remember { NotionIntegration.DEFINITION }
-                Item(def) {
+                Item(BuiltInIntegrationProviders.Notion) {
                     dialog = {
                         NotionDialog(
                             onDismiss = { dialog = null }
@@ -120,8 +120,7 @@ fun AddIntegration(coreNav: CoreNav) {
                 }
             }
             item {
-                val def = remember { ObsidianIntegration.DEFINITION }
-                Item(def) {
+                Item(BuiltInIntegrationProviders.Obsidian) {
                     dialog = {
                         ObsidianDialog(
                             onDismiss = { dialog = null }
@@ -144,8 +143,7 @@ fun AddIntegration(coreNav: CoreNav) {
             }
             if (platform.isAndroid) {
                 item {
-                    val def = remember { TASKER_DEFINITION }
-                    Item(def) {
+                    Item(BuiltInIntegrationProviders.Tasker) {
                         dialog = {
                             TaskerDialog(
                                 onDismiss = { dialog = null }
@@ -159,15 +157,15 @@ fun AddIntegration(coreNav: CoreNav) {
 }
 
 @Composable
-private fun Item(def: IntegrationDefinition, onClick: () -> Unit) {
+private fun Item(provider: IntegrationProvider, onClick: () -> Unit) {
     ListItem(
-        headlineContent = { Text(def.title) },
+        headlineContent = { Text(provider.title) },
         supportingContent = { Text(
             buildList {
-                if (def.reminder != null) {
+                if (provider.supportsReminders) {
                     add("Reminders")
                 }
-                if (def.notes != null) {
+                if (provider.supportsNotes) {
                     add("Notes")
                 }
             }.joinToString()
@@ -192,9 +190,11 @@ const val PHONE_CALENDAR_TITLE = "Phone Calendar"
  */
 @Composable
 fun PhoneCalendarDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onConnected: () -> Unit = onDismiss,
 ) {
     val preferences = koinInject<Preferences>()
+    val libPebble = koinInject<LibPebble>()
     val permissionRequester = koinInject<PermissionRequester>()
     val uiContext = rememberUiContext()
     var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
@@ -204,7 +204,7 @@ fun PhoneCalendarDialog(
         onDismissRequest = onDismiss,
         title = { Text(PHONE_CALENDAR_TITLE) },
         buttons = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = { if (state is SignInState.Success) onConnected() else onDismiss() }) {
                 Text(if (state is SignInState.Success) "Done" else "Cancel")
             }
             if (state !is SignInState.Success) {
@@ -218,6 +218,8 @@ fun PhoneCalendarDialog(
                             state = when (permissionRequester.requestPermission(Permission.Calendar, ctx)) {
                                 PermissionResult.Granted -> {
                                     preferences.setPhoneCalendarEnabled(true)
+                                    // Sync calendars into the db now so the target picker isn't empty.
+                                    libPebble.doStuffAfterPermissionsGranted()
                                     SignInState.Success
                                 }
                                 PermissionResult.RejectedForever -> {
@@ -417,7 +419,7 @@ fun ObsidianDialog(
 ) {
     val uiContext = rememberUiContext()!!
     val integration = koinInject<ObsidianIntegration>()
-    val preferences = koinInject<Preferences>()
+    val providers = koinInject<IntegrationProviderRepository>()
     val scope = rememberCoroutineScope()
 
     val alreadyConfigured = remember { integration.hasVault() }
@@ -477,7 +479,7 @@ fun ObsidianDialog(
                                 customTag = customTag,
                             )
                             if (!alreadyConfigured) {
-                                preferences.setNoteProvider(NoteProvider.Obsidian)
+                                providers.selectNoteProvider(BuiltInIntegrationProviders.Obsidian)
                             }
                             onDismiss()
                         }
@@ -685,7 +687,6 @@ fun TaskerDialog(
     onDismiss: () -> Unit
 ) {
     val uiContext = rememberUiContext()!!
-    val noteIntegrationFactory = koinInject<NoteIntegrationFactory>()
     var state by remember { mutableStateOf<SignInState>(SignInState.Idle) }
     val scope = rememberCoroutineScope()
 
@@ -704,7 +705,7 @@ fun TaskerDialog(
                         state = SignInState.SigningIn
                         scope.launch {
                             state = try {
-                                val client = noteIntegrationFactory.createNoteClient(NoteProvider.Tasker)
+                                val client = BuiltInIntegrationProviders.Tasker.notes()
                                 if (client.signIn(uiContext)) {
                                     SignInState.Success
                                 } else {

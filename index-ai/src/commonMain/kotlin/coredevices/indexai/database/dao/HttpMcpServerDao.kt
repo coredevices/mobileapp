@@ -5,7 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import coredevices.indexai.data.entity.mcp_sandbox.HttpMcpServerEntity
+import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -16,8 +16,8 @@ interface HttpMcpServerDao {
     @Delete
     suspend fun deleteServer(server: HttpMcpServerEntity)
 
-    @Query("SELECT * FROM HttpMcpServerEntity WHERE id IN (SELECT httpMcpId FROM HttpMcpGroupAssociation WHERE groupId = :groupId)")
-    fun getAllByGroupId(groupId: Long): Flow<List<HttpMcpServerEntity>>
+    @Query("UPDATE HttpMcpServerEntity SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
 
     @Query("SELECT * FROM HttpMcpServerEntity")
     fun getAllFlow(): Flow<List<HttpMcpServerEntity>>

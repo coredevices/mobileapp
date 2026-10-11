@@ -70,7 +70,8 @@ class PebbleKitProvider : BasePebbleKitProvider(), LibPebbleKoinComponent {
                      ActiveApp.TYPE to when (lockerEntry?.properties?.type) {
                         AppType.Watchface -> ActiveApp.TYPE_VALUE_WATCHFACE
                         AppType.Watchapp -> ActiveApp.TYPE_VALUE_WATCHAPP
-                        null -> ActiveApp.TYPE_VALUE_UNKNOWN
+                        // A plugin-only app never runs on the watch, so it can't be the active app.
+                        AppType.Plugin, null -> ActiveApp.TYPE_VALUE_UNKNOWN
                      },
                   )
                }

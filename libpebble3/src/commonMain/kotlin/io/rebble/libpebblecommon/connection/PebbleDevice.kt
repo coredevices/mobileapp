@@ -183,6 +183,8 @@ object ConnectedPebble {
         suspend fun launchApp(uuid: Uuid)
         suspend fun stopApp(uuid: Uuid)
         val runningApp: StateFlow<Uuid?>
+        /** The app that ran before the one running now (or last), since connecting. */
+        val previousApp: StateFlow<Uuid?>
     }
 
     interface PKJS {

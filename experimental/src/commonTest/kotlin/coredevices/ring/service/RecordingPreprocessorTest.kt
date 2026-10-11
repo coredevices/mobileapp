@@ -4,6 +4,7 @@ import coredevices.resampler.Resampler
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.StagedRecordingUpload
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.Buffer
 import kotlinx.io.Sink
@@ -59,6 +60,8 @@ class RecordingPreprocessorTest {
             override suspend fun deleteAllCachedMetadata() {}
 
             override suspend fun deleteFromFirebaseStorage(id: String) {}
+            override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) {}
+            override fun deleteStagedRecording(id: String) {}
 
             override fun deleteRecording(id: String) {}
 

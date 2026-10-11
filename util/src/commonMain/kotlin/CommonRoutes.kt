@@ -42,6 +42,13 @@ object CommonRoutes {
 
     @Serializable
     data object WatchOnboardingRoute : CoreRoute
+
+    @Serializable
+    data class WatchappSettingsRoute(
+        val uuid: String,
+        val title: String,
+    ) : CoreRoute
+
     @Serializable
     data object RingOnboardingRoute : CoreRoute
 

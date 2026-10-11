@@ -11,7 +11,6 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.RecordingBackgroundScope
@@ -50,7 +49,6 @@ interface TranscribingRecordingOperation : RecordingOperation {
 }
 
 open class DefaultRecordingOperation(
-    private val mcpSandboxRepository: McpSandboxRepository,
     private val mcpSessionFactory: McpSessionFactory,
     private val chatAgent: Agent,
     private val recordingId: Long,
@@ -58,8 +56,6 @@ open class DefaultRecordingOperation(
     private val fileId: String,
     private val trace: RingTraceSession,
     private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
-    /** Sandbox group whose MCP servers are exposed to the agent; null = default group. */
-    private val sandboxGroupId: Long? = null,
 ) : TranscribingRecordingOperation, KoinComponent {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -131,7 +127,7 @@ open class DefaultRecordingOperation(
             )
         }
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
-        // Fire-and-forget Firebase upload on the long-lived background scope. The local
+        // Stage the upload for the sync queue on the long-lived background scope. The local
         // cache file is already fully written by the time we get here, so the rest of the
         // operation (transcription / agent) doesn't depend on this completing, and a
         // failure should not block — or be cancelled by — the processing queue slot.
@@ -149,7 +145,6 @@ open class DefaultRecordingOperation(
                     fileId = fileId
                 ))
             } catch (e: Exception) {
-                //TODO: Better sync handling, e.g. retry later
                 logger.e(e) { "Error persisting recording $fileId" }
                 trace.markEvent("persist_recording_fail", TraceEventData.PersistRecordingStart(
                     recordingId = recordingId,
@@ -159,10 +154,7 @@ open class DefaultRecordingOperation(
             }
         }
         coroutineScope {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
-                this
-            )
+            val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = chatAgent.isCloud)
             val transcription = try {
                 trace.markEvent("transcription_start", TraceEventData.TranscriptionStart(
                     recordingId = recordingId,
@@ -256,7 +248,8 @@ open class DefaultRecordingOperation(
             recordingEntryDao.updateRecordingEntryTranscription(
                 entryId,
                 transcription.text,
-                transcription.modelUsed
+                transcription.modelUsed,
+                transcription.localFallback,
             )
             onTranscriptionPersisted?.invoke(transcription.text)
 

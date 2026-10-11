@@ -1,7 +1,7 @@
 {
   "name": "plugin-test",
   "author": "Pebble",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "keywords": [
     "pebble-app"
   ],
@@ -50,10 +50,39 @@
     "resources": {
       "media": []
     },
-    "usesPermissions": [
-      "Calendar",
-      "Notifications",
-      "Location"
-    ]
+    "configPage": "config.html",
+    "plugin": {
+      "uuid": "8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e",
+      "name": "Plugin Demo: Dashboard",
+      "description": "Demo plugin: serves a demo/message source whose text is set from the config page, and a confirmation-gated action that resets it.",
+      "script": "plugin.js",
+      "sources": [
+        {
+          "category": "demo",
+          "items": ["message"],
+          "properties": { "text": ["shortText"] },
+          "suggestedRefreshIntervalSec": 300
+        }
+      ],
+      "actions": [
+        {
+          "name": "clear_message",
+          "description": "Reset the demo message to its default text. Use only when the user asks to clear or reset the demo message.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "Note on why the message is being cleared."
+              }
+            },
+            "required": ["reason"],
+            "additionalProperties": false
+          },
+          "destructive": true,
+          "requiresConfirmation": true
+        }
+      ]
+    }
   }
 }

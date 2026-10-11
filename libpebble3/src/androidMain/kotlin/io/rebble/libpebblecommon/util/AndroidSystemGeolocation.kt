@@ -89,10 +89,10 @@ class AndroidSystemGeolocation(appContext: AppContext): SystemGeolocation {
         }
     }.shareIn(GlobalScope, SharingStarted.WhileSubscribed(1000))
 
-    private fun checkPermission(): Boolean {
-        return context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
+    private fun checkPermission(): Boolean = listOf(
+        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+    ).any { context.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
 
     private fun getBestProvider(): String? {
         val enabledProviders = locationManager.getProviders(true)
