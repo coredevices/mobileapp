@@ -58,6 +58,7 @@ class IosPermissionRequester(
             Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
             Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
             Permission.Reminders -> requestRemindersPermission()
+            Permission.MediaRouting -> throw IllegalStateException("MediaRouting permission not needed on iOS")
         }
     }
 
@@ -78,6 +79,7 @@ class IosPermissionRequester(
         Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
         Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
         Permission.Reminders -> hasRemindersPermission()
+        Permission.MediaRouting -> throw IllegalStateException("MediaRouting permission not needed on iOS")
     }
 
     override fun openPermissionsScreen(uiContext: PlatformUiContext) {

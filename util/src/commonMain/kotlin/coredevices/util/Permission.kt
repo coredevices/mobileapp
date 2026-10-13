@@ -16,5 +16,6 @@ enum class Permission {
     SetAlarms,
     BatteryOptimization,
     Beeper,
-    Reminders
+    Reminders,
+    MediaRouting,
 }
