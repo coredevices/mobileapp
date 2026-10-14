@@ -8,6 +8,7 @@ import android.provider.ContactsContract
 import android.provider.ContactsContract.Contacts
 import android.telecom.Call
 import android.telecom.InCallService
+import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -95,11 +96,19 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     }
 
     private fun Call.resolveContactName(): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val contactName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             details.contactDisplayName
         } else {
-            contentResolver.resolveNameFromContacts(details.handle.schemeSpecificPart)
+            contentResolver.resolveNameFromContacts(details.handle?.schemeSpecificPart)
         }
+        // Self-managed (VoIP) apps usually can't be matched to a contact and may put a placeholder in the
+        // handle, but they report the caller's name via the display name. Prefer it over the handle.
+        return contactName?.takeIf { it.isNotBlank() } ?: callerDisplayName()
+    }
+
+    private fun Call.callerDisplayName(): String? {
+        if (details.callerDisplayNamePresentation != TelecomManager.PRESENTATION_ALLOWED) return null
+        return details.callerDisplayName?.takeIf { it.isNotBlank() }
     }
 
     private fun Call.resolveContactNumber(): String {
