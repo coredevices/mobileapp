@@ -15,7 +15,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * Transcribes a recording purely so the webhook payload can carry the transcript.
+ * Transcribes a recording purely to hand the transcript on, e.g. to the webhook payload
+ * or the clipboard.
  * No recording entry is created and no agent runs.
  */
 internal class TranscribeOnlyRecordingOperation(

@@ -21,6 +21,7 @@ import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.SystemClipboard
 
 class RecordingOperationFactory(
     private val agentFactory: AgentFactory,
@@ -34,6 +35,7 @@ class RecordingOperationFactory(
     private val itemRepository: ItemRepository,
     private val ringTransferRepository: RingTransferRepository,
     private val queueTaskRepository: RecordingProcessingTaskRepository,
+    private val clipboard: SystemClipboard,
 ) {
     suspend fun createForButtonSequence(
         recordingId: Long,
@@ -175,6 +177,10 @@ class RecordingOperationFactory(
                     forcedTool = null
                 )
             }
+            GestureDestination.CopyToClipboard -> CopyToClipboardRecordingOperation(
+                transcribing = TranscribeOnlyRecordingOperation(fileId),
+                clipboard = clipboard,
+            )
             // maybeWrapWithWebhook layers the webhook send on top of this no-op.
             GestureDestination.WebhookOnly, GestureDestination.Nothing -> NoAgentRecordingOperation
         }
@@ -194,12 +200,13 @@ internal fun webhookNeedsOwnTranscription(
     payloadMode != IndexWebhookPayloadMode.RecordingOnly &&
     inner !is TranscribingRecordingOperation
 
-/** Text has no audio to deliver, so webhook-only and disabled routes still run the agent. */
+/** Text has no audio to deliver, so webhook-only, clipboard and disabled routes still run the agent. */
 internal fun textChatModeFor(destination: GestureDestination.Recording): ChatMode = when (destination) {
     GestureDestination.WebSearch -> ChatMode.Search
     GestureDestination.LocalAgent -> ChatMode.Local
     GestureDestination.RemoteAgent -> ChatMode.Remote
     GestureDestination.IndexAgent,
     GestureDestination.WebhookOnly,
+    GestureDestination.CopyToClipboard,
     GestureDestination.Nothing -> ChatMode.Normal
 }

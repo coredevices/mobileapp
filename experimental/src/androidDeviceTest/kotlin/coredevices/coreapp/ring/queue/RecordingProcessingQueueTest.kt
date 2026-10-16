@@ -24,6 +24,7 @@ import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
+import coredevices.util.SystemClipboard
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
@@ -246,6 +247,7 @@ class RecordingProcessingQueueTest {
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }
         }
+        single { SystemClipboard { } }
         // Real BuiltinServletRepository needed by McpSessionFactory (never actually resolves tools
         // because FakeServletRepository
         // seeds no builtins)

@@ -26,6 +26,7 @@ class IndexWebhookSendDecisionTest {
         assertTrue(configured.sendsFor(GestureDestination.IndexAgent))
         assertTrue(configured.sendsFor(GestureDestination.WebSearch))
         assertTrue(configured.sendsFor(GestureDestination.LocalAgent))
+        assertTrue(configured.sendsFor(GestureDestination.CopyToClipboard))
     }
 
     @Test

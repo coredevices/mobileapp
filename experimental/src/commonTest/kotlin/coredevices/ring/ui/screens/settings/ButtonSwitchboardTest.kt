@@ -42,6 +42,7 @@ class ButtonSwitchboardTest {
                 GestureDestination.LocalAgent,
                 GestureDestination.WebSearch,
                 GestureDestination.WebhookOnly,
+                GestureDestination.CopyToClipboard,
                 GestureDestination.Nothing,
             ),
             destinationsFor(GestureKind.Recording),

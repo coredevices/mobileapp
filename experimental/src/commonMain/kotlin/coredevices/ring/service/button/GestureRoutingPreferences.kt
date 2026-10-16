@@ -105,6 +105,7 @@ private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.RemoteAgent -> "remote_agent"
     GestureDestination.WebSearch -> "web_search"
     GestureDestination.WebhookOnly -> "webhook_only"
+    GestureDestination.CopyToClipboard -> "copy_to_clipboard"
     GestureDestination.Nothing -> "nothing"
 }
 
@@ -117,6 +118,7 @@ private fun decodeDestination(raw: String): GestureDestination? = when {
     raw == "remote_agent" -> GestureDestination.RemoteAgent
     raw == "web_search" -> GestureDestination.WebSearch
     raw == "webhook_only" -> GestureDestination.WebhookOnly
+    raw == "copy_to_clipboard" -> GestureDestination.CopyToClipboard
     raw == "nothing" -> GestureDestination.Nothing
     else -> null
 }

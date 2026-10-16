@@ -40,6 +40,14 @@ class TextChatModeTest {
     }
 
     @Test
+    fun clipboardRouteStillAnswersTypedInput() {
+        assertEquals(
+            ChatMode.Normal,
+            textChatModeFor(GestureDestination.CopyToClipboard),
+        )
+    }
+
+    @Test
     fun disabledRouteStillAnswersTypedInput() {
         assertEquals(
             ChatMode.Normal,

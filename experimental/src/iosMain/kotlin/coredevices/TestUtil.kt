@@ -15,6 +15,7 @@ import coredevices.ring.database.SecondaryMode
 import coredevices.ring.firestoreModule
 import coredevices.ring.mcpModule
 import coredevices.util.Platform
+import coredevices.util.SystemClipboard
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.util.models.CactusSTTMode
 import dev.gitlive.firebase.Firebase
@@ -89,6 +90,7 @@ object TestUtil {
                             }
                         }
                     } bind Platform::class
+                    single { SystemClipboard { } }
                     single { UsersDaoTestImpl } bind UsersDao::class
                 }
             )

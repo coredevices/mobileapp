@@ -60,6 +60,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 import kotlin.time.Instant
 
@@ -95,6 +96,10 @@ sealed interface NotificationProgress {
 
 // Fixed id so repeated prompts replace the visible notification rather than stack.
 internal const val SPEECH_MODEL_PROMPT_NOTIFICATION_ID = 5
+
+// Fixed id so each copy replaces the previous confirmation rather than stacking.
+internal const val COPIED_TO_CLIPBOARD_NOTIFICATION_ID = 6
+private val COPIED_TO_CLIPBOARD_NOTIFICATION_TIMEOUT = 30.seconds
 
 expect class PlatformIndexNotificationManager{
     fun notify(notification: GenericNotification)
@@ -671,3 +676,11 @@ internal fun speechModelPromptNotification(prompt: SpeechModelPrompt): GenericNo
     )
 }
 
+/** Confirms that a recording's transcript was put on the clipboard. */
+internal fun copiedToClipboardNotification(transcription: String) = GenericNotification(
+    id = COPIED_TO_CLIPBOARD_NOTIFICATION_ID,
+    title = "Index 01: transcription copied",
+    contentText = transcription,
+    channel = IndexNotificationChannel.IndexAction,
+    timeoutAfter = COPIED_TO_CLIPBOARD_NOTIFICATION_TIMEOUT,
+)

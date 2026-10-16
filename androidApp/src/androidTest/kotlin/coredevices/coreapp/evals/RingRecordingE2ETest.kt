@@ -44,6 +44,7 @@ import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.Platform
+import coredevices.util.SystemClipboard
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.queue.TaskStatus
 import coredevices.util.transcription.CactusModelPathProvider
@@ -657,6 +658,8 @@ class RingRecordingE2ETest {
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
             }
         }
+
+        single { SystemClipboard { } }
 
         // Webhook (disabled)
         single {

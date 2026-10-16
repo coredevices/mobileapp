@@ -18,6 +18,7 @@ import coredevices.ring.RingDelegate
 import coredevices.util.AndroidCompanionDevice
 import coredevices.util.AndroidPermissionRequester
 import coredevices.util.AndroidPlatform
+import coredevices.util.AndroidSystemClipboard
 import coredevices.util.auth.AppleAuthUtil
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -25,6 +26,7 @@ import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
+import coredevices.util.SystemClipboard
 import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.AndroidOAuthLauncher
@@ -57,6 +59,7 @@ val androidDefaultModule = module {
     } bind HttpClientEngine::class
     singleOf(::PlatformShareLauncher)
     singleOf(::AndroidPlatform) bind Platform::class
+    singleOf(::AndroidSystemClipboard) bind SystemClipboard::class
     singleOf(::AndroidOAuthLauncher) bind OAuthLauncher::class
     single { CoreAppVersion(get<Context>().appVersionName) }
     factory { AppUpdateManagerFactory.create(get()) }

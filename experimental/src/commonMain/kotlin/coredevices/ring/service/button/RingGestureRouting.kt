@@ -35,6 +35,8 @@ sealed interface GestureDestination {
     data object RemoteAgent : Recording
     data object WebSearch : Recording
     data object WebhookOnly : Recording
+    /** Transcribes the recording and puts the text on the phone's clipboard; no agent runs. */
+    data object CopyToClipboard : Recording
     data object Nothing : Music, Recording
 }
 

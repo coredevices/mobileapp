@@ -162,6 +162,7 @@ class GestureRoutingTest {
             assertFalse(it.accepts(GestureDestination.RemoteAgent))
             assertFalse(it.accepts(GestureDestination.WebSearch))
             assertFalse(it.accepts(GestureDestination.WebhookOnly))
+            assertFalse(it.accepts(GestureDestination.CopyToClipboard))
         }
         recording.forEach {
             assertTrue(it.accepts(GestureDestination.IndexAgent))
@@ -169,6 +170,7 @@ class GestureRoutingTest {
             assertTrue(it.accepts(GestureDestination.RemoteAgent))
             assertTrue(it.accepts(GestureDestination.WebSearch))
             assertTrue(it.accepts(GestureDestination.WebhookOnly))
+            assertTrue(it.accepts(GestureDestination.CopyToClipboard))
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.PlayPause))
             assertFalse(it.accepts(GestureDestination.NextTrack))
@@ -205,6 +207,21 @@ class GestureRoutingTest {
         assertEquals(GestureDestination.LocalAgent, reloaded.destinationFor(RingGesture.ClickHold))
         assertEquals(GestureDestination.NextTrack, reloaded.destinationFor(RingGesture.DoubleClick))
         assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.TripleClick))
+    }
+
+    @Test
+    fun clipboardRouteRoundTripsThroughSettings() {
+        val stored = MapSettings()
+        routing(stored = stored).apply {
+            setRoute(RingGesture.Hold, GestureDestination.CopyToClipboard)
+            setRoute(RingGesture.ClickHold, GestureDestination.CopyToClipboard)
+        }
+
+        val reloaded = routing(stored = stored)
+
+        assertEquals("copy_to_clipboard", stored.getStringOrNull("ring_gesture_route_Hold"))
+        assertEquals(GestureDestination.CopyToClipboard, reloaded.destinationFor(RingGesture.Hold))
+        assertEquals(GestureDestination.CopyToClipboard, reloaded.recordingDestinationFor(RingGesture.ClickHold))
     }
 
     /** The app-wide "Local LLM" mode this replaced: id 1 was local-only, 0 cloud, 2 cloud-first. */

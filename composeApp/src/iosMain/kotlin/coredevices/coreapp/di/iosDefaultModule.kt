@@ -17,10 +17,12 @@ import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.IOSPlatform
 import coredevices.util.IosCompanionDevice
 import coredevices.util.IosPermissionRequester
+import coredevices.util.IosSystemClipboard
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.RequiredPermissions
+import coredevices.util.SystemClipboard
 import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.auth.NoOpSilentSignIn
 import coredevices.util.auth.SilentSignIn
@@ -57,6 +59,7 @@ val iosDefaultModule = module {
     } bind HttpClientEngine::class
     singleOf(::AppContext)
     singleOf(::IOSPlatform) bind Platform::class
+    singleOf(::IosSystemClipboard) bind SystemClipboard::class
     singleOf(::IosOAuthLauncher) bind OAuthLauncher::class
     singleOf(::PlatformContext)
     singleOf(::IosPermissionRequester) bind PermissionRequester::class
