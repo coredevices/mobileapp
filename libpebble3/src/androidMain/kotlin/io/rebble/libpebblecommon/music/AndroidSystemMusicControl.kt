@@ -79,6 +79,16 @@ private val ALWAYS_SEEK_PACKAGES = setOf("com.audible.application")
 private val MEDIA_KEY_PACKAGES = setOf("com.overdrive.mobile.android.libby")
 
 /**
+ * Players that advertise play/pause but ignore [MediaController.TransportControls.play] and
+ * [MediaController.TransportControls.pause], acting only on media buttons. Legado's read-aloud
+ * session handles nothing but onMediaButtonEvent, and toggles on any media key.
+ */
+private val MEDIA_KEY_PLAY_PAUSE_PACKAGES = setOf("io.legado.app.release")
+
+internal fun playPauseUsesMediaKey(packageName: String?): Boolean =
+    packageName in MEDIA_KEY_PLAY_PAUSE_PACKAGES
+
+/**
  * What next/previous should do for a player advertising [actions]: change track where the player
  * supports it, and seek within the current track where it doesn't. Spotify offers no skip on a
  * podcast, which is also where seeking is the more useful thing for those buttons to do.
@@ -345,7 +355,15 @@ class AndroidSystemMusicControl(
 
     override fun play() {
         logger.d { "Playing media" }
-        targetSession.value?.transportControls?.play() ?: run {
+        val session = targetSession.value
+        if (session != null && playPauseUsesMediaKey(session.controller.packageName)) {
+            // These players toggle on any media key, so only send one when it changes the state.
+            if (session.playbackStatus.playbackState?.isActive() != true) {
+                session.controller.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY)
+            }
+            return
+        }
+        session?.transportControls?.play() ?: run {
             // Fallback to audio manager if no session is available
             logger.w { "No active media session found, falling back to AudioManager for play" }
             audioManager.dispatchMediaKeyEvent(
@@ -359,7 +377,14 @@ class AndroidSystemMusicControl(
 
     override fun pause() {
         logger.d { "Pausing playback" }
-        targetSession.value?.transportControls?.pause()
+        val session = targetSession.value ?: return
+        if (playPauseUsesMediaKey(session.controller.packageName)) {
+            if (session.playbackStatus.playbackState?.isActive() == true) {
+                session.controller.dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PAUSE)
+            }
+            return
+        }
+        session.transportControls.pause()
     }
 
     override fun playPause() {
