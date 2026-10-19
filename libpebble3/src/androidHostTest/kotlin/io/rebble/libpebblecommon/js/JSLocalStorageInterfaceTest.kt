@@ -1,18 +1,18 @@
 package io.rebble.libpebblecommon.js
 
-import com.russhwolf.settings.PropertiesSettings
+import android.content.ContextWrapper
+import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
 import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.serialization.json.Json
-import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class JSLocalStorageInterfaceTest {
-    private val settings: Settings = PropertiesSettings(Properties())
+    private val settings: Settings = MapSettings()
     private var length = -1
-    private val storage = object : JSLocalStorageInterface("test-uuid", AppContext(), settings) {
+    private val storage = object : JSLocalStorageInterface("test-uuid", AppContext(ContextWrapper(null)), settings) {
         override fun setLength(value: Int) {
             length = value
         }

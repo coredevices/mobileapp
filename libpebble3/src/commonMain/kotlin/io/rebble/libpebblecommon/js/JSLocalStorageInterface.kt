@@ -21,16 +21,9 @@ abstract class JSLocalStorageInterface(
     fun getLength(): Int = settings.keys.size
 
     /**
-     * Replace the stored keys with [data], a JSON object of key to value.
-     *
-     * The store never passes through an empty state on the way: the new values are written
-     * first and only then are the keys missing from [data] removed, so a process death part way
-     * through (a reboot with a PKJS session open) leaves the old or the new contents on disk
-     * rather than nothing.
-     *
-     * An empty [data] against a non-empty store is refused. An app that really called
-     * `localStorage.clear()` has already emptied the store through the shim, so an empty
-     * snapshot while keys are still stored means the DOM copy was lost, not cleared.
+     * Replace the stored keys with [data], a JSON object. New values are written before missing
+     * keys are removed, so the store is never empty mid-save. An empty [data] is ignored while
+     * keys are stored, since a real `localStorage.clear()` already emptied the store via the shim.
      */
     open fun saveState(data: Any?) {
         if (data !is String) return
