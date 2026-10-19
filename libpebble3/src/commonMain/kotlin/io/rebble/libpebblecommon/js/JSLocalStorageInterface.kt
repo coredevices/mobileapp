@@ -11,19 +11,35 @@ internal expect fun createJSSettings(appContext: AppContext, id: String): Settin
 abstract class JSLocalStorageInterface(
     scopedSettingsUuid: String,
     appContext: AppContext,
+    private val settings: Settings = createJSSettings(appContext, scopedSettingsUuid),
 ) {
-    private val settings = createJSSettings(appContext, scopedSettingsUuid)
+    companion object {
+        private val logger = Logger.withTag(JSLocalStorageInterface::class.simpleName!!)
+    }
 
     abstract fun setLength(value: Int)
     fun getLength(): Int = settings.keys.size
 
+    /**
+     * Replace the stored keys with [data], a JSON object. New values are written before missing
+     * keys are removed, so the store is never empty mid-save. An empty [data] is ignored while
+     * keys are stored, since a real `localStorage.clear()` already emptied the store via the shim.
+     */
     open fun saveState(data: Any?) {
         if (data !is String) return
         val map = Json.decodeFromString<Map<String, String?>>(data)
-        clear()
-        for ((key, value) in map) {
-            setItem(key, value)
+        val stored = settings.keys
+        if (map.isEmpty() && stored.isNotEmpty()) {
+            logger.w { "Refusing to replace ${stored.size} stored keys with an empty snapshot" }
+            return
         }
+        for ((key, value) in map) {
+            settings.putString(key, value ?: "null")
+        }
+        for (key in stored - map.keys) {
+            settings.remove(key)
+        }
+        setLength(settings.keys.size)
     }
 
     open fun restoreState(): String {
