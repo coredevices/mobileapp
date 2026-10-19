@@ -133,7 +133,7 @@ class NotificationHandler(
         isSummaryRecheck: Boolean,
     ): LibPebbleNotification? {
         // Don't even check (or persist) ongoing notifications
-        if (sbn.isOngoing) {
+        if (sbn.isOngoing && !ongoingIsShown(sbn.packageName, sbn.notification.isForegroundService())) {
             verboseLog {
                 "Ignoring ongoing notification from ${sbn.packageName.obfuscate(privateLogger)}"
             }
@@ -550,6 +550,12 @@ internal fun summaryStillNeeded(
 
 fun Notification.isGroupSummary(): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0
 fun Notification.isLocalOnly(): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
+fun Notification.isForegroundService(): Boolean = (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0
+
+// A foreground service's notification is only a status, even from an app that opts in
+internal fun ongoingIsShown(pkg: String, isForegroundService: Boolean): Boolean =
+    !isForegroundService && NotificationProperties.lookup(pkg)?.showOngoingNotifications == true
+
 fun RemoteInput.dumpDataOnly(): Boolean? {
     return isDataOnly
 }

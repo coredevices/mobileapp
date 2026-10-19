@@ -9,6 +9,7 @@ enum class NotificationProperties(
     val icon: TimelineIcon? = null,
     val addShowsUserInterfaceActions: Boolean = false,
     val showLocalOnlyNotifications: Boolean = false,
+    val showOngoingNotifications: Boolean = false,
     val allowDuplicates: Boolean = false,
 ) {
     Gmail(pkgName = "com.google.android.gm", color = TimelineColor.Red, icon = TimelineIcon.NotificationGmail),
@@ -81,6 +82,7 @@ enum class NotificationProperties(
     Ring(pkgName = "com.ringapp"),
     Zwift(pkgName = "com.zwift.zwiftgame", addShowsUserInterfaceActions = true),
     Shortwave(pkgName = "com.shortwave.android", addShowsUserInterfaceActions = true),
+    Claude(pkgName = "com.anthropic.claude", color = TimelineColor.Orange, showOngoingNotifications = true),
     ;
 
     companion object {
