@@ -29,3 +29,33 @@ actual fun getPlatformSTTLanguages(): List<Pair<String, String>> {
         code to name
     }.sortedBy { it.second }
 }
+
+@androidx.compose.runtime.Composable
+internal actual fun phoneNotificationDismissalSetting(): SettingsItem? {
+    if (!coredevices.pebble.supportsGuidedPebbleEnrollment()) return null
+    val defaults = androidx.compose.runtime.remember {
+        coredevices.pebble.notificationBridgeAppGroup()?.let { platform.Foundation.NSUserDefaults(suiteName = it) }
+    }
+    val enabled = androidx.compose.runtime.remember {
+        defaults?.synchronize()
+        androidx.compose.runtime.mutableStateOf(defaults?.boolForKey("notificationDismissOnBoth.v1") ?: false)
+    }
+    return basicSettingsToggleItem(
+        id = "DismissNotificationsOnPhone",
+        title = "Dismiss Notifications on Phone",
+        description = "Turn on Dismissing notifications on the iPhone when you choose Dismiss on the watch",
+        topLevelType = TopLevelType.Watch,
+        section = Section.Notifications,
+        checked = enabled.value,
+        onCheckChanged = { value ->
+            defaults?.setBool(value, forKey = "notificationDismissOnBoth.v1")
+            defaults?.synchronize()
+            enabled.value = value
+            platform.Foundation.NSNotificationCenter.defaultCenter.postNotificationName(
+                coredevices.pebble.notificationBridgeName("notification-dismissal-setting-changed"),
+                `object` = null,
+                userInfo = mapOf("enabled" to value),
+            )
+        },
+    )
+}

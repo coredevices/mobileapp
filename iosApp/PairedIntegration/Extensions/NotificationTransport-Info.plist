@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>NotificationTransport</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key>
+	<string>NotificationTransport</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>EXExtensionPointIdentifier</key>
+		<string>com.apple.accessory-transport-extension</string>
+	</dict>
+	<key>MinimumOSVersion</key>
+	<string>26.5</string>
+	<key>NSAccessorySetupBluetoothNames</key>
+	<array>
+		<string>Pebble</string>
+	</array>
+	<key>NSAccessorySetupBluetoothServices</key>
+	<array>
+		<string>0000FED9-0000-1000-8000-00805F9B34FB</string>
+	</array>
+	<key>NSAccessorySetupKitSupports</key>
+	<array>
+		<string>Bluetooth</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Pebble uses Bluetooth to hand the watch the notifications iOS forwards to it.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data-access-protocol</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Pebble notification transport</string>
+			<key>UTTypeIdentifier</key>
+			<string>$(BUNDLE_ID)$(TEAM_ID).accessory-transport</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+	</array>
+	<key>PebbleNotificationsEnabled</key>
+	<false/>
+	<key>PebbleNotificationNamespace</key>
+	<string>$(BUNDLE_ID)$(TEAM_ID)</string>
+	<key>PebbleNotificationAppGroup</key>
+	<string>group.$(BUNDLE_ID)$(TEAM_ID).notifications</string>
+	<key>PebbleNotificationKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)$(BUNDLE_ID)$(TEAM_ID).notifications</string>
+</dict>
+</plist>

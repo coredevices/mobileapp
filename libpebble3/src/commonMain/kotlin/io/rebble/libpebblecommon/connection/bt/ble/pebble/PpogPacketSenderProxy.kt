@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.connection.bt.ble.pebble
 
+import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.ble.ppog.PPoGPacketSender
 import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 
@@ -13,6 +14,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.ConnectedGattClient
 class PpogPacketSenderProxy(
     private val ppogClient: PpogClient,
     private val ppogServer: PpogServer,
+    private val blePlatformConfig: BlePlatformConfig,
 ) : PPoGPacketSender {
 
     private enum class Mode { Forward, Reversed }
@@ -28,6 +30,7 @@ class PpogPacketSenderProxy(
     }
 
     fun configureForward() {
+        check(blePlatformConfig.allowPhoneGattServer) { "Phone GATT role prohibited by platform authorization" }
         mode = Mode.Forward
     }
 

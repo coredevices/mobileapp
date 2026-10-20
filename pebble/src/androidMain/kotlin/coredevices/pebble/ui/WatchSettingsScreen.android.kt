@@ -31,3 +31,6 @@ actual fun openGoogleFitApp(uiContext: PlatformUiContext?) {
         )
     }
 }
+
+@androidx.compose.runtime.Composable
+internal actual fun phoneNotificationDismissalSetting(): SettingsItem? = null

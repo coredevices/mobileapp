@@ -119,11 +119,13 @@
 	<key>NSAccessorySetupBluetoothNames</key>
 	<array>
 		<string>CoreRing</string>
+		<string>Pebble</string>
 	</array>
 	<key>NSAccessorySetupBluetoothServices</key>
 	<array>
 		<string>607B5C9B-3700-4E94-F44A-2DF900BCB0C3</string>
 		<string>0000FCC9-0000-1000-8000-00805F9B34FB</string>
+		<string>0000FED9-0000-1000-8000-00805F9B34FB</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -253,5 +255,13 @@
 			</dict>
 		</dict>
 	</array>
+	<key>PebbleNotificationsEnabled</key>
+	<false/>
+	<key>PebbleNotificationNamespace</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>PebbleNotificationAppGroup</key>
+	<string>group.$(PRODUCT_BUNDLE_IDENTIFIER).notifications</string>
+	<key>PebbleNotificationKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER).notifications</string>
 </dict>
 </plist>

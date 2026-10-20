@@ -101,6 +101,10 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
+    override fun connectDiscoveredWatch(scanResult: PebbleScanResult) {
+        throw UnsupportedOperationException("Real watch registration is unavailable in previews")
+    }
+
     override val watches: PebbleDevices = MutableStateFlow(fakeWatches())
     override val connectionEvents: Flow<PebbleConnectionEvent> = MutableSharedFlow()
 

@@ -22,6 +22,8 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.connection.bt.ble.PpogRolePolicy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -76,8 +78,9 @@ class PebbleBle(
         // ourselves if neither is present.
         val watchServices = device.services?.takeIf { discovered }.orEmpty()
         val bleConfig = libPebbleConfigFlow.value.bleConfig
+        val rolePolicy = PpogRolePolicy(gattServerManager.allowPhoneGattServer)
         val reversedConfig: PpogClientConfig? = when {
-            !bleConfig.useReversedPpogV2 -> null
+            !rolePolicy.useReversedV2(bleConfig.useReversedPpogV2) -> null
 
             watchServices.any { it.uuid == PPOGATT_WATCH_SERVER_V2_SERVICE } -> PpogClientConfig(
                 serviceUuid = PPOGATT_WATCH_SERVER_V2_SERVICE,
@@ -86,7 +89,7 @@ class PebbleBle(
                 version = ReversePpogVersion.V2,
             )
 
-            bleConfig.legacyReversedPPoG && watchServices.any { it.uuid == PPOGATT_DEVICE_SERVICE_UUID_CLIENT } -> PpogClientConfig(
+            rolePolicy.useReversedV1(bleConfig.legacyReversedPPoG) && watchServices.any { it.uuid == PPOGATT_DEVICE_SERVICE_UUID_CLIENT } -> PpogClientConfig(
                 serviceUuid = PPOGATT_DEVICE_SERVICE_UUID_CLIENT,
                 notifyCharacteristic = PPOGATT_DEVICE_CHARACTERISTIC_READ,
                 // V1 legacy firmware accepts data writes on the notify char
@@ -100,6 +103,10 @@ class PebbleBle(
         logger.d("reversedConfig = $reversedConfig")
 
         if (reversedConfig == null) {
+            if (rolePolicy.requiresWatchHostedTransport) {
+                logger.w("Watch lacks an authorized watch-hosted transport; phone GATT is unavailable")
+                return PebbleConnectionResult.Failed(ConnectionFailureReason.RequiresWatchHostedTransport)
+            }
             if (!gattServerManager.registerDevice(identifier, pPoGStream.inboundPPoGBytesChannel)) {
                 return PebbleConnectionResult.Failed(ConnectionFailureReason.RegisterGattServer)
             }
@@ -185,7 +192,13 @@ class PebbleBle(
             useReversed = try {
                 ppogPacketSenderProxy.configureReversed(device, reversedConfig)
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (rolePolicy.requiresWatchHostedTransport) {
+                    logger.w("Watch-hosted PPoG failed; prohibited phone GATT fallback blocked", e)
+                    return PebbleConnectionResult.Failed(ConnectionFailureReason.WatchHostedTransportFailed)
+                }
                 // iOS in particular can return a `40000000` reversed-PPoG
                 // service in its cached GATT results even after the watch
                 // stopped advertising it (booted into a firmware without

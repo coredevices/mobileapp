@@ -23,7 +23,8 @@ actual fun peripheralFromIdentifier(
     val connected = CBCentralManager().retrieveConnectedPeripheralsWithServices(listOf(
         PAIRING_SERVICE_UUID.asCbUuid()
     )) as List<CBPeripheral>
-    val match = connected.firstOrNull { it.name == name }
+    // An authorized target must never be replaced by a same-name watch.
+    val match = connected.firstOrNull { it.identifier.asUuid() == identifier.uuid }
     if (match != null) {
         val fallbackPeripheral = peripheralFromUuid(match.identifier.asUuid())
         Logger.d("ios fallback: fallbackPeripheral = $fallbackPeripheral")

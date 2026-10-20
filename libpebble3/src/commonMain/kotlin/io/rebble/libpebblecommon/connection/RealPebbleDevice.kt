@@ -34,7 +34,7 @@ class PebbleDeviceFactory {
         languagePackInstallState: LanguagePackInstallState,
         reversePpogVersion: ReversePpogVersion?,
     ): PebbleDevice {
-        val btUsable = bluetoothState.enabled() || !identifier.requiresBluetooth()
+        val btUsable = admitsBluetoothConnection(identifier, bluetoothState.enabled(), accessoryAuthorizationFlow().value)
         val pebbleDevice = RealPebbleDevice(
             identifier = identifier,
             name = name,

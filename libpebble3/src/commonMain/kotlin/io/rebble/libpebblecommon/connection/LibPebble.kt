@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.calls.MissedCallSyncer
 import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.BluetoothStateProvider
 import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
+import io.rebble.libpebblecommon.connection.bt.ble.platformAllowsPhoneGattServer
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.configureKableCentral
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
@@ -111,6 +112,9 @@ interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallMa
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi {
     fun init()
+
+    /** Register genuine external discovery through the library-owned watch manager. */
+    fun connectDiscoveredWatch(scanResult: PebbleScanResult)
 
     val config: StateFlow<LibPebbleConfig>
     fun updateConfig(config: LibPebbleConfig)
@@ -540,6 +544,11 @@ class LibPebble3(
         performPlatformSpecificInit()
     }
 
+    override fun connectDiscoveredWatch(scanResult: PebbleScanResult) {
+        watchManager.addScanResult(scanResult)
+        watchManager.requestConnection(scanResult.identifier)
+    }
+
     override val config: StateFlow<LibPebbleConfig> = libPebbleConfigFlow.config
 
     override fun updateConfig(config: LibPebbleConfig) {
@@ -622,7 +631,8 @@ class LibPebble3(
             // touches Kable's shared central manager. Every Koin single here is lazy, and Kable is
             // only reached on the first scan/connect, which happens after create() returns.
             configureKableCentral(
-                koin.get<LibPebbleConfigHolder>().config.value.bleConfig.centralStateRestoration
+                koin.get<LibPebbleConfigHolder>().config.value.bleConfig.centralStateRestoration ||
+                    !platformAllowsPhoneGattServer()
             )
             val libPebble = koin.get<LibPebble>()
             return libPebble

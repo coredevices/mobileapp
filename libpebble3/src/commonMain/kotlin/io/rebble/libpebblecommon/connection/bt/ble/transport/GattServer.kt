@@ -54,7 +54,13 @@ class GattServerManager(
     private val registeredDevices = mutableSetOf<PebbleBleIdentifier>()
     private var servicesAdded = false
 
+    val allowPhoneGattServer: Boolean get() = blePlatformConfig.allowPhoneGattServer
+
     fun init() {
+        if (!allowPhoneGattServer) {
+            logger.i("Phone peripheral role unavailable; watch-hosted PPoG required")
+            return
+        }
         // Eagerly open the GATT server (create the platform manager, call
         // initServer) as soon as BT is enabled. On iOS the CBPeripheralManager
         // opts into state restoration via CBPeripheralManagerOptionRestoreIdentifierKey,
@@ -85,7 +91,7 @@ class GattServerManager(
         identifier: PebbleBleIdentifier,
         sendChannel: SendChannel<ByteArray>
     ): Boolean {
-        if (bluetoothStateProvider.state.value != BluetoothState.Enabled) return false
+        if (!allowPhoneGattServer || bluetoothStateProvider.state.value != BluetoothState.Enabled) return false
         openIfNeeded()
         val gs = gattServer ?: return false
         gs.registerDevice(identifier, sendChannel)
@@ -141,6 +147,7 @@ class GattServerManager(
     }
 
     private suspend fun openIfNeeded() {
+        if (!allowPhoneGattServer) return
         serverMutex.withLock {
             if (gattServer != null) return@withLock
             logger.d("open gatt server")

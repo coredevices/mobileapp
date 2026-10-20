@@ -30,6 +30,10 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
+import io.rebble.libpebblecommon.connection.PebbleScanResult
+import io.rebble.libpebblecommon.connection.asPebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.updateIosAccessoryAuthorizations
 import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
 import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
@@ -49,6 +53,8 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.toKotlinInstant
 import kotlinx.datetime.toNSDate
@@ -82,6 +88,31 @@ import kotlin.time.Clock
 private val logger = Logger.withTag("IOSDelegate")
 
 object IOSDelegate : KoinComponent {
+    /** Wait for an actual ordinary protocol connection to the authorized watch. */
+    @Throws(Exception::class)
+    suspend fun awaitAuthorizedWatchConnection(identifier: String): Boolean {
+        val selected = try { identifier.asPebbleBleIdentifier() } catch (_: IllegalArgumentException) { return false }
+        return withTimeoutOrNull(15_000L) {
+            get<LibPebble>().watches.first { devices ->
+                devices.any { it.identifier == selected && it is ConnectedPebbleDevice }
+            }
+            true
+        } ?: false
+    }
+
+    fun updateAccessoryAuthorizations(identifiers: List<String>) {
+        updateIosAccessoryAuthorizations(identifiers)
+    }
+
+    /** Register only the device selected by the live AccessorySetupKit session. */
+    @Throws(Exception::class)
+    fun connectAuthorizedWatch(identifier: String, name: String) {
+        val selected = identifier.asPebbleBleIdentifier()
+        get<LibPebble>().connectDiscoveredWatch(PebbleScanResult(
+            identifier = selected, name = name, rssi = 0, leScanRecord = null,
+        ))
+    }
+
     private val fileLogWriter: FileLogWriter by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val pebbleAppDelegate: PebbleAppDelegate by inject()

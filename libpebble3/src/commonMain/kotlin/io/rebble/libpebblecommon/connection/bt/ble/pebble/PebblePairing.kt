@@ -66,7 +66,7 @@ class PebblePairing(
                 val pairValue = makePairingTriggerValue(
                     noSecurityRequest = needsExplicitBond,
                     autoAcceptFuturePairing = false,
-                    watchAsGattServer = bleConfig.legacyReversedPPoG,
+                    watchAsGattServer = !blePlatformConfig.allowPhoneGattServer || bleConfig.legacyReversedPPoG,
                     pinAddress = blePlatformConfig.pinAddress,
                 )
                 val writeRes = device.writeCharacteristic(

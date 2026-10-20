@@ -48,8 +48,7 @@ class PpogClient(
             onSubscription = { cccdWritten.complete(Unit) },
         )
         if (flow == null) {
-            Logger.e("error subscribing to reverse data characteristic")
-            return
+            throw IllegalStateException("reversed PPoG notify characteristic unavailable")
         }
         scope.launch {
             try {

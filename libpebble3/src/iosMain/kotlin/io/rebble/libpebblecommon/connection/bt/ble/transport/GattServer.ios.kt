@@ -48,6 +48,7 @@ import platform.CoreBluetooth.CBManagerStateUnknown
 import platform.CoreBluetooth.CBMutableCharacteristic
 import platform.CoreBluetooth.CBMutableService
 import platform.CoreBluetooth.CBPeripheralManager
+import io.rebble.libpebblecommon.connection.bt.ble.platformAllowsPhoneGattServer
 import platform.CoreBluetooth.CBPeripheralManagerDelegateProtocol
 import platform.CoreBluetooth.CBPeripheralManagerOptionRestoreIdentifierKey
 import platform.CoreBluetooth.CBService
@@ -435,5 +436,6 @@ private val SEND_TIMEOUT = 8.seconds
 
 
 actual fun openGattServer(appContext: AppContext, bleConfigFlow: BleConfigFlow, libPebbleCoroutineScope: LibPebbleCoroutineScope): GattServer? {
+    if (!platformAllowsPhoneGattServer()) return null
     return GattServer(bleConfigFlow, libPebbleCoroutineScope)
 }
