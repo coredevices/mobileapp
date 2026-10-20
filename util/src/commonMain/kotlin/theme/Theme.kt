@@ -1,6 +1,7 @@
 package theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -15,6 +16,7 @@ import com.russhwolf.settings.Settings
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.black
 import coreapp.util.generated.resources.dark
+import coreapp.util.generated.resources.dynamic
 import coreapp.util.generated.resources.light
 import coreapp.util.generated.resources.system
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -172,6 +174,7 @@ enum class CoreAppTheme(val resource: StringResource, val key: String) {
     Dark(Res.string.dark, "dark"),
     Black(Res.string.black, "black"),
     System(Res.string.system, "system"),
+    Dynamic(Res.string.dynamic, "dynamic"),
     ;
 
     companion object {
@@ -196,7 +199,8 @@ fun currentColorScheme(): CoreAppColorScheme {
             CoreAppTheme.Light -> CoreAppColorScheme.Light
             CoreAppTheme.Dark -> CoreAppColorScheme.Grey
             CoreAppTheme.Black -> CoreAppColorScheme.Black
-            CoreAppTheme.System -> if (systemInDarkTheme) CoreAppColorScheme.Grey else CoreAppColorScheme.Light
+            CoreAppTheme.System,
+            CoreAppTheme.Dynamic -> if (systemInDarkTheme) CoreAppColorScheme.Grey else CoreAppColorScheme.Light
         }
     }
     return colorScheme
@@ -206,14 +210,12 @@ fun currentColorScheme(): CoreAppColorScheme {
 fun AppTheme(
     content: @Composable() () -> Unit
 ) {
+    val themeProvider: ThemeProvider = koinInject()
+    val theme by themeProvider.theme.collectAsState()
     val colorScheme = currentColorScheme()
     val extendedColors = if (colorScheme.isDark) darkExtendedColors else lightExtendedColors
     setStatusBarTheme(colorScheme)
-    val materialColorScheme = when (colorScheme) {
-        CoreAppColorScheme.Light -> lightScheme
-        CoreAppColorScheme.Grey -> greyScheme
-        CoreAppColorScheme.Black -> blackScheme
-    }
+    val materialColorScheme = getMaterialColorScheme(theme, colorScheme)
     CompositionLocalProvider(LocalExtendedColors provides extendedColors) {
         MaterialTheme(
             colorScheme = materialColorScheme,
@@ -224,6 +226,8 @@ fun AppTheme(
 }
 
 expect @Composable fun setStatusBarTheme(colorScheme: CoreAppColorScheme)
+
+expect @Composable fun getMaterialColorScheme(theme: CoreAppTheme, colorScheme: CoreAppColorScheme): ColorScheme
 
 interface ThemeProvider {
     val theme: StateFlow<CoreAppTheme>

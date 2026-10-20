@@ -6,4 +6,5 @@
     <string name="dark">Dark</string>
     <string name="black">Black</string>
     <string name="system">System</string>
+    <string name="dynamic">Dynamic</string>
 </resources>

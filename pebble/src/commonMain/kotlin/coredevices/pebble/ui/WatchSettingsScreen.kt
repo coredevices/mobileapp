@@ -651,7 +651,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
-                    keywords = "dark light system",
+                    keywords = "dark light system dynamic",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
                     onItemSelected = {
