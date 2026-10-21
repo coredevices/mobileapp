@@ -28,14 +28,22 @@ actual fun setStatusBarTheme(colorScheme: CoreAppColorScheme) {
     }
 }
 
+actual fun supportsDynamicTheme(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
 @Composable
-actual fun getMaterialColorScheme(theme: CoreAppTheme, colorScheme: CoreAppColorScheme): ColorScheme {
+actual fun getMaterialColorScheme(dynamicColor: Boolean, colorScheme: CoreAppColorScheme): ColorScheme {
     val context = LocalContext.current
-    return if (theme == CoreAppTheme.Dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (colorScheme.isDark) {
-            dynamicDarkColorScheme(context)
-        } else {
-            dynamicLightColorScheme(context)
+    return if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        when (colorScheme) {
+            CoreAppColorScheme.Light -> dynamicLightColorScheme(context)
+            CoreAppColorScheme.Grey -> dynamicDarkColorScheme(context)
+            CoreAppColorScheme.Black -> dynamicDarkColorScheme(context).copy(
+                background = androidx.compose.ui.graphics.Color.Black,
+                surface = androidx.compose.ui.graphics.Color.Black,
+                scrim = androidx.compose.ui.graphics.Color.Black,
+                surfaceDim = androidx.compose.ui.graphics.Color.Black,
+                surfaceContainerLowest = androidx.compose.ui.graphics.Color.Black,
+            )
         }
     } else {
         when (colorScheme) {

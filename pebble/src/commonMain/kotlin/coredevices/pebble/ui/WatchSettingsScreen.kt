@@ -180,6 +180,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import theme.CoreAppTheme
 import theme.ThemeProvider
 import theme.currentColorScheme
+import theme.supportsDynamicTheme
 import kotlin.math.roundToLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -334,6 +335,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val themeProvider: ThemeProvider = koinInject()
     val settings: Settings = koinInject()
     val currentTheme by themeProvider.theme.collectAsState()
+    val dynamicColor by themeProvider.dynamicColor.collectAsState()
     val pebbleFeatures = koinInject<PebbleFeatures>()
     val pebbleAccount = koinInject<PebbleAccount>()
     val loggedIn by pebbleAccount.loggedIn.collectAsState()
@@ -535,6 +537,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             watchPrefs,
             rebbleVoiceAvailable,
             platformSttAvailable,
+            currentTheme,
+            dynamicColor,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -651,7 +655,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
-                    keywords = "dark light system dynamic",
+                    keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
                     onItemSelected = {
@@ -660,6 +664,19 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     itemText = {
                         stringResource(it.resource)
                     },
+                ),
+                basicSettingsToggleItem(
+                    id = "dynamic_color",
+                    title = "Dynamic Theme",
+                    description = "Apply dynamic colors from your wallpaper to the chosen theme",
+                    keywords = "dynamic theme color wallpaper material you",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = dynamicColor,
+                    onCheckChanged = {
+                        themeProvider.setDynamicColor(it)
+                    },
+                    show = { supportsDynamicTheme() },
                 ),
                 basicSettingsToggleItem(
                     id = SettingsIds.HealthImperialUnits,

@@ -7,8 +7,10 @@ import androidx.compose.runtime.Composable
 actual fun setStatusBarTheme(colorScheme: CoreAppColorScheme) {
 }
 
+actual fun supportsDynamicTheme(): Boolean = false
+
 @Composable
-actual fun getMaterialColorScheme(theme: CoreAppTheme, colorScheme: CoreAppColorScheme): ColorScheme {
+actual fun getMaterialColorScheme(dynamicColor: Boolean, colorScheme: CoreAppColorScheme): ColorScheme {
     return when (colorScheme) {
         CoreAppColorScheme.Light -> lightScheme
         CoreAppColorScheme.Grey -> greyScheme

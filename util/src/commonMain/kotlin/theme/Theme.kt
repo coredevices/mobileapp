@@ -16,7 +16,6 @@ import com.russhwolf.settings.Settings
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.black
 import coreapp.util.generated.resources.dark
-import coreapp.util.generated.resources.dynamic
 import coreapp.util.generated.resources.light
 import coreapp.util.generated.resources.system
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -174,7 +173,6 @@ enum class CoreAppTheme(val resource: StringResource, val key: String) {
     Dark(Res.string.dark, "dark"),
     Black(Res.string.black, "black"),
     System(Res.string.system, "system"),
-    Dynamic(Res.string.dynamic, "dynamic"),
     ;
 
     companion object {
@@ -199,8 +197,7 @@ fun currentColorScheme(): CoreAppColorScheme {
             CoreAppTheme.Light -> CoreAppColorScheme.Light
             CoreAppTheme.Dark -> CoreAppColorScheme.Grey
             CoreAppTheme.Black -> CoreAppColorScheme.Black
-            CoreAppTheme.System,
-            CoreAppTheme.Dynamic -> if (systemInDarkTheme) CoreAppColorScheme.Grey else CoreAppColorScheme.Light
+            CoreAppTheme.System -> if (systemInDarkTheme) CoreAppColorScheme.Grey else CoreAppColorScheme.Light
         }
     }
     return colorScheme
@@ -211,11 +208,11 @@ fun AppTheme(
     content: @Composable() () -> Unit
 ) {
     val themeProvider: ThemeProvider = koinInject()
-    val theme by themeProvider.theme.collectAsState()
+    val dynamicColor by themeProvider.dynamicColor.collectAsState()
     val colorScheme = currentColorScheme()
     val extendedColors = if (colorScheme.isDark) darkExtendedColors else lightExtendedColors
     setStatusBarTheme(colorScheme)
-    val materialColorScheme = getMaterialColorScheme(theme, colorScheme)
+    val materialColorScheme = getMaterialColorScheme(dynamicColor, colorScheme)
     CompositionLocalProvider(LocalExtendedColors provides extendedColors) {
         MaterialTheme(
             colorScheme = materialColorScheme,
@@ -227,11 +224,16 @@ fun AppTheme(
 
 expect @Composable fun setStatusBarTheme(colorScheme: CoreAppColorScheme)
 
-expect @Composable fun getMaterialColorScheme(theme: CoreAppTheme, colorScheme: CoreAppColorScheme): ColorScheme
+expect fun supportsDynamicTheme(): Boolean
+
+expect @Composable fun getMaterialColorScheme(dynamicColor: Boolean, colorScheme: CoreAppColorScheme): ColorScheme
 
 interface ThemeProvider {
     val theme: StateFlow<CoreAppTheme>
     fun setTheme(theme: CoreAppTheme)
+    val dynamicColor: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
+    fun setDynamicColor(enabled: Boolean) {}
 }
 
 class RealThemeProvider(
@@ -240,9 +242,16 @@ class RealThemeProvider(
     private val _theme = MutableStateFlow(getTheme())
     override val theme: StateFlow<CoreAppTheme> = _theme.asStateFlow()
 
+    private val _dynamicColor = MutableStateFlow(getDynamicColor())
+    override val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
     private fun getTheme(): CoreAppTheme {
         val key = settings.getStringOrNull(THEME_SETTINGS_KEY)
         return key.asCoreAppTheme()
+    }
+
+    private fun getDynamicColor(): Boolean {
+        return settings.getBoolean(DYNAMIC_COLOR_SETTINGS_KEY, false)
     }
 
     override fun setTheme(theme: CoreAppTheme) {
@@ -250,8 +259,14 @@ class RealThemeProvider(
         _theme.value = theme
     }
 
+    override fun setDynamicColor(enabled: Boolean) {
+        settings.putBoolean(DYNAMIC_COLOR_SETTINGS_KEY, enabled)
+        _dynamicColor.value = enabled
+    }
+
     companion object {
         private const val THEME_SETTINGS_KEY = "current_theme"
+        private const val DYNAMIC_COLOR_SETTINGS_KEY = "dynamic_color"
     }
 }
 

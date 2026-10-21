@@ -6,5 +6,6 @@
     <string name="dark">Dark</string>
     <string name="black">Black</string>
     <string name="system">System</string>
-    <string name="dynamic">Dynamic</string>
+    <string name="dynamic_theme">Dynamic Theme</string>
+    <string name="dynamic_theme_description">Apply dynamic colors from your wallpaper to the chosen theme</string>
 </resources>

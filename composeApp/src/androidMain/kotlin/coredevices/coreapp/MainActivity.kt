@@ -104,8 +104,7 @@ class MainActivity : ComponentActivity() {
             CoreAppTheme.Light -> light
             CoreAppTheme.Dark -> dark
             CoreAppTheme.Black -> coredevices.coreapp.shared.R.style.Theme_CoreApp_Black
-            CoreAppTheme.System,
-            CoreAppTheme.Dynamic -> if (isNightMode(this)) {
+            CoreAppTheme.System -> if (isNightMode(this)) {
                 dark
             } else {
                 light
