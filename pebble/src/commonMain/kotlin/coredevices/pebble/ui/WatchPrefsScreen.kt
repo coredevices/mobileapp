@@ -143,7 +143,8 @@ fun WatchPref<*>.section(): Section = when (this) {
     EnumWatchPref.WindSpeed -> Section.Weather
 //    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
 //    ColorWatchPref.AppMenuHighlightColor -> Section.Display
-    EnumWatchPref.TextSize -> Section.Notifications
+    EnumWatchPref.SystemTextSize -> Section.Display
+    EnumWatchPref.NotificationTextSize -> Section.Notifications
     EnumWatchPref.MotionSensitivity -> Section.Display
     EnumWatchPref.BacklightPreset -> Section.Display
     EnumWatchPref.BacklightIntensity -> Section.Display
