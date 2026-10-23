@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="devices">Dispositivos</string>
+    <string name="faces">Carátulas</string>
+    <string name="apps">Aplicaciones</string>
+    <string name="notifications">Notificaciones</string>
+    <string name="settings">Ajustes</string>
+    <string name="app_store">Tienda Aplicaciones</string>
+    <string name="index">Índice</string>
+    <string name="health">Salud</string>
+</resources>
