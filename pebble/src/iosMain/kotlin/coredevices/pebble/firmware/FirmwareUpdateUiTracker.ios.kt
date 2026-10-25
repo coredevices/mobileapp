@@ -15,6 +15,7 @@ actual fun notifyFirmwareUpdate(
     body: String,
     key: Int,
     identifier: PebbleIdentifier,
+    showUpdateAction: Boolean,
 ) {
     val content = UNMutableNotificationContent()
     content.setTitle(title)

@@ -1,8 +1,8 @@
 // PKJS half of the plugin API weather face (see new-plugin-api.md).
 //
-// Two subscriptions: `weather/location` for the place itself — one instance per saved location,
-// and this face draws the first — and `weather/hour` for the hours ahead of it. Both feed one
-// snapshot, so the watch gets a single message however the two updates interleave.
+// Two subscriptions to `weather/location` — one instance per saved location, and this face draws
+// the first: one for the place itself, and one for its hourly series, at the smaller glyph size.
+// Both feed one snapshot, so the watch gets a single message however the two updates interleave.
 
 var HOURS = 3;
 var UNKNOWN = -1;
@@ -107,11 +107,23 @@ function onLocation(envelope) {
   sendIcon(0, properties.condition);
 }
 
+/** The series start at local midnight, so the next hour is wherever now falls, plus one. */
+function nextHourIn(series) {
+  if (!series || series.start === undefined) return 0;
+  return Math.floor((Date.now() / 1000 - series.start) / series.stepSec) + 1;
+}
+
 function onHours(envelope) {
+  var location = envelope.instances[0];
+  var properties = location ? location.properties : {};
+  var temps = properties.hourly_temperature && properties.hourly_temperature.series;
+  var conditions = properties.hourly_condition && properties.hourly_condition.series;
+  var next = nextHourIn(temps);
   for (var i = 0; i < HOURS; i++) {
-    var hour = envelope.instances[i];
-    snapshot['h' + i + 't'] = hour ? readingOf(hour.properties.temperature, 'shortText') : '';
-    if (hour) sendIcon(i + 1, hour.properties.condition);
+    var temp = temps && temps.shortText && temps.shortText.values[next + i];
+    snapshot['h' + i + 't'] = temp || '';
+    var image = conditions && conditions.image && conditions.image.values[next + i];
+    if (image) sendIcon(i + 1, { image: image });
   }
   push();
 }
@@ -224,12 +236,12 @@ function subscribe() {
   }));
   subscriptions.push(Pebble.subscribeToSource({
     category: 'weather',
-    item: 'hour',
+    item: 'location',
     plugin: chosenPlugin(),
-    properties: ['temperature', 'condition'],
+    properties: ['hourly_temperature', 'hourly_condition'],
     iconPixelSize: { w: iconSize.hour, h: iconSize.hour },
     onData: onHours,
-    onError: function (err) { log('weather/hour: ' + err.code); },
+    onError: function (err) { log('weather/location hours: ' + err.code); },
   }));
 }
 

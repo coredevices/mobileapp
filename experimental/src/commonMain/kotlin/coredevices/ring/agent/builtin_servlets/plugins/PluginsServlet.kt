@@ -22,9 +22,10 @@ class PluginsServlet(
 
     companion object {
         const val NAME = "builtin_plugins"
-        const val SOURCES_HEADER = "Data sources readable with '${ReadSourceTool.TOOL_NAME}', as '<plugin>: " +
-            "<category>/<item>'. Call it with the category and item; pass an instance id " +
-            "only to narrow a source with multiple instances. Read a source before answering from it."
+        const val SOURCES_HEADER = "Data sources readable with '${ReadSourceTool.TOOL_NAME}', listed as " +
+            "'<plugin> → category \"<category>\", item \"<item>\"'. Call it with exactly that category and " +
+            "item; the plugin name is never passed. Pass an instance id only to narrow a source with " +
+            "multiple instances. Read a source before answering from it."
     }
 }
 
@@ -33,7 +34,7 @@ internal fun List<PluginMetadata>.describeSources(): String? {
         plugin.sources.flatMap { source ->
             source.items.map { item ->
                 val multiple = if (source.supportsMultiple) " [multiple instances]" else ""
-                "- ${plugin.name}: ${source.category}/$item$multiple"
+                "- ${plugin.name} → category \"${source.category}\", item \"$item\"$multiple"
             }
         }
     }

@@ -93,6 +93,7 @@ class GestureRoutingPreferences(
 private const val LEGACY_SANDBOX_PREFIX = "mcp_sandbox:"
 /** The removed cloud-only agent; the Index agent is cloud-first anyway. */
 private const val LEGACY_REMOTE_AGENT = "remote_agent"
+private const val AGENT_PLUGIN_PREFIX = "agent_plugin:"
 
 private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.PlayPause -> "play_pause"
@@ -101,6 +102,7 @@ private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.LocalAgent -> "local_agent"
     GestureDestination.WebSearch -> "web_search"
     GestureDestination.WebhookOnly -> "webhook_only"
+    is GestureDestination.AgentPlugin -> AGENT_PLUGIN_PREFIX + providerId
     GestureDestination.Nothing -> "nothing"
 }
 
@@ -112,6 +114,8 @@ private fun decodeDestination(raw: String): GestureDestination? = when {
     raw == "local_agent" -> GestureDestination.LocalAgent
     raw == "web_search" -> GestureDestination.WebSearch
     raw == "webhook_only" -> GestureDestination.WebhookOnly
+    raw.startsWith(AGENT_PLUGIN_PREFIX) ->
+        raw.removePrefix(AGENT_PLUGIN_PREFIX).takeIf { it.isNotBlank() }?.let { GestureDestination.AgentPlugin(it) }
     raw == "nothing" -> GestureDestination.Nothing
     else -> null
 }

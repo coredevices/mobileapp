@@ -32,7 +32,7 @@ class PluginGrantRepositoryTest {
     fun nothingIsDeniedUntilTheUserSaysSo() = runTest {
         val repo = PluginGrantRepository(FakeDao())
         assertEquals(emptySet(), repo.disabledPlugins(PluginGrant.Actions).first())
-        assertEquals(emptySet(), repo.disabledPluginsNow(PluginGrant.Sources))
+        assertEquals(emptySet(), repo.disabledPlugins(PluginGrant.Sources).first())
     }
 
     @Test

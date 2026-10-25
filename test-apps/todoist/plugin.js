@@ -76,6 +76,7 @@ async function requestJson(method, path, body, tokenOverride) {
       text: text || '',
     };
   } catch (e) {
+    console.error('Todoist ' + method + ' ' + path + ' failed: ' + e);
     return { ok: false, status: 0, json: null, text: '' };
   }
 }
@@ -93,6 +94,7 @@ function apiErrorMessage(response, fallback) {
 }
 
 function respondWithHttpError(response, respond, operation) {
+  console.error('Failed to ' + operation + ': HTTP ' + response.status + ' ' + response.text);
   if (response.status === 401 || response.status === 403) {
     respond.error('AUTH_REQUIRED', 'Todoist authorization is missing, expired, or lacks data:read_write access.');
     return;

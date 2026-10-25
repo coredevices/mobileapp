@@ -79,7 +79,7 @@ class ConversationTurnsTest {
         assertEquals(
             listOf(
                 AssistantPart.Reply("Let me check"),
-                AssistantPart.ToolCalls(listOf(ToolCallStep("c1", ReadSourceTool.TOOL_NAME, done = true))),
+                AssistantPart.ToolCalls(listOf(ToolCallStep("c1", ReadSourceTool.TOOL_NAME, done = true, summary = "sources"))),
                 AssistantPart.Actions(listOf(actions.getValue("c2"))),
                 AssistantPart.Reply("Done!"),
             ),
@@ -216,6 +216,14 @@ class ConversationTurnsTest {
         val many = one + ToolCallStep("c2", "search_contacts", done = true) + ToolCallStep("c3", "get_time", done = false)
         assertEquals("Calling 3 tools", toolCallsLabel(many, active = true))
         assertEquals("Called 3 tools", toolCallsLabel(many, active = false))
+    }
+
+    @Test
+    fun stepSummaryReplacesTheDoneLabel() {
+        val step = ToolCallStep("c1", ReadSourceTool.TOOL_NAME, done = true, summary = "Read weather/location from Weather")
+        assertEquals(ToolCallLabel("Reading data sources", "Read weather/location from Weather"), toolCallLabel(step))
+        assertEquals("Read weather/location from Weather", toolCallsLabel(listOf(step), active = false))
+        assertEquals("Reading data sources", toolCallsLabel(listOf(step), active = true))
     }
 
     @Test

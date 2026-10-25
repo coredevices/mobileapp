@@ -85,6 +85,7 @@ import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.SettingsPageState
 import coredevices.pebble.services.isPebbleFeed
+import coredevices.pebble.services.pluginMetadata
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -668,6 +669,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         }
                     }
+                    val pluginMetadata = remember(pluginsEnabled, entry, storeApp) {
+                        if (!pluginsEnabled) null
+                        else libPebble.getAllPlugins().firstOrNull { it.pluginUuid == entry.uuid }
+                            ?: storeApp?.pluginMetadata()
+                    }
+                    pluginMetadata?.let { PluginCapabilitiesSection(it) }
                     Spacer(Modifier.height(5.dp))
                     // Shared minimum width for the name column — grows to fit the widest label.
                     var propertyNameWidthPx by remember { mutableIntStateOf(0) }
@@ -747,6 +754,28 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 nameModifier = propertyNameModifier,
                                 value = "External Link",
                                 onClick = { urlLauncher.open(sourceLink) }
+                            )
+                        }
+                    }
+                    pluginMetadata?.scriptPath?.let { script ->
+                        val installed = entry.commonAppType is CommonAppType.Locker
+                        val pbwUrl = storeApp?.latestRelease?.pbwFile
+                        if (installed || pbwUrl != null) {
+                            PropertyRow(
+                                name = "PLUGIN CODE",
+                                nameModifier = propertyNameModifier,
+                                value = "View Source",
+                                onClick = {
+                                    navBarNav.navigateTo(
+                                        PebbleNavBarRoutes.PluginSourceRoute(
+                                            uuid = entry.uuid.toString().takeIf { installed },
+                                            pbwUrl = pbwUrl,
+                                            script = script,
+                                            title = entry.title,
+                                        )
+                                    )
+                                },
+                                onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                             )
                         }
                     }

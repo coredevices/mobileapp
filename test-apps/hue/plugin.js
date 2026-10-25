@@ -20,6 +20,8 @@ async function http(url, options) {
     try { json = await response.json(); } catch (e) { /* not json */ }
     return { ok: response.ok, status: response.status, json: json };
   } catch (e) {
+    // Not the URL: its path carries the bridge username, which works as a password.
+    console.error('Bridge request failed: ' + e);
     return { ok: false, status: 0, json: null, error: 'request failed' };
   }
 }
@@ -222,6 +224,7 @@ Pebble.registerSourceHandler(async function (request, respond) {
       return;
   }
   if (!result.ok) {
+    console.error('Reading ' + request.item + ' failed: ' + result.error);
     respond.error(result.error === 'not paired' ? 'AUTH_REQUIRED' : 'PLUGIN_UNAVAILABLE', result.error);
     return;
   }
@@ -274,6 +277,7 @@ Pebble.registerActionHandler(async function (request, respond) {
   }
 
   if (!result.ok) {
+    console.error(request.action + ' failed: ' + result.error);
     respond.error(result.error === 'not paired' ? 'AUTH_REQUIRED' : 'PLUGIN_UNAVAILABLE', result.error);
     return;
   }

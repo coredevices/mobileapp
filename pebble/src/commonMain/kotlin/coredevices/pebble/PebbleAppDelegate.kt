@@ -28,24 +28,25 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.ConnectingPebbleDevice
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.Plugins
-import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 
 class PebbleAppDelegate(
     private val libPebble: LibPebble,
@@ -138,22 +139,22 @@ class PebbleAppDelegate(
                 }
             }
             GlobalScope.launch {
+                // Ticks so that the auto-update window opening is noticed.
+                val ticks = flow {
+                    while (true) {
+                        emit(Unit)
+                        delay(5.minutes)
+                    }
+                }
+                combine(libPebble.watches, ticks) { watches, _ -> watches }.collect { watches ->
+                    watches.filterIsInstance<CommonConnectedDevice>().forEach {
+                        firmwareUpdateUiTracker.onConnectedWatch(it)
+                    }
+                }
+            }
+            GlobalScope.launch {
                 libPebble.watches.collect { watches ->
                     watches.forEach { watch ->
-                        if (watch is ConnectedPebble.Firmware) {
-                            watch.firmwareUpdateAvailable.result?.let { fwup ->
-                                if (fwup is FirmwareUpdateCheckResult.FoundUpdate) {
-                                    firmwareUpdateUiTracker.maybeNotifyFirmwareUpdate(
-                                        fwup,
-                                        watch.identifier,
-                                        watch.name,
-                                    )
-                                }
-                            }
-                        }
-                        if (watch is ConnectedPebble.Firmware && watch.firmwareUpdateState is FirmwareUpdater.FirmwareUpdateStatus.InProgress) {
-                            firmwareUpdateUiTracker.firmwareUpdateIsInProgress(watch.identifier)
-                        }
                         if (watch is CommonConnectedDevice) {
                             usersDao.updateLastConnectedWatch(watch.serial)
                             batteryChargedNotifier.onBatteryLevel(

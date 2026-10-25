@@ -90,6 +90,7 @@ private val json = Json { ignoreUnknownKeys = true }
 //   v4.9.150: added bool activity_tracking_enabled  (2 → 3 bytes)
 private val FW_HRM_MEASUREMENT_INTERVAL = fwSentinel(4, 9, 146)
 private val FW_HRM_ACTIVITY_TRACKING = fwSentinel(4, 9, 150)
+private val FW_HRM_FIVE_MIN = fwSentinel(4, 39, 0)
 
 private fun fwSentinel(major: Int, minor: Int, patch: Int) = FirmwareVersion(
     stringVersion = "v$major.$minor.$patch",
@@ -402,13 +403,17 @@ enum class HealthGender(
 }
 
 enum class HRMonitoringInterval(val value: Byte) {
+    FiveMin(4),
     TenMin(0),
     ThirtyMin(1),
     OneHour(2),
     Disabled(3),
     ;
 
+    fun isSupportedBy(firmwareVersion: FirmwareVersion): Boolean =
+        this != FiveMin || firmwareVersion >= FW_HRM_FIVE_MIN
+
     companion object {
-        fun fromInt(value: Byte) = entries.first { it.value == value }
+        fun fromInt(value: Byte) = entries.firstOrNull { it.value == value } ?: TenMin
     }
 }

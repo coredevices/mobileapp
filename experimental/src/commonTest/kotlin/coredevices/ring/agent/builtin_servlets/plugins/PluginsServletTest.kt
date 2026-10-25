@@ -54,9 +54,9 @@ class PluginsServletTest {
         assertEquals(
             listOf(
                 PluginsServlet.SOURCES_HEADER,
-                "- Weather: weather/location [multiple instances]",
-                "- Phone: phone/state",
-                "- Phone: phone/network",
+                "- Weather → category \"weather\", item \"location\" [multiple instances]",
+                "- Phone → category \"phone\", item \"state\"",
+                "- Phone → category \"phone\", item \"network\"",
             ).joinToString("\n"),
             summary,
         )
@@ -73,7 +73,7 @@ class PluginsServletTest {
         val context = PluginsServlet({ listOf(phone) }, FakePlugins()).getExtraContext(null)
 
         assertContains(context.orEmpty(), PluginsServlet.SOURCES_HEADER)
-        assertContains(context.orEmpty(), "- Phone: phone/state")
+        assertContains(context.orEmpty(), "- Phone → category \"phone\", item \"state\"")
     }
 
     @Test

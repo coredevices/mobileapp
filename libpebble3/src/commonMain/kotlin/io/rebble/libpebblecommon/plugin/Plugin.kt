@@ -27,8 +27,12 @@ interface Plugin {
     val actions: List<ActionDeclaration>
         get() = emptyList()
 
+    /** Path of the plugin's script inside its pbw; null for built-in plugins. */
+    val scriptPath: String?
+        get() = null
+
     val metadata: PluginMetadata
-        get() = PluginMetadata(pluginUuid, name, description, sources, actions)
+        get() = PluginMetadata(pluginUuid, name, description, sources, actions, scriptPath)
 
     /**
      * Observe one kind of thing. The returned flow emits whenever the underlying data changes;
@@ -67,6 +71,7 @@ data class PluginMetadata(
     val description: String,
     val sources: List<SourceDeclaration>,
     val actions: List<ActionDeclaration>,
+    val scriptPath: String? = null,
 ) {
     fun serves(category: String, item: String) = sources.any { it.serves(category, item) }
 
@@ -115,7 +120,46 @@ object SourceShapeNames {
     const val BOOLEAN = "boolean"
     const val ICON = "icon"
     const val IMAGE = "image"
+    const val SERIES = "series"
+
+    /** How a source declares a property whose value is a series of [shape]. */
+    fun series(shape: String) = "$SERIES.$shape"
 }
+
+/**
+ * Many readings of one property along an axis. Each shape inside carries `values` in place of its
+ * single reading, and keeps whatever else it shares (a numericValue's unit and range); a null is a
+ * missing point. [start] (epoch seconds UTC) and [stepSec] come as a pair, for series over time;
+ * without them a value's position is all it has.
+ */
+@Serializable
+data class SeriesShape(
+    val start: Long? = null,
+    val stepSec: Long? = null,
+    val numericValue: NumericSeries? = null,
+    val shortText: TextSeries? = null,
+    val longText: TextSeries? = null,
+    val icon: BitmapSeries<IconShape>? = null,
+    val image: BitmapSeries<ImageShape>? = null,
+)
+
+@Serializable
+data class NumericSeries(
+    val values: List<Double?>,
+    val unit: String? = null,
+    val min: Double? = null,
+    val max: Double? = null,
+)
+
+@Serializable
+data class TextSeries(
+    val values: List<String?>,
+)
+
+@Serializable
+data class BitmapSeries<T>(
+    val values: List<T?>,
+)
 
 /**
  * A number, optionally one that fills a gauge. [min] and [max] come as a pair — with them the

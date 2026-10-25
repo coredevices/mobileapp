@@ -74,6 +74,10 @@ object RingRoutes {
     const val RECORDING_DEEP_LINK_PATH = "recording"
     fun recordingDeepLink(recordingId: Long) =
         "pebblecore://$OBJECT_DEEP_LINK_HOST/$RECORDING_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$recordingId"
+
+    /** Deep link that opens [Settings]. Parsed by `CoreDeepLinkHandler`. */
+    const val SETTINGS_DEEP_LINK_PATH = "index-settings"
+    const val SETTINGS_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$SETTINGS_DEEP_LINK_PATH"
 }
 
 /** Registers a ring destination inside [IndexThemeHost], so screens read

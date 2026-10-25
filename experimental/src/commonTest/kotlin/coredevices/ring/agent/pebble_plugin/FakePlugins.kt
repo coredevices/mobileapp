@@ -4,17 +4,21 @@ import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.plugin.ActionResult
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.IconPixelSize
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginErrors
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceUpdate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlin.time.Duration
+import kotlin.uuid.Uuid
 
 /** Calls the plugins it was given directly, recording who called. */
 internal class FakePlugins(vararg plugins: Plugin) : Plugins {
@@ -26,9 +30,13 @@ internal class FakePlugins(vararg plugins: Plugin) : Plugins {
         return plugin.metadata
     }
 
-    override fun registerPlugin(plugin: Plugin) {
+    override fun registerPlugin(plugin: NativePlugin) {
         install(plugin)
     }
+
+    override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
+
+    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) = Unit
 
     override fun nativePlugins(): Flow<List<PluginMetadata>> = flowOf(emptyList())
 

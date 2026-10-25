@@ -10,6 +10,7 @@ import coredevices.libindex.device.RSSIMeasurement
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.integrations.providers.LegacyDestinations
 import coredevices.ring.agent.integrations.providers.availableDestinations
 import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.data.NoteShortcutType
@@ -50,6 +51,7 @@ class SettingsViewModel(
     private val indexDeviceManager: IndexDeviceManager,
     private val ringDelegate: RingDelegate,
     libPebble: LibPebble,
+    legacy: LegacyDestinations,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
     val username = Firebase.auth.authStateChanged
@@ -88,6 +90,9 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val availableReminderProviders = providers
         .availableDestinations(IntegrationSupport.Reminder, pluginsEnabled, providerRefresh)
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val legacyDestinations = legacy.pending
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     private val _diagnosticsState = MutableStateFlow<DiagnosticsState>(DiagnosticsState.Idle)

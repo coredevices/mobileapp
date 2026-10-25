@@ -37,7 +37,7 @@ class NotificationsPlugin(
     private val notificationAppDao: NotificationAppRealDao,
     private val appContext: AppContext,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_NOTIFICATIONS_UUID
+    override val pluginUuid: Uuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID
     override val name: String = "Notifications"
     override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
@@ -165,10 +165,6 @@ class NotificationsPlugin(
 
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_NOTIFICATIONS_UUID: Uuid =
-            Uuid.parse("00000000-0000-0000-0001-000000000005")
     }
 }
 

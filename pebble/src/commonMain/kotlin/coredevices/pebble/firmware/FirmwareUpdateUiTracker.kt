@@ -2,22 +2,24 @@ package coredevices.pebble.firmware
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
+import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
-
-import coredevices.util.CoreConfigFlow
-import io.rebble.libpebblecommon.connection.ConnectedPebble
-import io.rebble.libpebblecommon.connection.LibPebble
-import kotlin.time.Duration.Companion.seconds
 
 interface FirmwareUpdateUiTracker {
     fun didFirmwareUpdateCheckFromUi()
     fun shouldUiUpdateCheck(): Boolean
-    fun maybeNotifyFirmwareUpdate(update: FirmwareUpdateCheckResult, identifier: PebbleIdentifier, watchName: String)
-    fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier)
+    fun onConnectedWatch(watch: CommonConnectedDevice)
     fun updateWatchNow(libPebble: LibPebble, identifier: String)
 }
 
@@ -30,6 +32,8 @@ class RealFirmwareUpdateUiTracker(
     private val logger = Logger.withTag("FirmwareUpdateUiTracker")
     private var lastUiUpdateMs: Long = settings.getLong(KEY_LAST_UI_UPDATE_CHECK_MS, 0)
     private val haveNotifiedForUpdate = mutableSetOf<Int>()
+    private val haveAutoUpdated = mutableSetOf<Int>()
+    private val autoUpdateTargetVersions = mutableMapOf<PebbleIdentifier, String>()
     private val activeNotificationKeys = mutableSetOf<Int>()
 
     override fun didFirmwareUpdateCheckFromUi() {
@@ -45,32 +49,56 @@ class RealFirmwareUpdateUiTracker(
         return shouldCheck
     }
 
-    override fun maybeNotifyFirmwareUpdate(update: FirmwareUpdateCheckResult, identifier: PebbleIdentifier, watchName: String) {
-        if (coreConfigFlow.value.disableFirmwareUpdateNotifications) {
+    override fun onConnectedWatch(watch: CommonConnectedDevice) {
+        if (watch.firmwareUpdateState is FirmwareUpdateStatus.InProgress) {
+            logger.d { "Firmware update in progress; removing notification" }
+            removeNotification(watch.identifier.asString)
+        }
+        if (autoUpdateTargetVersions[watch.identifier] == watch.runningFwVersion) {
+            autoUpdateTargetVersions.remove(watch.identifier)
+            notifyFirmwareUpdate(
+                appContext = appContext,
+                title = "PebbleOS updated",
+                body = "${watch.name} was updated to PebbleOS ${watch.runningFwVersion}",
+                key = watch.identifier.asString.hashCode(),
+                identifier = watch.identifier,
+                showUpdateAction = false,
+            )
+        }
+        val update = watch.firmwareUpdateAvailable.result as? FirmwareUpdateCheckResult.FoundUpdate ?: return
+        val key = update.hashCode() + watch.identifier.asString.hashCode()
+        val config = coreConfigFlow.value
+        val now = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
+        // Recovery mode is left to the user.
+        if (config.autoFirmwareUpdate &&
+            watch is ConnectedPebbleDevice &&
+            config.autoFirmwareUpdateWindow?.contains(now) != false &&
+            watch.firmwareUpdateState is FirmwareUpdateStatus.NotInProgress &&
+            haveAutoUpdated.add(key)
+        ) {
+            logger.i { "Auto-updating ${watch.name} to ${update.version.stringVersion}" }
+            haveNotifiedForUpdate.add(key)
+            removeNotification(watch.identifier.asString)
+            autoUpdateTargetVersions[watch.identifier] = update.version.stringVersion
+            watch.updateFirmware(update)
             return
         }
-        if (update !is FirmwareUpdateCheckResult.FoundUpdate) {
+        if (config.disableFirmwareUpdateNotifications) {
             return
         }
-        val key = update.hashCode() + identifier.asString.hashCode()
-        if (haveNotifiedForUpdate.contains(key)) {
+        if (!haveNotifiedForUpdate.add(key)) {
             return
         }
-        haveNotifiedForUpdate.add(key)
-        val notificationKey = identifier.asString.hashCode()
+        val notificationKey = watch.identifier.asString.hashCode()
         activeNotificationKeys.add(notificationKey)
         notifyFirmwareUpdate(
             appContext = appContext,
             title = "PebbleOS update available",
-            body = "PebbleOS ${update.version.stringVersion} is available for $watchName:\n${update.notes}",
+            body = "PebbleOS ${update.version.stringVersion} is available for ${watch.name}:\n${update.notes}",
             key = notificationKey,
-            identifier = identifier,
+            identifier = watch.identifier,
+            showUpdateAction = true,
         )
-    }
-
-    override fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier) {
-        logger.d { "Firmware update in progress; removing notification" }
-        removeNotification(identifier.asString)
     }
 
     private fun removeNotification(identifier: String) {
@@ -115,6 +143,7 @@ expect fun notifyFirmwareUpdate(
     body: String,
     key: Int,
     identifier: PebbleIdentifier,
+    showUpdateAction: Boolean,
 )
 
 expect fun removeFirmwareUpdateNotification(appContext: AppContext, key: Int)

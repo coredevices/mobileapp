@@ -161,12 +161,14 @@ class GestureRoutingTest {
             assertFalse(it.accepts(GestureDestination.LocalAgent))
             assertFalse(it.accepts(GestureDestination.WebSearch))
             assertFalse(it.accepts(GestureDestination.WebhookOnly))
+            assertFalse(it.accepts(GestureDestination.AgentPlugin("plugin:claude")))
         }
         recording.forEach {
             assertTrue(it.accepts(GestureDestination.IndexAgent))
             assertTrue(it.accepts(GestureDestination.LocalAgent))
             assertTrue(it.accepts(GestureDestination.WebSearch))
             assertTrue(it.accepts(GestureDestination.WebhookOnly))
+            assertTrue(it.accepts(GestureDestination.AgentPlugin("plugin:claude")))
             assertTrue(it.accepts(GestureDestination.Nothing))
             assertFalse(it.accepts(GestureDestination.PlayPause))
             assertFalse(it.accepts(GestureDestination.NextTrack))
@@ -203,6 +205,23 @@ class GestureRoutingTest {
         assertEquals(GestureDestination.LocalAgent, reloaded.destinationFor(RingGesture.ClickHold))
         assertEquals(GestureDestination.NextTrack, reloaded.destinationFor(RingGesture.DoubleClick))
         assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.TripleClick))
+    }
+
+    @Test
+    fun agentPluginRoutesRoundTripByProviderId() {
+        val stored = MapSettings()
+        val claude = GestureDestination.AgentPlugin("plugin:0d33014e-5d56-42ea-9665-3ebf182b4cfb")
+        routing(stored = stored).setRoute(RingGesture.Hold, claude)
+
+        assertEquals(claude, routing(stored = stored).destinationFor(RingGesture.Hold))
+        assertEquals(claude, routing(stored = stored).recordingDestinationFor(RingGesture.Hold))
+    }
+
+    @Test
+    fun anAgentPluginRouteWithoutAProviderIsIgnored() {
+        val stored = MapSettings().apply { putString("ring_gesture_route_Hold", "agent_plugin:") }
+
+        assertEquals(GestureDestination.IndexAgent, routing(stored = stored).destinationFor(RingGesture.Hold))
     }
 
     /** The app-wide "Local LLM" mode this replaced: id 1 was local-only, 0 cloud, 2 cloud-first. */

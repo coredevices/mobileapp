@@ -1,7 +1,6 @@
 package coredevices.pebble.services
 
-import coredevices.speex.SpeexCodec
-import coredevices.speex.SpeexDecodeResult
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.decodeAll
 import coredevices.util.CoreConfigFlow
 import coredevices.util.transcription.HybridTranscriptionService
 import coredevices.util.transcription.STTLanguage
@@ -9,6 +8,7 @@ import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
 import io.ktor.utils.io.CancellationException
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.PEBBLE_FW_TRANSCRIPTION_TIMEOUT
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
@@ -22,9 +22,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.io.Buffer
 import kotlinx.io.files.Path
 import kotlinx.io.readByteArray
 import kotlin.time.Duration.Companion.seconds
@@ -38,6 +36,7 @@ class HybridTranscription(
     private val service: HybridTranscriptionService,
     private val libPebbleLazy: Lazy<LibPebble>,
     private val coreConfigFlow: CoreConfigFlow,
+    private val audioFrameDecoder: AudioFrameDecoder,
 ): TranscriptionProvider {
     override suspend fun canServeSession(): Boolean {
         service.earlyInit()
@@ -50,27 +49,7 @@ class HybridTranscription(
         audioFrames: Flow<UByteArray>,
         isNotificationReply: Boolean
     ): TranscriptionResult {
-        require(encoderInfo is VoiceEncoderInfo.Speex) {
-            "Cactus transcription only supports Speex encoding, got ${encoderInfo::class.simpleName}"
-        }
-
-        val speex = SpeexCodec(
-            sampleRate = encoderInfo.sampleRate,
-            bitRate = encoderInfo.bitRate,
-            frameSize = encoderInfo.frameSize
-        )
-        val decodedBuffer = Buffer()
-        val pcm = ByteArray(encoderInfo.frameSize * Short.SIZE_BYTES)
-        withContext(Dispatchers.IO) {
-            audioFrames.collect { frame ->
-                val result =
-                    speex.decodeFrame(frame.asByteArray(), pcm, hasHeaderByte = true)
-                if (result != SpeexDecodeResult.Success) {
-                    error("Failed to decode Speex frame: $result")
-                }
-                decodedBuffer.write(pcm)
-            }
-        }
+        val decodedBuffer = audioFrameDecoder.decodeAll(encoderInfo, audioFrames)
         return try {
             val recentContacts = if (isNotificationReply) {
                 libPebbleLazy.value.mostRecentNotificationParticipants(limit = 10).first().takeIf { it.isNotEmpty() }?.flatMap {

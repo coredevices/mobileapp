@@ -32,6 +32,14 @@ class TextChatModeTest {
     }
 
     @Test
+    fun agentPluginRouteFallsBackToTheNormalAgentWhenThePluginIsGone() {
+        assertEquals(
+            ChatMode.Normal,
+            textChatModeFor(GestureDestination.AgentPlugin("plugin:claude")),
+        )
+    }
+
+    @Test
     fun disabledRouteStillAnswersTypedInput() {
         assertEquals(
             ChatMode.Normal,

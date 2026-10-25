@@ -1,4 +1,5 @@
 import androidx.compose.runtime.Stable
+import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.serialization.Serializable
 
 /**
@@ -12,6 +13,10 @@ object CommonRoutes {
         val pebble: Boolean,
         val recordingPath: String? = null,
         val screenshotPath: String? = null,
+        /** Deep link only: base64url-encoded context attached to the report. */
+        val context: String? = null,
+        /** Deep link only: prefilled description. */
+        val text: String? = null,
     ) : CoreRoute
 
     @Serializable
@@ -51,6 +56,9 @@ object CommonRoutes {
 
     @Serializable
     data class LockerAppRoute(val uuid: String) : CoreRoute
+
+    @Serializable
+    data class LockerTabRoute(val initialTab: AppType) : CoreRoute
 
     @Serializable
     data object RingOnboardingRoute : CoreRoute

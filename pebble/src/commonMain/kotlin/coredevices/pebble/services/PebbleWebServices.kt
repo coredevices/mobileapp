@@ -972,7 +972,7 @@ fun StoreApplication.pluginMetadata(): PluginMetadata? {
     val manifest = runCatching { DiskUtil.pbwJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
         .onFailure { logger.w(it) { "unreadable plugin manifest for $uuid" } }
         .getOrNull() ?: return null
-    return PluginMetadata(Uuid.parse(uuid), title, manifest.description, manifest.sources, manifest.actions)
+    return PluginMetadata(Uuid.parse(uuid), title, manifest.description, manifest.sources, manifest.actions, manifest.script)
 }
 
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {

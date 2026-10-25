@@ -80,6 +80,20 @@ interface NoteIntegration : Integration {
     suspend fun createNote(content: String, source: ItemSource? = null): String?
 }
 
+/** Sends messages to an external agent, optionally into one of its chats (see [getAllChats]). */
+interface AgentIntegration : Integration {
+    /** Delivers [message] and returns the agent's acknowledgement text (throws on failure).
+     *  External integrations ignore [source]. */
+    suspend fun sendToAgent(message: String, chatId: String? = null, source: ItemSource? = null): String
+
+    suspend fun getAllChats(): List<AgentChatEntry> = emptyList()
+}
+
+data class AgentChatEntry(
+    val id: String,
+    val nickname: String,
+)
+
 /**
  * Identifies the recording a tool-created object came from, so builtin integrations can stamp
  * the feed items they create (feed grouping and reminder deep links rely on it). External

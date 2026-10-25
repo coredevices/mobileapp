@@ -119,6 +119,13 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data class WatchSettingsCategoryRoute(val section: String, val topLevelType: String) : NavBarRoute
+
+    /** [uuid] reads the installed pbw; [pbwUrl] fetches a store app's. */
+    @Serializable
+    data class NativePluginRoute(val uuid: String) : NavBarRoute
+
+    @Serializable
+    data class PluginSourceRoute(val uuid: String?, val pbwUrl: String?, val script: String, val title: String) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -268,6 +275,20 @@ fun NavGraphBuilder.addNavBarRoutes(
             topBarParams,
             Section.valueOf(route.section),
             TopLevelType.valueOf(route.topLevelType),
+        )
+    }
+    composableWithAnimations<PebbleNavBarRoutes.NativePluginRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.NativePluginRoute = it.toRoute()
+        NativePluginScreen(nav, topBarParams, Uuid.parse(route.uuid))
+    }
+    composableWithAnimations<PebbleNavBarRoutes.PluginSourceRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.PluginSourceRoute = it.toRoute()
+        PluginSourceScreen(
+            topBarParams = topBarParams,
+            uuid = route.uuid?.let { id -> Uuid.parse(id) },
+            pbwUrl = route.pbwUrl,
+            script = route.script,
+            title = route.title,
         )
     }
 }

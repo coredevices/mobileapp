@@ -34,13 +34,16 @@ import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.requestedPermissions
 import io.rebble.libpebblecommon.plugin.Connections
 import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
@@ -111,6 +114,7 @@ class Locker(
     private val permissions: AppPermissions,
     private val appContext: AppContext,
     private val phoneNetworkMonitor: PhoneNetworkMonitor,
+    private val pluginFileAccess: PluginFileAccess,
 ) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
@@ -189,8 +193,17 @@ class Locker(
     override suspend fun appConfigPageUrl(uuid: Uuid): String? {
         // V2 config pages won't work with plugins disabled (no messaging channel)
         if (!config.value.enablePlugins) return null
-        val page = lockerEntryDao.getEntryFlow(uuid).first()?.configPage ?: return null
-        if (page.startsWith("http://") || page.startsWith("https://")) return page
+        val entry = lockerEntryDao.getEntryFlow(uuid).first() ?: return null
+        val page = entry.configPage ?: return null
+        if (page.startsWith("http://") || page.startsWith("https://")) {
+            // Like a PKJS config URL (`JsRunner.mayOpen`), opening it can carry data off the phone.
+            val verdict = NetworkGate(permissions, entry.title, uuid).check(page, wait = true)
+            if (verdict is PluginNetworkVerdict.Denied) {
+                logger.w { "Not opening ${entry.title}'s config page: ${verdict.reason}" }
+                return null
+            }
+            return page
+        }
         // A bundled page still needs its HTML from the pbw, delivered as a data URL.
         return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
     }
@@ -247,7 +260,7 @@ class Locker(
         }
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
-        if (!keepSecrets) deletePluginSecrets(listOf(id))
+        if (!keepSecrets) deletePluginData(listOf(id))
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -323,6 +336,7 @@ class Locker(
                     orderIndex = existing.orderIndex,
                     active = existing.active,
                     grantedPermissions = existing.grantedPermissions,
+                    microphoneGranted = existing.microphoneGranted,
                 )
                 if (newWithExistingLocalProps != existing && !existing.sideloaded) {
                     newWithExistingLocalProps
@@ -346,13 +360,14 @@ class Locker(
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
-        deletePluginSecrets(toDelete)
+        deletePluginData(toDelete)
         performCacheCleanup()
     }
 
-    private suspend fun deletePluginSecrets(ids: List<Uuid>) = ids.forEach { id ->
+    private suspend fun deletePluginData(ids: List<Uuid>) = ids.forEach { id ->
         try {
             pluginSecureStorage(appContext, id).destroy()
+            pluginFileAccess.destroy(id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

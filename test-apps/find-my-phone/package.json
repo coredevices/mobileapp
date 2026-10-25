@@ -1,0 +1,35 @@
+{
+  "name": "find-my-phone",
+  "author": "Core Devices",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Find My Phone",
+    "uuid": "438e789f-1f16-424e-829c-0c2f4865fbe8",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [],
+    "resources": {
+      "media": []
+    },
+    "usesPermissions": [
+      "FindMyPhone"
+    ]
+  }
+}

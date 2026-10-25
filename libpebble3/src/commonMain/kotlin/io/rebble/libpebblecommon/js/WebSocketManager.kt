@@ -29,6 +29,8 @@ private const val NORMAL_CLOSURE = 1000
 private const val NO_STATUS_RECEIVED = 1005
 private const val ABNORMAL_CLOSURE = 1006
 
+private val UPGRADE_HEADERS = setOf("host", "connection", "upgrade")
+
 class WebSocketManager(
     private val scope: CoroutineScope,
     private val eval: (String) -> Unit,
@@ -44,7 +46,11 @@ class WebSocketManager(
     override val methods = listOf("createInstance", "send", "close")
 
     override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
-        "createInstance" -> createInstance(args[0].toString(), args.getOrNull(1)?.toString().orEmpty())
+        "createInstance" -> createInstance(
+            args[0].toString(),
+            args.getOrNull(1)?.toString().orEmpty(),
+            handshakeHeaders(args.getOrNull(2)?.toString().orEmpty()),
+        )
         "send" -> {
             val binary = when (val v = args.getOrNull(2)) {
                 is Boolean -> v
@@ -64,9 +70,9 @@ class WebSocketManager(
         else -> error("Unknown method: $method")
     }
 
-    private fun createInstance(url: String, protocols: String): Int {
+    private fun createInstance(url: String, protocols: String, headers: Map<String, String>): Int {
         val id = ++lastInstance
-        val instance = Instance(id, url, protocols)
+        val instance = Instance(id, url, protocols, headers)
         instances[id] = instance
         instance.connect()
         return id
@@ -77,7 +83,18 @@ class WebSocketManager(
         instances.clear()
     }
 
-    private inner class Instance(val id: Int, private val url: String, private val protocols: String) {
+    private fun handshakeHeaders(json: String): Map<String, String> =
+        runCatching { Json.decodeFromString<Map<String, String>>(json) }.getOrDefault(emptyMap())
+            .filterKeys { name ->
+                name.lowercase().let { it !in UPGRADE_HEADERS && !it.startsWith("sec-websocket-") }
+            }
+
+    private inner class Instance(
+        val id: Int,
+        private val url: String,
+        private val protocols: String,
+        private val extraHeaders: Map<String, String>,
+    ) {
         private val js = "WebSocket._instances.get($id)"
         private val outgoing = Channel<Frame>(Channel.UNLIMITED)
         private var job: Job? = null
@@ -97,6 +114,7 @@ class WebSocketManager(
                     return
                 }
                 val ws = client.webSocketSession(url) {
+                    extraHeaders.forEach { (name, value) -> header(name, value) }
                     if (protocols.isNotEmpty()) header(HttpHeaders.SecWebSocketProtocol, protocols)
                 }
                 session.value = ws

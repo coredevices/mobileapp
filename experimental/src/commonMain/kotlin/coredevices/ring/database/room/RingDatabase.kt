@@ -37,6 +37,7 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.PluginGrantDenial
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
@@ -60,6 +61,7 @@ import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.dao.RingTransferFeedItem
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
+import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -93,7 +95,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 42,
+    version = 43,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -146,6 +148,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 40, to = 41),
         // 41→42: adds HttpMcpServerEntity.description.
         AutoMigration(from = 41, to = 42),
+        // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
+        AutoMigration(from = 42, to = 43, Migrate42To43::class),
     ]
 )
 @TypeConverters(Converters::class)
@@ -287,6 +291,37 @@ class Migrate39To40 : AutoMigrationSpec {
             "DELETE FROM RecordingProcessingTaskEntity WHERE type = 'AudioRecording' AND transferId IS NULL"
         )
     }
+}
+
+/** Plugins the Index agent may not use until the user turns them on. */
+private val PLUGINS_DENIED_BY_DEFAULT = listOf(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID)
+
+private fun SQLiteConnection.denyDefaultPluginGrants() {
+    val statement = prepare(
+        "INSERT OR IGNORE INTO PluginGrantDenial (pluginUuid, `grant`, name) VALUES (?, ?, '')"
+    )
+    try {
+        PLUGINS_DENIED_BY_DEFAULT.forEach { pluginUuid ->
+            PluginGrant.entries.forEach { grant ->
+                statement.bindText(1, pluginUuid.toString())
+                statement.bindText(2, grant.name)
+                statement.step()
+                statement.reset()
+            }
+        }
+    } finally {
+        statement.close()
+    }
+}
+
+class Migrate42To43 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+}
+
+/** Fresh databases skip migrations, so the default denials are seeded here instead. */
+object SeedDefaultPluginGrants : RoomDatabase.Callback() {
+    override fun onCreate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

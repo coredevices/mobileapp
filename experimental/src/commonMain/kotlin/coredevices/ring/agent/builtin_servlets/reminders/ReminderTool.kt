@@ -9,8 +9,12 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
+import coredevices.ring.agent.builtin_servlets.destinationProperty
+import coredevices.ring.agent.builtin_servlets.withoutDestination
 import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.externalDestination
 import coredevices.ring.ui.isLocale24HourFormat
 import coredevices.util.capitalizeFirstWord
@@ -32,43 +36,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 
 class ReminderTool: BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "date_time_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
-                        ).toJson()
-                    ),
-                    "duration_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
-                        ).toJson()
-                    ),
-                    "notification_hours_before" to JsonObject(
-                        mapOf(
-                            "type" to "number",
-                            "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
-                        ).toJson()
-                    ),
-                    "message" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The message to remind the user e.g. 'Buy more milk'"
-                        ).toJson()
-                    ),
-                )
-            ),
-            required = listOf(
-                "message"
-            )
-        )
-    ),
+    definition = DEFINITION,
+    localDefinition = DEFINITION.withoutDestination(),
     extraContext = """
         Only pass times to 'create_reminder' that the user actually said. If the user started to specify a reminder time but it was cut off, do not guess one and do not create the reminder; tell the user the time was missing. Omit the time fields entirely for reminders without a time.
     """.trimIndent()
@@ -79,6 +48,44 @@ class ReminderTool: BuiltInMcpTool(
         const val TOOL_NAME = "create_reminder"
         const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder, asks to remember to do something ('remind me to...', 'remember to...'), or wants to be reminded at a specific time or date."
         private val logger = Logger.withTag("ReminderTool")
+        private val DEFINITION = Tool(
+            name = TOOL_NAME,
+            description = TOOL_DESCRIPTION,
+            inputSchema = ToolSchema(
+                properties = JsonObject(
+                    mapOf(
+                        "date_time_human" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
+                            ).toJson()
+                        ),
+                        "duration_human" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
+                            ).toJson()
+                        ),
+                        "notification_hours_before" to JsonObject(
+                            mapOf(
+                                "type" to "number",
+                                "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
+                            ).toJson()
+                        ),
+                        "message" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The message to remind the user e.g. 'Buy more milk'"
+                            ).toJson()
+                        ),
+                        DESTINATION_ARG to destinationProperty("reminder"),
+                    )
+                ),
+                required = listOf(
+                    "message"
+                )
+            )
+        )
     }
 
     @Serializable
@@ -86,7 +93,8 @@ class ReminderTool: BuiltInMcpTool(
         val date_time_human: String? = null,
         val duration_human: String? = null,
         val notification_hours_before: Double? = null,
-        val message: String
+        val message: String,
+        val destination: String? = null,
     )
 
     @Serializable
@@ -216,8 +224,19 @@ class ReminderTool: BuiltInMcpTool(
             remindArgs.notification_hours_before?.takeIf { hours -> hours > 0 }?.hours
         }
 
+        val provider = providers.destinationProvider(remindArgs.destination, IntegrationSupport.Reminder)
+            ?: return ToolCallResult(
+                JsonSnake.encodeToString(
+                    RemindResult(
+                        success = false,
+                        errorMessage = "Unknown reminder destination '${remindArgs.destination}'. Use a " +
+                                "name from the context, or omit $DESTINATION_ARG to use the default."
+                    )
+                ),
+                SemanticResult.GenericFailure("Unknown reminder destination '${remindArgs.destination}'", llmRecoverable = true)
+            )
+
         return try {
-            val provider = providers.selectedReminderProvider.value
             val reminderId = providers.reminderIntegration(provider)
                 .createReminder(remindArgs.message, instant, notifyBefore = notifyBefore, source = context.itemSource())
             ToolCallResult(

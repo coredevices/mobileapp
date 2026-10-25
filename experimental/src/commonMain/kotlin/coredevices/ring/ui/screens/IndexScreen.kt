@@ -5,13 +5,17 @@ import CoreNav
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coredevices.pebble.ui.IndexTabBadge
 import coredevices.pebble.ui.TopBarParams
 import coredevices.ring.database.Preferences
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -33,6 +37,7 @@ fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
     val recordingStorage = koinInject<RecordingStorage>()
     val prefs = koinInject<Preferences>()
     val isDebugEnabled by prefs.debugDetailsEnabled.collectAsStateWithLifecycle()
+    val settingsBadgeCount by koinInject<IndexTabBadge>().count.collectAsState(0)
     val scope = rememberCoroutineScope()
     val launchWavImportDialog = rememberOpenDocumentLauncher {
         it?.firstOrNull()?.let { file ->
@@ -84,7 +89,9 @@ fun IndexScreen(coreNav: CoreNav, topBarParams: TopBarParams) {
                 IconButton(
                     onClick = { coreNav.navigateTo(RingRoutes.Settings) },
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    BadgedBox(badge = { if (settingsBadgeCount > 0) Badge() }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
                 }
             },
         )

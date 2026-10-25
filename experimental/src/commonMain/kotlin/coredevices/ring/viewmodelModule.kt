@@ -40,10 +40,19 @@ internal val viewmodelModule = module {
             platform = get(),
             pluginsEnabled = libPebble.pluginsEnabled(),
             lockerUuids = libPebble.getAllLockerUuids(),
-            lockerApp = libPebble::getLockerApp,
         )
     }
-    viewModelOf(::RingButtonViewModel)
+    viewModel {
+        RingButtonViewModel(
+            gestureRouting = get(),
+            webhookPreferences = get(),
+            cactusModelProvider = get(),
+            appScope = get(),
+            platform = get(),
+            providers = get(),
+            pluginsEnabled = get<LibPebble>().pluginsEnabled(),
+        )
+    }
     viewModelOf(::BackupViewModel)
     viewModelOf(::EncryptionViewModel)
     viewModelOf(::ListenDialogViewModel)

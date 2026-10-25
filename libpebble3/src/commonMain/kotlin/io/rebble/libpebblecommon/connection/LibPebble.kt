@@ -64,13 +64,15 @@ import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.ActionResult
 import io.rebble.libpebblecommon.plugin.IconPixelSize
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginErrors
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.plugin.SourceUpdate
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccessApi
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -109,7 +111,8 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
+    PluginFileAccessApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -230,10 +233,15 @@ interface Weather {
 /** The installed plugins, and the only way to call them (see `new-plugin-api.md`). */
 interface Plugins {
     /** For plugins outside libpebble3, whose Koin context is isolated. */
-    fun registerPlugin(plugin: Plugin)
+    fun registerPlugin(plugin: NativePlugin)
 
     /** Built-in plugins (phone-side data sources like Music or Weather), not backed by a pbw. */
     fun nativePlugins(): Flow<List<PluginMetadata>>
+
+    val disabledBuiltInPlugins: StateFlow<Set<Uuid>>
+
+    /** A disabled built-in is hidden from every caller, as if it weren't installed. */
+    fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean)
 
     /** The script behind [pluginUuid]'s settings page, or null if it has none. */
     fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
@@ -394,6 +402,8 @@ interface LockerApi {
      * none, so callers fall back to the PKJS `showConfiguration` flow.
      */
     suspend fun appConfigPageUrl(uuid: Uuid): String?
+    /** A text file from an installed app's pbw, or null if the app or file is missing. */
+    suspend fun getAppFile(uuid: Uuid, name: String): String?
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
@@ -496,8 +506,9 @@ class LibPebble3(
     private val vibePatternDao: VibePatternDao,
     private val watchPreferences: WatchPrefs,
     private val weatherManager: WeatherManager,
-    appPermissions: AppPermissions,
+    private val appPermissions: AppPermissions,
     pluginClient: PluginClient,
+    pluginFileAccess: PluginFileAccess,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
@@ -505,7 +516,7 @@ class LibPebble3(
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
     HealthDataApi by health, Plugins by pluginClient,
-    AppPermissionsApi by appPermissions {
+    AppPermissionsApi by appPermissions, PluginFileAccessApi by pluginFileAccess {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -514,6 +525,7 @@ class LibPebble3(
             logger.w { "Already initialized!!!" }
             return
         }
+        appPermissions.init()
         WatchHardwarePlatform.init(libPebbleCoroutineScope, libPebbleConfigFlow.config)
         bluetoothStateProvider.init()
         gattServerManager.init()

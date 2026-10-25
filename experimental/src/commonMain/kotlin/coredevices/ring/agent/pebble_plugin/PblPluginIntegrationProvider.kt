@@ -1,6 +1,7 @@
 package coredevices.ring.agent.pebble_plugin
 
 import io.rebble.libpebblecommon.connection.Plugins
+import coredevices.ring.agent.integrations.AgentIntegration
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
@@ -9,9 +10,10 @@ import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlin.uuid.Uuid
 
 /**
- * A plugin offered as a note/reminder destination because it declares a `create_note` and/or
- * `create_reminder` action together with the matching `notes/configured` / `reminders/configured`
- * source. Instances are recreated on every lookup, so equality is by [id].
+ * A plugin offered as a note/reminder/agent destination because it declares a `create_note`,
+ * `create_reminder` and/or `send_to_agent` action together with the matching `notes/configured` /
+ * `reminders/configured` / `agent/configured` source. Instances are recreated on every lookup, so
+ * equality is by [id].
  */
 class PblPluginIntegrationProvider private constructor(
     private val plugin: PluginMetadata,
@@ -24,12 +26,14 @@ class PblPluginIntegrationProvider private constructor(
 
     override fun notes(): NoteIntegration = PblPluginActionNoteIntegration(plugin, plugins)
     override fun reminders(): ReminderIntegration = PblPluginActionReminderIntegration(plugin, plugins)
+    override fun agent(): AgentIntegration = PblPluginActionAgentIntegration(plugin, plugins)
 
     override suspend fun isAuthorized(): Boolean = supports.all { isAuthorized(it) }
 
     override suspend fun isAuthorized(support: IntegrationSupport): Boolean = when (support) {
         IntegrationSupport.Note -> notes().isAuthorized()
         IntegrationSupport.Reminder -> reminders().isAuthorized()
+        IntegrationSupport.Agent -> agent().isAuthorized()
     }
 
     override fun equals(other: Any?): Boolean = other is PblPluginIntegrationProvider && other.id == id
@@ -55,6 +59,9 @@ class PblPluginIntegrationProvider private constructor(
             }
             if (plugin.offersDestination(PblPluginActionReminderIntegration.ACTION_NAME, PblPluginActionReminderIntegration.CATEGORY)) {
                 add(IntegrationSupport.Reminder)
+            }
+            if (plugin.offersDestination(PblPluginActionAgentIntegration.ACTION_NAME, PblPluginActionAgentIntegration.CATEGORY)) {
+                add(IntegrationSupport.Agent)
             }
         }
 

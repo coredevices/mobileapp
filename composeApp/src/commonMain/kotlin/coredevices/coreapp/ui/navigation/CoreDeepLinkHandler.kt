@@ -18,6 +18,7 @@ class CoreDeepLinkHandler {
         objectRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         recordingRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         speechModelRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
+        settingsRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
         return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
     }
 
@@ -51,6 +52,14 @@ class CoreDeepLinkHandler {
         if (uri.host != HOST) return null
         if (uri.pathSegments.firstOrNull() != CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH) return null
         return CommonRoutes.SpeechModelDownloadDialog
+    }
+
+    /** `pebblecore://deep-link/index-settings` opens the Index settings screen. */
+    internal fun settingsRouteFor(uri: Uri): RingRoutes.Settings? {
+        if (uri.scheme != SCHEME) return null
+        if (uri.host != HOST) return null
+        if (uri.pathSegments.firstOrNull() != RingRoutes.SETTINGS_DEEP_LINK_PATH) return null
+        return RingRoutes.Settings
     }
 
     fun clearPendingDeepLink() {

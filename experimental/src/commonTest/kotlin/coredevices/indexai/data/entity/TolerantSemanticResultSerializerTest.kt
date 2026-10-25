@@ -3,6 +3,7 @@ package coredevices.indexai.data.entity
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.withItemId
+import dev.gitlive.firebase.internal.decode
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,6 +45,56 @@ class TolerantSemanticResultSerializerTest {
         )
         assertNull(msg.semantic_result)
         assertEquals("call-1", msg.tool_call_id)
+    }
+
+    @Test
+    fun unknownDiscriminatorDecodesToNullOnTheFirestorePath() {
+        // gitlive's decoder is not a JsonDecoder; an unknown subtype surfaces as an NPE from
+        // its polymorphic lookup, which previously failed the whole RecordingDocument decode.
+        val msg = decode(
+            ConversationMessageDocument.serializer(),
+            mapOf(
+                "role" to "tool",
+                "content" to "c",
+                "semantic_result" to mapOf("type" to "list_item_creation", "content" to "milk"),
+                "tool_call_id" to "call-1",
+            ),
+        )
+        assertNull(msg.semantic_result)
+        assertEquals("call-1", msg.tool_call_id)
+
+        val known = decode(
+            ConversationMessageDocument.serializer(),
+            mapOf(
+                "role" to "tool",
+                "semantic_result" to mapOf("type" to "ListItemCreation", "content" to "milk"),
+            ),
+        )
+        assertTrue(known.semantic_result is SemanticResult.ListItemCreation)
+
+        // iOS only strips NSNull at the document's top level, so a nested null arrives as a
+        // non-null, non-map object; a string stands in for it here.
+        val nested = decode(
+            ConversationMessageDocument.serializer(),
+            mapOf("role" to "tool", "semantic_result" to "NSNull"),
+        )
+        assertNull(nested.semantic_result)
+    }
+
+    @Test
+    fun unknownMessageTagIsDroppedOnTheFirestorePath() {
+        val msg = decode(
+            ConversationMessageDocument.serializer(),
+            mapOf(
+                "role" to "assistant",
+                "content" to "Sunny",
+                "message_tags" to listOf(
+                    mapOf("type" to "FromTheFuture", "x" to 1L),
+                    mapOf("type" to "AnswerResponse", "itemId" to "item-1"),
+                ),
+            ),
+        )
+        assertEquals(listOf(MessageTag.AnswerResponse(itemId = "item-1")), msg.messageTags)
     }
 
     @Test

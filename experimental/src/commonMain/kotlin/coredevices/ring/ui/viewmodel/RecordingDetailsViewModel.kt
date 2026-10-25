@@ -22,6 +22,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.NonCancellable
@@ -187,6 +188,8 @@ class RecordingDetailsViewModel(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
                 )
                 onAfter()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 logger.e(e) { "deleteRecording failed" }
                 snackbarHostState.showSnackbar("Couldn't delete: ${e.message ?: e}")
@@ -199,6 +202,8 @@ class RecordingDetailsViewModel(
         playbackState.value = MessagePlaybackState.Buffering(item.userMessageId ?: -1)
         val (samples, info) = try {
             recordingStorage.openRecordingSource(fileName)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "No playable audio for $fileName" }
             playbackState.value = MessagePlaybackState.Stopped

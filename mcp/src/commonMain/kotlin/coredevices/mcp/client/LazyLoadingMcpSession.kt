@@ -99,9 +99,10 @@ class LazyLoadingMcpSession(
             )
         }
         loadedGroups += group
-        val names = tools.joinToString(", ") { it.tool.definition.name }
+        // The model must address loaded tools by their full declared names, not the bare ones.
+        val names = tools.joinToString(", ") { it.compositeName() }
         return ToolCallResult(
-            "Loaded ${tools.size} tools from '$group', now available to call: $names",
+            "Loaded ${tools.size} tools from '$group', now available to call by these exact names: $names",
             SemanticResult.SupportingData("Loaded MCP $group with ${tools.size} tools")
         )
     }

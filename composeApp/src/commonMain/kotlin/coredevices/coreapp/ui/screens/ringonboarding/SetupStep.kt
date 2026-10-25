@@ -300,7 +300,7 @@ internal fun SetupStep(
             title = "Ring Button",
             sub = "Choose what each press does. You can change this later in Index settings.",
         ) {
-            RingButtonSection(ringButtonViewModel)
+            RingButtonSection(coreNav, ringButtonViewModel)
         }
 
         // 3 — Index agent actions
@@ -309,7 +309,7 @@ internal fun SetupStep(
             title = "Index Agent",
             sub = "Pick which actions Index can take, and where notes and reminders are saved."
         ) {
-            IndexAgentActionsSection(coreNav, showHeader = false)
+            IndexAgentActionsSection(coreNav, showHeader = false, canBrowsePlugins = false)
         }
 
         // 4 — Secondary action

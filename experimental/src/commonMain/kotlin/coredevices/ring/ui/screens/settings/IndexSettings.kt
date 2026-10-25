@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,6 +66,7 @@ import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.LegacyDestination
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
@@ -94,6 +96,50 @@ import coredevices.util.models.CactusSTTMode
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import coreapp.util.generated.resources.Res as UtilRes
+
+@Composable
+private fun RelinkDestinationsCard(destinations: List<LegacyDestination>) {
+    val colors = IndexTheme.colors
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = colors.errorContainer,
+            contentColor = colors.onErrorContainer,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Link, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    destinations.map { it.provider.title }.distinct().joinToString() + " needs re-linking",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Built-in integrations are being replaced by plugins and will be removed in an upcoming version. " +
+                    "Relink each one as a plugin to keep sending to it.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(8.dp))
+            destinations.forEach { destination ->
+                Text(
+                    "${destination.provider.title} · ${legacyDestinationLabel(destination.setting)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+}
+
+private fun legacyDestinationLabel(setting: LegacyDestination.Setting): String = when (setting) {
+    LegacyDestination.Setting.Notes -> "Notes"
+    LegacyDestination.Setting.Reminders -> "Reminders"
+    LegacyDestination.Setting.Shortcut -> "Notification shortcut"
+}
 
 // openUri throws if nothing can handle the link (no browser, DPC policy);
 // don't let a help link tap crash the settings screen.
@@ -151,6 +197,7 @@ fun IndexSettings(coreNav: CoreNav) {
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
+    val legacyDestinations by viewModel.legacyDestinations.collectAsState()
 
     val colors = IndexTheme.colors
 
@@ -224,6 +271,10 @@ fun IndexSettings(coreNav: CoreNav) {
         LazyColumn(
             modifier = Modifier.padding(padding).fillMaxHeight()
         ) {
+            if (legacyDestinations.isNotEmpty()) {
+                item { RelinkDestinationsCard(legacyDestinations) }
+            }
+
             // Getting Started guide + FAQ — Index 01 is a new kind of device,
             // so steer everyone to the guide. Opens in the system browser.
             item {
@@ -310,7 +361,7 @@ fun IndexSettings(coreNav: CoreNav) {
                     modifier = Modifier.padding(top = 18.dp, bottom = 2.dp, start = 16.dp, end = 16.dp)
                 )
             }
-            item { RingButtonSection() }
+            item { RingButtonSection(coreNav) }
 
             // --- Actions section ---
             item { IndexAgentActionsSection(coreNav) }

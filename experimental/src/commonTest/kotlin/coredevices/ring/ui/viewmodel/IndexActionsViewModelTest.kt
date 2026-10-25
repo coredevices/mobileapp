@@ -207,6 +207,7 @@ class IndexActionsViewModelTest {
                 installedPlugins = { emptyList() },
                 disabledPlugins = { flowOf(emptySet<Uuid>()) },
                 persistPluginGrantEnabled = { _, _, _ -> },
+                watchPaired = flowOf(true),
             ),
             mcpServerRepository = McpServerRepository(
                 FakeDisabledBuiltinDao(),
@@ -220,7 +221,6 @@ class IndexActionsViewModelTest {
             platform = FakePlatform("Android 15"),
             pluginsEnabled = pluginsEnabled,
             lockerUuids = lockerUuids,
-            lockerApp = { flowOf(null) },
         )
     }
 

@@ -1,5 +1,6 @@
 package coredevices.ring.agent.pebble_plugin
 
+import coredevices.ring.agent.integrations.AgentChatEntry
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionResult
@@ -26,11 +27,16 @@ private val PLUGIN_UUID = Uuid.parse("00000000-0000-0000-0002-00000000000d")
 
 private val createNote = ActionDeclaration(name = "create_note")
 private val createReminder = ActionDeclaration(name = "create_reminder")
+private val sendToAgent = ActionDeclaration(name = "send_to_agent")
 private val next = ActionDeclaration(name = "next")
 
 private fun configuredSource(category: String) = SourceDeclaration(category = category, items = listOf("configured"))
 
 private val bothConfiguredSources = listOf(configuredSource("notes"), configuredSource("reminders"))
+private val agentPluginSources = listOf(
+    configuredSource("agent"),
+    SourceDeclaration(category = "agent", items = listOf("chats")),
+)
 
 private fun thingsPlugin(
     actions: List<ActionDeclaration>,
@@ -57,6 +63,16 @@ private fun configured(value: Boolean) = SourceEnvelope(
     ),
 )
 
+private fun chats(vararg chats: Pair<String, String>) = SourceEnvelope(
+    pluginUuid = "p",
+    instances = chats.map { (id, nickname) ->
+        SourceInstance(
+            instanceId = id,
+            properties = mapOf("name" to mapOf("shortText" to JsonObject(mapOf("text" to JsonPrimitive(nickname))))),
+        )
+    },
+)
+
 class PblPluginIntegrationProviderTest {
     private val plugins = FakePlugins()
 
@@ -77,6 +93,10 @@ class PblPluginIntegrationProviderTest {
             setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
             providerFor(thingsPlugin(listOf(createNote, createReminder)))?.supports
         )
+        assertEquals(
+            setOf(IntegrationSupport.Agent),
+            providerFor(thingsPlugin(listOf(sendToAgent), sources = agentPluginSources))?.supports
+        )
     }
 
     @Test
@@ -92,6 +112,9 @@ class PblPluginIntegrationProviderTest {
         )
         assertNull(
             providerFor(thingsPlugin(listOf(next), sources = bothConfiguredSources))
+        )
+        assertNull(
+            providerFor(thingsPlugin(listOf(sendToAgent), sources = bothConfiguredSources))
         )
     }
 
@@ -187,5 +210,86 @@ class PblPluginIntegrationProviderTest {
         provider.notes().createNote("buy milk")
 
         assertEquals(listOf<PluginCaller>(PluginCaller.Host(probe = true), PluginCaller.Host()), plugins.callers)
+    }
+
+    @Test
+    fun sendingToTheAgentInvokesTheSendToAgentAction() = runTest {
+        val plugin = thingsPlugin(
+            listOf(sendToAgent),
+            sources = agentPluginSources,
+            result = ActionResult(ok = true, text = "Sent"),
+        )
+        val provider = assertNotNull(providerFor(plugin))
+
+        val integration = assertIs<PblPluginActionAgentIntegration>(provider.agent())
+        assertEquals("Sent", integration.sendToAgent("what's on today?"))
+        assertEquals("Sent", integration.sendToAgent("and tomorrow?", chatId = "work"))
+
+        assertEquals(
+            listOf(
+                "send_to_agent" to JsonObject(mapOf("message" to JsonPrimitive("what's on today?"))),
+                "send_to_agent" to JsonObject(
+                    mapOf("message" to JsonPrimitive("and tomorrow?"), "chat_id" to JsonPrimitive("work"))
+                ),
+            ),
+            plugin.invoked,
+        )
+    }
+
+    @Test
+    fun aFailedSendToAgentActionThrowsTheErrorMessage() = runTest {
+        val plugin = thingsPlugin(
+            listOf(sendToAgent),
+            sources = agentPluginSources,
+            result = ActionResult.error(PluginErrors.INVALID_ARGS, "Message is required"),
+        )
+
+        val e = assertFailsWith<IllegalStateException> {
+            PblPluginActionAgentIntegration(plugins.install(plugin), plugins).sendToAgent("hi")
+        }
+        assertEquals("Message is required", e.message)
+    }
+
+    @Test
+    fun chatsComeFromTheAgentChatsSource() = runTest {
+        val provider = assertNotNull(
+            providerFor(
+                thingsPlugin(
+                    listOf(sendToAgent),
+                    sources = agentPluginSources,
+                    envelopes = mapOf("agent/chats" to chats("work" to "Work", "home" to "Home")),
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(AgentChatEntry("work", "Work"), AgentChatEntry("home", "Home")),
+            provider.agent().getAllChats(),
+        )
+    }
+
+    @Test
+    fun aPluginWithoutAChatsSourceHasNoChatsToPick() = runTest {
+        val provider = assertNotNull(
+            providerFor(thingsPlugin(listOf(sendToAgent), sources = listOf(configuredSource("agent"))))
+        )
+
+        assertEquals(emptyList(), provider.agent().getAllChats())
+    }
+
+    @Test
+    fun theAgentConfiguredSourceDecidesWhetherItIsConnected() = runTest {
+        val provider = assertNotNull(
+            providerFor(
+                thingsPlugin(
+                    listOf(sendToAgent),
+                    sources = agentPluginSources,
+                    envelopes = mapOf("agent/configured" to configured(true)),
+                )
+            )
+        )
+
+        assertTrue(provider.isAuthorized(IntegrationSupport.Agent))
+        assertTrue(provider.isAuthorized())
     }
 }

@@ -63,10 +63,14 @@ import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.PluginCaller
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.PluginErrors
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceUpdate
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.files.FileAccessMode
+import io.rebble.libpebblecommon.plugin.files.FileEntryKind
+import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -223,6 +227,7 @@ class FakeLibPebble : LibPebble {
 
     override suspend fun removeApp(id: Uuid): Boolean = true
     override suspend fun reviewSideload(pbwPath: Path): InstallReview? = null
+    override suspend fun getAppFile(uuid: Uuid, name: String): String? = null
 
     override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? = null
 
@@ -506,7 +511,12 @@ class FakeLibPebble : LibPebble {
 
     override val currentWeather: Flow<List<WeatherAppEntry>> = flowOf(emptyList())
 
-    override fun registerPlugin(plugin: Plugin) {
+    override fun registerPlugin(plugin: NativePlugin) {
+    }
+
+    override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
+
+    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) {
     }
 
     override fun activePermissionRequests(): Flow<List<LockerAppPermission>> = flowOf(emptyList())
@@ -525,6 +535,15 @@ class FakeLibPebble : LibPebble {
     override fun nativePlugins(): Flow<List<PluginMetadata>> = flowOf(emptyList())
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
+
+    override suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo> = emptyList()
+
+    override suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode) = PermissionDecision.Denied
+
+    override suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String) =
+        FileHandleInfo(scope, FileEntryKind.File, scope, mode)
+
+    override suspend fun revokePluginFile(appUuid: Uuid, scope: String) = Unit
 
     override fun getAllPlugins(): List<PluginMetadata> = emptyList()
 

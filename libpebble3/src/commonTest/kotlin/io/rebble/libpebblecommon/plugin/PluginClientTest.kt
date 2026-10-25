@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
+import com.russhwolf.settings.MapSettings
 import io.rebble.libpebblecommon.LibPebbleAnalytics
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
@@ -17,6 +18,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -84,8 +87,9 @@ class PluginClientTest {
     private val dao = FakePermissionDao()
     private val running = RunningApps(NoWatches)
     private val analytics = CountingAnalytics()
-    private val registry = PluginRegistry(emptySet(), WatchConfig(enablePlugins = true).asFlow())
-    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics)
+    private val logs = PluginLogs()
+    private val registry = PluginRegistry(emptySet(), WatchConfig(enablePlugins = true).asFlow(), MapSettings())
+    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs)
 
     private fun ClientFakePlugin.registered(): PluginMetadata = also { registry.registerPlugin(it) }.metadata
 
@@ -214,6 +218,28 @@ class PluginClientTest {
         val updates = client.observe(PluginCaller.Host(), plugin.registered(), "weather", "now").toList()
 
         assertEquals(listOf(failed, SourceUpdate.Data(ENVELOPE)), updates)
+    }
+
+    @Test
+    fun subscribersOnlyGetWhatTheSourceDeclares() = runTest {
+        val undeclared = SourceInstance("1", mapOf("colour" to mapOf("shortText" to JsonPrimitive("red"))))
+        val plugin = ClientFakePlugin(envelopes = flow { emit(SourceUpdate.Data(ENVELOPE.copy(instances = listOf(undeclared)))) })
+
+        val update = client.read(PluginCaller.Host(), plugin.registered(), "weather", "now")
+
+        assertEquals(emptyMap(), assertIs<SourceUpdate.Data>(update).envelope.instances.single().properties)
+    }
+
+    @Test
+    fun aPluginsDeveloperIsToldWhatWasDropped() = runTest {
+        val logged = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { logs.messages.collect { logged += it } }
+        val undeclared = SourceInstance("1", mapOf("colour" to mapOf("shortText" to JsonPrimitive("red"))))
+        val plugin = ClientFakePlugin(envelopes = flow { emit(SourceUpdate.Data(ENVELOPE.copy(instances = listOf(undeclared)))) })
+
+        client.read(PluginCaller.Host(), plugin.registered(), "weather", "now")
+
+        assertEquals(listOf("[plugin] Fake: weather/now.colour: dropped: shortText isn't declared"), logged)
     }
 
     @Test

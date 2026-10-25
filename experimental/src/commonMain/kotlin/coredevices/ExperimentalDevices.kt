@@ -16,6 +16,7 @@ import coredevices.ring.bugreport.RecentRecordingExport
 import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.IndexNotificationManager
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Permission
@@ -64,6 +65,7 @@ class ExperimentalDevices(
     private val rssiStatistics: RingRssiStatistics,
     private val platform: Platform,
     private val targetCalendarSeeder: TargetCalendarSeeder,
+    private val indexNotificationManager: IndexNotificationManager,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -101,6 +103,7 @@ class ExperimentalDevices(
     suspend fun init() {
         ringDelegate.init()
         scope.launch { targetCalendarSeeder.seedIfNeeded() }
+        scope.launch { indexNotificationManager.notifyLegacyDestinationUse() }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
             NotifierManager.getLocalNotifier().notify {

@@ -48,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -136,34 +137,33 @@ internal data class DestOption(
 internal fun noteDestOptions(
     providers: List<IntegrationProvider>,
     available: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid> = emptySet(),
+    lockerPlugins: Set<Uuid> = emptySet(),
 ): List<DestOption> = providers.map {
     val connected = it in available
     DestOption(
         provider = it,
         title = it.notesTitle,
         connected = connected,
-        configurable = connected &&
-            (noteConfigureDialog(it) != null || it.isConfigurablePlugin(configurablePlugins)),
+        configurable = connected && (noteConfigureDialog(it) != null || it.hasLockerPage(lockerPlugins)),
     )
 }
 
 internal fun reminderDestOptions(
     providers: List<IntegrationProvider>,
     available: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid> = emptySet(),
+    lockerPlugins: Set<Uuid> = emptySet(),
 ): List<DestOption> = providers.map {
     val connected = it in available
-    DestOption(it, it.remindersTitle, connected, connected && it.isConfigurablePlugin(configurablePlugins))
+    DestOption(it, it.remindersTitle, connected, connected && it.hasLockerPage(lockerPlugins))
 }
 
 /** Store plugins that could take this kind once installed, listed after the installed options. */
 internal fun storeDestOptions(plugins: List<StorePlugin>, support: IntegrationSupport): List<StorePlugin> =
     plugins.filter { support in it.supports }
 
-/** Plugins with a config page open their locker page from a hold, where the locker's Settings button lives. */
-internal fun IntegrationProvider.isConfigurablePlugin(configurablePlugins: Set<Uuid>): Boolean =
-    this is PblPluginIntegrationProvider && pluginUuid in configurablePlugins
+/** Locker plugins reconfigure from their locker page; built-in plugins have no page to open. */
+internal fun IntegrationProvider.hasLockerPage(lockerPlugins: Set<Uuid>): Boolean =
+    this is PblPluginIntegrationProvider && pluginUuid in lockerPlugins
 
 /** Actions that are switched off because they still need linking get a Connect button. */
 internal fun actionConnectDialog(action: IndexAction): ActionsDialog? =
@@ -288,8 +288,9 @@ internal fun IndexActionsSection(
     reminderDestinationProviders: List<IntegrationProvider>,
     availableNoteProviders: List<IntegrationProvider>,
     availableReminderProviders: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid>,
+    lockerPlugins: Set<Uuid>,
     storePlugins: List<StorePlugin>,
+    pluginsEnabled: Boolean,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
     onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
     onSetHttpServerEnabled: (server: HttpMcpServerEntity, enabled: Boolean) -> Unit,
@@ -307,6 +308,8 @@ internal fun IndexActionsSection(
     onOpenPluginPage: (uuid: Uuid) -> Unit,
     onOpenBeeperContacts: () -> Unit,
     onGetMoreActions: () -> Unit,
+    /** Null where the user can't browse plugins yet, e.g. onboarding; a hint is shown instead. */
+    onGetMorePlugins: (() -> Unit)?,
     onProvidersChanged: () -> Unit,
     showHeader: Boolean = true,
 ) {
@@ -404,7 +407,7 @@ internal fun IndexActionsSection(
         plugins.forEach { plugin ->
             PluginRow(
                 plugin = plugin,
-                onConfigure = if (plugin.pluginUuid in configurablePlugins) {
+                onConfigure = if (plugin.pluginUuid in lockerPlugins) {
                     { onOpenPluginPage(plugin.pluginUuid) }
                 } else {
                     null
@@ -430,6 +433,23 @@ internal fun IndexActionsSection(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         // The Actions store is future expansion and ships disabled.
         // GetMoreActionsRow(onClick = onGetMoreActions)
+        if (pluginsEnabled && onGetMorePlugins != null) {
+            SectionActionRow(
+                icon = Icons.Default.Power,
+                title = "Add plugin integration",
+                subtitle = "Browse plugins in the store",
+                enabled = true,
+                onClick = onGetMorePlugins,
+            )
+        } else if (pluginsEnabled) {
+            SectionActionRow(
+                icon = Icons.Default.Power,
+                title = "Add plugin integration",
+                subtitle = "You can add plugins from settings later",
+                enabled = false,
+                onClick = {},
+            )
+        }
         SectionActionRow(
             icon = Icons.Default.Dns,
             title = "Add MCP server",
@@ -459,8 +479,10 @@ internal fun IndexActionsSection(
         ActionsSheet.NoteDestination -> DestinationSheet(
             icon = Icons.Default.EditNote,
             title = "Where notes save",
-            options = noteDestOptions(noteDestinationProviders, availableNoteProviders, configurablePlugins),
+            options = noteDestOptions(noteDestinationProviders, availableNoteProviders, lockerPlugins),
             storePlugins = storeDestOptions(storePlugins, IntegrationSupport.Note),
+            pluginsEnabled = pluginsEnabled,
+            onGetMore = onGetMorePlugins,
             selected = noteProvider,
             onSelect = onSelectNoteProvider,
             onConnect = { provider ->
@@ -485,8 +507,10 @@ internal fun IndexActionsSection(
         ActionsSheet.ReminderDestination -> DestinationSheet(
             icon = Icons.Default.Checklist,
             title = "Where reminders save",
-            options = reminderDestOptions(reminderDestinationProviders, availableReminderProviders, configurablePlugins),
+            options = reminderDestOptions(reminderDestinationProviders, availableReminderProviders, lockerPlugins),
             storePlugins = storeDestOptions(storePlugins, IntegrationSupport.Reminder),
+            pluginsEnabled = pluginsEnabled,
+            onGetMore = onGetMorePlugins,
             selected = reminderProvider,
             onSelect = onSelectReminderProvider,
             onConnect = { provider ->
@@ -1109,6 +1133,8 @@ private fun DestinationSheet(
     title: String,
     options: List<DestOption>,
     storePlugins: List<StorePlugin>,
+    pluginsEnabled: Boolean,
+    onGetMore: (() -> Unit)?,
     selected: IntegrationProvider,
     onSelect: (IntegrationProvider) -> Unit,
     onConnect: (IntegrationProvider) -> Unit,
@@ -1117,8 +1143,12 @@ private fun DestinationSheet(
     onConfigure: (IntegrationProvider) -> Unit = {},
 ) {
     val colors = IndexTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
-        Column(modifier = Modifier.padding(bottom = 28.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.sheetSurface,
+    ) {
+        Column {
             Row(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1183,8 +1213,35 @@ private fun DestinationSheet(
                     trailing = { TextButton(onClick = install) { Text("Connect") } },
                 )
             }
+            if (pluginsEnabled && onGetMore != null) {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        onGetMore()
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text("Get more")
+                }
+            } else if (pluginsEnabled) {
+                AddMoreLaterHint(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun AddMoreLaterHint(modifier: Modifier = Modifier) {
+    Text(
+        "You can add more from Settings later",
+        fontSize = 13.sp,
+        color = IndexTheme.colors.onSurfaceVariant,
+        modifier = modifier,
+    )
 }
 
 @Composable

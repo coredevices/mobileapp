@@ -39,6 +39,8 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.config.ConfigPageBridge
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.config.ConfigScriptIds
+import coredevices.pebble.config.PluginConfigFileAccess
 import coredevices.pebble.config.performWebSignIn
 import coredevices.pebble.config.webSignInSupported
 import coredevices.util.isDebugBuild
@@ -155,6 +157,17 @@ fun WatchappSettingsScreen(
             bridge?.webSignIn = if (ctx != null && webSignInSupported() &&
                 webSignInApp?.mayUseWebSignIn(debugBuild) == true) {
                 { request -> performWebSignIn(ctx, request) }
+            } else {
+                null
+            }
+        }
+        LaunchedEffect(bridge, session, uiContext, webViewUuid) {
+            val ctx = uiContext
+            val pluginUuid = webViewUuid
+            // Only a plugin can use a granted file, so a page with none behind it gets no picker.
+            bridge?.fileAccess = if (ctx != null && pluginUuid != null &&
+                session?.scripts?.containsKey(ConfigScriptIds.PLUGIN) == true) {
+                PluginConfigFileAccess(libPebble, pluginUuid, ctx)
             } else {
                 null
             }

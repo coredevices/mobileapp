@@ -96,7 +96,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 49,
+    version = 50,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -137,6 +137,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 46, to = 47),
         AutoMigration(from = 47, to = 48, spec = AutoMigration48::class),
         AutoMigration(from = 48, to = 49),
+        AutoMigration(from = 49, to = 50),
     ],
     exportSchema = true,
 )

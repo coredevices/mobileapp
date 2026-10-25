@@ -31,6 +31,7 @@ import io.rebble.libpebblecommon.notification.NotificationListenerConnection
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.plugin.PhoneBatteryMonitor
+import io.rebble.libpebblecommon.plugin.PhoneSoundPlayer
 import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
 import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.util.SystemGeolocation
@@ -66,6 +67,7 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemContacts) bind SystemContacts::class
     singleOf(::IosLegacyPhoneReceiver) bind LegacyPhoneReceiver::class
     singleOf(::PhoneBatteryMonitor)
+    singleOf(::PhoneSoundPlayer)
     singleOf(::PhoneNetworkMonitor)
     // No media session equivalent on iOS.
     single { PlatformPlugins(emptySet()) }

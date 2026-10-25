@@ -227,6 +227,7 @@ kotlin {
                 implementation(libs.settings.test)
                 implementation(libs.coroutines.test)
                 implementation(libs.ktor.client.mock)
+                implementation(libs.firebase.common.internal)
             }
         }
 

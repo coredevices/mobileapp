@@ -93,7 +93,7 @@ class ReadSourceToolTest {
         assertEquals(listOf("weather" to "location"), plugin.observed)
         assertEquals(listOf(home, work), decodeInstances(result.resultString))
         val semantic = assertIs<SemanticResult.SupportingData>(result.semanticResult)
-        assertEquals("Read weather/location", semantic.summary)
+        assertEquals("Read weather/location from Fake", semantic.summary)
     }
 
     @Test
@@ -105,7 +105,7 @@ class ReadSourceToolTest {
 
         assertEquals(listOf(work), decodeInstances(result.resultString))
         assertEquals(
-            "Read weather/location/work",
+            "Read weather/location/work from Fake",
             assertIs<SemanticResult.SupportingData>(result.semanticResult).summary,
         )
     }

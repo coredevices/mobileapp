@@ -20,7 +20,6 @@ import coredevices.ring.ui.screens.settings.nothingRoutesToIndexAgent
 import coredevices.util.Platform
 import coredevices.util.flow.mapState
 import coredevices.util.isAndroid
-import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,7 +30,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -44,7 +42,7 @@ import kotlin.uuid.Uuid
 
 /**
  * State for the Index Agent actions section: built-in actions, plugins, MCP servers and where
- * notes and reminders are saved. The locker is reached through [lockerUuids] / [lockerApp] so the
+ * notes and reminders are saved. The locker is reached through [lockerUuids] so the
  * view model does not need the whole of LibPebble.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -56,9 +54,8 @@ class IndexActionsViewModel(
     private val preferences: Preferences,
     gestureRouting: GestureRoutingPreferences,
     platform: Platform,
-    private val pluginsEnabled: StateFlow<Boolean>,
+    val pluginsEnabled: StateFlow<Boolean>,
     lockerUuids: Flow<List<Uuid>>,
-    private val lockerApp: (Uuid) -> Flow<LockerWrapper?>,
 ) : ViewModel() {
     val agentReachable: StateFlow<Boolean> = gestureRouting.routes.mapState { !nothingRoutesToIndexAgent(it) }
     val contactsDialogSupported: Boolean = platform.isAndroid
@@ -129,9 +126,9 @@ class IndexActionsViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    /** Plugin destinations whose pbw declares a settings page. */
-    val configurablePlugins = providerRefresh
-        .map { configurablePluginUuids() }
+    /** Plugins with a locker page; built-in plugins have none to configure from. */
+    val lockerPlugins: StateFlow<Set<Uuid>> = lockerUuids
+        .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
 
     fun setActionEnabled(name: String, enabled: Boolean) {
@@ -213,9 +210,4 @@ class IndexActionsViewModel(
             pending.value = null
         }
     }
-
-    private suspend fun configurablePluginUuids(): Set<Uuid> = indexActionsRepository.plugins.first()
-        .filter { (lockerApp(it.pluginUuid).first() as? LockerWrapper.NormalApp)?.configurable == true }
-        .map { it.pluginUuid }
-        .toSet()
 }

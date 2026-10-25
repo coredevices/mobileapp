@@ -63,6 +63,7 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
+import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.coroutines.cancellation.CancellationException
@@ -560,7 +561,20 @@ class RingSync(
                                                             reason = transferStatus.exception?.message,
                                                             recoverable = false,
                                                         )
-                                                        sendBugReportPrompt()
+                                                        sendBugReportPrompt(
+                                                            context = Json.encodeToString(
+                                                                mapOf(
+                                                                    "comment" to "Irrecoverable data",
+                                                                    "exceptionType" to transferStatus.exception?.let {
+                                                                        it::class.simpleName
+                                                                    },
+                                                                    "exceptionMessage" to transferStatus.exception?.message,
+                                                                    "serialNumber" to satelliteSerial,
+                                                                    "rssi" to transferStatus.satellite.lastAdvertisement?.rssi?.roundToInt()?.toString()
+                                                                )
+                                                            ),
+                                                            reportText = "App reported transfer failed"
+                                                        )
                                                     }
 
                                                     is TransferStatus.TransferInProgress -> {
@@ -785,7 +799,17 @@ class RingSync(
                                                                                 RingTransferStatus.Failed
                                                                             )
                                                                         }
-                                                                        sendBugReportPrompt()
+                                                                        sendBugReportPrompt(
+                                                                            context = Json.encodeToString(
+                                                                                mapOf(
+                                                                                    "comment" to "Saving/queueing failed",
+                                                                                    "exceptionType" to e::class.simpleName,
+                                                                                    "exceptionMessage" to e.message,
+                                                                                    "serialNumber" to satelliteSerial,
+                                                                                )
+                                                                            ),
+                                                                            reportText = "App reported error queueing transfer"
+                                                                        )
                                                                     }
                                                                 }
                                                             }
@@ -801,7 +825,16 @@ class RingSync(
                                             } catch (e: Exception) {
                                                 if (e is CancellationException) throw e
                                                 logger.e(e) { "Error during transfer: ${e.message}" }
-                                                sendBugReportPrompt()
+                                                sendBugReportPrompt(
+                                                    context = Json.encodeToString(
+                                                        mapOf(
+                                                            "comment" to "Uncaught error during transfer",
+                                                            "exceptionType" to e::class.simpleName,
+                                                            "exceptionMessage" to e.message,
+                                                        )
+                                                    ),
+                                                    reportText = "App reported error during transfer"
+                                                )
                                             }
                                         }
 
@@ -826,7 +859,15 @@ class RingSync(
                                                                 logger.w {
                                                                     "Marked ${pending.size} transfers as failed due to satellite entering failsafe mode during active transfer. Transfer range was ${transferRange!!.first} to ${transferRange!!.last}"
                                                                 }
-                                                                sendBugReportPrompt()
+                                                                sendBugReportPrompt(
+                                                                    context = Json.encodeToString(
+                                                                        mapOf(
+                                                                            "comment" to "Failsafe entered during active transfer - ${pending.size} dropped",
+                                                                            "serialNumber" to (satelliteStatus.satellite.state.value?.programmedSerialNumber ?: satelliteStatus.satellite.state.value?.serialNumber),
+                                                                        )
+                                                                    ),
+                                                                    reportText = "Device entered failsafe during transfer"
+                                                                )
                                                             }
                                                         }
                                                         transferRange = null
@@ -920,13 +961,18 @@ class RingSync(
         }
     }
 
-    suspend fun sendBugReportPrompt() {
+    suspend fun sendBugReportPrompt(
+        context: String,
+        reportText: String,
+    ) {
         indexNotificationManager.sendBugReportPrompt(
             "Index ran into a problem",
             """
                 We detected a data transfer error with a recent recording from your Index 01.
                 Sorry about that! Please help us improve by sending a bug report.
             """.trimIndent(),
+            context = context,
+            reportText = reportText
         )
     }
 

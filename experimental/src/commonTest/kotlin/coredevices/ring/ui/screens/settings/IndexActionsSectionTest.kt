@@ -19,6 +19,7 @@ import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.visibleDestinations
 import coredevices.ring.agent.pebble_plugin.FakePlugin
 import coredevices.ring.agent.pebble_plugin.FakePlugins
+import coredevices.ring.agent.pebble_plugin.PblPluginActionAgentIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginActionNoteIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginActionReminderIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
@@ -178,7 +179,7 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `plugin destinations are configurable once connected and they have a config page`() {
+    fun `plugin destinations are configurable once connected and in the locker`() {
         val plugin = PblPluginIntegrationProvider.forPlugin(
             FakePlugin(
                 actions = listOf(
@@ -193,13 +194,15 @@ class IndexActionsSectionTest {
             ).metadata,
             FakePlugins(),
         )!!
-        val withPage = setOf(plugin.pluginUuid)
+        val inLocker = setOf(plugin.pluginUuid)
 
-        assertTrue(noteDestOptions(listOf(plugin), listOf(plugin), withPage).single().configurable)
-        assertTrue(reminderDestOptions(listOf(plugin), listOf(plugin), withPage).single().configurable)
+        assertTrue(noteDestOptions(listOf(plugin), listOf(plugin), inLocker).single().configurable)
+        assertTrue(reminderDestOptions(listOf(plugin), listOf(plugin), inLocker).single().configurable)
+        // A built-in plugin has no locker page to open.
         assertFalse(noteDestOptions(listOf(plugin), listOf(plugin)).single().configurable)
-        assertFalse(noteDestOptions(listOf(plugin), emptyList(), withPage).single().configurable)
-        assertFalse(reminderDestOptions(listOf(GoogleTasks), listOf(GoogleTasks), withPage).single().configurable)
+        assertFalse(reminderDestOptions(listOf(plugin), listOf(plugin)).single().configurable)
+        assertFalse(noteDestOptions(listOf(plugin), emptyList(), inLocker).single().configurable)
+        assertFalse(reminderDestOptions(listOf(GoogleTasks), listOf(GoogleTasks), inLocker).single().configurable)
     }
 
     private fun thingsPlugin(vararg kinds: IntegrationSupport) = FakePlugin(
@@ -208,6 +211,7 @@ class IndexActionsSectionTest {
                 name = when (it) {
                     IntegrationSupport.Note -> PblPluginActionNoteIntegration.ACTION_NAME
                     IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.ACTION_NAME
+                    IntegrationSupport.Agent -> PblPluginActionAgentIntegration.ACTION_NAME
                 }
             )
         },
@@ -217,6 +221,7 @@ class IndexActionsSectionTest {
                 category = when (it) {
                     IntegrationSupport.Note -> PblPluginActionNoteIntegration.CATEGORY
                     IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.CATEGORY
+                    IntegrationSupport.Agent -> PblPluginActionAgentIntegration.CATEGORY
                 },
                 items = listOf("configured"),
             )
@@ -224,11 +229,11 @@ class IndexActionsSectionTest {
     )
 
     @Test
-    fun `with plugins on only the built-in feed, Obsidian and plugins are offered`() {
+    fun `with plugins on only the built-in feed and plugins are offered`() {
         val plugin = PblPluginIntegrationProvider.forPlugin(thingsPlugin(IntegrationSupport.Note).metadata, FakePlugins())!!
         val all = listOf(Index, Notion, Obsidian, GoogleTasks, IosReminders, Tasker, plugin)
 
-        assertEquals(listOf(Index, Obsidian, plugin), all.visibleDestinations(pluginsEnabled = true))
+        assertEquals(listOf(Index, plugin), all.visibleDestinations(pluginsEnabled = true))
         assertEquals(all, all.visibleDestinations(pluginsEnabled = false))
     }
 

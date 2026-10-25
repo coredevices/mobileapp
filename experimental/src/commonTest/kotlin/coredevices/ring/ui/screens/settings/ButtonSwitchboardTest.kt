@@ -1,5 +1,7 @@
 package coredevices.ring.ui.screens.settings
 
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureKind
@@ -48,6 +50,48 @@ class ButtonSwitchboardTest {
     }
 
     @Test
+    fun agentPluginsAreOfferedAfterTheIndexAgents() {
+        val claude = GestureDestination.AgentPlugin("plugin:claude")
+        val codex = GestureDestination.AgentPlugin("plugin:codex")
+
+        assertEquals(
+            listOf(
+                GestureDestination.IndexAgent,
+                GestureDestination.LocalAgent,
+                claude,
+                codex,
+                GestureDestination.WebSearch,
+                GestureDestination.WebhookOnly,
+                GestureDestination.Nothing,
+            ),
+            destinationsFor(GestureKind.Recording, listOf(claude, codex)),
+        )
+        assertEquals(destinationsFor(GestureKind.Music), destinationsFor(GestureKind.Music, listOf(claude)))
+        RingGesture.entries.filter { it.kind == GestureKind.Recording }.forEach {
+            assertTrue(it.accepts(claude))
+            assertTrue(gestureSheetStaysOpenFor(it, claude))
+        }
+    }
+
+    @Test
+    fun agentPluginOptionsCarryTheirProviderTitles() {
+        val claude = FakeAgentProvider("plugin:claude", "Claude")
+        val options = listOf(AgentPluginOption(claude, connected = false))
+
+        assertEquals(GestureDestination.AgentPlugin("plugin:claude"), options.single().destination)
+        assertEquals(mapOf("plugin:claude" to "Claude"), options.titles())
+    }
+
+    @Test
+    fun agentPluginTilesAreLabelledByTheirProvider() {
+        val claude = GestureDestination.AgentPlugin("plugin:claude")
+
+        assertEquals("Claude", claude.tileLabel(mapOf("plugin:claude" to "Claude")))
+        assertEquals("Unavailable agent", claude.tileLabel(emptyMap()))
+        assertEquals("Index agent", GestureDestination.IndexAgent.tileLabel(mapOf("plugin:claude" to "Claude")))
+    }
+
+    @Test
     fun copyRowFollowsAnActiveWebhookConfig() {
         assertFalse(IndexWebhookConfig().isActive)
         assertFalse(IndexWebhookConfig(url = "https://example.com/hook").isActive)
@@ -93,5 +137,9 @@ class ButtonSwitchboardTest {
         GestureKind.entries
             .flatMap { destinationsFor(it) }
             .forEach { assertTrue(it.tileLabel.isNotBlank(), "$it has no tile label") }
+    }
+
+    private class FakeAgentProvider(override val id: String, override val title: String) : IntegrationProvider {
+        override val supports = setOf(IntegrationSupport.Agent)
     }
 }

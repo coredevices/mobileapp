@@ -8,10 +8,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
+import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
 import coredevices.ring.external.indexwebhook.IndexWebhookSheet
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.ring.ui.viewmodel.IndexActionsViewModel
 import coredevices.ring.ui.viewmodel.RingButtonViewModel
+import io.rebble.libpebblecommon.locker.AppType
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -21,11 +23,15 @@ import org.koin.compose.viewmodel.koinViewModel
  * also render [IndexWebhookSheetHost], or the webhook rows here open nothing.
  */
 @Composable
-fun RingButtonSection(viewModel: RingButtonViewModel = koinViewModel()) {
+fun RingButtonSection(coreNav: CoreNav, viewModel: RingButtonViewModel = koinViewModel()) {
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val gestureRoutes by viewModel.gestureRoutes.collectAsState()
     val webhookConfigs by viewModel.webhookConfigs.collectAsState()
+    val agentProviders by viewModel.agentProviders.collectAsState()
+    val connectedAgentProviders by viewModel.connectedAgentProviders.collectAsState()
+    val agentPlugins = agentProviders.map { AgentPluginOption(it, connected = it in connectedAgentProviders) }
 
+    LaunchedEffect(Unit) { viewModel.refreshAgentDestinations() }
     ButtonSwitchboard(
         routes = gestureRoutes,
         musicEnabled = viewModel.musicEnabled,
@@ -33,6 +39,12 @@ fun RingButtonSection(viewModel: RingButtonViewModel = koinViewModel()) {
         onSetRoute = viewModel::setGestureRoute,
         onOpenWebhookSettings = { webhookViewModel.openDialog(it) },
         onDisableWebhook = viewModel::disableWebhook,
+        agentPlugins = agentPlugins,
+        onConnectAgentPlugin = { provider ->
+            if (provider is PblPluginIntegrationProvider) {
+                coreNav.navigateTo(CommonRoutes.WatchappSettingsRoute(uuid = provider.pluginUuid.toString(), title = provider.title))
+            }
+        },
     )
 }
 
@@ -50,6 +62,7 @@ fun IndexWebhookSheetHost() {
 fun IndexAgentActionsSection(
     coreNav: CoreNav,
     showHeader: Boolean = true,
+    canBrowsePlugins: Boolean = true,
     viewModel: IndexActionsViewModel = koinViewModel(),
 ) {
     val agentReachable by viewModel.agentReachable.collectAsState()
@@ -65,8 +78,9 @@ fun IndexAgentActionsSection(
     val reminderDestinationProviders by viewModel.reminderDestinationProviders.collectAsState()
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
-    val configurablePlugins by viewModel.configurablePlugins.collectAsState()
+    val lockerPlugins by viewModel.lockerPlugins.collectAsState()
     val storePlugins by viewModel.storePlugins.collectAsState()
+    val pluginsEnabled by viewModel.pluginsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
@@ -88,8 +102,9 @@ fun IndexAgentActionsSection(
         reminderDestinationProviders = reminderDestinationProviders,
         availableNoteProviders = availableNoteProviders,
         availableReminderProviders = availableReminderProviders,
-        configurablePlugins = configurablePlugins,
+        lockerPlugins = lockerPlugins,
         storePlugins = storePlugins,
+        pluginsEnabled = pluginsEnabled,
         onSetActionEnabled = viewModel::setActionEnabled,
         onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,
         onSetHttpServerEnabled = viewModel::setHttpServerEnabled,
@@ -109,6 +124,8 @@ fun IndexAgentActionsSection(
         onOpenPluginPage = { uuid -> coreNav.navigateTo(CommonRoutes.LockerAppRoute(uuid = uuid.toString())) },
         onOpenBeeperContacts = viewModel::showContactsDialog,
         onGetMoreActions = {},
+        onGetMorePlugins = { coreNav.navigateTo(CommonRoutes.LockerTabRoute(AppType.Plugin)) }
+            .takeIf { canBrowsePlugins },
         onProvidersChanged = viewModel::refreshAvailableProviders,
     )
 }

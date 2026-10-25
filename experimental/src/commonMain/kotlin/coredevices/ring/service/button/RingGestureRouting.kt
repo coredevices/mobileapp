@@ -34,6 +34,9 @@ sealed interface GestureDestination {
     data object LocalAgent : Recording
     data object WebSearch : Recording
     data object WebhookOnly : Recording
+    /** An installed plugin offering `send_to_agent`; [providerId] resolves through
+     *  [coredevices.ring.agent.integrations.providers.IntegrationProviderRepository]. */
+    data class AgentPlugin(val providerId: String) : Recording
     data object Nothing : Music, Recording
 }
 

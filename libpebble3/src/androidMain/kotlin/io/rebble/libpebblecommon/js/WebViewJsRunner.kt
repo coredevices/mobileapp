@@ -494,6 +494,13 @@ class WebViewJsRunner(
         return true
     }
 
+    override suspend fun signalAudioStream(json: String) {
+        readyState.first { it }
+        withContext(Dispatchers.Main) {
+            webView?.evaluateJavascript("window.signalAudioStream(${Json.encodeToString(json)})", null)
+        }
+    }
+
     override suspend fun signalShowConfiguration() {
         readyState.first { it }
         withContext(Dispatchers.Main) {

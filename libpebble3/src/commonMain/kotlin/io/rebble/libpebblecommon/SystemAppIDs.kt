@@ -26,4 +26,6 @@ object SystemAppIDs {
     val BACKLIGHT_UUID = Uuid.parse("d0f12e6c-97eb-2287-a2f5-115dfaa1d168")
     val MOTION_BACKLIGHT_UUID = Uuid.parse("d4f7be63-97e6-4952-b265-dd4bce11c155")
     val AIRPLANE_MODE_UUID = Uuid.parse("88c28c12-7f81-42db-aaa6-14ccef6f27e5")
+    val TOUCH_TOGGLE_UUID = Uuid.parse("5cc5a4e8-150d-4ec3-9afc-965e3fdec3c3")
+    val CLEAR_NOTIFICATIONS_UUID = Uuid.parse("d9c0d758-54bd-45b1-99ac-2a3a889350c9")
 }

@@ -32,6 +32,7 @@ Pebble.registerConfigHandler(function (message, respond) {
 
 Pebble.registerActionHandler(function (request, respond) {
   if (request.action !== 'clear_message') {
+    console.error('Unsupported action: ' + request.action);
     respond.error('INVALID_REQUEST', 'Unsupported demo action.');
     return;
   }

@@ -376,6 +376,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsSettingsSync(23),
     SupportsWeatherDbV4(24),
     SupportsUnknownTimelineAttributes(25),
+    SupportsAppPermissions(27),
     ;
 
     companion object {

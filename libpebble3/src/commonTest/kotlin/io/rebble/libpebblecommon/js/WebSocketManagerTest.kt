@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.http.Headers
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.awaitCancellation
@@ -36,7 +37,7 @@ class WebSocketManagerTest {
         val evals = mutableListOf<String>()
         val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), nothing)
 
-        assertEquals(1, manager.dispatch("createInstance", listOf("wss://stream.example.com/", "")))
+        assertEquals(1, manager.dispatch("createInstance", listOf("wss://stream.example.com/", "", """{"Authorization":"Bearer t"}""")))
         awaitSockets()
 
         assertFalse(dialled)
@@ -54,6 +55,44 @@ class WebSocketManagerTest {
         awaitSockets()
 
         assertEquals(listOf("$INSTANCE._onError()", ABNORMAL_CLOSE), evals)
+    }
+
+    @Test
+    fun handshakeCarriesTheRequestedHeadersButNotUpgradeOnes() = runTest {
+        var sent: Headers? = null
+        val client = HttpClient(MockEngine { sent = it.headers; respond("") }) { install(WebSockets) }
+        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet)
+
+        manager.dispatch(
+            "createInstance",
+            listOf(
+                "wss://stream.example.com/",
+                "chat",
+                """{"Authorization":"Bearer t","Host":"evil.example","Connection":"close","Upgrade":"h2c",""" +
+                    """"Sec-WebSocket-Key":"x","Sec-WebSocket-Protocol":"other"}""",
+            ),
+        )
+        awaitSockets()
+
+        val headers = sent!!
+        assertEquals(listOf("Bearer t"), headers.getAll("Authorization"))
+        assertFalse(headers.getAll("Host").orEmpty().contains("evil.example"))
+        assertFalse(headers.getAll("Connection").orEmpty().contains("close"))
+        assertFalse(headers.getAll("Upgrade").orEmpty().contains("h2c"))
+        assertFalse(headers.getAll("Sec-WebSocket-Key").orEmpty().contains("x"))
+        assertEquals(listOf("chat"), headers.getAll("Sec-WebSocket-Protocol"))
+    }
+
+    @Test
+    fun malformedHeadersAreIgnored() = runTest {
+        var sent: Headers? = null
+        val client = HttpClient(MockEngine { sent = it.headers; respond("") }) { install(WebSockets) }
+        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet)
+
+        manager.dispatch("createInstance", listOf("wss://stream.example.com/", "", "not json"))
+        awaitSockets()
+
+        assertEquals(null, sent?.get("Authorization"))
     }
 
     @Test

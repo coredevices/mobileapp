@@ -9,6 +9,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
@@ -160,6 +161,16 @@ class XMLHTTPRequestManager(
             headers[header] = value
         }
 
+        /**
+         * Checks network access against both the host in the URL and the host in the headers
+         */
+        private suspend fun checkAccess(): PluginNetworkVerdict {
+            val verdict = networkAccess.check(url!!, wait = false)
+            if (verdict is PluginNetworkVerdict.Denied) return verdict
+            val hostUrl = hostHeaderUrl(url!!, headers) ?: return verdict
+            return networkAccess.check(hostUrl, wait = false)
+        }
+
         private fun dispatchError() {
             changeReadyState(DONE)
             dispatchEvent(XHREvent.Error)
@@ -185,7 +196,7 @@ class XMLHTTPRequestManager(
                     }
                     return
                 }
-                val verdict = networkAccess.check(url!!, wait = false)
+                val verdict = checkAccess()
                 if (verdict is PluginNetworkVerdict.Denied) {
                     logger.w { "$appUuid blocked: ${verdict.reason}" }
                     dispatchError()
@@ -283,6 +294,16 @@ class XMLHTTPRequestManager(
         instances.values.forEach { it.requestJob?.cancel("Closing") }
         instances.clear()
     }
+}
+
+/** Internally  */
+internal fun hostHeaderUrl(url: String, headers: Map<String, Any>): String? {
+    val host = headers.entries
+        .firstOrNull { it.key.equals(HttpHeaders.Host, ignoreCase = true) }
+        ?.value?.toString()?.trim()
+        ?.ifEmpty { null }
+        ?: return null
+    return "${url.substringBefore("://")}://$host/"
 }
 
 enum class XHREvent {

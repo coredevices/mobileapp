@@ -168,7 +168,7 @@ fun registerAppBuild(name: String) =
     }
 
 // spotify is intentionally not built/bundled yet — no prod dev account to sign in against.
-val testApps = listOf("plugin-test", "weather-face", "met-weather", "hue", "stocks", "notion", "ticktick", "todoist")
+val testApps = listOf("plugin-test", "find-my-phone", "weather-face", "met-weather", "hue", "stocks", "notion", "ticktick", "todoist")
 val testAppPbws = testApps.map { registerAppBuild(it) }
 
 // waf self-extracts its library to ~/.waf3-* on first run; two concurrent waf processes

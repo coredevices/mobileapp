@@ -350,6 +350,7 @@ async function http(method, path, token, body) {
       error: json && json.message ? String(json.message) : ('Notion returned HTTP ' + response.status + '.'),
     };
   } catch (error) {
+    console.error('Notion ' + method + ' ' + path + ' failed: ' + error);
     return { ok: false, status: 0, json: null, error: 'Could not reach Notion.' };
   }
 }
@@ -519,6 +520,7 @@ async function appendParagraph(token, pageId, body) {
 }
 
 function pluginError(result) {
+  console.error('Notion request failed (HTTP ' + result.status + '): ' + result.error);
   if (result.status === 401 || result.status === 403) {
     return { code: 'AUTH_REQUIRED', message: result.error || 'Notion authorization failed.' };
   }

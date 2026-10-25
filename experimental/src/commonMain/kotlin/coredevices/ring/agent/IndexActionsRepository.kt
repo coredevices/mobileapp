@@ -8,7 +8,9 @@ import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.agent.pebble_plugin.agentActions
 import coredevices.ring.agent.pebble_plugin.agentSources
 import coredevices.ring.agent.pebble_plugin.forAgent
+import coredevices.ring.agent.pebble_plugin.forWatchPaired
 import coredevices.ring.agent.pebble_plugin.offers
+import coredevices.ring.agent.pebble_plugin.withGrant
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,18 +71,27 @@ class IndexActionsRepository(
     private val installedPlugins: () -> List<PluginMetadata>,
     private val disabledPlugins: (PluginGrant) -> Flow<Set<Uuid>>,
     private val persistPluginGrantEnabled: suspend (pluginUuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
+    private val watchPaired: Flow<Boolean>,
 ) {
     // Plugins register without a flow to observe, so callers poke this when they may have changed.
     private val pluginsVersion = MutableStateFlow(0)
 
+    /** Installed plugins with something for the agent, less the watch-bound ones while no watch is paired. */
+    private val agentPlugins: Flow<List<PluginMetadata>> =
+        combine(watchPaired, pluginsVersion) { paired, _ -> installedPlugins().forAgent().forWatchPaired(paired) }
+
+    /** The plugins the agent may currently use for [grant]. */
+    fun grantedPlugins(grant: PluginGrant): Flow<List<PluginMetadata>> =
+        combine(agentPlugins, disabledPlugins(grant)) { plugins, disabled -> plugins.withGrant(grant, disabled) }
+
     val plugins: Flow<List<IndexPlugin>> =
         combine(
+            agentPlugins,
             disabledPlugins(PluginGrant.Actions),
             disabledPlugins(PluginGrant.Sources),
             localAgentOnly,
-            pluginsVersion,
-        ) { disabledActions, disabledSources, localOnly, _ ->
-            installedPlugins().forAgent().map {
+        ) { plugins, disabledActions, disabledSources, localOnly ->
+            plugins.map {
                 IndexPlugin(
                     pluginUuid = it.pluginUuid,
                     title = it.name,

@@ -110,6 +110,7 @@ kotlin {
             implementation(libs.sqlite.bundled)
             api(libs.kotlinx.io.core)
             implementation(libs.kotlinx.io.okio)
+            implementation(libs.coredevices.speex)
             implementation(libs.okio)
             implementation(libs.kable)
             implementation(libs.kmpio)
@@ -131,10 +132,12 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.coroutines.test)
             implementation(libs.ktor.client.mock)
+            implementation(libs.settings.test)
         }
 
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
+            implementation(libs.androidx.documentfile)
             implementation(libs.pebblekit)
         }
 
@@ -204,4 +207,3 @@ dependencies {
         }
     }
 }*/
-

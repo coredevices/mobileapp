@@ -108,7 +108,7 @@ class ReadSourceTool(
                 )
             ),
             semanticResult = SemanticResult.SupportingData(
-                "Read ${args.category}/${args.item}${args.instance?.let { "/$it" } ?: ""}"
+                "Read ${args.category}/${args.item}${args.instance?.let { "/$it" } ?: ""} from ${plugin.name}"
             )
         )
     }

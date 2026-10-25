@@ -148,6 +148,7 @@ androidx-navigation-compose = { group = "org.jetbrains.androidx.navigation", nam
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
 firebase-auth = { group = "dev.gitlive", name = "firebase-auth", version.ref = "firebase-kotlin" }
 firebase-firestore = { group = "dev.gitlive", name = "firebase-firestore", version.ref = "firebase-kotlin" }
+firebase-common-internal = { group = "dev.gitlive", name = "firebase-common-internal", version.ref = "firebase-kotlin" }
 firebase-crashlytics = { group = "dev.gitlive", name = "firebase-crashlytics", version.ref = "firebase-kotlin" }
 firebase-crashlytics-ndk = { group = "com.google.firebase", name = "firebase-crashlytics-ndk" }
 firebase-storage = { group = "dev.gitlive", name = "firebase-storage", version.ref = "firebase-kotlin" }

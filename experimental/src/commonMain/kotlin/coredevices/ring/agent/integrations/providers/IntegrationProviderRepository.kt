@@ -1,7 +1,9 @@
 package coredevices.ring.agent.integrations.providers
 
 import co.touchlab.kermit.Logger
+import coredevices.ring.agent.integrations.AgentIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
+import coredevices.ring.agent.integrations.DelegatingAgentIntegration
 import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.DelegatingReminderIntegration
 import coredevices.ring.agent.integrations.NoteIntegration
@@ -13,12 +15,15 @@ import coredevices.util.Platform
 import coredevices.util.flow.mapState
 import coredevices.util.isAndroid
 import io.rebble.libpebblecommon.connection.Plugins
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
- * The single place to find note/reminder providers: the built-in ones plus any installed plugin
- * that declares the matching actions. Owns which provider is selected for notes and for reminders,
- * and hands tools the integration to write through.
+ * The single place to find note/reminder/agent providers: the built-in ones plus any installed
+ * plugin that declares the matching actions. Owns which provider is selected for notes and for
+ * reminders, and hands tools the integration to write through.
  */
 class IntegrationProviderRepository(
     private val preferences: Preferences,
@@ -39,6 +44,10 @@ class IntegrationProviderRepository(
     val selectedReminderProvider: StateFlow<IntegrationProvider> =
         preferences.reminderProviderId.mapState { resolve(it, IntegrationSupport.Reminder) }
 
+    private val _integrationUsed = MutableSharedFlow<IntegrationProvider>(extraBufferCapacity = 16)
+    /** The provider each time an integration is handed out to write through. */
+    val integrationUsed: SharedFlow<IntegrationProvider> = _integrationUsed.asSharedFlow()
+
     /** Every provider usable on this platform, connected or not. Plugins come and go, so not cached. */
     fun allProviders(): List<IntegrationProvider> =
         builtIn + plugins.getAllPlugins().mapNotNull { PblPluginIntegrationProvider.forPlugin(it, plugins) }
@@ -51,6 +60,28 @@ class IntegrationProviderRepository(
         providers(support).filter { it.isAuthorized(support) }
 
     fun findProvider(id: String): IntegrationProvider? = allProviders().firstOrNull { it.id == id }
+
+    /** The provider named [destination], or the selected one when null. Null for an unknown name. */
+    fun destinationProvider(destination: String?, support: IntegrationSupport): IntegrationProvider? =
+        if (destination == null) selected(support) else findProviderByName(destination, support)
+
+    /** The provider for [support] the user would call [name], ignoring case and spacing. */
+    fun findProviderByName(name: String, support: IntegrationSupport): IntegrationProvider? {
+        val wanted = normalizeProviderName(name)
+        return providers(support).firstOrNull {
+            normalizeProviderName(it.titleFor(support)) == wanted || normalizeProviderName(it.title) == wanted
+        }
+    }
+
+    /**
+     * Connected providers for [support], other than the selected one, that [text] names.
+     */
+    suspend fun mentionedProviders(text: String, support: IntegrationSupport): List<IntegrationProvider> {
+        val selected = selected(support)
+        return providers(support)
+            .filter { it != selected && text.mentionsProviderName(it.titleFor(support)) }
+            .filter { it.isAuthorized(support) }
+    }
 
     fun selectNoteProvider(provider: IntegrationProvider) {
         require(provider.supportsNotes) { "${provider.id} does not support notes" }
@@ -65,6 +96,7 @@ class IntegrationProviderRepository(
     /** The integration tools write notes through, for [provider] or the selected one. */
     fun noteIntegration(provider: IntegrationProvider = selectedNoteProvider.value): NoteIntegration {
         logger.i { "Creating note integration for provider: ${provider.id}" }
+        _integrationUsed.tryEmit(provider)
         val integration = provider.notes()
         return if (provider.storesItemsLocally) {
             integration
@@ -77,6 +109,7 @@ class IntegrationProviderRepository(
         provider: IntegrationProvider = selectedReminderProvider.value,
     ): ReminderIntegration {
         logger.i { "Creating reminder integration for provider: ${provider.id}" }
+        _integrationUsed.tryEmit(provider)
         val integration = provider.reminders()
         return if (provider.storesItemsLocally) {
             integration
@@ -84,6 +117,21 @@ class IntegrationProviderRepository(
             DelegatingReminderIntegration(integration, provider.title, delegatedItems)
         }
     }
+
+    /** The integration tools send agent messages through. Agent providers have no stored selection. */
+    fun agentIntegration(provider: IntegrationProvider): AgentIntegration {
+        logger.i { "Creating agent integration for provider: ${provider.id}" }
+        _integrationUsed.tryEmit(provider)
+        val integration = provider.agent()
+        return if (provider.storesItemsLocally) {
+            integration
+        } else {
+            DelegatingAgentIntegration(integration, provider.title, delegatedItems)
+        }
+    }
+
+    /** The agent plugin a gesture routes to, or null when it is gone or no longer offers it. */
+    fun agentProvider(id: String): IntegrationProvider? = findProvider(id)?.takeIf { it.supportsAgent }
 
     /** Label of the provider a shortcut sends to, or null for [NoteShortcutType.SendToMe]. */
     fun shortcutDestinationTitle(shortcut: NoteShortcutType): String? = when (shortcut) {
@@ -96,6 +144,12 @@ class IntegrationProviderRepository(
 
     private fun resolve(id: String, support: IntegrationSupport): IntegrationProvider =
         findProvider(id)?.takeIf { support in it.supports } ?: defaultProvider
+
+    private fun selected(support: IntegrationSupport): IntegrationProvider? = when (support) {
+        IntegrationSupport.Note -> selectedNoteProvider.value
+        IntegrationSupport.Reminder -> selectedReminderProvider.value
+        IntegrationSupport.Agent -> providers(support).firstOrNull()
+    }
 
     companion object {
         private val logger = Logger.withTag("IntegrationProviderRepository")

@@ -575,10 +575,11 @@ fun StoreApplication.asCommonApp(
         version = latestRelease.version,
         listImageUrl = listImage.values.firstOrNull(),
         screenshotImageUrl = screenshotImages.firstOrNull()?.values?.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 when {
                     // If store doesn't report binary info, mark as compatible
@@ -637,10 +638,11 @@ fun StoreSearchResult.asCommonApp(
         listImageUrl = listImage,
         screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull()
             ?: screenshotImages.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 val platformCompatibility = compatibility.findPlatform(watchType)
                 // Mark as compatible if API doesn't set the field

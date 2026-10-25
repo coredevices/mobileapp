@@ -68,7 +68,8 @@ async function http(method, url, options) {
     var retryAfter = null;
     try { retryAfter = response.headers.get('Retry-After'); } catch (_) { /* unavailable */ }
     return { status: response.status, text: text, json: json, retryAfter: retryAfter };
-  } catch (_) {
+  } catch (e) {
+    console.error('Spotify ' + method + ' ' + url + ' failed: ' + e);
     return { status: 0, text: '', json: null, retryAfter: null };
   }
 }
@@ -351,6 +352,7 @@ function configStatus() {
 function actionError(error, respond) {
   var code = error && error.code ? error.code : 'UNKNOWN';
   var message = error && error.message ? error.message : String(error);
+  console.error(code + ': ' + message);
   respond.error(code, message);
 }
 

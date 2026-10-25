@@ -254,6 +254,12 @@ class JavascriptCoreJsRunner(
         return true
     }
 
+    override suspend fun signalAudioStream(json: String) {
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalAudioStream(${Json.encodeToString(json)})")
+        }
+    }
+
     override suspend fun signalTimelineToken(callId: String, token: String) {
         val tokenJson = Json.encodeToString(mapOf("userToken" to token, "callId" to callId))
         withContext(threadContext) {
