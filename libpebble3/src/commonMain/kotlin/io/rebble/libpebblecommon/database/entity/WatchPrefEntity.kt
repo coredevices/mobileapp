@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.QuickLaunchSetting.Companion.toJson
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem.Attribute
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
@@ -68,6 +69,9 @@ data class WatchPrefItem(
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w { "Don't know how to encode watch pref key: $id" }
+            return null
+        }
+        if (type is QuicklaunchWatchPref && !type.isSupportedBy(params.capabilities)) {
             return null
         }
         logger.v { "trying to insert watch pref to watch blobdb: $id / $value" }
@@ -294,6 +298,7 @@ enum class QuicklaunchWatchPref(
     override val defaultValue: QuickLaunchSetting,
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
+    val requiredCapability: ProtocolCapsFlag? = null,
 ) : WatchPref<QuickLaunchSetting> {
     QlUp("qlUp", "Quick Launch: Hold Up", QuickLaunchSetting(false, null)),
     QlDown("qlDown", "Quick Launch: Hold Down", QuickLaunchSetting(false, null)),
@@ -311,7 +316,26 @@ enum class QuicklaunchWatchPref(
         "Quick Launch: Tap Down",
         QuickLaunchSetting(true, TIMELINE_FUTURE_UUID)
     ),
+    QlSwipeUp(
+        "qlSwipeUp", "Quick Launch: Swipe Up", QuickLaunchSetting(false, null),
+        requiredCapability = ProtocolCapsFlag.SupportsSwipeShortcuts,
+    ),
+    QlSwipeDown(
+        "qlSwipeDown", "Quick Launch: Swipe Down", QuickLaunchSetting(false, null),
+        requiredCapability = ProtocolCapsFlag.SupportsSwipeShortcuts,
+    ),
+    QlSwipeLeft(
+        "qlSwipeLeft", "Quick Launch: Swipe Left", QuickLaunchSetting(false, null),
+        requiredCapability = ProtocolCapsFlag.SupportsSwipeShortcuts,
+    ),
+    QlSwipeRight(
+        "qlSwipeRight", "Quick Launch: Swipe Right", QuickLaunchSetting(false, null),
+        requiredCapability = ProtocolCapsFlag.SupportsSwipeShortcuts,
+    ),
     ;
+
+    fun isSupportedBy(capabilities: Set<ProtocolCapsFlag>): Boolean =
+        requiredCapability == null || requiredCapability in capabilities
 
     override val type = WatchPrefType.TypeQuickLaunch
     override fun decodeValue(value: String): QuickLaunchSetting = try {

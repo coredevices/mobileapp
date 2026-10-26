@@ -36,6 +36,7 @@ import io.rebble.libpebblecommon.SystemAppIDs.QUIET_TIME_TOGGLE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.TOUCH_TOGGLE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_FUTURE_UUID
 import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_PAST_UUID
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
@@ -51,6 +52,7 @@ import io.rebble.libpebblecommon.database.entity.ScheduleWatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WatchPrefEnum
 import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.map
@@ -90,6 +92,13 @@ private val BACKLIGHT_COLOR_SCHEDULE_PREFS = setOf<WatchPref<*>>(
 internal fun List<WatchPreference<*>>.hideFoldedBacklightColorPrefs(): List<WatchPreference<*>> =
     filterNot { it.pref in BACKLIGHT_COLOR_SCHEDULE_PREFS }
 
+internal fun List<WatchPreference<*>>.hideUnsupportedQuickLaunchPrefs(
+    capabilities: Set<ProtocolCapsFlag>,
+): List<WatchPreference<*>> = filter { item ->
+    val pref = item.pref
+    pref !is QuicklaunchWatchPref || pref.isSupportedBy(capabilities)
+}
+
 private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
     BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
     BoolWatchPref.QuietTimeWeekendScheduleEnabled to ScheduleWatchPref.QuietTimeWeekendSchedule,
@@ -108,7 +117,13 @@ internal fun List<WatchPreference<*>>.groupQuietTimeScheduleHours(): List<WatchP
 fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
-    val settings by libPebble.watchPrefs.collectAsState(emptyList())
+    val allSettings by libPebble.watchPrefs.collectAsState(emptyList())
+    val watches by libPebble.watches.collectAsState(emptyList())
+    val settings = remember(allSettings, watches) {
+        val capabilities = watches.filterIsInstance<KnownPebbleDevice>()
+            .flatMap { it.capabilities }.toSet()
+        allSettings.hideUnsupportedQuickLaunchPrefs(capabilities)
+    }
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val mapped = remember(settings, quickLaunchOptions) {
         settings.hidePresetManagedBacklightPrefs()
@@ -193,6 +208,10 @@ fun WatchPref<*>.section(): Section = when (this) {
     QuicklaunchWatchPref.QlBack -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSingleClickUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlSingleClickDown -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlSwipeUp -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlSwipeDown -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlSwipeLeft -> Section.QuickLaunch
+    QuicklaunchWatchPref.QlSwipeRight -> Section.QuickLaunch
     BoolWatchPref.TimelineQuickViewEnabled -> Section.Timeline
     NumberWatchPref.TimelineQuickViewMinsBefore -> Section.Timeline
     EnumWatchPref.TimelineQuickViewUnsupportedFaces -> Section.Timeline
@@ -641,7 +660,7 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
 
 private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble: LibPebble, options: List<QuickLaunchOption>): SettingsItem {
     val default = item.valueOrDefault()
-    val defaultQl = options.firstOrNull { it.uuid == default.uuid } ?: options[0]
+    val defaultQl = options.firstOrNull { default.enabled && it.uuid == default.uuid } ?: options[0]
     return basicSettingsDropdownItem(
         id = item.pref.id,
         title = item.pref.displayName,

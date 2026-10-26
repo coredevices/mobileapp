@@ -377,6 +377,7 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsWeatherDbV4(24),
     SupportsUnknownTimelineAttributes(25),
     SupportsAppPermissions(27),
+    SupportsSwipeShortcuts(29),
     ;
 
     companion object {
