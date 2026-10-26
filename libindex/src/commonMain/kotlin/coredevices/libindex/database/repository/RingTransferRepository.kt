@@ -113,6 +113,16 @@ class RingTransferRepository(
         return orphaned
     }
 
+    /**
+     * Fail transfers at [startIndex] still stuck in [RingTransferStatus.Started], in any index
+     * iteration. Used when a completion arrives whose row was retired by a re-pair or rollover.
+     */
+    suspend fun failStartedTransfersAtStartIndex(startIndex: Int): List<RingTransfer> {
+        val stale = ringTransferDao.getStartedTransfersByStartIndex(startIndex)
+        stale.forEach { ringTransferDao.updateStatus(it.id, RingTransferStatus.Failed) }
+        return stale
+    }
+
     suspend fun markTransfersAsPreviousIndexIteration() {
         ringTransferDao.markTransfersAsPreviousIndexIteration()
     }

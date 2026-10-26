@@ -5,7 +5,7 @@ import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.permissions.AppPermissions
-import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionDispatcher
 import io.rebble.libpebblecommon.plugin.PluginRegistry
@@ -44,10 +44,10 @@ abstract class PrivatePKJSInterface(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val pluginRegistry: PluginRegistry,
     permissions: AppPermissions,
-    runningApps: RunningApps,
+    pluginClient: PluginClient,
 ) {
-    private val sourceDispatcher = SourceDispatcher(pluginRegistry, jsRunner, scope, permissions, runningApps)
-    private val actionDispatcher = ActionDispatcher(pluginRegistry, jsRunner, scope, permissions)
+    private val sourceDispatcher = SourceDispatcher(pluginRegistry, jsRunner, scope, permissions, pluginClient)
+    private val actionDispatcher = ActionDispatcher(pluginRegistry, jsRunner, scope, permissions, pluginClient)
 
     companion object {
         private val logger = Logger.withTag("PrivatePKJSInterface")

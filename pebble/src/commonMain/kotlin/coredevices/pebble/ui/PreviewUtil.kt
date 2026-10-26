@@ -60,8 +60,8 @@ import coredevices.util.PermissionResult
 import coredevices.util.RequiredPermissions
 import coredevices.util.WeatherUnit
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.FakeLibPebble
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
@@ -135,14 +135,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     val firmwareUpdateUiTracker = object : FirmwareUpdateUiTracker {
         override fun didFirmwareUpdateCheckFromUi() {}
         override fun shouldUiUpdateCheck(): Boolean = false
-        override fun maybeNotifyFirmwareUpdate(
-            update: FirmwareUpdateCheckResult,
-            identifier: PebbleIdentifier,
-            watchName: String
-        ) {
-        }
-
-        override fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier) {}
+        override fun onConnectedWatch(watch: CommonConnectedDevice) {}
         override fun updateWatchNow(
             libPebble: LibPebble,
             identifier: String
@@ -350,6 +343,9 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             MutableStateFlow(null)
         override val pendingAppSideload: StateFlow<Path?> = MutableStateFlow(null)
         override fun consumePendingAppSideload() {}
+        override val pendingLockerTab: StateFlow<AppType?> = MutableStateFlow(null)
+        override fun consumePendingLockerTab() {}
+        override fun navigateToLockerTab(type: AppType) {}
         override fun consumeRequestIndexCompanion() {}
         override fun confirmPendingFirmwareSideload() {}
         override fun dismissPendingFirmwareSideload() {}

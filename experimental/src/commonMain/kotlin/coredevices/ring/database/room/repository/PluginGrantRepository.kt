@@ -4,7 +4,6 @@ import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.data.entity.room.PluginGrantDenial
 import coredevices.ring.database.room.dao.PluginGrantDao
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
 
@@ -18,8 +17,6 @@ class PluginGrantRepository(private val dao: PluginGrantDao) {
                 .filter { it.grant == grant && it.name == PluginGrantDenial.WHOLE_GRANT }
                 .mapTo(mutableSetOf()) { it.pluginUuid }
         }
-
-    suspend fun disabledPluginsNow(grant: PluginGrant): Set<Uuid> = disabledPlugins(grant).first()
 
     suspend fun setPluginGrantEnabled(pluginUuid: Uuid, grant: PluginGrant, enabled: Boolean) {
         val denial = PluginGrantDenial(pluginUuid, grant)

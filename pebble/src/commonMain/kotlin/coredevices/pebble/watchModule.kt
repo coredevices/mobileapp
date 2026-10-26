@@ -22,12 +22,14 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealBatteryChargedNotifier
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.firmware.postWatchFullyChargedNotification
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFrameDecoder
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.HybridTranscription
 import coredevices.pebble.services.LanguagePackRepository
+import coredevices.pebble.services.PluginSourceLoader
 import coredevices.pebble.services.Memfault
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.AnalyticsIngest
@@ -89,6 +91,7 @@ import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.connection.WebServices
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
@@ -215,6 +218,7 @@ val watchModule = module {
     singleOf(::WeatherPlugin)
     singleOf(::ConfigPageSessions)
     singleOf(::LanguagePackRepository)
+    singleOf(::PluginSourceLoader)
     factoryOf(::NativeLockerAddUtil)
     singleOf(::PermissionRequestNotifier)
     singleOf(::WatchOnboardingFinished)
@@ -244,10 +248,12 @@ val watchModule = module {
         }
     }
     singleOf(::RebbleAsrService)
+    singleOf(::SpeexAudioFrameDecoder) bind AudioFrameDecoder::class
     single {
         HybridTranscription(
             get(),
             lazy { get<LibPebble3>() },
+            get(),
             get(),
         )
     }
@@ -258,6 +264,7 @@ val watchModule = module {
             rebble = get(),
             cactusService = get(),
             coreConfigFlow = get(),
+            audioFrameDecoder = get(),
         )
     } bind TranscriptionProvider::class
 

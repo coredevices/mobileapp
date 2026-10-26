@@ -6,6 +6,7 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
 import coredevices.mcp.client.McpSessionTool
 import coredevices.ring.agent.pebble_plugin.FakePlugin
+import coredevices.ring.agent.pebble_plugin.FakePlugins
 import coredevices.ring.agent.pebble_plugin.PblPluginMcpIntegration
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
@@ -40,8 +41,8 @@ class AgentNenyaToolNamesTest {
 
     private suspend fun pluginTools(pluginName: String): List<McpSessionTool> {
         val integration = PblPluginMcpIntegration(
-            FakePlugin(actions = listOf(ActionDeclaration("get_forecast")), name = pluginName),
-            RecordingCoreAnalytics(),
+            FakePlugin(actions = listOf(ActionDeclaration("get_forecast")), name = pluginName).metadata,
+            FakePlugins(),
         )
         return integration.listTools().map { McpSessionTool(integration.name, it) }
     }

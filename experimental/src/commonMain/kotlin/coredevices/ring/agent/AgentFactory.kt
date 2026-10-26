@@ -1,5 +1,6 @@
 package coredevices.ring.agent
 
+import com.cactus.isCactusSupported
 import coredevices.indexai.agent.Agent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.ring.database.Preferences
@@ -27,22 +28,21 @@ class AgentFactory: KoinComponent {
         existingConversation: List<ConversationMessageDocument> = emptyList()
     ): Agent {
         return when (mode) {
-            ChatMode.Normal -> if (!signedIn) {
-                local(existingConversation)
-            } else {
-                FallbackAgent(
+            ChatMode.Normal -> when {
+                !isCactusSupported() -> {
+                    if (!signedIn) {
+                        throw AgentAuthenticationException("User must be authenticated to use online LLM agent")
+                    }
+                    remote(existingConversation)
+                }
+                !signedIn -> local(existingConversation)
+                else -> FallbackAgent(
                     primary = remote(existingConversation),
                     fallback = local(existingConversation),
                     initialConversation = existingConversation,
                 )
             }
             ChatMode.Local -> local(existingConversation)
-            ChatMode.Remote -> {
-                if (!signedIn) {
-                    throw AgentAuthenticationException("User must be authenticated to use online LLM agent")
-                }
-                remote(existingConversation)
-            }
             // Always online, because, well, search
             ChatMode.Search -> {
                 if (!signedIn) {
@@ -57,11 +57,9 @@ class AgentFactory: KoinComponent {
 class AgentAuthenticationException(message: String): Exception(message)
 
 sealed interface ChatMode {
-    /** The hybrid Index agent: online (Nenya), falling back to on-device (Cactus). */
+    /** The Index agent: online (Nenya), falling back to on-device (Cactus) where supported. */
     data object Normal : ChatMode
     /** The on-device (Cactus) Index agent only. */
     data object Local : ChatMode
-    /** The online (Nenya) Index agent only. */
-    data object Remote : ChatMode
     data object Search : ChatMode
 }

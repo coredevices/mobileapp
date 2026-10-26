@@ -507,6 +507,7 @@ fun SelectRgbColor(
     currentRgb: UInt,
     defaultRgb: UInt,
     presets: List<RgbColorPreset>,
+    label: String = "Color",
     onChangeColor: (UInt) -> Unit,
 ) {
     var showPicker by remember { mutableStateOf(false) }
@@ -525,7 +526,7 @@ fun SelectRgbColor(
     val swatchColor = Color(0xFF000000u.toInt() or (currentRgb and 0x00FFFFFFu).toInt())
     val matchedPreset = presets.firstOrNull { it.rgb == currentRgb }
     ListItem(
-        headlineContent = { Text("Color") },
+        headlineContent = { Text(label) },
         supportingContent = {
             Box(modifier = Modifier.padding(4.dp)) {
                 Box(

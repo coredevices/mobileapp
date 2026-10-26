@@ -114,6 +114,7 @@ class BundledAppInstaller(
     private companion object {
         val BUNDLED_APPS = listOf(
             BundledApp("plugin-test.pbw", Uuid.parse("8b1c6b0e-7d6a-4cf2-a9b2-2c3f8b1c6b0e")),
+            BundledApp("find-my-phone.pbw", Uuid.parse("438e789f-1f16-424e-829c-0c2f4865fbe8")),
             BundledApp("weather-face.pbw", Uuid.parse("3f6d2a90-5c41-4b7e-9d38-6a1e0c4f27b5")),
             BundledApp("met-weather.pbw", Uuid.parse("323dc117-55bd-455f-9ee4-4d0faba56ea1")),
             BundledApp("hue.pbw", Uuid.parse("6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40")),

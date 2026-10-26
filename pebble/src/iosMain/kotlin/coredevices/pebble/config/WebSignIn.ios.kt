@@ -22,10 +22,13 @@ import platform.UIKit.UIViewController
 import platform.UIKit.UIWindow
 import platform.UIKit.navigationItem
 import platform.WebKit.WKNavigation
+import platform.WebKit.WKNavigationAction
 import platform.WebKit.WKNavigationDelegateProtocol
+import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebsiteDataStore
+import platform.WebKit.WKWindowFeatures
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
@@ -55,6 +58,8 @@ private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequ
             websiteDataStore = WKWebsiteDataStore.nonPersistentDataStore()
         }
         val webView = WKWebView(frame = CGRectZero.readValue(), configuration = configuration)
+        val pages = mutableListOf(webView)
+        var uiDelegate: WKUIDelegateProtocol? = null
         var delegate: WKNavigationDelegateProtocol? = null
         var pollTimer: NSTimer? = null
 
@@ -63,8 +68,13 @@ private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequ
             completed = true
             pollTimer?.invalidate()
             pollTimer = null
-            webView.stopLoading()
-            webView.navigationDelegate = null
+            pages.forEach {
+                it.stopLoading()
+                it.navigationDelegate = null
+                it.UIDelegate = null
+            }
+            pages.clear()
+            uiDelegate = null
             delegate = null
             navigationController.dismissViewControllerAnimated(true, completion = null)
             if (continuation.isActive) continuation.resume(value)
@@ -106,7 +116,56 @@ private suspend fun capture(uiContext: PlatformUiContext, request: WebSignInRequ
         }
         navigationController = UINavigationController(rootViewController = content).apply {
             modalPresentationStyle = UIModalPresentationFullScreen
+            interactivePopGestureRecognizer?.enabled = false
         }
+        fun closePopup(popup: WKWebView) {
+            // The app-created root stays open until cookie capture or explicit cancellation.
+            if (popup == webView || !pages.remove(popup)) return
+            popup.stopLoading()
+            popup.navigationDelegate = null
+            popup.UIDelegate = null
+            navigationController.setViewControllers(
+                navigationController.viewControllers.filter { (it as UIViewController).view != popup },
+                animated = false,
+            )
+        }
+
+        uiDelegate = object : NSObject(), WKUIDelegateProtocol {
+            override fun webView(
+                webView: WKWebView,
+                createWebViewWithConfiguration: WKWebViewConfiguration,
+                forNavigationAction: WKNavigationAction,
+                windowFeatures: WKWindowFeatures,
+            ): WKWebView? {
+                if (completed) return null
+                val popup = WKWebView(frame = CGRectZero.readValue(), configuration = createWebViewWithConfiguration)
+                popup.UIDelegate = this
+                popup.navigationDelegate = delegate
+                pages.add(popup)
+                val popupContent = UIViewController(nibName = null, bundle = null).apply {
+                    view = popup
+                    title = "Sign in to ${request.domain}"
+                    navigationItem.leftBarButtonItem = UIBarButtonItem(
+                        primaryAction = UIAction.actionWithTitle(
+                            title = "Back", image = null, identifier = null,
+                            handler = { closePopup(popup) },
+                        ),
+                    )
+                    navigationItem.rightBarButtonItem = UIBarButtonItem(
+                        primaryAction = UIAction.actionWithTitle(
+                            title = "Cancel", image = null, identifier = null,
+                            handler = { finish(null) },
+                        ),
+                    )
+                }
+                navigationController.pushViewController(popupContent, animated = false)
+                // WKUIDelegate: WebKit loads the request in the returned web view.
+                return popup
+            }
+
+            override fun webViewDidClose(webView: WKWebView) = closePopup(webView)
+        }
+        webView.UIDelegate = uiDelegate
         pollTimer = NSTimer.scheduledTimerWithTimeInterval(interval = POLL_INTERVAL_SECONDS, repeats = true) { check() }
         continuation.invokeOnCancellation {
             dispatch_async(dispatch_get_main_queue()) { finish(null) }

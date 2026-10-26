@@ -1,24 +1,22 @@
 package coredevices.pebble.services
 
 import co.touchlab.kermit.Logger
-import coredevices.speex.SpeexCodec
-import coredevices.speex.SpeexDecodeResult
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.decodeAll
 import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.TranscriptionException
 import io.ktor.utils.io.CancellationException
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.voice.TranscriptionResult
 import io.rebble.libpebblecommon.voice.TranscriptionWord
 import io.rebble.libpebblecommon.voice.VoiceEncoderInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.withContext
+import kotlinx.io.readByteArray
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -26,7 +24,7 @@ import kotlin.time.TimeSource
 /**
  * Mode-aware [TranscriptionProvider] dispatching between [HybridTranscription] (cloud/local via
  * Cactus + WisprFlow) and [RebbleAsrTranscription] (Rebble's ASR). Owns fallback orchestration
- * for `RebbleFirst`/`RebbleFallback` modes (which buffer Speex frames so they can be replayed
+ * for `RebbleFirst`/`RebbleFallback` modes (which buffer audio frames so they can be replayed
  * across both backends).
  */
 class STTRouter(
@@ -34,6 +32,7 @@ class STTRouter(
     private val rebble: RebbleAsrTranscription,
     private val cactusService: CactusTranscriptionService,
     private val coreConfigFlow: CoreConfigFlow,
+    private val audioFrameDecoder: AudioFrameDecoder,
 ) : TranscriptionProvider {
     companion object {
         private val logger = Logger.withTag("STTRouter")
@@ -94,10 +93,10 @@ class STTRouter(
                     return rebbleResult
                 }
                 logger.w { "Rebble ASR returned $rebbleResult, falling back to local" }
-                runLocalFromSpeex(encoderInfo, frames, timeout = remaining())
+                runLocal(encoderInfo, frames, timeout = remaining())
             }
             CactusSTTMode.RebbleFallback -> {
-                val localResult = runLocalFromSpeex(
+                val localResult = runLocal(
                     encoderInfo,
                     frames,
                     timeout = (remaining() - rebbleFallbackReserve).coerceAtLeast(Duration.ZERO),
@@ -117,12 +116,12 @@ class STTRouter(
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private suspend fun runLocalFromSpeex(
-        encoderInfo: VoiceEncoderInfo.Speex,
+    private suspend fun runLocal(
+        encoderInfo: VoiceEncoderInfo,
         frames: List<UByteArray>,
         timeout: Duration,
     ): TranscriptionResult {
-        val pcm = decodeSpeex(encoderInfo, frames)
+        val pcm = audioFrameDecoder.decodeAll(encoderInfo, flowOf(*frames.toTypedArray())).readByteArray()
         return try {
             val text = cactusService.transcribeLocalForFallback(
                 audio = pcm,
@@ -143,29 +142,5 @@ class STTRouter(
         } catch (e: Exception) {
             TranscriptionResult.Error("Local transcription failed: ${e.message}")
         }
-    }
-
-    @OptIn(ExperimentalUnsignedTypes::class)
-    private suspend fun decodeSpeex(
-        encoderInfo: VoiceEncoderInfo.Speex,
-        frames: List<UByteArray>,
-    ): ByteArray {
-        val speex = SpeexCodec(
-            sampleRate = encoderInfo.sampleRate,
-            bitRate = encoderInfo.bitRate,
-            frameSize = encoderInfo.frameSize,
-        )
-        val pcm = ByteArray(encoderInfo.frameSize * Short.SIZE_BYTES)
-        val output = ArrayList<Byte>(frames.size * pcm.size)
-        withContext(Dispatchers.IO) {
-            for (frame in frames) {
-                val result = speex.decodeFrame(frame.asByteArray(), pcm, hasHeaderByte = true)
-                if (result != SpeexDecodeResult.Success) {
-                    error("Failed to decode Speex frame: $result")
-                }
-                for (b in pcm) output.add(b)
-            }
-        }
-        return output.toByteArray()
     }
 }

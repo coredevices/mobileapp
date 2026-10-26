@@ -91,6 +91,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
     )
     override val ringPairedName = _ringPairedName.asStateFlow()
+    private val _ringPairingKeyHash = MutableStateFlow(settings.getIntOrNull("ring_pairing_key_hash"))
+    override val ringPairingKeyHash = _ringPairingKeyHash.asStateFlow()
     override val ringPairedOld = MutableStateFlow(
         try {
             settings.getBoolean("ring_paired", false)
@@ -188,6 +190,13 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.putString("ring_paired_name", it)
         } ?: settings.remove("ring_paired_name")
         _ringPairedName.value = name
+    }
+
+    override fun setRingPairingKeyHash(hash: Int?) {
+        hash?.let {
+            settings.putInt("ring_pairing_key_hash", it)
+        } ?: settings.remove("ring_pairing_key_hash")
+        _ringPairingKeyHash.value = hash
     }
 
     override fun setMusicControlMode(mode: MusicControlMode) {

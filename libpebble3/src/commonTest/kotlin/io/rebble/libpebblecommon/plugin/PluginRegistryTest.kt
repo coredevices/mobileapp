@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
+import com.russhwolf.settings.MapSettings
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
@@ -74,7 +75,7 @@ class PluginRegistryTest {
     @Test
     fun findsSourcePluginByCategoryAndItem() {
         val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(plugin), enabled())
+        val registry = PluginRegistry(setOf(plugin), enabled(), MapSettings())
 
         assertEquals(plugin, registry.findSourcePlugin("weather", "location"))
         assertNull(registry.findSourcePlugin("weather", "forecast"))
@@ -85,7 +86,7 @@ class PluginRegistryTest {
     fun prefersRequestedPluginButFallsBack() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
         val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a, b), enabled())
+        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
 
         assertEquals(b, registry.findSourcePlugin("weather", "location", UUID_B.toString()))
         // An unknown preference must not fail the lookup — sources are fungible.
@@ -98,7 +99,7 @@ class PluginRegistryTest {
     @Test
     fun actionLookupIsExactAndNeverFallsBack() {
         val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(a), enabled())
+        val registry = PluginRegistry(setOf(a), enabled(), MapSettings())
 
         assertEquals(a, registry.findPlugin(UUID_A.toString()))
         assertNull(registry.findPlugin(UUID_B.toString()))
@@ -106,7 +107,7 @@ class PluginRegistryTest {
 
     @Test
     fun registerJsPluginsAtRuntime() {
-        val registry = PluginRegistry(emptySet(), enabled())
+        val registry = PluginRegistry(emptySet(), enabled(), MapSettings())
         assertNull(registry.findSourcePlugin("weather", "location"))
 
         val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
@@ -118,11 +119,47 @@ class PluginRegistryTest {
     @Test
     fun nothingIsVisibleWhilePluginsAreDisabled() {
         val plugin = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
-        val registry = PluginRegistry(setOf(plugin), enabled(false))
+        val registry = PluginRegistry(setOf(plugin), enabled(false), MapSettings())
 
         assertTrue(registry.getAllPlugins().isEmpty())
         assertNull(registry.findPlugin(UUID_A.toString()))
         assertNull(registry.findSourcePlugin("weather", "location"))
+    }
+
+    @Test
+    fun aDisabledBuiltInIsRemovedUntilReEnabled() = runTest {
+        val a = FakePlugin(UUID_A, "A", sources = listOf(weatherSource()))
+        val b = FakePlugin(UUID_B, "B", sources = listOf(weatherSource()))
+        val registry = PluginRegistry(setOf(a, b), enabled(), MapSettings())
+
+        registry.setBuiltInEnabled(UUID_A, false)
+
+        assertNull(registry.findPlugin(UUID_A.toString()))
+        assertEquals(b, registry.findSourcePlugin("weather", "location", preferredPluginUuid = UUID_A.toString()))
+        assertEquals(listOf(UUID_B), registry.getAllPlugins().map { it.pluginUuid })
+        assertEquals(setOf(UUID_A, UUID_B), registry.nativePlugins().first().map { it.pluginUuid }.toSet())
+
+        registry.setBuiltInEnabled(UUID_A, true)
+
+        assertEquals(a, registry.findPlugin(UUID_A.toString()))
+    }
+
+    @Test
+    fun disabledBuiltInsStayDisabledAcrossRestartsAndLateRegistration() {
+        val settings = MapSettings()
+        val a = FakePlugin(UUID_A, "A")
+        val b = FakePlugin(UUID_B, "B")
+        PluginRegistry(setOf(a), enabled(), settings).apply {
+            registerPlugin(b)
+            setBuiltInEnabled(UUID_A, false)
+            setBuiltInEnabled(UUID_B, false)
+        }
+
+        val reloaded = PluginRegistry(setOf(a), enabled(), settings)
+        reloaded.registerPlugin(b)
+
+        assertEquals(setOf(UUID_A, UUID_B), reloaded.disabledBuiltIns.value)
+        assertTrue(reloaded.getAllPlugins().isEmpty())
     }
 }
 

@@ -14,7 +14,11 @@ import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.routesOnlyToLocalAgent
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
+import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Plugins
+import io.rebble.libpebblecommon.connection.Watches
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -23,7 +27,15 @@ import org.koin.dsl.module
 internal val mcpModule = module {
     singleOf(::BuiltinServletRepository)
     single { McpServerCache() }
-    singleOf(::McpSessionFactory)
+    single {
+        McpSessionFactory(
+            mcpServerRepository = get(),
+            builtinServletRepository = get(),
+            mcpServerCache = get(),
+            plugins = get(),
+            indexActions = get(),
+        )
+    }
     single {
         IndexActionsRepository(
             servletRepository = get(),
@@ -35,6 +47,7 @@ internal val mcpModule = module {
             installedPlugins = get<Plugins>()::getAllPlugins,
             disabledPlugins = get<PluginGrantRepository>()::disabledPlugins,
             persistPluginGrantEnabled = get<PluginGrantRepository>()::setPluginGrantEnabled,
+            watchPaired = get<LibPebble>().watches.map { devices -> devices.any { it is KnownPebbleDevice } },
         )
     }
     factoryOf(::CreateNoteTool)

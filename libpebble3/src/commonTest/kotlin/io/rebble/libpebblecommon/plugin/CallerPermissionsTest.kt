@@ -9,7 +9,7 @@ import kotlin.uuid.Uuid
 
 private class PermissionsFakePlugin(
     callerPermissions: List<PluginPermission> = emptyList(),
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000001")
     override val name = "Fake"
     override val description = ""

@@ -8,7 +8,8 @@ class EngineGeolocation(
     scope: CoroutineScope,
     eval: suspend (String) -> Unit,
     appUuid: Uuid,
-) : GeolocationInterface(scope, eval, appUuid), JsEngineInterface, AutoCloseable {
+    prompt: Boolean,
+) : GeolocationInterface(scope, eval, appUuid, prompt), JsEngineInterface, AutoCloseable {
     override val name = "_PebbleGeo"
     override val methods = listOf("getCurrentPosition", "watchPosition", "clearWatch", "getRequestCallbackID", "getWatchCallbackID")
 

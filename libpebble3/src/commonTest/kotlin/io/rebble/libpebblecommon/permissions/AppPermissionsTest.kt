@@ -1,6 +1,8 @@
 package io.rebble.libpebblecommon.permissions
 
+import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.WatchConfig
+import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.connection.PebbleConnectionEvent
 import io.rebble.libpebblecommon.connection.PebbleDevice
@@ -12,7 +14,6 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.permissions.PermissionDecision.Denied
 import io.rebble.libpebblecommon.permissions.PermissionDecision.Granted
 import io.rebble.libpebblecommon.permissions.PermissionDecision.NeedsApproval
-import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.plugin.PluginPermissions.CALENDAR
@@ -20,12 +21,16 @@ import io.rebble.libpebblecommon.plugin.PluginPermissions.GLOBAL_INTERNET
 import io.rebble.libpebblecommon.plugin.PluginPermissions.INTERNET
 import io.rebble.libpebblecommon.plugin.PluginPermissions.LOCAL_NETWORK
 import io.rebble.libpebblecommon.plugin.PluginPermissions.LOCATION
+import io.rebble.libpebblecommon.plugin.PluginPermissions.WATCH_MICROPHONE
 import io.rebble.libpebblecommon.plugin.PluginPermissions.LEGACY_PEBBLEKIT
+import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_FILES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_WATCH_SETTINGS
 import io.rebble.libpebblecommon.plugin.PluginPermissions.TIMELINE
+import io.rebble.libpebblecommon.plugin.PluginPermissions.WRITE_FILES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.WRITE_WATCH_SETTINGS
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
@@ -44,15 +49,15 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-private val APP = Uuid.parse("00000000-0000-0000-0000-00000000a001")
+internal val APP = Uuid.parse("00000000-0000-0000-0000-00000000a001")
 
-private fun subject(
+internal fun subject(
     legacy: Boolean = false,
     hasAndroidCompanion: Boolean = false,
     hasCompanionApp: Boolean = false,
 ) = PermissionSubject(APP, legacy, hasAndroidCompanion, hasCompanionApp)
 
-private fun installedAs(
+internal fun installedAs(
     subject: PermissionSubject?,
     plugins: Flow<Map<String, PluginDefinedPermission>> = flowOf(emptyMap()),
 ) = object : InstalledApps {
@@ -79,6 +84,28 @@ private fun decide(
 
 class DecidePermissionTest {
     @Test
+    fun microphoneFollowsTheReadPermissionPolicy() {
+        assertEquals(Granted, decide(WATCH_MICROPHONE))
+        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET))))
+        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, subject(hasCompanionApp = true)))
+        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+    }
+
+    @Test
+    fun legacyMicrophoneAccessIsNotImplicit() {
+        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, subject(legacy = true), listOf(row(GLOBAL_INTERNET))))
+    }
+
+    @Test
+    fun microphoneRespectsExplicitAnswersEvenUnderNeverAsk() {
+        assertEquals(Granted, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET), row(WATCH_MICROPHONE, true))))
+        assertEquals(Denied, decide(WATCH_MICROPHONE, rows = listOf(row(WATCH_MICROPHONE, false))))
+        val config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)
+        assertEquals(Granted, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET)), config = config))
+        assertEquals(Denied, decide(WATCH_MICROPHONE, rows = listOf(row(WATCH_MICROPHONE, false)), config = config))
+    }
+
+    @Test
     fun theUsersDecisionWins() {
         assertEquals(Granted, decide(CALENDAR, subject(hasCompanionApp = true), listOf(row(CALENDAR, true))))
         assertEquals(Denied, decide(CALENDAR, rows = listOf(row(CALENDAR, false))))
@@ -87,6 +114,59 @@ class DecidePermissionTest {
     @Test
     fun unknownPermissionIsDenied() {
         assertEquals(Denied, decide("Teleport"))
+    }
+
+    @Test
+    fun aFileIsOnlyGrantedByBeingPicked() {
+        val key = readFilesKey("content://docs/tree/notes")
+        assertEquals(Denied, decide(key))
+        assertEquals(Denied, decide(key, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)))
+        assertEquals(Denied, decide(key, rows = listOf(row(READ_FILES, true))))
+        assertEquals(Granted, decide(key, rows = listOf(row(key, true))))
+        assertEquals(Denied, decide(writeFilesKey("content://docs/tree/notes"), rows = listOf(row(key, true))))
+        assertEquals(NeedsApproval, decide(WRITE_FILES))
+    }
+
+    @Test
+    fun aWriteFilesDecisionCoversReadFiles() {
+        val scope = "content://docs/tree/notes"
+        assertEquals(Granted, decide(READ_FILES, rows = listOf(row(WRITE_FILES, true))))
+        assertEquals(Denied, decide(READ_FILES, rows = listOf(row(WRITE_FILES, false))))
+        assertEquals(Denied, decide(READ_FILES, rows = listOf(row(READ_FILES, false), row(WRITE_FILES, true))))
+        assertEquals(Granted, decide(readFilesKey(scope), rows = listOf(row(writeFilesKey(scope), true))))
+        assertEquals(Denied, decide(readFilesKey(scope), rows = listOf(row(writeFilesKey(scope), false))))
+        assertEquals(Denied, decide(readFilesKey(scope), rows = listOf(row(WRITE_FILES, true))))
+    }
+
+    @Test
+    fun denyingWriteFilesLeavesADeclaredReadFilesItsOwnChoice() {
+        val scope = "content://docs/tree/notes"
+        val declaredBoth = listOf(row(READ_FILES), row(WRITE_FILES, false))
+        assertEquals(Granted, decide(READ_FILES, rows = declaredBoth))
+        val alwaysAsk = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        assertEquals(NeedsApproval, decide(READ_FILES, rows = declaredBoth, config = alwaysAsk))
+        // So its picks stay, and a read-write pick drops to read-only rather than off.
+        assertEquals(Granted, decide(readFilesKey(scope), rows = declaredBoth + row(readFilesKey(scope), true)))
+        assertEquals(Granted, decide(readFilesKey(scope), rows = declaredBoth + row(writeFilesKey(scope), true)))
+        assertEquals(Denied, decide(writeFilesKey(scope), rows = declaredBoth + row(writeFilesKey(scope), true)))
+        // Read's own decision still wins either way.
+        assertEquals(Denied, decide(READ_FILES, rows = listOf(row(READ_FILES, false), row(WRITE_FILES, false))))
+        assertEquals(Granted, decide(READ_FILES, rows = listOf(row(READ_FILES, true), row(WRITE_FILES, false))))
+    }
+
+    @Test
+    fun denyingTheBareFilePermissionTurnsOffEveryEntryPickedUnderIt() {
+        val scope = "content://docs/tree/notes"
+        assertEquals(Denied, decide(readFilesKey(scope), rows = listOf(row(READ_FILES, false), row(readFilesKey(scope), true))))
+        assertEquals(Denied, decide(writeFilesKey(scope), rows = listOf(row(WRITE_FILES, false), row(writeFilesKey(scope), true))))
+        // Without a ReadFiles decision of its own, denying WriteFiles denies reading too.
+        assertEquals(Denied, decide(readFilesKey(scope), rows = listOf(row(WRITE_FILES, false), row(writeFilesKey(scope), true))))
+        // Denying only writing leaves a read-write pick readable.
+        val readOnly = listOf(row(READ_FILES, true), row(WRITE_FILES, false), row(writeFilesKey(scope), true))
+        assertEquals(Granted, decide(readFilesKey(scope), rows = readOnly))
+        assertEquals(Denied, decide(writeFilesKey(scope), rows = readOnly))
+        // Allowing it again brings the pick back.
+        assertEquals(Granted, decide(readFilesKey(scope), rows = listOf(row(READ_FILES, true), row(readFilesKey(scope), true))))
     }
 
     @Test
@@ -309,6 +389,36 @@ class PermissionStatusesTest {
     fun withoutItsLockerEntryOnlyDecisionsAreKnown() {
         assertEquals(mapOf(CALENDAR to PermissionStatus.Denied), statuses(null, row(CALENDAR, false), row(LOCATION)))
     }
+
+    @Test
+    fun aPickedEntryReadsDeniedWhileItsBarePermissionIs() {
+        val vault = writeFilesKey("content://docs/tree/notes")
+        assertEquals(
+            mapOf(WRITE_FILES to PermissionStatus.Denied, vault to PermissionStatus.Denied),
+            statuses(subject(), row(WRITE_FILES, false), row(vault, true)),
+        )
+        assertEquals(
+            mapOf(WRITE_FILES to PermissionStatus.Granted, vault to PermissionStatus.Granted),
+            statuses(subject(), row(WRITE_FILES, true), row(vault, true)),
+        )
+    }
+
+    @Test
+    fun aDeclaredReadFilesStaysListedWhileWriteFilesIsDenied() {
+        // Turning write off must leave read on the page, so it can be allowed on its own.
+        assertEquals(
+            mapOf(READ_FILES to PermissionStatus.AllowedAutomatically, WRITE_FILES to PermissionStatus.Denied),
+            statuses(subject(), row(READ_FILES), row(WRITE_FILES, false)),
+        )
+        assertEquals(
+            mapOf(READ_FILES to PermissionStatus.Waiting, WRITE_FILES to PermissionStatus.Denied),
+            statuses(subject(), row(READ_FILES), row(WRITE_FILES, false), config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)),
+        )
+        assertEquals(
+            mapOf(READ_FILES to PermissionStatus.AllowedAutomatically, WRITE_FILES to PermissionStatus.Granted),
+            statuses(subject(), row(READ_FILES), row(WRITE_FILES, true)),
+        )
+    }
 }
 
 class CanExfiltrateTest {
@@ -331,7 +441,7 @@ class CanExfiltrateTest {
     }
 }
 
-private class FakePermissionDao : LockerAppPermissionDao {
+internal class FakePermissionDao : LockerAppPermissionDao {
     val rows = MutableStateFlow<Map<Pair<Uuid, String>, LockerAppPermission>>(emptyMap())
 
     override suspend fun insertOrReplace(permission: LockerAppPermission) {
@@ -360,6 +470,10 @@ private class FakePermissionDao : LockerAppPermissionDao {
         rows.value = rows.value.filterKeys { it.first != appUuid }
     }
 
+    override suspend fun deleteByAppUuidAndPermissions(appUuid: Uuid, permissions: List<String>) {
+        rows.value = rows.value.filterKeys { it.first != appUuid || it.second !in permissions }
+    }
+
     override suspend fun getByAppUuid(appUuid: Uuid) = rows.value.values.filter { it.appUuid == appUuid }
 
     override fun flowByAppUuid(appUuid: Uuid): Flow<List<LockerAppPermission>> =
@@ -370,19 +484,19 @@ private class FakePermissionDao : LockerAppPermissionDao {
     fun row(permission: String) = rows.value[APP to permission]
 }
 
-private class FixedClock(var ms: Long) : Clock {
+internal class FixedClock(var ms: Long) : Clock {
     override fun now(): Instant = Instant.fromEpochMilliseconds(ms)
 }
 
-private val testScope = LibPebbleCoroutineScope(EmptyCoroutineContext)
+internal val testScope = LibPebbleCoroutineScope(EmptyCoroutineContext)
 
-private object NoWatches : Watches {
+internal object NoWatches : Watches {
     override val watches = MutableStateFlow(emptyList<PebbleDevice>())
     override val connectionEvents = emptyFlow<PebbleConnectionEvent>()
     override fun watchesDebugState() = ""
 }
 
-private fun permissions(
+internal fun permissions(
     dao: LockerAppPermissionDao,
     config: WatchConfig = WatchConfig(enablePlugins = true),
     clock: Clock = FixedClock(1_000),
@@ -582,6 +696,16 @@ class NetworkGateTest {
     }
 
     @Test
+    fun withoutPromptingAnUndecidedHostIsRefusedUnasked() = runTest {
+        val silent = NetworkGate(permissions, "App", APP, prompt = false)
+        assertIs<PluginNetworkVerdict.Denied>(silent.check("https://config.example.com/", wait = true))
+        assertEquals(emptyMap(), dao.rows.value)
+
+        permissions.setDecisions(APP, mapOf(internetKey("config.example.com") to true))
+        assertIs<PluginNetworkVerdict.Allowed>(silent.check("https://config.example.com/", wait = false))
+    }
+
+    @Test
     fun withPluginsOffAnyRequestableUrlIsAllowedWithoutLookingAtTheHost() = runTest {
         val off = permissions(dao, config = WatchConfig(enablePlugins = false))
         val gate = NetworkGate(off, "App", APP)
@@ -648,6 +772,21 @@ class InstallReviewTest {
             declares(internet("a.example.com", ".B.example.com"), PluginPermission(LOCAL_NETWORK)).all,
         )
         assertEquals(listOf(INTERNET), declares(PluginPermission(INTERNET)).all)
+    }
+
+    @Test
+    fun aManifestGetsOnlyTheBareFilePermission() {
+        assertEquals(listOf(READ_FILES), PluginPermission(READ_FILES, mapOf("paths" to listOf("/Documents"))).keys())
+        assertEquals(listOf(READ_FILES), PluginPermission(readFilesKey("/Documents")).keys())
+        assertEquals(listOf(WRITE_FILES), PluginPermission(writeFilesKey("content://docs/tree/x")).keys())
+    }
+
+    @Test
+    fun readAndWriteFilesAreBothReviewed() = runTest {
+        val both = declares(PluginPermission(READ_FILES), PluginPermission(WRITE_FILES))
+        assertEquals(listOf(READ_FILES, WRITE_FILES), both.all)
+        config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        assertEquals(setOf(READ_FILES, WRITE_FILES), reviewed(both))
     }
 
     @Test
@@ -720,6 +859,14 @@ class InstallReviewTest {
     }
 
     @Test
+    fun aDeclaredMicrophonePermissionIsReviewedAndRemembered() = runTest {
+        val requested = declares(internet("api.example.com"), PluginPermission(WATCH_MICROPHONE))
+        assertEquals(setOf(internetKey("api.example.com"), WATCH_MICROPHONE), reviewed(requested))
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        assertEquals(setOf(internetKey("api.example.com")), reviewed(requested))
+    }
+
+    @Test
     fun anUpdateOnlyReviewsWhatIsNew() = runTest {
         val api = internetKey("api.example.com")
         permissions.setDecisions(APP, mapOf(api to true, LOCATION to false))
@@ -743,6 +890,21 @@ class RuntimeRequestTest {
     private val dao = FakePermissionDao()
     private val permissions = permissions(dao)
     private val legacy = subject(legacy = true)
+
+    @Test
+    fun microphoneRequestsRecordApprovalAndReturnWithoutWaiting() = runTest {
+        permissions.recordRequested(APP, listOf(GLOBAL_INTERNET))
+        val before = testScheduler.currentTime
+        assertEquals(NeedsApproval, permissions.request(APP, WATCH_MICROPHONE))
+        assertEquals(before, testScheduler.currentTime)
+        assertEquals(null, dao.row(WATCH_MICROPHONE)!!.granted)
+        assertEquals(null, dao.row(WATCH_MICROPHONE)!!.lastUsedAtMs)
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
+        assertEquals(Granted, permissions.request(APP, WATCH_MICROPHONE))
+        assertEquals(1_000, dao.row(WATCH_MICROPHONE)!!.lastUsedAtMs)
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        assertEquals(Denied, permissions.request(APP, WATCH_MICROPHONE))
+    }
 
     @Test
     fun anAnswerInTimeDecidesTheRequest() = runTest {
@@ -781,5 +943,101 @@ class RuntimeRequestTest {
         permissions.recordRequested(APP, listOf(GLOBAL_INTERNET))
         assertEquals(NeedsApproval, permissions.request(legacy, CALENDAR, wait = true))
         assertEquals(null, dao.row(CALENDAR)!!.granted)
+    }
+}
+
+class LocalMicrophoneGrantsTest {
+    private val dao = FakePermissionDao()
+    private val permissions = permissions(dao)
+
+    @Test
+    fun localAndStreamingCaptureFollowTheSamePermissionPolicy() = runTest {
+        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk))
+        assertEquals(NeedsApproval, permissions.request(APP, WATCH_MICROPHONE))
+        assertEquals(emptySet(), permissions.localMicrophoneGrants().first())
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
+        assertEquals(setOf(APP), permissions.localMicrophoneGrants().first())
+        assertEquals(Granted, permissions.request(APP, WATCH_MICROPHONE))
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        assertEquals(emptySet(), permissions.localMicrophoneGrants().first())
+    }
+
+    @Test
+    fun neverAskGrantsLocalAndStreamingCaptureWithoutOverridingADenial() = runTest {
+        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk))
+        permissions.recordRequested(APP, listOf(WATCH_MICROPHONE, INTERNET))
+        assertEquals(Granted, permissions.request(APP, WATCH_MICROPHONE))
+        assertEquals(setOf(APP), permissions.localMicrophoneGrants().first())
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        assertEquals(Denied, permissions.request(APP, WATCH_MICROPHONE))
+        assertEquals(emptySet(), permissions.localMicrophoneGrants().first())
+    }
+
+    @Test
+    fun localGrantsFollowPolicyChanges() = runTest {
+        val config = MutableStateFlow(LibPebbleConfig(
+            watchConfig = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+        val permissions = AppPermissions(dao, installedAs(subject()),
+            WatchConfigFlow(config),
+            FixedClock(1_000), RunningApps(NoWatches), testScope)
+        permissions.recordRequested(APP, listOf(WATCH_MICROPHONE, INTERNET))
+        val seen = mutableListOf<Set<Uuid>>()
+        val streaming = mutableListOf<Set<String>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            permissions.grantedKeys(subject(), listOf(WATCH_MICROPHONE)).collect { streaming += it }
+        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            permissions.localMicrophoneGrants().collect { seen += it }
+        }
+        runCurrent()
+        config.value = config.value.copy(watchConfig = config.value.watchConfig.copy(permissionPolicy = PermissionPolicy.NeverAsk))
+        runCurrent()
+        config.value = config.value.copy(watchConfig = config.value.watchConfig.copy(permissionPolicy = PermissionPolicy.AlwaysAsk))
+        runCurrent()
+        assertEquals(listOf(emptySet(), setOf(APP), emptySet()), seen)
+        assertEquals(listOf(emptySet(), setOf(WATCH_MICROPHONE), emptySet()), streaming)
+    }
+
+    @Test
+    fun disablingEnforcementSyncsNoGrantsToTheWatchAndRemovedAppsHaveNoGrant() = runTest {
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
+        val disabled = permissions(dao, config = WatchConfig(enablePlugins = false))
+        assertEquals(emptySet(), disabled.localMicrophoneGrants().first())
+        assertEquals(Granted, disabled.request(APP, WATCH_MICROPHONE))
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        assertEquals(emptySet(), disabled.localMicrophoneGrants().first())
+        assertEquals(Granted, disabled.request(APP, WATCH_MICROPHONE))
+        val removed = permissions(dao, installed = installedAs(null))
+        assertEquals(emptySet(), removed.localMicrophoneGrants().first())
+    }
+
+    @Test
+    fun lockerProjectionFollowsDecisionsAndRefreshesAfterMetadataChanges() = runTest {
+        val subjects = MutableSharedFlow<Map<Uuid, PermissionSubject>>(replay = 1)
+        val app = subject()
+        subjects.emit(mapOf(APP to app))
+        val seen = mutableListOf<Set<Uuid>>()
+        val installed = object : InstalledApps {
+            override fun subjectsOf(appUuids: Set<Uuid>) = subjects.map { all -> all.filterKeys { it in appUuids } }
+            override fun pluginPermissions() = flowOf(emptyMap<String, PluginDefinedPermission>())
+            override suspend fun syncMicrophoneGrants(grants: Set<Uuid>) { seen += grants }
+        }
+        val permissions = permissions(dao, installed = installed,
+            scope = LibPebbleCoroutineScope(backgroundScope.coroutineContext))
+        permissions.init()
+        runCurrent()
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
+        runCurrent()
+        subjects.emit(mapOf(APP to app))
+        runCurrent()
+        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
+        runCurrent()
+        assertEquals(listOf(emptySet(), setOf(APP), setOf(APP), emptySet()), seen)
+    }
+
+    @Test
+    fun unrelatedGrantsNeverAllowLocalCapture() = runTest {
+        permissions.setPermissionDecisions(APP, mapOf(INTERNET to true, LOCATION to true))
+        assertEquals(emptySet(), permissions.localMicrophoneGrants().first())
     }
 }

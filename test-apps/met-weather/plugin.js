@@ -5,7 +5,8 @@
 var FORECAST_URL = 'https://api.met.no/weatherapi/locationforecast/2.0/complete';
 var USER_AGENT = 'PebbleWeatherPluginDemo/1.0 github.com/coredevices/mobileapp';
 var CACHE_KEY = 'forecast';
-var HOURS = 6;
+var MAX_HOURS = 48;
+var HOURLY_PROPERTIES = ['hourly_temperature', 'hourly_condition', 'hourly_condition_code'];
 var DEFAULT_TTL_MS = 30 * 60 * 1000;
 
 // ---------------------------------------------------------------- location
@@ -219,7 +220,7 @@ function symbolOf(entry) {
   return next && next.summary && next.summary.symbol_code;
 }
 
-function locationEnvelope(series, iconPixelSize) {
+function locationEnvelope(series, iconPixelSize, wanted) {
   var now = series[0];
   var details = now.data.instant.details;
   // MET has no daily summary, so the day's range is the next 24 hours'.
@@ -237,22 +238,50 @@ function locationEnvelope(series, iconPixelSize) {
     var uv = details.ultraviolet_index_clear_sky;
     properties.uv_index = { numericValue: { value: uv, min: 0, max: 11 }, shortText: { text: String(Math.round(uv)) } };
   }
+  // A series of glyphs is costly to draw, so only for a subscriber that asked for the hours.
+  if (wanted.some(function (name) { return name.indexOf('hourly_') === 0; })) {
+    var hourly = hourlySeries(series, iconPixelSize);
+    wanted.forEach(function (name) { if (hourly[name]) properties[name] = hourly[name]; });
+  }
   return [{ instanceId: 'current', properties: properties }];
 }
 
-function hourEnvelope(series, iconPixelSize) {
-  // series[0] is the hour we're in; the face wants the ones after it.
-  return series.slice(1, HOURS + 1).map(function (entry, index) {
-    var celsius = entry.data.instant.details.air_temperature;
-    return {
-      instanceId: String(index),
-      properties: {
-        temperature: { numericValue: { value: celsius, unit: '°C' }, shortText: { text: Math.round(celsius) + '°C' } },
-        condition: conditionShapes(symbolOf(entry), iconPixelSize, false),
-        condition_code: { longText: { text: conditionCode(symbolOf(entry)) } },
-      },
+/**
+ * The hours ahead as series, from the hour we're in. MET's timeseries turns 6-hourly after a couple
+ * of days, so this stops at the first step that isn't an hour.
+ */
+function hourlySeries(series, iconPixelSize) {
+  var start = Date.parse(series[0].time);
+  var hours = [];
+  for (var i = 0; i < series.length && i < MAX_HOURS && Date.parse(series[i].time) === start + i * 3600000; i++) {
+    hours.push(series[i]);
+  }
+  function over(shapes) {
+    shapes.start = start / 1000;
+    shapes.stepSec = 3600;
+    return { series: shapes };
+  }
+  var temps = hours.map(function (entry) { return entry.data.instant.details.air_temperature; });
+  var symbols = hours.map(symbolOf);
+  var condition = { shortText: { values: symbols.map(conditionText) } };
+  if (iconPixelSize) {
+    var size = Math.min(iconPixelSize.w, iconPixelSize.h);
+    var drawn = {};
+    var glyphFor = function (symbol, mono) {
+      var key = conditionCode(symbol) + (mono ? ':mono' : ':colour');
+      return drawn[key] || (drawn[key] = glyph(conditionCode(symbol), size, mono));
     };
-  });
+    condition.icon = { values: symbols.map(function (s) { return glyphFor(s, true); }) };
+    condition.image = { values: symbols.map(function (s) { return glyphFor(s, false); }) };
+  }
+  return {
+    hourly_temperature: over({
+      numericValue: { values: temps, unit: '°C' },
+      shortText: { values: temps.map(function (t) { return Math.round(t) + '°C'; }) },
+    }),
+    hourly_condition: over(condition),
+    hourly_condition_code: over({ longText: { values: symbols.map(conditionCode) } }),
+  };
 }
 
 Pebble.registerSourceHandler(async function (request, respond) {
@@ -260,10 +289,18 @@ Pebble.registerSourceHandler(async function (request, respond) {
   try {
     coords = await currentPosition();
   } catch (e) {
+    console.error('No location: ' + ((e && e.message) || e));
     respond.error('PERMISSION_DENIED', (e && e.message) || 'no location');
     return;
   }
-  var forecast = await forecastFor(coords);
+  var forecast;
+  try {
+    forecast = await forecastFor(coords);
+  } catch (e) {
+    console.error('Fetching the MET forecast failed: ' + e);
+    respond.error('PLUGIN_UNAVAILABLE', 'Could not reach MET Norway.');
+    return;
+  }
   var series = forecast.body.properties.timeseries;
   var hourStart = Date.now() - 60 * 60 * 1000;
   series = series.filter(function (entry) { return Date.parse(entry.time) > hourStart; });
@@ -273,8 +310,6 @@ Pebble.registerSourceHandler(async function (request, respond) {
   }
   respond.data({
     validUntilMs: forecast.expires,
-    instances: request.item === 'hour'
-      ? hourEnvelope(series, request.iconPixelSize)
-      : locationEnvelope(series, request.iconPixelSize),
+    instances: locationEnvelope(series, request.iconPixelSize, request.properties || HOURLY_PROPERTIES),
   });
 });

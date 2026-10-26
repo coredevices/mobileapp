@@ -62,10 +62,17 @@ import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
+import io.rebble.libpebblecommon.plugin.ActionResult
+import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.plugin.NativePlugin
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginClient
+import io.rebble.libpebblecommon.plugin.PluginErrors
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.PluginOAuthApi
-import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.SourceUpdate
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccessApi
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.WatchInfo
@@ -84,9 +91,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
+import kotlinx.serialization.json.JsonObject
 import org.koin.core.Koin
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
@@ -102,7 +111,8 @@ sealed class PebbleConnectionEvent {
 @Stable
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
-    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi {
+    SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
+    PluginFileAccessApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -220,33 +230,55 @@ interface Weather {
     val currentWeather: Flow<List<WeatherAppEntry>>
 }
 
-/**
- * Registration for plugins that live outside libpebble3 (see `new-plugin-api.md`). libpebble3's
- * Koin context is isolated, so app-side plugins cannot be injected into the registry directly.
- */
+/** The installed plugins, and the only way to call them (see `new-plugin-api.md`). */
 interface Plugins {
-    fun registerPlugin(plugin: Plugin)
+    /** For plugins outside libpebble3, whose Koin context is isolated. */
+    fun registerPlugin(plugin: NativePlugin)
 
     /** Built-in plugins (phone-side data sources like Music or Weather), not backed by a pbw. */
-    fun nativePlugins(): Flow<List<NativePlugin>>
+    fun nativePlugins(): Flow<List<PluginMetadata>>
+
+    val disabledBuiltInPlugins: StateFlow<Set<Uuid>>
+
+    /** A disabled built-in is hidden from every caller, as if it weren't installed. */
+    fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean)
 
     /** The script behind [pluginUuid]'s settings page, or null if it has none. */
     fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
 
-    /**
-     * Find a plugin serving the given (category, item) tuple. If [preferredPluginUuid] is set
-     * and that plugin serves the tuple, prefer it; otherwise fall back to any plugin that does.
-     * Sources are fungible — actions are not, so action lookup uses [findPlugin] by uuid.
-     */
-    fun findSourcePlugin(
+    fun getAllPlugins(): List<PluginMetadata>
+
+    fun observe(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
         category: String,
         item: String,
-        preferredPluginUuid: String? = null,
-    ): Plugin?
+        properties: List<String>? = null,
+        iconPixelSize: IconPixelSize? = null,
+    ): Flow<SourceUpdate>
 
-    fun findPlugin(pluginUuid: String): Plugin?
+    /** The first update, or a [PluginErrors.TIMEOUT] error. */
+    suspend fun read(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
+        category: String,
+        item: String,
+        properties: List<String>? = null,
+        timeout: Duration = DEFAULT_READ_TIMEOUT,
+    ): SourceUpdate
 
-    fun getAllPlugins(): List<Plugin>
+    suspend fun invoke(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
+        action: String,
+        args: JsonObject,
+        /** Null leaves it to the plugin: a JS plugin's request times out on its own. */
+        timeout: Duration? = null,
+    ): ActionResult
+
+    companion object {
+        val DEFAULT_READ_TIMEOUT = 10.seconds
+    }
 }
 
 interface Timeline {
@@ -268,6 +300,7 @@ data class AnalyticsEvent(
 
 interface AnalyticsEvents {
     val analyticsEvents: Flow<AnalyticsEvent>
+    val heartbeatCounterIncrements: Flow<String>
 }
 
 interface WatchPrefs {
@@ -369,6 +402,8 @@ interface LockerApi {
      * none, so callers fall back to the PKJS `showConfiguration` flow.
      */
     suspend fun appConfigPageUrl(uuid: Uuid): String?
+    /** A text file from an installed app's pbw, or null if the app or file is missing. */
+    suspend fun getAppFile(uuid: Uuid, name: String): String?
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
@@ -445,7 +480,6 @@ class LibPebble3(
     private val locker: Locker,
     private val bundledAppInstaller: BundledAppInstaller,
     private val lockerPluginLoader: LockerPluginLoader,
-    private val pluginRegistry: PluginRegistry,
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -472,14 +506,17 @@ class LibPebble3(
     private val vibePatternDao: VibePatternDao,
     private val watchPreferences: WatchPrefs,
     private val weatherManager: WeatherManager,
-    appPermissions: AppPermissions,
+    private val appPermissions: AppPermissions,
+    pluginClient: PluginClient,
+    pluginFileAccess: PluginFileAccess,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
     Errors by errorTracker, Contacts by contacts, AnalyticsEvents by analytics,
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
-    HealthDataApi by health, Plugins by pluginRegistry, AppPermissionsApi by appPermissions {
+    HealthDataApi by health, Plugins by pluginClient,
+    AppPermissionsApi by appPermissions, PluginFileAccessApi by pluginFileAccess {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -488,6 +525,7 @@ class LibPebble3(
             logger.w { "Already initialized!!!" }
             return
         }
+        appPermissions.init()
         WatchHardwarePlatform.init(libPebbleCoroutineScope, libPebbleConfigFlow.config)
         bluetoothStateProvider.init()
         gattServerManager.init()

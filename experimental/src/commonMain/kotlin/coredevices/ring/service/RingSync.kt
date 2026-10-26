@@ -5,10 +5,13 @@ import coredevices.analytics.CoreAnalytics
 import coredevices.firestore.UsersDao
 import coredevices.haversine.BluetoothFailureReason
 import coredevices.haversine.DataDecodeException
+import coredevices.haversine.KMPHaversineAdvertisement
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.haversine.SatelliteStatus
 import coredevices.haversine.TransferStatus
+import coredevices.haversine.fingerprintMatchesFailsafe
+import coredevices.haversine.fingerprintMatchesPTF
 import coredevices.haversine.removeDCBias
 import coredevices.resampler.Resampler
 import coredevices.libindex.database.entity.RingTransferStatus
@@ -60,6 +63,7 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
+import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.coroutines.cancellation.CancellationException
@@ -161,6 +165,7 @@ class RingSync(
     }
     private var syncJob: Job? = null
     private val saveSemaphore = Semaphore(permits = 8)
+    private val pairingKeyMonitor = RingPairingKeyMonitor(prefs)
     private val _lastRing: MutableStateFlow<KMPHaversineSatellite?> = MutableStateFlow(null)
     val lastRing = _lastRing.asStateFlow()
 
@@ -235,6 +240,21 @@ class RingSync(
         return filename
     }
 
+    private fun isPairedRing(id: String): Boolean =
+        prefs.ringPaired.value?.replace(":", "").equals(id.replace(":", ""), ignoreCase = true)
+
+    private suspend fun checkPairingKeyHash(satelliteManager: KMPHaversineSatelliteManager, advertisement: KMPHaversineAdvertisement) {
+        if (!isPairedRing(advertisement.id)) return
+        val fingerprint = advertisement.cacheableStateFingerprint ?: return
+        if (fingerprintMatchesFailsafe(fingerprint) || fingerprintMatchesPTF(fingerprint)) return
+        val satellite = satelliteManager.lastRing.value?.takeIf { it.id.equals(advertisement.id, ignoreCase = true) }
+            ?: satelliteManager.getSatelliteById(advertisement.id)
+        val firmwareVersion = satellite?.state?.value?.firmwareVersion ?: return
+        if (pairingKeyMonitor.onAdvertisement(firmwareVersion, advertisement.pairingKeyHash)) {
+            _ringEvents.emit(RingEvent.BluetoothPeerPairingIssue(ringId = advertisement.id))
+        }
+    }
+
     @OptIn(FlowPreview::class)
     fun startSyncJob(satelliteManager: KMPHaversineSatelliteManager) {
         logger.d { "startSyncJob()" }
@@ -252,6 +272,9 @@ class RingSync(
             }
             launch {
                 indexNotificationManager.processRingSyncTransferNotifications(ringEvents)
+            }
+            launch {
+                satelliteManager.advertisements.collect { checkPairingKeyHash(satelliteManager, it) }
             }
             launch(Dispatchers.IO) {
                 lifetimeCollectionCount.debounce(1.seconds).collect {
@@ -315,6 +338,14 @@ class RingSync(
                                             logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi} lastRxRSSI = ${satelliteStatus.satellite.state.value?.rxRSSI}" }
                                             val transferStatus = satelliteStatus.transferStatus
                                             buttonSequenceRecorder.onTransferStatus(transferStatus)
+                                            if (transferStatus !is TransferStatus.TransferFailed && isPairedRing(satelliteStatus.satellite.id)) {
+                                                satelliteStatus.satellite.state.value?.firmwareVersion?.let { firmwareVersion ->
+                                                    pairingKeyMonitor.onEncryptedLinkConfirmed(
+                                                        firmwareVersion,
+                                                        satelliteStatus.satellite.lastAdvertisement?.pairingKeyHash
+                                                    )
+                                                }
+                                            }
                                             if (transferStatus is TransferStatus.TransferComplete) {
                                                 withContext(Dispatchers.Default) {
                                                     removeDCBias(transferStatus.samples)
@@ -530,7 +561,20 @@ class RingSync(
                                                             reason = transferStatus.exception?.message,
                                                             recoverable = false,
                                                         )
-                                                        sendBugReportPrompt()
+                                                        sendBugReportPrompt(
+                                                            context = Json.encodeToString(
+                                                                mapOf(
+                                                                    "comment" to "Irrecoverable data",
+                                                                    "exceptionType" to transferStatus.exception?.let {
+                                                                        it::class.simpleName
+                                                                    },
+                                                                    "exceptionMessage" to transferStatus.exception?.message,
+                                                                    "serialNumber" to satelliteSerial,
+                                                                    "rssi" to transferStatus.satellite.lastAdvertisement?.rssi?.roundToInt()?.toString()
+                                                                )
+                                                            ),
+                                                            reportText = "App reported transfer failed"
+                                                        )
                                                     }
 
                                                     is TransferStatus.TransferInProgress -> {
@@ -625,14 +669,29 @@ class RingSync(
                                                             )
                                                         }
                                                         val transfer = withContext(Dispatchers.IO) {
-                                                            ringTransferRepository.getLastValidTransferByStartIndex(
-                                                                ringRxIndex
-                                                            )
+                                                            ringTransferRepository.getLastValidTransferByStartIndex(ringRxIndex)
+                                                                ?: run {
+                                                                    // Best-effort flush of a buffer left over from before a re-pair or
+                                                                    // rollover; its transfer row is no longer in the current iteration.
+                                                                    val stale = ringTransferRepository.failStartedTransfersAtStartIndex(ringRxIndex)
+                                                                    logger.w {
+                                                                        "No pending transfer found for completed transfer w/ start index $ringRxIndex, " +
+                                                                                "saving $audioDuration seconds as a partial recording" +
+                                                                                " (marked stale transfers ${stale.map { it.id }} as failed)"
+                                                                    }
+                                                                    val newId = ringTransferRepository.createRingTransfer(
+                                                                        advertisementReceived = stale.lastOrNull()?.transferInfo?.advertisementReceived
+                                                                            ?.let { Instant.fromEpochMilliseconds(it) }
+                                                                            ?: transferCompleteTimestamp,
+                                                                        startIndex = ringRxIndex,
+                                                                    )
+                                                                    ringTransferRepository.getRingTransferById(newId)!!
+                                                                }
                                                         }
                                                         val latency = buttonReleaseTimestamp
                                                             ?.let {
                                                                 val pressT = it - audioDuration.seconds
-                                                                transfer?.transferInfo?.advertisementReceived?.let { advT ->
+                                                                transfer.transferInfo?.advertisementReceived?.let { advT ->
                                                                     (advT - pressT.toEpochMilliseconds())
                                                                 }
                                                             }
@@ -644,7 +703,6 @@ class RingSync(
                                                             transferStatus.collectionStartCount.toInt(),
                                                             transferStatus.collectionIndex
                                                         )
-                                                        transfer ?: error("Expected to find existing transfer for start index $ringRxIndex")
                                                         val transferInfo = transfer.transferInfo!!.copy(
                                                             collectionEndIndex = transferStatus.collectionIndex,
                                                             buttonPressed = buttonReleaseTimestamp?.let { it - audioDuration.seconds }?.toEpochMilliseconds(),
@@ -741,7 +799,17 @@ class RingSync(
                                                                                 RingTransferStatus.Failed
                                                                             )
                                                                         }
-                                                                        sendBugReportPrompt()
+                                                                        sendBugReportPrompt(
+                                                                            context = Json.encodeToString(
+                                                                                mapOf(
+                                                                                    "comment" to "Saving/queueing failed",
+                                                                                    "exceptionType" to e::class.simpleName,
+                                                                                    "exceptionMessage" to e.message,
+                                                                                    "serialNumber" to satelliteSerial,
+                                                                                )
+                                                                            ),
+                                                                            reportText = "App reported error queueing transfer"
+                                                                        )
                                                                     }
                                                                 }
                                                             }
@@ -757,7 +825,16 @@ class RingSync(
                                             } catch (e: Exception) {
                                                 if (e is CancellationException) throw e
                                                 logger.e(e) { "Error during transfer: ${e.message}" }
-                                                sendBugReportPrompt()
+                                                sendBugReportPrompt(
+                                                    context = Json.encodeToString(
+                                                        mapOf(
+                                                            "comment" to "Uncaught error during transfer",
+                                                            "exceptionType" to e::class.simpleName,
+                                                            "exceptionMessage" to e.message,
+                                                        )
+                                                    ),
+                                                    reportText = "App reported error during transfer"
+                                                )
                                             }
                                         }
 
@@ -782,7 +859,15 @@ class RingSync(
                                                                 logger.w {
                                                                     "Marked ${pending.size} transfers as failed due to satellite entering failsafe mode during active transfer. Transfer range was ${transferRange!!.first} to ${transferRange!!.last}"
                                                                 }
-                                                                sendBugReportPrompt()
+                                                                sendBugReportPrompt(
+                                                                    context = Json.encodeToString(
+                                                                        mapOf(
+                                                                            "comment" to "Failsafe entered during active transfer - ${pending.size} dropped",
+                                                                            "serialNumber" to (satelliteStatus.satellite.state.value?.programmedSerialNumber ?: satelliteStatus.satellite.state.value?.serialNumber),
+                                                                        )
+                                                                    ),
+                                                                    reportText = "Device entered failsafe during transfer"
+                                                                )
                                                             }
                                                         }
                                                         transferRange = null
@@ -876,13 +961,18 @@ class RingSync(
         }
     }
 
-    suspend fun sendBugReportPrompt() {
+    suspend fun sendBugReportPrompt(
+        context: String,
+        reportText: String,
+    ) {
         indexNotificationManager.sendBugReportPrompt(
             "Index ran into a problem",
             """
                 We detected a data transfer error with a recent recording from your Index 01.
                 Sorry about that! Please help us improve by sending a bug report.
             """.trimIndent(),
+            context = context,
+            reportText = reportText
         )
     }
 
@@ -901,13 +991,15 @@ class RingSync(
             appendLine("Name: ${it.name}")
             appendLine("Last Seen: ${it.lastAdvertisement?.timestamp}")
             appendLine("Last RSSI: ${it.lastAdvertisement?.rssi}")
-            appendLine("Last RX RSSI: ${state?.rxRSSI}")
+            appendLine("Last RX RSSI: ${state?.rxRSSI} (measured ${state?.rxRSSITimestamp})")
             appendLine("Battery Voltage: ${batteryVoltage.replayCache.firstOrNull()?.second ?: "<unknown>"} mV")
             appendLine("isInCollectionState: ${state?.isInCollectionState}")
             appendLine("isNearby: ${state?.isNearby}")
             appendLine("isInFailsafeMode: ${state?.isInFailsafeMode}")
             appendLine("firmwareVersion: ${state?.firmwareVersion}")
             appendLine("truncatedCollectionCount: ${state?.truncatedCollectionCount}")
+            appendLine("pairingKeyHash: ${it.lastAdvertisement?.pairingKeyHash?.toPairingKeyHex()}")
+            appendLine("expectedPairingKeyHash: ${prefs.ringPairingKeyHash.value?.toPairingKeyHex()}")
         }
     }
 }

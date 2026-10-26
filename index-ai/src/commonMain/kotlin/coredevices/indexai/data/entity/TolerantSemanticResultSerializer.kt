@@ -18,6 +18,9 @@ import kotlinx.serialization.json.JsonNull
  * polymorphic decoder throws on an unknown discriminator, which would otherwise fail the
  * whole RecordingDocument decode (dropping the recording from sync / crashing read paths).
  *
+ * On iOS gitlive only strips `NSNull` at the document's top level, so a nested explicit
+ * `semantic_result: null` also reaches this serializer as a non-map value.
+ *
  * Degrade an unresolvable subtype to null instead of throwing, mirroring
  * [TolerantInstantSerializer]: one drifted field never strands the entire recording. The
  * field is nullable and the UI already null-checks it.
@@ -27,18 +30,21 @@ object TolerantSemanticResultSerializer : KSerializer<SemanticResult?> {
     override val descriptor: SerialDescriptor = delegate.descriptor
 
     override fun deserialize(decoder: Decoder): SemanticResult? {
-        // Consume the whole element first: a failed streaming decode leaves the lexer
-        // mid-object, which then fails the enclosing decode anyway.
-        val json = decoder as? JsonDecoder ?: return decoder.decodeSerializableValue(delegate)
+        // gitlive decodes from a materialised map, so a failure can just be swallowed; JSON
+        // must consume the whole element first or a failed decode leaves the lexer mid-object.
+        val json = decoder as? JsonDecoder
+            ?: return decodeOrNull { decoder.decodeSerializableValue(delegate) }
         val element = json.decodeJsonElement()
         if (element is JsonNull) return null
-        return try {
-            json.json.decodeFromJsonElement(delegate, element)
-        } catch (e: Exception) {
-            Logger.withTag("SemanticResult")
-                .w { "Unknown/undecodable semantic_result, dropping: ${e.message}" }
-            null
-        }
+        return decodeOrNull { json.json.decodeFromJsonElement(delegate, element) }
+    }
+
+    private inline fun decodeOrNull(decode: () -> SemanticResult): SemanticResult? = try {
+        decode()
+    } catch (e: Exception) {
+        Logger.withTag("SemanticResult")
+            .w { "Unknown/undecodable semantic_result, dropping: ${e.message}" }
+        null
     }
 
     override fun serialize(encoder: Encoder, value: SemanticResult?) {

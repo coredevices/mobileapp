@@ -3,8 +3,11 @@ package coredevices.ring.agent.builtin_servlets.reminders
 import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.builtin_servlets.destinationHints
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
+import coredevices.ring.agent.builtin_servlets.userMessageIfReady
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.database.room.repository.ListRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -48,13 +51,14 @@ class ReminderServlet(
             emptyList()
         }
         logger.d { "Fetched ${lists.size} lists from reminder integration" }
-        val words = sessionContext?.userMessageText
-            .takeIf { it?.isCompleted ?: false }
-            ?.await()
-            ?.split(" ")
-            ?.map { it.lowercase() } ?: emptyList()
+        val message = sessionContext.userMessageIfReady()
+        val words = message?.split(" ")?.map { it.lowercase() } ?: emptyList()
+        val hints = providers.destinationHints(
+            message, IntegrationSupport.Reminder, ReminderTool.TOOL_NAME, ListTool.TOOL_NAME,
+        )
         return buildString {
             super.getExtraContext(sessionContext)?.let { appendLine(it) }
+            hints.forEach { appendLine(it) }
             if (lists.isEmpty()) {
                 return@buildString
             }

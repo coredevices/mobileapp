@@ -44,6 +44,7 @@ import io.rebble.libpebblecommon.pebblekit.two.PebbleKit2Datalogging
 import io.rebble.libpebblecommon.plugin.MusicPlugin
 import io.rebble.libpebblecommon.plugin.NotificationsPlugin
 import io.rebble.libpebblecommon.plugin.PhoneBatteryMonitor
+import io.rebble.libpebblecommon.plugin.PhoneSoundPlayer
 import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
 import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.util.OtherPebbleAndroidApps
@@ -83,6 +84,7 @@ actual val platformModule: Module = module {
     singleOf(::AndroidPhoneReceiver) bind LegacyPhoneReceiver::class
     singleOf(::NotificationCallDetector)
     singleOf(::PhoneBatteryMonitor)
+    singleOf(::PhoneSoundPlayer)
     singleOf(::PhoneNetworkMonitor)
     singleOf(::MusicPlugin)
     singleOf(::NotificationsPlugin)

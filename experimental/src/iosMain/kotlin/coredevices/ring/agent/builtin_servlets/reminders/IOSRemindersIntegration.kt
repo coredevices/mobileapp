@@ -57,10 +57,6 @@ class IOSRemindersIntegration : ReminderIntegration {
     ): String {
         val eventStore = EKEventStore()
         check(requestAccess(eventStore)) { "Reminder permission not granted" }
-        val status = EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeReminder)
-        if (status != EKAuthorizationStatusAuthorized) {
-            throw Exception("Reminders full access not granted. Please enable full access in Settings → Privacy & Security → Reminders → Pebble.")
-        }
         val calendar = if (listId != null) {
             eventStore.calendarWithIdentifier(listId)
                 ?: throw Exception("Reminders list not found")

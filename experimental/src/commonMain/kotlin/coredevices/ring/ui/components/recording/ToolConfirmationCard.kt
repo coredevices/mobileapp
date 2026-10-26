@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
@@ -93,7 +93,7 @@ fun ToolConfirmationCard(
                     Spacer(Modifier.width(3.dp))
                     with(LocalDensity.current) {
                         Icon(
-                            Icons.Filled.Extension,
+                            Icons.Filled.Power,
                             contentDescription = null,
                             tint = colors.onSurfaceVariant,
                             modifier = Modifier.size(11.sp.toDp()),

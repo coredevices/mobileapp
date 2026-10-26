@@ -1,6 +1,5 @@
 package coredevices.ring.agent
 
-import coredevices.analytics.CoreAnalytics
 import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.mcp.client.HttpMcpIntegration
 import coredevices.mcp.client.HttpMcpProtocol
@@ -11,9 +10,7 @@ import coredevices.mcp.client.McpSession
 import coredevices.ring.agent.builtin_servlets.plugins.PluginsServlet
 import coredevices.ring.agent.pebble_plugin.PblPluginMcpIntegration
 import coredevices.ring.agent.pebble_plugin.PluginGrant
-import coredevices.ring.agent.pebble_plugin.withGrant
 import coredevices.ring.database.room.repository.McpServerRepository
-import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.McpServerEntry
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import io.rebble.libpebblecommon.connection.Plugins
@@ -30,16 +27,14 @@ class McpSessionFactory(
     private val builtinServletRepository: BuiltinServletRepository,
     private val mcpServerCache: McpServerCache,
     private val plugins: Plugins,
-    private val pluginGrants: PluginGrantRepository,
-    private val analytics: CoreAnalytics,
+    private val indexActions: IndexActionsRepository,
 ) {
-    private suspend fun pluginsWith(grant: PluginGrant) =
-        plugins.getAllPlugins().withGrant(grant, pluginGrants.disabledPluginsNow(grant))
+    private suspend fun pluginsWith(grant: PluginGrant) = indexActions.grantedPlugins(grant).first()
 
     /** One integration per plugin granting actions, plus the sources servlet if any plugin grants those. */
     private suspend fun getPluginServers(): List<McpIntegration> {
-        val actions = pluginsWith(PluginGrant.Actions).map { PblPluginMcpIntegration(it, analytics) }
-        val sources = PluginsServlet({ pluginsWith(PluginGrant.Sources) }, analytics)
+        val actions = pluginsWith(PluginGrant.Actions).map { PblPluginMcpIntegration(it, plugins) }
+        val sources = PluginsServlet({ pluginsWith(PluginGrant.Sources) }, plugins)
             .takeIf { pluginsWith(PluginGrant.Sources).isNotEmpty() }
         return actions + listOfNotNull(sources)
     }
@@ -70,5 +65,6 @@ private fun HttpMcpServerEntity.toMcpIntegration(cache: McpServerCache): HttpMcp
         protocol = if (this.streamable) HttpMcpProtocol.Streaming else HttpMcpProtocol.Sse,
         authHeader = this.authHeader,
         cache = cache,
+        description = this.description?.takeIf { it.isNotBlank() },
     )
 }

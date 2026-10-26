@@ -505,12 +505,20 @@ private fun AudioPlayerCard(
                 .clickable(onClick = onTogglePlay),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = if (playing) "Pause" else "Play",
-                tint = colors.onPrimary,
-                modifier = Modifier.size(18.dp),
-            )
+            if (playbackState is MessagePlaybackState.Buffering) {
+                CircularProgressIndicator(
+                    color = colors.onPrimary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                )
+            } else {
+                Icon(
+                    if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (playing) "Pause" else "Play",
+                    tint = colors.onPrimary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         WaveformBars(

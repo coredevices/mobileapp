@@ -1,8 +1,7 @@
 package coredevices.ring.agent.pebble_plugin
 
+import io.rebble.libpebblecommon.connection.Plugins
 import co.touchlab.kermit.Logger
-import coredevices.analytics.CoreAnalytics
-import coredevices.analytics.HEARTBEAT_COUNTER_PLUGIN_INVOCATIONS
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.McpTool
 import coredevices.mcp.SessionContext
@@ -12,15 +11,16 @@ import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 
 class PblPluginMcpIntegration(
-    private val plugin: Plugin,
-    private val analytics: CoreAnalytics,
+    private val plugin: PluginMetadata,
+    private val plugins: Plugins,
 ): McpIntegration {
 
     companion object {
@@ -94,8 +94,7 @@ class PblPluginMcpIntegration(
             )
         }
 
-        analytics.incrementHeartbeatCounter(HEARTBEAT_COUNTER_PLUGIN_INVOCATIONS)
-        val result = plugin.invoke(toolName, jsonParams)
+        val result = plugins.invoke(PluginCaller.Host(), plugin, toolName, jsonParams)
         val errorLine = listOfNotNull(result.code, result.message).joinToString(": ").ifEmpty { null }
         if (!result.ok) {
             logger.w { "Error during invocation of $toolName: $errorLine" }

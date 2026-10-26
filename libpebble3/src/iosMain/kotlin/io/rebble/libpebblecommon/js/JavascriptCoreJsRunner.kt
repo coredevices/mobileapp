@@ -10,7 +10,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCGeolocationInte
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.JSCJSLocalStorageInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.reproduceProductionCrash
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
-import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.cinterop.StableRef
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +59,7 @@ class JavascriptCoreJsRunner(
     private val pluginRegistry: PluginRegistry,
     private val httpClient: HttpClient,
     private val permissions: AppPermissions,
-    private val runningApps: RunningApps,
+    private val pluginClient: PluginClient,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests) {
     private var jsContext: JSContext? = null
     private val logger = Logger.withTag("JSCRunner-${appInfo.longName}")
@@ -96,7 +96,7 @@ class JavascriptCoreJsRunner(
             JSTimeout(interfacesScope, evalRawFn),
             WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess),
             JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
-            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps),
+            JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)
         )
@@ -252,6 +252,12 @@ class JavascriptCoreJsRunner(
             jsContext?.evalCatching("globalThis.signalNewAppMessageData(${Json.encodeToString(data)})")
         }
         return true
+    }
+
+    override suspend fun signalAudioStream(json: String) {
+        withContext(threadContext) {
+            jsContext?.evalCatching("globalThis.signalAudioStream(${Json.encodeToString(json)})")
+        }
     }
 
     override suspend fun signalTimelineToken(callId: String, token: String) {

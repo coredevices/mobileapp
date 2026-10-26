@@ -696,6 +696,7 @@ private class E2EPreferences : Preferences {
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
     override val ringPairedName: StateFlow<String?> = MutableStateFlow(null)
+    override val ringPairingKeyHash: StateFlow<Int?> = MutableStateFlow(null)
     override val ringPairedOld: StateFlow<Boolean> = MutableStateFlow(false)
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
@@ -720,6 +721,7 @@ private class E2EPreferences : Preferences {
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
     override fun setRingPairedName(name: String?) {}
+    override fun setRingPairingKeyHash(hash: Int?) {}
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}

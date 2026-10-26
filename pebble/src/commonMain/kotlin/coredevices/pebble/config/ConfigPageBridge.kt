@@ -1,6 +1,8 @@
 package coredevices.pebble.config
 
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.plugin.PluginNativeException
+import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -34,6 +37,10 @@ class ConfigPageBridge(
     // Written on the main thread, read on the WebView's JS-interface thread in onCall.
     @Volatile
     var webSignIn: (suspend (WebSignInRequest) -> Map<String, String>?)? = null
+
+    /** File pickers and grants for the plugin behind this page; null when there is no plugin. */
+    @Volatile
+    var fileAccess: ConfigPageFileAccess? = null
 
     private val readyTargets = mutableSetOf<String>()
 
@@ -121,8 +128,71 @@ class ConfigPageBridge(
                     }))
                 }
             }
+            "showFilePicker" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                val request = try {
+                    LENIENT.decodeFromJsonElement(FilePickRequest.serializer(), call.message)
+                } catch (e: Exception) {
+                    reply(call.id, error("showFilePicker needs { kind, mode, accept }"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("file picker") {
+                        // Cancel resolves the page's promise to null.
+                        access.pick(request)?.let { Json.encodeToString(FileHandleInfo.serializer(), it) } ?: "null"
+                    })
+                }
+            }
+            "fileGrants" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("listing file access") {
+                        Json.encodeToString(FILE_HANDLES, access.handles())
+                    })
+                }
+            }
+            "revokeFileGrant" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                val id = (call.message as? JsonObject)?.get("id")?.let { it as? JsonPrimitive }?.content
+                if (id.isNullOrBlank()) {
+                    reply(call.id, error("revokeFileGrant needs { id }"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("revoking file access") {
+                        access.revoke(id)
+                        "null"
+                    })
+                }
+            }
             else -> reply(call.id, error("unknown method '${call.method}'"))
         }
+    }
+
+    private suspend fun fileAccessResult(what: String, block: suspend () -> String): String = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: PluginNativeException) {
+        Json.encodeToString(JsonObject.serializer(), buildJsonObject {
+            put("error", e.message ?: "$what failed")
+            put("code", e.code)
+        })
+    } catch (e: Exception) {
+        logger.w(e) { "$what failed" }
+        error("$what failed")
     }
 
     /** A script pushed something at the page. */
@@ -177,6 +247,7 @@ class ConfigPageBridge(
         val TARGETS = ListSerializer(Target.serializer())
         val HELLO = Hello.serializer()
         val STRING = String.serializer()
+        val FILE_HANDLES = ListSerializer(FileHandleInfo.serializer())
         // A config page may pass extra options; tolerate them rather than reject the call.
         val LENIENT = Json { ignoreUnknownKeys = true }
     }
@@ -252,6 +323,56 @@ val CONFIG_PAGE_SHIM_JS = """
       return result ? result.cookies : null;
     });
   };
+
+  /**
+   * Ask the user for a file or directory the plugin may use from then on, as
+   * window.showOpenFilePicker / showDirectoryPicker: { mode: 'read' | 'readwrite', types: [{ accept:
+   * { 'text/markdown': ['.md'] } }] }. Resolves with { id, kind, name, mode }; hand the id to the
+   * plugin, which opens it with Pebble.fileSystem.getHandle(id). Rejects with AbortError on cancel,
+   * and NotAllowedError if the user hasn't allowed the plugin ReadFiles / WriteFiles.
+   */
+  function showPicker(kind, options) {
+    options = options || {};
+    var accept = [];
+    (options.types || []).forEach(function (type) {
+      Object.keys((type && type.accept) || {}).forEach(function (mime) { accept.push(mime); });
+    });
+    var request = { kind: kind, mode: options.mode === 'readwrite' ? 'readwrite' : 'read', accept: accept };
+    return call('showFilePicker', '', request).then(function (result) {
+      if (result && result.error) {
+        var refused = new Error(result.error);
+        if (result.code === 'PERMISSION_DENIED') refused.name = 'NotAllowedError';
+        throw refused;
+      }
+      if (!result) {
+        var aborted = new Error('The user aborted a request.');
+        aborted.name = 'AbortError';
+        throw aborted;
+      }
+      return result;
+    });
+  }
+
+  global.Pebble.showOpenFilePicker = function (options) {
+    return showPicker('file', options).then(function (handle) { return [handle]; });
+  };
+
+  global.Pebble.showDirectoryPicker = function (options) { return showPicker('directory', options); };
+
+  global.Pebble.fileSystem = Object.freeze({
+    /** [{ id, kind, name, mode }] the plugin currently holds. */
+    grants: function () {
+      return call('fileGrants').then(function (result) {
+        if (result && result.error) throw new Error(result.error);
+        return result;
+      });
+    },
+    revoke: function (id) {
+      return call('revokeFileGrant', '', { id: String(id) }).then(function (result) {
+        if (result && result.error) throw new Error(result.error);
+      });
+    }
+  });
 
   /** Scripts that have already reported ready, for a page that listens late. */
   global.Pebble.readyTargets = function () { return readyTargets.slice(); };

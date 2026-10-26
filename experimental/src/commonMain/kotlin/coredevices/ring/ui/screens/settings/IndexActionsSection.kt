@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
@@ -48,17 +48,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withCompositionLocal
 import androidx.compose.ui.Alignment
@@ -90,30 +90,27 @@ import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
-import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
 import coredevices.ring.agent.pebble_plugin.PluginGrant
+import coredevices.ring.agent.pebble_plugin.PluginStore
+import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
-import coredevices.ring.database.Preferences
 import coredevices.ring.service.button.GestureDestination
-import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.screens.settings.mcp.HttpServerEditDialog
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.toggleButtonColors
 import coredevices.ui.M3Dialog
+import io.rebble.libpebblecommon.permissions.InstallReview
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import kotlin.uuid.Uuid
 
 /** Actions are only reachable through an Index agent, so they are off when no gesture routes to one. */
 internal fun nothingRoutesToIndexAgent(routes: Map<RingGesture, GestureDestination>): Boolean =
-    routes.values.none {
-        it == GestureDestination.IndexAgent ||
-            it == GestureDestination.LocalAgent ||
-            it == GestureDestination.RemoteAgent
-    }
+    routes.values.none { it == GestureDestination.IndexAgent || it == GestureDestination.LocalAgent }
 
 internal fun captureTypeLabel(type: DefaultCaptureType): String = type.title.lowercase()
 
@@ -140,30 +137,33 @@ internal data class DestOption(
 internal fun noteDestOptions(
     providers: List<IntegrationProvider>,
     available: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid> = emptySet(),
+    lockerPlugins: Set<Uuid> = emptySet(),
 ): List<DestOption> = providers.map {
     val connected = it in available
     DestOption(
         provider = it,
         title = it.notesTitle,
         connected = connected,
-        configurable = connected &&
-            (noteConfigureDialog(it) != null || it.isConfigurablePlugin(configurablePlugins)),
+        configurable = connected && (noteConfigureDialog(it) != null || it.hasLockerPage(lockerPlugins)),
     )
 }
 
 internal fun reminderDestOptions(
     providers: List<IntegrationProvider>,
     available: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid> = emptySet(),
+    lockerPlugins: Set<Uuid> = emptySet(),
 ): List<DestOption> = providers.map {
     val connected = it in available
-    DestOption(it, it.remindersTitle, connected, connected && it.isConfigurablePlugin(configurablePlugins))
+    DestOption(it, it.remindersTitle, connected, connected && it.hasLockerPage(lockerPlugins))
 }
 
-/** Plugins with a config page reopen it, as the locker's Settings button does. */
-internal fun IntegrationProvider.isConfigurablePlugin(configurablePlugins: Set<Uuid>): Boolean =
-    this is PblPluginIntegrationProvider && pluginUuid in configurablePlugins
+/** Store plugins that could take this kind once installed, listed after the installed options. */
+internal fun storeDestOptions(plugins: List<StorePlugin>, support: IntegrationSupport): List<StorePlugin> =
+    plugins.filter { support in it.supports }
+
+/** Locker plugins reconfigure from their locker page; built-in plugins have no page to open. */
+internal fun IntegrationProvider.hasLockerPage(lockerPlugins: Set<Uuid>): Boolean =
+    this is PblPluginIntegrationProvider && pluginUuid in lockerPlugins
 
 /** Actions that are switched off because they still need linking get a Connect button. */
 internal fun actionConnectDialog(action: IndexAction): ActionsDialog? =
@@ -220,7 +220,7 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
         "Beeper Messaging",
         "“Tell Jake I’m running late” → message to an approved contact",
     )
-    else -> ActionPresentation(Icons.Default.Extension, action.title, "")
+    else -> ActionPresentation(Icons.Default.Power, action.title, "")
 }
 
 private fun presentationFor(server: HttpMcpServerEntity) = ActionPresentation(
@@ -274,63 +274,77 @@ internal enum class ActionsDialog {
 }
 
 @Composable
-fun IndexActionsSection(
+internal fun IndexActionsSection(
+    agentReachable: Boolean,
     actions: List<IndexAction>,
     plugins: List<IndexPlugin>,
     httpMcpServers: List<HttpMcpServerEntity>,
     httpMcpDisabledReason: String?,
+    captureType: DefaultCaptureType,
+    noteProvider: IntegrationProvider,
+    reminderProvider: IntegrationProvider,
+    approvedContactCount: Int,
+    noteDestinationProviders: List<IntegrationProvider>,
+    reminderDestinationProviders: List<IntegrationProvider>,
     availableNoteProviders: List<IntegrationProvider>,
     availableReminderProviders: List<IntegrationProvider>,
-    configurablePlugins: Set<Uuid>,
+    lockerPlugins: Set<Uuid>,
+    storePlugins: List<StorePlugin>,
+    pluginsEnabled: Boolean,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
     onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
     onSetHttpServerEnabled: (server: HttpMcpServerEntity, enabled: Boolean) -> Unit,
     onSaveHttpServer: (server: HttpMcpServerEntity) -> Unit,
     onDeleteHttpServer: (server: HttpMcpServerEntity) -> Unit,
+    onSetCaptureType: (DefaultCaptureType) -> Unit,
+    onSelectNoteProvider: (IntegrationProvider) -> Unit,
+    onSelectReminderProvider: (IntegrationProvider) -> Unit,
+    onNoteConnectStarted: (providerId: String) -> Unit,
+    onReminderConnectStarted: (providerId: String) -> Unit,
+    onReviewInstall: suspend (StorePlugin) -> InstallReview?,
+    onInstallStorePlugin: suspend (StorePlugin, granted: Map<String, Boolean?>) -> Boolean,
     onAddIntegration: () -> Unit,
     onConfigurePlugin: (uuid: Uuid, title: String) -> Unit,
+    onOpenPluginPage: (uuid: Uuid) -> Unit,
     onOpenBeeperContacts: () -> Unit,
     onGetMoreActions: () -> Unit,
+    /** Null where the user can't browse plugins yet, e.g. onboarding; a hint is shown instead. */
+    onGetMorePlugins: (() -> Unit)?,
     onProvidersChanged: () -> Unit,
     showHeader: Boolean = true,
 ) {
-    val gestureRouting = koinInject<GestureRoutingPreferences>()
-    val routes by gestureRouting.routes.collectAsState()
-    if (nothingRoutesToIndexAgent(routes)) {
+    if (!agentReachable) {
         NoIndexAgentCard()
         return
     }
 
-    val preferences = koinInject<Preferences>()
-    val providers = koinInject<IntegrationProviderRepository>()
     val colors = IndexTheme.colors
+    val scope = rememberCoroutineScope()
 
-    val captureType by preferences.defaultCaptureType.collectAsState()
-    val noteProvider by providers.selectedNoteProvider.collectAsState()
-    val reminderProvider by providers.selectedReminderProvider.collectAsState()
-    val approvedContacts by preferences.approvedBeeperContacts.collectAsState()
     var sheet by remember { mutableStateOf<ActionsSheet?>(null) }
     var dialog by remember { mutableStateOf<ActionsDialog?>(null) }
     var editingServer by remember { mutableStateOf<HttpMcpServerEntity?>(null) }
-    // Connecting from a destination sheet is a pick as well as a connect, but the connect dialogs
-    // only report dismissal, so the choice is applied once the provider shows up as available.
-    var pendingNoteConnect by remember { mutableStateOf<IntegrationProvider?>(null) }
-    var pendingReminderConnect by remember { mutableStateOf<IntegrationProvider?>(null) }
+    var storeReview by remember { mutableStateOf<Pair<StorePlugin, InstallReview>?>(null) }
+    var installFailed by remember { mutableStateOf<StorePlugin?>(null) }
     val closeConnectDialog = {
         dialog = null
         onProvidersChanged()
     }
 
-    LaunchedEffect(availableNoteProviders) {
-        pendingNoteConnect?.takeIf { it in availableNoteProviders }?.let {
-            providers.selectNoteProvider(it)
-            pendingNoteConnect = null
+    // Installing from the sheet behaves like connecting an installed plugin: the config page opens.
+    fun installStorePlugin(plugin: StorePlugin, granted: Map<String, Boolean?>) {
+        scope.launch {
+            if (!onInstallStorePlugin(plugin, granted)) {
+                installFailed = plugin
+            } else if (plugin.configurable) {
+                onConfigurePlugin(plugin.pluginUuid, plugin.title)
+            }
         }
     }
-    LaunchedEffect(availableReminderProviders) {
-        pendingReminderConnect?.takeIf { it in availableReminderProviders }?.let {
-            providers.selectReminderProvider(it)
-            pendingReminderConnect = null
+    fun connectStorePlugin(plugin: StorePlugin) {
+        scope.launch {
+            val review = onReviewInstall(plugin)
+            if (review == null) installStorePlugin(plugin, emptyMap()) else storeReview = plugin to review
         }
     }
 
@@ -364,8 +378,8 @@ fun IndexActionsSection(
                 enabled = action.enabled,
                 disabledReason = action.disabledReason,
                 presentation = presentationFor(action),
-                badge = contactsBadge(approvedContacts.size)
-                    .takeIf { action.name == MessagingServlet.name && approvedContacts.isNotEmpty() },
+                badge = contactsBadge(approvedContactCount)
+                    .takeIf { action.name == MessagingServlet.name && approvedContactCount > 0 },
                 destinationLabel = when (action.name) {
                     NoteServlet.NAME -> noteProvider.notesTitle
                     ReminderServlet.NAME -> reminderProvider.remindersTitle
@@ -393,8 +407,8 @@ fun IndexActionsSection(
         plugins.forEach { plugin ->
             PluginRow(
                 plugin = plugin,
-                onConfigure = if (plugin.pluginUuid in configurablePlugins) {
-                    { onConfigurePlugin(plugin.pluginUuid, plugin.title) }
+                onConfigure = if (plugin.pluginUuid in lockerPlugins) {
+                    { onOpenPluginPage(plugin.pluginUuid) }
                 } else {
                     null
                 },
@@ -419,6 +433,23 @@ fun IndexActionsSection(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         // The Actions store is future expansion and ships disabled.
         // GetMoreActionsRow(onClick = onGetMoreActions)
+        if (pluginsEnabled && onGetMorePlugins != null) {
+            SectionActionRow(
+                icon = Icons.Default.Power,
+                title = "Add plugin integration",
+                subtitle = "Browse plugins in the store",
+                enabled = true,
+                onClick = onGetMorePlugins,
+            )
+        } else if (pluginsEnabled) {
+            SectionActionRow(
+                icon = Icons.Default.Power,
+                title = "Add plugin integration",
+                subtitle = "You can add plugins from settings later",
+                enabled = false,
+                onClick = {},
+            )
+        }
         SectionActionRow(
             icon = Icons.Default.Dns,
             title = "Add MCP server",
@@ -440,7 +471,7 @@ fun IndexActionsSection(
         ActionsSheet.CaptureType -> CaptureTypeSheet(
             current = captureType,
             onSelect = {
-                preferences.setDefaultCaptureType(it)
+                onSetCaptureType(it)
                 sheet = null
             },
             onDismiss = { sheet = null },
@@ -448,26 +479,26 @@ fun IndexActionsSection(
         ActionsSheet.NoteDestination -> DestinationSheet(
             icon = Icons.Default.EditNote,
             title = "Where notes save",
-            options = noteDestOptions(
-                providers.providers(IntegrationSupport.Note),
-                availableNoteProviders,
-                configurablePlugins,
-            ),
+            options = noteDestOptions(noteDestinationProviders, availableNoteProviders, lockerPlugins),
+            storePlugins = storeDestOptions(storePlugins, IntegrationSupport.Note),
+            pluginsEnabled = pluginsEnabled,
+            onGetMore = onGetMorePlugins,
             selected = noteProvider,
-            onSelect = {
-                pendingNoteConnect = null
-                providers.selectNoteProvider(it)
-            },
+            onSelect = onSelectNoteProvider,
             onConnect = { provider ->
-                pendingNoteConnect = provider
+                onNoteConnectStarted(provider.id)
                 when (provider) {
                     is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
                     else -> noteConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
                 }
             },
+            onInstall = { plugin ->
+                onNoteConnectStarted(PblPluginIntegrationProvider.idFor(plugin.pluginUuid))
+                connectStorePlugin(plugin)
+            },
             onConfigure = { provider ->
                 when (provider) {
-                    is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
+                    is PblPluginIntegrationProvider -> onOpenPluginPage(provider.pluginUuid)
                     else -> noteConfigureDialog(provider)?.let { dialog = it }
                 }
             },
@@ -476,29 +507,50 @@ fun IndexActionsSection(
         ActionsSheet.ReminderDestination -> DestinationSheet(
             icon = Icons.Default.Checklist,
             title = "Where reminders save",
-            options = reminderDestOptions(
-                providers.providers(IntegrationSupport.Reminder),
-                availableReminderProviders,
-                configurablePlugins,
-            ),
+            options = reminderDestOptions(reminderDestinationProviders, availableReminderProviders, lockerPlugins),
+            storePlugins = storeDestOptions(storePlugins, IntegrationSupport.Reminder),
+            pluginsEnabled = pluginsEnabled,
+            onGetMore = onGetMorePlugins,
             selected = reminderProvider,
-            onSelect = {
-                pendingReminderConnect = null
-                providers.selectReminderProvider(it)
-            },
+            onSelect = onSelectReminderProvider,
             onConnect = { provider ->
-                pendingReminderConnect = provider
+                onReminderConnectStarted(provider.id)
                 when (provider) {
                     is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
                     else -> reminderConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
                 }
             },
+            onInstall = { plugin ->
+                onReminderConnectStarted(PblPluginIntegrationProvider.idFor(plugin.pluginUuid))
+                connectStorePlugin(plugin)
+            },
             onConfigure = { provider ->
-                if (provider is PblPluginIntegrationProvider) onConfigurePlugin(provider.pluginUuid, provider.title)
+                if (provider is PblPluginIntegrationProvider) onOpenPluginPage(provider.pluginUuid)
             },
             onDismiss = { sheet = null },
         )
         null -> {}
+    }
+
+    storeReview?.let { (plugin, review) ->
+        koinInject<PluginStore>().ReviewInstallDialog(review) { granted ->
+            storeReview = null
+            if (granted != null) installStorePlugin(plugin, granted)
+        }
+    }
+    installFailed?.let { plugin ->
+        M3Dialog(
+            onDismissRequest = { installFailed = null },
+            title = { Text("Couldn't add ${plugin.title}") },
+            buttons = { TextButton(onClick = { installFailed = null }) { Text("OK") } },
+        ) {
+            Text(
+                "Check your connection and try again.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = colors.onSurfaceVariant,
+            )
+        }
     }
 
     editingServer?.let { server ->
@@ -681,7 +733,7 @@ private fun PluginRow(
     }
     Column(modifier = Modifier.fillMaxWidth()) {
         AgentRow(
-            icon = Icons.Default.Extension,
+            icon = Icons.Default.Power,
             title = plugin.title,
             summary = pluginSummary(plugin),
             interactive = interactive,
@@ -944,7 +996,7 @@ private fun NoIndexAgentCard() {
         Text(
             buildAnnotatedString {
                 append("Nothing routes to the Index agent right now, so actions are off. Point a gesture at ")
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Hybrid Index agent") }
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Index agent") }
                 append(" above to turn them back on.")
             },
             fontSize = 13.sp,
@@ -1057,15 +1109,15 @@ private fun SheetOptionRow(
 }
 
 @Composable
-private fun DestOptionTitle(option: DestOption) {
+private fun DestOptionTitle(title: String, plugin: Boolean) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(option.title)
+        Text(title)
         Spacer(Modifier.width(4.dp))
-        if (option.provider.isExternalPlugin) {
+        if (plugin) {
             Icon(
-                Icons.Default.Extension,
+                Icons.Default.Power,
                 contentDescription = "Plugin",
                 modifier = Modifier.size(18.dp),
                 tint = IndexTheme.colors.onSurfaceVariant
@@ -1080,15 +1132,23 @@ private fun DestinationSheet(
     icon: ImageVector,
     title: String,
     options: List<DestOption>,
+    storePlugins: List<StorePlugin>,
+    pluginsEnabled: Boolean,
+    onGetMore: (() -> Unit)?,
     selected: IntegrationProvider,
     onSelect: (IntegrationProvider) -> Unit,
     onConnect: (IntegrationProvider) -> Unit,
+    onInstall: (StorePlugin) -> Unit,
     onDismiss: () -> Unit,
     onConfigure: (IntegrationProvider) -> Unit = {},
 ) {
     val colors = IndexTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.sheetSurface) {
-        Column(modifier = Modifier.padding(bottom = 28.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.sheetSurface,
+    ) {
+        Column {
             Row(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1117,7 +1177,7 @@ private fun DestinationSheet(
                     onConfigure(option.provider)
                 }
                 SheetOptionRow(
-                    title = { DestOptionTitle(option) },
+                    title = { DestOptionTitle(option.title, plugin = option.provider.isExternalPlugin) },
                     subtitle = when {
                         !option.connected -> "Not connected"
                         option.configurable -> "Hold to reconfigure"
@@ -1140,8 +1200,48 @@ private fun DestinationSheet(
                     },
                 )
             }
+            storePlugins.forEach { plugin ->
+                val install = {
+                    onDismiss()
+                    onInstall(plugin)
+                }
+                SheetOptionRow(
+                    title = { DestOptionTitle(plugin.title, plugin = true) },
+                    subtitle = "Not connected",
+                    selected = false,
+                    onClick = install,
+                    trailing = { TextButton(onClick = install) { Text("Connect") } },
+                )
+            }
+            if (pluginsEnabled && onGetMore != null) {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        onGetMore()
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text("Get more")
+                }
+            } else if (pluginsEnabled) {
+                AddMoreLaterHint(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun AddMoreLaterHint(modifier: Modifier = Modifier) {
+    Text(
+        "You can add more from Settings later",
+        fontSize = 13.sp,
+        color = IndexTheme.colors.onSurfaceVariant,
+        modifier = modifier,
+    )
 }
 
 @Composable

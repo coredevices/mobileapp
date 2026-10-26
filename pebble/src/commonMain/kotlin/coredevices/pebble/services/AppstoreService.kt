@@ -543,6 +543,17 @@ class AppstoreService(
         }
     }
 
+    suspend fun fetchCollectionApps(
+        path: String,
+        appType: AppType?,
+        hardwarePlatform: WatchType,
+        limit: Int,
+    ): List<CommonApp>? {
+        val result = fetchAppStoreCollection(path, appType, hardwarePlatform)
+            .load(PagingSource.LoadParams.Refresh(key = null, loadSize = limit, placeholdersEnabled = false))
+        return (result as? PagingSource.LoadResult.Page)?.data
+    }
+
     private fun fetchHeartedCollection(
         appType: AppType?,
         hardwarePlatform: WatchType,

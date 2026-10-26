@@ -32,7 +32,7 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewGeolocationInterface
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.js.WebViewJSLocalStorageInterface
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
-import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.NetworkGate
@@ -75,7 +75,7 @@ class WebViewJsRunner(
     notificationConfigFlow: NotificationConfigFlow,
     pluginRegistry: PluginRegistry,
     permissions: AppPermissions,
-    runningApps: RunningApps,
+    pluginClient: PluginClient,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -95,7 +95,7 @@ class WebViewJsRunner(
     private val initializedLock = Object()
     override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
     private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
-    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps)
+    private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {
             webView?.evaluateJavascript(
@@ -492,6 +492,13 @@ class WebViewJsRunner(
             webView?.evaluateJavascript("window.signalNewAppMessageData(${data?.let { Json.encodeToString(data) } ?: "null"})", null)
         }
         return true
+    }
+
+    override suspend fun signalAudioStream(json: String) {
+        readyState.first { it }
+        withContext(Dispatchers.Main) {
+            webView?.evaluateJavascript("window.signalAudioStream(${Json.encodeToString(json)})", null)
+        }
     }
 
     override suspend fun signalShowConfiguration() {

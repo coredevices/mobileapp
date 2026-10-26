@@ -3,15 +3,8 @@ package io.rebble.libpebblecommon.plugin
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.js.JsRunner
 import io.rebble.libpebblecommon.permissions.AppPermissions
-import io.rebble.libpebblecommon.permissions.PermissionDecision
-import io.rebble.libpebblecommon.permissions.RunningApps
-import io.rebble.libpebblecommon.permissions.refusalMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -33,7 +26,7 @@ class SourceDispatcher(
     private val jsRunner: JsRunner,
     private val scope: CoroutineScope,
     private val permissions: AppPermissions,
-    private val runningApps: RunningApps,
+    private val client: PluginClient,
 ) {
     private val logger = Logger.withTag("SourceDispatcher")
     private val subscriptions = mutableMapOf<Int, Job>()
@@ -65,52 +58,32 @@ class SourceDispatcher(
             return
         }
 
-        val declaration = plugin.sources.firstOrNull { it.serves(request.category, request.item) }
-
         subscriptions[subscriptionId] = scope.launch {
-            val required = declaration?.let { requiredOfCaller(it) }.orEmpty()
             val appName = jsRunner.appInfo.shortName
             val subject = permissions.subjectOf(Uuid.parse(jsRunner.appInfo.uuid))
             if (subject == null) {
                 emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, "$appName isn't installed")
                 return@launch
             }
-            permissions.requestAll(subject, required, wait = true)
-            // Re-evaluated as grants change, so allowing or revoking takes effect at once.
-            permissions.grantedKeys(subject, required)
-                .map { granted -> granted.containsAll(required) }
-                .distinctUntilChanged()
-                .collectLatest { allowed ->
-                    if (allowed) {
-                        serve(subscriptionId, plugin, request)
-                    } else {
-                        val refused = required.associateWith { permissions.check(subject, it) }
-                            .filterValues { it != PermissionDecision.Granted }
-                        emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, refusalMessage(appName, refused))
+            client.observe(
+                PluginCaller.App(subject, appName),
+                plugin.metadata,
+                request.category,
+                request.item,
+                request.properties,
+                request.iconPixelSize,
+            ).collect { update ->
+                when (update) {
+                    is SourceUpdate.Data -> {
+                        val payload = Json.encodeToString(SourceEnvelope.serializer(), update.envelope)
+                        // Quote the JSON so it becomes a JS string literal, then JSON.parse it
+                        // back inside the JS shim. Same pattern as the existing app-message ACK path.
+                        val quoted = Json.encodeToString(String.serializer(), payload)
+                        jsRunner.eval("globalThis._signalSourceUpdate($subscriptionId, $quoted)")
                     }
+                    is SourceUpdate.Error -> emitError(subscriptionId, update.code, update.message)
                 }
-        }
-    }
-
-    private suspend fun serve(subscriptionId: Int, plugin: Plugin, request: SubscribeRequest) {
-        runningApps.whileRunning(plugin.pluginUuid) {
-            plugin
-                .observe(request.category, request.item, request.properties, request.iconPixelSize)
-                .catch { t ->
-                    logger.w(t) { "subscription $subscriptionId failed" }
-                    emitError(
-                        subscriptionId,
-                        PluginErrors.UNKNOWN,
-                        t.message ?: t::class.simpleName ?: "error",
-                    )
-                }
-                .collect { envelope ->
-                    val payload = Json.encodeToString(SourceEnvelope.serializer(), envelope)
-                    // Quote the JSON so it becomes a JS string literal, then JSON.parse it
-                    // back inside the JS shim. Same pattern as the existing app-message ACK path.
-                    val quoted = Json.encodeToString(String.serializer(), payload)
-                    jsRunner.eval("globalThis._signalSourceUpdate($subscriptionId, $quoted)")
-                }
+            }
         }
     }
 

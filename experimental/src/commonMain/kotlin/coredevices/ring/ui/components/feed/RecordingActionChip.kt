@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,7 +51,7 @@ fun RecordingActionChip(
         glyph = action.glyph,
         label = action.label.take(64),
         subtext = action.source,
-        subtextGlyph = Icons.Default.Extension.takeIf { action.source != null },
+        subtextGlyph = Icons.Default.Power.takeIf { action.source != null },
         onClick = onClick,
         modifier = modifier,
     )

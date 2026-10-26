@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,11 @@ interface PebbleDeepLinkHandler {
 
     val pendingAppSideload: StateFlow<Path?>
     fun consumePendingAppSideload()
+
+    /** Tab the locker should select when it next shows; consumed by the locker screen. */
+    val pendingLockerTab: StateFlow<AppType?>
+    fun consumePendingLockerTab()
+    fun navigateToLockerTab(type: AppType)
 
     fun consumeRequestIndexCompanion()
     fun confirmPendingFirmwareSideload()
@@ -93,6 +99,18 @@ class RealPebbleDeepLinkHandler(
 
     override fun consumePendingAppSideload() {
         _pendingAppSideload.value = null
+    }
+
+    private val _pendingLockerTab = MutableStateFlow<AppType?>(null)
+    override val pendingLockerTab: StateFlow<AppType?> = _pendingLockerTab.asStateFlow()
+
+    override fun consumePendingLockerTab() {
+        _pendingLockerTab.value = null
+    }
+
+    override fun navigateToLockerTab(type: AppType) {
+        _pendingLockerTab.value = type
+        navigateToTab(PebbleNavBarRoutes.WatchfacesRoute)
     }
 
 

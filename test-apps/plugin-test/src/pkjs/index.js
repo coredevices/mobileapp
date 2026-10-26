@@ -91,6 +91,13 @@ var SHAPE_PREFERENCE = ['image', 'numericValue', 'boolean', 'icon', 'timestamp',
 // for idly.
 var tilePixels = { w: 48, h: 48 };
 
+/** A tile shows one reading, so a property that only comes as a series has nothing to put in it. */
+function drawableProperties(declared) {
+  return Object.keys(declared.properties).filter(function (property) {
+    return declared.properties[property].some(function (shape) { return shape.indexOf('series.') !== 0; });
+  });
+}
+
 /** Both bitmap shapes travel and draw the same way; the icon is just the monochrome one. */
 function isBitmap(shape) {
   return shape === 'image' || shape === 'icon';
@@ -428,7 +435,7 @@ function render(index, entry, envelope) {
   });
   // Nothing playing, no rooms paired: the thing can still say which properties it has.
   var declared = sourceOf(entry) || { properties: {} };
-  properties[index] = Object.keys(declared.properties);
+  properties[index] = drawableProperties(declared);
   var property = entry.property || defaultProperty(properties[index]);
   activeProperties[index] = property;
   activeActions[index] = actionsFor(entry, property).map(function (action) {
@@ -678,7 +685,7 @@ function subscribeAll() {
       return;
     }
     var declared = sourceOf(entry) || { properties: {} };
-    properties[index] = Object.keys(declared.properties);
+    properties[index] = drawableProperties(declared);
     activeProperties[index] = entry.property || defaultProperty(properties[index]);
     show(index, text(activeProperties[index], '...'));
     if (!groups[entry.source]) groups[entry.source] = [];
@@ -704,6 +711,7 @@ function subscribeAll() {
       category: entry.category,
       item: entry.item,
       plugin: entry.plugin,
+      properties: drawableProperties(declared),
       iconPixelSize: offersImages ? tilePixels : undefined,
       onData: function (envelope) {
         indexes.forEach(function (index) { render(index, activeEntries[index], envelope); });

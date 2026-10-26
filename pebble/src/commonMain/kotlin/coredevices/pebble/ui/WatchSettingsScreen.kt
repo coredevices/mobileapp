@@ -164,9 +164,11 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
+import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -184,6 +186,7 @@ import kotlin.math.roundToLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 enum class TopLevelType(val displayName: String) {
     Phone("Phone"),
@@ -391,6 +394,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         sttConfig = coreConfig.sttConfig.copy(spokenLanguage = code)
                     )
                 )
+                platformSpeechRecognizer.releaseUnusedModels(code)
                 showSpokenLanguageDialog = false
                 if (coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly) {
                     scope.launch {
@@ -513,6 +517,20 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             )
         }
     }
+    val anyWatchSupportsFiveMinHrm = remember(watchesCastable) {
+        watchesCastable.any {
+            if (it !is KnownPebbleDevice) return@any false
+            val fw = FirmwareVersion.from(
+                tag = it.runningFwVersion,
+                isRecovery = false,
+                gitHash = "",
+                timestamp = Instant.DISTANT_PAST,
+                isDualSlot = false,
+                isSlot0 = false,
+            ) ?: return@any false
+            HRMonitoringInterval.FiveMin.isSupportedBy(fw)
+        }
+    }
     val watchPrefs = watchPrefs()
     val coreAnalytics: CoreAnalytics = koinInject()
     val platformHealthSync: PlatformHealthSync = koinInject()
@@ -534,6 +552,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             watchPrefs,
             rebbleVoiceAvailable,
             platformSttAvailable,
+            anyWatchSupportsFiveMinHrm,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -738,6 +757,56 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             coreConfig.copy(
                                 notifyWatchFullyCharged = it
                             )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Automatic firmware updates",
+                    description = "Install PebbleOS updates automatically when available",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    keywords = "firmware pebbleos update automatic",
+                    checked = coreConfig.autoFirmwareUpdate,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(autoFirmwareUpdate = it))
+                    },
+                ),
+                SettingsItem(
+                    title = "Firmware update time window",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    keywords = "firmware pebbleos update automatic time window",
+                    show = { coreConfig.autoFirmwareUpdate },
+                    isDebugSetting = false,
+                    item = {
+                        val window = coreConfig.autoFirmwareUpdateWindow
+                        ListItem(
+                            headlineContent = {
+                                Text("Only update during time window")
+                            },
+                            leadingContent = {
+                                Checkbox(
+                                    checked = window != null,
+                                    onCheckedChange = {
+                                        coreConfigHolder.update(
+                                            coreConfig.copy(
+                                                autoFirmwareUpdateWindow = if (it) QuietTimeSchedule(2, 0, 5, 0) else null
+                                            )
+                                        )
+                                    },
+                                )
+                            },
+                            supportingContent = {
+                                if (window != null) {
+                                    SelectTimeRange(
+                                        schedule = window,
+                                        onChangeSchedule = {
+                                            coreConfigHolder.update(coreConfig.copy(autoFirmwareUpdateWindow = it))
+                                        },
+                                    )
+                                }
+                            },
+                            shadowElevation = ELEVATION,
                         )
                     },
                 ),
@@ -1135,7 +1204,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     selectedItem = healthSettings.hrmMeasurementInterval,
-                    items = HRMonitoringInterval.entries,
+                    items = HRMonitoringInterval.entries.filter {
+                        it != HRMonitoringInterval.FiveMin || anyWatchSupportsFiveMinHrm
+                    },
                     onItemSelected = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(hrmMeasurementInterval = it)
@@ -1143,6 +1214,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = {
                         when (it) {
+                            HRMonitoringInterval.FiveMin -> "Every 5 minutes"
                             HRMonitoringInterval.TenMin -> "Every 10 minutes"
                             HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
                             HRMonitoringInterval.OneHour -> "Every hour"
@@ -2060,6 +2132,39 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { debugOptionsEnabled },
                 ) },
+                basicSettingsToggleItem(
+                    title = "Download app updates in background",
+                    description = "When an app you've used gets an update, download it in the background so it is ready for next launch",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    checked = libPebbleConfig.watchConfig.proactivelyDownloadAppUpdates,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    proactivelyDownloadAppUpdates = it
+                                )
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Download app updates on Wi-Fi only",
+                    description = "Only pre-download app updates while on Wi-Fi",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    checked = libPebbleConfig.watchConfig.appUpdateDownloadWifiOnly,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    appUpdateDownloadWifiOnly = it
+                                )
+                            )
+                        )
+                    },
+                    show = { libPebbleConfig.watchConfig.proactivelyDownloadAppUpdates },
+                ),
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",

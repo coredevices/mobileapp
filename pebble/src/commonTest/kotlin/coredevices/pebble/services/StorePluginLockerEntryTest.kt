@@ -4,6 +4,8 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StorePluginLockerEntryTest {
@@ -30,6 +32,26 @@ class StorePluginLockerEntryTest {
             .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!
         assertEquals(7, entry.hardwarePlatforms.size)
         assertTrue(entry.hardwarePlatforms.all { it.description == "Share prices." && it.images.list == "https://list" })
+    }
+
+    @Test
+    fun aListingsManifestSaysWhatThePluginWillOffer() {
+        val manifest = """"manifest_version":2,"plugin":{"config_page":"config.html","manifest":{"description":"Notes",
+            "actions":[{"name":"create_note"}],"sources":[{"category":"notes","items":["configured"]}]}},"""
+        val app = json.decodeFromString(StoreApplication.serializer(), stocks.replace(""""title":"Stocks",""", manifest + """"title":"Stocks","""))
+
+        val metadata = assertNotNull(app.pluginMetadata())
+        assertEquals("2c4b7f10-9a3d-4e6b-8f21-5d0c7e9a1b34", metadata.pluginUuid.toString())
+        assertEquals("Stocks", metadata.name)
+        assertEquals(listOf("create_note"), metadata.actions.map { it.name })
+        assertTrue(metadata.serves("notes", "configured"))
+    }
+
+    @Test
+    fun listingsWithoutALoadableManifestOfferNothing() {
+        assertNull(json.decodeFromString(StoreApplication.serializer(), stocks).pluginMetadata())
+        val legacy = stocks.replace(""""title":"Stocks",""", """"plugin":{"manifest":{"actions":[{"name":"create_note"}]}},"title":"Stocks",""")
+        assertNull(json.decodeFromString(StoreApplication.serializer(), legacy).pluginMetadata())
     }
 
     @Test

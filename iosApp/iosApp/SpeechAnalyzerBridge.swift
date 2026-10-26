@@ -69,6 +69,10 @@ enum SpeechAnalyzerBridge {
                         completion(String(describing: error))
                     }
                 }
+            },
+            releaseUnusedReservations: { localeTag in
+                guard #available(iOS 26.0, *) else { return }
+                Task { await releaseUnusedReservations(localeTag: localeTag) }
             }
         )
         Task {
@@ -101,13 +105,31 @@ enum SpeechAnalyzerBridge {
     /// devices where they're unavailable (older hardware, simulator).
     @available(iOS 26.0, *)
     private enum Engine {
-        case transcriber(SpeechTranscriber)
-        case dictation(DictationTranscriber)
+        case transcriber(SpeechTranscriber, Locale)
+        case dictation(DictationTranscriber, Locale)
 
         var module: any SpeechModule {
             switch self {
-            case .transcriber(let module): return module
-            case .dictation(let module): return module
+            case .transcriber(let module, _): return module
+            case .dictation(let module, _): return module
+            }
+        }
+
+        var locale: Locale {
+            switch self {
+            case .transcriber(_, let locale): return locale
+            case .dictation(_, let locale): return locale
+            }
+        }
+
+        var isInstalledOnDevice: Bool {
+            get async {
+                let installed: [Locale]
+                switch self {
+                case .transcriber: installed = await SpeechTranscriber.installedLocales
+                case .dictation: installed = await DictationTranscriber.installedLocales
+                }
+                return installed.contains { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
             }
         }
     }
@@ -116,10 +138,10 @@ enum SpeechAnalyzerBridge {
     private static func candidateEngines(for requested: Locale) async -> [Engine] {
         var engines: [Engine] = []
         if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) {
-            engines.append(.transcriber(SpeechTranscriber(locale: locale, preset: .transcription)))
+            engines.append(.transcriber(SpeechTranscriber(locale: locale, preset: .transcription), locale))
         }
         if let locale = await DictationTranscriber.supportedLocale(equivalentTo: requested) {
-            engines.append(.dictation(DictationTranscriber(locale: locale, preset: .longDictation)))
+            engines.append(.dictation(DictationTranscriber(locale: locale, preset: .longDictation), locale))
         }
         return engines
     }
@@ -132,10 +154,38 @@ enum SpeechAnalyzerBridge {
         for engine in await candidateEngines(for: requested) {
             let status = AssetStatus(await AssetInventory.status(forModules: [engine.module]))
             if status != .unsupported {
-                return (engine, status)
+                return (engine, await renewReservation(for: engine, status: status))
             }
         }
         return nil
+    }
+
+    /// `.supported` is also reported when the assets are on disk but the system has dropped this
+    /// app's locale reservation; reserving again restores `.installed` without a download.
+    @available(iOS 26.0, *)
+    private static func renewReservation(for engine: Engine, status: AssetStatus) async -> AssetStatus {
+        guard status == .notDownloaded, await engine.isInstalledOnDevice else { return status }
+        do {
+            if try await !AssetInventory.reserve(locale: engine.locale) {
+                await AssetInventory.release(reservedLocale: engine.locale)
+                try await AssetInventory.reserve(locale: engine.locale)
+            }
+        } catch {
+            NSLog("SpeechAnalyzerBridge: could not reserve \(engine.locale.identifier): \(error)")
+            return status
+        }
+        return AssetStatus(await AssetInventory.status(forModules: [engine.module]))
+    }
+
+    /// Reservations count against `AssetInventory.maximumReservedLocales`, so drop the ones for
+    /// languages no longer configured.
+    @available(iOS 26.0, *)
+    private static func releaseUnusedReservations(localeTag: String?) async {
+        let requested = localeTag.map { Locale(identifier: $0) } ?? Locale.current
+        let keep = Set(await candidateEngines(for: requested).map { $0.locale.identifier(.bcp47) })
+        for locale in await AssetInventory.reservedLocales where !keep.contains(locale.identifier(.bcp47)) {
+            await AssetInventory.release(reservedLocale: locale)
+        }
     }
 
     @available(iOS 26.0, *)
@@ -146,14 +196,17 @@ enum SpeechAnalyzerBridge {
         guard let resolved = await resolveEngine(localeTag: localeTag) else {
             throw BridgeError("Locale \(localeTag ?? Locale.current.identifier) not supported")
         }
-        guard let installation = try await AssetInventory.assetInstallationRequest(supporting: [resolved.engine.module]) else {
-            return
+        if let installation = try await AssetInventory.assetInstallationRequest(supporting: [resolved.engine.module]) {
+            let observation = installation.progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
+                onProgress(progress.fractionCompleted)
+            }
+            defer { observation.invalidate() }
+            try await installation.downloadAndInstall()
         }
-        let observation = installation.progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
-            onProgress(progress.fractionCompleted)
+        let status = AssetStatus(await AssetInventory.status(forModules: [resolved.engine.module]))
+        guard status == .installed else {
+            throw BridgeError("Speech assets for \(resolved.engine.locale.identifier) are \(status.rawValue) after install")
         }
-        defer { observation.invalidate() }
-        try await installation.downloadAndInstall()
     }
 
     @available(iOS 26.0, *)
@@ -168,7 +221,7 @@ enum SpeechAnalyzerBridge {
         }
         let audioFile = try AVAudioFile(forReading: URL(fileURLWithPath: path))
         switch resolved.engine {
-        case .transcriber(let transcriber):
+        case .transcriber(let transcriber, _):
             return try await run(transcriber, audioFile: audioFile) {
                 var pieces: [String] = []
                 for try await result in transcriber.results where result.isFinal {
@@ -176,7 +229,7 @@ enum SpeechAnalyzerBridge {
                 }
                 return pieces.joined(separator: " ")
             }
-        case .dictation(let transcriber):
+        case .dictation(let transcriber, _):
             return try await run(transcriber, audioFile: audioFile) {
                 var pieces: [String] = []
                 for try await result in transcriber.results where result.isFinal {

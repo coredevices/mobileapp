@@ -6,6 +6,7 @@ import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineDebugInfo
 import coredevices.haversine.KMPHaversineSatellite
 import coredevices.ring.bugreport.IndexRebootLogStore
+import coredevices.ring.bugreport.RingRssiStatistics
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.Timestamp
@@ -32,6 +33,7 @@ import kotlin.time.TimeSource
 class FirestoreRingDebugDelegate(
     private val analytics: CoreAnalytics,
     private val rebootLogStore: IndexRebootLogStore,
+    private val rssiStatistics: RingRssiStatistics,
 ): KMPHaversineDebugDelegate {
     companion object {
         private val logger = Logger.withTag("FirestoreRingDebugDelegate")
@@ -101,6 +103,14 @@ class FirestoreRingDebugDelegate(
         val diff = txRssi?.let { (it - rssi).absoluteValue }
         logger.i { "Received Rx RSSI: $rssi for satellite ${satellite.name} (${satellite.id}), tx = $txRssi, diff = $diff" }
         val state = satellite.state.value
+        val serial = state?.programmedSerialNumber ?: state?.serialNumber ?: satellite.id
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                rssiStatistics.record(ringSerial = serial, ringRxRssi = rssi, phoneRssi = txRssi)
+            } catch (e: Exception) {
+                logger.w(e) { "Failed to persist Rx RSSI reading" }
+            }
+        }
         analytics.logEvent(
             "ring.rssi_measurement",
             mapOf(

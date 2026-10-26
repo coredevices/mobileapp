@@ -67,7 +67,8 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
     override fun resolveName(name: String): McpIntegration? {
         return when (name) {
             NoteServlet.NAME -> NoteServlet(
-                createNoteTool = CreateNoteTool(get())
+                createNoteTool = CreateNoteTool(get()),
+                providers = get(),
             )
             ClockServlet.name -> ClockServlet.takeIf { platform.isAndroid }
             JsServlet.name -> JsServlet

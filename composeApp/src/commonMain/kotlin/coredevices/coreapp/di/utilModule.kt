@@ -6,11 +6,13 @@ import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.CoreAnalytics
+import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.analytics.RealCoreAnalytics
 import coredevices.api.EngDashOtaApi
 import coredevices.api.EngDashOtaApiImpl
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
+import coredevices.coreapp.plugins.AppstorePluginStore
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.coreapp.push.PushMessaging
@@ -24,6 +26,7 @@ import coredevices.database.SyncTaskDao
 import coredevices.database.getCoreRoomDatabase
 import coredevices.firestore.UsersDao
 import coredevices.firestore.UsersDaoImpl
+import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.util.AppResumed
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -82,7 +85,7 @@ val utilModule = module {
     singleOf(::DoneInitialOnboarding)
     single { SecondaryProfileWarning(get(), get<coredevices.util.Platform>().isSecondaryProfile) }
     singleOf(::AppUpdateTracker)
-    singleOf(::RealCoreAnalytics) bind CoreAnalytics::class
+    single { RealCoreAnalytics(get(), get(), get(), metricsSources = { getAll<HeartbeatMetricsSource>() }) } bind CoreAnalytics::class
     single { getCoreRoomDatabase(get()) }
     single { get<CoreDatabase>().analyticsDao() }
     single { get<CoreDatabase>().appstoreSourceDao() }
@@ -98,6 +101,7 @@ val utilModule = module {
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     single { ModelManager(get(), get(), getOrNull()) }
     singleOf(::OAuthRedirectHandler)
+    singleOf(::AppstorePluginStore) bind PluginStore::class
     singleOf(::WisprFlowAuth)
     single {
         CactusTranscriptionService(

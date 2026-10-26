@@ -1,11 +1,10 @@
 package coredevices.ring.agent.pebble_plugin
 
-import coredevices.analytics.HEARTBEAT_COUNTER_PLUGIN_INVOCATIONS
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
-import coredevices.ring.agent.RecordingCoreAnalytics
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionResult
+import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginErrors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
@@ -43,8 +42,8 @@ private val createNote = ActionDeclaration(name = "create_note")
 
 private val context = SessionContext(timeBase = null, userMessageText = CompletableDeferred(null))
 
-private fun integrationFor(plugin: FakePlugin, analytics: RecordingCoreAnalytics = RecordingCoreAnalytics()) =
-    PblPluginMcpIntegration(plugin, analytics)
+private fun integrationFor(plugin: FakePlugin, calls: FakePlugins = FakePlugins()) =
+    PblPluginMcpIntegration(calls.install(plugin), calls)
 
 class PblPluginMcpIntegrationTest {
 
@@ -148,15 +147,10 @@ class PblPluginMcpIntegrationTest {
     }
 
     @Test
-    fun invocationsAreCountedForTheHeartbeat() = runTest {
-        val analytics = RecordingCoreAnalytics()
-        val integration = integrationFor(FakePlugin(listOf(next, clearQueue)), analytics)
+    fun invokesAsTheHostSoItMayPrompt() = runTest {
+        val calls = FakePlugins()
+        integrationFor(FakePlugin(listOf(next)), calls).callTool("next", emptyMap(), context)
 
-        integration.callTool("next", emptyMap(), context)
-        integration.callTool("next", emptyMap(), context)
-        integration.callTool("clear_queue", emptyMap(), context)
-        integration.callTool("missing", emptyMap(), context)
-
-        assertEquals(mapOf(HEARTBEAT_COUNTER_PLUGIN_INVOCATIONS to 2), analytics.counters)
+        assertEquals(listOf<PluginCaller>(PluginCaller.Host()), calls.callers)
     }
 }

@@ -33,15 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -66,7 +59,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -107,7 +99,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.permissions.InstallReview
-import io.rebble.libpebblecommon.plugin.NativePlugin
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -289,6 +281,13 @@ fun LockerScreen(
                 sideload(it)
             }
         }
+        val pendingLockerTab by deepLinks.pendingLockerTab.collectAsState()
+        LaunchedEffect(pendingLockerTab) {
+            pendingLockerTab?.let {
+                deepLinks.consumePendingLockerTab()
+                viewModel.type.value = it
+            }
+        }
         val launchInstallAppDialog = rememberOpenDocumentLauncher {
             it?.firstOrNull()?.let { file ->
                 val tempAppPath = getTempFilePath(appContext, "temp.pbw")
@@ -329,6 +328,7 @@ fun LockerScreen(
         }
         val settings: Settings = koinInject()
         val showDebugOptions = settings.showDebugOptions()
+        var pluginsHelpDismissed by remember { mutableStateOf(settings.pluginsHelpDismissed()) }
         LaunchedEffect(showDebugOptions) {
             topBarParams.actions {
                 if (showDebugOptions) {
@@ -388,7 +388,7 @@ fun LockerScreen(
         )
         val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value)
         val activeWatchapp = loadActiveWatchapp(sharedViewModel.watchType.value)
-        val nativePlugins by libPebble.nativePlugins().collectAsState(emptyList())
+        val nativePlugins = rememberNativePlugins()
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)
@@ -497,6 +497,7 @@ fun LockerScreen(
                                 title: String,
                                 items: List<CommonApp>,
                                 highlightInLocker: Boolean,
+                                nativePlugins: List<PluginMetadata> = emptyList(),
                                 onClick: (() -> Unit)? = null
                             ) {
                                 AppCarousel(
@@ -505,8 +506,20 @@ fun LockerScreen(
                                     navBarNav = navBarNav,
                                     topBarParams = topBarParams,
                                     highlightInLocker = highlightInLocker,
+                                    nativePlugins = nativePlugins,
                                     onClick = onClick,
                                 )
+                            }
+                            if (viewModel.type.value == AppType.Plugin && !pluginsHelpDismissed) {
+                                item(contentType = "plugins_help", key = "plugins_help") {
+                                    PluginsHelpCard(
+                                        onDismiss = {
+                                            settings.dismissPluginsHelp()
+                                            pluginsHelpDismissed = true
+                                        },
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    )
+                                }
                             }
                             active?.let {
                                 item(
@@ -580,6 +593,7 @@ fun LockerScreen(
                                     viewModel.type.value.myCollectionName(),
                                     myAppsToDisplay,
                                     highlightInLocker = false,
+                                    nativePlugins = if (viewModel.type.value == AppType.Plugin) nativePlugins else emptyList(),
                                     onClick = {
                                         navBarNav.navigateTo(
                                             PebbleNavBarRoutes.MyCollectionRoute(
@@ -587,12 +601,6 @@ fun LockerScreen(
                                             )
                                         )
                                     })
-                            }
-
-                            if (viewModel.type.value == AppType.Plugin && nativePlugins.isNotEmpty()) {
-                                item(contentType = "app_carousel", key = "collection_built-in") {
-                                    BuiltInPluginCarousel(nativePlugins)
-                                }
                             }
 
                             storeHome.forEach {
@@ -938,9 +946,10 @@ fun AppCarousel(
     navBarNav: NavBarNav,
     topBarParams: TopBarParams,
     highlightInLocker: Boolean,
+    nativePlugins: List<PluginMetadata> = emptyList(),
     onClick: (() -> Unit)? = null,
 ) {
-    if (items.isEmpty()) {
+    if (items.isEmpty() && nativePlugins.isEmpty()) {
         logger.d { "Not showing collection $title as it has no items" }
         return
     }
@@ -975,6 +984,9 @@ fun AppCarousel(
                     topBarParams = topBarParams,
                     highlightInLocker = highlightInLocker,
                 )
+            }
+            items(nativePlugins, key = { it.pluginUuid }) { plugin ->
+                NativePluginCard(plugin, navBarNav)
             }
         }
     }
@@ -1076,62 +1088,7 @@ val testApps = listOf(
     )
 )
 
-private val NATIVE_SCREENSHOT_HEIGHT = 100.dp
-
-// Built-in plugins have no pbw, so the UI maps each to an icon rather than reading one from a bundle.
-private fun NativePlugin.builtInIcon(): ImageVector = when (name) {
-    "Music" -> Icons.Filled.MusicNote
-    "Calendar" -> Icons.Filled.CalendarMonth
-    "Weather" -> Icons.Filled.Cloud
-    "Phone" -> Icons.Filled.Smartphone
-    "Watch Settings" -> Icons.Filled.Watch
-    "Watch State" -> Icons.Filled.Apps
-    "Notifications" -> Icons.Filled.Notifications
-    else -> AppType.Plugin.icon()
-}
-
-@Composable
-private fun BuiltInPluginCarousel(plugins: List<NativePlugin>) {
-    Column {
-        Text(
-            "My Plugins",
-            fontSize = 24.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(horizontal = 5.dp),
-        ) {
-            items(plugins, key = { it.pluginUuid.toString() }) { plugin ->
-                NativePluginCard(plugin)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NativePluginCard(plugin: NativePlugin) {
-    Card(modifier = Modifier.padding(3.dp).width(100.dp)) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().height(NATIVE_SCREENSHOT_HEIGHT),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(plugin.builtInIcon(), contentDescription = null, modifier = Modifier.size(44.dp))
-            }
-            Text(
-                plugin.name,
-                fontSize = 12.sp,
-                lineHeight = 12.sp,
-                maxLines = 1,
-                fontWeight = FontWeight.Bold,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 5.dp, end = 5.dp, bottom = 7.dp).heightIn(min = 18.dp),
-            )
-        }
-    }
-}
+internal val NATIVE_SCREENSHOT_HEIGHT = 100.dp
 
 @Composable
 fun NativeWatchfaceCard(
@@ -1320,7 +1277,7 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 val url = when (entry.type) {
                     AppType.Watchapp -> entry.screenshotImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
-                    AppType.Plugin -> entry.screenshotImageUrl
+                    AppType.Plugin -> entry.listImageUrl ?: entry.screenshotImageUrl
                 }
                 ImageRequest.Builder(context)
                     .memoryCachePolicy(CachePolicy.ENABLED)

@@ -3,7 +3,7 @@ package coredevices.ring.agent.pebble_plugin
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionResult
 import io.rebble.libpebblecommon.plugin.IconPixelSize
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.SourceEnvelope
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +25,7 @@ internal class FakePlugin(
     override val sources: List<SourceDeclaration> = emptyList(),
     private val envelope: SourceEnvelope? = null,
     private val envelopes: Map<String, SourceEnvelope> = emptyMap(),
-) : Plugin {
+) : NativePlugin {
     val invoked = mutableListOf<Pair<String, JsonObject>>()
 
     override fun observe(

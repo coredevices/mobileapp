@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
@@ -803,6 +804,7 @@ fun RingItem(
     val coreConfig by koinInject<CoreConfigFlow>().flow.collectAsState()
     val uiContext = rememberUiContext()
     var showRingAlreadyPairedDialog by remember { mutableStateOf(false) }
+    var showSyncDisabledDialog by remember { mutableStateOf(false) }
     var companionApproved by remember(ring.identifier) {
         mutableStateOf(companionDevice.hasApprovedDevice(ring.identifier))
     }
@@ -864,6 +866,10 @@ fun RingItem(
                         if (ring.pairingState is IndexPairingState.Error || ring.pairingState is IndexPairingState.NotPaired) {
                             Button(
                                 onClick = {
+                                    if (coreConfig.disableRingBluetoothSync) {
+                                        showSyncDisabledDialog = true
+                                        return@Button
+                                    }
                                     scope.launch {
                                         uiContext?.let { companionDevice.registerDevice(ring.identifier, it, false) }
                                         companionApproved = companionDevice.hasApprovedDevice(ring.identifier)
@@ -979,6 +985,23 @@ fun RingItem(
             }
         },
     )
+
+    if (showSyncDisabledDialog) {
+        M3Dialog(
+            onDismissRequest = { showSyncDisabledDialog = false },
+            icon = { Icon(Icons.Default.SwitchAccount, null) },
+            title = { Text("Bluetooth Sync Disabled") },
+            buttons = {
+                TextButton(onClick = { showSyncDisabledDialog = false }) { Text("OK") }
+            },
+        ) {
+            Text(
+                "Bluetooth sync is disabled for this profile, so an Index 01 can't be paired here.\n\n" +
+                        "Switch to your primary profile to pair, or if you're not using multiple profiles " +
+                        "on this phone, turn off \"Disable Bluetooth Sync\" in Index settings."
+            )
+        }
+    }
 
     if (showRingAlreadyPairedDialog) {
         val platform = koinInject<Platform>()

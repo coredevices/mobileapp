@@ -16,7 +16,7 @@ import kotlin.time.Instant
             entity = RingTransfer::class,
             parentColumns = ["id"],
             childColumns = ["transferId"],
-            onDelete = ForeignKey.SET_NULL,
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = LocalRecording::class,

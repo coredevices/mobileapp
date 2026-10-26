@@ -5,6 +5,8 @@ import io.rebble.libpebblecommon.weather.WeatherType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Instant
+import kotlinx.datetime.TimeZone
 
 class WeatherFetcherFieldsTest {
 
@@ -20,6 +22,14 @@ class WeatherFetcherFieldsTest {
     fun returnsNullForUnparseableOffset() {
         assertNull("2026-07-20T06:03:00Z".utcOffsetMinutes())
         assertNull("".utcOffsetMinutes())
+    }
+
+    @Test
+    fun minuteOfDayUsesProvidedTimeZone() {
+        // 13:03 UTC is 06:03 in Los Angeles (UTC-7 in July).
+        val instant = Instant.parse("2026-07-20T13:03:00Z")
+        assertEquals(6 * 60 + 3, instant.minuteOfDay(TimeZone.of("America/Los_Angeles")))
+        assertEquals(13 * 60 + 3, instant.minuteOfDay(TimeZone.UTC))
     }
 
     @Test

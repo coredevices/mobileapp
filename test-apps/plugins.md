@@ -2,8 +2,8 @@
 
 Plugins are nearly here (finally). A plugin is a small piece of JavaScript that runs on the phone and:
 
-- **provides data**: (*sources*) that any Pebble watchface/app (and soon Index) can read
-- **takes actions**: turn a light off, add a task, that a watchface/app (and soon Index) can trigger
+- **provides data**: (*sources*) that any Pebble watchface/app (and Index) can read
+- **takes actions**: turn a light off, add a task, that a watchface/app (and Index) can trigger
 
 It has a generic API, designed to allow any type of data to be exposed, in multiple formats.
 
@@ -21,9 +21,9 @@ default.
   made.
 - Plugins let us expose data the Pebble app has but developers
   couldn't get at before very easily: music, notifications, phone state, and more.
-- Actions let a watch (and, later, Index) control things like lights or
+- Actions let a watch (and Index) control things like lights or
   tasks through a plugin, without every app integrating with every service.
-- Once Index can use plugins, adding a to-do list
+- Index uses plugins too, so adding a to-do list
   service (like the Todoist, TickTick and Notion demos) is just a plugin, with no change to the
   Pebble app.
 
@@ -69,7 +69,7 @@ A **source** is something an app can read from a plugin, addressed in layers:
 ```
 category            home
   item              room_lights        the kind of thing
-    instance        "3"                one particular room (its name property: "Living room")
+    instance        "3"                one particular room (its name property: "Kitchen")
       property      brightness         one reading of it
         shape       numericValue -> { value: 64, unit: "%", min: 0, max: 100 }
 ```
@@ -80,6 +80,13 @@ change. Instances have a stable `instanceId`; `name` is the property to display 
 An **action** is something a plugin can do (`set_on`, `add_task`). It takes JSON arguments described
 by a JSON Schema in the manifest, and can say which sources it affects (`targets`), so a tile showing
 a light knows which actions apply to it.
+
+## Multiple instances
+
+Updates carry `instances: [...]`, one per thing (a room, a saved location), in an order that means
+something: `instances[0]` is the first ([example](#three-ways-to-use-plugins)). `supportsMultiple`
+in a manifest just tells a settings page to offer a picker. Many readings of one thing are a
+[series](#series) instead.
 
 ## Categories
 
@@ -95,7 +102,7 @@ Examples now:
 
 | Category        | Items                                                             | From      |
 | --------------- | ----------------------------------------------------------------- | --------- |
-| `weather`       | `location`, `hour`                                                | built-in  |
+| `weather`       | `location`                                                        | built-in  |
 | `calendar`      | `event`                                                           | built-in  |
 | `phone`         | `phone_state`                                                     | built-in  |
 | `music`         | `track`                                                           | built-in (Android) |
@@ -105,12 +112,21 @@ Examples now:
 | `finance`       | `stock`                                                           | Stocks demo |
 | `notes`         | `destination`, `configured`                                       | Notion demo |
 | `reminders`     | `list`, `configured`                                              | Todoist, TickTick demos |
+| `agent`         | `chats`, `configured`                                             |           |
 
-A plugin is offered as a notes / reminders destination for the Index agent when it declares a
-`create_note` / `create_reminder` action *and* serves `notes/configured` / `reminders/configured`:
-one instance whose `configured` property is a `boolean` that is true once the user has signed in and
-set everything the action needs. While it reads false the destination shows a Connect button that
-opens the plugin's settings page. An action without its `configured` source is not offered.
+A plugin is offered as a notes / reminders / agent destination for the Index agent when it declares
+a `create_note` / `create_reminder` / `send_to_agent` action *and* serves `notes/configured` /
+`reminders/configured` / `agent/configured`: one instance whose `configured` property is a `boolean`
+that is true once the user has signed in and set everything the action needs. While it reads false
+the destination shows a Connect button that opens the plugin's settings page. An action without its
+`configured` source is not offered.
+
+`send_to_agent` takes `{ message, chat_id? }` and forwards the user's message to an external agent.
+A plugin that keeps several chats can serve `agent/chats`, one instance per chat with its id as the
+`instanceId` and its nickname as the `name` property; the host lists these and passes the chosen one
+as `chat_id`. Without that source the chat sent to is decided by the plugin (usually a new chat each
+time). Unlike `create_note` and `create_reminder`, `send_to_agent` is also offered to the Index agent
+as a tool, so the user can ask for something to be sent to the agent by name.
 
 The built-in Watch State plugin has no sources, only actions, both needing `LaunchApps`:
 `launch_app` (`{ uuid }`) opens an app or watchface in the user's locker, and
@@ -138,6 +154,30 @@ and you pick one.
 
 A missing property or shape means the plugin can't serve it right now. Check before drawing.
 
+### Series
+
+A property can also be a **series**: many readings of one thing along an axis, like the
+temperature for each hour ahead. Its value is a `series` wrapping the shapes it can be drawn as,
+each with `values` in place of its single reading:
+
+```js
+hourly_temperature: {
+  series: {
+    start: 1729468800,   // epoch seconds UTC of values[0] (optional, with stepSec)
+    stepSec: 3600,
+    numericValue: { values: [14, 15, null, 16], unit: "°C" },   // unit, min, max are shared
+    shortText:    { values: ["14°C", "15°C", null, "16°C"] },
+  },
+},
+```
+
+- Every `values` array is the same length, and `null` is a missing point. `icon` and `image`
+  series carry one bitmap per point.
+- Use `start` and `stepSec` to find *now* in the series, rather than assuming `values[0]` is.
+- A series is declared as `series.<shape>`, e.g. `"hourly_temperature": ["series.numericValue",
+  "series.shortText"]`.
+- The built-in weather plugin offers `hourly_*` and `daily_*` series on `weather/location`.
+
 Shapes are designed so you can build for a *slot in your design* rather than for specific data. A
 face with a gauge widget can offer the user anything that has a `numericValue` with a range: battery,
 UV index, a light's brightness. A small text slot can take any `shortText`, whatever it came from. An
@@ -162,14 +202,22 @@ Declare what your app and its plugin need once, in the `pebble` block of `packag
 }
 ```
 
-The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Notifications`, `Calendar`,
+The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Microphone`, `Notifications`, `Calendar`,
 `Contacts`, `Timeline`, `ReadWatchSettings`/`WriteWatchSettings`, `ReadMusic`/`ControlMusic`,
-`LaunchApps`, `LegacyPebbleKit` and `Health`.
+`LaunchApps`, `FindMyPhone`, `ReadFiles`/`WriteFiles`, `LegacyPebbleKit` and `Health`.
 
 - Each `Internet` domain is its own permission and covers its subdomains. `LocalNetwork` covers
   devices on the LAN.
+- `ReadFiles` and `WriteFiles` let your settings page ask the user for a file or folder. They take
+  no parameters: you can't name paths in the manifest. Each entry the user picks is its own
+  permission (`ReadFiles/<path>`, or `WriteFiles/<path>` for read-write), listed on the app's page
+  like any other, and nothing is granted without a pick. `WriteFiles` includes reading: declare
+  both to let the user allow reading but not writing, and allowing `WriteFiles` allows `ReadFiles`
+  with it. See [File access](#file-access).
 - `LegacyPebbleKit` lets your watchapp talk to a companion app over PebbleKit Classic. A PebbleKit 2
   companion doesn't need declaring: each package your appinfo lists is asked about on its own.
+- `Microphone` allows watch microphone streaming to PebbleKit JS and local `mic_capture_*`
+  capture (SDK revision 111); declare it in `usesPermissions`.
 - `Health` isn't enforced yet: health data is read on the watch, so enforcing it needs permissions
   synced to the watch, which isn't built yet. Declare it anyway if you use health data.
 
@@ -258,10 +306,11 @@ const subscription = Pebble.subscribeToSource({
   properties: ["name", "temperature", "condition"],  // optional hint; omit for everything
   iconPixelSize: { w: 48, h: 48 },                   // optional; ask only if you want bitmaps
   onData: ({ instances }) => {
-    const here = instances[0];                       // first saved location (can be multiple if supportsMultiple==true)
+    // the location picked on your settings page, else the user's first
+    const here = instances.find((i) => i.instanceId === savedId) ?? instances[0];
     if (!here) return;
     const p = here.properties;
-    send(p.name.shortText.text, p.temperature.shortText.text);
+    send(p.name?.shortText?.text, p.temperature?.shortText?.text ?? "--");   // any property can be missing
   },
   onError: (err) => console.log(err.code, err.message),
 });
@@ -275,14 +324,22 @@ Every update is an envelope:
 {
   pluginUuid: "...",
   validUntilMs: 1716940000000,
-  instances: [
+  instances: [                                   // one per room
     {
-      instanceId: "3",
+      instanceId: "3",                           // stable: store this to remember a choice
       properties: {
         name:       { shortText: { text: "Kitchen" } },
+        on:         { boolean: { value: true }, shortText: { text: "On" } },
         brightness: { numericValue: { value: 64, unit: "%", min: 0, max: 100 },
                       shortText:    { text: "64%" } },
       },
+    },
+    {
+      instanceId: "5",
+      properties: {
+        name:       { shortText: { text: "Living room" } },
+        on:         { boolean: { value: false }, shortText: { text: "Off" } },
+      },                                         // off, so no brightness: draw what is there
     },
   ],
 }
@@ -308,7 +365,8 @@ const result = await Pebble.invokeAction({
 its sources (items, properties and shapes) and actions.
 
 Error codes: `PLUGIN_UNAVAILABLE`, `PERMISSION_DENIED`, `RATE_LIMITED`, `TIMEOUT`,
-`INVALID_REQUEST`, `UNKNOWN`, plus `AUTH_REQUIRED` and `INVALID_ARGS` for actions.
+`INVALID_REQUEST`, `UNKNOWN`, plus `AUTH_REQUIRED` and `INVALID_ARGS` for actions. An error doesn't
+end a subscription: it carries on, and the next update may succeed.
 
 # Writing a plugin
 
@@ -319,7 +377,7 @@ copy is `stocks/`.
 **If your app fetches data from a service and displays it, consider splitting it into a plugin plus
 the app, in one pbw.** The app reads from its own plugin (pass your pbw's uuid as `plugin`), and
 behaves the same as it does now. But the data is also available to every other watchface and app,
-and later to Index - and users can show it in a design other than yours.
+and to Index - and users can show it in a design other than yours.
 
 ## The manifest
 
@@ -394,8 +452,11 @@ Pebble.registerSourceHandler(async (request, respond) => {
 
 Pebble.registerActionHandler(async (request, respond) => {
   // request: { action, args }
+  if (request.action !== "add_stock") return respond.error("INVALID_REQUEST");
   try {
     await addStock(request.args.symbol);
+    // Sources this changed: subscriptions to them (the caller's included) are re-read now, so
+    // they get the new data without waiting for the next refresh.
     respond.ok({ text: "Added.", refreshed: ["finance/stock"] });
   } catch (e) {
     respond.error("UNKNOWN", e.message);
@@ -424,10 +485,21 @@ What a plugin has to work with:
   `await Pebble.oauth.authorize("todoist")` for a token and
   `Pebble.oauth.refresh("todoist", broker_refresh)` to renew it; keep both in `Pebble.secureStorage`. The connector has to be registered
   with the Pebble app store (see the `todoist/` example).
+- **`Pebble.fileSystem`** for files and folders on the phone the user has handed your plugin from
+  its settings page (see [File access](#file-access)); needs `ReadFiles` / `WriteFiles`.
+  `await Pebble.fileSystem.getHandle(id)` gives a `FileSystemFileHandle` /
+  `FileSystemDirectoryHandle` with the browser
+  [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API)
+  surface: `getFile()`, `createWritable()`, `getFileHandle()`, `getDirectoryHandle()`,
+  `removeEntry()`, `entries()`, `queryPermission()`.
+- **`console.log`** shows up in `pebble logs`, beside your app's PKJS logs.
 - Nothing else: unlike PKJS, a plugin has no WebView APIs.
 
 Return every property and shape you can; text shapes cost nothing once you have the data, and the
 app picks. Only produce `icon`/`image` when the request has `iconPixelSize`.
+
+The Pebble app checks every update before an app sees it: a shape your manifest doesn't declare, or
+one that doesn't match its format (above), is dropped. Why shows up in `pebble logs`.
 
 ## Settings pages
 
@@ -451,6 +523,51 @@ Pebble.addEventListener("configmessage", (e) => e.respond({ theme: theme() }));
 ```
 
 Wait for `ready` before sending: the plugin is started when the page opens.
+
+## File access
+
+A plugin can read and write to files/directories the user permits. Declare `ReadFiles` 
+(and/or `WriteFiles` to change files; allowing it allows reading too) in `usesPermissions`.
+
+The plugin must have the read/write permission to use the associated mode with the file picker
+(called from the settings page) which then grants additional access to that specific file or
+directory in that mode.
+
+The resulting file(s) or folder can be stored and reused outside the settings page, such as during 
+plugin use to read/write files in response to user requests or to facilitate providing data to apps.
+
+```javascript
+// in the settings page
+const folder = await Pebble.showDirectoryPicker({ mode: "readwrite" });         // or
+const [file] = await Pebble.showOpenFilePicker({ types: [{ accept: { "text/markdown": [".md"] } }] });
+await Pebble.sendMessage("plugin", { type: "setFolder", id: folder.id });
+const held = await Pebble.fileSystem.grants();     // [{ id, kind, name, mode }]
+await Pebble.fileSystem.revoke(held[0].id);
+
+// in plugin.js
+Pebble.registerConfigHandler((message, respond) => {
+  if (message.type === "setFolder") localStorage.setItem("folder", message.id);
+  respond({ ok: true });
+});
+
+Pebble.registerActionHandler(async (request, respond) => {
+  const dir = await Pebble.fileSystem.getHandle(localStorage.getItem("folder"));
+  const file = await dir.getFileHandle("inbox.md", { create: true });
+  const existing = await (await file.getFile()).text();
+  const writable = await file.createWritable();
+  await writable.write(existing + "\n- " + request.args.text);
+  await writable.close();
+  for await (const [name, entry] of dir.entries()) console.log(name, entry.kind);
+  respond.ok({ text: "Added." });
+});
+```
+
+Cancelling the picker rejects with an `AbortError`; a plugin the user hasn't allowed `ReadFiles`
+(or `WriteFiles`, for a read-write pick) gets `NotAllowedError`, as does attempting to write through 
+a read-only pick or any use of an entry the user has since withdrawn.
+
+Plugins can revoke access they no longer need (such as if the user is re-configuring the plugin) via 
+`Pebble.fileSystem.revoke(id)`.
 
 The `plugin-test` dashboard shows what this makes possible: its settings page asks the app's PKJS
 for the catalogue of everything installed (built from `enumeratePlugins`) to fill its dropdowns. Each
@@ -478,9 +595,7 @@ in v1.15.0 (along with several other parts of the API).
 
 We're planning:
 
-- Index integration (plugins as MCP tools).
-- Tooling support (the Pebble tool, CloudPebble).
-- Permission metadata in the app store, so users can review an app's permissions before adding it.
+- Tooling support: `pebble build` and the Pebble tool (in progress), and CloudPebble.
 - Choosing favourite readings in the app, and a preferred plugin when several serve the same thing
   (e.g. weather), plus an API to read those choices.
 - More extensive documentation.
@@ -489,5 +604,5 @@ We're planning:
   display images after restarting, right now)
 - PebbleKit-Android plugin support.
 - Plugins calling other plugins.
-- App store support, including a Plugins section for discovery.
+- Publishing plugins to the app store (it can already list them, but uploads aren't open yet).
 - More built-in plugins exposing more things.

@@ -154,6 +154,7 @@ class IndexDeviceManager(
                 prefs.setRingPairedName(null)
             } else if (evt.state == IndexBondState.Bonded && evt.identifier.asString == prefs.ringPaired.value) {
                 logger.d { "Received bond state change for paired ring ${evt.identifier.asString}, state=${evt.state}, ring likely SOS'd, considering it a new iteration" }
+                prefs.setRingPairingKeyHash(null)
                 indexStorage.setLastSuccessfulCollectionIndex(null)
                 transferRepo.markTransfersAsPreviousIndexIteration()
                 evt.name?.let { prefs.setRingPairedName(it) }
@@ -170,6 +171,7 @@ class IndexDeviceManager(
             .drop(1)
             .onEach { (old, new) ->
                 logger.d { "Paired ring changed from $old to $new" }
+                prefs.setRingPairingKeyHash(null)
                 // remove old if it isnt the same as new, otherwise keep it to avoid UI flickering
                 if (old != null && old != new) {
                     logger.d { "Removing old from list" }

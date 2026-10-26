@@ -17,6 +17,9 @@ import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
+import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
+import io.rebble.libpebblecommon.plugin.files.PluginFileSystemJsBridge
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CompletableDeferred
@@ -57,8 +60,11 @@ class JsPlugin(
     private val scope: CoroutineScope,
     private val httpClient: HttpClient,
     private val httpInterceptorManager: HttpInterceptorManager,
-    private val networkAccess: NetworkAccess,
+    private val networkAccess: (prompt: Boolean) -> NetworkAccess,
     private val runningApps: RunningApps,
+    private val fileAccess: PluginFileAccess,
+    private val fileSystem: PluginFileSystem,
+    private val logs: PluginLogs,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
 ) : Plugin, ConfigMessageTarget {
@@ -66,6 +72,7 @@ class JsPlugin(
     override val description: String = manifest.description
     override val sources: List<SourceDeclaration> = manifest.sources
     override val actions: List<ActionDeclaration> = manifest.actions
+    override val scriptPath: String = manifest.script
 
     private val logger = Logger.withTag("JsPlugin-$name")
     private val lenientJson = Json { ignoreUnknownKeys = true }
@@ -84,7 +91,8 @@ class JsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
-    ): Flow<SourceEnvelope> = callbackFlow {
+        prompt: Boolean,
+    ): Flow<SourceUpdate> = callbackFlow {
         val declaration = sources.firstOrNull { it.serves(category, item) }
         if (declaration == null) {
             close()
@@ -106,9 +114,10 @@ class JsPlugin(
                     .orEmpty()
                 val raw = request(
                     """{"kind":"source","category":${quote(category)},"item":${quote(item)}""" +
-                        """$wanted$size}"""
+                        """$wanted$size}""",
+                    prompt,
                 )
-                raw?.let { parseEnvelope(it) }?.let { send(it) }
+                send(raw?.let { parseEnvelope(it) } ?: SourceUpdate.Error(PluginErrors.TIMEOUT, "plugin did not respond"))
                 withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
                 }
@@ -117,8 +126,8 @@ class JsPlugin(
         awaitClose { job.cancel() }
     }
 
-    override suspend fun invoke(action: String, args: JsonObject): ActionResult {
-        val raw = request("""{"kind":"action","action":${quote(action)},"args":$args}""")
+    override suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult {
+        val raw = request("""{"kind":"action","action":${quote(action)},"args":$args}""", prompt)
             ?: return ActionResult.error(PluginErrors.TIMEOUT, "plugin did not respond")
         return try {
             val result = lenientJson.decodeFromString(ActionResult.serializer(), raw)
@@ -130,37 +139,38 @@ class JsPlugin(
         }
     }
 
-    private fun parseEnvelope(raw: String): SourceEnvelope? = try {
+    private fun parseEnvelope(raw: String): SourceUpdate = try {
         val parsed = lenientJson.decodeFromString(JsEnvelope.serializer(), raw)
         if (parsed.error != null) {
             logger.w { "source error: ${parsed.error}" }
-            null
+            // PLUGIN_HOST_JS sends "CODE" or "CODE: message".
+            SourceUpdate.Error(parsed.error.substringBefore(": "), parsed.error.substringAfter(": ", parsed.error))
         } else {
-            SourceEnvelope(
-                pluginUuid = pluginUuid.toString(),
-                validUntilMs = parsed.validUntilMs,
-                instances = parsed.instances,
+            SourceUpdate.Data(
+                SourceEnvelope(
+                    pluginUuid = pluginUuid.toString(),
+                    validUntilMs = parsed.validUntilMs,
+                    instances = parsed.instances,
+                )
             )
         }
     } catch (e: Exception) {
         logger.w(e) { "bad source response: $raw" }
-        null
+        SourceUpdate.Error(PluginErrors.UNKNOWN, "malformed plugin response")
     }
 
     /** Cold-start a session, dispatch one request, tear the session down. */
-    private suspend fun request(requestJson: String): String? = runningApps.whileRunning(pluginUuid) {
-        sessionLock.withLock {
-            if (retired) return@withLock null
-            val session = newSession()
-            try {
-                session.start()
-                awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
-            } catch (e: Exception) {
-                logger.w(e) { "plugin session failed" }
-                null
-            } finally {
-                session.stop()
-            }
+    private suspend fun request(requestJson: String, prompt: Boolean): String? = sessionLock.withLock {
+        if (retired) return@withLock null
+        val session = newSession(prompt)
+        try {
+            session.start()
+            awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
+        } catch (e: Exception) {
+            logger.w(e) { "plugin session failed" }
+            null
+        } finally {
+            session.stop()
         }
     }
 
@@ -181,7 +191,7 @@ class JsPlugin(
 
     private val secureStorage = pluginSecureStorage(appContext, pluginUuid)
 
-    private fun newSession(): Session {
+    private fun newSession(prompt: Boolean = true): Session {
         logger.d { "newSession(): $pluginUuid $name" }
         // XHR drives the JS side by evaluating statements that must land in order — readyState
         // before the response body before the events — so callbacks queue rather than race.
@@ -192,7 +202,7 @@ class JsPlugin(
             httpInterceptorManager = httpInterceptorManager,
             appUuid = pluginUuid,
             client = httpClient,
-            networkAccess = networkAccess,
+            networkAccess = networkAccess(prompt),
             jsTarget = FETCH_REGISTRY,
         )
         val webSockets = WebSocketManager(
@@ -200,7 +210,7 @@ class JsPlugin(
             eval = { js -> evals.trySend(js) },
             client = httpClient,
             appUuid = pluginUuid,
-            networkAccess = networkAccess,
+            networkAccess = networkAccess(prompt),
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.
@@ -213,11 +223,14 @@ class JsPlugin(
             PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid.toString(), manifest.oauth.keys, it)
         }
         val secureStorageBridge = PluginSecureStorageJsBridge(scope, { js -> evals.trySend(js) }, secureStorage)
-        val geolocation = EngineGeolocation(scope, { js -> evals.trySend(js) }, pluginUuid)
-        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge)
+        val fileSystemBridge = PluginFileSystemJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid, fileAccess, fileSystem)
+        val geolocation = EngineGeolocation(scope, { js -> evals.trySend(js) }, pluginUuid, prompt)
+        val interfaces = listOfNotNull(
+            Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
+        )
         val engine = JsEngine(appContext, scope, name, interfaces)
         return Session(
-            engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, evals,
+            engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge, evals,
             scope.launch { for (js in evals) engine.eval(js) },
         )
     }
@@ -230,6 +243,7 @@ class JsPlugin(
         private val geolocation: EngineGeolocation,
         private val oauthBridge: PluginOAuthJsBridge?,
         private val secureStorageBridge: PluginSecureStorageJsBridge,
+        private val fileSystemBridge: PluginFileSystemJsBridge,
         private val evals: Channel<String>,
         private val pump: Job,
     ) {
@@ -244,6 +258,7 @@ class JsPlugin(
             engine.eval(PLUGIN_HOST_JS)
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
             engine.eval(PluginSecureStorageJsBridge.INSTALL_JS)
+            engine.eval(PluginFileSystemJsBridge.INSTALL_JS)
             engine.eval(script())
         }
 
@@ -256,6 +271,7 @@ class JsPlugin(
             geolocation.close()
             oauthBridge?.close()
             secureStorageBridge.close()
+            fileSystemBridge.close()
             engine.stop()
         }
     }
@@ -330,6 +346,7 @@ class JsPlugin(
             }
             "log" -> {
                 logger.i { "[${args[0]}] ${args[1]}" }
+                logs.log(this@JsPlugin, "[${args[0]}] ${args[1]}")
                 null
             }
             "configMessage" -> {
@@ -355,7 +372,7 @@ class JsPlugin(
         val error: String? = null,
     )
 
-    private companion object {
+    internal companion object {
         val REQUEST_TIMEOUT = 20.seconds
 
         // An interactive OAuth sign-in (browser round-trip) outlasts a data-read timeout; the UI

@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
+import coredevices.mcp.client.compositeName
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
@@ -60,14 +61,6 @@ open class AgentNenya(
         return locationLine
     }
 
-    /**
-     * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
-     * + 64 max chars. Covers Gemini + Claude
-     */
-    private fun sanitizeToolName(name: String): String {
-        return name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_").take(64)
-    }
-
     /** Sanitized composite name -> (integration, tool) as declared on the last inference round. */
     private val declaredTools = mutableMapOf<String, Pair<String, String>>()
 
@@ -75,7 +68,7 @@ open class AgentNenya(
         return tools.mapNotNull {
             val definition = it.tool.definition
             val compositeNameRaw = "${it.integrationName}__${definition.name}"
-            val compositeName = sanitizeToolName(compositeNameRaw)
+            val compositeName = it.compositeName()
             declaredTools[compositeName] = it.integrationName to definition.name
             if (compositeName != compositeNameRaw) {
                 logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }

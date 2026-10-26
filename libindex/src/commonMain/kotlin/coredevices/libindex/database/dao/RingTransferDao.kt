@@ -35,6 +35,9 @@ interface RingTransferDao {
     @Query("SELECT * FROM RingTransfer WHERE isCurrentIndexIteration = 1 AND status = 'Started' AND transferInfo_collectionStartIndex < :index")
     suspend fun getStartedTransfersBelowIndex(index: Int): List<RingTransfer>
 
+    @Query("SELECT * FROM RingTransfer WHERE status = 'Started' AND transferInfo_collectionStartIndex = :startIndex ORDER BY createdAt")
+    suspend fun getStartedTransfersByStartIndex(startIndex: Int): List<RingTransfer>
+
     @Query("UPDATE RingTransfer SET isCurrentIndexIteration = 0 WHERE isCurrentIndexIteration = 1")
     suspend fun markTransfersAsPreviousIndexIteration()
 

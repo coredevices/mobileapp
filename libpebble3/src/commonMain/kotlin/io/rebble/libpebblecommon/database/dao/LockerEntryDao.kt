@@ -86,6 +86,23 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     fun getEntriesFlow(ids: List<Uuid>): Flow<List<LockerEntry>>
 
+    @Query("""
+        UPDATE LockerEntryEntity
+        SET microphoneGranted = :granted, recordHashcode = :hashcode
+        WHERE id = :id AND microphoneGranted != :granted
+    """)
+    suspend fun updateMicrophoneGrant(id: Uuid, granted: Boolean, hashcode: Int)
+
+    @Transaction
+    suspend fun syncMicrophoneGrants(grants: Set<Uuid>) {
+        getAll().forEach { entry ->
+            val granted = entry.id in grants
+            if (entry.microphoneGranted != granted) {
+                updateMicrophoneGrant(entry.id, granted, entry.copy(microphoneGranted = granted).recordHashCode())
+            }
+        }
+    }
+
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
         insertOrReplace(entry)

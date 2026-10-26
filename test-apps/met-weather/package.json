@@ -62,33 +62,20 @@
             "uv_index": [
               "numericValue",
               "shortText"
+            ],
+            "hourly_temperature": [
+              "series.numericValue",
+              "series.shortText"
+            ],
+            "hourly_condition": [
+              "series.shortText",
+              "series.icon",
+              "series.image"
+            ],
+            "hourly_condition_code": [
+              "series.longText"
             ]
           },
-          "callerPermissions": [
-            "Location"
-          ],
-          "suggestedRefreshIntervalSec": 1800
-        },
-        {
-          "category": "weather",
-          "items": [
-            "hour"
-          ],
-          "properties": {
-            "temperature": [
-              "numericValue",
-              "shortText"
-            ],
-            "condition": [
-              "shortText",
-              "icon",
-              "image"
-            ],
-            "condition_code": [
-              "longText"
-            ]
-          },
-          "supportsMultiple": true,
           "callerPermissions": [
             "Location"
           ],

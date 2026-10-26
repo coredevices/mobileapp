@@ -42,8 +42,12 @@ import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.disk.pbw.DiskUtil
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.plugin.PluginManifest
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.LockerAddResponse
@@ -74,6 +78,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNull
@@ -959,6 +964,15 @@ fun StoreApplication.asLockerEntryPlatform(
             screenshot = screenshotImage ?: "",
         )
     )
+}
+
+fun StoreApplication.pluginMetadata(): PluginMetadata? {
+    val raw = plugin?.manifest ?: return null
+    if (isLegacy(manifestVersion) || uuid == null) return null
+    val manifest = runCatching { DiskUtil.pbwJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
+        .onFailure { logger.w(it) { "unreadable plugin manifest for $uuid" } }
+        .getOrNull() ?: return null
+    return PluginMetadata(Uuid.parse(uuid), title, manifest.description, manifest.sources, manifest.actions, manifest.script)
 }
 
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {

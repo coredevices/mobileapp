@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 interface LibPebbleAnalytics {
     fun logEvent(name: String, parameters: Map<String, String> = emptyMap())
+    fun incrementHeartbeatCounter(name: String)
 }
 
 class RealLibPebbleAnalytics : LibPebbleAnalytics, AnalyticsEvents {
@@ -21,4 +22,12 @@ class RealLibPebbleAnalytics : LibPebbleAnalytics, AnalyticsEvents {
     }
 
     override val analyticsEvents: Flow<AnalyticsEvent> = _events.asSharedFlow()
+
+    private val _heartbeatCounterIncrements = MutableSharedFlow<String>(extraBufferCapacity = 64)
+
+    override fun incrementHeartbeatCounter(name: String) {
+        _heartbeatCounterIncrements.tryEmit(name)
+    }
+
+    override val heartbeatCounterIncrements: Flow<String> = _heartbeatCounterIncrements.asSharedFlow()
 }

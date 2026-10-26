@@ -34,11 +34,16 @@ import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.requestedPermissions
+import io.rebble.libpebblecommon.plugin.Connections
+import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
+import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
@@ -73,6 +78,22 @@ import kotlinx.serialization.json.Json
 
 class WebSyncManagerProvider(val webSyncManager: () -> WebSyncManager)
 
+internal data class AppVersionState(
+    val id: Uuid,
+    val currentVersion: String,
+    val sideloaded: Boolean,
+    val cachedVersions: List<String>,
+)
+
+/**
+ * Apps to proactively re-download: the current version isn't cached, but a previous version is
+ * (so the user had it before). Sideloaded apps are excluded — they can't be re-fetched.
+ */
+internal fun appsNeedingUpdatePrefetch(apps: List<AppVersionState>): List<Uuid> =
+    apps.filter {
+        !it.sideloaded && it.currentVersion !in it.cachedVersions && it.cachedVersions.isNotEmpty()
+    }.map { it.id }
+
 interface AppFileReader {
     suspend fun getAppFile(uuid: Uuid, name: String): String?
 }
@@ -92,6 +113,8 @@ class Locker(
     private val settings: Settings,
     private val permissions: AppPermissions,
     private val appContext: AppContext,
+    private val phoneNetworkMonitor: PhoneNetworkMonitor,
+    private val pluginFileAccess: PluginFileAccess,
 ) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
@@ -170,8 +193,17 @@ class Locker(
     override suspend fun appConfigPageUrl(uuid: Uuid): String? {
         // V2 config pages won't work with plugins disabled (no messaging channel)
         if (!config.value.enablePlugins) return null
-        val page = lockerEntryDao.getEntryFlow(uuid).first()?.configPage ?: return null
-        if (page.startsWith("http://") || page.startsWith("https://")) return page
+        val entry = lockerEntryDao.getEntryFlow(uuid).first() ?: return null
+        val page = entry.configPage ?: return null
+        if (page.startsWith("http://") || page.startsWith("https://")) {
+            // Like a PKJS config URL (`JsRunner.mayOpen`), opening it can carry data off the phone.
+            val verdict = NetworkGate(permissions, entry.title, uuid).check(page, wait = true)
+            if (verdict is PluginNetworkVerdict.Denied) {
+                logger.w { "Not opening ${entry.title}'s config page: ${verdict.reason}" }
+                return null
+            }
+            return page
+        }
         // A bundled page still needs its HTML from the pbw, delivered as a data URL.
         return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
     }
@@ -228,7 +260,7 @@ class Locker(
         }
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
-        if (!keepSecrets) deletePluginSecrets(listOf(id))
+        if (!keepSecrets) deletePluginData(listOf(id))
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -304,6 +336,7 @@ class Locker(
                     orderIndex = existing.orderIndex,
                     active = existing.active,
                     grantedPermissions = existing.grantedPermissions,
+                    microphoneGranted = existing.microphoneGranted,
                 )
                 if (newWithExistingLocalProps != existing && !existing.sideloaded) {
                     newWithExistingLocalProps
@@ -327,13 +360,14 @@ class Locker(
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
-        deletePluginSecrets(toDelete)
+        deletePluginData(toDelete)
         performCacheCleanup()
     }
 
-    private suspend fun deletePluginSecrets(ids: List<Uuid>) = ids.forEach { id ->
+    private suspend fun deletePluginData(ids: List<Uuid>) = ids.forEach { id ->
         try {
             pluginSecureStorage(appContext, id).destroy()
+            pluginFileAccess.destroy(id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -394,6 +428,41 @@ class Locker(
     private suspend fun performCacheCleanup() {
         val entries = lockerEntryDao.getAllBasicInfo()
         lockerPBWCache.cleanupCache(entries)
+    }
+
+    /**
+     * For apps whose current version isn't cached but a previous version is, download the current
+     * version's pbw now so it can be pushed to the watch offline. Runs after a locker sync; a web
+     * version bump otherwise only reveals itself as a failed fetch the next time the app is launched
+     * without a connection.
+     */
+    suspend fun prefetchStaleAppUpdates() {
+        if (!config.value.proactivelyDownloadAppUpdates) return
+        if (config.value.appUpdateDownloadWifiOnly) {
+            val connection = phoneNetworkMonitor.connection.first()
+            if (connection != Connections.WIFI) {
+                logger.d { "Skipping app-update prefetch, not on Wi-Fi (connection=$connection)" }
+                return
+            }
+        }
+        val cachedByUuid = lockerPBWCache.allCachedVersions()
+        val statesById = lockerEntryDao.getAll().associate {
+            it.id to AppVersionState(it.id, it.version, it.sideloaded, cachedByUuid[it.id.toString()].orEmpty())
+        }
+        val toPrefetch = appsNeedingUpdatePrefetch(statesById.values.toList())
+        if (toPrefetch.isEmpty()) return
+        logger.d { "Prefetching ${toPrefetch.size} updated app pbw(s)" }
+        toPrefetch.forEach { id ->
+            val version = statesById.getValue(id).currentVersion
+            try {
+                lockerPBWCache.getPBWFileForApp(id, version, this)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.d { "Prefetch failed for $id v$version: ${e.message}" }
+            }
+        }
+        performCacheCleanup()
     }
 
     fun init(libPebble: LibPebble) {
@@ -543,6 +612,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
             iosCompanion = iosCompanion,
             androidCompanion = androidCompanion,
             order = orderIndex,
+            legacy = isLegacy(manifestVersion),
             developerId = appstoreData?.developerId,
             storeId = appstoreData?.storeId,
             sourceLink = appstoreData?.sourceLink,
@@ -779,6 +849,19 @@ abstract class LockerPBWCache(private val context: AppContext) {
 
     fun cachedPBWFileForApp(appId: Uuid, version: String): Path? =
         pathForApp(appId, version).takeIf { SystemFileSystem.exists(it) }
+
+    /** Every cached pbw version on disk, grouped by app-uuid string, parsed from `${uuid}_${version}.pbw`. */
+    fun allCachedVersions(): Map<String, List<String>> {
+        if (!SystemFileSystem.exists(cacheDir)) return emptyMap()
+        return SystemFileSystem.list(cacheDir).mapNotNull {
+            val name = it.name
+            if (!name.endsWith(".pbw")) return@mapNotNull null
+            // The uuid has no underscores, so the first one separates it from the version.
+            val sep = name.indexOf('_')
+            if (sep <= 0) return@mapNotNull null
+            name.substring(0, sep) to name.substring(sep + 1).removeSuffix(".pbw")
+        }.groupBy({ it.first }, { it.second })
+    }
 
     fun addPBWFileForApp(appId: Uuid, version: String, source: Source) {
         val targetPath = pathForApp(appId, version)

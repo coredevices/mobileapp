@@ -18,9 +18,13 @@ var DEFAULT = [{ symbol: '^GSPC', name: 'S&P 500' }];
 async function http(url) {
   try {
     var response = await fetch(url);
-    if (!response.ok) return { ok: false, json: null };
+    if (!response.ok) {
+      console.error('Quote request failed: HTTP ' + response.status + ' from ' + url);
+      return { ok: false, json: null };
+    }
     return { ok: true, json: await response.json() };
   } catch (e) {
+    console.error('Quote request to ' + url + ' failed: ' + e);
     return { ok: false, json: null };
   }
 }

@@ -58,7 +58,9 @@ class RingOta(
         val cachedFile = Path(otaCachePath, "${CACHED_FW_PREFIX}_${hardwareVersion}.json")
         cacheMutex.withLock {
             if ((SystemFileSystem.metadataOrNull(cachedFile)?.size ?: 0) > 0) {
-                return@withContext SystemFileSystem.source(cachedFile).buffered().readString()
+                return@withContext SystemFileSystem.source(cachedFile).buffered().use {
+                    it.readString()
+                }
             } else {
                 return@withContext null
             }
@@ -70,7 +72,9 @@ class RingOta(
         val cachedFile = Path(otaCachePath, "${CACHED_FW_PREFIX}_${hardwareVersion}.json")
         cacheMutex.withLock {
             val current = try {
-                SystemFileSystem.source(cachedFile).buffered().readString()
+                SystemFileSystem.source(cachedFile).buffered().use {
+                    it.readString()
+                }
             } catch (e: FileNotFoundException) {
                 null
             }

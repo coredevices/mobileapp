@@ -21,6 +21,7 @@ abstract class GeolocationInterface(
     private val scope: CoroutineScope,
     private val eval: suspend (String) -> Unit,
     private val appUuid: Uuid,
+    private val prompt: Boolean = true,
 ): LibPebbleKoinComponent {
     private val logger = Logger.withTag("GeolocationInterface")
     private val permissions: AppPermissions by inject()
@@ -71,9 +72,14 @@ abstract class GeolocationInterface(
         }
     }
 
-    private suspend fun geolocationPermissionGranted(): Boolean =
-        permissions.request(appUuid, PluginPermissions.LOCATION, wait = true) ==
-            PermissionDecision.Granted
+    private suspend fun geolocationPermissionGranted(): Boolean {
+        val decision = if (prompt) {
+            permissions.request(appUuid, PluginPermissions.LOCATION, wait = true)
+        } else {
+            permissions.check(appUuid, PluginPermissions.LOCATION)
+        }
+        return decision == PermissionDecision.Granted
+    }
 
     open fun getRequestCallbackID() = getNextRequestID()
     open fun getWatchCallbackID() = getNextWatchID()

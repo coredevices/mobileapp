@@ -28,7 +28,8 @@ internal const val WEBSOCKET_JS = """
     return bytes.buffer;
   }
 
-  function WebSocket(url, protocols) {
+  // `options.headers` (extra handshake headers) is non-standard.
+  function WebSocket(url, protocols, options) {
     if (!url) throw new SyntaxError('WebSocket: URL is required');
     this.url = String(url);
     this.readyState = WebSocket.CONNECTING;
@@ -48,7 +49,8 @@ internal const val WEBSOCKET_JS = """
     } else if (protocols) {
       protocolStr = String(protocols);
     }
-    this._id = _WebSocketManager.createInstance(this.url, protocolStr);
+    var headers = options && options.headers ? JSON.stringify(options.headers) : '';
+    this._id = _WebSocketManager.createInstance(this.url, protocolStr, headers);
     WebSocket._instances.set(this._id, this);
   }
 

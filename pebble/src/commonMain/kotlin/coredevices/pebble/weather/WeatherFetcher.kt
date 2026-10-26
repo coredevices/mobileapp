@@ -15,7 +15,9 @@ import dev.jordond.compass.geocoder.GeocoderResult
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.NumberWatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.health.HealthSettings
@@ -36,6 +38,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
@@ -133,6 +137,7 @@ class WeatherFetcher(
         if (pinsEnabled) {
             createTimelinePins(fetchedData)
         }
+        updateBacklightColorSchedule(fetchedData)
         libPebble.updateWeatherData(weatherAppData)
         if (weatherAppData.filterIsInstance<WeatherLocationData.WeatherLocationDataPopulated>().isNotEmpty()) {
             settings.putBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, true)
@@ -181,6 +186,32 @@ class WeatherFetcher(
         createTimelinePins(today, Day.Today)
         createTimelinePins(tomorrow, Day.Tomorrow)
         createTimelinePins(dayAfterTomorrow, Day.DayAfterTomorrow)
+    }
+
+    private suspend fun updateBacklightColorSchedule(fetchedData: List<LocationWithData>) {
+        if (!coreConfigFlow.value.backlightColorAutoSunriseSunset) return
+        val prefs = libPebble.watchPrefs.first()
+        fun bool(pref: BoolWatchPref) =
+            prefs.firstOrNull { it.pref == pref }?.let { pref.castParent(it).valueOrDefault() }
+                ?: pref.defaultValue
+        if (!bool(BoolWatchPref.BacklightColorDayNightEnabled)) return
+        // Sunrise/sunset are the current location's local wall-clock time, which only matches the
+        // watch's clock when it follows the phone's timezone. Leave manual-timezone watches alone.
+        if (bool(BoolWatchPref.TimezoneSourceIsManual)) {
+            logger.i { "Not syncing backlight sunrise/sunset: watch timezone is manual" }
+            return
+        }
+
+        val today = fetchedData.firstOrNull { it.location.currentLocation }
+            ?.data?.fcstdaily7?.data?.forecasts?.firstOrNull() ?: return
+        val timeZone = TimeZone.currentSystemDefault()
+        val (sunrise, sunset) = runCatching {
+            today.sunrise.minuteOfDay(timeZone) to today.sunset.minuteOfDay(timeZone)
+        }.getOrNull() ?: return
+        if (sunrise == sunset) return
+
+        libPebble.setWatchPref(WatchPreference(NumberWatchPref.BacklightColorSunriseMinute, sunrise.toLong()))
+        libPebble.setWatchPref(WatchPreference(NumberWatchPref.BacklightColorSunsetMinute, sunset.toLong()))
     }
 
     private fun weatherAppData(locationWithData: LocationWithData, units: WeatherUnit): WeatherLocationData? {
@@ -377,7 +408,7 @@ private val TomorrowDayUuid = Uuid.parse("2834d0c8-85bc-45bd-b2b7-d0f026098d28")
 private val TomorrowNightUuid = Uuid.parse("2f363ad4-bc5d-455a-a445-4e00ec07417e")
 private val DayAfterTomorrowDayUuid = Uuid.parse("3233984e-2dc9-4469-8a9a-46f91d81b7fc")
 private val DayAfterTomorrowNightUuid = Uuid.parse("fd97c081-9970-436b-aa87-9c55232bce35")
-private const val TEMP_NO_VALUE = Short.MAX_VALUE
+internal const val TEMP_NO_VALUE = Short.MAX_VALUE
 private const val HOURS_PER_DAY = 24
 
 internal fun HourlyForecast.toHourlyForecast() = WeatherHourlyForecast(
@@ -554,6 +585,10 @@ private fun String.asInstantFromIso8601(): Instant {
     val sanitized = substring(0, length - 2) + ":" + substring(length - 2)
     return Instant.parse(sanitized)
 }
+
+/** Wall-clock minute-of-day (0..1439) of this instant in [timeZone]. */
+internal fun Instant.minuteOfDay(timeZone: TimeZone): Int =
+    toLocalDateTime(timeZone).time.let { it.hour * 60 + it.minute }
 
 /** Minutes east of UTC from an ISO-8601 timestamp ending in a colon-less offset (e.g. `-0700`). */
 internal fun String.utcOffsetMinutes(): Int? {

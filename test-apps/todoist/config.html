@@ -19,6 +19,7 @@
                       border: 0; border-radius: 8px; font: 15px inherit;
                       background: #dc4c3e; color: white; text-decoration: none; }
     button.secondary { background: rgba(128,128,128,.2); color: inherit; }
+    [hidden] { display: none !important; }
     #status { margin-top: 16px; padding: 10px 12px; border-radius: 8px;
               background: rgba(128,128,128,.15); font-size: 14px; }
   </style>
@@ -27,9 +28,8 @@
   <h1>Todoist</h1>
 
   <div class="buttons">
-    <button id="connect" type="button">Sign in with Todoist</button>
-    <button id="test" class="secondary" type="button">Test connection</button>
-    <button id="unlink" class="secondary" type="button">Unlink</button>
+    <button id="connect" type="button" hidden>Sign in with Todoist</button>
+    <button id="unlink" class="secondary" type="button" hidden>Unlink</button>
   </div>
   <div id="status">Starting the Todoist plugin…</div>
 
@@ -41,6 +41,8 @@
     }
 
     function showConfigured(configured, projectCount) {
+      document.getElementById('connect').hidden = !!configured;
+      document.getElementById('unlink').hidden = !configured;
       if (!configured) {
         statusElement.textContent = 'Todoist is not connected.';
         return;
@@ -53,16 +55,6 @@
     document.getElementById('connect').onclick = async function () {
       statusElement.textContent = 'Opening Todoist sign-in…';
       var result = await send({ type: 'connect' });
-      if (result.error) {
-        statusElement.textContent = result.error;
-        return;
-      }
-      showConfigured(result.configured, result.projectCount);
-    };
-
-    document.getElementById('test').onclick = async function () {
-      statusElement.textContent = 'Testing…';
-      var result = await send({ type: 'testConnection' });
       if (result.error) {
         statusElement.textContent = result.error;
         return;

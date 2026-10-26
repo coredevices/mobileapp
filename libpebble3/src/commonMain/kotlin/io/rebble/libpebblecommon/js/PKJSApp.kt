@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioStreamTarget
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
@@ -11,15 +12,20 @@ import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.services.appmessage.AppMessageData
 import io.rebble.libpebblecommon.services.appmessage.AppMessageDictionary
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
@@ -28,6 +34,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
@@ -61,12 +68,12 @@ class PKJSApp(
     val appInfo: PbwAppInfo,
     val lockerEntry: LockerEntry,
     private val connectionScope: ConnectionCoroutineScope,
-): LibPebbleKoinComponent, CompanionApp, ConfigMessageTarget {
+): LibPebbleKoinComponent, CompanionApp, ConfigMessageTarget, AudioStreamTarget {
     companion object {
         private val logger = Logger.withTag(PKJSApp::class.simpleName!!)
         private val CONFIGURATION_URL_TIMEOUT = 10.seconds
     }
-    val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
+    override val uuid: Uuid by lazy { Uuid.parse(appInfo.uuid) }
     private var jsRunner: JsRunner? = null
     private var runningScope: CoroutineScope? = null
     // Buffered so JS-side `loadUrl(...).trySend(url)` can't silently drop the URL when the
@@ -119,6 +126,30 @@ class PKJSApp(
         }.catch {
             logger.e(it) { "Error receiving app message: ${it.message}" }
         }.launchIn(scope)
+    }
+
+    override suspend fun streamAudio(
+        sampleRate: Int,
+        pcm: Flow<ByteArray>,
+        onReady: suspend () -> Unit,
+    ): Boolean {
+        val scope = runningScope ?: return false
+        val runner = jsRunner ?: return false
+        // Tie delivery to the app's lifetime as well as the voice session's lifetime.
+        val delivery = scope.async {
+            streamAudioToJs(sampleRate, pcm, runner.readyState, runner::signalAudioStream, onReady)
+        }
+        return try {
+            delivery.await()
+        } catch (e: CancellationException) {
+            // An app stop ends this stream without cancelling the voice request listener.
+            currentCoroutineContext().ensureActive()
+            false
+        } finally {
+            withContext(NonCancellable) {
+                delivery.cancelAndJoin()
+            }
+        }
     }
 
     private fun launchOutgoingAppMessageHandler(device: ConnectedPebble.AppMessages, scope: CoroutineScope) {
@@ -213,8 +244,11 @@ class PKJSApp(
     }
 
     override suspend fun stop() {
+        withContext(NonCancellable) {
+            runningScope?.coroutineContext?.get(Job)?.cancelAndJoin()
+        }
         jsRunner?.stop()
-        runningScope?.cancel()
+        runningScope = null
         jsRunner = null
     }
 

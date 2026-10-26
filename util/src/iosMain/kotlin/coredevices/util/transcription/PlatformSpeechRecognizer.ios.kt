@@ -1,5 +1,6 @@
 package coredevices.util.transcription
 
+import co.touchlab.kermit.Logger
 import coredevices.util.hasSpeechRecognitionAuthorization
 import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.inProgress
@@ -42,6 +43,9 @@ object NativeSpeechAnalyzerBridge {
     @Volatile
     var downloadAssets: ((localeTag: String?, onProgress: (Double) -> Unit, completion: (String?) -> Unit) -> Unit)? = null
 
+    @Volatile
+    var releaseUnusedReservations: ((localeTag: String?) -> Unit)? = null
+
     /** Populated once the Swift side finishes its async locale query, shortly after launch. */
     val supportedLanguageTags = MutableStateFlow<List<String>>(emptyList())
 
@@ -56,6 +60,7 @@ object NativeSpeechAnalyzerBridge {
 
 /** Apple SpeechAnalyzer/SpeechTranscriber (iOS 26+) via the Swift bridge. */
 actual class PlatformSpeechRecognizer {
+    private val logger = Logger.withTag("PlatformSpeechRecognizer")
     // The system caps concurrent SpeechAnalyzer sessions; serialize like Cactus does.
     private val mutex = Mutex()
     private val _downloadStatus = MutableStateFlow<ModelDownloadStatus>(ModelDownloadStatus.Idle)
@@ -97,10 +102,15 @@ actual class PlatformSpeechRecognizer {
             _downloadStatus.value = if (error == null) {
                 ModelDownloadStatus.Idle
             } else {
+                logger.w { "Platform speech model download failed: $error" }
                 ModelDownloadStatus.Failed(PLATFORM_STT_MODEL_NAME, error)
             }
         }
         return true
+    }
+
+    actual fun releaseUnusedModels(languageTag: String?) {
+        NativeSpeechAnalyzerBridge.releaseUnusedReservations?.invoke(languageTag?.let { toBcp47(it, null) })
     }
 
     actual suspend fun transcribe(pcm: ByteArray, sampleRate: Int, languageTag: String?): String {

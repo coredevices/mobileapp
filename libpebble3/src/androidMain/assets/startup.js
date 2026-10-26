@@ -8,6 +8,15 @@ _global.onunhandledrejection = (event) => {
     _Pebble.onUnhandledRejection(event.reason);
 }
 _global.navigator = _global.navigator || {};
+// Uint8Array.fromBase64 arrived in iOS 18.2 / Chrome 140; older engines fall back to atob.
+if (typeof Uint8Array.fromBase64 !== 'function') {
+    Uint8Array.fromBase64 = (base64) => {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    };
+}
 _global._PebbleGeoCB = {
     _requestCallbacks: new Map(),
     _watchCallbacks: new Map(),
@@ -139,6 +148,9 @@ navigator.geolocation.clearWatch = (id) => {
         GET_TIMELINE_TOKEN_SUCCESS: 'getTimelineTokenSuccess',
         GET_TIMELINE_TOKEN_FAILURE: 'getTimelineTokenFailure',
         CONFIG_MESSAGE: 'configmessage',
+        AUDIO_STREAM_START: 'audiostreamstart',
+        AUDIO_STREAM: 'audiostream',
+        AUDIO_STREAM_STOP: 'audiostreamstop',
     };
     Object.freeze(PebbleEventTypes);
     const DEFAULT_TIMEOUT = 5000; // 5 seconds
@@ -276,6 +288,15 @@ navigator.geolocation.clearWatch = (id) => {
     global.signalNewAppMessageData = (data) => {
         const payload = data ? JSON.parse(data) : {};
         dispatchPebbleEvent(PebbleEventTypes.APP_MESSAGE, { payload });
+    }
+    // Live microphone audio from the watch app. `audiostream` events carry 100 ms of 16-bit
+    // little-endian mono PCM as an ArrayBuffer in `data`.
+    global.signalAudioStream = (data) => {
+        const payload = JSON.parse(data);
+        if (typeof payload.data === 'string') {
+            payload.data = Uint8Array.fromBase64(payload.data).buffer;
+        }
+        dispatchPebbleEvent(payload.type, payload);
     }
     global.signalAppMessageAck = (data) => {
         const payload = data ? JSON.parse(data) : {};

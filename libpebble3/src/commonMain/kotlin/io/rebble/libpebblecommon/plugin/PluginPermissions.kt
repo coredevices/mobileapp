@@ -59,6 +59,7 @@ object PluginPermissions {
     /** Legacy apps only. */
     const val GLOBAL_INTERNET = "GlobalInternet"
     const val LOCATION = "Location"
+    const val WATCH_MICROPHONE = "WatchMicrophone"
     const val NOTIFICATIONS = "Notifications"
     const val CALENDAR = "Calendar"
     const val CONTACTS = "Contacts"
@@ -68,6 +69,9 @@ object PluginPermissions {
     const val READ_MUSIC = "ReadMusic"
     const val CONTROL_MUSIC = "ControlMusic"
     const val LAUNCH_APPS = "LaunchApps"
+    const val FIND_MY_PHONE = "FindMyPhone"
+    const val READ_FILES = "ReadFiles"
+    const val WRITE_FILES = "WriteFiles"
     const val LEGACY_PEBBLEKIT = "LegacyPebbleKit"
     const val PEBBLEKIT_2 = "PebbleKit2"
 

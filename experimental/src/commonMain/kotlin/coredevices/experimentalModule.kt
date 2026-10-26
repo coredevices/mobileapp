@@ -27,7 +27,10 @@ import coredevices.ring.agent.confirmation.RealAgentUserConfirmation
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
+import coredevices.pebble.ui.IndexTabBadge
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.LegacyDestinations
+import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -43,6 +46,7 @@ import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.Migrate33To34
 import coredevices.ring.database.room.Migrate36To37
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.database.room.SeedDefaultPluginGrants
 import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
@@ -92,6 +96,8 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.ring.bugreport.IndexRebootLogStore
+import coredevices.ring.bugreport.RingRssiStatistics
+import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
 import coredevices.util.sync.SyncHandler
@@ -128,6 +134,7 @@ val experimentalModule = module {
                 Migrate33To34(isAndroid = get<Platform>().isAndroid),
                 Migrate36To37(isAndroid = get<Platform>().isAndroid),
             )
+            .addCallback(SeedDefaultPluginGrants)
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
@@ -180,6 +187,9 @@ val experimentalModule = module {
     }
     single {
         get<RingDatabase>().agentIterationDao()
+    }
+    single {
+        get<RingDatabase>().ringRssiReadingDao()
     }
     singleOf(::PluginGrantRepository)
     singleOf(::RecordingRepository)
@@ -250,10 +260,11 @@ val experimentalModule = module {
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
-    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), get(), getOrNull()) }
+    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), get(), getOrNull(), get()) }
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
     singleOf(::IndexRebootLogStore)
+    single { RingRssiStatistics(get()) } bind HeartbeatMetricsSource::class
     singleOf(::ExperimentalDevices)
     single { TargetCalendarSeeder(get(), get<LibPebble>(), get()) }
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
@@ -279,6 +290,7 @@ val experimentalModule = module {
     singleOf(::BuiltInReminderFeedItems)
     singleOf(::DelegatedIntegrationItems)
     single { IntegrationProviderRepository(get(), get(), get(), get()) }
+    single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)
     singleOf(::RealAgentUserConfirmation) bind AgentUserConfirmation::class

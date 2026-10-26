@@ -29,6 +29,9 @@ interface LockerAppPermissionDao {
     @Query("DELETE FROM AppPermission WHERE appUuid = :appUuid")
     suspend fun deleteByAppUuid(appUuid: Uuid)
 
+    @Query("DELETE FROM AppPermission WHERE appUuid = :appUuid AND permission IN (:permissions)")
+    suspend fun deleteByAppUuidAndPermissions(appUuid: Uuid, permissions: List<String>)
+
     @Query("DELETE FROM AppPermission WHERE appUuid NOT IN (SELECT id FROM LockerEntryEntity WHERE deleted = 0)")
     suspend fun deleteForRemovedApps()
 

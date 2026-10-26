@@ -22,6 +22,8 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.storage.appStorageBreakdown
+import coredevices.util.storage.formatStorageSummary
 import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -291,6 +293,9 @@ class BugReportProcessor(
         val pkjsSummary = getPKJSSummary()
         val sttSummary = getSTTSummary()
         val pebbleContext = pebbleScreenContext()
+        val storageSummary = withContext(Dispatchers.IO) {
+            formatStorageSummary(appContext.appStorageBreakdown())
+        }
         val summaryWithAttachmentCount = buildString {
             append(deviceSummary)
             append(pkjsSummary)
@@ -318,6 +323,7 @@ class BugReportProcessor(
             append("\nFirebase uploads enabled: ${settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)}")
             append("\nMemfault uploads enabled: ${settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)}")
             append("\nMixpanel uploads enabled: ${settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)}")
+            append(storageSummary)
         }
         return summaryWithAttachmentCount
     }
