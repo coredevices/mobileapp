@@ -185,6 +185,12 @@ interface LockerEntryRealDao : LockerEntryDao {
             WHEN systemApp = 1 THEN 0
             WHEN type = 'plugin' THEN 0
             WHEN orderIndex < :syncLimit THEN 1
+            WHEN EXISTS (
+                SELECT 1 FROM WatchPrefItemEntity
+                WHERE WatchPrefItemEntity.id LIKE 'ql%'
+                AND WatchPrefItemEntity.value LIKE '%"enabled":true%'
+                AND WatchPrefItemEntity.value LIKE '%"' || LockerEntryEntity.id || '"%'
+            ) THEN 1
             ELSE 0
         END
     """)

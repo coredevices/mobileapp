@@ -471,15 +471,30 @@ fun WatchHomeScreen(
         val rings by ringsFlow.collectAsState(initial = libIndex.rings.value)
         var hasSeenWatchOnboarding by remember { mutableStateOf(settings.hasSeenWatchOnboarding())}
         var hasSeenRingOnboarding by remember { mutableStateOf(settings.hasSeenRingOnboarding())}
+        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
+        // Re-read when plugins are switched, because switching them off resets it.
+        var hasSeenPermissionsIntro by remember(pluginsEnabled) { mutableStateOf(settings.hasSeenPermissionsIntro()) }
+        var startingOnboarding = false
         if (watches.any { it is CommonConnectedDevice } && !hasSeenWatchOnboarding) {
             hasSeenWatchOnboarding = true
             settings.setHasSeenWatchOnboarding(true)
             coreNav.navigateTo(CommonRoutes.WatchOnboardingRoute)
+            startingOnboarding = true
         }
         if (rings.any { it is InterviewedIndexDevice && !hasSeenRingOnboarding }) {
             hasSeenRingOnboarding = true
             coreConfigHolder.update(coreConfig.copy(enableIndex = true))
             coreNav.navigateTo(CommonRoutes.RingOnboardingRoute)
+            startingOnboarding = true
+        }
+        // Watch and ring onboarding show this themselves, so only people past one get the dialog.
+        if (!startingOnboarding && (hasSeenWatchOnboarding || hasSeenRingOnboarding) && pluginsEnabled &&
+            !hasSeenPermissionsIntro
+        ) {
+            PermissionsIntroDialog(onDismissRequest = {
+                hasSeenPermissionsIntro = true
+                settings.setHasSeenPermissionsIntro(true)
+            })
         }
 
         Scaffold(

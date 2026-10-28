@@ -76,7 +76,7 @@ class IndexWebhookRunRepository(private val settings: Settings) {
 
     private fun migrateAndLoad(): Map<RingGesture, List<IndexWebhookRun>> {
         migrateTriggerKeyedRuns()
-        return IndexWebhookPreferences.gestures.associateWith { load(it) }
+        return RingGesture.entries.associateWith { load(it) }
     }
 
     /** Runs are keyed by the same names the configs were, so they need the same re-keying. */

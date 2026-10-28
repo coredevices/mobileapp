@@ -38,6 +38,22 @@ class LanguagePackRepositoryTest {
     }
 
     @Test
+    fun groupsPacksAndDropsArchivedEnglish() {
+        val fonts = published.copy(locale = "en_SA").asLanguagePack()
+        val translation = published.asLanguagePack()
+        val community = legacy("ar_SA")
+        val groups = groupLanguagePacks(listOf(legacy("en_US"), community, fonts, translation, legacy("en_TW")))
+        assertEquals(
+            listOf(
+                LanguagePackGroup.Translations to listOf(translation),
+                LanguagePackGroup.FontPacks to listOf(fonts, legacy("en_TW")),
+                LanguagePackGroup.Community to listOf(community),
+            ),
+            groups,
+        )
+    }
+
+    @Test
     fun catalanAliasDoesNotProduceTwoChoices() {
         val packs = selectLanguagePacks(listOf(legacy("ca")),
             listOf(published.copy(locale = "ca_ES")), WatchHardwarePlatform.CORE_ASTERIX, "ca-ES")

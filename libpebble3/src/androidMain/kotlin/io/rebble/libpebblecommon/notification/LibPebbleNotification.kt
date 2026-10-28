@@ -47,6 +47,7 @@ data class LibPebbleNotification(
      * deduplication.
      */
     val messageKey: String? = null,
+    val silent: Boolean = false,
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
@@ -116,6 +117,9 @@ data class LibPebbleNotification(
         itemID = uuid
 
         layout = TimelineItem.Layout.GenericNotification
+        if (silent) {
+            flags { silent() }
+        }
         attributes {
             title?.let {
                 title { it }

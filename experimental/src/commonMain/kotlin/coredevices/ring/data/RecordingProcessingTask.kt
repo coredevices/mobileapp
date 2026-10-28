@@ -31,6 +31,8 @@ sealed interface ProcessingTask {
     ) : ProcessingTask
     data class TextRecording(
         val transcription: String,
+        /** Set when a ring click sent [transcription] as an agent command rather than it being typed. */
+        val buttonSequence: String? = null,
         override val created: Instant = Clock.System.now()
     ) : ProcessingTask
 }

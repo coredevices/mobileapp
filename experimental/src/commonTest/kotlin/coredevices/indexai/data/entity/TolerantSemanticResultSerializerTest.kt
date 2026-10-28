@@ -98,6 +98,17 @@ class TolerantSemanticResultSerializerTest {
     }
 
     @Test
+    fun legacyTaskCreationWithLocalReminderIdStillDecodes() {
+        // TaskCreation dropped `local_reminder_id`; older records still carry it and must decode.
+        val msg = decodeTree<ConversationMessageDocument>(
+            """{"role":"tool","semantic_result":{"type":"TaskCreation","title":"call mom","deadline":null,"local_reminder_id":42}}"""
+        )
+        val sr = msg.semantic_result
+        assertTrue(sr is SemanticResult.TaskCreation)
+        assertEquals("call mom", sr.title)
+    }
+
+    @Test
     fun canonicalDiscriminatorStillDecodes() {
         val msg = decodeTree<ConversationMessageDocument>(
             """{"role":"tool","semantic_result":{"type":"ListItemCreation","content":"milk"}}"""

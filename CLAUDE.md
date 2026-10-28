@@ -24,9 +24,8 @@ Kotlin Multiplatform / Compose Multiplatform app targeting Android and iOS.
 - `:mcp`, `:index-ai`, `:libindex` — AI/MCP-related modules.
 - `:cactus`, `:resampler`, `:krisp-stubs` — audio/ML support modules. `:cactus-native` is a plain Android library holding cactus' CMake build and prebuilt `.so` (the KMP Android library plugin has no NDK support).
 - `:blobannotations`, `:blobdbgen` — KSP annotations + code generator for Pebble blobdb.
-- `test-apps/` — demo watchapps for the plugin API (`plugin-test`, `weather-face`). Built by
-  `./gradlew buildTestAppPbws` when the Pebble SDK is on `PATH`, and bundled into the host apps'
-  resources; without the SDK the build carries on and the apps simply aren't bundled.
+- `test-apps/plugins.md` — the plugin API guide. The demo apps and plugins live in
+  `coredevices/pebble-plugins`, which builds them and publishes them to the store.
 
 iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, not `.xcodeproj`).
 

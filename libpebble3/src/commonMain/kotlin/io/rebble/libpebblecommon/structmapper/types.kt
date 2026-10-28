@@ -289,7 +289,8 @@ class SFixedString(mapper: StructMapper, initialSize: Int, default: String = "")
         },
         { buf, el ->
             el.set(
-                buf.getBytes(el.size).toByteArray().takeWhile { it > 0 }.toByteArray()
+                // 0xFF (erased flash) is never valid UTF-8
+                buf.getBytes(el.size).toByteArray().takeWhile { it != 0.toByte() && it != 0xFF.toByte() }.toByteArray()
                     .decodeToString(), el.size
             )
         }, mapper, initialSize, default

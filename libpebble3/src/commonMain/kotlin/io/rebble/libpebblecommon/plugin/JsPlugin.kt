@@ -22,6 +22,7 @@ import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
 import io.rebble.libpebblecommon.plugin.files.PluginFileSystemJsBridge
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import kotlin.concurrent.Volatile
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -30,6 +31,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -47,8 +50,9 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 /**
- * A [Plugin] backed by a JS script. Sources are polled at the declared refresh interval; actions
- * are one-shot. Sessions are cold-started per request and torn down immediately.
+ * A [Plugin] backed by a JS script. Sources are polled at the declared refresh interval, and
+ * re-run when anything they subscribed to changes; actions are one-shot. Sessions are
+ * cold-started per request and torn down immediately.
  */
 class JsPlugin(
     override val pluginUuid: Uuid,
@@ -67,6 +71,7 @@ class JsPlugin(
     private val logs: PluginLogs,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
+    private val otherSources: PluginSources,
 ) : Plugin, ConfigMessageTarget {
 
     override val description: String = manifest.description
@@ -86,6 +91,21 @@ class JsPlugin(
     private val sessionLock = Mutex()
     private var nextRequestId = 0
 
+    /** Each subscriber to one of this plugin's sources, by id: what it asked for, and where to send it. */
+    private class Observer(
+        val category: String,
+        val item: String,
+        val properties: List<String>?,
+        val iconPixelSize: IconPixelSize?,
+        val prompt: Boolean,
+        val send: (SourceUpdate) -> Unit,
+    )
+
+    private val observers = MutableStateFlow<Map<Int, Observer>>(emptyMap())
+    private val nextObserverId = atomic(0)
+
+    private val upstreams = PluginUpstreams(scope, { otherSources.observe(metadata, it) }, ::rerun)
+
     override fun observe(
         category: String,
         item: String,
@@ -99,31 +119,60 @@ class JsPlugin(
             return@callbackFlow
         }
         val key = "$category/$item"
+        val id = nextObserverId.getAndIncrement()
+        observers.update { it + (id to Observer(category, item, properties, iconPixelSize, prompt) { update -> trySend(update) }) }
         val job = launch {
             while (true) {
                 if (retired) {
                     close(IllegalStateException("$name was updated or removed; subscribe again"))
                     break
                 }
-                val size = iconPixelSize
-                    ?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }
-                    .orEmpty()
-                val wanted = properties
-                    ?.joinToString(",") { quote(it) }
-                    ?.let { ""","properties":[$it]""" }
-                    .orEmpty()
-                val raw = request(
-                    """{"kind":"source","category":${quote(category)},"item":${quote(item)}""" +
-                        """$wanted$size}""",
-                    prompt,
-                )
-                send(raw?.let { parseEnvelope(it) } ?: SourceUpdate.Error(PluginErrors.TIMEOUT, "plugin did not respond"))
+                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, null), prompt, setOf(id))
+                send(answerOf(raw))
                 withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
                 }
             }
         }
-        awaitClose { job.cancel() }
+        awaitClose {
+            job.cancel()
+            observers.update { it - id }
+            upstreams.ownerGone(id)
+        }
+    }
+
+    private fun sourceRequestJson(
+        category: String,
+        item: String,
+        properties: List<String>?,
+        iconPixelSize: IconPixelSize?,
+        trigger: SourceRequest?,
+    ): String {
+        val size = iconPixelSize?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }.orEmpty()
+        val wanted = properties?.joinToString(",") { quote(it) }?.let { ""","properties":[$it]""" }.orEmpty()
+        val triggered = trigger
+            ?.let { ""","trigger":{"category":${quote(it.category)},"item":${quote(it.item)}}""" }
+            .orEmpty()
+        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$triggered}"""
+    }
+
+    private fun answerOf(raw: String?): SourceUpdate =
+        raw?.let { parseEnvelope(it) } ?: SourceUpdate.Error(PluginErrors.TIMEOUT, "plugin did not respond")
+
+    /** Something [owners] subscribed to changed: one run per distinct request among them, each answer to all who asked. */
+    private suspend fun rerun(owners: Set<Int>, trigger: SourceRequest) {
+        val groups = observers.value.filterKeys { it in owners }.entries
+            .groupBy { (_, o) -> listOf(o.category, o.item, o.properties, o.iconPixelSize) }
+        for (group in groups.values) {
+            val first = group.first().value
+            val raw = request(
+                sourceRequestJson(first.category, first.item, first.properties, first.iconPixelSize, trigger),
+                first.prompt,
+                group.map { it.key }.toSet(),
+            )
+            val answer = answerOf(raw)
+            group.forEach { it.value.send(answer) }
+        }
     }
 
     override suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult {
@@ -159,20 +208,28 @@ class JsPlugin(
         SourceUpdate.Error(PluginErrors.UNKNOWN, "malformed plugin response")
     }
 
-    /** Cold-start a session, dispatch one request, tear the session down. */
-    private suspend fun request(requestJson: String, prompt: Boolean): String? = sessionLock.withLock {
-        if (retired) return@withLock null
-        val session = newSession(prompt)
-        try {
-            session.start()
-            awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
-        } catch (e: Exception) {
-            logger.w(e) { "plugin session failed" }
-            null
-        } finally {
-            session.stop()
+    /**
+     * Cold-start a session, dispatch one request, tear the session down. A source request is a
+     * run for [owners]: what it subscribes to replaces what their last run did.
+     */
+    private suspend fun request(requestJson: String, prompt: Boolean, owners: Set<Int> = emptySet()): String? =
+        sessionLock.withLock {
+            if (retired) return@withLock null
+            val session = newSession(prompt, runsRequests = true)
+            upstreams.beginRun(owners.filter { it in observers.value }.toSet())
+            try {
+                session.start()
+                awaitReply { id -> session.engine.eval("globalThis.__pluginDispatch($id, $requestJson)") }
+            } catch (e: Exception) {
+                logger.w(e) { "plugin session failed" }
+                null
+            } finally {
+                upstreams.endRun()
+                // A subscriber that went away mid-run can still have been declared for.
+                owners.filterNot { it in observers.value }.forEach(upstreams::ownerGone)
+                session.stop()
+            }
         }
-    }
 
     private suspend fun awaitReply(timeout: Duration = REQUEST_TIMEOUT, send: suspend (Int) -> Unit): String? {
         val deferred = CompletableDeferred<String>()
@@ -191,7 +248,8 @@ class JsPlugin(
 
     private val secureStorage = pluginSecureStorage(appContext, pluginUuid)
 
-    private fun newSession(prompt: Boolean = true): Session {
+    /** Only a session that runs requests can subscribe: a config page's can't. */
+    private fun newSession(prompt: Boolean = true, runsRequests: Boolean = false): Session {
         logger.d { "newSession(): $pluginUuid $name" }
         // XHR drives the JS side by evaluating statements that must land in order — readyState
         // before the response body before the events — so callbacks queue rather than race.
@@ -225,13 +283,17 @@ class JsPlugin(
         val secureStorageBridge = PluginSecureStorageJsBridge(scope, { js -> evals.trySend(js) }, secureStorage)
         val fileSystemBridge = PluginFileSystemJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid, fileAccess, fileSystem)
         val geolocation = EngineGeolocation(scope, { js -> evals.trySend(js) }, pluginUuid, prompt)
+        val sourcesBridge = PluginSourcesJsBridge(scope, { js -> evals.trySend(js) }) { request ->
+            upstreams.latest(request) ?: otherSources.read(metadata, request)
+        }
         val interfaces = listOfNotNull(
-            Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
+            Bridge(runsRequests), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
+            sourcesBridge,
         )
         val engine = JsEngine(appContext, scope, name, interfaces)
         return Session(
-            engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge, evals,
-            scope.launch { for (js in evals) engine.eval(js) },
+            engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
+            sourcesBridge, evals, scope.launch { for (js in evals) engine.eval(js) },
         )
     }
 
@@ -244,6 +306,7 @@ class JsPlugin(
         private val oauthBridge: PluginOAuthJsBridge?,
         private val secureStorageBridge: PluginSecureStorageJsBridge,
         private val fileSystemBridge: PluginFileSystemJsBridge,
+        private val sourcesBridge: PluginSourcesJsBridge,
         private val evals: Channel<String>,
         private val pump: Job,
     ) {
@@ -259,6 +322,7 @@ class JsPlugin(
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
             engine.eval(PluginSecureStorageJsBridge.INSTALL_JS)
             engine.eval(PluginFileSystemJsBridge.INSTALL_JS)
+            engine.eval(PluginSourcesJsBridge.INSTALL_JS)
             engine.eval(script())
         }
 
@@ -272,6 +336,7 @@ class JsPlugin(
             oauthBridge?.close()
             secureStorageBridge.close()
             fileSystemBridge.close()
+            sourcesBridge.close()
             engine.stop()
         }
     }
@@ -295,6 +360,7 @@ class JsPlugin(
 
     suspend fun retire() = configLock.withLock {
         retired = true
+        upstreams.close()
         closeConfigSessionLocked()
     }
 
@@ -335,9 +401,9 @@ class JsPlugin(
     }
 
     /** What plugin JS calls back into: settling a request, and console output. */
-    private inner class Bridge : JsEngineInterface {
+    private inner class Bridge(private val runsRequests: Boolean) : JsEngineInterface {
         override val name = "_JsBridge"
-        override val methods = listOf("respond", "log", "configMessage", "refreshSources")
+        override val methods = listOf("respond", "log", "configMessage", "refreshSources", "subscribeSource")
 
         override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
             "respond" -> {
@@ -347,6 +413,13 @@ class JsPlugin(
             "log" -> {
                 logger.i { "[${args[0]}] ${args[1]}" }
                 logs.log(this@JsPlugin, "[${args[0]}] ${args[1]}")
+                null
+            }
+            "subscribeSource" -> {
+                val request = lenientJson.decodeFromString(SourceRequest.serializer(), args[0].toString())
+                if (!runsRequests || !upstreams.declare(request)) {
+                    logs.log(this@JsPlugin, "subscribeSource(${request.key}) not kept: only from a source handler with subscribers, at most ${PluginUpstreams.MAX_SUBSCRIPTIONS}")
+                }
                 null
             }
             "configMessage" -> {

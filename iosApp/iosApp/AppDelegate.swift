@@ -7,6 +7,7 @@ import FirebaseAuth
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        UIImagePickerController.hideCameraSource()
         let mixpanel = Mixpanel.initialize(token: "2c9c89f4bc233ba9317f82abe488511a", trackAutomaticEvents: true)
         let res = IOSDelegate.shared.didFinishLaunching(application: application, logAnalyticsEvent: { (name: String, params: [String: Any]?) -> Void in
             if let params = params as? Properties {
@@ -122,5 +123,18 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate, ObservableObject {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         IOSDelegate.shared.sceneDidEnterBackground()
+    }
+}
+
+extension UIImagePickerController {
+    // WKWebView's file upload menu only offers "Take Photo" when this reports the camera as available.
+    static func hideCameraSource() {
+        guard let original = class_getClassMethod(self, #selector(isSourceTypeAvailable(_:))),
+              let replacement = class_getClassMethod(self, #selector(pebble_isSourceTypeAvailable(_:))) else { return }
+        method_exchangeImplementations(original, replacement)
+    }
+
+    @objc private class func pebble_isSourceTypeAvailable(_ sourceType: SourceType) -> Bool {
+        sourceType != .camera && pebble_isSourceTypeAvailable(sourceType)
     }
 }

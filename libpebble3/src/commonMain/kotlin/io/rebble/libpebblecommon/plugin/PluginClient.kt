@@ -66,6 +66,14 @@ class PluginClient(
 
     override fun registerPlugin(plugin: NativePlugin) = registry.registerPlugin(plugin)
 
+    override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> get() = registry.preferredSources
+
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) =
+        registry.setPreferredSource(category, item, pluginUuid)
+
+    override fun sourcePlugin(category: String, item: String): PluginMetadata? =
+        registry.findSourcePlugin(category, item)?.metadata
+
     override fun nativePlugins(): Flow<List<PluginMetadata>> = registry.nativePlugins()
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = registry.configMessageTarget(pluginUuid)
@@ -100,25 +108,34 @@ class PluginClient(
             return@flow
         }
         count(caller, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
-        val served = serve(caller, target, declaration, category, item, properties, iconPixelSize)
         if (caller !is PluginCaller.App) {
-            emitAll(served)
+            emitAll(serve(caller, target, declaration, category, item, properties, iconPixelSize))
             return@flow
         }
         val required = requiredOfCaller(declaration)
-        permissions.requestAll(caller.subject, required, wait = true)
+        // Asked for what the app declared: `Notifications/<package>` rather than all of them.
+        val asked = required.flatMap { permissions.callerKeys(caller.subject.appUuid, it) }.distinct()
+        permissions.requestAll(caller.subject, asked, wait = true)
         // Re-evaluated as grants change, so allowing or revoking takes effect at once.
         emitAll(
-            permissions.grantedKeys(caller.subject, required)
-                .map { granted -> granted.containsAll(required) }
+            permissions.grantedKeys(caller.subject, asked)
+                // A source without the property a partial grant is scoped by can't be narrowed to it.
+                .map { granted -> callerScope(required, granted)?.takeIf { declaration.properties.keys.containsAll(it.keys) } }
                 .distinctUntilChanged()
-                .flatMapLatest { allowed ->
-                    if (allowed) {
-                        served
+                .flatMapLatest { scope ->
+                    if (scope != null) {
+                        // The scoping properties are needed to filter by, whether asked for or not.
+                        val wanted = properties?.plus(scope.keys)?.distinct()
+                        serve(caller, target, declaration, category, item, wanted, iconPixelSize).map { it.scopedTo(scope) }
                     } else {
-                        val refused = required.associateWith { permissions.check(caller.subject, it) }
+                        val refused = asked.associateWith { permissions.check(caller.subject, it) }
                             .filterValues { it != PermissionDecision.Granted }
-                        flowOf(SourceUpdate.Error(PluginErrors.PERMISSION_DENIED, refusalMessage(caller.name, refused)))
+                        val message = if (refused.isEmpty()) {
+                            "${caller.name} holds ${asked.joinToString()}, but $category/$item needs ${required.joinToString()}"
+                        } else {
+                            refusalMessage(caller.name, refused)
+                        }
+                        flowOf(SourceUpdate.Error(PluginErrors.PERMISSION_DENIED, message))
                     }
                 }
         )

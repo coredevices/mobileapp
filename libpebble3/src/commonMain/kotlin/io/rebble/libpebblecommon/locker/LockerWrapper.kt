@@ -42,6 +42,7 @@ data class AppPlatform(
     val listImageUrl: String? = null,
     val iconImageUrl: String? = null,
     val description: String? = null,
+    val listImageTintable: Boolean = false,
 )
 
 data class AppProperties(

@@ -24,6 +24,10 @@ import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.SourceUpdate
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.weather.WeatherDailyForecast
@@ -39,12 +43,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.offsetAt
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -68,6 +74,7 @@ class WeatherFetcher(
     companion object {
         private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
         private const val SETTINGS_KEY_MIGRATED_UNITS = "migrated_weather_units_to_watch_pref"
+        private val PLUGIN_READ_TIMEOUT = 45.seconds
     }
 
     private val mutex = Mutex()
@@ -118,11 +125,12 @@ class WeatherFetcher(
         }
         val locations = getLocationsAndUpdateCurrentLocation()
         val locale = Locale.current.toLanguageTag()
+        val fromPlugin = weatherProvider()?.let { pluginWeather(it, units) }.orEmpty()
         val fetchedData = locations.map { location ->
             scope.async {
                 val lat = location.latitude
                 val lon = location.longitude
-                val response = if (lat == null || lon == null) {
+                val response = fromPlugin[location.key] ?: if (lat == null || lon == null) {
                     null
                 } else {
                     pebbleWebServices.getWeather(lat, lon, units, locale)
@@ -142,6 +150,33 @@ class WeatherFetcher(
         if (weatherAppData.filterIsInstance<WeatherLocationData.WeatherLocationDataPopulated>().isNotEmpty()) {
             settings.putBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, true)
         }
+    }
+
+    /** The weather plugin the user chose for `weather/location`; not the built-in one, which serves what this fetches. */
+    private fun weatherProvider(): PluginMetadata? {
+        val key = PluginRegistry.sourceKey(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)
+        val chosen = libPebble.preferredSourcePlugins.value[key] ?: return null
+        if (chosen == WeatherPlugin.BUILT_IN_WEATHER_UUID) return null
+        return libPebble.getAllPlugins().firstOrNull {
+            it.pluginUuid == chosen && it.serves(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)
+        }
+    }
+
+    /** [plugin]'s weather for each location it has, keyed like the user's locations; the backend fills in the rest. */
+    private suspend fun pluginWeather(plugin: PluginMetadata, units: WeatherUnit): Map<Uuid, WeatherResponse> {
+        val update = libPebble.read(PluginCaller.Host(), plugin, WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION, timeout = PLUGIN_READ_TIMEOUT)
+        if (update !is SourceUpdate.Data) {
+            logger.w { "Weather from ${plugin.name} failed (${(update as SourceUpdate.Error).code}); using the backend" }
+            return emptyMap()
+        }
+        val now = clock.now()
+        val phoneOffsetMin = TimeZone.currentSystemDefault().offsetAt(now).totalSeconds / 60
+        return update.envelope.instances.mapNotNull { instance ->
+            val key = Uuid.parseOrNull(instance.instanceId) ?: return@mapNotNull null
+            val response = pluginWeatherResponse(instance, units, now, phoneOffsetMin)
+            if (response == null) logger.w { "${plugin.name} lacks what the watch needs for ${instance.instanceId}" }
+            response?.let { key to it }
+        }.toMap()
     }
 
     private suspend fun getLocationsAndUpdateCurrentLocation(): List<WeatherLocationEntity> {
@@ -248,6 +283,8 @@ class WeatherFetcher(
                 humidityPct = forecast.humidityPct,
                 visibilityM = forecast.visibilityM,
                 precipSumMm = forecast.precipMm?.roundToInt(),
+                sunriseUtcSecs = runCatching { forecast.sunrise.epochSeconds }.getOrNull(),
+                sunsetUtcSecs = runCatching { forecast.sunset.epochSeconds }.getOrNull(),
             )
         }
         // The series starts at the location's local midnight, so hours 24+ are tomorrow.

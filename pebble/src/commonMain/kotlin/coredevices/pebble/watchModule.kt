@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFram
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
+import coredevices.pebble.services.BundledAppMigration
 import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.HybridTranscription
 import coredevices.pebble.services.LanguagePackRepository
@@ -56,6 +57,7 @@ import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.SharedLockerViewModel
+import coredevices.pebble.ui.TopChartsViewModel
 import coredevices.pebble.ui.HealthViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
 import coredevices.pebble.ui.WatchOnboardingFinished
@@ -65,6 +67,7 @@ import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.config.ConfigPageSessions
 import coredevices.pebble.plugin.HostedPluginOAuthApi
 import coredevices.pebble.weather.WeatherPlugin
+import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.pebble.weather.YahooWeatherInterceptor
 import coredevices.pebble.permissions.PermissionRequestNotifier
 import dev.gitlive.firebase.Firebase
@@ -141,6 +144,7 @@ val watchModule = module {
         }
     } } bind PebbleAccountProvider::class
     singleOf(::PebbleAppDelegate)
+    singleOf(::BundledAppMigration)
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     single<BatteryChargedNotifier> {
         val appContext: AppContext = get()
@@ -167,7 +171,7 @@ val watchModule = module {
         )
     ) }
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get(), get())
     }
     single {
         object : LibPebbleLockerProxy {
@@ -216,6 +220,7 @@ val watchModule = module {
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
     singleOf(::WeatherPlugin)
+    singleOf(::PreferencesPlugin)
     singleOf(::ConfigPageSessions)
     singleOf(::LanguagePackRepository)
     singleOf(::PluginSourceLoader)
@@ -274,6 +279,7 @@ val watchModule = module {
     viewModelOf(::NotificationAppsScreenViewModel)
     viewModelOf(::LockerViewModel)
     singleOf(::SharedLockerViewModel)
+    singleOf(::TopChartsViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
     viewModelOf(::ContactsViewModel)

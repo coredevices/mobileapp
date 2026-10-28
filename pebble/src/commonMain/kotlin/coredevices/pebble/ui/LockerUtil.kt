@@ -419,6 +419,7 @@ data class CommonApp(
     val category: String?,
     val version: String?,
     val listImageUrl: String?,
+    val listImageTintable: Boolean = false,
     val screenshotImageUrl: String?,
     val isCompatible: Boolean,
     val isNativelyCompatible: Boolean,
@@ -493,6 +494,7 @@ fun LockerWrapper.asCommonApp(
         category = properties.category,
         version = properties.version,
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
+        listImageTintable = (compatiblePlatform ?: anyPlatform)?.listImageTintable == true,
         screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
             ?: anyPlatform?.screenshotImageUrl,
         // Plugins run on the phone, so they're compatible with any (or no) connected watch.
@@ -574,6 +576,7 @@ fun StoreApplication.asCommonApp(
         category = category,
         version = latestRelease.version,
         listImageUrl = listImage.values.firstOrNull(),
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotImages.firstOrNull()?.values?.firstOrNull(),
         isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
@@ -636,6 +639,7 @@ fun StoreSearchResult.asCommonApp(
         category = category,
         version = null,
         listImageUrl = listImage,
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull()
             ?: screenshotImages.firstOrNull(),
         isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),

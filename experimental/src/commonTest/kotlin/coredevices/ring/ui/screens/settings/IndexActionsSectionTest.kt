@@ -27,6 +27,9 @@ import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.RingGesture
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.ui.viewmodel.DestinationItem
+import coredevices.ring.ui.viewmodel.isPlugin
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import kotlin.test.Test
@@ -112,24 +115,28 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `note destinations list every provider and mark unauthorized ones as unconnected`() {
-        val options = noteDestOptions(
-            providers = listOf(Index, Notion, Obsidian, Tasker),
-            available = listOf(Index),
-        )
-        assertEquals(listOf(Index, Notion, Obsidian, Tasker), options.map { it.provider })
-        assertEquals(listOf(Index), options.filter { it.connected }.map { it.provider })
-        assertEquals("Index Notes", options.first().title)
+    fun `a destination is configurable once connected with a locker page or its own dialog`() {
+        val notion = DestinationItem.Installed(Notion, "Notion", connected = true, hasLockerPage = false)
+        val plugin = DestinationItem.Installed(Tasker, "Tasker", connected = true, hasLockerPage = true)
+        val unconnected = plugin.copy(connected = false)
+        val hasDialog = { provider: IntegrationProvider -> noteConfigureDialog(provider) != null }
+
+        assertTrue(notion.isConfigurable(hasDialog))
+        assertFalse(notion.isConfigurable())
+        assertTrue(plugin.isConfigurable())
+        assertFalse(unconnected.isConfigurable(hasDialog))
+        assertFalse(DestinationItem.InStore(StorePlugin(FakePlugin(name = "Things").metadata, configurable = true)).isConfigurable())
     }
 
     @Test
-    fun `reminder destinations use the reminders label`() {
-        val options = reminderDestOptions(
-            providers = listOf(Index, GoogleTasks),
-            available = listOf(Index, GoogleTasks),
-        )
-        assertEquals(listOf("Index Reminders", "Google Tasks"), options.map { it.title })
-        assertTrue(options.all { it.connected })
+    fun `row subtitles say not connected, then hold to reconfigure`() {
+        val connected = DestinationItem.Installed(Notion, "Notion", connected = true, hasLockerPage = false)
+        val inStore = DestinationItem.InStore(StorePlugin(FakePlugin(name = "Things").metadata, configurable = false))
+
+        assertNull(connected.rowSubtitle(configurable = false))
+        assertEquals("Hold to reconfigure", connected.rowSubtitle(configurable = true))
+        assertEquals("Not connected", connected.copy(connected = false).rowSubtitle(configurable = false))
+        assertEquals("Not connected", inStore.rowSubtitle(configurable = false))
     }
 
     @Test
@@ -166,45 +173,6 @@ class IndexActionsSectionTest {
         assertNull(noteConfigureDialog(Tasker))
     }
 
-    @Test
-    fun `note destinations are only configurable once connected`() {
-        val options = noteDestOptions(
-            providers = listOf(Index, Notion, Obsidian),
-            available = listOf(Index, Obsidian),
-        )
-        assertEquals(listOf(Obsidian), options.filter { it.configurable }.map { it.provider })
-        assertFalse(
-            noteDestOptions(providers = listOf(Index, Obsidian), available = emptyList()).any { it.configurable }
-        )
-    }
-
-    @Test
-    fun `plugin destinations are configurable once connected and in the locker`() {
-        val plugin = PblPluginIntegrationProvider.forPlugin(
-            FakePlugin(
-                actions = listOf(
-                    ActionDeclaration(name = PblPluginActionNoteIntegration.ACTION_NAME),
-                    ActionDeclaration(name = PblPluginActionReminderIntegration.ACTION_NAME),
-                ),
-                name = "Things",
-                sources = listOf(
-                    SourceDeclaration(category = PblPluginActionNoteIntegration.CATEGORY, items = listOf("configured")),
-                    SourceDeclaration(category = PblPluginActionReminderIntegration.CATEGORY, items = listOf("configured")),
-                ),
-            ).metadata,
-            FakePlugins(),
-        )!!
-        val inLocker = setOf(plugin.pluginUuid)
-
-        assertTrue(noteDestOptions(listOf(plugin), listOf(plugin), inLocker).single().configurable)
-        assertTrue(reminderDestOptions(listOf(plugin), listOf(plugin), inLocker).single().configurable)
-        // A built-in plugin has no locker page to open.
-        assertFalse(noteDestOptions(listOf(plugin), listOf(plugin)).single().configurable)
-        assertFalse(reminderDestOptions(listOf(plugin), listOf(plugin)).single().configurable)
-        assertFalse(noteDestOptions(listOf(plugin), emptyList(), inLocker).single().configurable)
-        assertFalse(reminderDestOptions(listOf(GoogleTasks), listOf(GoogleTasks), inLocker).single().configurable)
-    }
-
     private fun thingsPlugin(vararg kinds: IntegrationSupport) = FakePlugin(
         actions = kinds.map {
             ActionDeclaration(
@@ -238,19 +206,12 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `store plugins are offered for the kinds their manifest can take`() {
-        val notes = StorePlugin(thingsPlugin(IntegrationSupport.Note).metadata, configurable = true)
-        val both = StorePlugin(
-            thingsPlugin(IntegrationSupport.Note, IntegrationSupport.Reminder).metadata,
-            configurable = false,
-        )
-        val neither = StorePlugin(FakePlugin(name = "Music").metadata, configurable = false)
-        val listed = listOf(notes, both, neither)
+    fun `store plugins know the kinds their manifest can take`() {
+        val both = StorePlugin(thingsPlugin(IntegrationSupport.Note, IntegrationSupport.Reminder).metadata, configurable = false)
 
-        assertEquals(listOf(notes, both), storeDestOptions(listed, IntegrationSupport.Note))
-        assertEquals(listOf(both), storeDestOptions(listed, IntegrationSupport.Reminder))
-        assertEquals("Things", notes.title)
-        assertEquals(setOf(IntegrationSupport.Note), notes.supports)
+        assertEquals("Things", both.title)
+        assertEquals(setOf(IntegrationSupport.Note, IntegrationSupport.Reminder), both.supports)
+        assertTrue(DestinationItem.InStore(both).isPlugin)
     }
 
     @Test

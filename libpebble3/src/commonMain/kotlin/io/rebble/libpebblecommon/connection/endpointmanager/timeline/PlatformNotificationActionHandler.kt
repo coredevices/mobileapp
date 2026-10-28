@@ -11,4 +11,6 @@ interface PlatformNotificationActionHandler {
         action: BaseAction,
         attributes: List<TimelineItem.Attribute>
     ): TimelineActionResult
+
+    fun onDisplayedItem(itemId: Uuid?) {}
 }

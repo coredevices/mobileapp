@@ -8,10 +8,7 @@ import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
-import coredevices.ring.agent.integrations.providers.availableDestinations
-import coredevices.ring.agent.integrations.providers.visibleDestinations
 import coredevices.ring.agent.pebble_plugin.PluginGrant
-import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpServerRepository
@@ -22,40 +19,30 @@ import coredevices.util.flow.mapState
 import coredevices.util.isAndroid
 import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
 /**
  * State for the Index Agent actions section: built-in actions, plugins, MCP servers and where
- * notes and reminders are saved. The locker is reached through [lockerUuids] so the
- * view model does not need the whole of LibPebble.
+ * notes and reminders are saved.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class IndexActionsViewModel(
     private val indexActionsRepository: IndexActionsRepository,
     private val mcpServerRepository: McpServerRepository,
-    private val pluginStore: PluginStore,
+    private val destinations: DestinationCatalog,
     private val providers: IntegrationProviderRepository,
     private val preferences: Preferences,
     gestureRouting: GestureRoutingPreferences,
     platform: Platform,
     val pluginsEnabled: StateFlow<Boolean>,
-    lockerUuids: Flow<List<Uuid>>,
 ) : ViewModel() {
     val agentReachable: StateFlow<Boolean> = gestureRouting.routes.mapState { !nothingRoutesToIndexAgent(it) }
     val contactsDialogSupported: Boolean = platform.isAndroid
@@ -90,45 +77,22 @@ class IndexActionsViewModel(
     val reminderProvider = providers.selectedReminderProvider
     val approvedContactCount: StateFlow<Int> = preferences.approvedBeeperContacts.mapState { it.size }
 
-    private val providerRefresh = MutableStateFlow(0)
     // Connecting from a destination sheet is a pick as well as a connect, but the connect flows
-    // only report dismissal, so the choice is applied once the provider shows up as available.
+    // only report dismissal, so the choice is applied once the provider shows up as connected.
     // Held by id: a store plugin has no provider until it is installed.
     private val pendingNoteConnect = MutableStateFlow<String?>(null)
     private val pendingReminderConnect = MutableStateFlow<String?>(null)
 
-    val availableNoteProviders = providers
-        .availableDestinations(IntegrationSupport.Note, pluginsEnabled, providerRefresh)
+    val noteDestinations: StateFlow<List<DestinationItem>> = destinations
+        .items(IntegrationSupport.Note)
         .applyingPendingConnect(pendingNoteConnect, providers::selectNoteProvider)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val availableReminderProviders = providers
-        .availableDestinations(IntegrationSupport.Reminder, pluginsEnabled, providerRefresh)
+    val reminderDestinations: StateFlow<List<DestinationItem>> = destinations
+        .items(IntegrationSupport.Reminder)
         .applyingPendingConnect(pendingReminderConnect, providers::selectReminderProvider)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    /** Every destination on this platform for the kind, connected or not. */
-    val noteDestinationProviders = destinationProviders(IntegrationSupport.Note)
-    val reminderDestinationProviders = destinationProviders(IntegrationSupport.Reminder)
-
-    // Fetched once per screen: the list only changes when the store does.
-    private val indexStorePlugins = flow { emit(pluginStore.indexPlugins().orEmpty()) }
-        .shareIn(viewModelScope, SharingStarted.Lazily, replay = 1)
-
-    /** Store plugins not in the locker yet, offered as destinations while plugins are on. */
-    val storePlugins: StateFlow<List<StorePlugin>> = pluginsEnabled
-        .flatMapLatest { pluginsOn ->
-            if (!pluginsOn) {
-                flowOf(emptyList())
-            } else {
-                combine(indexStorePlugins, lockerUuids) { listed, installed ->
-                    listed.filter { it.pluginUuid !in installed }
-                }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    /** Plugins with a locker page; built-in plugins have none to configure from. */
-    val lockerPlugins: StateFlow<Set<Uuid>> = lockerUuids
-        .map { it.toSet() }
+    val lockerPlugins: StateFlow<Set<Uuid>> = destinations.lockerPlugins
         .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
 
     fun setActionEnabled(name: String, enabled: Boolean) {
@@ -175,17 +139,17 @@ class IndexActionsViewModel(
         pendingReminderConnect.value = providerId
     }
 
-    suspend fun reviewInstall(plugin: StorePlugin): InstallReview? = pluginStore.reviewInstall(plugin.pluginUuid)
+    suspend fun reviewInstall(plugin: StorePlugin): InstallReview? = destinations.reviewInstall(plugin)
 
     suspend fun installStorePlugin(plugin: StorePlugin, granted: Map<String, Boolean?>): Boolean {
-        val installed = pluginStore.install(plugin.pluginUuid, granted)
-        refreshAvailableProviders()
+        val installed = destinations.install(plugin, granted)
+        indexActionsRepository.refreshPlugins()
         return installed
     }
 
     fun refreshAvailableProviders() {
         indexActionsRepository.refreshPlugins()
-        providerRefresh.value++
+        destinations.refresh()
     }
 
     fun showContactsDialog() {
@@ -196,18 +160,15 @@ class IndexActionsViewModel(
         _showContactsDialog.value = false
     }
 
-    private fun destinationProviders(support: IntegrationSupport): StateFlow<List<IntegrationProvider>> =
-        combine(providerRefresh, pluginsEnabled) { _, pluginsOn ->
-            providers.providers(support).visibleDestinations(pluginsOn)
-        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    private fun Flow<List<IntegrationProvider>>.applyingPendingConnect(
+    private fun Flow<List<DestinationItem>>.applyingPendingConnect(
         pending: MutableStateFlow<String?>,
         select: (IntegrationProvider) -> Unit,
-    ): Flow<List<IntegrationProvider>> = onEach { available ->
-        available.firstOrNull { it.id == pending.value }?.let {
-            select(it)
-            pending.value = null
-        }
+    ): Flow<List<DestinationItem>> = onEach { items ->
+        items.filterIsInstance<DestinationItem.Installed>()
+            .firstOrNull { it.connected && it.id == pending.value }
+            ?.let {
+                select(it.provider)
+                pending.value = null
+            }
     }
 }

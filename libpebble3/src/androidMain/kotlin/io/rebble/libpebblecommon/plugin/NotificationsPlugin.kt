@@ -49,6 +49,7 @@ class NotificationsPlugin(
                 SourceInstance.PROPERTY_NAME to TEXT_SHAPES,
                 PROPERTY_BODY to TEXT_SHAPES,
                 PROPERTY_APP to listOf(SourceShapeNames.SHORT_TEXT),
+                SourceInstance.PROPERTY_PACKAGE to listOf(SourceShapeNames.LONG_TEXT),
                 PROPERTY_APP_ICON to listOf(SourceShapeNames.IMAGE),
             ),
             supportsMultiple = true,
@@ -111,6 +112,10 @@ class NotificationsPlugin(
                 put(
                     PROPERTY_APP,
                     mapOf(SourceShapeNames.SHORT_TEXT to encode(ShortTextShape(appName))),
+                )
+                put(
+                    SourceInstance.PROPERTY_PACKAGE,
+                    mapOf(SourceShapeNames.LONG_TEXT to encode(LongTextShape(notification.packageName))),
                 )
                 iconSize
                     ?.let { appIcon(notification.packageName, it) }

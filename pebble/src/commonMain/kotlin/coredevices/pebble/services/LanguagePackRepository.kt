@@ -146,7 +146,25 @@ data class LanguagePack(
 fun LanguagePack.description(): String = when {
     isEnglishFontPack(isoLocal) -> "English with additional fonts"
     published != null -> published.completionLabel()
-    else -> "Older community pack"
+    else -> "From the Rebble archive"
+}
+
+enum class LanguagePackGroup(val title: String) {
+    Translations("Translations"),
+    FontPacks("Font packs"),
+    Community("Older community packs"),
+}
+
+/** Built-in English makes the archived en_US pack redundant. */
+internal fun groupLanguagePacks(packs: List<LanguagePack>): List<Pair<LanguagePackGroup, List<LanguagePack>>> {
+    val grouped = packs.filter { canonicalLocale(it.isoLocal) != "en_us" }.groupBy {
+        when {
+            isEnglishFontPack(it.isoLocal) -> LanguagePackGroup.FontPacks
+            it.published != null -> LanguagePackGroup.Translations
+            else -> LanguagePackGroup.Community
+        }
+    }
+    return LanguagePackGroup.entries.mapNotNull { group -> grouped[group]?.let { group to it } }
 }
 
 fun LanguagePack.canContribute() = published != null && !isEnglishFontPack(isoLocal)

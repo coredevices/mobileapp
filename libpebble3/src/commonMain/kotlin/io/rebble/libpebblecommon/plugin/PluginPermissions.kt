@@ -1,22 +1,28 @@
 package io.rebble.libpebblecommon.plugin
 
+import io.rebble.libpebblecommon.permissions.PermissionRegistry
+import io.rebble.libpebblecommon.permissions.argumentOf
+import io.rebble.libpebblecommon.permissions.keys
+import io.rebble.libpebblecommon.permissions.permissionOf
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * A permission, and whatever arguments narrow it: `Internet` for one domain rather than for the
- * web at large. Written in a manifest either as the bare name or as an object, and always read
+ * web at large, `Notifications` for one app's. Written in a manifest either as the bare name or as an object, and always read
  * back as an object, so a consumer never has to handle both.
  *
  * ```jsonc
  * "usesPermissions": [
  *   "LocalNetwork",
  *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } },
+ *   { "name": "Notifications", "parameters": { "packages": ["com.google.android.apps.maps"] } },
  *   { "name": "HomeControl", "plugin": "<plugin uuid>" }
  * ]
  * ```
@@ -76,6 +82,7 @@ object PluginPermissions {
     const val PEBBLEKIT_2 = "PebbleKit2"
 
     const val PARAM_DOMAINS = "domains"
+    const val PARAM_PACKAGES = "packages"
 }
 
 /**
@@ -84,7 +91,31 @@ object PluginPermissions {
  * it is named after is a requirement of whoever reads it, not of the plugin.
  */
 fun requiredOfCaller(source: SourceDeclaration): Set<String> =
-    source.callerPermissions.map { it.name }.toSet()
+    source.callerPermissions.flatMap { it.keys() }.toSet()
 
 fun requiredOfCaller(action: ActionDeclaration): Set<String> =
-    action.callerPermissions.map { it.name }.toSet()
+    action.callerPermissions.flatMap { it.keys() }.toSet()
+
+/**
+ * For each [required] permission the caller holds only for some arguments (`Notifications/<package>`),
+ * the instance property those arguments match and the values it may have. Null if it lacks one.
+ */
+internal fun callerScope(required: Set<String>, granted: Set<String>): Map<String, Set<String>>? =
+    required.filterNot { it in granted }.associate { permission ->
+        val property = PermissionRegistry[permission]?.scopeProperty ?: return null
+        val allowed = granted.filter { permissionOf(it) == permission }.mapNotNull(::argumentOf).toSet()
+        if (allowed.isEmpty()) return null
+        property to allowed
+    }
+
+/** Only the instances whose text in each of [scope]'s properties is one it allows. */
+internal fun SourceUpdate.scopedTo(scope: Map<String, Set<String>>): SourceUpdate {
+    if (this !is SourceUpdate.Data || scope.isEmpty()) return this
+    val visible = envelope.instances.filter { instance ->
+        scope.all { (property, allowed) -> instance.text(property) in allowed }
+    }
+    return SourceUpdate.Data(envelope.copy(instances = visible))
+}
+
+private fun SourceInstance.text(property: String): String? =
+    properties[property]?.values?.firstNotNullOfOrNull { ((it as? JsonObject)?.get("text") as? JsonPrimitive)?.content }

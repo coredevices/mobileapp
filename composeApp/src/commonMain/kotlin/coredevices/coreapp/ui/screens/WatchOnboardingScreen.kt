@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
+import com.russhwolf.settings.Settings
 import coredevices.pebble.Platform
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.PebbleWebServices
@@ -60,6 +62,7 @@ import coredevices.pebble.ui.CommonAppType
 import coredevices.pebble.ui.LanguageDialog
 import coredevices.pebble.ui.NativeLockerAddUtil
 import coredevices.pebble.ui.NativeWatchfaceMainContent
+import coredevices.pebble.ui.PermissionsIntroContent
 import coredevices.pebble.ui.SettingsIds.EnableActivityInsights
 import coredevices.pebble.ui.SettingsIds.EnableHealthPlatformSync
 import coredevices.pebble.ui.SettingsIds.EnableHealthTracking
@@ -74,6 +77,7 @@ import coredevices.pebble.ui.SettingsIds.HrmEnabled
 import coredevices.pebble.ui.SettingsIds.HrmMeasurementInterval
 import coredevices.pebble.ui.SettingsIds.OfflineSpeechRecognition
 import coredevices.pebble.ui.SettingsItemsState
+import coredevices.pebble.ui.Show
 import coredevices.pebble.ui.SnackbarDisplay
 import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.allCollectionUuids
@@ -82,6 +86,7 @@ import coredevices.pebble.ui.connectedWatch
 import coredevices.pebble.ui.languagePackInstalled
 import coredevices.pebble.ui.launchApp
 import coredevices.pebble.ui.rememberSettingsItemsState
+import coredevices.pebble.ui.setHasSeenPermissionsIntro
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -123,6 +128,8 @@ fun WatchOnboardingScreen(
     var haveUpdatedFirmware by remember { mutableStateOf(false) }
     var haveStartedFwupSinceLastConnection by remember { mutableStateOf(false) }
     val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
+    val appSettings: Settings = koinInject()
+    val libPebbleConfig by rememberLibPebble().config.collectAsState()
     val snackbarDisplay =
         remember { SnackbarDisplay { scope.launch { snackbarHostState.showSnackbar(message = it) } } }
     val settings = rememberSettingsItemsState(
@@ -232,6 +239,14 @@ fun WatchOnboardingScreen(
                             return@Scaffold
                         }
 
+                        // Before the apps, since adding one can ask for permissions.
+                        if (libPebbleConfig.watchConfig.enablePlugins) {
+                            LaunchedEffect(Unit) { appSettings.setHasSeenPermissionsIntro(true) }
+                            SectionText("App permissions")
+                            Spacer(modifier = Modifier.height(15.dp))
+                            PermissionsIntroContent(settings)
+                            SectionDivider()
+                        }
                         OnboardingAppCarousel(
                             header = "Add some Watchfaces",
                             storeHome = pebbleStoreHomes[AppType.Watchface],
@@ -373,19 +388,6 @@ fun SectionDivider() {
     )
 }
 
-@Composable
-fun SettingsItemsState?.Show(id: String) {
-    if (this == null) {
-        return
-    }
-    val setting = remember(this) {
-        rawSettingsItems.find { it.id == id }
-    }
-    if (setting == null || !setting.show()) {
-        return
-    }
-    setting.Item()
-}
 
 @Composable
 fun OnboardingAppCarousel(

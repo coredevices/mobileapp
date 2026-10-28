@@ -8,11 +8,9 @@ import coredevices.libindex.device.InterviewedIndexDevice
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.libindex.device.RSSIMeasurement
 import coredevices.ring.RingDelegate
-import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
-import coredevices.ring.agent.integrations.providers.availableDestinations
-import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.Preferences
 import coredevices.util.CommonBuildKonfig
@@ -27,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
@@ -47,10 +46,9 @@ private val DIAGNOSTICS_CONNECTION_TIMEOUT = 10.seconds
 
 class SettingsViewModel(
     private val preferences: Preferences,
-    private val providers: IntegrationProviderRepository,
+    private val destinations: DestinationCatalog,
     private val indexDeviceManager: IndexDeviceManager,
     private val ringDelegate: RingDelegate,
-    libPebble: LibPebble,
     legacy: LegacyDestinations,
 ): ViewModel() {
     val version = CommonBuildKonfig.GIT_HASH
@@ -83,14 +81,8 @@ class SettingsViewModel(
             initialValue = null
         )
 
-    private val pluginsEnabled = libPebble.pluginsEnabled()
-    private val providerRefresh = MutableStateFlow(0)
-    val availableNoteProviders = providers
-        .availableDestinations(IntegrationSupport.Note, pluginsEnabled, providerRefresh)
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val availableReminderProviders = providers
-        .availableDestinations(IntegrationSupport.Reminder, pluginsEnabled, providerRefresh)
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val availableNoteProviders = connectedProviders(IntegrationSupport.Note)
+    val availableReminderProviders = connectedProviders(IntegrationSupport.Reminder)
 
     val legacyDestinations = legacy.pending
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -158,8 +150,13 @@ class SettingsViewModel(
     }
 
     private fun refreshAvailableProviders() {
-        providerRefresh.value++
+        destinations.refresh()
     }
+
+    private fun connectedProviders(support: IntegrationSupport): StateFlow<List<IntegrationProvider>> = destinations
+        .items(support)
+        .map { items -> items.filterIsInstance<DestinationItem.Installed>().filter { it.connected }.map { it.provider } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun toggleDebugDetailsEnabled() {
         viewModelScope.launch {

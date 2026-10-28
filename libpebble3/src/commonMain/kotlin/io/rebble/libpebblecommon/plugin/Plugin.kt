@@ -108,6 +108,9 @@ data class SourceInstance(
 ) {
     companion object {
         const val PROPERTY_NAME = "name"
+
+        /** The Android package an instance's data came from, which per-package permissions are scoped by. */
+        const val PROPERTY_PACKAGE = "package"
     }
 }
 
@@ -141,6 +144,7 @@ data class SeriesShape(
     val longText: TextSeries? = null,
     val icon: BitmapSeries<IconShape>? = null,
     val image: BitmapSeries<ImageShape>? = null,
+    val timestamp: TimestampSeries? = null,
 )
 
 @Serializable
@@ -154,6 +158,12 @@ data class NumericSeries(
 @Serializable
 data class TextSeries(
     val values: List<String?>,
+)
+
+/** Epoch seconds UTC, as [TimestampShape]. */
+@Serializable
+data class TimestampSeries(
+    val values: List<Long?>,
 )
 
 @Serializable

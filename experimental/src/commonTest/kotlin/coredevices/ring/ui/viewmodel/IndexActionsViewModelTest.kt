@@ -1,7 +1,6 @@
 package coredevices.ring.ui.viewmodel
 
 import PlatformUiContext
-import androidx.compose.runtime.Composable
 import com.russhwolf.settings.MapSettings
 import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.McpServerDefinition
@@ -20,9 +19,8 @@ import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.pebble_plugin.FakePluginStore
 import coredevices.ring.agent.pebble_plugin.FakePlugins
-import coredevices.ring.agent.pebble_plugin.PluginStore
-import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.dao.CachedItemDao
@@ -33,8 +31,6 @@ import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.util.Platform
-import io.rebble.libpebblecommon.permissions.InstallReview
-import io.rebble.libpebblecommon.plugin.PluginMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -87,7 +83,7 @@ class IndexActionsViewModelTest {
     @Test
     fun pendingNoteConnectSelectsTheProviderOnceItIsAvailableThenClears() = runMainTest {
         val fixture = Fixture()
-        backgroundScope.launch { fixture.viewModel.availableNoteProviders.collect {} }
+        backgroundScope.launch { fixture.viewModel.noteDestinations.collect {} }
         fixture.notion.authorized = false
 
         fixture.viewModel.noteConnectStarted(fixture.notion.id)
@@ -110,7 +106,7 @@ class IndexActionsViewModelTest {
     @Test
     fun pendingReminderConnectSelectsTheProviderOnceItIsAvailable() = runMainTest {
         val fixture = Fixture()
-        backgroundScope.launch { fixture.viewModel.availableReminderProviders.collect {} }
+        backgroundScope.launch { fixture.viewModel.reminderDestinations.collect {} }
         fixture.googleTasks.authorized = false
 
         fixture.viewModel.reminderConnectStarted(fixture.googleTasks.id)
@@ -124,7 +120,7 @@ class IndexActionsViewModelTest {
     @Test
     fun selectingAProviderCancelsAPendingConnect() = runMainTest {
         val fixture = Fixture()
-        backgroundScope.launch { fixture.viewModel.availableNoteProviders.collect {} }
+        backgroundScope.launch { fixture.viewModel.noteDestinations.collect {} }
         fixture.notion.authorized = false
 
         fixture.viewModel.noteConnectStarted(fixture.notion.id)
@@ -134,23 +130,6 @@ class IndexActionsViewModelTest {
         advanceUntilIdle()
 
         assertSame(fixture.index, fixture.repository.selectedNoteProvider.value)
-    }
-
-    @Test
-    fun storePluginsExcludeInstalledOnesAndAreEmptyWhilePluginsAreOff() = runMainTest {
-        val things = storePlugin("Things", "00000000-0000-0000-0002-000000000001")
-        val weather = storePlugin("Weather", "00000000-0000-0000-0002-000000000002")
-        val fixture = Fixture(storePlugins = listOf(things, weather))
-        backgroundScope.launch { fixture.viewModel.storePlugins.collect {} }
-
-        fixture.pluginsEnabled.value = true
-        fixture.lockerUuids.value = listOf(things.pluginUuid)
-        advanceUntilIdle()
-        assertEquals(listOf(weather), fixture.viewModel.storePlugins.value)
-
-        fixture.pluginsEnabled.value = false
-        advanceUntilIdle()
-        assertEquals(emptyList(), fixture.viewModel.storePlugins.value)
     }
 
     private fun runMainTest(block: suspend TestScope.() -> Unit) {
@@ -163,18 +142,7 @@ class IndexActionsViewModelTest {
         }
     }
 
-    private fun storePlugin(name: String, uuid: String) = StorePlugin(
-        metadata = PluginMetadata(
-            pluginUuid = Uuid.parse(uuid),
-            name = name,
-            description = "",
-            sources = emptyList(),
-            actions = emptyList(),
-        ),
-        configurable = false,
-    )
-
-    private class Fixture(storePlugins: List<StorePlugin> = emptyList()) {
+    private class Fixture {
         val index = FakeProvider(
             id = "index",
             supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
@@ -214,24 +182,13 @@ class IndexActionsViewModelTest {
                 FakeHttpServerDao(),
                 FakeServletRepository(),
             ),
-            pluginStore = FakePluginStore(storePlugins),
+            destinations = DestinationCatalog(repository, FakePluginStore(), pluginsEnabled, lockerUuids),
             providers = repository,
             preferences = preferences,
             gestureRouting = routing,
             platform = FakePlatform("Android 15"),
             pluginsEnabled = pluginsEnabled,
-            lockerUuids = lockerUuids,
         )
-    }
-
-    private class FakePluginStore(private val plugins: List<StorePlugin>) : PluginStore {
-        override suspend fun indexPlugins(): List<StorePlugin>? = plugins
-        override suspend fun reviewInstall(pluginUuid: Uuid): InstallReview? = null
-        override suspend fun install(pluginUuid: Uuid, granted: Map<String, Boolean?>): Boolean = true
-
-        @Composable
-        override fun ReviewInstallDialog(review: InstallReview, onAnswer: (Map<String, Boolean?>?) -> Unit) {
-        }
     }
 
     private class FakeServletRepository : ServletRepository {
@@ -302,6 +259,7 @@ class IndexActionsViewModelTest {
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
         override suspend fun getAllActive(): List<CachedItem> = emptyList()
+        override suspend fun getAllIncludingDeleted(): List<CachedItem> = emptyList()
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) {}

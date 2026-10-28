@@ -28,4 +28,16 @@ object SystemAppIDs {
     val AIRPLANE_MODE_UUID = Uuid.parse("88c28c12-7f81-42db-aaa6-14ccef6f27e5")
     val TOUCH_TOGGLE_UUID = Uuid.parse("5cc5a4e8-150d-4ec3-9afc-965e3fdec3c3")
     val CLEAR_NOTIFICATIONS_UUID = Uuid.parse("d9c0d758-54bd-45b1-99ac-2a3a889350c9")
+
+    /** Launchable system apps/shortcuts that aren't locker entries. */
+    val SYSTEM_SHORTCUTS: Map<Uuid, String> = mapOf(
+        QUIET_TIME_TOGGLE_UUID to "Quiet Time",
+        BACKLIGHT_UUID to "Backlight",
+        MOTION_BACKLIGHT_UUID to "Motion Backlight",
+        AIRPLANE_MODE_UUID to "Airplane Mode",
+        TOUCH_TOGGLE_UUID to "Touch",
+        TIMELINE_PAST_UUID to "Timeline Past",
+        TIMELINE_FUTURE_UUID to "Timeline Future",
+        CLEAR_NOTIFICATIONS_UUID to "Clear Notifications",
+    )
 }

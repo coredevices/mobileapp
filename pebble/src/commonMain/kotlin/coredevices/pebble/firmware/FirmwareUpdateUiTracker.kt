@@ -65,6 +65,10 @@ class RealFirmwareUpdateUiTracker(
                 showUpdateAction = false,
             )
         }
+        if (watch.watchInfo.runningFwVersion.suffix?.isNotEmpty() == true) {
+            logger.d { "Not doing notification of auto-update because watch is running custom build" }
+            return
+        }
         val update = watch.firmwareUpdateAvailable.result as? FirmwareUpdateCheckResult.FoundUpdate ?: return
         val key = update.hashCode() + watch.identifier.asString.hashCode()
         val config = coreConfigFlow.value

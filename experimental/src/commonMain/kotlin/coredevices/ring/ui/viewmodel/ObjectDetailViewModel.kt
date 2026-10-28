@@ -194,15 +194,14 @@ class ObjectDetailViewModel(
         }
     }
 
-    /** Cancels the reminder's extra early notification and clears it from the item metadata.
-     *  Only meaningful for built-in reminders (which carry a localReminderId). */
+    /** Cancels the reminder's extra early notification and clears it from the item metadata. */
     fun removeExtraNotification() {
         val s = state.value as? UiState.ItemView ?: return
         val item = s.item
         val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
         if (meta.notifyBeforeMillis == null) return
         appScope.launch {
-            meta.localReminderId?.let { runCatching { builtInReminders.cancelExtraNotification(it) } }
+            runCatching { builtInReminders.cancelExtraNotification(item.firestoreId) }
             val updated = item.toDocument().copy(
                 metadata = meta.copy(notifyBeforeMillis = null),
                 updatedAt = Clock.System.now(),

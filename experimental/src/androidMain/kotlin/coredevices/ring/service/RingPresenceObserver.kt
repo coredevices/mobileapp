@@ -36,7 +36,8 @@ class RingPresenceObserver(
     private var observed: Observation? = null
     private val lastLogged = mutableMapOf<String, TimeMark>()
 
-    private class Observation(val address: String, val request: ObservingDevicePresenceRequest?)
+    // ObservingDevicePresenceRequest only exists on Android 16+; a field of that type fails to resolve on older versions.
+    private class Observation(val address: String, val request: Any?)
 
     fun start() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
@@ -106,9 +107,10 @@ class RingPresenceObserver(
     @RequiresApi(Build.VERSION_CODES.S)
     @Suppress("DEPRECATION")
     private fun CompanionDeviceManager.stopObserving(observation: Observation) {
-        val request = observation.request
-        if (request != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            stopObservingDevicePresence(request)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA &&
+            observation.request is ObservingDevicePresenceRequest
+        ) {
+            stopObservingDevicePresence(observation.request)
         } else {
             stopObservingDevicePresence(observation.address)
         }

@@ -23,6 +23,8 @@ import io.rebble.libpebblecommon.plugin.PluginPermissions.LOCAL_NETWORK
 import io.rebble.libpebblecommon.plugin.PluginPermissions.LOCATION
 import io.rebble.libpebblecommon.plugin.PluginPermissions.WATCH_MICROPHONE
 import io.rebble.libpebblecommon.plugin.PluginPermissions.LEGACY_PEBBLEKIT
+import io.rebble.libpebblecommon.plugin.PluginPermissions.NOTIFICATIONS
+import io.rebble.libpebblecommon.plugin.PluginPermissions.PARAM_PACKAGES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_FILES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_WATCH_SETTINGS
 import io.rebble.libpebblecommon.plugin.PluginPermissions.TIMELINE
@@ -624,6 +626,16 @@ class WaitingRequestsTest {
     }
 
     @Test
+    fun aVersionDeclaringPermissionsDropsWhatTheLegacyOneWasGiven() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(APP, RequestedPermissions(declared = null, hasPkjs = true, hasAndroidCompanion = true))
+        permissions.setDecisions(APP, mapOf(LOCATION to false, TIMELINE to true, LEGACY_PEBBLEKIT to false))
+        permissions.recordRequested(APP, RequestedPermissions(declared = listOf(PluginPermission(LOCATION), PluginPermission(CALENDAR)), hasPkjs = true))
+        assertEquals(setOf(LOCATION, CALENDAR), dao.rows.value.keys.map { it.second }.toSet())
+        assertEquals(false, dao.row(LOCATION)!!.granted)
+    }
+
+    @Test
     fun aNullDecisionRecordsASeenUndecidedRow() = runTest {
         permissions(dao).setDecisions(APP, mapOf(CALENDAR to null))
         val row = dao.row(CALENDAR)!!
@@ -1039,5 +1051,26 @@ class LocalMicrophoneGrantsTest {
     fun unrelatedGrantsNeverAllowLocalCapture() = runTest {
         permissions.setPermissionDecisions(APP, mapOf(INTERNET to true, LOCATION to true))
         assertEquals(emptySet(), permissions.localMicrophoneGrants().first())
+    }
+}
+
+class NotificationsScopeTest {
+    private val maps = notificationsKey("com.google.android.apps.maps")
+
+    @Test
+    fun eachDeclaredPackageIsItsOwnKey() {
+        val declared = PluginPermission(NOTIFICATIONS, mapOf(PARAM_PACKAGES to listOf("com.google.android.apps.maps")))
+        assertEquals(listOf(maps), declared.keys())
+        assertEquals(listOf(NOTIFICATIONS), PluginPermission(NOTIFICATIONS).keys())
+        assertEquals("com.google.android.apps.maps", packageOf(maps))
+    }
+
+    @Test
+    fun allNotificationsCoversEachPackage() {
+        val exfiltrating = listOf(row(GLOBAL_INTERNET, true))
+        assertEquals(Granted, decide(maps, rows = exfiltrating + row(NOTIFICATIONS, true)))
+        assertEquals(Denied, decide(maps, rows = exfiltrating + row(NOTIFICATIONS, false)))
+        assertEquals(Denied, decide(maps, rows = exfiltrating + row(NOTIFICATIONS, true) + row(maps, false)))
+        assertEquals(NeedsApproval, decide(maps, rows = exfiltrating + row(notificationsKey("com.example"), true)))
     }
 }

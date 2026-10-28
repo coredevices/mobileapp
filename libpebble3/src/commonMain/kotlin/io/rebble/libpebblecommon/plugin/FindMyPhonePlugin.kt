@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -18,7 +19,7 @@ import kotlin.uuid.Uuid
 
 /**
  * Built-in find-my-phone plugin, reachable two ways:
- *  - As a source: subscribing to `phone_state/find_my_phone` starts ringing and the subscription
+ *  - As a source: subscribing to `phone/find_my_phone` starts ringing and the subscription
  *    ending (watchapp closed, unsubscribe, disconnect) stops it. This suits a watchapp, which has
  *    no reliable "I'm closing" hook to stop with.
  *  - As `ring`/`stop` actions: one-shot callers (the Index agent) that don't hold a subscription.
@@ -73,6 +74,19 @@ class FindMyPhonePlugin(
         }.onCompletion { stop() }
     }
 
+    override fun observe(
+        category: String,
+        item: String,
+        properties: List<String>?,
+        iconPixelSize: IconPixelSize?,
+        prompt: Boolean,
+    ): Flow<SourceUpdate> = when {
+        prompt -> super.observe(category, item, properties, iconPixelSize, prompt)
+        // A probe (settings UI) only looks, so it mustn't start the phone ringing.
+        !serves(category, item) -> emptyFlow()
+        else -> soundPlayer.isRinging.map { SourceUpdate.Data(toEnvelope(it)) }
+    }
+
     override suspend fun invoke(action: String, args: JsonObject): ActionResult = when (action) {
         ACTION_RING -> {
             ring()
@@ -119,7 +133,7 @@ class FindMyPhonePlugin(
         Json.encodeToJsonElement(value)
 
     companion object {
-        const val CATEGORY = "phone_state"
+        const val CATEGORY = "phone"
         const val ITEM_FIND_MY_PHONE = "find_my_phone"
         const val PROPERTY_RINGING = "ringing"
         const val ACTION_RING = "ring"

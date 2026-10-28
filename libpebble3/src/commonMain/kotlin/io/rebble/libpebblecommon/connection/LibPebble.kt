@@ -51,10 +51,10 @@ import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.notification.NotificationApi
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
+import io.rebble.libpebblecommon.notification.RespectDoNotDisturbMigrator
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.performPlatformSpecificInit
-import io.rebble.libpebblecommon.plugin.BundledAppInstaller
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.AppPermissionsApi
@@ -96,6 +96,7 @@ import org.koin.core.Koin
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
@@ -112,7 +113,7 @@ sealed class PebbleConnectionEvent {
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
-    PluginFileAccessApi {
+    PluginFileAccessApi, NotificationReplies {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -139,6 +140,7 @@ sealed class UserFacingError {
     data class FailedToRemovePbwFromLocker(override val message: String) : UserFacingError()
     data class FailedToSideloadApp(override val message: String) : UserFacingError()
     data class FailedToScan(override val message: String) : UserFacingError()
+    data class FailedToInstallLanguagePack(override val message: String) : UserFacingError()
     data class MissingCompanionApp(
         override val message: String,
         val appName: String,
@@ -243,6 +245,15 @@ interface Plugins {
     /** A disabled built-in is hidden from every caller, as if it weren't installed. */
     fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean)
 
+    /** The user's choice of plugin for each source several plugins serve, keyed by `category/item`. */
+    val preferredSourcePlugins: StateFlow<Map<String, Uuid>>
+
+    /** Null goes back to the default order. */
+    fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?)
+
+    /** The plugin that answers a read of [category]/[item] that doesn't name one. */
+    fun sourcePlugin(category: String, item: String): PluginMetadata?
+
     /** The script behind [pluginUuid]'s settings page, or null if it has none. */
     fun configMessageTarget(pluginUuid: String): ConfigMessageTarget?
 
@@ -279,6 +290,18 @@ interface Plugins {
     companion object {
         val DEFAULT_READ_TIMEOUT = 10.seconds
     }
+}
+
+interface NotificationReplies {
+    suspend fun replyToDisplayedNotification(text: String, at: Instant): DisplayedNotificationReplyResult
+}
+
+sealed interface DisplayedNotificationReplyResult {
+    data class Sent(val title: String?) : DisplayedNotificationReplyResult
+    data object NoNotificationDisplayed : DisplayedNotificationReplyResult
+    data object NotReplyable : DisplayedNotificationReplyResult
+    data object Failed : DisplayedNotificationReplyResult
+    data object Unsupported : DisplayedNotificationReplyResult
 }
 
 interface Timeline {
@@ -395,7 +418,8 @@ interface LockerApi {
     fun getAllLockerUuids(): Flow<List<Uuid>>
     fun getLocker(type: AppType, searchQuery: String?, limit: Int): Flow<List<LockerWrapper>>
     fun getLockerApp(id: Uuid): Flow<LockerWrapper?>
-    fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>>
+    /** Null until the app's pbw has been fetched, so what it uses isn't known yet. */
+    fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?>
     /**
      * The config page URL for an installed app, from its appinfo `configPage` — an http(s) URL as
      * given, or an HTML file bundled in the pbw returned as a data URL. Null when the app declares
@@ -409,6 +433,8 @@ interface LockerApi {
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
     suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    /** Lets the next locker sync replace a sideloaded app with its copy in the user's locker. */
+    suspend fun clearSideloaded(id: Uuid)
     fun restoreSystemAppOrder()
     val activeWatchface: StateFlow<LockerWrapper?>
 }
@@ -478,7 +504,6 @@ class LibPebble3(
     private val watchManager: WatchManager,
     private val scanning: Scanning,
     private val locker: Locker,
-    private val bundledAppInstaller: BundledAppInstaller,
     private val lockerPluginLoader: LockerPluginLoader,
     private val timeChanged: TimeChanged,
     private val webSyncManager: RequestSync,
@@ -509,6 +534,8 @@ class LibPebble3(
     private val appPermissions: AppPermissions,
     pluginClient: PluginClient,
     pluginFileAccess: PluginFileAccess,
+    private val notificationReplies: NotificationReplies,
+    private val respectDoNotDisturbMigrator: RespectDoNotDisturbMigrator,
 ) : LibPebble, Scanning by scanning, RequestSync by webSyncManager, LockerApi by locker,
     NotificationApps by notificationApi, Calendar by phoneCalendarSyncer,
     OtherPebbleApps by otherPebbleApps, PKJSToken by jsTokenUtil, Watches by watchManager,
@@ -516,7 +543,8 @@ class LibPebble3(
     HealthApi by health, SystemGeolocation by systemGeolocation, Timeline by timeline,
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
     HealthDataApi by health, Plugins by pluginClient,
-    AppPermissionsApi by appPermissions, PluginFileAccessApi by pluginFileAccess {
+    AppPermissionsApi by appPermissions, PluginFileAccessApi by pluginFileAccess,
+    NotificationReplies by notificationReplies {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 
@@ -526,6 +554,7 @@ class LibPebble3(
             return
         }
         appPermissions.init()
+        libPebbleCoroutineScope.launch { respectDoNotDisturbMigrator.migrateIfNeeded() }
         WatchHardwarePlatform.init(libPebbleCoroutineScope, libPebbleConfigFlow.config)
         bluetoothStateProvider.init()
         gattServerManager.init()
@@ -546,7 +575,6 @@ class LibPebble3(
             vibePatternDao.ensureAllDefaultsInserted()
         }
         locker.init(this)
-        bundledAppInstaller.init(this)
         lockerPluginLoader.init()
 
         performPlatformSpecificInit()

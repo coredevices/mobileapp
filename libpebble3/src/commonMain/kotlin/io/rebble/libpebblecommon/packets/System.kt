@@ -11,6 +11,7 @@ import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.structmapper.SBoolean
 import io.rebble.libpebblecommon.structmapper.SBytes
+import io.rebble.libpebblecommon.structmapper.SFixedList
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SOptional
 import io.rebble.libpebblecommon.structmapper.SShort
@@ -351,6 +352,8 @@ open class WatchFactoryData(message: Message) : SystemPacket(endpoint) {
 }
 
 @Serializable
+const val MAX_LANGUAGE_PACKS = 4
+
 enum class ProtocolCapsFlag(val value: Int) {
     SupportsAppRunStateProtocol(0),
     SupportsInfiniteLogDump(1),
@@ -376,7 +379,9 @@ enum class ProtocolCapsFlag(val value: Int) {
     SupportsSettingsSync(23),
     SupportsWeatherDbV4(24),
     SupportsUnknownTimelineAttributes(25),
+    SupportsNotificationWindowState(26),
     SupportsAppPermissions(27),
+    SupportsMultipleLanguagePacks(28),
     ;
 
     companion object {
@@ -447,7 +452,13 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
         MAPEnabled(0x09u),
         FirmwareUpdateStartResponse(0x0au),
         FirmwareUpdateStatus(0x0bu),
-        FirmwareUpdateStatusResponse(0x0cu)
+        FirmwareUpdateStatusResponse(0x0cu),
+        LanguagePacksRequest(0x0du),
+        LanguagePacksResponse(0x0eu),
+        LanguagePackRemoveRequest(0x0fu),
+        LanguagePackRemoveResponse(0x10u),
+        LanguageSelectRequest(0x11u),
+        LanguageSelectResponse(0x13u)
     }
 
     val command = SUByte(m, 0x0u)
@@ -487,6 +498,58 @@ open class SystemMessage(message: Message) : SystemPacket(endpoint) {
         val resourcesCrc = SUInt(m, endianness = Endian.Little)
         val firmwareBytesWritten = SUInt(m, endianness = Endian.Little)
         val firmwareCrc = SUInt(m, endianness = Endian.Little)
+    }
+
+    class LanguagePacksRequest(token: UByte) : SystemMessage(Message.LanguagePacksRequest) {
+        val token = SUByte(m, token)
+    }
+
+    class LanguagePackRecord : StructMappable() {
+        val slot = SUByte(m)
+        val flags = SUByte(m)
+        val version = SUShort(m, endianness = Endian.Little)
+        val locale = SFixedString(m, 6)
+        val name = SFixedString(m, 30)
+
+        val present get() = flags.get().toInt() and 1 != 0
+        val readable get() = flags.get().toInt() and 2 != 0
+        val hasTranslation get() = flags.get().toInt() and 4 != 0
+    }
+
+    class LanguagePacksResponse : SystemMessage(Message.LanguagePacksResponse) {
+        val token = SUByte(m)
+        val activeSlot = SUByte(m)
+        val packs = SFixedList(m, MAX_LANGUAGE_PACKS, List(MAX_LANGUAGE_PACKS) { LanguagePackRecord() }) {
+            LanguagePackRecord()
+        }
+    }
+
+    class LanguagePackRemoveRequest(token: UByte, slot: UByte, version: UShort, locale: String) :
+        SystemMessage(Message.LanguagePackRemoveRequest) {
+        val token = SUByte(m, token)
+        val slot = SUByte(m, slot)
+        val version = SUShort(m, version, endianness = Endian.Little)
+        val locale = SFixedString(m, 6, locale)
+    }
+
+    class LanguagePackRemoveResponse : SystemMessage(Message.LanguagePackRemoveResponse) {
+        val token = SUByte(m)
+        val slot = SUByte(m)
+        val success = SUByte(m)
+    }
+
+    class LanguageSelectRequest(token: UByte, slot: UByte, version: UShort, locale: String) :
+        SystemMessage(Message.LanguageSelectRequest) {
+        val token = SUByte(m, token)
+        val slot = SUByte(m, slot)
+        val version = SUShort(m, version, endianness = Endian.Little)
+        val locale = SFixedString(m, 6, locale)
+    }
+
+    class LanguageSelectResponse : SystemMessage(Message.LanguageSelectResponse) {
+        val token = SUByte(m)
+        val slot = SUByte(m)
+        val success = SUByte(m)
     }
 
     enum class FirmwareUpdateStartStatus(val value: UByte) {
@@ -595,6 +658,17 @@ fun systemPacketsRegister() {
         SystemMessage.endpoint,
         SystemMessage.Message.FirmwareUpdateStatusResponse.value
     ) { SystemMessage.FirmwareUpdateStatusResponse() }
+
+    PacketRegistry.register(SystemMessage.endpoint, SystemMessage.Message.LanguagePacksResponse.value) {
+        SystemMessage.LanguagePacksResponse()
+    }
+    PacketRegistry.register(SystemMessage.endpoint, SystemMessage.Message.LanguagePackRemoveResponse.value) {
+        SystemMessage.LanguagePackRemoveResponse()
+    }
+
+    PacketRegistry.register(SystemMessage.endpoint, SystemMessage.Message.LanguageSelectResponse.value) {
+        SystemMessage.LanguageSelectResponse()
+    }
 
     PacketRegistry.register(
         ProtocolEndpoint.TIME,

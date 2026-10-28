@@ -273,6 +273,7 @@ enum class BoolWatchPref(
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    RespectPhoneSilence("notifRespectPhoneSilence", "Respect Phone Do Not Disturb", false, description = "Notifications silenced by the phone's Do Not Disturb / Focus are delivered quietly (no popup, vibration or backlight)"),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
     QuietTimeTouchBacklight("dndTouchBacklight", "Quiet Time - Touch Backlight", true, description = "Enable touch backlight during Quiet Time"),
@@ -499,13 +500,6 @@ enum class BacklightPresetMode(override val code: UByte, override val displayNam
     Advanced(3u, "Advanced"),
 }
 
-// Codes MUST match the ShellLanguage enum in pebble-firmware:fw/shell/prefs.h. "Custom" (0) means
-// the watch uses whatever language pack was uploaded via PutBytes (see LanguagePackInstaller).
-enum class WatchLanguage(override val code: UByte, override val displayName: String) : WatchPrefEnum {
-    Custom(0u, "Custom (Language Pack)"),
-    English(1u, "English"),
-}
-
 // How the Timeline Quick View peek is drawn on watchfaces that don't support it. Codes match
 // TimelinePeekUnsupportedFaceMode in pebble-firmware:fw/shell/prefs.h. Only watch models with
 // TIMELINE_PEEK_WATCHFACE_FIT_SUPPORTED honour this; others discard the synced value.
@@ -640,13 +634,6 @@ enum class EnumWatchPref(
         description = "Automatic follows the Imperial Units setting.",
         defaultValue = WindUnits.FromDistance,
         options = WindUnits.entries,
-    ),
-    Language(
-        id = "language",
-        displayName = "Language",
-        description = "Choose Custom to use the installed language pack.",
-        defaultValue = WatchLanguage.Custom,
-        options = WatchLanguage.entries,
     ),
     TimelineQuickViewUnsupportedFaces(
         id = "timelineQuickViewWatchfaceFit",
@@ -857,7 +844,7 @@ enum class ColorWatchPref(
 - heartRatePreferences (see HealthSettingsEntry)
 - spo2Preferences / bloodOxygenPreferences / bloodOxygenActivityPreferences (health toggles - belong with HealthSettingsEntry, not here)
 - workerId (need UI to figure out which apps are eligible)
-- langEnglish (legacy bool, superseded by the `language` enum we already sync)
+- language / langEnglish (holds a per-watch pack slot; set through LanguagePackInstaller instead)
 - textStyle (legacy content size; firmware no longer reads it - superseded by systemTextSize/notifTextSize)
  */
 

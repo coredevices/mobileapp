@@ -64,6 +64,9 @@ class AndroidPebbleNotificationListenerConnection(
         return notificationHandler.getNotificationAction(itemId, actionId)
     }
 
+    fun getNotification(itemId: Uuid): LibPebbleNotification? =
+        notificationHandler.getNotification(itemId)
+
     fun setService(service: LibPebbleNotificationListener?) {
         logger.d { "setService: $service" }
         listenerService = service

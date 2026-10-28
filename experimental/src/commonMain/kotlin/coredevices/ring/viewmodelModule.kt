@@ -6,6 +6,7 @@ import coredevices.ring.ui.components.recording.RecordingTraceTimelineViewModel
 import coredevices.ring.ui.viewmodel.AllAnswersViewModel
 import coredevices.ring.ui.viewmodel.AllListsViewModel
 import coredevices.ring.ui.viewmodel.BackupViewModel
+import coredevices.ring.ui.viewmodel.DestinationCatalog
 import coredevices.ring.ui.viewmodel.EncryptionViewModel
 import coredevices.ring.ui.viewmodel.FullFeedViewModel
 import coredevices.ring.ui.viewmodel.IndexActionsViewModel
@@ -28,18 +29,25 @@ internal val viewmodelModule = module {
     viewModelOf(::ObjectDetailViewModel)
     viewModelOf(::RecordingDetailsViewModel)
     viewModelOf(::SettingsViewModel)
-    viewModel {
+    single {
         val libPebble = get<LibPebble>()
+        DestinationCatalog(
+            providers = get(),
+            pluginStore = get(),
+            pluginsEnabled = libPebble.pluginsEnabled(),
+            lockerUuids = libPebble.getAllLockerUuids(),
+        )
+    }
+    viewModel {
         IndexActionsViewModel(
             indexActionsRepository = get(),
             mcpServerRepository = get(),
-            pluginStore = get(),
+            destinations = get(),
             providers = get(),
             preferences = get(),
             gestureRouting = get(),
             platform = get(),
-            pluginsEnabled = libPebble.pluginsEnabled(),
-            lockerUuids = libPebble.getAllLockerUuids(),
+            pluginsEnabled = get<LibPebble>().pluginsEnabled(),
         )
     }
     viewModel {
@@ -49,8 +57,7 @@ internal val viewmodelModule = module {
             cactusModelProvider = get(),
             appScope = get(),
             platform = get(),
-            providers = get(),
-            pluginsEnabled = get<LibPebble>().pluginsEnabled(),
+            destinations = get(),
         )
     }
     viewModelOf(::BackupViewModel)

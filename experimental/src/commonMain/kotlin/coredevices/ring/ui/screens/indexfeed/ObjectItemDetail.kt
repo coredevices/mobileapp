@@ -97,11 +97,9 @@ internal fun ItemView(
     var menuOpen by remember { mutableStateOf(false) }
     val title = s.parentList?.title?.takeIf { it.isNotBlank() } ?: kindLabel(it.kind)
 
-    // Early heads-up notification metadata (built-in reminders only carry a
-    // localReminderId, which is what lets us actually cancel the extra alarm).
     val reminderMeta = it.metadata as? coredevices.indexai.data.entity.ItemDocument.ItemMetadata.Reminder
     val notifyBeforeMillis = reminderMeta?.notifyBeforeMillis
-    val canRemoveExtraNotification = reminderMeta?.localReminderId != null
+    val canRemoveExtraNotification = notifyBeforeMillis != null
 
     // Always-edit, Apple Notes style. No "Save" button — the draft is
     // persisted automatically when the user navigates away (DisposableEffect

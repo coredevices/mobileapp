@@ -293,24 +293,23 @@ object IOSDelegate : KoinComponent {
         }
         if (permissionAnswer) return
 
-        // Reminder notifications carry only the reminder id; the feed item to deep link to
-        // isn't linked when the notification is scheduled, so resolve it now (at tap time).
-        val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
-        if (reminderId != null) {
+        // Reminder notifications carry the feed item id; resolve the deep link at tap time.
+        val itemId = userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String
+        if (itemId != null) {
             // "Done" button (MOB-8439): mark the backing item complete in the background without
             // opening the app. Completing it cancels the reminder and dismisses the notification.
             if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
                 val completer: ReminderCompleter = get()
                 bgTaskScope.launch {
-                    runCatching { completer.markDone(reminderId) }
-                        .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                    runCatching { completer.markDone(itemId) }
+                        .onFailure { logger.e(it) { "Failed to mark reminder $itemId done" } }
                     withContext(Dispatchers.Main) { completionHandler() }
                 }
                 return
             }
             val resolver: ReminderDeepLinkResolver = get()
             bgTaskScope.launch {
-                val link = resolver.resolveDeepLink(reminderId)
+                val link = resolver.resolveDeepLink(itemId)
                 logger.d { "Handling reminder deep link from notification: $link" }
                 withContext(Dispatchers.Main) {
                     NSURL.URLWithString(link)?.let { handleOpenUrl(it) }

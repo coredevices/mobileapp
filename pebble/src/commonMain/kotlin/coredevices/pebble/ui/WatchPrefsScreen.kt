@@ -26,16 +26,9 @@ import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.ui.ConfirmDialog
 import coredevices.util.CoreConfigHolder
-import io.rebble.libpebblecommon.SystemAppIDs.AIRPLANE_MODE_UUID
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import io.rebble.libpebblecommon.SystemAppIDs.BACKLIGHT_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.CLEAR_NOTIFICATIONS_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.MOTION_BACKLIGHT_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.QUIET_TIME_TOGGLE_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.TOUCH_TOGGLE_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_FUTURE_UUID
-import io.rebble.libpebblecommon.SystemAppIDs.TIMELINE_PAST_UUID
+import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_SHORTCUTS
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BacklightPresetMode
@@ -171,7 +164,6 @@ fun WatchPref<*>.section(): Section = when (this) {
     RgbColorWatchPref.BacklightColorNight -> Section.Display
     NumberWatchPref.BacklightColorSunriseMinute -> Section.Display
     NumberWatchPref.BacklightColorSunsetMinute -> Section.Display
-    EnumWatchPref.Language -> Section.Display
     EnumWatchPref.WindSpeed -> Section.Weather
 //    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
 //    ColorWatchPref.AppMenuHighlightColor -> Section.Display
@@ -212,6 +204,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.AlternativeNotificationStyle -> Section.Notifications
     BoolWatchPref.NotificationVibeDelay -> Section.Notifications
     BoolWatchPref.NotificationBacklight -> Section.Notifications
+    BoolWatchPref.RespectPhoneSilence -> Section.Notifications
     NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
     BoolWatchPref.MenuScrollWrapAround -> Section.Display
     EnumWatchPref.MenuScrollVibe -> Section.Display
@@ -625,14 +618,7 @@ private fun quickLaunchOptions(libPebble: LibPebble): List<QuickLaunchOption> {
     }.collectAsState(emptyList())
     return remember(installedApps) {
         listOf(QuickLaunchOption(null, "None")) +
-                QuickLaunchOption(QUIET_TIME_TOGGLE_UUID, "Quiet Time") +
-                QuickLaunchOption(BACKLIGHT_UUID, "Backlight") +
-                QuickLaunchOption(MOTION_BACKLIGHT_UUID, "Motion Backlight") +
-                QuickLaunchOption(AIRPLANE_MODE_UUID, "Airplane Mode") +
-                QuickLaunchOption(TOUCH_TOGGLE_UUID, "Touch") +
-                QuickLaunchOption(TIMELINE_PAST_UUID, "Timeline Past") +
-                QuickLaunchOption(TIMELINE_FUTURE_UUID, "Timeline Future") +
-                QuickLaunchOption(CLEAR_NOTIFICATIONS_UUID, "Clear Notifications") +
+                SYSTEM_SHORTCUTS.map { (uuid, name) -> QuickLaunchOption(uuid, name) } +
                 installedApps.map { app ->
                     QuickLaunchOption(app.properties.id, app.properties.title)
                 }

@@ -165,6 +165,7 @@ data class LockerEntryPlatform(
     val iconImageUrl: String? = null,
     val pbwIconResourceId: Int,
     val description: String? = null,
+    val listImageTintable: Boolean = false,
 )
 
 // Only some fields should trigger a watch resync if changed:

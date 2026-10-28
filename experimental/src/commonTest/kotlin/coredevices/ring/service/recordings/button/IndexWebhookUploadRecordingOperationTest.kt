@@ -13,9 +13,11 @@ import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.storage.StagedRecordingUpload
+import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -91,14 +93,59 @@ class IndexWebhookUploadRecordingOperationTest {
     fun webhookStillFiresWhenAgentFailsAfterTranscription() = runTest {
         val api = FakeWebhookApi()
         val inner = FakeTranscribingOp(transcript = "delivered", throwAfterHook = true)
-        val decorator =
-            buildDecorator(api, IndexWebhookPayloadMode.Both, inner, fileId = "rec-4", recordingId = 4)
+        // The hook's send stalls reading audio, so a stray fallback send would claim the key first.
+        val decorator = buildDecorator(
+            api, IndexWebhookPayloadMode.Both, inner, fileId = "rec-4", recordingId = 4,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            storage = SlowFirstReadStorage(),
+        )
 
         assertFailsWith<IllegalStateException> { decorator.run(null) }
         advanceUntilIdle()
 
         assertEquals(1, api.calls.size)
         assertEquals("delivered", api.calls.single().transcription)
+    }
+
+    @Test
+    fun audioStillSendsWhenTranscriptionFails() = runTest {
+        val api = FakeWebhookApi()
+        val inner = FakeTranscribingOp(transcript = "unused", failBeforeHook = IllegalStateException("no speech"))
+        val decorator =
+            buildDecorator(api, IndexWebhookPayloadMode.Both, inner, fileId = "rec-7", recordingId = 7)
+
+        assertFailsWith<IllegalStateException> { decorator.run(null) }
+        advanceUntilIdle()
+
+        assertEquals(1, api.calls.size)
+        assertFalse(api.calls.single().samplesNull)
+        assertNull(api.calls.single().transcription)
+    }
+
+    @Test
+    fun recoverableTranscriptionFailureWaitsForRetry() = runTest {
+        val api = FakeWebhookApi()
+        val inner = FakeTranscribingOp(transcript = "unused", failBeforeHook = RecoverableTaskException("offline"))
+        val decorator =
+            buildDecorator(api, IndexWebhookPayloadMode.Both, inner, fileId = "rec-8", recordingId = 8)
+
+        assertFailsWith<RecoverableTaskException> { decorator.run(null) }
+        advanceUntilIdle()
+
+        assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun transcriptionOnlySendsNothingWhenTranscriptionFails() = runTest {
+        val api = FakeWebhookApi()
+        val inner = FakeTranscribingOp(transcript = "unused", failBeforeHook = IllegalStateException("no speech"))
+        val decorator =
+            buildDecorator(api, IndexWebhookPayloadMode.TranscriptionOnly, inner, fileId = "rec-9", recordingId = 9)
+
+        assertFailsWith<IllegalStateException> { decorator.run(null) }
+        advanceUntilIdle()
+
+        assertTrue(api.calls.isEmpty())
     }
 
     @Test
@@ -134,6 +181,7 @@ class IndexWebhookUploadRecordingOperationTest {
         fileId: String?,
         recordingId: Long,
         dispatcher: CoroutineDispatcher = UnconfinedTestDispatcher(testScheduler),
+        storage: RecordingStorage = FakeRecordingStorage,
     ): IndexWebhookUploadRecordingOperation {
         startKoin {
             modules(module {
@@ -150,7 +198,7 @@ class IndexWebhookUploadRecordingOperationTest {
         return IndexWebhookUploadRecordingOperation(
             webhookApi = api,
             webhookPreferences = prefs,
-            recordingStorage = FakeRecordingStorage,
+            recordingStorage = storage,
             decorated = decorated,
             fileId = fileId,
             recordingId = recordingId,
@@ -175,24 +223,29 @@ private class FakeWebhookApi : IndexWebhookApi {
         calls += Call(samplesNull = samples == null, transcription = transcription)
     }
 
+    override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+
     override suspend fun sendTestEvent(
         gesture: RingGesture,
         url: String,
         headers: Map<String, String>,
         signRequests: Boolean,
         signingSecret: String?,
+        clickPayload: String,
     ) = throw NotImplementedError("unused")
 }
 
 private class FakeTranscribingOp(
     private val transcript: String,
     private val throwAfterHook: Boolean = false,
+    private val failBeforeHook: Throwable? = null,
 ) : TranscribingRecordingOperation {
     override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
     var hookPresentAtRun = false
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         hookPresentAtRun = onTranscriptionPersisted != null
+        failBeforeHook?.let { throw it }
         onTranscriptionPersisted?.invoke(transcript)
         if (throwAfterHook) throw IllegalStateException("agent failed")
     }
@@ -242,4 +295,12 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
     override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
     override fun deleteStagedRecording(id: String) = TODO()
+}
+
+private class SlowFirstReadStorage : RecordingStorage by FakeRecordingStorage {
+    private var reads = 0
+
+    override suspend fun openRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean) =
+        FakeRecordingStorage.openRecordingSource(idNoSuffix, useOriginalAudio)
+            .also { if (reads++ == 0) delay(100) }
 }

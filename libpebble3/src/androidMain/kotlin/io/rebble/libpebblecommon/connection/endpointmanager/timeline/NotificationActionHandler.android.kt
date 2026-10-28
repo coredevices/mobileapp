@@ -7,7 +7,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.connection.DisplayedNotificationReplyResult
 import io.rebble.libpebblecommon.connection.NotificationApps
+import io.rebble.libpebblecommon.connection.NotificationReplies
 import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidPebbleNotificationListenerConnection
@@ -16,15 +18,19 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class AndroidNotificationActionHandler(
     private val notificationListenerConnection: AndroidPebbleNotificationListenerConnection,
     private val notificationApps: NotificationApps,
-) : PlatformNotificationActionHandler {
+) : PlatformNotificationActionHandler, NotificationReplies {
     companion object {
         private val logger = Logger.withTag(PlatformNotificationActionHandler::class.simpleName!!)
 
@@ -38,6 +44,36 @@ class AndroidNotificationActionHandler(
     }
 
     private val platformActions = mutableMapOf<Uuid, Map<UByte, LibPebbleNotificationAction>>()
+    private val displayedItems = MutableStateFlow<List<DisplayedItem>>(emptyList())
+
+    override fun onDisplayedItem(itemId: Uuid?) {
+        displayedItems.update {
+            (it + DisplayedItem(Clock.System.now(), itemId)).takeLast(MAX_DISPLAYED_ITEMS)
+        }
+    }
+
+    override suspend fun replyToDisplayedNotification(
+        text: String,
+        at: Instant
+    ): DisplayedNotificationReplyResult {
+        val notification = displayedItemAt(displayedItems.value, at)
+            ?.let { notificationListenerConnection.getNotification(it) }
+            ?: return DisplayedNotificationReplyResult.NoNotificationDisplayed
+        val replyAction = notification.actions.firstOrNull {
+            it.type == LibPebbleNotificationAction.ActionType.Reply
+        }
+        val replyInput = replyAction?.remoteInput?.remoteInput
+            ?: return DisplayedNotificationReplyResult.NotReplyable
+        val fillIntent = Intent()
+        RemoteInput.addResultsToIntent(
+            arrayOf(replyInput),
+            fillIntent,
+            Bundle().apply { putString(replyInput.resultKey, text.take(1024 - 1)) }
+        )
+        replyAction.pendingIntent?.let { actionIntent(it, fillIntent) }
+            ?: return DisplayedNotificationReplyResult.Failed
+        return DisplayedNotificationReplyResult.Sent(title = notification.title)
+    }
 
     //TODO: Set from e.g. notification service
     fun setActionHandlers(itemId: Uuid, actionHandlers: Map<UByte, LibPebbleNotificationAction>) {
@@ -197,3 +233,10 @@ class AndroidNotificationActionHandler(
         }
     }
 }
+
+private const val MAX_DISPLAYED_ITEMS = 32
+
+internal data class DisplayedItem(val since: Instant, val itemId: Uuid?)
+
+internal fun displayedItemAt(history: List<DisplayedItem>, at: Instant): Uuid? =
+    history.lastOrNull { it.since <= at }?.itemId

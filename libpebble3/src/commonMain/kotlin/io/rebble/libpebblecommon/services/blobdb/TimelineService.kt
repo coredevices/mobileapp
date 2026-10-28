@@ -23,6 +23,10 @@ class TimelineService(private val protocolHandler: PebbleProtocolHandler) : Prot
             TimelineActionInvocation(itemId, actionId, attributes)
         }
 
+    val displayedItems = protocolHandler.inboundMessages
+        .filterIsInstance<TimelineAction.DisplayedItem>()
+        .map { it.itemID.get().takeIf { id -> id != TimelineAction.NOTHING_DISPLAYED } }
+
     inner class TimelineActionInvocation(val itemId: Uuid, val actionId: UByte, val attributes: List<TimelineItem.Attribute>) {
         suspend fun respond(response: TimelineActionResult) {
             val responsePacket = response.toPebblePacket()

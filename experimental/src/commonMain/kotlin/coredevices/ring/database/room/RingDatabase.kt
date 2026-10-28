@@ -95,7 +95,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 43,
+    version = 44,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -150,6 +150,7 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 41, to = 42),
         // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
         AutoMigration(from = 42, to = 43, Migrate42To43::class),
+        // 43→44 is Migrate43To44, added to the builder in experimentalModule.
     ]
 )
 @TypeConverters(Converters::class)
@@ -289,6 +290,23 @@ class Migrate39To40 : AutoMigrationSpec {
     override fun onPostMigrate(connection: SQLiteConnection) {
         connection.execSQL(
             "DELETE FROM RecordingProcessingTaskEntity WHERE type = 'AudioRecording' AND transferId IS NULL"
+        )
+    }
+}
+
+/**
+ * Re-keys LocalReminderData from a device-local autoincrement id to the reminder feed item's global
+ * Firestore id. The old rows recorded device-local alarms only; [coredevices.ring.reminders.ReminderReconciler]
+ * re-arms every still-pending reminder from its (durable, synced) feed item on next launch, so
+ * dropping them loses no user-visible reminder.
+ */
+class Migrate43To44 : Migration(43, 44) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("DROP TABLE IF EXISTS `LocalReminderData`")
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `LocalReminderData` " +
+                "(`itemId` TEXT NOT NULL, `time` INTEGER, `message` TEXT NOT NULL, " +
+                "`notifyBeforeMillis` INTEGER, PRIMARY KEY(`itemId`))"
         )
     }
 }

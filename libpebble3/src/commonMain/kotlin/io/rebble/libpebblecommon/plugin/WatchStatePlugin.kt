@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
+import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_SHORTCUTS
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.locker.Locker
@@ -24,7 +25,7 @@ class WatchStatePlugin(
     override val actions: List<ActionDeclaration> = listOf(
         ActionDeclaration(
             name = ACTION_LAUNCH_APP,
-            description = "Open an app or watchface on the watch, by its uuid. It has to be in the user's locker.",
+            description = "Open an app or watchface on the watch, by its uuid. It has to be in the user's locker, or be a system shortcut (e.g. Timeline Future, Quiet Time).",
             parameters = schema(""""$PARAM_UUID":{"type":"string"}""", required = listOf(PARAM_UUID)),
             callerPermissions = LAUNCH,
         ),
@@ -49,11 +50,12 @@ class WatchStatePlugin(
             ACTION_LAUNCH_APP -> {
                 val uuid = args[PARAM_UUID]?.jsonPrimitive?.content?.let(Uuid::parseOrNull)
                     ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "'$PARAM_UUID' must be an app uuid")
-                val app = locker.getLockerApp(uuid).first()
-                    ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "no app $uuid in the locker")
+                val title = locker.getLockerApp(uuid).first()?.properties?.title
+                    ?: SYSTEM_SHORTCUTS[uuid]
+                    ?: return ActionResult.error(PluginErrors.INVALID_ARGS, "no app $uuid in the locker or system shortcuts")
                 if (connected.isEmpty()) return noWatch()
                 launch(uuid, connected)
-                ActionResult(ok = true, text = "Opened ${app.properties.title}.")
+                ActionResult(ok = true, text = "Opened $title.")
             }
             ACTION_LAUNCH_PREVIOUS_APP -> {
                 if (connected.isEmpty()) return noWatch()
@@ -64,7 +66,9 @@ class WatchStatePlugin(
                 if (launched.isEmpty()) {
                     return ActionResult.error(PluginErrors.INVALID_REQUEST, "no previous app since the watch connected")
                 }
-                val title = locker.getLockerApp(launched.first()).first()?.properties?.title ?: "the previous app"
+                val title = locker.getLockerApp(launched.first()).first()?.properties?.title
+                    ?: SYSTEM_SHORTCUTS[launched.first()]
+                    ?: "the previous app"
                 ActionResult(ok = true, text = "Opened $title.")
             }
             else -> ActionResult.error(PluginErrors.PLUGIN_UNAVAILABLE, "no action $action")

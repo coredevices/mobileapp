@@ -13,6 +13,9 @@ interface RecordingProcessingTaskDao {
     @Query("SELECT buttonSequence FROM RecordingProcessingTaskEntity WHERE transferId = :transferId AND buttonSequence IS NOT NULL ORDER BY created DESC LIMIT 1")
     suspend fun getLatestButtonSequenceForTransfer(transferId: Long): String?
 
+    @Query("SELECT EXISTS(SELECT 1 FROM RecordingProcessingTaskEntity WHERE recordingId = :recordingId AND type = 'TextRecording' AND buttonSequence IS NOT NULL)")
+    suspend fun isGestureCommandRecording(recordingId: Long): Boolean
+
     @Insert
     suspend fun insertTask(task: RecordingProcessingTaskEntity): Long
 

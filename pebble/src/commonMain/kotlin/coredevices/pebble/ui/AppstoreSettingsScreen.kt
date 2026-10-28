@@ -42,6 +42,8 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.isPebbleFeed
@@ -120,7 +122,13 @@ fun AppstoreSettingsScreen(
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
-    val collections by viewModel.collections.collectAsState()
+    val allCollections by viewModel.collections.collectAsState()
+    val pluginsEnabled = rememberLibPebble().config.collectAsState().value.watchConfig.enablePlugins
+    val collections = remember(allCollections, pluginsEnabled) {
+        if (pluginsEnabled) allCollections else allCollections?.mapValues { (_, byType) ->
+            (byType - AppType.Plugin).mapValues { (_, cols) -> cols.filter { it.slug != PLUGIN_DATA_APPS_SLUG } }
+        }
+    }
     val pebbleAccount: PebbleAccount = koinInject()
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()

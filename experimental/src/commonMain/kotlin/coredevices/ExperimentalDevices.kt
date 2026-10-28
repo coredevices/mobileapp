@@ -26,6 +26,7 @@ import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -60,12 +61,14 @@ class ExperimentalDevices(
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
+    private val reminderReconciler: coredevices.ring.reminders.ReminderReconciler,
     private val indexSettingsSummary: IndexSettingsSummary,
     private val rebootLogStore: IndexRebootLogStore,
     private val rssiStatistics: RingRssiStatistics,
     private val platform: Platform,
     private val targetCalendarSeeder: TargetCalendarSeeder,
     private val indexNotificationManager: IndexNotificationManager,
+    private val libPebble: LibPebble,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
@@ -78,6 +81,9 @@ class ExperimentalDevices(
             }
         )
         indexFeedSyncService.hashCode()
+        // Arm alarms for any reminder synced in while this device was away, then keep them in
+        // step as items sync (a new phone, the web app, a second device).
+        reminderReconciler.start()
         // Self-healing: creates the three system seed lists in Firestore
         // (Notes-to-self / Todos / Shopping) if any are missing. Idempotent.
         // Runs after each auth event because [DefaultListsBootstrap] reads
@@ -104,6 +110,16 @@ class ExperimentalDevices(
         ringDelegate.init()
         scope.launch { targetCalendarSeeder.seedIfNeeded() }
         scope.launch { indexNotificationManager.notifyLegacyDestinationUse() }
+        scope.launch {
+            preferences.ringPaired.map { it != null }.distinctUntilChanged().collect { paired ->
+                val config = libPebble.config.value
+                if (config.watchConfig.notificationWindowState != paired) {
+                    libPebble.updateConfig(
+                        config.copy(watchConfig = config.watchConfig.copy(notificationWindowState = paired))
+                    )
+                }
+            }
+        }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
             NotifierManager.getLocalNotifier().notify {

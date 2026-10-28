@@ -3,11 +3,8 @@ package coredevices.ring.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.libindex.di.LibIndexCoroutineScope
-import coredevices.ring.agent.integrations.providers.IntegrationProvider
-import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
-import coredevices.ring.agent.integrations.providers.availableDestinations
-import coredevices.ring.agent.integrations.providers.visibleDestinations
+import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
@@ -15,10 +12,9 @@ import coredevices.ring.service.button.RingGesture
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import coredevices.util.transcription.CactusModelPathProvider
-import kotlinx.coroutines.flow.MutableStateFlow
+import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -29,30 +25,28 @@ class RingButtonViewModel(
     private val cactusModelProvider: CactusModelPathProvider,
     private val appScope: LibIndexCoroutineScope,
     platform: Platform,
-    private val providers: IntegrationProviderRepository,
-    pluginsEnabled: StateFlow<Boolean>,
+    private val destinations: DestinationCatalog,
 ) : ViewModel() {
     val gestureRoutes = gestureRouting.routes
+    val gestureCommands = gestureRouting.commands
     val webhookConfigs = webhookPreferences.configs
     val musicEnabled: Boolean = platform.isAndroid
 
-    private val providerRefresh = MutableStateFlow(0)
-
-    /** Every installed agent plugin a recording gesture could send to, connected or not. */
-    val agentProviders: StateFlow<List<IntegrationProvider>> =
-        combine(providerRefresh, pluginsEnabled) { _, pluginsOn ->
-            providers.providers(IntegrationSupport.Agent).visibleDestinations(pluginsOn)
-        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    /** The subset of [agentProviders] that is set up and can be picked. */
-    val connectedAgentProviders: StateFlow<List<IntegrationProvider>> = providers
-        .availableDestinations(IntegrationSupport.Agent, pluginsEnabled, providerRefresh)
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    /** Every agent plugin a recording gesture could send to: installed ones, then the store's.
+     *  Null until the first check completes, which can take a few seconds per unresponsive plugin. */
+    val agentDestinations: StateFlow<List<DestinationItem>?> = destinations
+        .items(IntegrationSupport.Agent)
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     /** Plugins connect from their own settings page, so re-check whenever the switchboard shows. */
     fun refreshAgentDestinations() {
-        providerRefresh.value++
+        destinations.refresh()
     }
+
+    suspend fun reviewInstall(plugin: StorePlugin): InstallReview? = destinations.reviewInstall(plugin)
+
+    suspend fun installStorePlugin(plugin: StorePlugin, granted: Map<String, Boolean?>): Boolean =
+        destinations.install(plugin, granted)
 
     fun setGestureRoute(gesture: RingGesture, destination: GestureDestination) {
         gestureRouting.setRoute(gesture, destination)
@@ -60,6 +54,10 @@ class RingButtonViewModel(
             // Trigger LM model extraction, should be already integrated into assets so no DL
             appScope.launch { cactusModelProvider.getLMModelPath() }
         }
+    }
+
+    fun setGestureCommand(gesture: RingGesture, command: String) {
+        gestureRouting.setCommand(gesture, command)
     }
 
     fun disableWebhook(gesture: RingGesture) {

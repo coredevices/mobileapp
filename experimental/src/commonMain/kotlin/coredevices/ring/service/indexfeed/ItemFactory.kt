@@ -68,7 +68,6 @@ class ItemFactory {
         title: String,
         dueAt: Instant?,
         toolCallId: String?,
-        localReminderId: Int? = null,
         notifyBeforeMillis: Long? = null,
     ): ItemDocument = createItem(
         createdAt = createdAt,
@@ -80,7 +79,6 @@ class ItemFactory {
         metadata = ItemMetadata.Reminder(
             repeat = "one_time",
             notification = "push",
-            localReminderId = localReminderId,
             notifyBeforeMillis = notifyBeforeMillis,
         ),
     )

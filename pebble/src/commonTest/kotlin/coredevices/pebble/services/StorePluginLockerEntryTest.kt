@@ -1,5 +1,6 @@
 package coredevices.pebble.services
 
+import io.rebble.libpebblecommon.locker.asEntity
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,5 +62,28 @@ class StorePluginLockerEntryTest {
             .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!.isConfigurable
         assertFalse(configurable(stocks))
         assertTrue(configurable(withConfigPage))
+    }
+
+    @Test
+    fun anIconIsOnlyTintableWhenTheStoreSaysSo() {
+        fun tintable(app: String) = json.decodeFromString(StoreApplication.serializer(), app).iconTintable
+        val tintableStocks = stocks.replace(""""title":"Stocks",""", """"icon_tintable":true,"title":"Stocks",""")
+        assertFalse(tintable(stocks))
+        assertTrue(tintable(tintableStocks))
+        val entity = json.decodeFromString(StoreApplication.serializer(), tintableStocks)
+            .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!.asEntity(0)
+        assertTrue(entity.platforms.all { it.listImageTintable })
+    }
+
+    @Test
+    fun aSearchResultIconIsOnlyTintableWhenTheStoreSaysSo() {
+        val result = """{"author":"Pebble","category":"Finance & News","compatibility":{"aplite":$watch,"basalt":$watch,
+            "chalk":$watch,"diorite":$watch,"emery":$watch,"android":{"supported":true},"ios":{"supported":true}},
+            "description":"Share prices.","hearts":0,"icon_image":"","list_image":"https://list","title":"Stocks",
+            "type":"plugin","uuid":"2c4b7f10-9a3d-4e6b-8f21-5d0c7e9a1b34","id":"730a1d95229d42e9b66098cb",
+            "screenshot_images":[],"asset_collections":[]}"""
+        fun tintable(json: String) = this.json.decodeFromString(StoreSearchResult.serializer(), json).iconTintable
+        assertFalse(tintable(result))
+        assertTrue(tintable(result.replace(""""title":"Stocks",""", """"icon_tintable":true,"title":"Stocks",""")))
     }
 }

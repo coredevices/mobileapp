@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,8 +37,9 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,11 +94,7 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                 review.toReview.forEach { key ->
                     PermissionRow(key, defined) {
                         val decision = decisionOf(key)
-                        when {
-                            decision == null -> UndecidedChoice { decisions[key] = it }
-                            decision != decisions[key] -> Switch(checked = true, onCheckedChange = {}, enabled = false)
-                            else -> Switch(checked = decision, onCheckedChange = { decisions[key] = it })
-                        }
+                        DecisionChoice(decision, enabled = decision == decisions[key]) { decisions[key] = it }
                     }
                 }
                 // At the end of the list, so it's only reached after scrolling past every permission.
@@ -139,13 +137,13 @@ private fun PermissionRow(
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (permissionKind(key, defined) == PermissionKind.Exfiltrating) ExfiltratingInfo()
+        if (permissionKind(key, defined) == PermissionKind.Exfiltrating) ExfiltratingInfo(key)
         control()
     }
 }
 
 @Composable
-private fun ExfiltratingInfo() {
+private fun ExfiltratingInfo(key: String) {
     var explaining by remember { mutableStateOf(false) }
     Icon(
         Icons.Outlined.Info,
@@ -158,11 +156,19 @@ private fun ExfiltratingInfo() {
             onDismissRequest = { explaining = false },
             title = { Text("Sends data off your phone") },
             text = {
-                Text("This allows the app to send data off your device - limited to the listed location")
+                Text(exfiltratingExplanation(key))
             },
             confirmButton = { TextButton(onClick = { explaining = false }) { Text("OK") } },
         )
     }
+}
+
+private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
+    PluginPermissions.GLOBAL_INTERNET ->
+        "Allow this app to connect to any site on the internet, because it was built before the permissions system was created."
+    PluginPermissions.LEGACY_PEBBLEKIT, PluginPermissions.PEBBLEKIT_2 ->
+        "This allows the app to send data to its phone app, which can send it anywhere."
+    else -> "This allows the app to send data off your device - limited to the specified location"
 }
 
 private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermission>): ImageVector = when (permissionOf(key)) {
@@ -191,7 +197,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.GLOBAL_INTERNET -> "Connect to any website or local device"
     PluginPermissions.LOCATION -> "Use your location"
     PluginPermissions.WATCH_MICROPHONE -> "Use your watch microphone"
-    PluginPermissions.NOTIFICATIONS -> "Read your notifications"
+    PluginPermissions.NOTIFICATIONS -> packageOf(key)?.let { "Read your notifications from $it" } ?: "Read all your notifications"
     PluginPermissions.CALENDAR -> "Read your calendar"
     PluginPermissions.CONTACTS -> "Read your contacts"
     PluginPermissions.TIMELINE -> "Add pins to your timeline"
@@ -269,14 +275,15 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val config by libPebble.config.collectAsState()
     if (!config.watchConfig.enablePlugins) return
     val defined = rememberPluginPermissions()
-    val statuses by remember(appUuid) {
-        libPebble.appPermissionStatuses(appUuid).map { all -> all.sortedBy { it.status != PermissionStatus.Waiting } }
-    }.collectAsState(emptyList())
+    // Null while loading.
+    val loaded by remember(appUuid) {
+        libPebble.appPermissionStatuses(appUuid).map { all -> LoadedStatuses(all?.sortedBy { it.status != PermissionStatus.Waiting }) }
+    }.collectAsState(null)
     // Leaving the page stops asking about anything still waiting.
-    val current by rememberUpdatedState(statuses)
+    val current by rememberUpdatedState(loaded?.statuses)
     DisposableEffect(appUuid) {
         onDispose {
-            val unanswered = current.filter { it.status == PermissionStatus.Waiting }.map { it.permission }
+            val unanswered = current.orEmpty().filter { it.status == PermissionStatus.Waiting }.map { it.permission }
             if (unanswered.isNotEmpty()) {
                 GlobalScope.launch { libPebble.markPermissionRequestsSeen(appUuid, unanswered) }
             }
@@ -286,7 +293,19 @@ fun AppPermissionsSection(appUuid: Uuid) {
         libPebble.getLockerApp(appUuid).map { it?.properties?.legacy == true }
     }.collectAsState(false)
     var expanded by remember(appUuid) { mutableStateOf(false) }
-    if (statuses.isEmpty()) return
+    val statuses = (loaded ?: return).statuses
+    if (statuses.isNullOrEmpty()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+            Text(
+                if (statuses == null) "Shown once the app has been installed on your watch."
+                else "This app doesn't use any permissions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (legacy) {
@@ -338,16 +357,24 @@ fun AppPermissionsSection(appUuid: Uuid) {
             val bareDenied = fileScopeOf(row.permission) != null && statuses.deniesBareFilePermission(permissionOf(row.permission))
             PermissionRow(row.permission, defined, note) {
                 when {
-                    impliedByWrite -> Switch(checked = true, onCheckedChange = {}, enabled = false)
-                    bareDenied -> Switch(checked = false, onCheckedChange = {}, enabled = false)
-                    row.status == PermissionStatus.Granted || row.status == PermissionStatus.Denied ->
-                        Switch(checked = row.status == PermissionStatus.Granted, onCheckedChange = decide)
-                    else -> UndecidedChoice(decide)
+                    impliedByWrite -> DecisionChoice(true, enabled = false) {}
+                    bareDenied -> DecisionChoice(false, enabled = false) {}
+                    else -> DecisionChoice(
+                        when (row.status) {
+                            PermissionStatus.Granted -> true
+                            PermissionStatus.Denied -> false
+                            else -> null
+                        },
+                        onDecide = decide,
+                    )
                 }
             }
         }
     }
 }
+
+/** [statuses] is null until the app's permissions are known. */
+private class LoadedStatuses(val statuses: List<AppPermissionStatus>?)
 
 /** Whether the bare file permission reads as denied, with `WriteFiles` standing in for a `ReadFiles` the app never declared. */
 private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Boolean {
@@ -357,14 +384,22 @@ private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Bo
         any { it.permission == PluginPermissions.WRITE_FILES && it.status == PermissionStatus.Denied }
 }
 
+/** Nothing is selected while [granted] is null. */
 @Composable
-private fun UndecidedChoice(onDecide: (Boolean) -> Unit) {
-    Row {
-        OutlinedIconButton(onClick = { onDecide(false) }) {
-            Icon(Icons.Filled.Close, contentDescription = "Deny", tint = MaterialTheme.colorScheme.error)
-        }
-        OutlinedIconButton(onClick = { onDecide(true) }) {
-            Icon(Icons.Filled.Check, contentDescription = "Allow", tint = MaterialTheme.colorScheme.primary)
+private fun DecisionChoice(granted: Boolean?, enabled: Boolean = true, onDecide: (Boolean) -> Unit) {
+    val options = listOf(Triple(false, Icons.Filled.Close, "Deny"), Triple(true, Icons.Filled.Check, "Allow"))
+    SingleChoiceSegmentedButtonRow {
+        options.forEachIndexed { index, (value, icon, label) ->
+            SegmentedButton(
+                selected = granted == value,
+                onClick = { onDecide(value) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                enabled = enabled,
+                icon = {},
+                modifier = Modifier.width(48.dp),
+            ) {
+                Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

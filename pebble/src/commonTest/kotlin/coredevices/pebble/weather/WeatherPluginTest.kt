@@ -6,8 +6,10 @@ import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.plugin.IconPixelSize
+import io.rebble.libpebblecommon.plugin.NumericValueShape
 import io.rebble.libpebblecommon.plugin.SeriesShape
 import io.rebble.libpebblecommon.plugin.SourceShapeNames
+import io.rebble.libpebblecommon.plugin.TimestampShape
 import io.rebble.libpebblecommon.weather.WeatherDailyForecast
 import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import io.rebble.libpebblecommon.weather.WeatherLocationData
@@ -141,8 +143,13 @@ class WeatherSeriesTest {
         locationUtcOffsetMin = 0,
         todayHourly = List(24) { WeatherHourlyForecast(WeatherType.Sun, temp = it.toByte()) },
         tomorrowHourly = List(24) { WeatherHourlyForecast(WeatherType.LightRain, temp = (100 + it).toByte()) },
+        todayWindSpeed = 10,
+        todayWindDirection = 270,
         dailyForecast = listOf(
-            WeatherDailyForecast(highTemp = 18, lowTemp = 9, weatherType = WeatherType.Sun, precipProbability = 10),
+            WeatherDailyForecast(
+                highTemp = 18, lowTemp = 9, weatherType = WeatherType.Sun, precipProbability = 10, humidityPct = 70,
+                sunriseUtcSecs = midnight + 7 * 3600, sunsetUtcSecs = midnight + 17 * 3600,
+            ),
             WeatherDailyForecast(highTemp = TEMP_NO_VALUE, lowTemp = 7, weatherType = WeatherType.HeavyRain),
         ),
     )
@@ -159,6 +166,23 @@ class WeatherSeriesTest {
 
     private fun Map<String, Map<String, JsonElement>>.series(property: String): SeriesShape =
         Json.decodeFromJsonElement(getValue(property).getValue(SourceShapeNames.SERIES))
+
+    @Test
+    fun todaysWindHumidityOffsetAndSunAreServed() = runTest {
+        val properties = read(null)
+        fun number(property: String) =
+            Json.decodeFromJsonElement<NumericValueShape>(properties.getValue(property).getValue(SourceShapeNames.NUMERIC_VALUE)).value
+
+        assertEquals(10.0, number(WeatherPlugin.PROPERTY_WIND_SPEED))
+        assertEquals(270.0, number(WeatherPlugin.PROPERTY_WIND_DIRECTION))
+        assertEquals(70.0, number(WeatherPlugin.PROPERTY_HUMIDITY))
+        assertEquals(0.0, number(WeatherPlugin.PROPERTY_UTC_OFFSET))
+        assertEquals(
+            midnight + 7 * 3600,
+            Json.decodeFromJsonElement<TimestampShape>(properties.getValue(WeatherPlugin.PROPERTY_SUNRISE).getValue(SourceShapeNames.TIMESTAMP)).value,
+        )
+        assertEquals(listOf(midnight + 17 * 3600, null), properties.series(WeatherPlugin.PROPERTY_DAILY_SUNSET).timestamp!!.values)
+    }
 
     @Test
     fun hoursRunFromLocalMidnightThroughTomorrow() = runTest {

@@ -100,10 +100,16 @@ class RecordingOperationFactory(
         text: String,
         forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
         isQuestion: Boolean = false,
+        isGestureCommand: Boolean = false,
     ): RecordingOperation {
-        // A typed question routes to the search/answer agent and forces no note. Anything else
-        // follows wherever Hold & Talk points, so typing stands in for the gesture.
-        val destination = gestureRouting.recordingDestinationFor(RingGesture.Hold)
+        // A typed question routes to the search/answer agent and forces no note. A click's agent
+        // command always runs the Index agent. Anything else follows wherever Hold & Talk points,
+        // so typing stands in for the gesture.
+        val destination = if (isGestureCommand) {
+            GestureDestination.IndexAgent
+        } else {
+            gestureRouting.recordingDestinationFor(RingGesture.Hold)
+        }
         val delivery = if (isQuestion) null else (destination as? GestureDestination.AgentPlugin)?.let { agentDelivery(it) }
         val inner = if (delivery != null) {
             SendToAgentTextOperation(delivery = delivery, recordingId = recordingId, text = text)
@@ -117,6 +123,7 @@ class RecordingOperationFactory(
                 forcedTool = if (isQuestion) null else forcedTool,
             )
         }
+        if (isGestureCommand) return inner
         return maybeWrapWithWebhook(
             recordingId = recordingId,
             fileId = null,
@@ -128,7 +135,8 @@ class RecordingOperationFactory(
 
     /**
      * Resumes a recording's conversation after the user answered a confirmation, on the route
-     * the recording took: its ring gesture, or Hold & Talk's for typed and phone-mic input.
+     * the recording took: its ring gesture, the Index agent for a click's agent command, or
+     * Hold & Talk's for typed and phone-mic input.
      */
     suspend fun createConversationResumeOperation(
         recordingId: Long,
@@ -143,7 +151,11 @@ class RecordingOperationFactory(
                 ?.parseAsButtonSequence()
                 ?.let { RingGesture.forSequence(it) }
         }
-        val destination = gestureRouting.recordingDestinationFor(gesture)
+        val destination = if (transfer == null && queueTaskRepository.isGestureCommandRecording(recordingId)) {
+            GestureDestination.IndexAgent
+        } else {
+            gestureRouting.recordingDestinationFor(gesture)
+        }
         return ConversationResumeOperation(
             recordingId = recordingId,
             toolCallId = toolCallId,

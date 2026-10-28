@@ -15,10 +15,15 @@ import coredevices.util.Platform
 import coredevices.util.flow.mapState
 import coredevices.util.isAndroid
 import io.rebble.libpebblecommon.connection.Plugins
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * The single place to find note/reminder/agent providers: the built-in ones plus any installed
@@ -55,9 +60,15 @@ class IntegrationProviderRepository(
     fun providers(support: IntegrationSupport): List<IntegrationProvider> =
         allProviders().filter { support in it.supports }
 
-    /** Providers the user can pick right now: on this platform, supporting [support], and connected. */
-    suspend fun availableProviders(support: IntegrationSupport): List<IntegrationProvider> =
-        providers(support).filter { it.isAuthorized(support) }
+    /** Providers the user can pick right now: on this platform, supporting [support], and connected.
+     *  A plugin answers over its own channel and may time out, so a few are asked at once. */
+    suspend fun availableProviders(support: IntegrationSupport): List<IntegrationProvider> = coroutineScope {
+        val permits = Semaphore(CONCURRENT_AUTH_CHECKS)
+        providers(support)
+            .map { provider -> async { provider.takeIf { permits.withPermit { it.isAuthorized(support) } } } }
+            .awaitAll()
+            .filterNotNull()
+    }
 
     fun findProvider(id: String): IntegrationProvider? = allProviders().firstOrNull { it.id == id }
 
@@ -154,5 +165,6 @@ class IntegrationProviderRepository(
     companion object {
         private val logger = Logger.withTag("IntegrationProviderRepository")
         private const val UNKNOWN_PROVIDER_TITLE = "Unavailable provider"
+        private const val CONCURRENT_AUTH_CHECKS = 3
     }
 }

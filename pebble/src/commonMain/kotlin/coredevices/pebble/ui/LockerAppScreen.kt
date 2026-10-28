@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -248,6 +249,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         title = "Remove ${entry.title}?",
                         text = "Are you sure you want to remove this app from your Pebble?",
                         onConfirm = {
+                            // Store apps stay here to show the store listing; nothing to show otherwise
+                            if (viewModel.selectedStoreEntry == null) {
+                                navBarNav.goBack()
+                            }
                             // Don't use local scope: that will die because we moved back
                             GlobalScope.launch {
                                 logger.d { "removing app ${entry.uuid}" }
@@ -301,7 +306,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     AsyncImage(
                                         model = entry.listImageUrl,
                                         contentDescription = null,
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(28.dp),
+                                        colorFilter = entry.listImageColorFilter(),
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
                                 }
@@ -746,6 +752,22 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             nameModifier = propertyNameModifier,
                             value = "$version$sideloadedText$updatedDateText"
                         )
+                    }
+                    commonAppStore?.storeApp?.batteryImpact?.takeIf { it.isNotEmpty() }?.let { impacts ->
+                        val connected = sharedViewModel.watchType.value.codename
+                        val platform = if (connected in impacts) connected else impacts.keys.first()
+                        var showDetails by remember { mutableStateOf(false) }
+                        val otherWatchText = if (platform != connected) " (${batteryImpactWatchName(platform, short = true)})" else ""
+                        PropertyRow(
+                            name = "BATTERY IMPACT",
+                            nameModifier = propertyNameModifier,
+                            value = impacts.getValue(platform).level.capitalized() + otherWatchText,
+                            onClick = { showDetails = true },
+                            onClickIcon = Icons.Outlined.Info,
+                        )
+                        if (showDetails) {
+                            BatteryImpactDialog(impacts, initialPlatform = platform, onDismiss = { showDetails = false })
+                        }
                     }
                     (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
                         if (sourceLink.isNotEmpty()) {

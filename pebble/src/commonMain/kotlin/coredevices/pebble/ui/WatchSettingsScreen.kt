@@ -6,6 +6,7 @@ import CoreAppVersion
 import NextBugReportContext
 import PlatformUiContext
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,7 +27,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
@@ -34,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -48,6 +52,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Schedule
@@ -57,6 +62,8 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -66,6 +73,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -97,6 +105,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -132,6 +141,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.weather.WeatherPlugin
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
@@ -158,7 +168,6 @@ import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
-import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
@@ -168,6 +177,9 @@ import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -187,6 +199,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import theme.coreOrange
 
 enum class TopLevelType(val displayName: String) {
     Phone("Phone"),
@@ -219,6 +232,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
     Apps("Apps", Icons.Default.Apps),
+    Plugins("Plugins", Icons.Default.Power),
     Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
     Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
@@ -242,6 +256,7 @@ fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
 }
 
 object SettingsIds {
+    const val PermissionPolicy = "PermissionPolicy"
     const val OfflineSpeechRecognition = "OfflineSpeechRecognition"
     const val EnableHealthTracking = "EnableHealthTracking"
     const val EnableActivityInsights = "EnableActivityInsights"
@@ -327,6 +342,21 @@ data class SettingsItemsState(
     val coreConfig: CoreConfig,
     val healthTrackingEnabled: Boolean,
 )
+
+/** Shows the setting with this [SettingsItem.id], as on the settings screen. */
+@Composable
+fun SettingsItemsState?.Show(id: String) {
+    if (this == null) {
+        return
+    }
+    val setting = remember(this) {
+        rawSettingsItems.find { it.id == id }
+    }
+    if (setting == null || !setting.show()) {
+        return
+    }
+    setting.Item()
+}
 
 @Composable
 fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarDisplay): SettingsItemsState? {
@@ -537,9 +567,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val healthSyncTracker: HealthSyncTracker = koinInject()
     val healthPlatformSyncEnabled by healthSyncTracker.enabled.collectAsState()
     val healthIsSyncing by platformHealthSync.syncing.collectAsState()
+    val preferredSources by libPebble.preferredSourcePlugins.collectAsState()
 
     val rawSettingsItems = remember(
             libPebbleConfig,
+            preferredSources,
             debugOptionsEnabled,
             missingPermissions,
             updateState,
@@ -831,23 +863,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             libPebbleConfig.copy(
                                 notificationConfig = libPebbleConfig.notificationConfig.copy(
                                     alwaysSendNotifications = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
-                basicSettingsToggleItem(
-                    title = "Respect Phone Do Not Disturb",
-                    description = "Notifications won't be sent to watch if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    checked = libPebbleConfig.notificationConfig.respectDoNotDisturb,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    respectDoNotDisturb = it
                                 )
                             )
                         )
@@ -1436,6 +1451,29 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
                 ),
+                run {
+                    // Any plugin but the built-in one, which shows what this fetches.
+                    val providers = libPebble.getAllPlugins().filter {
+                        it.serves(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION) &&
+                            it.pluginUuid != WeatherPlugin.BUILT_IN_WEATHER_UUID
+                    }
+                    val chosen = preferredSources[PluginRegistry.sourceKey(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)]
+                    basicSettingsDropdownItem(
+                        title = "Weather provider",
+                        description = "Where the watch's weather app and timeline get their forecast",
+                        topLevelType = TopLevelType.Phone,
+                        section = Section.Weather,
+                        items = listOf<PluginMetadata?>(null) + providers,
+                        selectedItem = providers.firstOrNull { it.pluginUuid == chosen },
+                        onItemSelected = {
+                            libPebble.setPreferredSourcePlugin(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION, it?.pluginUuid)
+                            GlobalScope.launch { weatherFetcher.fetchWeather(this) }
+                        },
+                        itemText = { it?.let { plugin -> "Plugin: ${plugin.name}" } ?: "Pebble" },
+                        show = { coreConfig.fetchWeather && libPebbleConfig.watchConfig.enablePlugins && providers.isNotEmpty() },
+                        selectorBelow = true,
+                    )
+                },
                 basicSettingsDropdownItem(
                     title = "Weather Refresh Interval",
                     topLevelType = TopLevelType.Phone,
@@ -1543,6 +1581,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     keywords = "cactus stt speech recognition offline rebble",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
+                    selectorBelow = true,
                     items = CactusSTTMode.entries.filter { mode ->
                         when (mode) {
                             CactusSTTMode.RebbleOnly,
@@ -1984,12 +2023,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
-                    title = "Use experimental plugins / permissions",
-                    description = "Enable the new plugins API, and new permissions system. This is an experimental feature under development - not recommended unless you know what you are doing (API is unstable)",
+                    title = "Plugins / permissions preview",
+                    description = "Enable Plugins (a new system for apps to share data and actions), and the new granular app permissions system. This will be enabled for everyone in a future release",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
+                    section = Section.Plugins,
                     checked = libPebbleConfig.watchConfig.enablePlugins,
                     onCheckChanged = {
+                        // So turning them back on shows the permissions introduction again.
+                        if (!it) settings.setHasSeenPermissionsIntro(false)
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 watchConfig = libPebbleConfig.watchConfig.copy(
@@ -1998,16 +2039,27 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
-                    isDebugSetting = true,
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Complications",
+                    description = "Readings watchfaces should show in their complication slots",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Plugins,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.ComplicationsRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Preferred sources",
+                    description = "Which plugin to use when several offer the same thing",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Plugins,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.PreferredSourcesRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins && hasSharedSources(libPebble.getAllPlugins()) },
+                ) },
                 basicSettingsDropdownItem(
+                    id = SettingsIds.PermissionPolicy,
                     title = "Ask before apps use permissions",
-                    description = when (libPebbleConfig.watchConfig.permissionPolicy) {
-                        PermissionPolicy.AskIfExfiltrating ->
-                            "Apps ask before going online or changing anything, and before reading your data if they could send it off your phone."
-                        PermissionPolicy.AlwaysAsk -> "Apps ask before using any permission."
-                        PermissionPolicy.NeverAsk -> "Apps can use any permission you haven't turned off on the app's page."
-                    },
+                    description = libPebbleConfig.watchConfig.permissionPolicy.description(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
                     items = PermissionPolicy.entries,
@@ -2019,14 +2071,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
-                    itemText = {
-                        when (it) {
-                            PermissionPolicy.AskIfExfiltrating -> "With network access"
-                            PermissionPolicy.AlwaysAsk -> "Always"
-                            PermissionPolicy.NeverAsk -> "Never"
-                        }
-                    },
+                    itemText = { it.displayName() },
                     show = { libPebbleConfig.watchConfig.enablePlugins },
+                    selectorBelow = true,
+                    details = { PermissionPolicyDetails() },
                 ),
                 basicSettingsToggleItem(
                     title = "Legacy PebbleKit",
@@ -2046,7 +2094,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Ask before older apps use permissions",
-                    description = "Otherwise apps built before permissions keep the access they've always had.",
+                    description = "Otherwise apps built before permissions keep the access they've always had. They can never get more access without updating",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
                     checked = libPebbleConfig.watchConfig.askLegacyAppsForPermissions,
@@ -2851,6 +2899,10 @@ fun <T> basicSettingsDropdownItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
     extraSupportingContent: (@Composable () -> Unit)? = null,
+    /** Under the description rather than beside the title, for long values. */
+    selectorBelow: Boolean = false,
+    /** Shown in a popup from an info button beside the title. */
+    details: (@Composable () -> Unit)? = null,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2860,45 +2912,72 @@ fun <T> basicSettingsDropdownItem(
     show = show,
     isDebugSetting = isDebugSetting,
     item = {
-        ListItem(
-            headlineContent = {
-                Text(title)
-            },
-            trailingContent = {
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    TextButton(onClick = { expanded = true }) {
-                        Text(
-                            text = itemText(selectedItem),
-                            modifier = Modifier.widthIn(max = 150.dp),
-                            maxLines = 2,
+        var expanded by remember { mutableStateOf(false) }
+        val selector: @Composable () -> Unit = {
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
+                    border = BorderStroke(1.dp, coreOrange),
+                ) {
+                    Text(
+                        text = itemText(selectedItem),
+                        modifier = if (selectorBelow) Modifier else Modifier.widthIn(max = 130.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    items.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(itemText(option)) },
+                            onClick = {
+                                onItemSelected(option)
+                                expanded = false
+                            }
                         )
                     }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        items.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(itemText(option)) },
-                                onClick = {
-                                    onItemSelected(option)
-                                    expanded = false
-                                }
-                            )
+                }
+            }
+        }
+        var showingDetails by remember { mutableStateOf(false) }
+        if (showingDetails && details != null) {
+            AlertDialog(
+                onDismissRequest = { showingDetails = false },
+                title = { Text(title) },
+                text = { Column(Modifier.verticalScroll(rememberScrollState())) { details() } },
+                confirmButton = { TextButton(onClick = { showingDetails = false }) { Text("OK") } },
+            )
+        }
+        ListItem(
+            headlineContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, modifier = Modifier.weight(1f, fill = false))
+                    if (details != null) {
+                        IconButton(onClick = { showingDetails = true }) {
+                            Icon(Icons.Outlined.Info, contentDescription = "About $title")
                         }
                     }
                 }
             },
+            trailingContent = if (selectorBelow) null else selector,
             supportingContent = {
-                Row {
-                    if (description != null) {
-                        Text(description, fontSize = 11.sp)
+                Column {
+                    Row {
+                        if (description != null) {
+                            Text(description, fontSize = 11.sp)
+                        }
+                        extraSupportingContent?.invoke()
                     }
-                    extraSupportingContent?.invoke()
+                    if (selectorBelow) selector()
                 }
             },
             shadowElevation = ELEVATION,
+            modifier = Modifier.clickable { expanded = true },
         )
     }
 )

@@ -196,6 +196,10 @@ class FlagsBuilder internal constructor() {
         flags.add(TimelineItem.Flag.PERSIST_QUICK_VIEW)
     }
 
+    fun silent() {
+        flags.add(TimelineItem.Flag.SILENT)
+    }
+
     internal fun build(): List<TimelineItem.Flag> {
         return flags.toList()
     }

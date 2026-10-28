@@ -53,6 +53,7 @@ data class LockerEntry(
     @SerialName("manifest_version") val manifestVersion: Int = 1,
     @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
     @SerialName("config_page") val configPage: String? = null,
+    @SerialName("icon_tintable") val iconTintable: Boolean = false,
 )
 
 @Serializable

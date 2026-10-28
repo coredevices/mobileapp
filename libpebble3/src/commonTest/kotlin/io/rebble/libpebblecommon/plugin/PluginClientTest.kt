@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.permissions.APP
 import io.rebble.libpebblecommon.permissions.FakePermissionDao
 import io.rebble.libpebblecommon.permissions.NoWatches
 import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.permissions.notificationsKey
 import io.rebble.libpebblecommon.permissions.permissions
 import io.rebble.libpebblecommon.permissions.subject
 import kotlinx.coroutines.awaitCancellation
@@ -37,13 +38,14 @@ private val ENVELOPE = SourceEnvelope(PLUGIN.toString(), null, emptyList())
 
 private class ClientFakePlugin(
     callerPermissions: List<PluginPermission> = emptyList(),
+    properties: Map<String, List<String>> = emptyMap(),
     private val envelopes: Flow<SourceUpdate> = flow { emit(SourceUpdate.Data(ENVELOPE)) },
     private val onInvoke: suspend () -> ActionResult = { ActionResult(ok = true) },
 ) : Plugin {
     override val pluginUuid = PLUGIN
     override val name = "Fake"
     override val description = ""
-    override val sources = listOf(SourceDeclaration("weather", listOf("now"), callerPermissions = callerPermissions))
+    override val sources = listOf(SourceDeclaration("weather", listOf("now"), properties, callerPermissions = callerPermissions))
     override val actions = listOf(
         ActionDeclaration(
             "do_it",
@@ -281,6 +283,40 @@ class PluginClientTest {
         assertEquals(PluginErrors.PLUGIN_UNAVAILABLE, client.invoke(PluginCaller.Host(), gone, "do_it", ARGS).code)
         val update = client.read(PluginCaller.Host(), gone, "weather", "now")
         assertEquals(PluginErrors.PLUGIN_UNAVAILABLE, assertIs<SourceUpdate.Error>(update).code)
+    }
+
+    @Test
+    fun anAppHoldingSomePackagesSeesOnlyTheirInstances() = runTest {
+        fun instance(id: String, packageName: String) = SourceInstance(
+            id,
+            mapOf(SourceInstance.PROPERTY_PACKAGE to mapOf(SourceShapeNames.LONG_TEXT to JsonObject(mapOf("text" to JsonPrimitive(packageName))))),
+        )
+        val shade = SourceEnvelope(PLUGIN.toString(), null, listOf(instance("1", "com.maps"), instance("2", "com.chat")))
+        val plugin = ClientFakePlugin(
+            callerPermissions = listOf(PluginPermission(PluginPermissions.NOTIFICATIONS)),
+            properties = mapOf(SourceInstance.PROPERTY_PACKAGE to listOf(SourceShapeNames.LONG_TEXT)),
+            envelopes = flow { emit(SourceUpdate.Data(shade)) },
+        ).registered()
+
+        dao.insertOrReplace(LockerAppPermission(APP, notificationsKey("com.maps"), granted = true, requestedAtMs = 1, decidedAtMs = 1))
+        val scoped = assertIs<SourceUpdate.Data>(client.observe(APP_CALLER, plugin, "weather", "now").first())
+        assertEquals(listOf("1"), scoped.envelope.instances.map { it.instanceId })
+
+        dao.insertOrReplace(LockerAppPermission(APP, PluginPermissions.NOTIFICATIONS, granted = true, requestedAtMs = 1, decidedAtMs = 1))
+        val all = assertIs<SourceUpdate.Data>(client.observe(APP_CALLER, plugin, "weather", "now").first())
+        assertEquals(listOf("1", "2"), all.envelope.instances.map { it.instanceId })
+    }
+
+    @Test
+    fun aPartialGrantIsRefusedBySourcesThatCantBeNarrowed() = runTest {
+        val plugin = ClientFakePlugin(callerPermissions = listOf(PluginPermission(PluginPermissions.NOTIFICATIONS))).registered()
+        dao.insertOrReplace(LockerAppPermission(APP, notificationsKey("com.maps"), granted = true, requestedAtMs = 1, decidedAtMs = 1))
+
+        val update = client.observe(APP_CALLER, plugin, "weather", "now").first()
+
+        val error = assertIs<SourceUpdate.Error>(update)
+        assertEquals(PluginErrors.PERMISSION_DENIED, error.code)
+        assertEquals("App holds Notifications/com.maps, but weather/now needs Notifications", error.message)
     }
 
     private fun deniedRow(permission: String) =

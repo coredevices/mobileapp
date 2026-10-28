@@ -191,8 +191,10 @@ class GestureRoutingTest {
     fun routesRoundTripThroughSettings() {
         val stored = MapSettings()
         routing(stored = stored).apply {
-            setRoute(RingGesture.Click, GestureDestination.PlayPause)
-            setRoute(RingGesture.DoubleClick, GestureDestination.NextTrack)
+            setRoute(RingGesture.DoubleClick, GestureDestination.PreviousTrack)
+            setRoute(RingGesture.TripleClick, GestureDestination.Webhook)
+            setRoute(RingGesture.Click, GestureDestination.AgentCommand)
+            setCommand(RingGesture.Click, "Unlock front door")
             setRoute(RingGesture.Hold, GestureDestination.WebhookOnly)
             setRoute(RingGesture.ClickHold, GestureDestination.LocalAgent)
         }
@@ -200,11 +202,13 @@ class GestureRoutingTest {
         // A fresh instance ignores the legacy prefs for gestures with a stored route.
         val reloaded = routing(MusicControlMode.Disabled, SecondaryMode.Search, stored = stored)
 
-        assertEquals(GestureDestination.PlayPause, reloaded.destinationFor(RingGesture.Click))
+        assertEquals(GestureDestination.AgentCommand, reloaded.destinationFor(RingGesture.Click))
+        assertEquals("Unlock front door", reloaded.commandFor(RingGesture.Click))
+        assertEquals("", reloaded.commandFor(RingGesture.DoubleClick))
         assertEquals(GestureDestination.WebhookOnly, reloaded.destinationFor(RingGesture.Hold))
         assertEquals(GestureDestination.LocalAgent, reloaded.destinationFor(RingGesture.ClickHold))
-        assertEquals(GestureDestination.NextTrack, reloaded.destinationFor(RingGesture.DoubleClick))
-        assertEquals(GestureDestination.Nothing, reloaded.destinationFor(RingGesture.TripleClick))
+        assertEquals(GestureDestination.PreviousTrack, reloaded.destinationFor(RingGesture.DoubleClick))
+        assertEquals(GestureDestination.Webhook, reloaded.destinationFor(RingGesture.TripleClick))
     }
 
     @Test

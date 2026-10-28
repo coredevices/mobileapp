@@ -244,7 +244,6 @@ class ReminderTool: BuiltInMcpTool(
                 SemanticResult.TaskCreation(
                     title = remindArgs.message,
                     deadline = instant,
-                    localReminderId = reminderId.toIntOrNull(),
                     notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
                     destination = provider.externalDestination,
                 )

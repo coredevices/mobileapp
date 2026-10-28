@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.SourceEnvelope
 import io.rebble.libpebblecommon.plugin.SourceInstance
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -37,6 +38,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -76,11 +78,15 @@ private class FakeProvider(
     override val storesItemsLocally: Boolean = false,
     var authorized: Boolean = true,
     override val title: String = id,
+    private val authorizing: suspend () -> Unit = {},
 ) : IntegrationProvider {
     val notes = FakeNoteIntegration()
     val reminders = FakeReminderIntegration()
     val agent = FakeAgentIntegration()
-    override suspend fun isAuthorized() = authorized
+    override suspend fun isAuthorized(): Boolean {
+        authorizing()
+        return authorized
+    }
     override fun notes(): NoteIntegration = notes
     override fun reminders(): ReminderIntegration = reminders
     override fun agent(): AgentIntegration = agent
@@ -102,6 +108,7 @@ private class FakeCachedItemDao : CachedItemDao {
     override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
     override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
     override suspend fun getAllActive(): List<CachedItem> = emptyList()
+    override suspend fun getAllIncludingDeleted(): List<CachedItem> = emptyList()
     override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
     override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
     override suspend fun deleteById(id: String) {}
@@ -158,6 +165,39 @@ class IntegrationProviderRepositoryTest {
 
         assertEquals(listOf(index, notion, tasker), repository.providers(IntegrationSupport.Note))
         assertEquals(listOf(index, googleTasks, tasker), repository.providers(IntegrationSupport.Reminder))
+    }
+
+    @Test
+    fun connectionChecksRunThreeAtATimeInOrder() = runTest {
+        var running = 0
+        var mostAtOnce = 0
+        val slow = (1..7).map { n ->
+            FakeProvider(
+                id = "plugin:$n",
+                supports = setOf(IntegrationSupport.Agent),
+                authorized = n % 2 == 1,
+                authorizing = {
+                    running++
+                    mostAtOnce = maxOf(mostAtOnce, running)
+                    delay(1.seconds)
+                    running--
+                },
+            )
+        }
+        val repository = IntegrationProviderRepository(
+            preferences = preferences,
+            plugins = FakePlugins(),
+            platform = FakePlatform("Android"),
+            delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
+            builtIn = builtIn + slow,
+        )
+
+        val started = testScheduler.currentTime
+        val available = repository.availableProviders(IntegrationSupport.Agent)
+
+        assertEquals(listOf("plugin:1", "plugin:3", "plugin:5", "plugin:7"), available.map { it.id })
+        assertEquals(3, mostAtOnce)
+        assertEquals(3.seconds.inWholeMilliseconds, testScheduler.currentTime - started)
     }
 
     @Test

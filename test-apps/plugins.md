@@ -8,7 +8,7 @@ Plugins are nearly here (finally). A plugin is a small piece of JavaScript that 
 It has a generic API, designed to allow any type of data to be exposed, in multiple formats.
 
 This doc lives here while plugins are under active development, and will move once they're stable.
-Right now they're supported in the Pebble mobile app (v1.14.0), but are experimental and disabled by
+Right now they're supported in the Pebble mobile app (v1.16.x), but are in preview, and disabled by
 default.
 
 ## Why?
@@ -33,25 +33,31 @@ default.
 - Build a watchface or app that uses plugin data.
 - Build a plugin.
 
-First, enable plugins in the mobile app (v1.14.0 or above): **Settings → Debug → Show debug options**, then **Use
-experimental plugins**. The demo apps below are installed automatically, and a **Plugins** tab appears in the Apps
-screen listing plugins and their settings pages.
+First, enable plugins in the mobile app (v1.16.x or above): **Settings → Plugins → Plugins / permissions preview**. A **Plugins** tab appears in the Apps
+screen listing plugins and their settings pages. The demo apps below are on the app store.
+
+Note: this document represents the API/functionality of mobile app version 1.16.x. Apps/plugins built
+previously may not work, as there have been many changes to both in 1.16.
 
 ## Try the demo apps and plugins
 
-Source for each is in this folder:
+Source for each is in [coredevices/pebble-plugins](https://github.com/coredevices/pebble-plugins):
 
-- **`weather-face`** ("Plugin Demo: Weather Face"): a watchface built entirely from a weather
+- **[`weather-face`](https://github.com/coredevices/pebble-plugins/tree/main/weather-face)** ("Weather Face (Plugin Demo)"): a watchface built entirely from a weather
   plugin: any installed one (the built-in one, `met-weather`, or yours), picked on its settings
   page.
-- **`met-weather`**: weather for the phone's current location from MET Norway (api.met.no), an
-  alternative to the built-in weather plugin. Shows `navigator.geolocation` and drawing condition
-  images in JS.
-- **`plugin-test`** ("Plugin Demo: Dashboard"): a watchapp with eight tiles, each set from its
+- **[`complication-face`](https://github.com/coredevices/pebble-plugins/tree/main/complication-face)** ("Complication Face (Plugin Demo)"): the time and date with two slots,
+  a number and a bitmap, filled from the user's preferred readings (`preferences/complications`):
+  each takes the first entry offering its shape that the other hasn't taken.
+- **[`met-weather`](https://github.com/coredevices/pebble-plugins/tree/main/met-weather)**: weather for your weather locations from MET Norway (api.met.no), in your
+  units, an alternative to the built-in weather plugin. It can also be the watch's weather
+  provider (Settings → Weather → Weather provider). Shows `Pebble.subscribeSource`,
+  `navigator.geolocation` and drawing condition images in JS.
+- **[`plugin-test`](https://github.com/coredevices/pebble-plugins/tree/main/plugin-test)** ("Dashboard (Plugin Demo)"): a watchapp with eight tiles, each set from its
   settings page to any reading from any installed plugin. This shows what data is available through the example/built-in plugins. You can also configure taps to take actions, or make a tile a button for any action that takes no arguments (e.g. "Back", the default, goes to the previous app). A tile can also show the date, from the watch's own clock.
-- **`stocks`**: share prices for tickers you pick on its settings page.
-- **`hue`**: Control Philips Hue lights on your local bridge (pair from its settings page).
-- **`notion`**, **`ticktick`**, **`todoist`**: examples of plugins that sign in with OAuth.
+- **[`stocks`](https://github.com/coredevices/pebble-plugins/tree/main/stocks)**: share prices for tickers you pick on its settings page.
+- **[`hue`](https://github.com/coredevices/pebble-plugins/tree/main/hue)**: Control Philips Hue lights on your local bridge (pair from its settings page).
+- **[`notion`](https://github.com/coredevices/pebble-plugins/tree/main/notion)**, **[`ticktick`](https://github.com/coredevices/pebble-plugins/tree/main/ticktick)**, **[`todoist`](https://github.com/coredevices/pebble-plugins/tree/main/todoist)**: examples of plugins that sign in with OAuth.
 
 ## What can't I do yet?
 
@@ -104,7 +110,7 @@ Examples now:
 | --------------- | ----------------------------------------------------------------- | --------- |
 | `weather`       | `location`                                                        | built-in  |
 | `calendar`      | `event`                                                           | built-in  |
-| `phone`         | `phone_state`                                                     | built-in  |
+| `phone`         | `phone_state`, `find_my_phone`                                    | built-in  |
 | `music`         | `track`                                                           | built-in (Android) |
 | `notifications` | `notification`                                                    | built-in (Android) |
 | `watch`         | `switch_setting`, `number_setting`, `text_setting`, `app_setting` | built-in  |
@@ -113,6 +119,31 @@ Examples now:
 | `notes`         | `destination`, `configured`                                       | Notion demo |
 | `reminders`     | `list`, `configured`                                              | Todoist, TickTick demos |
 | `agent`         | `chats`, `configured`                                             |           |
+| `preferences`   | `units`, `complications`, `weather_location`                      | built-in  |
+
+**Weather.** `weather/location` serves one instance per place, with the user's weather locations
+(`preferences/weather_location`) under the same `instanceId`s. Temperatures are `numericValue`s
+in `°C` or `°F` (say which in `unit`), with `shortText`/`longText` in the user's units. Series
+start at the place's local midnight: `stepSec` 3600 for `hourly_*`, 86400 for `daily_*`.
+
+| Property | Shapes | |
+| --- | --- | --- |
+| `name`, `temperature`, `feels_like`, `high`, `low` | `shortText`, `longText`, `numericValue` | `high`/`low` for the local day |
+| `condition`, `condition_code` | `shortText`, `longText` (+ `icon`, `image`) | codes: `sun`, `partly_cloudy`, `cloudy`, `light_rain`, `heavy_rain`, `light_snow`, `heavy_snow`, `rain_and_snow`, `unknown` |
+| `uv_index`, `precipitation` (chance, %), `humidity` (%) | `numericValue`, `shortText` | |
+| `wind_speed` (`m/s`, `km/h`, `mph` or `knots`), `wind_direction` (degrees it's from) | `numericValue` | |
+| `utc_offset` (minutes east of UTC) | `numericValue` | |
+| `sunrise`, `sunset` | `timestamp` | today's |
+| `hourly_temperature`, `hourly_condition`, `hourly_condition_code` | `series` | |
+| `daily_high`, `daily_low`, `daily_condition`, `daily_condition_code`, `daily_precipitation`, `daily_sunrise`, `daily_sunset` | `series` (`timestamp` for the sun) | |
+
+The built-in weather plugin serves all of these, from whichever provider the user chose.
+
+A weather plugin the user picks as their weather provider (Settings → Weather) feeds the watch's
+weather app and timeline pins, as well as apps. For that it needs at least `temperature`,
+`condition_code`, `utc_offset`, and today's and tomorrow's `daily_high`, `daily_low`,
+`daily_condition_code`, `daily_sunrise` and `daily_sunset`; the rest fills in what the watch
+shows if it's there. A place it doesn't serve, or a read that fails, falls back to Pebble's own.
 
 A plugin is offered as a notes / reminders / agent destination for the Index agent when it declares
 a `create_note` / `create_reminder` / `send_to_agent` action *and* serves `notes/configured` /
@@ -175,7 +206,9 @@ hourly_temperature: {
   series carry one bitmap per point.
 - Use `start` and `stepSec` to find *now* in the series, rather than assuming `values[0]` is.
 - A series is declared as `series.<shape>`, e.g. `"hourly_temperature": ["series.numericValue",
-  "series.shortText"]`.
+  "series.shortText"]`. Any shape can be one, timestamps included: `"daily_sunrise":
+  ["series.timestamp"]` is `{ "series": { "start": …, "stepSec": 86400, "timestamp": { "values":
+  [1798354800, …] } } }`.
 - The built-in weather plugin offers `hourly_*` and `daily_*` series on `weather/location`.
 
 Shapes are designed so you can build for a *slot in your design* rather than for specific data. A
@@ -208,6 +241,12 @@ The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Microphone
 
 - Each `Internet` domain is its own permission and covers its subdomains. `LocalNetwork` covers
   devices on the LAN.
+- `Notifications` can be narrowed to some apps (Android):
+  `{ "name": "Notifications", "parameters": { "packages": ["com.google.android.apps.maps"] } }`.
+  Each package is its own permission ("Read your notifications from …"), and you only see those
+  apps' notifications (by their `package` property). Bare `Notifications` is all of them, and
+  allowing it allows every package. Ask for just the apps you need if you can: users are far
+  more likely to allow one app's notifications than all of them.
 - `ReadFiles` and `WriteFiles` let your settings page ask the user for a file or folder. They take
   no parameters: you can't name paths in the manifest. Each entry the user picks is its own
   permission (`ReadFiles/<path>`, or `WriteFiles/<path>` for read-write), listed on the app's page
@@ -223,11 +262,17 @@ The built-in permissions are `Internet`, `LocalNetwork`, `Location`, `Microphone
 
 The [packaging script](#packaging-and-sideloading) marks the pbw as using permissions
 (`manifestVersion: 2` in its appinfo). Without that it's a legacy app, which keeps what apps had
-before permissions: internet access, and what its `capabilities` declare.
+before permissions: internet access, location and timeline pins if it has PebbleKit JS, and
+`LegacyPebbleKit` if it has an Android companion app. Users can have legacy apps ask too, with
+**Ask before older apps use permissions** in settings.
 
 Sources and actions guard themselves with **caller permissions**: what an app must hold to use
 them. `calendar/event` needs `Calendar`, `notifications/notification` needs `Notifications`,
-`weather/*` needs `Location`.
+`weather/*` needs `Location`. Caller permissions take the same parameters as `usesPermissions`,
+so a source can ask its callers for one app's notifications rather than all of them. If your
+source needs bare `Notifications`, a caller holding only some apps' is refused
+(`PERMISSION_DENIED`) unless your instances have a `package` property to narrow them by; so
+either add one, or ask for those apps specifically.
 
 A plugin can also define its own permissions, to guard its sources and actions:
 
@@ -273,7 +318,7 @@ user a notification and a card in the Pebble app. Until they answer, it fails wi
 `PERMISSION_DENIED` (a blocked `fetch` rejects like a network error), possibly after waiting a few
 seconds. Try again later rather than treating it as permanent.
 
-Users can change any permission on the app's page, and choose in settings when apps have to ask.
+Users can allow or deny any permission on the app's page, and choose in settings when apps have to ask.
 Declare what you need up front, and keep `Internet` to the domains you use: fewer prompts, and
 users can trust you. An app holding `Location` whose only network access is
 `api.openweathermap.org` can't send the user's location anywhere else.
@@ -292,10 +337,11 @@ Your app uses plugins from its PKJS (`pebble-js-app.js`).
 2. **Let the user choose.** Use `Pebble.enumeratePlugins()` to see everything available, and a
    settings page for the user to pick what goes where, as the `plugin-test` dashboard does. Filter
    by the shapes your design can draw (see [Shapes](#shapes)).
-3. **Use what the user already prefers** *(not built yet)*. Users will pick their favourite readings
-   in the Pebble app: e.g. a user might select weather for home location first, then phone battery,
-   then the Google stock price. An API will expose that ordered list, so any face with widget slots
-   can display those items with no configuration required.
+3. **Use what the user already prefers.** Users pick their favourite readings in the Pebble app
+   (Settings → Plugins → Complications, up to five), e.g. phone battery first, then the temperature for their first
+   weather location, then their next calendar event. `preferences/complications` lists them in
+   order, so a face with N slots can show the first N with no configuration (see
+   [User preferences](#user-preferences)).
 
 **Reading a source:**
 
@@ -345,9 +391,11 @@ Every update is an envelope:
 }
 ```
 
-**Reading from a specific plugin:** pass `plugin: "<uuid>"`, for example your own pbw's plugin. This
-is a preference. If that plugin isn't installed or doesn't serve the item, another plugin serving it
-is used. Check `pluginUuid` on the envelope if you need to know which one answered.
+**Which plugin answers:** pass `plugin: "<uuid>"` only if you depend on that plugin, for example
+your own pbw's plugin: you always get it while it's installed and serves the item, whatever the
+user prefers. Otherwise (or if it isn't installed) you get the plugin the user chose for that item
+in the Pebble app (Settings → Plugins → Preferred sources), else a built-in, else the first by name.
+Check `pluginUuid` on the envelope if you need to know which one answered.
 
 **Invoking an action**: `plugin` is required here, and never falls back to another plugin:
 
@@ -368,11 +416,63 @@ Error codes: `PLUGIN_UNAVAILABLE`, `PERMISSION_DENIED`, `RATE_LIMITED`, `TIMEOUT
 `INVALID_REQUEST`, `UNKNOWN`, plus `AUTH_REQUIRED` and `INVALID_ARGS` for actions. An error doesn't
 end a subscription: it carries on, and the next update may succeed.
 
+## User preferences
+
+The built-in Preferences plugin tells apps how the user wants things shown and what they want to
+see. Each source updates when the user changes the setting.
+
+**`preferences/units`** (no permission): one instance, every property a `shortText`.
+
+| Property        | Values                        |
+| --------------- | ----------------------------- |
+| `locale`        | e.g. `en-GB`, `de-DE`: the watch's language, else the phone's. Use it with `Intl` for decimal separators, dates and so on. |
+| `temperature`   | `°C`, `°F`                    |
+| `distance`      | `km`, `mi`                    |
+| `wind_speed`    | `km/h`, `mph`, `m/s`, `knots` |
+| `pressure`      | `hPa`, `inHg`                 |
+| `precipitation` | `mm`, `in`                    |
+| `clock`         | `12h`, `24h`                  |
+
+**`preferences/complications`** (no permission): the user's readings, one instance per filled
+slot in order (`instanceId` is the slot number; empty slots are left out). Each has `category`, `item` and `property` (`shortText`) and `index` (`numericValue`): read
+`category/item` as usual and use instance `index`'s `property`. An entry names no plugin and
+reveals nothing about the data, so the list is never filtered: reading an entry may ask the user
+for permission like any other read, and fails with `PERMISSION_DENIED` until they answer. Skip to
+the next entry when one can't be read.
+
+```javascript
+Pebble.subscribeToSource({
+  category: "preferences",
+  item: "complications",
+  onData: ({ instances }) => {
+    const slot = instances[0]?.properties;
+    if (!slot) return;
+    const property = slot.property.shortText.text;
+    Pebble.subscribeToSource({
+      category: slot.category.shortText.text,
+      item: slot.item.shortText.text,
+      properties: [property],
+      onData: ({ instances }) => show(instances[slot.index.numericValue.value]?.properties[property]),
+      onError: () => show(null),
+    });
+  },
+});
+```
+
+Because slots refer to instances by position, list your instances in a meaningful, stable order,
+most important first.
+
+**`preferences/weather_location`** (needs `Location`): the weather locations the user set up in the
+Pebble app, in their order. `instanceId` is the location's key; properties are `name`, `latitude`
+and `longitude` (absent for the current-location entry) and `current` (`boolean`). A weather plugin
+that serves one instance per location under the same `instanceId`s means the same place as the
+built-in one.
+
 # Writing a plugin
 
 A plugin ships in a `.pbw`: either alongside a watchapp/watchface, or on its own as a
 **plugin-only** pbw (no watch binary). It uses the pbw's uuid and name. The simplest example to
-copy is `stocks/`.
+copy is [`stocks`](https://github.com/coredevices/pebble-plugins/tree/main/stocks).
 
 **If your app fetches data from a service and displays it, consider splitting it into a plugin plus
 the app, in one pbw.** The app reads from its own plugin (pass your pbw's uuid as `plugin`), and
@@ -478,13 +578,37 @@ What a plugin has to work with:
 - **`Pebble.secureStorage`** for credentials (tokens, API keys): `await getItem(key)`,
   `setItem(key, value)` and `removeItem(key)`, encrypted by the phone's keystore. Private to your
   plugin (PKJS can't read it) and deleted when the app is removed.
+- **`await Pebble.readSource({ category, item, plugin?, properties?, iconPixelSize? })`** to read
+  another plugin's source (built-in or not), e.g. `preferences/units` (see
+  [User preferences](#user-preferences)). It rejects with `PLUGIN_UNAVAILABLE`,
+  `PERMISSION_DENIED`, `INVALID_REQUEST` or `TIMEOUT`.
+- **`Pebble.subscribeSource(sameRequest)`** in your source handler, so the handler runs again
+  whenever that source changes (`request.trigger` says which), while anything is subscribed to
+  yours. Call it on every run: whatever a run doesn't subscribe to is dropped. While subscribed,
+  `readSource` answers from the subscription. At most 8; changes are debounced by a second.
+
+  ```javascript
+  Pebble.registerSourceHandler(async function (request, respond) {
+    var units = { category: 'preferences', item: 'units' };
+    Pebble.subscribeSource(units);
+    var unit = (await Pebble.readSource(units)).instances[0].properties.temperature.shortText.text;
+    // ...
+  });
+  ```
+
+  Either way you read as your plugin, with its permissions. What you read can reach your callers,
+  so for each caller permission the source needs, every one of your sources and actions must
+  require at least as much of its callers as you declared yourself: a plugin that declared
+  `Notifications` for Maps only must require (at least) Maps' notifications of its callers, and
+  one that declared all notifications must require all of them. A plugin can't read itself, or
+  one that already reads it.
 - **`Pebble.refreshSources(["finance/stock"])`** when data changes outside a request (for example,
   the user added a ticker on the settings page).
 - **`Pebble.oauth`** for sign-in with OAuth providers, without the plugin ever holding a client
   secret. Declare the connector in the manifest (`"oauth": { "todoist": {} }`), then
   `await Pebble.oauth.authorize("todoist")` for a token and
   `Pebble.oauth.refresh("todoist", broker_refresh)` to renew it; keep both in `Pebble.secureStorage`. The connector has to be registered
-  with the Pebble app store (see the `todoist/` example).
+  with the Pebble app store (see the [`todoist`](https://github.com/coredevices/pebble-plugins/tree/main/todoist) example).
 - **`Pebble.fileSystem`** for files and folders on the phone the user has handed your plugin from
   its settings page (see [File access](#file-access)); needs `ReadFiles` / `WriteFiles`.
   `await Pebble.fileSystem.getHandle(id)` gives a `FileSystemFileHandle` /
@@ -577,32 +701,18 @@ pushes the live readings back, so each option is labelled with what it currently
 
 ## Packaging and sideloading
 
-The standard `pebble build` doesn't put `plugin.js` or `config.html` in the pbw (or support
-plugin-only PBWs), so use [`scripts/pack-plugin-pbw.py`](../scripts/pack-plugin-pbw.py):
-
-```sh
-scripts/pack-plugin-pbw.py path/to/my-plugin
-```
-
-It works out what to do from the project. If there's a watchapp (`src/c`), it runs `pebble build`,
-then adds the plugin files. Otherwise it builds a plugin-only pbw directly. Either way it marks the
-pbw as using [permissions](#declaring).
-
-Sideloading plugins is supported from v1.14.0 of the mobile app - but the manifest format changed
-in v1.15.0 (along with several other parts of the API).
+Build with `pebble build`, using SDK 4.42 or later and a `pebble-tool` with plugin support. A
+plugin-only project sets `"projectType": "plugin"` in `package.json`. The SDK marks the pbw as using
+[permissions](#declaring) (`manifestVersion` 2) by default. The plugins in
+[coredevices/pebble-plugins](https://github.com/coredevices/pebble-plugins) are worked examples.
 
 # Future
 
 We're planning:
 
-- Tooling support: `pebble build` and the Pebble tool (in progress), and CloudPebble.
-- Choosing favourite readings in the app, and a preferred plugin when several serve the same thing
-  (e.g. weather), plus an API to read those choices.
 - More extensive documentation.
 - A watch-side (C / Alloy) API, so apps can use plugins without any phone-side JS.
-- A way to cache images on the watch (see the Weather demo face which needs a phone connection to
-  display images after restarting, right now)
+- A way to cache images on the watch (the Weather and Complication demo faces need a phone
+  connection to display images after restarting, right now)
 - PebbleKit-Android plugin support.
-- Plugins calling other plugins.
-- Publishing plugins to the app store (it can already list them, but uploads aren't open yet).
 - More built-in plugins exposing more things.

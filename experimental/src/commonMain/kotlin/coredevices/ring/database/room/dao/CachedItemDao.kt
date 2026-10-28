@@ -36,10 +36,14 @@ interface CachedItemDao {
     @Query("SELECT * FROM CachedItem WHERE sourceRecordingId = :recordingId AND deleted = 0")
     suspend fun getByRecording(recordingId: String): List<CachedItem>
 
-    /** All non-deleted items. Used to resolve a reminder back to its feed item by
-     *  `metadata.localReminderId` when there's no source recording to query by. */
+    /** All non-deleted items. */
     @Query("SELECT * FROM CachedItem WHERE deleted = 0")
     suspend fun getAllActive(): List<CachedItem>
+
+    /** All items including soft-deleted tombstones; [ReminderReconciler] needs the tombstones to
+     *  tell a completed/deleted reminder from one that simply hasn't synced here. */
+    @Query("SELECT * FROM CachedItem")
+    suspend fun getAllIncludingDeleted(): List<CachedItem>
 
     /**
      * Items whose `parentListIdsCsv` contains [listId]. Uses LIKE matching with

@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
@@ -45,6 +46,13 @@ class TimelineActionManager(
     fun init() {
         timelineService.actionInvocations.onEach {
             handleAction(it)
+        }.launchIn(scope)
+        notifActionHandler.onDisplayedItem(null)
+        timelineService.displayedItems.onEach {
+            logger.d { "Watch displaying notification $it" }
+            notifActionHandler.onDisplayedItem(it)
+        }.onCompletion {
+            notifActionHandler.onDisplayedItem(null)
         }.launchIn(scope)
     }
 

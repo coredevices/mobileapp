@@ -28,12 +28,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -50,12 +53,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cactus.isCactusSupported
+import com.russhwolf.settings.Settings
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.ModelDownloadPromptDialog
+import coredevices.pebble.ui.PermissionsIntroContent
+import coredevices.pebble.ui.rememberSettingsItemsState
 import coredevices.pebble.ui.SnackbarDisplay
+import coredevices.pebble.ui.setHasSeenPermissionsIntro
 import coredevices.ring.agent.integrations.GTasksIntegration
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.database.MusicControlMode
@@ -66,7 +75,9 @@ import coredevices.ring.service.button.musicRoutesFor
 import coredevices.ring.ui.screens.settings.EncryptionKeyResultDialogs
 import coredevices.ring.ui.screens.settings.EncryptionSetupDialog
 import coredevices.ring.ui.screens.settings.GTasksDialog
+import coredevices.ring.ui.screens.settings.IndexAgentActionsSection
 import coredevices.ring.ui.screens.settings.NotionDialog
+import coredevices.ring.ui.screens.settings.RingButtonSection
 import coredevices.ring.ui.viewmodel.BackupViewModel
 import coredevices.ring.ui.viewmodel.EncryptionViewModel
 import coredevices.ring.ui.viewmodel.RingButtonViewModel
@@ -85,9 +96,6 @@ import coredevices.util.rememberUiContext
 import coredevices.util.transcription.PlatformSpeechRecognizer
 import coredevices.util.transcription.SpokenLanguageOptions
 import coredevices.util.transcription.coversLanguage
-import androidx.compose.ui.text.intl.Locale
-import coredevices.ring.ui.screens.settings.IndexAgentActionsSection
-import coredevices.ring.ui.screens.settings.RingButtonSection
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.Dispatchers
@@ -123,6 +131,8 @@ internal fun SetupStep(
     // model-download dialog for non-RemoteOnly when no offline models).
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
+    val appSettings: Settings = koinInject()
+    val pluginsEnabled = rememberLibPebble().config.collectAsState().value.watchConfig.enablePlugins
     val modelManager: ModelManager = koinInject()
     val coreUser by Firebase.auth.authStateChanged
         .map { it?.emailOrNull }
@@ -282,8 +292,8 @@ internal fun SetupStep(
             )
         }
 
-        // 1 — Speech recognition
-        NumberedSection(num = 1, title = "Speech recognition") {
+        var section = 0
+        NumberedSection(num = ++section, title = "Speech recognition") {
             CardContainer {
                 SpeechModeChoice(
                     mode = coreConfig.sttConfig.mode,
@@ -294,27 +304,47 @@ internal fun SetupStep(
             }
         }
 
-        // 2 — Ring button
         NumberedSection(
-            num = 2,
+            num = ++section,
             title = "Ring Button",
             sub = "Choose what each press does. You can change this later in Index settings.",
         ) {
             RingButtonSection(coreNav, ringButtonViewModel)
         }
 
-        // 3 — Index agent actions
+        // Before the agent's actions, which become plugins once plugins are on.
+        if (pluginsEnabled) {
+            LaunchedEffect(Unit) { appSettings.setHasSeenPermissionsIntro(true) }
+            NumberedSection(num = ++section, title = "App permissions") {
+                CardContainer {
+                    // The embedded settings row uses Material colours, which don't follow the onboarding palette.
+                    MaterialTheme(
+                        colorScheme = MaterialTheme.colorScheme.copy(
+                            surface = Color.Transparent,
+                            onSurface = palette.onSurface,
+                            onSurfaceVariant = palette.onSurfaceVariant,
+                            primary = palette.primary,
+                            surfaceContainer = palette.surfaceContainer,
+                        ),
+                    ) {
+                        CompositionLocalProvider(LocalContentColor provides palette.onSurface) {
+                            PermissionsIntroContent(rememberSettingsItemsState(navBarNav = null, snackbarDisplay = snackbarDisplay))
+                        }
+                    }
+                }
+            }
+        }
+
         NumberedSection(
-            num = 3,
+            num = ++section,
             title = "Index Agent",
             sub = "Pick which actions Index can take, and where notes and reminders are saved."
         ) {
             IndexAgentActionsSection(coreNav, showHeader = false, canBrowsePlugins = false)
         }
 
-        // 4 — Secondary action
         NumberedSection(
-            num = 4,
+            num = ++section,
             title = "Secondary action",
             sub = "Click before holding to perform a secondary voice action.",
         ) {
@@ -343,9 +373,8 @@ internal fun SetupStep(
             }
         }
 
-        // 5 — Backups
         NumberedSection(
-            num = 5,
+            num = ++section,
             title = "Backups",
             sub = "Your recordings sync to the cloud so you can restore them on a new phone. " +
                     "Optionally encrypt them for extra privacy.",
@@ -353,8 +382,7 @@ internal fun SetupStep(
             BackupsContent()
         }
 
-        // 6 — Try it out (live ring demo)
-        NumberedSection(num = 6, title = "Try it out") {
+        NumberedSection(num = ++section, title = "Try it out") {
             RingDemo(nav = coreNav)
         }
 

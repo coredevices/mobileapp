@@ -15,6 +15,7 @@ import coredevices.ring.ui.viewmodel.IndexActionsViewModel
 import coredevices.ring.ui.viewmodel.RingButtonViewModel
 import io.rebble.libpebblecommon.locker.AppType
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.uuid.Uuid
 
 /**
  * The Ring Button switchboard with its settings state.
@@ -26,23 +27,37 @@ import org.koin.compose.viewmodel.koinViewModel
 fun RingButtonSection(coreNav: CoreNav, viewModel: RingButtonViewModel = koinViewModel()) {
     val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val gestureRoutes by viewModel.gestureRoutes.collectAsState()
+    val gestureCommands by viewModel.gestureCommands.collectAsState()
     val webhookConfigs by viewModel.webhookConfigs.collectAsState()
-    val agentProviders by viewModel.agentProviders.collectAsState()
-    val connectedAgentProviders by viewModel.connectedAgentProviders.collectAsState()
-    val agentPlugins = agentProviders.map { AgentPluginOption(it, connected = it in connectedAgentProviders) }
+    val agentDestinations by viewModel.agentDestinations.collectAsState()
+    val configurePlugin: (Uuid, String) -> Unit = { uuid, title ->
+        coreNav.navigateTo(CommonRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title))
+    }
+    val installer = rememberStorePluginInstaller(
+        reviewInstall = viewModel::reviewInstall,
+        installPlugin = viewModel::installStorePlugin,
+        onConfigurePlugin = configurePlugin,
+    )
 
     LaunchedEffect(Unit) { viewModel.refreshAgentDestinations() }
+    installer.Dialogs()
     ButtonSwitchboard(
         routes = gestureRoutes,
+        commands = gestureCommands,
         musicEnabled = viewModel.musicEnabled,
         webhookConfigFor = { webhookConfigs[it] ?: IndexWebhookConfig() },
         onSetRoute = viewModel::setGestureRoute,
+        onSetCommand = viewModel::setGestureCommand,
         onOpenWebhookSettings = { webhookViewModel.openDialog(it) },
         onDisableWebhook = viewModel::disableWebhook,
-        agentPlugins = agentPlugins,
+        agentDestinations = agentDestinations,
         onConnectAgentPlugin = { provider ->
+            if (provider is PblPluginIntegrationProvider) configurePlugin(provider.pluginUuid, provider.title)
+        },
+        onInstallAgentPlugin = installer::install,
+        onConfigureAgentPlugin = { provider ->
             if (provider is PblPluginIntegrationProvider) {
-                coreNav.navigateTo(CommonRoutes.WatchappSettingsRoute(uuid = provider.pluginUuid.toString(), title = provider.title))
+                coreNav.navigateTo(CommonRoutes.LockerAppRoute(uuid = provider.pluginUuid.toString()))
             }
         },
     )
@@ -74,12 +89,9 @@ fun IndexAgentActionsSection(
     val noteProvider by viewModel.noteProvider.collectAsState()
     val reminderProvider by viewModel.reminderProvider.collectAsState()
     val approvedContactCount by viewModel.approvedContactCount.collectAsState()
-    val noteDestinationProviders by viewModel.noteDestinationProviders.collectAsState()
-    val reminderDestinationProviders by viewModel.reminderDestinationProviders.collectAsState()
-    val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
-    val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
+    val noteDestinations by viewModel.noteDestinations.collectAsState()
+    val reminderDestinations by viewModel.reminderDestinations.collectAsState()
     val lockerPlugins by viewModel.lockerPlugins.collectAsState()
-    val storePlugins by viewModel.storePlugins.collectAsState()
     val pluginsEnabled by viewModel.pluginsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
 
@@ -98,12 +110,9 @@ fun IndexAgentActionsSection(
         noteProvider = noteProvider,
         reminderProvider = reminderProvider,
         approvedContactCount = approvedContactCount,
-        noteDestinationProviders = noteDestinationProviders,
-        reminderDestinationProviders = reminderDestinationProviders,
-        availableNoteProviders = availableNoteProviders,
-        availableReminderProviders = availableReminderProviders,
+        noteDestinations = noteDestinations,
+        reminderDestinations = reminderDestinations,
         lockerPlugins = lockerPlugins,
-        storePlugins = storePlugins,
         pluginsEnabled = pluginsEnabled,
         onSetActionEnabled = viewModel::setActionEnabled,
         onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,

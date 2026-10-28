@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.connection.PlatformFlags
 import io.rebble.libpebblecommon.connection.bt.ble.BlePlatformConfig
 import io.rebble.libpebblecommon.connection.bt.classic.pebble.BtClassicConnector
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.AndroidNotificationActionHandler
+import io.rebble.libpebblecommon.connection.NotificationReplies
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.AndroidPhoneReceiver
@@ -53,6 +54,7 @@ import org.koin.core.module.Module
 import org.koin.core.module.dsl.scopedOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 
 actual val platformModule: Module = module {
@@ -62,6 +64,7 @@ actual val platformModule: Module = module {
                 ProtocolCapsFlag.SupportsExtendedMusicProtocol,
                 ProtocolCapsFlag.SupportsImageFetch,
                 ProtocolCapsFlag.SupportsTwoWayDismissal,
+                ProtocolCapsFlag.SupportsNotificationWindowState,
             )
         )
     }
@@ -71,7 +74,7 @@ actual val platformModule: Module = module {
         )
     }
     singleOf(::AndroidPebbleNotificationListenerConnection) bind NotificationListenerConnection::class
-    singleOf(::AndroidNotificationActionHandler) bind PlatformNotificationActionHandler::class
+    singleOf(::AndroidNotificationActionHandler) binds arrayOf(PlatformNotificationActionHandler::class, NotificationReplies::class)
     singleOf(::AndroidNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::AndroidSystemCalendar) bind SystemCalendar::class
     singleOf(::AndroidCalendarActionHandler) bind PlatformCalendarActionHandler::class

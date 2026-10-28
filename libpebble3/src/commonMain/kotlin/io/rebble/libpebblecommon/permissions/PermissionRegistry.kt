@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.permissions
 
 import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.plugin.PluginPermissions
+import io.rebble.libpebblecommon.plugin.SourceInstance
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
@@ -19,6 +20,8 @@ enum class PermissionKind {
 data class PermissionDefinition(
     val name: String,
     val kind: PermissionKind,
+    /** Set when the permission can be held for some instances only: the property naming them. */
+    val scopeProperty: String? = null,
 )
 
 /** No Health: the watch reads it directly, so the phone can't enforce it. */
@@ -29,7 +32,7 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.GLOBAL_INTERNET, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.LOCATION, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WATCH_MICROPHONE, PermissionKind.Read),
-        PermissionDefinition(PluginPermissions.NOTIFICATIONS, PermissionKind.Read),
+        PermissionDefinition(PluginPermissions.NOTIFICATIONS, PermissionKind.Read, SourceInstance.PROPERTY_PACKAGE),
         PermissionDefinition(PluginPermissions.CALENDAR, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTACTS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.TIMELINE, PermissionKind.Write),
@@ -71,11 +74,13 @@ internal fun legacyRequested(hasPkjs: Boolean, hasAndroidCompanion: Boolean): Li
 /** Keys are a name, `Internet/<domain>`, `PebbleKit2/<package>` or `ReadFiles/<path or uri>`. */
 fun permissionOf(key: String): String = key.substringBefore('/')
 
-private fun argumentOf(key: String): String? = key.substringAfter('/', "").ifEmpty { null }
+internal fun argumentOf(key: String): String? = key.substringAfter('/', "").ifEmpty { null }
 
 fun domainOf(key: String): String? = argumentOf(key)?.takeIf { permissionOf(key) == PluginPermissions.INTERNET }
 
-fun packageOf(key: String): String? = argumentOf(key)?.takeIf { permissionOf(key) == PluginPermissions.PEBBLEKIT_2 }
+fun packageOf(key: String): String? = argumentOf(key)?.takeIf {
+    permissionOf(key) == PluginPermissions.PEBBLEKIT_2 || permissionOf(key) == PluginPermissions.NOTIFICATIONS
+}
 
 /** The path (iOS) or uri (Android) of a file permission's entry. */
 fun fileScopeOf(key: String): String? =
@@ -89,10 +94,14 @@ fun writeFilesKey(scope: String): String = "${PluginPermissions.WRITE_FILES}/$sc
 
 fun pebbleKit2Key(packageName: String): String = "${PluginPermissions.PEBBLEKIT_2}/$packageName"
 
+fun notificationsKey(packageName: String): String = "${PluginPermissions.NOTIFICATIONS}/$packageName"
+
 fun PluginPermission.keys(): List<String> {
     if (plugin != null) return listOfNotNull(Uuid.parseOrNull(plugin)?.let { pluginPermissionKey(it, name) })
     // A manifest only ever gets the bare file permission; entries come from the user's picks.
     if (fileScopeOf(name) != null) return listOf(permissionOf(name))
+    val packages = parameters[PluginPermissions.PARAM_PACKAGES]?.takeIf { name == PluginPermissions.NOTIFICATIONS }
+    if (!packages.isNullOrEmpty()) return packages.map(::notificationsKey)
     val domains = parameters[PluginPermissions.PARAM_DOMAINS]?.takeIf { name == PluginPermissions.INTERNET }
     if (domains.isNullOrEmpty()) return listOf(name)
     return domains.map { internetKey(it.lowercase().removePrefix(".").trimEnd('.')) }
@@ -100,6 +109,9 @@ fun PluginPermission.keys(): List<String> {
 
 /** Most specific first. A `WriteFiles` decision covers the matching `ReadFiles` when it has none of its own. */
 internal fun coveringKeys(key: String): List<String> {
+    if (permissionOf(key) == PluginPermissions.NOTIFICATIONS && key != PluginPermissions.NOTIFICATIONS) {
+        return listOf(key, PluginPermissions.NOTIFICATIONS)
+    }
     if (permissionOf(key) == PluginPermissions.READ_FILES) {
         return listOf(key, fileScopeOf(key)?.let(::writeFilesKey) ?: PluginPermissions.WRITE_FILES)
     }

@@ -164,6 +164,7 @@ class LegacyDestinationsTest {
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
         override suspend fun getAllActive(): List<CachedItem> = emptyList()
+        override suspend fun getAllIncludingDeleted(): List<CachedItem> = emptyList()
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) {}

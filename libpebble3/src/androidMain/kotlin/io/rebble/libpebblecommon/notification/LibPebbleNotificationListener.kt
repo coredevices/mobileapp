@@ -179,12 +179,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
             return
         }
 
-        if (configHolder.value.respectDoNotDisturb && isNotificationFilteredByDoNotDisturb(sbn)) {
-            logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - do not disturb" }
-            return
-        }
-
-        notificationHandler.handleNotificationPosted(sbn)
+        notificationHandler.handleNotificationPosted(sbn, silent = isNotificationFilteredByDoNotDisturb(sbn))
     }
 
     override fun onNotificationRemoved(

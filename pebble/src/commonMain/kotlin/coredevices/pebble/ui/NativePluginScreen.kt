@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.weather.WeatherPlugin
+import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.ui.PebbleElevatedButton
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.plugin.CalendarPlugin
@@ -69,12 +71,15 @@ fun PluginMetadata.builtInIcon(): ImageVector = when (pluginUuid) {
     WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID -> Icons.Filled.Watch
     WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID -> Icons.Filled.Apps
     PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID -> Icons.Filled.Notifications
+    PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> Icons.Filled.Tune
     else -> AppType.Plugin.icon()
 }
 
 fun PluginMetadata.settingsRoute(): NavBarRoute? = when (pluginUuid) {
-    WeatherPlugin.BUILT_IN_WEATHER_UUID -> PebbleNavBarRoutes.WeatherRoute
+    WeatherPlugin.BUILT_IN_WEATHER_UUID ->
+        PebbleNavBarRoutes.WatchSettingsCategoryRoute(section = Section.Weather.name, topLevelType = TopLevelType.Phone.name)
     CalendarPlugin.BUILT_IN_CALENDAR_UUID -> PebbleNavBarRoutes.CalendarsRoute
+    PreferencesPlugin.BUILT_IN_PREFERENCES_UUID -> PebbleNavBarRoutes.ComplicationsRoute
     else -> null
 }
 

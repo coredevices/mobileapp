@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.connection.bt.classic.transport.IosClassicScann
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationActionHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationAppsSync
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.IosNotificationListenerConnection
+import io.rebble.libpebblecommon.connection.NotificationReplies
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.PlatformNotificationActionHandler
 import io.rebble.libpebblecommon.contacts.SystemContacts
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls.IosLegacyPhoneReceiver
@@ -38,6 +39,7 @@ import io.rebble.libpebblecommon.util.SystemGeolocation
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Duration.Companion.seconds
 
@@ -54,7 +56,7 @@ actual val platformModule: Module = module {
             PhoneAppVersion.PlatformFlag.makeFlags(PhoneAppVersion.OSType.IOS, emptyList())
         )
     }
-    singleOf(::IosNotificationActionHandler) bind PlatformNotificationActionHandler::class
+    singleOf(::IosNotificationActionHandler) binds arrayOf(PlatformNotificationActionHandler::class, NotificationReplies::class)
     singleOf(::IosNotificationListenerConnection) bind NotificationListenerConnection::class
     singleOf(::IosNotificationAppsSync) bind NotificationAppsSync::class
     singleOf(::IosSystemCalendar) bind SystemCalendar::class

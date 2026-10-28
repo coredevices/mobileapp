@@ -597,6 +597,8 @@ data class StoreSearchResult(
     val iconImage: String,
     @SerialName("list_image")
     val listImage: String,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     val title: String,
     val type: String,
     val uuid: String,
@@ -828,6 +830,8 @@ data class StoreApplication(
     val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     @SerialName("published_date")
     @Serializable(with = PublishedDateSerializer::class)
     val publishedDate: Instant?,
@@ -842,6 +846,24 @@ data class StoreApplication(
     val visible: Boolean,
     val website: String?,
     val contactable: Boolean = false,
+    /** Keyed by platform codename; only platforms with enough telemetry are present. */
+    @SerialName("battery_impact")
+    val batteryImpact: Map<String, StoreBatteryImpact>? = null,
+)
+
+/** Levels are relative to TicToc: negligible / small / medium / large. */
+@Serializable
+data class StoreBatteryImpact(
+    val level: String,
+    val modes: List<StoreBatteryImpactMode> = emptyList(),
+    @SerialName("app_version")
+    val appVersion: String? = null,
+)
+
+@Serializable
+data class StoreBatteryImpactMode(
+    val mode: String,
+    val level: String,
 )
 
 @Serializable
@@ -1020,6 +1042,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         manifestVersion = app.manifestVersion,
         pluginManifest = app.plugin?.manifest,
         configPage = app.plugin?.configPage,
+        iconTintable = app.iconTintable,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {

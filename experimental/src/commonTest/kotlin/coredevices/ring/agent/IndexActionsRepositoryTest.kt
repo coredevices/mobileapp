@@ -7,6 +7,7 @@ import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
 import coredevices.ring.agent.pebble_plugin.FakePlugin
 import coredevices.ring.agent.pebble_plugin.PluginGrant
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
@@ -163,6 +164,19 @@ class IndexActionsRepositoryTest {
 
         fixture.calendar.value = true
         assertNull(fixture.repo.actions.first().single { it.name == CalendarServlet.NAME }.disabledReason)
+    }
+
+    @Test
+    fun replyToNotificationsFollowsWhetherAPebbleIsPaired() = runTest {
+        val fixture = Fixture(isAndroid = true, watchPaired = false)
+        suspend fun reason() =
+            fixture.repo.actions.first().single { it.name == NotificationReplyServlet.NAME }.disabledReason
+
+        assertEquals(NO_PEBBLE_REASON, reason())
+        fixture.watch.value = true
+        assertNull(reason())
+        fixture.watch.value = false
+        assertEquals(NO_PEBBLE_REASON, reason())
     }
 
     @Test

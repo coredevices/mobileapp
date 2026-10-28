@@ -204,6 +204,12 @@ class TimelineItem(
         PERSIST_QUICK_VIEW(5),
 
         /**
+         * Notification was silenced on the phone (e.g. Do Not Disturb). The watch delivers it
+         * quietly when the notifRespectPhoneSilence pref is on.
+         */
+        SILENT(6),
+
+        /**
          * Marks a notification as read (dismisses if visible, and removes actions).
          */
         STATE_READ(12),
@@ -228,6 +234,7 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
 
     enum class Message(val value: UByte) {
         InvokeAction(0x02u),
+        DisplayedItem(0x04u),
         ActionResponse(0x11u)
     }
 
@@ -248,6 +255,10 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
         }
     }
 
+    class DisplayedItem(itemID: Uuid = NOTHING_DISPLAYED) : TimelineAction(Message.DisplayedItem) {
+        val itemID = SUUID(m, itemID)
+    }
+
     class ActionResponse(
         itemID: Uuid = Uuid.NIL,
         response: UByte = 0u,
@@ -263,6 +274,7 @@ open class TimelineAction(message: Message) : PebblePacket(endpoint) {
 
     companion object {
         val endpoint = ProtocolEndpoint.TIMELINE_ACTIONS
+        val NOTHING_DISPLAYED = Uuid.fromByteArray(ByteArray(16) { 0xFF.toByte() })
     }
 }
 
@@ -324,6 +336,10 @@ fun timelinePacketsRegister() {
         TimelineAction.endpoint,
         TimelineAction.Message.InvokeAction.value
     ) { TimelineAction.InvokeAction() }
+    PacketRegistry.register(
+        TimelineAction.endpoint,
+        TimelineAction.Message.DisplayedItem.value
+    ) { TimelineAction.DisplayedItem() }
     PacketRegistry.register(
         TimelineAction.endpoint,
         TimelineAction.Message.ActionResponse.value

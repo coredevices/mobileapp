@@ -7,6 +7,8 @@ import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.database.room.dao.CachedItemDao
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -18,14 +20,17 @@ import kotlin.time.Instant
  */
 class ItemRepository(
     private val cacheDao: CachedItemDao,
-    private val cancelReminder: suspend (localReminderId: Int) -> Unit,
-    private val rescheduleReminder: suspend (localReminderId: Int, recordingId: String?, newTime: Instant?) -> Unit = { _, _, _ -> },
+    private val cancelReminder: suspend (itemId: String) -> Unit,
+    private val rescheduleReminder: suspend (itemId: String, message: String, newTime: Instant?, notifyBefore: Duration?) -> Unit = { _, _, _, _ -> },
 ) {
     fun getAllFlow(): Flow<List<CachedItem>> = cacheDao.getAllFlow()
 
     /** Sync-only flow that includes soft-deleted rows so tombstones
      *  propagate to Firestore. UI must not use this. */
     fun getAllForSyncFlow(): Flow<List<CachedItem>> = cacheDao.getAllForSyncFlow()
+
+    /** One-shot snapshot including soft-deleted tombstones (reminder reconciliation). */
+    suspend fun getAllIncludingDeleted(): List<CachedItem> = cacheDao.getAllIncludingDeleted()
 
     fun getByListFlow(listId: String): Flow<List<CachedItem>> = cacheDao.getByListFlow(listId)
 
@@ -49,13 +54,14 @@ class ItemRepository(
         // transition; sync uses upsertLocal.
         val completed = existing != null && !existing.done && item.done
         val deleted = existing != null && !existing.deleted && item.deleted
-        if (completed || deleted) {
-            (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
-                runCatching { cancelReminder(it) }
-            }
-        } else if (existing != null && !item.done && !item.deleted && existing.dueAt != item.dueAt) {
-            (item.metadata as? ItemDocument.ItemMetadata.Reminder)?.localReminderId?.let {
-                runCatching { rescheduleReminder(it, item.sourceRecordingId, item.dueAt) }
+        val reminder = item.metadata as? ItemDocument.ItemMetadata.Reminder
+        if (reminder != null) {
+            if (completed || deleted) {
+                runCatching { cancelReminder(id) }
+            } else if (existing != null && !item.done && !item.deleted && existing.dueAt != item.dueAt) {
+                runCatching {
+                    rescheduleReminder(id, item.title, item.dueAt, reminder.notifyBeforeMillis?.milliseconds)
+                }
             }
         }
     }

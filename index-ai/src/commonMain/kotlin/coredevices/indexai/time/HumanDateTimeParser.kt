@@ -41,8 +41,10 @@ class HumanDateTimeParser(
      *  - "oh" minutes: "nine oh five" / "9 oh 5" → "9:05"
      *  - "<minute> past/after <hour>", and "<minute> to/till/before/of <hour>" when anchored by
      *    am/pm or "at" (or the minute is half/quarter) — "ten to twelve" alone stays a range
-     *  - Hour word with time context: "eight pm" → "8 pm", "at eight" → "at 8", "eight o'clock" → "8"
-     *  - "noon" → "12 pm", "midnight" → "12 am"
+     *  - Hour with o'clock: "eight o'clock" / "8 o'clock" → "8:00"
+     *  - Dotted clock times anchored by am/pm or "at": "1.45pm" → "1:45pm"
+     *  - "noon"/"midday" → "12:00 pm", "midnight" → "12:00 am"
+     *  - Approximation/deadline modifiers: "around 4pm" → "4pm", "by 10am" → "at 10am", "6pm sharp" → "6pm"
      *  - "in the morning/afternoon/evening/night" / "at night" → am/pm suffix
      *
      * Hour words with no adjacent time context are left alone so date phrases like
@@ -52,15 +54,35 @@ class HumanDateTimeParser(
     private fun normalizeTimeExpressions(s: String): String {
         var r = s
 
-        r = r.replace(noonRegex, "12 pm")
-        r = r.replace(midnightRegex, "12 am")
+        // Colon form, not "12 pm": a bare day-of-month before it ("february 1 noon") must not
+        // merge with the 12 into a digit-pair clock time ("1:12 pm").
+        r = r.replace(noonRegex, "12:00 pm")
+        r = r.replace(middayRegex, "12:00 pm")
+        r = r.replace(midnightRegex, "12:00 am")
 
-        // "<hour word> o'clock" → digit (o'clock is the time context), then strip residual
-        // "o'clock" after digit hours ("8 o'clock")
-        r = r.replace(hourWordOclockRegex) { match ->
-            wordToHour(match.groupValues[1])?.toString() ?: match.value
+        // Approximation/deadline modifiers around an explicit time carry no schedulable
+        // information: "around 4pm" → "4pm", "by 10am" → "at 10am", "6pm sharp" → "6pm".
+        r = r.replace(approxTimeRegex, "")
+        r = r.replace(byTimeRegex, "at ")
+        r = r.replace(sharpRegex) { it.groupValues[1] }
+
+        // "<hour> o'clock" (word or digit) → "<hour>:00". o'clock is itself the time marker,
+        // so the rewrite must keep the hour unambiguous rather than reduce it to a bare digit.
+        r = r.replace(hourOclockRegex) { match ->
+            val hour = hourOf(match.groupValues[1], match.groupValues[2]) ?: return@replace match.value
+            "$hour:00"
         }
-        r = r.replace(oclockRegex, "")
+
+        // Dot-separated clock times, only when anchored as a time by am/pm or "at":
+        // "1.45pm" → "1:45pm", "at 7.30" → "at 7:30". Bare "1.45" stays a number.
+        r = r.replace(dottedTimeAmPmRegex) { match ->
+            match.groupValues[2].toIntOrNull()?.takeIf { it in 0..59 } ?: return@replace match.value
+            "${match.groupValues[1]}:${match.groupValues[2]}${match.groupValues[3]}"
+        }
+        r = r.replace(atDottedTimeRegex) { match ->
+            match.groupValues[2].toIntOrNull()?.takeIf { it in 0..59 } ?: return@replace match.value
+            "at ${match.groupValues[1]}:${match.groupValues[2]}"
+        }
 
         r = r.replace(inTheTimeOfDayRegex) { match ->
             if (match.groupValues[1] == "morning") " am" else " pm"
@@ -128,6 +150,12 @@ class HumanDateTimeParser(
         }
         r = r.replace(atHourWordRegex) { match ->
             wordToHour(match.groupValues[1])?.let { "at $it" } ?: match.value
+        }
+
+        // Assistant-model stutter tolerance: a repeated day token ("today at 2:00 today")
+        // collapses to a single mention.
+        r = r.replace(duplicateDayRegex) { match ->
+            "${match.groupValues[1]}${match.groupValues[2]}"
         }
 
         return r
@@ -324,65 +352,77 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
+        // A bare hour ("8") is only honoured as a time when "at" anchors it; a time reached
+        // through the plain/comma connector must carry its own marker (am/pm, :mm, noon).
         dayWordTimePattern.find(input)?.let { match ->
-            val dayWord = match.groupValues[1]
-            val timeStr = match.groupValues[2]
-            val date = parseDayWord(dayWord) ?: return null
-            // The pattern contains an explicit "at", so a bare hour is a time ("tomorrow at 8")
-            val time = parseTimeString(timeStr, allowBareHour = true) ?: return null
+            val date = parseDayWord(match.groupValues[1]) ?: return null
+            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         timeDayWordPattern.find(input)?.let { match ->
-            val timeStr = match.groupValues[1]
-            val dayWord = match.groupValues[2]
-            val date = parseDayWord(dayWord) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val date = parseDayWord(match.groupValues[3]) ?: return null
+            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         dayOfWeekTimePattern.find(input)?.let { match ->
-            val dayName = match.groupValues[1]
-            val timeStr = match.groupValues[2]
-            val date = parseNextDayOfWeek(dayName) ?: return null
-            val time = parseTimeString(timeStr, allowBareHour = true) ?: return null
+            val date = parseNextDayOfWeek(match.groupValues[1]) ?: return null
+            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         timeDayOfWeekPattern.find(input)?.let { match ->
-            val timeStr = match.groupValues[1]
-            val dayName = match.groupValues[2]
-            val date = parseNextDayOfWeek(dayName) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val date = parseNextDayOfWeek(match.groupValues[3]) ?: return null
+            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         monthDayTimePattern.find(input)?.let { match ->
-            val monthName = match.groupValues[1]
             val day = parseDayOfMonth(match.groupValues[2]) ?: return null
             val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
-            val timeStr = match.groupValues[4]
-            val date = parseMonthDay(monthName, day, year) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val date = parseMonthDay(match.groupValues[1], day, year) ?: return null
+            val time = parseTimeString(match.groupValues[5], allowBareHour = match.groupValues[4].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         timeMonthDayPattern.find(input)?.let { match ->
-            val timeStr = match.groupValues[1]
-            val monthName = match.groupValues[2]
-            val day = parseDayOfMonth(match.groupValues[3]) ?: return null
-            val year = match.groupValues[4].takeIf { it.isNotEmpty() }?.toIntOrNull()
-            val date = parseMonthDay(monthName, day, year) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val day = parseDayOfMonth(match.groupValues[4]) ?: return null
+            val year = match.groupValues[5].takeIf { it.isNotEmpty() }?.toIntOrNull()
+            val date = parseMonthDay(match.groupValues[3], day, year) ?: return null
+            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        nthOfMonthTimePattern.find(input)?.let { match ->
+            val day = parseDayOfMonth(match.groupValues[1]) ?: return null
+            val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
+            val date = parseMonthDay(match.groupValues[2], day, year) ?: return null
+            val time = parseTimeString(match.groupValues[5], allowBareHour = match.groupValues[4].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        dayOfMonthOnlyTimePattern.find(input)?.let { match ->
+            val day = match.groupValues[1].toIntOrNull() ?: return null
+            val date = resolveFutureDayOfMonth(day) ?: return null
+            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
         numericDateTimePattern.find(input)?.let { match ->
             val month = match.groupValues[1].toIntOrNull() ?: return null
             val day = match.groupValues[2].toIntOrNull() ?: return null
-            val timeStr = match.groupValues[3]
             val date = parseNumericDate(month, day) ?: return null
-            val time = parseTimeString(timeStr) ?: return null
+            val time = parseTimeString(match.groupValues[4], allowBareHour = match.groupValues[3].isNotEmpty())
+                ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
@@ -452,6 +492,19 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDate(date)
         }
 
+        nthOfMonthPattern.find(input)?.let { match ->
+            val day = parseDayOfMonth(match.groupValues[1]) ?: return null
+            val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
+            val date = parseMonthDay(match.groupValues[2], day, year) ?: return null
+            return InterpretedDateTime.AbsoluteDate(date)
+        }
+
+        dayOfMonthOnlyPattern.find(input)?.let { match ->
+            val day = match.groupValues[1].toIntOrNull() ?: return null
+            val date = resolveFutureDayOfMonth(day) ?: return null
+            return InterpretedDateTime.AbsoluteDate(date)
+        }
+
         numericDatePattern.find(input)?.let { match ->
             val month = match.groupValues[1].toIntOrNull() ?: return null
             val day = match.groupValues[2].toIntOrNull() ?: return null
@@ -459,6 +512,23 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDate(date)
         }
 
+        return null
+    }
+
+    /** Next occurrence (today included) of the given day-of-month, rolling forward past months
+     *  that don't contain it (e.g. "the 31st" in February). */
+    private fun resolveFutureDayOfMonth(day: Int): LocalDate? {
+        if (day !in 1..31) return null
+        var anchor = currentDateTime.date
+        repeat(12) {
+            val candidate = try {
+                LocalDate(anchor.year, anchor.month, day)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+            if (candidate != null && candidate >= currentDateTime.date) return candidate
+            anchor = anchor.plus(DatePeriod(months = 1))
+        }
         return null
     }
 
@@ -692,15 +762,22 @@ class HumanDateTimeParser(
 
         // Normalizer rewrite patterns
         private val noonRegex = Regex("""\bnoon\b""")
+        private val middayRegex = Regex("""\bmid-?day\b""")
         private val midnightRegex = Regex("""\bmidnight\b""")
-        private val hourWordOclockRegex = Regex("""\b$HOUR_WORD_PATTERN\s+o'?clock\b""")
-        private val oclockRegex = Regex("""\s*\bo'?clock\b""")
+        private val approxTimeRegex = Regex("""\b(?:around|about)\s+(?=\d|noon\b|midnight\b|midday\b)""")
+        private val byTimeRegex = Regex("""\bby\s+(?=\d)""")
+        private val sharpRegex = Regex("""([0-9m])\s+sharp\b""")
+        private val hourOclockRegex = Regex("""\b(?:$HOUR_WORD_PATTERN|(\d{1,2}))\s+o'?clock\b""")
+        private val dottedTimeAmPmRegex = Regex("""\b(\d{1,2})\.(\d{2})(\s*$AMPM_EXPR)""")
+        private val atDottedTimeRegex = Regex("""\bat\s+(\d{1,2})\.(\d{2})\b""")
+        private val duplicateDayRegex =
+            Regex("""\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b(.*?)\s+\1\b""")
         private val inTheTimeOfDayRegex = Regex("""\s+in\s+the\s+(morning|afternoon|evening|night)\b""")
         private val atNightRegex = Regex("""\s+at\s+night\b""")
         private val minutesPastHourRegex =
-            Regex("""\b(?:a\s+)?($PAST_TO_MINUTE_PATTERN)\s+(?:past|after)\s+(?:$HOUR_WORD_PATTERN|(\d{1,2}))\b""")
+            Regex("""\b(?:a\s+)?($PAST_TO_MINUTE_PATTERN)\s+(?:past|after)\s+(?:$HOUR_WORD_PATTERN|(\d{1,2}))(?::00)?\b""")
         private val minutesToHourRegex =
-            Regex("""(\bat\s+)?\b(?:a\s+)?($TO_MINUTE_PATTERN)\s+(?:to|till|before|of)\s+(?:$HOUR_WORD_PATTERN\b|(\d{1,2})(?![0-9]))((?:\s*$AMPM_EXPR)?)""")
+            Regex("""(\bat\s+)?\b(?:a\s+)?($TO_MINUTE_PATTERN)\s+(?:to|till|before|of)\s+(?:$HOUR_WORD_PATTERN\b|(\d{1,2})(?::00)?(?![0-9]))((?:\s*$AMPM_EXPR)?)""")
         private val ohMinutesRegex =
             Regex("""\b(?:$HOUR_WORD_PATTERN|(\d{1,2}))\s+(?:oh|o)\s+(?:$MINUTE_ONES_CAPTURE|(\d))\b""")
         private val wordHourMinuteRegex = Regex("""\b$HOUR_WORD_PATTERN\s+($MINUTE_COMPOUND_PATTERN|\d{2})\b""")
@@ -751,18 +828,26 @@ class HumanDateTimeParser(
         private val fromNowPattern = Regex("""$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE\s+from\s+now""")
         private val standaloneDurationPattern = Regex("""^$QUANTIFIER_CAPTURE\s+$UNIT_CAPTURE$""")
 
+        // Connector between a date and its time: "at", a comma, or plain whitespace. The "at" is
+        // captured so callers can grant bare-hour parsing only when it is present ("tomorrow at 8"
+        // is a time; "tomorrow 8" stays ambiguous and is rejected).
+        private const val CONNECTOR_EXPR = """,?\s+(at\s+)?"""
+        private const val DOW_PREFIX_EXPR = """(?:next|on|this)?"""
+
         // Absolute date+time patterns
         // "tonight" is a single token, so it can't go through the day-word + time-of-day patterns.
         private val tonightPattern = Regex("""\btonight\b""")
         private val dayWordTimeOfDayPattern = Regex("""(today|tomorrow|this)\s+(morning|afternoon|evening|night)""")
-        private val dayOfWeekTimeOfDayPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(morning|afternoon|evening|night)""")
-        private val dayWordTimePattern = Regex("""(today|tomorrow)\s+at\s+(.+)""")
-        private val timeDayWordPattern = Regex("""(?:at\s+)?(.+?)\s+(today|tomorrow)""")
-        private val dayOfWeekTimePattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(.+)""")
-        private val timeDayOfWeekPattern = Regex("""(?:at\s+)?(.+?)\s+(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
-        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?\s+at\s+(.+)""")
-        private val timeMonthDayPattern = Regex("""(?:at\s+)?(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?""")
-        private val numericDateTimePattern = Regex("""(\d{1,2})/(\d{1,2})\s+at\s+(.+)""")
+        private val dayOfWeekTimeOfDayPattern = Regex("""$DOW_PREFIX_EXPR\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(morning|afternoon|evening|night)""")
+        private val dayWordTimePattern = Regex("""(today|tomorrow)$CONNECTOR_EXPR(.+)""")
+        private val timeDayWordPattern = Regex("""((?:at\s+)?)(.+?)\s+(today|tomorrow)""")
+        private val dayOfWeekTimePattern = Regex("""$DOW_PREFIX_EXPR\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$CONNECTOR_EXPR(.+)""")
+        private val timeDayOfWeekPattern = Regex("""((?:at\s+)?)(.+?)\s+$DOW_PREFIX_EXPR\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)""")
+        private val monthDayTimePattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:the\s+)?($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?$CONNECTOR_EXPR(.+)""")
+        private val timeMonthDayPattern = Regex("""((?:at\s+)?)(.+?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:the\s+)?($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?""")
+        private val numericDateTimePattern = Regex("""(\d{1,2})/(\d{1,2})$CONNECTOR_EXPR(.+)""")
+        private val nthOfMonthTimePattern = Regex("""(?:on\s+)?(?:the\s+)?($DAY_OF_MONTH_EXPR)\s+of\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:,?\s+(\d{4}))?$CONNECTOR_EXPR(.+)""")
+        private val dayOfMonthOnlyTimePattern = Regex("""(?:on\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)$CONNECTOR_EXPR(.+)""")
 
         // Absolute time patterns
         private val atTimePattern = Regex("""at\s+(.+)""")
@@ -779,20 +864,26 @@ class HumanDateTimeParser(
         private val weekendPattern = Regex("""^(?:(this|the|next|coming|this\s+coming)\s+)?weekend$""")
         private val nextWeekPattern = Regex("""^next\s+week$""")
         private val dayWordOnlyPattern = Regex("""^(today|tomorrow)$""")
-        private val dayOfWeekPattern = Regex("""(?:next|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
-        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?$""")
+        private val dayOfWeekPattern = Regex("""$DOW_PREFIX_EXPR\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$""")
+        private val monthDayPattern = Regex("""(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:the\s+)?($DAY_OF_MONTH_EXPR)(?:,?\s+(\d{4}))?$""")
+        private val nthOfMonthPattern = Regex("""^(?:on\s+)?(?:the\s+)?($DAY_OF_MONTH_EXPR)\s+of\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:,?\s+(\d{4}))?$""")
+        // A bare day-of-month needs the ordinal suffix ("the 21st"); "the 21" is too ambiguous.
+        private val dayOfMonthOnlyPattern = Regex("""^(?:on\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)$""")
         private val numericDatePattern = Regex("""^(\d{1,2})/(\d{1,2})$""")
 
         // Patterns for parseFromMessage, ordered by specificity (most specific first)
         private val messagePatterns = listOf(
-            // Date + time combinations
-            Regex("""(?:$DAY_WORD_EXPR)\s+at\s+(?:$ANY_TIME_EXPR)"""),
-            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
-            Regex("""(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR\s+at\s+(?:$ANY_TIME_EXPR)"""),
-            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:next\s+|on\s+)?$DAY_OF_WEEK_EXPR"""),
-            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?\s+at\s+(?:$ANY_TIME_EXPR)"""),
-            Regex("""at\s+(?:$ANY_TIME_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
-            Regex("""\d{1,2}/\d{1,2}\s+at\s+(?:$ANY_TIME_EXPR)"""),
+            // Date + time combinations. The connector between date and time is "at", a comma, or
+            // plain whitespace (a time without "at" must carry its own am/pm/:mm/named marker).
+            Regex("""(?:$DAY_WORD_EXPR),?\s+(?:at\s+)?(?:$ANY_TIME_EXPR)"""),
+            Regex("""(?:at\s+)?(?:$ANY_TIME_EXPR)\s+(?:$DAY_WORD_EXPR)"""),
+            Regex("""(?:next\s+|on\s+|this\s+)?$DAY_OF_WEEK_EXPR,?\s+(?:at\s+)?(?:$ANY_TIME_EXPR)"""),
+            Regex("""(?:at\s+)?(?:$ANY_TIME_EXPR)\s+(?:next\s+|on\s+|this\s+)?$DAY_OF_WEEK_EXPR"""),
+            Regex("""(?:on\s+)?$MONTH_EXPR\s+(?:the\s+)?(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?,?\s+(?:at\s+)?(?:$ANY_TIME_EXPR)"""),
+            Regex("""(?:at\s+)?(?:$ANY_TIME_EXPR)\s+(?:on\s+)?$MONTH_EXPR\s+(?:the\s+)?(?:$DAY_OF_MONTH_EXPR)(?:,?\s+\d{4})?"""),
+            Regex("""(?:on\s+)?(?:the\s+)?(?:$DAY_OF_MONTH_EXPR)\s+of\s+$MONTH_EXPR(?:,?\s+\d{4})?(?:,?\s+(?:at\s+)?(?:$ANY_TIME_EXPR))?"""),
+            Regex("""(?:on\s+)?the\s+\d{1,2}(?:st|nd|rd|th)\b(?:,?\s+(?:at\s+)?(?:$ANY_TIME_EXPR))?"""),
+            Regex("""\d{1,2}/\d{1,2},?\s+(?:at\s+)?(?:$ANY_TIME_EXPR)"""),
             // Date + time-of-day combinations. Explicit-time variants first so they aren't
             // truncated to the vague form; bare hour is allowed since "at" anchors it as a time.
             Regex("""(?:$DAY_WORD_EXPR|this)\s+$TIME_OF_DAY_EXPR\s+at\s+(?:$ANY_TIME_EXPR|\d{1,2})"""),

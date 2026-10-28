@@ -23,6 +23,8 @@ import io.rebble.libpebblecommon.plugin.SourceEnvelope
 import io.rebble.libpebblecommon.plugin.SourceInstance
 import io.rebble.libpebblecommon.plugin.SourceShapeNames
 import io.rebble.libpebblecommon.plugin.TextSeries
+import io.rebble.libpebblecommon.plugin.TimestampShape
+import io.rebble.libpebblecommon.plugin.TimestampSeries
 import io.rebble.libpebblecommon.weather.WeatherType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -98,6 +100,14 @@ class WeatherPlugin(
                 PROPERTY_DAILY_CONDITION to CONDITION_SERIES_SHAPES,
                 PROPERTY_DAILY_CONDITION_CODE to CODE_SERIES_SHAPES,
                 PROPERTY_DAILY_PRECIPITATION to NUMERIC_SERIES_SHAPES,
+                PROPERTY_DAILY_SUNRISE to TIMESTAMP_SERIES_SHAPES,
+                PROPERTY_DAILY_SUNSET to TIMESTAMP_SERIES_SHAPES,
+                PROPERTY_WIND_SPEED to listOf(SourceShapeNames.NUMERIC_VALUE, SourceShapeNames.SHORT_TEXT),
+                PROPERTY_WIND_DIRECTION to listOf(SourceShapeNames.NUMERIC_VALUE),
+                PROPERTY_HUMIDITY to listOf(SourceShapeNames.NUMERIC_VALUE, SourceShapeNames.SHORT_TEXT),
+                PROPERTY_UTC_OFFSET to listOf(SourceShapeNames.NUMERIC_VALUE),
+                PROPERTY_SUNRISE to listOf(SourceShapeNames.TIMESTAMP),
+                PROPERTY_SUNSET to listOf(SourceShapeNames.TIMESTAMP),
             ),
             supportsMultiple = true,
             callerPermissions = listOf(PluginPermission(PluginPermissions.LOCATION)),
@@ -161,7 +171,7 @@ class WeatherPlugin(
                     iconSize,
                 ),
                 PROPERTY_CONDITION_CODE to conditionCode(entry.currentWeatherType),
-            ) + uvShapes(entry) + precipitationShapes(entry) + seriesShapes(entry, iconSize, unit, wanted),
+            ) + uvShapes(entry) + precipitationShapes(entry) + todayShapes(entry, unit) + seriesShapes(entry, iconSize, unit, wanted),
         )
     }
 
@@ -205,6 +215,12 @@ class WeatherPlugin(
         series(PROPERTY_DAILY_CONDITION_CODE, days, SECONDS_PER_DAY) {
             copy(longText = TextSeries(days.map { conditionCodeOf(it.weatherType.code) }))
         }
+        series(PROPERTY_DAILY_SUNRISE, days.takeIf { it.any { day -> day.sunriseUtcSecs != null } }.orEmpty(), SECONDS_PER_DAY) {
+            copy(timestamp = TimestampSeries(days.map { it.sunriseUtcSecs }))
+        }
+        series(PROPERTY_DAILY_SUNSET, days.takeIf { it.any { day -> day.sunsetUtcSecs != null } }.orEmpty(), SECONDS_PER_DAY) {
+            copy(timestamp = TimestampSeries(days.map { it.sunsetUtcSecs }))
+        }
         series(PROPERTY_DAILY_PRECIPITATION, days, SECONDS_PER_DAY) {
             val percents = days.map { it.precipProbability?.toDouble() }
             copy(
@@ -224,6 +240,39 @@ class WeatherPlugin(
         icon = iconSize?.let { size -> BitmapSeries(codes.map { iconShape(it, size) }) },
         image = iconSize?.let { size -> BitmapSeries(codes.map { imageShape(it, size) }) },
     )
+
+    /** Wind, humidity, the place's UTC offset and today's sun, each left off when the forecast lacked it. */
+    private fun todayShapes(entry: WeatherAppEntry, unit: String): Map<String, Map<String, JsonElement>> = buildMap {
+        val today = entry.dailyForecast?.firstOrNull()
+        entry.todayWindSpeed?.let { mph ->
+            val imperial = unit == "°F"
+            val text = if (imperial) "$mph mph" else "${(mph * 1.609344).roundToInt()} km/h"
+            put(
+                PROPERTY_WIND_SPEED,
+                mapOf(
+                    SourceShapeNames.NUMERIC_VALUE to encode(NumericValueShape(value = mph.toDouble(), unit = "mph")),
+                    SourceShapeNames.SHORT_TEXT to encode(ShortTextShape(text)),
+                ),
+            )
+        }
+        entry.todayWindDirection?.let {
+            put(PROPERTY_WIND_DIRECTION, mapOf(SourceShapeNames.NUMERIC_VALUE to encode(NumericValueShape(it.toDouble(), "°", 0.0, 360.0))))
+        }
+        today?.humidityPct?.let {
+            put(
+                PROPERTY_HUMIDITY,
+                mapOf(
+                    SourceShapeNames.NUMERIC_VALUE to encode(NumericValueShape(it.toDouble(), "%", 0.0, 100.0)),
+                    SourceShapeNames.SHORT_TEXT to encode(ShortTextShape("$it%")),
+                ),
+            )
+        }
+        entry.locationUtcOffsetMin?.let {
+            put(PROPERTY_UTC_OFFSET, mapOf(SourceShapeNames.NUMERIC_VALUE to encode(NumericValueShape(it.toDouble(), "min"))))
+        }
+        today?.sunriseUtcSecs?.let { put(PROPERTY_SUNRISE, mapOf(SourceShapeNames.TIMESTAMP to encode(TimestampShape(it)))) }
+        today?.sunsetUtcSecs?.let { put(PROPERTY_SUNSET, mapOf(SourceShapeNames.TIMESTAMP to encode(TimestampShape(it)))) }
+    }
 
     /** Also v4-only; absent rather than zero when the forecast didn't carry one. */
     private fun precipitationShapes(entry: WeatherAppEntry): Map<String, Map<String, JsonElement>> {
@@ -340,6 +389,17 @@ class WeatherPlugin(
         const val PROPERTY_DAILY_CONDITION_CODE = "daily_condition_code"
         const val PROPERTY_DAILY_PRECIPITATION = "daily_precipitation"
 
+        // Shared `weather/location` names, which a weather plugin needs to feed the watch's
+        // weather app and timeline (see `pluginWeatherResponse`).
+        const val PROPERTY_WIND_SPEED = "wind_speed"
+        const val PROPERTY_WIND_DIRECTION = "wind_direction"
+        const val PROPERTY_HUMIDITY = "humidity"
+        const val PROPERTY_UTC_OFFSET = "utc_offset"
+        const val PROPERTY_SUNRISE = "sunrise"
+        const val PROPERTY_SUNSET = "sunset"
+        const val PROPERTY_DAILY_SUNRISE = "daily_sunrise"
+        const val PROPERTY_DAILY_SUNSET = "daily_sunset"
+
         // The weather icon vocabulary, published in `new-plugin-api.md` for consumers to draw.
         const val ICON_SUN = "sun"
         const val ICON_PARTLY_CLOUDY = "partly_cloudy"
@@ -361,6 +421,7 @@ class WeatherPlugin(
         private val CONDITION_SERIES_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.ICON, SourceShapeNames.IMAGE).map(SourceShapeNames::series)
         private val CODE_SERIES_SHAPES = listOf(SourceShapeNames.series(SourceShapeNames.LONG_TEXT))
+        private val TIMESTAMP_SERIES_SHAPES = listOf(SourceShapeNames.series(SourceShapeNames.TIMESTAMP))
 
         // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
         val BUILT_IN_WEATHER_UUID: Uuid = Uuid.parse("00000000-0000-0000-0001-000000000002")

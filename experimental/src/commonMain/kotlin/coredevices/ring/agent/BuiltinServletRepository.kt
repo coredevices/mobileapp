@@ -8,11 +8,14 @@ import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.js.JsServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
+import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
+import coredevices.ring.agent.builtin_servlets.notifications.ReplyToWatchNotificationTool
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
 import coredevices.ring.agent.builtin_servlets.plugins.PluginsServlet
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.component.inject
@@ -23,7 +26,12 @@ const val ANDROID_ONLY_REASON = "Only available on Android"
  * TODO(RING-84): the local Cactus model isn't trained on these tools yet, so they are only usable
  *  via the online Nenya agent. Remove once the on-device model supports them.
  */
-val LOCAL_MODEL_UNSUPPORTED_SERVLETS = setOf(CalendarServlet.NAME, MessagingServlet.name, PluginsServlet.NAME)
+val LOCAL_MODEL_UNSUPPORTED_SERVLETS = setOf(
+    CalendarServlet.NAME,
+    MessagingServlet.name,
+    PluginsServlet.NAME,
+    NotificationReplyServlet.NAME,
+)
 
 internal fun builtinServletDefinitions(isAndroid: Boolean): List<McpServerDefinition> {
     val androidOnly = if (isAndroid) null else ANDROID_ONLY_REASON
@@ -48,6 +56,11 @@ internal fun builtinServletDefinitions(isAndroid: Boolean): List<McpServerDefini
         McpServerDefinition(
             name = MessagingServlet.name,
             title = "Beeper Messaging",
+            unavailableReason = androidOnly
+        ),
+        McpServerDefinition(
+            name = NotificationReplyServlet.NAME,
+            title = "Reply to Notifications",
             unavailableReason = androidOnly
         )
     )
@@ -75,6 +88,9 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             ReminderServlet.NAME -> ReminderServlet(get(), get())
             CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> MessagingServlet.takeIf { platform.isAndroid }
+            NotificationReplyServlet.NAME -> NotificationReplyServlet(
+                replyTool = ReplyToWatchNotificationTool(get<LibPebble>())
+            ).takeIf { platform.isAndroid }
             else -> null
         }
     }

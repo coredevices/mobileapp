@@ -683,7 +683,7 @@ class HumanDateTimeParserTest {
             (result?.dateTime as InterpretedDateTime.AbsoluteDateTime).dateTime,
         )
         // normalizeTimeExpressions rewrites "noon" -> "12 pm", so the extracted text is normalized.
-        assertEquals("at 12 pm on friday", result.matchedText.lowercase())
+        assertEquals("at 12:00 pm on friday", result.matchedText.lowercase())
     }
     
     @Test

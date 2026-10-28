@@ -39,6 +39,7 @@ class BuiltInReminderFeedItemsTest {
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
         override suspend fun getAllActive(): List<CachedItem> = items.values.filter { !it.deleted }
+        override suspend fun getAllIncludingDeleted(): List<CachedItem> = items.values.toList()
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) { items.remove(id) }
@@ -87,7 +88,7 @@ class BuiltInReminderFeedItemsTest {
     fun createFeedItemWithListIdMakesNoteInThatList() = runBlocking {
         val (feedItems, itemDao) = fixture()
         feedItems.createFeedItem(
-            localReminderId = 5,
+            itemId = "item-note",
             title = "Umbrella",
             deadline = null,
             listId = "list_custom",
@@ -108,7 +109,7 @@ class BuiltInReminderFeedItemsTest {
         val checklist = CachedList(firestoreId = "list_chk", title = "Packing", listKind = "checklist")
         val (feedItems, itemDao) = fixture(defaultLists + checklist)
         feedItems.createFeedItem(
-            localReminderId = 5,
+            itemId = "item-chk",
             title = "Umbrella",
             deadline = null,
             listId = "list_chk",
@@ -125,7 +126,7 @@ class BuiltInReminderFeedItemsTest {
         val (feedItems, itemDao) = fixture()
         val deadline = now + 5.minutes
         feedItems.createFeedItem(
-            localReminderId = 42,
+            itemId = "item-reminder",
             title = "Call mom",
             deadline = deadline,
             listId = null,
@@ -140,7 +141,6 @@ class BuiltInReminderFeedItemsTest {
         assertEquals("call-reminder", item.sourceToolCallId)
         val meta = item.metadata
         assertTrue(meta is ItemMetadata.Reminder)
-        assertEquals(42, meta.localReminderId)
         assertEquals(2.hours.inWholeMilliseconds, meta.notifyBeforeMillis)
     }
 
@@ -148,7 +148,7 @@ class BuiltInReminderFeedItemsTest {
     fun createFeedItemWithoutSourceStillPersistsUnlinkedItem() = runBlocking {
         val (feedItems, itemDao) = fixture()
         feedItems.createFeedItem(
-            localReminderId = 1,
+            itemId = "item-unlinked",
             title = "Call mom",
             deadline = null,
             listId = null,

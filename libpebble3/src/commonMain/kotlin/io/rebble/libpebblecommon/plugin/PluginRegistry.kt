@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
 
 /**
@@ -26,6 +28,27 @@ class PluginRegistry(
         MutableStateFlow(stored?.split(',')?.filter { it.isNotEmpty() }?.mapTo(HashSet(), Uuid::parse).orEmpty())
     }
     val disabledBuiltIns: StateFlow<Set<Uuid>> get() = _disabledBuiltIns
+
+    private val _preferredSources by lazy {
+        val stored = settings.getStringOrNull(PREFERRED_SOURCES_KEY)?.let {
+            try {
+                Json.decodeFromString<Map<String, String>>(it)
+            } catch (e: SerializationException) {
+                null
+            }
+        }
+        MutableStateFlow(stored.orEmpty().mapValues { Uuid.parse(it.value) })
+    }
+
+    /** The user's choice of plugin for a source several plugins serve, keyed by [sourceKey]. */
+    val preferredSources: StateFlow<Map<String, Uuid>> get() = _preferredSources
+
+    /** Null goes back to the default order. */
+    fun setPreferredSource(category: String, item: String, pluginUuid: Uuid?) {
+        val key = sourceKey(category, item)
+        val preferred = _preferredSources.updateAndGet { if (pluginUuid == null) it - key else it + (key to pluginUuid) }
+        settings.putString(PREFERRED_SOURCES_KEY, Json.encodeToString(preferred.mapValues { it.value.toString() }))
+    }
 
     /** Disabled built-ins are left out, so no caller can reach them. */
     private val registered by lazy {
@@ -64,22 +87,22 @@ class PluginRegistry(
     }
 
     /**
-     * Find a plugin serving the given (category, item) tuple. If [preferredPluginUuid] is set
-     * and that plugin serves the tuple, prefer it; otherwise fall back to any plugin that does.
+     * Find a plugin serving the given (category, item) tuple: the caller's [preferredPluginUuid]
+     * if it serves it, else the user's [preferredSources] choice, else built-ins first, then by name.
      * Sources are fungible — actions are not, so action lookup uses [findPlugin] by uuid.
      */
     fun findSourcePlugin(
         category: String,
         item: String,
         preferredPluginUuid: String? = null,
+        /** A plugin reading another's source can't be answered by itself. */
+        exclude: Uuid? = null,
     ): Plugin? {
-        val all = plugins
-        if (preferredPluginUuid != null) {
-            all.firstOrNull {
-                it.pluginUuid.toString() == preferredPluginUuid && it.serves(category, item)
-            }?.let { return it }
-        }
-        return all.firstOrNull { it.serves(category, item) }
+        val serving = plugins.filter { it.serves(category, item) && it.pluginUuid != exclude }
+        val userChoice = _preferredSources.value[sourceKey(category, item)]
+        return serving.firstOrNull { it.pluginUuid.toString() == preferredPluginUuid }
+            ?: serving.firstOrNull { it.pluginUuid == userChoice }
+            ?: serving.minWithOrNull(compareBy({ it !is NativePlugin }, { it.name.lowercase() }))
     }
 
     /** Exact lookup. Actions must never fall back to a different plugin. */
@@ -88,7 +111,10 @@ class PluginRegistry(
 
     fun getAllPlugins(): List<PluginMetadata> = plugins.map { it.metadata }
 
-    private companion object {
-        const val DISABLED_BUILT_INS_KEY = "disabled_built_in_plugins"
+    companion object {
+        private const val DISABLED_BUILT_INS_KEY = "disabled_built_in_plugins"
+        private const val PREFERRED_SOURCES_KEY = "preferred_source_plugins"
+
+        fun sourceKey(category: String, item: String) = "$category/$item"
     }
 }

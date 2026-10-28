@@ -42,6 +42,13 @@ internal class FakePlugins(vararg plugins: Plugin) : Plugins {
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
 
+    override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> = MutableStateFlow(emptyMap())
+
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) = Unit
+
+    override fun sourcePlugin(category: String, item: String): PluginMetadata? =
+        getAllPlugins().firstOrNull { it.serves(category, item) }
+
     override fun getAllPlugins(): List<PluginMetadata> = plugins.values.map { it.metadata }
 
     override fun observe(

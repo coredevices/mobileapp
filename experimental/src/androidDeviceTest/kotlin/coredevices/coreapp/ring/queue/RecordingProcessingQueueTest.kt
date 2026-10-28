@@ -41,6 +41,7 @@ import coredevices.ring.database.room.repository.RecordingProcessingTaskReposito
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -281,12 +282,15 @@ class RecordingProcessingQueueTest {
                     recordedAt: Instant,
                     gesture: coredevices.ring.service.button.RingGesture,
                 ) {}
+                override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+
                 override suspend fun sendTestEvent(
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
                     signRequests: Boolean,
                     signingSecret: String?,
+                    clickPayload: String,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
