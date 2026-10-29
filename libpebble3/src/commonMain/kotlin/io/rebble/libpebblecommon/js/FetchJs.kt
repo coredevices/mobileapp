@@ -129,9 +129,14 @@ internal const val FETCH_JS = """
     } else if (type === 'error' || type === 'timeout' || type === 'abort') {
       this._settled = true;
       registry._instances.delete(this._id);
-      // A blocked host, a DNS failure and a dropped connection are one thing to a caller: the
-      // request did not happen. A non-2xx is a resolved Response with ok === false.
-      this._reject(new TypeError('fetch ' + (type === 'error' ? 'failed' : type) + ': ' + this._url));
+      // A non-2xx is a resolved Response with ok === false.
+      if (this._notAllowed) {
+        var denied = new Error('fetch not allowed: ' + this._url);
+        denied.name = 'NotAllowedError';
+        this._reject(denied);
+      } else {
+        this._reject(new TypeError('fetch ' + (type === 'error' ? 'failed' : type) + ': ' + this._url));
+      }
     }
   };
 
