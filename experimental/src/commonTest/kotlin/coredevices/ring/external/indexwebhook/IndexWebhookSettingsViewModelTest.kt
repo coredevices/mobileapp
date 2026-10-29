@@ -51,6 +51,30 @@ class IndexWebhookSettingsViewModelTest {
     }
 
     @Test
+    fun pastedLineBreaksAroundTheSigningSecretAreDroppedOnSaveAndTest() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val fixture = Fixture()
+            fixture.viewModel.openDialog(RingGesture.Hold)
+            advanceUntilIdle()
+
+            fixture.viewModel.updateUrlInput("https://example.com/hook")
+            fixture.viewModel.updateSignRequests(true)
+            fixture.viewModel.updateSigningSecret("\n  exact secret value  \r\n\n")
+            fixture.viewModel.sendTestEvent()
+            advanceUntilIdle()
+            assertEquals("  exact secret value  ", fixture.api.lastTestRequest?.signingSecret)
+
+            fixture.viewModel.save()
+            advanceUntilIdle()
+            assertEquals("  exact secret value  ", fixture.secretStorage.get(RingGesture.Hold))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun copyAndTestEventUseTheOtherGesturesSigningSecret() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
