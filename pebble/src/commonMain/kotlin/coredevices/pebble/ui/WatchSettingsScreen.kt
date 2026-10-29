@@ -292,6 +292,7 @@ enum class SettingsGroup(val title: String) {
     PhoneEffects("Phone Effects"),
     CustomVibration("Custom Vibration Patterns"),
     Advanced("Advanced"),
+    AutomaticFirmwareUpdatess("Automatic Updates"),
 }
 
 data class SettingsItem(
@@ -818,22 +819,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
                 basicSettingsToggleItem(
-                    title = "Foreground Service",
-                    description = "Show foreground service notification to keep app alive in background",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.General,
-                    checked = coreConfig.androidForegroundServiceForWatchConnectionV2,
-                    onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                androidForegroundServiceForWatchConnectionV2 = it,
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsForegroundService() },
-                ),
-                basicSettingsToggleItem(
-                    title = "Watch fully charged",
+                    title = "Notify when watch fully charged",
                     description = "Notify on this phone when a watch finishes charging",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
@@ -847,10 +833,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
                 basicSettingsToggleItem(
-                    title = "Automatic firmware updates",
+                    title = "Update PebbleOS Automatically",
                     description = "Install PebbleOS updates automatically when available",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
+                    group = SettingsGroup.AutomaticFirmwareUpdatess,
                     keywords = "firmware pebbleos update automatic",
                     checked = coreConfig.autoFirmwareUpdate,
                     onCheckChanged = {
@@ -858,9 +845,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
                 SettingsItem(
-                    title = "Firmware update time window",
+                    title = "Time Window",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
+                    group = SettingsGroup.AutomaticFirmwareUpdatess,
                     keywords = "firmware pebbleos update automatic time window",
                     show = { coreConfig.autoFirmwareUpdate },
                     isDebugSetting = false,
@@ -2245,6 +2233,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
+                    isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
+                    title = "Foreground Service",
+                    description = "Show foreground service notification to keep app alive in background",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = coreConfig.androidForegroundServiceForWatchConnectionV2,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                androidForegroundServiceForWatchConnectionV2 = it,
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsForegroundService() },
                 ),
                 navBarNav?.let {basicSettingsActionItem(
                     title = "Show Watch Onboarding",
