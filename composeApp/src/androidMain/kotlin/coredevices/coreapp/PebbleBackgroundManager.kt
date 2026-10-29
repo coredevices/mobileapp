@@ -59,20 +59,7 @@ class PebbleBackgroundManager(
     }
 
     private fun stopBackground() {
-        val serviceIntent = Intent(context, PebbleService::class.java).apply {
-            action = PebbleService.ACTION_STOP
-        }
-        try {
-            ContextCompat.startForegroundService(context, serviceIntent)
-        } catch (e: Exception) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
-                // App may already be backgrounded by the time we try to stop; startService is allowed for an already-running service.
-                logger.w(e) { "Cannot deliver STOP via foreground service from background; falling back to startService" }
-                context.startService(serviceIntent)
-            } else {
-                throw e
-            }
-        }
+        context.stopService(Intent(context, PebbleService::class.java))
     }
 
     fun monitorToStartBackground() {
