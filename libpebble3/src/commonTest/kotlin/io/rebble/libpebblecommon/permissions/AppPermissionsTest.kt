@@ -1142,3 +1142,35 @@ class NotificationsScopeTest {
         assertEquals(NeedsApproval, decide(maps, rows = exfiltrating + row(notificationsKey("com.example"), true)))
     }
 }
+
+class PermissionQueryTest {
+    private val dao = FakePermissionDao()
+
+    @Test
+    fun reportsWhatUsingItWouldGetWithoutCountingAsAUse() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(APP, listOf(CALENDAR))
+        assertEquals("granted", permissions.query(APP, CALENDAR).queryState())
+        permissions.recordRequested(APP, listOf(internetKey("example.com")))
+        assertEquals("prompt", permissions.query(APP, internetKey("example.com")).queryState())
+        assertEquals("prompt", permissions.query(APP, CALENDAR).queryState())
+        permissions.setPermissionDecisions(APP, mapOf(internetKey("example.com") to true))
+        assertEquals("granted", permissions.query(APP, internetKey("api.example.com")).queryState())
+        permissions.setPermissionDecisions(APP, mapOf(CALENDAR to false))
+        assertEquals("denied", permissions.query(APP, CALENDAR).queryState())
+        assertEquals(null, dao.row(internetKey("example.com"))!!.lastUsedAtMs)
+    }
+
+    @Test
+    fun aLegacyAppsNetworkIsGlobalInternet() = runTest {
+        val permissions = permissions(dao, installed = installedAs(subject(legacy = true)))
+        assertEquals("granted", permissions.query(APP, internetKey("example.com")).queryState())
+        permissions.setPermissionDecisions(APP, mapOf(GLOBAL_INTERNET to false))
+        assertEquals("denied", permissions.query(APP, internetKey("example.com")).queryState())
+    }
+
+    @Test
+    fun anAppThatIsNotInstalledHasNothing() = runTest {
+        assertEquals("denied", permissions(dao, installed = installedAs(null)).query(APP, CALENDAR).queryState())
+    }
+}

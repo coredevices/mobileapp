@@ -6,6 +6,7 @@ import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.permissions.queryState
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionDispatcher
@@ -27,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -44,7 +46,7 @@ abstract class PrivatePKJSInterface(
     private val httpInterceptorManager: HttpInterceptorManager,
     private val notificationConfigFlow: NotificationConfigFlow,
     private val pluginRegistry: PluginRegistry,
-    permissions: AppPermissions,
+    private val permissions: AppPermissions,
     pluginClient: PluginClient,
 ) {
     private val sourceDispatcher = SourceDispatcher(pluginRegistry, jsRunner, scope, permissions, pluginClient)
@@ -256,6 +258,13 @@ abstract class PrivatePKJSInterface(
 
     open fun invokeAction(callId: Int, requestJson: String) {
         actionDispatcher.invoke(callId, requestJson)
+    }
+
+    open fun queryPermission(callId: Int, permission: String) {
+        scope.launch {
+            val state = permissions.query(Uuid.parse(jsRunner.appInfo.uuid), permission).queryState()
+            jsRunner.eval("globalThis._signalPermissionQuery($callId, ${Json.encodeToString(String.serializer(), state)})")
+        }
     }
 
     /** The app's answer to a config-page message, keyed by the id the host sent. */

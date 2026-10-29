@@ -39,6 +39,7 @@ class JsPluginFactory(
         httpClient = httpClient,
         httpInterceptorManager = httpInterceptorManager,
         networkAccess = { prompt -> NetworkGate(permissions, name, pluginUuid, prompt) },
+        queryPermission = { key -> permissions.query(pluginUuid, key) },
         runningApps = runningApps,
         fileAccess = fileAccess,
         fileSystem = fileSystem,

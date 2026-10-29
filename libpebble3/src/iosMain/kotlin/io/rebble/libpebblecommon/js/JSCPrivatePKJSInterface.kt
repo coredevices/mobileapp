@@ -56,6 +56,7 @@ class JSCPrivatePKJSInterface(
         "unsubscribeSource" to this::unsubscribeSource,
         "invokeAction" to this::invokeAction,
         "enumeratePlugins" to this::enumeratePlugins,
+        "queryPermission" to this::queryPermission,
         "configMessageReply" to this::configMessageReply,
         "sendConfigMessage" to this::sendConfigMessage,
     )
@@ -125,6 +126,11 @@ class JSCPrivatePKJSInterface(
             null
         }
         "enumeratePlugins" -> enumeratePlugins()
+        "queryPermission" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("queryPermission: bad id")
+            queryPermission(id, args.getOrNull(1)?.toString() ?: error("queryPermission: bad permission"))
+            null
+        }
         "configMessageReply" -> {
             val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("configMessageReply: bad id")
             configMessageReply(id, args.getOrNull(1)?.toString() ?: "null")

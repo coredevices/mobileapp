@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.js.FETCH_REGISTRY
 import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
 import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
@@ -65,6 +66,7 @@ class JsPlugin(
     private val httpClient: HttpClient,
     private val httpInterceptorManager: HttpInterceptorManager,
     private val networkAccess: (prompt: Boolean) -> NetworkAccess,
+    private val queryPermission: suspend (String) -> PermissionDecision,
     private val runningApps: RunningApps,
     private val fileAccess: PluginFileAccess,
     private val fileSystem: PluginFileSystem,
@@ -286,14 +288,15 @@ class JsPlugin(
         val sourcesBridge = PluginSourcesJsBridge(scope, { js -> evals.trySend(js) }) { request ->
             upstreams.latest(request) ?: otherSources.read(metadata, request)
         }
+        val permissionsBridge = PluginPermissionsJsBridge(scope, { js -> evals.trySend(js) }, queryPermission)
         val interfaces = listOfNotNull(
             Bridge(runsRequests), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
-            sourcesBridge,
+            sourcesBridge, permissionsBridge,
         )
         val engine = JsEngine(appContext, scope, name, interfaces)
         return Session(
             engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, fileSystemBridge,
-            sourcesBridge, evals, scope.launch { for (js in evals) engine.eval(js) },
+            sourcesBridge, permissionsBridge, evals, scope.launch { for (js in evals) engine.eval(js) },
         )
     }
 
@@ -307,6 +310,7 @@ class JsPlugin(
         private val secureStorageBridge: PluginSecureStorageJsBridge,
         private val fileSystemBridge: PluginFileSystemJsBridge,
         private val sourcesBridge: PluginSourcesJsBridge,
+        private val permissionsBridge: PluginPermissionsJsBridge,
         private val evals: Channel<String>,
         private val pump: Job,
     ) {
@@ -323,6 +327,7 @@ class JsPlugin(
             engine.eval(PluginSecureStorageJsBridge.INSTALL_JS)
             engine.eval(PluginFileSystemJsBridge.INSTALL_JS)
             engine.eval(PluginSourcesJsBridge.INSTALL_JS)
+            engine.eval(PluginPermissionsJsBridge.INSTALL_JS)
             engine.eval(script())
         }
 
@@ -337,6 +342,7 @@ class JsPlugin(
             secureStorageBridge.close()
             fileSystemBridge.close()
             sourcesBridge.close()
+            permissionsBridge.close()
             engine.stop()
         }
     }

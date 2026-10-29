@@ -186,6 +186,15 @@ class AppPermissions(
             .first { it != PermissionDecision.NeedsApproval }
     } ?: PermissionDecision.NeedsApproval
 
+    /** What using [permission] would get [appUuid] now, without counting as a use. */
+    suspend fun query(appUuid: Uuid, permission: String): PermissionDecision {
+        val subject = subjectOf(appUuid) ?: return PermissionDecision.Denied
+        // A legacy app's network access is all one permission.
+        val key = if (subject.legacy && permissionOf(permission) in LEGACY_NETWORK) PluginPermissions.GLOBAL_INTERNET else permission
+        val rows = dao.getByAppUuid(appUuid)
+        return decidePermission(key, subject, rows, watchConfig.value, pluginDefinitionsFor(rows, key))
+    }
+
     suspend fun request(appUuid: Uuid, permission: String, wait: Boolean = false): PermissionDecision =
         subjectOf(appUuid)?.let { request(it, permission, wait) } ?: PermissionDecision.Denied
 
@@ -405,6 +414,15 @@ fun refusalMessage(appName: String, refused: Map<String, PermissionDecision>): S
         denied.takeIf { it.isNotEmpty() }?.let { "$appName was not allowed ${it.joinToString()}" },
         pending.takeIf { it.isNotEmpty() }?.let { "$appName is waiting for approval of ${it.joinToString()}" },
     ).joinToString("; ")
+}
+
+private val LEGACY_NETWORK = setOf(PluginPermissions.INTERNET, PluginPermissions.LOCAL_NETWORK)
+
+/** As `Pebble.permissions.query` reports it, after the browser's PermissionState. */
+fun PermissionDecision.queryState(): String = when (this) {
+    PermissionDecision.Granted -> "granted"
+    PermissionDecision.Denied -> "denied"
+    PermissionDecision.NeedsApproval -> "prompt"
 }
 
 internal fun permissionStatuses(
