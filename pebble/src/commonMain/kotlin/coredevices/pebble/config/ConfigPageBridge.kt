@@ -1,6 +1,7 @@
 package coredevices.pebble.config
 
 import co.touchlab.kermit.Logger
+import io.ktor.http.Url
 import io.rebble.libpebblecommon.plugin.PluginNativeException
 import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
 import kotlin.concurrent.Volatile
@@ -41,6 +42,10 @@ class ConfigPageBridge(
     /** File pickers and grants for the plugin behind this page; null when there is no plugin. */
     @Volatile
     var fileAccess: ConfigPageFileAccess? = null
+
+    /** Asks the user before opening a url in the browser; resolves whether it was opened. */
+    @Volatile
+    var openUrl: (suspend (String) -> Boolean)? = null
 
     private val readyTargets = mutableSetOf<String>()
 
@@ -177,6 +182,19 @@ class ConfigPageBridge(
                     })
                 }
             }
+            "openUrl" -> {
+                val handler = openUrl
+                if (handler == null) {
+                    reply(call.id, error("opening links is not available here"))
+                    return
+                }
+                val url = (call.message as? JsonPrimitive)?.takeIf { it.isString }?.content
+                if (url == null || !isWebUrl(url)) {
+                    reply(call.id, error("openUrl needs an http(s) url"))
+                    return
+                }
+                scope.launch { reply(call.id, handler(url).toString()) }
+            }
             else -> reply(call.id, error("unknown method '${call.method}'"))
         }
     }
@@ -222,6 +240,17 @@ class ConfigPageBridge(
         // A page that hasn't started parsing has no shim to call into, and a bare call would
         // throw inside someone else's config page. Whatever is missed, `hello` replays.
         eval("if (window.__pebbleConfig) { $js; }")
+    }
+
+    // The user judges the url by reading it, so nothing that can disguise its host gets through:
+    // userinfo (https://trusted.com@evil.com), whitespace, control or bidi characters, or a
+    // non-ASCII host (lookalike letters such as Cyrillic 'а').
+    private fun isWebUrl(url: String): Boolean {
+        if (!url.startsWith("https://", ignoreCase = true) && !url.startsWith("http://", ignoreCase = true)) return false
+        if (url.any { it.isWhitespace() || it.isISOControl() || it in '\u200E'..'\u200F' || it in '\u202A'..'\u202E' || it in '\u2066'..'\u2069' }) return false
+        val parsed = runCatching { Url(url) }.getOrNull() ?: return false
+        return parsed.host.isNotEmpty() && parsed.user == null &&
+            parsed.host.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '.' || it == '-' }
     }
 
     private fun error(message: String) =
@@ -373,6 +402,17 @@ val CONFIG_PAGE_SHIM_JS = """
       });
     }
   });
+
+  /**
+   * Offer to open an http(s) url in the browser. The user sees the full url first; resolves
+   * true if they opened it.
+   */
+  global.Pebble.openUrl = function (url) {
+    return call('openUrl', '', String(url)).then(function (result) {
+      if (result && result.error) throw new Error(result.error);
+      return result === true;
+    });
+  };
 
   /** Scripts that have already reported ready, for a page that listens late. */
   global.Pebble.readyTargets = function () { return readyTargets.slice(); };

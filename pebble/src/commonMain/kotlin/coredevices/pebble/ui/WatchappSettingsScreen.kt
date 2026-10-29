@@ -5,24 +5,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.request.RequestInterceptor
 import com.multiplatform.webview.request.WebRequest
@@ -51,6 +60,7 @@ import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -183,6 +193,45 @@ fun WatchappSettingsScreen(
                 null
             }
         }
+        var linkRequest by remember { mutableStateOf<LinkRequest?>(null) }
+        LaunchedEffect(bridge) {
+            bridge?.openUrl = { url ->
+                // One at a time, so a page can't swap the url while the user is reading it.
+                if (linkRequest != null) {
+                    false
+                } else {
+                    val answer = CompletableDeferred<Boolean>()
+                    linkRequest = LinkRequest(url, Url(url).host, answer)
+                    answer.await()
+                }
+            }
+        }
+        linkRequest?.let { request ->
+            val uriHandler = LocalUriHandler.current
+            val close = { opened: Boolean ->
+                request.answer.complete(opened)
+                linkRequest = null
+            }
+            AlertDialog(
+                onDismissRequest = { close(false) },
+                title = { Text("Open in browser?") },
+                text = {
+                    Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+                        Text("$title wants to open a page on")
+                        Text(request.host, style = MaterialTheme.typography.titleMedium)
+                        Text(request.url, style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { close(runCatching { uriHandler.openUri(request.url) }.isSuccess) }) {
+                        Text("Open")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { close(false) }) { Text("Cancel") }
+                },
+            )
+        }
         LaunchedEffect(bridge, session, uiContext, webViewUuid) {
             val ctx = uiContext
             val pluginUuid = webViewUuid
@@ -252,6 +301,8 @@ fun WatchappSettingsScreen(
         }
     }
 }
+
+private class LinkRequest(val url: String, val host: String, val answer: CompletableDeferred<Boolean>)
 
 internal fun normalizeWatchappSettingsUrl(url: String): String {
     val parsed = runCatching { Url(url) }.getOrNull() ?: return url
