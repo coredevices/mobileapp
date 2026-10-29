@@ -1174,3 +1174,18 @@ class PermissionQueryTest {
         assertEquals("denied", permissions(dao, installed = installedAs(null)).query(APP, CALENDAR).queryState())
     }
 }
+
+class AllAppsStatusesTest {
+    private val dao = FakePermissionDao()
+
+    @Test
+    fun nullListsEveryInstalledAppsPermissionsWithTheirApp() = runTest {
+        val removed = Uuid.parse("00000000-0000-0000-0000-00000000a002")
+        val permissions = permissions(dao)
+        permissions.recordRequested(APP, listOf(CALENDAR))
+        permissions.recordRequested(removed, listOf(LOCATION))
+        val all = permissions.statuses(null).first()
+        assertEquals(listOf(APP to CALENDAR), all.map { it.appUuid to it.permission })
+        assertEquals(PermissionStatus.AllowedAutomatically, all.single().status)
+    }
+}

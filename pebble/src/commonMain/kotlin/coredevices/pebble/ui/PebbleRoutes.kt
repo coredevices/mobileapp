@@ -105,6 +105,12 @@ object PebbleNavBarRoutes {
     data object PreferredSourcesRoute : NavBarRoute
 
     @Serializable
+    data object PermissionUsageRoute : NavBarRoute
+
+    @Serializable
+    data class PermissionHoldersRoute(val permission: String) : NavBarRoute
+
+    @Serializable
     data object CannedRepliesRoute : NavBarRoute
 
     @Serializable
@@ -281,6 +287,13 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.PreferredSourcesRoute> {
         PreferredSourcesScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PermissionUsageRoute> {
+        PermissionUsageScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
+        val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()
+        PermissionHoldersScreen(nav, topBarParams, route.permission)
     }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
         CannedRepliesScreen(nav, topBarParams)

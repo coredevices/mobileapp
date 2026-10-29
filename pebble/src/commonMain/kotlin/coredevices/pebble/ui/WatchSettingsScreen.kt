@@ -2111,6 +2111,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.enablePlugins },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Permissions in use",
+                    description = "Which apps can use each permission",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.PermissionUsageRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ) },
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
                     description = "Sign out of your Pebble account ($coreUser)",

@@ -58,7 +58,7 @@ enum class PermissionStatus {
     Waiting,
 }
 
-data class AppPermissionStatus(val permission: String, val status: PermissionStatus, val lastUsedAtMs: Long? = null)
+data class AppPermissionStatus(val appUuid: Uuid, val permission: String, val status: PermissionStatus, val lastUsedAtMs: Long? = null)
 
 enum class PermissionDecision {
     Granted,
@@ -315,14 +315,17 @@ class AppPermissions(
         return key == invokeActionKey(plugin) && !canExfiltrate(plugin)
     }
 
-    fun statuses(appUuid: Uuid): Flow<List<AppPermissionStatus>> = combine(
-        dao.flowByAppUuid(appUuid),
-        watchConfig.flow,
-        installed.pluginPermissions(),
-        installed.subjectsOf(setOf(appUuid)),
-    ) { rows, config, defined, subjects ->
-        permissionStatuses(subjects[appUuid], rows, config.watchConfig, defined)
-    }
+    /** [appUuid]'s permissions, or every installed app's if null. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun statuses(appUuid: Uuid?): Flow<List<AppPermissionStatus>> =
+        combine(appUuid?.let(dao::flowByAppUuid) ?: dao.allFlow(), watchConfig.flow, installed.pluginPermissions(), ::Triple)
+            .flatMapLatest { (rows, config, defined) ->
+                installed.subjectsOf(rows.map { it.appUuid }.toSet() + listOfNotNull(appUuid)).map { subjects ->
+                    rows.groupBy { it.appUuid }
+                        .filterKeys { appUuid != null || it in subjects }
+                        .flatMap { (app, appRows) -> permissionStatuses(subjects[app], appRows, config.watchConfig, defined) }
+                }
+            }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val waiting: Flow<List<LockerAppPermission>> by lazy {
@@ -442,7 +445,7 @@ internal fun permissionStatuses(
             PermissionDecision.Denied -> return@mapNotNull null
         }
     }
-    AppPermissionStatus(row.permission, status, row.lastUsedAtMs)
+    AppPermissionStatus(row.appUuid, row.permission, status, row.lastUsedAtMs)
 }
 
 internal fun waitingRows(

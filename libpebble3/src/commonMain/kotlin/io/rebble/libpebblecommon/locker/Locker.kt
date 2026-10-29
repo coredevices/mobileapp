@@ -184,13 +184,15 @@ class Locker(
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
 
-    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> =
-        combine(permissions.statuses(id), lockerEntryDao.getEntryFlow(id)) { statuses, entry ->
+    override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> {
+        if (id == null) return permissions.statuses(null).flowOn(Dispatchers.IO)
+        return combine(permissions.statuses(id), lockerEntryDao.getEntryFlow(id)) { statuses, entry ->
             statuses.takeIf {
                 it.isNotEmpty() || entry == null || entry.systemApp ||
                     lockerPBWCache.cachedPBWFileForApp(id, entry.version) != null
             }
         }.flowOn(Dispatchers.IO)
+    }
 
     private suspend fun pbwFor(uuid: Uuid): PbwApp? {
         val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null

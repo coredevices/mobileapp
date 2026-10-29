@@ -212,7 +212,7 @@ class FakeLibPebble : LibPebble {
         return locker
     }
 
-    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
+    override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }
