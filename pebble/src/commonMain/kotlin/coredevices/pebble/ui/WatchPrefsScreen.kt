@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -72,16 +71,19 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
-// Rendered inside the single "Backlight Color" item (backlightColorPref), not loose in the list.
-private val BACKLIGHT_COLOR_SCHEDULE_PREFS = setOf<WatchPref<*>>(
-    BoolWatchPref.BacklightColorDayNightEnabled,
-    RgbColorWatchPref.BacklightColorNight,
+private val BACKLIGHT_SUN_TIMES = setOf<WatchPref<*>>(
     NumberWatchPref.BacklightColorSunriseMinute,
     NumberWatchPref.BacklightColorSunsetMinute,
 )
 
-internal fun List<WatchPreference<*>>.hideFoldedBacklightColorPrefs(): List<WatchPreference<*>> =
-    filterNot { it.pref in BACKLIGHT_COLOR_SCHEDULE_PREFS }
+/** Night colour and its times only while night colour is on; manual times only while they aren't automatic. */
+internal fun List<WatchPreference<*>>.hideUnusedBacklightColorPrefs(autoSunTimes: Boolean): List<WatchPreference<*>> {
+    val night = firstOrNull { it.pref == BoolWatchPref.BacklightColorDayNightEnabled }?.valueOrDefault() == true
+    return filterNot {
+        (!night && (it.pref == RgbColorWatchPref.BacklightColorNight || it.pref in BACKLIGHT_SUN_TIMES)) ||
+            (autoSunTimes && it.pref in BACKLIGHT_SUN_TIMES)
+    }
+}
 
 private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
     BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
@@ -102,25 +104,29 @@ fun watchPrefs(): List<SettingsItem> {
     val libPebble = rememberLibPebble()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
+    val coreConfig by coreConfigHolder.config.collectAsState()
+    val weatherFetcher = koinInject<WeatherFetcher>()
     val quickLaunchOptions = quickLaunchOptions(libPebble)
-    val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs()
+    val mapped = remember(settings, quickLaunchOptions, coreConfig) {
+        settings.inLayoutOrder()
+            .hidePresetManagedBacklightPrefs()
             .groupQuietTimeScheduleHours()
-            .hideFoldedBacklightColorPrefs()
-            .map { item ->
-                when (val pref = item.pref) {
+            .hideUnusedBacklightColorPrefs(coreConfig.backlightColorAutoSunriseSunset)
+            .flatMap { item ->
+                val setting = when (val pref = item.pref) {
                     is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                     is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
                     is QuicklaunchWatchPref -> quicklaunchPref(pref.castParent(item), libPebble, quickLaunchOptions)
                     is ColorWatchPref -> colorPref(pref.castParent(item), libPebble)
-                    is RgbColorWatchPref ->
-                        if (pref == RgbColorWatchPref.BacklightColor) {
-                            backlightColorPref(settings, libPebble, coreConfigHolder)
-                        } else {
-                            rgbColorPref(pref.castParent(item), libPebble)
-                        }
+                    is RgbColorWatchPref -> rgbColorPref(pref.castParent(item), libPebble)
                     is NumberWatchPref -> numberPref(pref.castParent(item), libPebble)
                     is ScheduleWatchPref -> schedulePref(pref.castParent(item), libPebble)
+                }
+                // Automatic sun times are a phone setting, shown with the night colour they serve.
+                if (item.pref == RgbColorWatchPref.BacklightColorNight) {
+                    listOf(setting, autoSunTimesItem(coreConfigHolder, weatherFetcher))
+                } else {
+                    listOf(setting)
                 }
             }
     }
@@ -152,70 +158,97 @@ fun watchPrefs(): List<SettingsItem> {
     return listOf(reset) + mapped
 }
 
-fun WatchPref<*>.section(): Section = when (this) {
-    BoolWatchPref.TimezoneSourceIsManual -> Section.Time
-    BoolWatchPref.Clock24h -> Section.Time
-    BoolWatchPref.StandbyMode -> Section.Other
-    BoolWatchPref.LeftHandedMode -> Section.Display
-    BoolWatchPref.Backlight -> Section.Display
-    BoolWatchPref.AmbientLightSensor -> Section.Display
-    BoolWatchPref.BacklightMotion -> Section.Display
-    BoolWatchPref.BacklightColorDayNightEnabled -> Section.Display
-    RgbColorWatchPref.BacklightColorNight -> Section.Display
-    NumberWatchPref.BacklightColorSunriseMinute -> Section.Display
-    NumberWatchPref.BacklightColorSunsetMinute -> Section.Display
-    EnumWatchPref.WindSpeed -> Section.Weather
-//    ColorWatchPref.SettingsMenuHighlightColor -> Section.Display
-//    ColorWatchPref.AppMenuHighlightColor -> Section.Display
-    EnumWatchPref.SystemTextSize -> Section.Display
-    EnumWatchPref.NotificationTextSize -> Section.Notifications
-    EnumWatchPref.MotionSensitivity -> Section.Display
-    EnumWatchPref.BacklightPreset -> Section.Display
-    EnumWatchPref.BacklightIntensity -> Section.Display
-    EnumWatchPref.DynamicBacklightMode -> Section.Display
-    EnumWatchPref.BacklightTouch -> Section.Display
-    RgbColorWatchPref.BacklightColor -> Section.Display
-    NumberWatchPref.BacklightTimeoutMs -> Section.Display
-    NumberWatchPref.AmbientLightThreshold -> Section.Display
-    QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlComboUpDown -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlSelect -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlBack -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlSingleClickUp -> Section.QuickLaunch
-    QuicklaunchWatchPref.QlSingleClickDown -> Section.QuickLaunch
-    BoolWatchPref.TimelineQuickViewEnabled -> Section.Timeline
-    NumberWatchPref.TimelineQuickViewMinsBefore -> Section.Timeline
-    EnumWatchPref.TimelineQuickViewUnsupportedFaces -> Section.Timeline
-    EnumWatchPref.NotificationFilter -> Section.Notifications
-    EnumWatchPref.QuietTimeInterruptions -> Section.QuietTime
-    EnumWatchPref.QuietTimeShowNotifications -> Section.QuietTime
-    EnumWatchPref.LegacyVibeIntensity -> Section.Notifications
-    EnumWatchPref.VibeScoreNotifications -> Section.Notifications
-    EnumWatchPref.VibeScoreCalls -> Section.Notifications
-    EnumWatchPref.VibeScoreAlarms -> Section.Notifications
-    BoolWatchPref.QuietTimeManuallyEnabled -> Section.QuietTime
-    BoolWatchPref.CalendarAwareQuietTime -> Section.QuietTime
-    BoolWatchPref.QuietTimeWeekdayScheduleEnabled -> Section.QuietTime
-    BoolWatchPref.QuietTimeWeekendScheduleEnabled -> Section.QuietTime
-    ScheduleWatchPref.QuietTimeWeekdaySchedule -> Section.QuietTime
-    ScheduleWatchPref.QuietTimeWeekendSchedule -> Section.QuietTime
-    BoolWatchPref.AlternativeNotificationStyle -> Section.Notifications
-    BoolWatchPref.NotificationVibeDelay -> Section.Notifications
-    BoolWatchPref.NotificationBacklight -> Section.Notifications
-    BoolWatchPref.RespectPhoneSilence -> Section.Notifications
-    NumberWatchPref.NotificationTimeoutMs -> Section.Notifications
-    BoolWatchPref.MenuScrollWrapAround -> Section.Display
-    EnumWatchPref.MenuScrollVibe -> Section.Display
-    BoolWatchPref.QuietTimeMotionBacklight -> Section.QuietTime
-    BoolWatchPref.QuietTimeTouchBacklight -> Section.QuietTime
-    BoolWatchPref.QuietTimeNotificationBacklight -> Section.QuietTime
-    BoolWatchPref.QuietTimeAutoDismiss -> Section.QuietTime
-    BoolWatchPref.MusicShowVolumeControls -> Section.Music
-    BoolWatchPref.MusicShowProgressBar -> Section.Music
-    BoolWatchPref.MusicShowAlbumArt -> Section.Music
-}
+internal class PrefLayout(
+    val pref: WatchPref<*>,
+    val section: Section,
+    val group: SettingsGroup? = null,
+    /** Its title under the group's heading. */
+    val title: String? = null,
+)
+
+/** Every watch pref, in the order the settings screen shows them (WatchPrefLayoutTest checks none is missing). */
+internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
+    PrefLayout(QuicklaunchWatchPref.QlUp, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlDown, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlSelect, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlBack, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlComboBackUp, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlComboUpDown, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlSingleClickUp, Section.QuickLaunch),
+    PrefLayout(QuicklaunchWatchPref.QlSingleClickDown, Section.QuickLaunch),
+
+    PrefLayout(EnumWatchPref.SystemTextSize, Section.Display),
+    PrefLayout(BoolWatchPref.Backlight, Section.Display, SettingsGroup.Backlight, "Enabled"),
+    PrefLayout(EnumWatchPref.BacklightPreset, Section.Display, SettingsGroup.Backlight, "Preset"),
+    PrefLayout(EnumWatchPref.BacklightIntensity, Section.Display, SettingsGroup.Backlight, "Intensity"),
+    PrefLayout(EnumWatchPref.DynamicBacklightMode, Section.Display, SettingsGroup.Backlight),
+    PrefLayout(EnumWatchPref.BacklightTouch, Section.Display, SettingsGroup.Backlight),
+    PrefLayout(NumberWatchPref.BacklightTimeoutMs, Section.Display, SettingsGroup.Backlight, "Timeout"),
+    PrefLayout(BoolWatchPref.AmbientLightSensor, Section.Display, SettingsGroup.BacklightAmbient, "Enabled"),
+    PrefLayout(NumberWatchPref.AmbientLightThreshold, Section.Display, SettingsGroup.BacklightAmbient, "Threshold"),
+    PrefLayout(BoolWatchPref.BacklightMotion, Section.Display, SettingsGroup.BacklightMotion, "Enabled"),
+    PrefLayout(EnumWatchPref.MotionSensitivity, Section.Display, SettingsGroup.BacklightMotion, "Sensitivity"),
+    PrefLayout(RgbColorWatchPref.BacklightColor, Section.Display, SettingsGroup.BacklightColor, "Color"),
+    PrefLayout(BoolWatchPref.BacklightColorDayNightEnabled, Section.Display, SettingsGroup.BacklightColor, "Change Color at Night"),
+    PrefLayout(RgbColorWatchPref.BacklightColorNight, Section.Display, SettingsGroup.BacklightColor, "Night Color"),
+    PrefLayout(NumberWatchPref.BacklightColorSunriseMinute, Section.Display, SettingsGroup.BacklightColor, "Sunrise"),
+    PrefLayout(NumberWatchPref.BacklightColorSunsetMinute, Section.Display, SettingsGroup.BacklightColor, "Sunset"),
+    PrefLayout(BoolWatchPref.MenuScrollWrapAround, Section.Display, SettingsGroup.MenuScrolling, "Wrap Around"),
+    PrefLayout(EnumWatchPref.MenuScrollVibe, Section.Display, SettingsGroup.MenuScrolling, "Vibration"),
+    PrefLayout(BoolWatchPref.LeftHandedMode, Section.Display),
+
+    PrefLayout(EnumWatchPref.WindSpeed, Section.Weather),
+
+    PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Notifications, SettingsGroup.Vibration, "System Intensity"),
+    PrefLayout(EnumWatchPref.VibeScoreNotifications, Section.Notifications, SettingsGroup.Vibration, "Notifications"),
+    PrefLayout(EnumWatchPref.VibeScoreCalls, Section.Notifications, SettingsGroup.Vibration, "Incoming Calls"),
+    PrefLayout(EnumWatchPref.VibeScoreAlarms, Section.Notifications, SettingsGroup.Vibration, "Alarms"),
+    PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, SettingsGroup.Vibration, "Delay Until Notification Is Visible"),
+    PrefLayout(BoolWatchPref.NotificationBacklight, Section.Notifications),
+    PrefLayout(BoolWatchPref.RespectPhoneSilence, Section.Notifications),
+    PrefLayout(EnumWatchPref.NotificationTextSize, Section.Notifications),
+    PrefLayout(EnumWatchPref.NotificationFilter, Section.Notifications),
+    PrefLayout(NumberWatchPref.NotificationTimeoutMs, Section.Notifications),
+    PrefLayout(BoolWatchPref.AlternativeNotificationStyle, Section.Notifications),
+
+    PrefLayout(BoolWatchPref.TimezoneSourceIsManual, Section.Time),
+    PrefLayout(BoolWatchPref.Clock24h, Section.Time),
+
+    PrefLayout(BoolWatchPref.TimelineQuickViewEnabled, Section.Timeline, SettingsGroup.QuickView, "Show Upcoming Events"),
+    PrefLayout(NumberWatchPref.TimelineQuickViewMinsBefore, Section.Timeline, SettingsGroup.QuickView, "Minutes Before Event"),
+    PrefLayout(EnumWatchPref.TimelineQuickViewUnsupportedFaces, Section.Timeline, SettingsGroup.QuickView, "Unsupported Faces"),
+
+    PrefLayout(BoolWatchPref.QuietTimeManuallyEnabled, Section.QuietTime),
+    PrefLayout(BoolWatchPref.CalendarAwareQuietTime, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeWeekdayScheduleEnabled, Section.QuietTime),
+    PrefLayout(ScheduleWatchPref.QuietTimeWeekdaySchedule, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeWeekendScheduleEnabled, Section.QuietTime),
+    PrefLayout(ScheduleWatchPref.QuietTimeWeekendSchedule, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeMotionBacklight, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeTouchBacklight, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeNotificationBacklight, Section.QuietTime),
+    PrefLayout(BoolWatchPref.QuietTimeAutoDismiss, Section.QuietTime),
+    PrefLayout(EnumWatchPref.QuietTimeInterruptions, Section.QuietTime),
+    PrefLayout(EnumWatchPref.QuietTimeShowNotifications, Section.QuietTime),
+
+    PrefLayout(BoolWatchPref.MusicShowVolumeControls, Section.Music),
+    PrefLayout(BoolWatchPref.MusicShowProgressBar, Section.Music),
+    PrefLayout(BoolWatchPref.MusicShowAlbumArt, Section.Music),
+
+    PrefLayout(BoolWatchPref.StandbyMode, Section.Other),
+)
+
+private val LAYOUT = WATCH_PREF_LAYOUT.associateBy { it.pref }
+private val POSITION = WATCH_PREF_LAYOUT.withIndex().associate { (index, layout) -> layout.pref to index }
+
+fun WatchPref<*>.section(): Section = LAYOUT[this]?.section ?: Section.Other
+
+fun WatchPref<*>.settingsTitle(): String = LAYOUT[this]?.title ?: displayName
+
+fun WatchPref<*>.settingsGroup(): SettingsGroup? = LAYOUT[this]?.group
+
+internal fun List<WatchPreference<*>>.inLayoutOrder(): List<WatchPreference<*>> =
+    sortedBy { POSITION[it.pref] ?: Int.MAX_VALUE }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
     // Weather is configured on the phone, even though the unit it sets is a watch pref.
@@ -245,12 +278,14 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
                 steps = NOTIFICATION_TIMEOUT_STEP_COUNT,
             )
         }
+        NumberWatchPref.BacklightColorSunriseMinute, NumberWatchPref.BacklightColorSunsetMinute -> timeOfDayPref(item, libPebble)
         else -> basicSettingsNumberItem(
             id = pref.id,
-            title = pref.displayName,
+            title = pref.settingsTitle(),
             description = pref.description,
             topLevelType = pref.topLevelType(),
             section = pref.section(),
+            group = pref.settingsGroup(),
             value = item.valueOrDefault(),
             min = pref.min,
             max = pref.max,
@@ -277,10 +312,11 @@ private fun basicSettingsNumberSecondsItem(
     steps: Int? = null,
 ): SettingsItem = basicSettingsNumberItem(
     id = pref.id,
-    title = pref.displayName,
+    title = pref.settingsTitle(),
     description = pref.description,
     topLevelType = pref.topLevelType(),
     section = pref.section(),
+    group = pref.settingsGroup(),
     value = item.valueOrDefault().milliseconds.inWholeSeconds,
     min = pref.min.milliseconds.inWholeSeconds.toInt(),
     max = pref.max.milliseconds.inWholeSeconds.toInt(),
@@ -301,9 +337,10 @@ private fun schedulePref(
     val pref = item.pref as ScheduleWatchPref
     return SettingsItem(
         id = pref.id,
-        title = pref.displayName,
+        title = pref.settingsTitle(),
         topLevelType = pref.topLevelType(),
         section = pref.section(),
+        group = pref.settingsGroup(),
         item = {
             ListItem(
                 headlineContent = {
@@ -393,9 +430,10 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
     val default = item.valueOrDefault()
     return SettingsItem(
         id = pref.id,
-        title = pref.displayName,
+        title = pref.settingsTitle(),
         topLevelType = pref.topLevelType(),
         section = pref.section(),
+        group = pref.settingsGroup(),
         item = {
             ListItem(
                 headlineContent = {
@@ -426,10 +464,11 @@ private fun colorPref(item: WatchPreference<TimelineColor>, libPebble: LibPebble
 private fun booleanPref(item: WatchPreference<Boolean>, libPebble: LibPebble): SettingsItem {
     return basicSettingsToggleItem(
         id = item.pref.id,
-        title = item.pref.displayName,
+        title = item.pref.settingsTitle(),
         description = item.pref.description,
         topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
+        group = item.pref.settingsGroup(),
         checked = item.valueOrDefault(),
         onCheckChanged = { enabled ->
             libPebble.setWatchPref(item.copy(value = enabled))
@@ -442,10 +481,11 @@ private fun enumPref(item: WatchPreference<WatchPrefEnum>, libPebble: LibPebble)
     val pref = item.pref as EnumWatchPref
     return basicSettingsDropdownItem(
         id = pref.id,
-        title = pref.displayName,
+        title = pref.settingsTitle(),
         description = pref.description,
         topLevelType = pref.topLevelType(),
         section = pref.section(),
+        group = pref.settingsGroup(),
         selectedItem = item.valueOrDefault(),
         items = pref.options,
         onItemSelected = {
@@ -460,12 +500,13 @@ private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): Set
     val pref = item.pref as RgbColorWatchPref
     return SettingsItem(
         id = pref.id,
-        title = pref.displayName,
+        title = pref.settingsTitle(),
         topLevelType = pref.topLevelType(),
         section = pref.section(),
+        group = pref.settingsGroup(),
         item = {
             ListItem(
-                headlineContent = { Text(pref.displayName) },
+                headlineContent = { Text(pref.settingsTitle()) },
                 supportingContent = {
                     Column {
                         pref.description?.let { description ->
@@ -487,90 +528,37 @@ private fun rgbColorPref(item: WatchPreference<UInt>, libPebble: LibPebble): Set
     )
 }
 
-private fun <T> List<WatchPreference<*>>.preference(pref: WatchPref<T>): WatchPreference<T> =
-    pref.castParent(firstOrNull { it.pref == pref } ?: WatchPreference(pref, null))
-
-/**
- * Day colour, the night toggle, and — only while night colour is on — night colour, the
- * automatic-times toggle and (only while that is off) manual sunrise/sunset pickers, in one item.
- */
-private fun backlightColorPref(
-    settings: List<WatchPreference<*>>,
-    libPebble: LibPebble,
-    coreConfigHolder: CoreConfigHolder,
-): SettingsItem {
-    val dayPref = RgbColorWatchPref.BacklightColor
-    val nightPref = RgbColorWatchPref.BacklightColorNight
-    val day = settings.preference(dayPref)
-    val night = settings.preference(nightPref)
-    val enabled = settings.preference(BoolWatchPref.BacklightColorDayNightEnabled)
-    val sunrise = settings.preference(NumberWatchPref.BacklightColorSunriseMinute)
-    val sunset = settings.preference(NumberWatchPref.BacklightColorSunsetMinute)
-    return SettingsItem(
-        id = dayPref.id,
-        title = dayPref.displayName,
-        topLevelType = dayPref.topLevelType(),
-        section = dayPref.section(),
-        item = {
-            val coreConfig by coreConfigHolder.config.collectAsState()
-            val autoSunriseSunset = coreConfig.backlightColorAutoSunriseSunset
-            val dayNightOn = enabled.valueOrDefault()
-            ListItem(
-                headlineContent = { Text(dayPref.displayName) },
-                supportingContent = {
-                    Column {
-                        dayPref.description?.let { Text(it, fontSize = 11.sp) }
-                        SelectRgbColor(
-                            currentRgb = day.valueOrDefault(),
-                            defaultRgb = dayPref.defaultValue,
-                            presets = dayPref.presets,
-                            label = if (dayNightOn) "Day" else "Color",
-                            onChangeColor = { libPebble.setWatchPref(day.copy(value = it)) },
-                        )
-                        BacklightToggleRow(
-                            label = BoolWatchPref.BacklightColorDayNightEnabled.displayName,
-                            checked = dayNightOn,
-                            onCheckedChange = { libPebble.setWatchPref(enabled.copy(value = it)) },
-                        )
-                        if (dayNightOn) {
-                            SelectRgbColor(
-                                currentRgb = night.valueOrDefault(),
-                                defaultRgb = nightPref.defaultValue,
-                                presets = nightPref.presets,
-                                label = "Night",
-                                onChangeColor = { libPebble.setWatchPref(night.copy(value = it)) },
-                            )
-                            val weatherFetcher = koinInject<WeatherFetcher>()
-                            BacklightToggleRow(
-                                label = "Automatic Sunrise/Sunset",
-                                checked = autoSunriseSunset,
-                                onCheckedChange = { on ->
-                                    coreConfigHolder.update(coreConfig.copy(backlightColorAutoSunriseSunset = on))
-                                    if (on) GlobalScope.launch { weatherFetcher.fetchWeather(this) }
-                                },
-                            )
-                            if (!autoSunriseSunset) {
-                                SelectTimeOfDay("Sunrise", sunrise.valueOrDefault()) {
-                                    libPebble.setWatchPref(sunrise.copy(value = it))
-                                }
-                                SelectTimeOfDay("Sunset", sunset.valueOrDefault()) {
-                                    libPebble.setWatchPref(sunset.copy(value = it))
-                                }
-                            }
-                        }
-                    }
-                },
-            )
+private fun autoSunTimesItem(coreConfigHolder: CoreConfigHolder, weatherFetcher: WeatherFetcher): SettingsItem {
+    val pref = RgbColorWatchPref.BacklightColorNight
+    val coreConfig = coreConfigHolder.config.value
+    return basicSettingsToggleItem(
+        title = "Automatic Sunrise/Sunset",
+        description = "Use the sunrise and sunset times for your location",
+        topLevelType = pref.topLevelType(),
+        section = pref.section(),
+        group = pref.settingsGroup(),
+        checked = coreConfig.backlightColorAutoSunriseSunset,
+        onCheckChanged = { on ->
+            coreConfigHolder.update(coreConfig.copy(backlightColorAutoSunriseSunset = on))
+            if (on) GlobalScope.launch { weatherFetcher.fetchWeather(this) }
         },
-        isDebugSetting = dayPref.isDebugSetting,
     )
 }
 
-@Composable
-private fun BacklightToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    ListItem(
-        headlineContent = { Text(label) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+private fun timeOfDayPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
+    val pref = item.pref
+    return SettingsItem(
+        id = pref.id,
+        title = pref.settingsTitle(),
+        topLevelType = pref.topLevelType(),
+        section = pref.section(),
+        group = pref.settingsGroup(),
+        item = {
+            SelectTimeOfDay(pref.settingsTitle(), item.valueOrDefault()) {
+                libPebble.setWatchPref(item.copy(value = it))
+            }
+        },
+        isDebugSetting = pref.isDebugSetting,
     )
 }
 
@@ -630,10 +618,11 @@ private fun quicklaunchPref(item: WatchPreference<QuickLaunchSetting>, libPebble
     val defaultQl = options.firstOrNull { it.uuid == default.uuid } ?: options[0]
     return basicSettingsDropdownItem(
         id = item.pref.id,
-        title = item.pref.displayName,
+        title = item.pref.settingsTitle(),
         description = item.pref.description,
         topLevelType = item.pref.topLevelType(),
         section = item.pref.section(),
+        group = item.pref.settingsGroup(),
         selectedItem = defaultQl,
         items = options,
         onItemSelected = {
