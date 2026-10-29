@@ -35,10 +35,11 @@ class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
     private val appResumed: AppResumed,
-    private val healthManager: HealthManager,
+    healthManager: Lazy<HealthManager>,
     private val healthDataApi: HealthDataApi,
 ) {
     private val logger = Logger.withTag("PlatformHealthSync")
+    private val healthManager by healthManager
 
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing

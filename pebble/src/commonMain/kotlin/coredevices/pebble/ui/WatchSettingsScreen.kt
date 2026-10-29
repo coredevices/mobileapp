@@ -567,6 +567,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val healthSyncTracker: HealthSyncTracker = koinInject()
     val healthPlatformSyncEnabled by healthSyncTracker.enabled.collectAsState()
     val healthIsSyncing by platformHealthSync.syncing.collectAsState()
+    val healthPlatformAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformHealthSync.isAvailable() }
+    }
     val preferredSources by libPebble.preferredSourcePlugins.collectAsState()
 
     val rawSettingsItems = remember(
@@ -585,6 +588,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             rebbleVoiceAvailable,
             platformSttAvailable,
             anyWatchSupportsFiveMinHrm,
+            healthPlatformAvailable,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -1362,7 +1366,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Health,
                     checked = healthPlatformSyncEnabled,
                     description = "Write steps, heart rate, sleep, and workouts to your phone's health platform",
-                    show = { healthSettings.trackingEnabled && platformHealthSync.isAvailable() },
+                    show = { healthSettings.trackingEnabled && healthPlatformAvailable },
                     onCheckChanged = { enabled ->
                         scope.launch {
                             if (enabled) {
