@@ -172,7 +172,7 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null } ?: return
         if (_signingSecretLoading.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value.takeIf { signRequests }
+        val signingSecret = _signingSecretInput.value.trimLineBreaks().takeIf { signRequests }
         if (signRequests && signingSecret.isNullOrBlank()) return
         _testState.value = WebhookTestState.Sending
         viewModelScope.launch {
@@ -196,7 +196,7 @@ class IndexWebhookSettingsViewModel(
         val url = _urlInput.value.trim().ifBlank { null }
         if (_signingSecretLoading.value || _saving.value) return
         val signRequests = _signRequestsInput.value
-        val signingSecret = _signingSecretInput.value
+        val signingSecret = _signingSecretInput.value.trimLineBreaks()
         if (signRequests && signingSecret.isBlank()) return
         val payloadMode = _payloadModeInput.value
         val clickPayload = _clickPayloadInput.value.trim()
@@ -259,6 +259,15 @@ class IndexWebhookSettingsViewModel(
     }
 
     /** Drops rows with a blank name; later rows win on duplicate names. */
+    /**
+     * Pasting a secret out of a notification, chat message or web page often brings line breaks
+     * along with it, and a multi-line text field keeps them. The secret then signs as
+     * `secret + "\n"` and every delivery fails signature verification with no visible cause.
+     * Line breaks can never be part of an intended secret, so drop them; other whitespace is
+     * kept exactly as typed.
+     */
+    private fun String.trimLineBreaks(): String = trim { it == '\n' || it == '\r' }
+
     private fun draftHeaders(): Map<String, String> = _headerInputs.value
         .map { it.name.trim() to it.value.trim() }
         .filter { it.first.isNotEmpty() }
