@@ -61,6 +61,7 @@ object BuiltInIntegrationProviders {
         override val title = "iPhone Reminders"
         override val supports = setOf(Reminder)
         override val platforms = setOf(SupportedPlatform.Ios)
+        override val isHiddenByPlugins = false
         override suspend fun isAuthorized() = true
         override fun reminders(): ReminderIntegration = createRemindersAppIntegration()
     }
