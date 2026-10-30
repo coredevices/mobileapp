@@ -92,6 +92,7 @@ class NotificationDecisionTest {
         channel: ChannelItem? = null,
         isLocalOnly: Boolean = false,
         isRuleFiltered: Boolean = false,
+        alreadySent: Boolean = false,
         screenIsOnAndUnlocked: Boolean = false,
     ) = decideNotification(
         notification = notification,
@@ -102,8 +103,22 @@ class NotificationDecisionTest {
         notificationConfig = config,
         isLocalOnly = isLocalOnly,
         isRuleFiltered = { isRuleFiltered },
+        alreadySent = { alreadySent },
         screenIsOnAndUnlocked = { screenIsOnAndUnlocked },
     )
+
+    @Test
+    fun `notification already sent before a restart is a duplicate`() = runTest {
+        assertEquals(NotSentDuplicate, decide(notification(), alreadySent = true))
+    }
+
+    @Test
+    fun `allowDuplicates ignores notifications already sent`() = runTest {
+        assertEquals(
+            SendToWatch,
+            decide(notification(), alreadySent = true, appEntry = appEntry(allowDuplicates = true)),
+        )
+    }
 
     @Test
     fun `duplicate from non-Ring app is blocked`() = runTest {

@@ -177,6 +177,15 @@ fun LibPebbleNotification.toEntity(
     imageAspect = imageAspect?.toInt(),
 )
 
+fun LibPebbleNotification.wasSentAs(sent: NotificationEntity): Boolean =
+    packageName == sent.pkg &&
+            title == sent.title &&
+            body == sent.body &&
+            messageKey == sent.messageKey &&
+            imageAspect?.toInt() == sent.imageAspect &&
+            // Without a message to identify, only a replay of the same post is the same notification.
+            (messageKey != null || timestamp.asMillisecond() == sent.timestamp)
+
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
     is NotificationResult.Extracted -> notification
     NotificationResult.NotProcessed -> null

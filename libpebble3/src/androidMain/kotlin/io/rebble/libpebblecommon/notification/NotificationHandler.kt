@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
+import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
 import io.rebble.libpebblecommon.notification.NotificationDecision
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
@@ -229,6 +231,7 @@ class NotificationHandler(
             notificationConfig = notificationConfig.value,
             isLocalOnly = sbn.notification.isLocalOnly(),
             isRuleFiltered = { checkRuleFiltered(appEntry, notification) },
+            alreadySent = { findSent(notification) != null },
             screenIsOnAndUnlocked = ::screenIsOnAndUnlocked,
         )
         val storeNotification = when {
@@ -284,6 +287,16 @@ class NotificationHandler(
         }
 
         return rules.any { it.matches() }
+    }
+
+    private suspend fun findSent(notification: LibPebbleNotification): NotificationEntity? {
+        val since = timeProvider.now() - SENT_LOOKBACK
+        return notificationDao.sentWithText(
+            pkg = notification.packageName,
+            title = notification.title,
+            body = notification.body,
+            sinceMs = since.toEpochMilliseconds(),
+        ).firstOrNull { notification.wasSentAs(it) }
     }
 
     private fun screenIsOnAndUnlocked(): Boolean {
@@ -499,6 +512,7 @@ internal suspend fun decideNotification(
     notificationConfig: NotificationConfig,
     isLocalOnly: Boolean,
     isRuleFiltered: suspend () -> Boolean,
+    alreadySent: suspend () -> Boolean,
     screenIsOnAndUnlocked: () -> Boolean,
 ): NotificationDecision {
     val anyContactMuted = notification.people.any { it.muteState == MuteState.Always }
@@ -513,6 +527,7 @@ internal suspend fun decideNotification(
         notification.title.isNullOrBlank() && notification.body.isNullOrBlank() -> NotSentEmpty
         isRuleFiltered() -> NotSentRuleFiltered
         !allowDuplicates && inflightNotifications.any { it.displayDataEquals(notification) } -> NotSentDuplicate
+        !allowDuplicates && alreadySent() -> NotSentDuplicate
         !notificationConfig.alwaysSendNotifications && !notification.isPebbleTestNotification() && screenIsOnAndUnlocked() -> NotificationDecision.NotSentScreenOn
         else -> SendToWatch
     }
@@ -528,6 +543,9 @@ private val EXTRA_KEYS_SKIP_VALUE =
     setOf("android.largeIcon", "android.picture", "android.backgroundImage", "android.icon", "android.smallIcon")
 
 private val GROUP_SUMMARY_RECHECK_DELAY = 0.5.seconds
+
+// The watch drops notifications older than this, so a replay past it can't duplicate anything.
+private val SENT_LOOKBACK = 1.days
 
 internal data class ActiveNotificationInfo(
     val key: String,
