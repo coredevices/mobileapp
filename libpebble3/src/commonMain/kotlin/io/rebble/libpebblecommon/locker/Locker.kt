@@ -431,7 +431,10 @@ class Locker(
             pbwApp.info.watchapp.watchface -> AppType.Watchface
             else -> AppType.Watchapp
         }
-        val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type))
+        val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type)).let { new ->
+            // A permissions-only change doesn't make the watch reload the binary
+            new.copy(microphoneGranted = lockerEntryDao.getEntry(new.id)?.microphoneGranted ?: false)
+        }
         lockerPBWCache.deleteApp(lockerEntry.id)  // Clear old version(s) if re-sideloading
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)

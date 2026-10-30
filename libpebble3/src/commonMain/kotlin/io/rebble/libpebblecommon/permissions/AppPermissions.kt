@@ -113,6 +113,8 @@ class AppPermissions(
     private val scope: LibPebbleCoroutineScope,
 ) : AppPermissionsApi {
     fun init() {
+        // Any watch-synced permission added here must also be carried over in Locker.sideloadApp: the
+        // watch won't reload the binary on a permissions-only change.
         localMicrophoneGrants().onEach { installed.syncMicrophoneGrants(it) }.launchIn(scope)
     }
 
