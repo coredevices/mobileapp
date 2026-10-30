@@ -55,6 +55,7 @@ private class ClientFakePlugin(
     )
     val invoked = mutableListOf<JsonObject>()
     val prompting = mutableListOf<Boolean>()
+    val requested = mutableListOf<Pair<List<String>?, IconPixelSize?>>()
 
     override fun observe(
         category: String,
@@ -64,6 +65,7 @@ private class ClientFakePlugin(
         prompt: Boolean,
     ): Flow<SourceUpdate> = flow {
         prompting += prompt
+        requested += properties to iconPixelSize
         envelopes.collect { emit(it) }
     }
 
@@ -94,6 +96,17 @@ class PluginClientTest {
     private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs)
 
     private fun ClientFakePlugin.registered(): PluginMetadata = also { registry.registerPlugin(it) }.metadata
+
+    @Test
+    fun aSubscriberCantPassItsOwnStringsOrSizesToThePlugin() = runTest {
+        val plugin = ClientFakePlugin(properties = mapOf("temperature" to listOf(SourceShapeNames.SHORT_TEXT)))
+
+        client.observe(APP_CALLER, plugin.registered(), "weather", "now", listOf("temperature", "40.7128,-74.0060"), IconPixelSize(99999, 0))
+            .first()
+
+        val expected: Pair<List<String>?, IconPixelSize?> = listOf("temperature") to IconPixelSize(IconPixelSize.MAX_SIDE, 1)
+        assertEquals(listOf(expected), plugin.requested)
+    }
 
     @Test
     fun theHostInvokesWithoutCallerPermissionsAndIsCounted() = runTest {
