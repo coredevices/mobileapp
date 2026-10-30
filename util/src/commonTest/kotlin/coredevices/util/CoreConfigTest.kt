@@ -19,4 +19,21 @@ class CoreConfigTest {
     fun unsetWeatherUnitsDecodesAsNull() {
         assertEquals(null, json.decodeFromString<CoreConfig>("{}").weatherUnits)
     }
+
+    @Test
+    fun navBarTabsMigrationPutsPreferredTabFirst() {
+        assertEquals(
+            listOf("WatchFaces", "Index", "Watches", "Health", "Notifications", "Settings"),
+            CoreConfig().migrateNavBarTabs().navBarTabs,
+        )
+        assertEquals(
+            listOf("WatchFaces", "Index", "Watches", "Notifications", "Health", "Settings"),
+            CoreConfig(preferHealthTab = false).migrateNavBarTabs().navBarTabs,
+        )
+    }
+
+    @Test
+    fun navBarTabsMigrationKeepsExistingTabs() {
+        assertEquals(listOf("Watches"), CoreConfig(navBarTabs = listOf("Watches")).migrateNavBarTabs().navBarTabs)
+    }
 }

@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RocketLaunch
@@ -235,6 +236,7 @@ enum class Section(val title: String, val icon: ImageVector) {
     QuickLaunch("Quick Launch", Icons.Default.RocketLaunch), // watch only
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
+    Appearance("Appearance", Icons.Default.Palette),
     Apps("Apps", Icons.Default.Apps),
     Plugins("Plugins", Icons.Default.Power),
     Battery("Battery", Icons.Default.BatteryFull),
@@ -764,7 +766,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.General,
+                    section = Section.Appearance,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -775,6 +777,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         stringResource(it.resource)
                     },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Bottom Bar",
+                    description = "Choose and reorder the tabs in the bottom bar",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Appearance,
+                    keywords = "tabs navigation health notifications devices apps index",
+                    action = { nav.navigateTo(PebbleNavBarRoutes.NavBarTabsRoute) },
+                ) },
                 basicSettingsToggleItem(
                     id = SettingsIds.HealthImperialUnits,
                     title = "Imperial Units",
@@ -1461,17 +1471,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { healthPlatformSyncEnabled && platform == Platform.Android },
                     action = {
                         openGoogleFitApp(uiContext)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Show Health Tab",
-                    description = "Show Health instead of Notifications in the bottom bar",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = coreConfig.preferHealthTab,
-                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
                     },
                 ),
                 basicSettingsActionItem(
@@ -2529,41 +2528,8 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         }
                     }
                 } else {
-                    val notificationsDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
-                    val healthDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
-
                     // When not searching, show category list
                     LazyColumn(state = listState) {
-                        if (notificationsDisplaced) {
-                            item(key = "displaced_notifications") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Notifications") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
-                                    },
-                                )
-                            }
-                        }
-                        if (healthDisplaced) {
-                            item(key = "displaced_health") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Health") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
-                                    },
-                                )
-                            }
-                        }
                         items(
                             items = sectionsToShowInList,
                             key = { it.name },

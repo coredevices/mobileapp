@@ -114,6 +114,9 @@ object PebbleNavBarRoutes {
     data object CannedRepliesRoute : NavBarRoute
 
     @Serializable
+    data object NavBarTabsRoute : NavBarRoute
+
+    @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
         NavBarRoute
 
@@ -297,6 +300,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
         CannedRepliesScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.NavBarTabsRoute> {
+        NavBarTabsScreen(topBarParams)
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
         val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
