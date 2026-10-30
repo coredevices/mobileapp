@@ -172,6 +172,9 @@ fun LibPebbleNotification.toEntity(
     decision = decision,
     channelId = channelId,
     people = people.map { it.lookupKey },
+    itemId = uuid.takeIf { decision == NotificationDecision.SendToWatch },
+    messageKey = messageKey,
+    imageAspect = imageAspect?.toInt(),
 )
 
 fun NotificationResult.notification(): LibPebbleNotification? = when (this) {
