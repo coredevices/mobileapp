@@ -3,8 +3,10 @@ package coredevices.ring.external.indexwebhook
 import com.russhwolf.settings.MapSettings
 import coredevices.ring.service.button.RingGesture
 import coredevices.util.integrations.IntegrationTokenStorage
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -25,7 +27,7 @@ class IndexWebhookSettingsViewModelTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         try {
-            val fixture = Fixture()
+            val fixture = Fixture(backgroundScope)
             fixture.viewModel.openDialog(RingGesture.Hold)
             advanceUntilIdle()
 
@@ -55,7 +57,7 @@ class IndexWebhookSettingsViewModelTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         try {
-            val fixture = Fixture()
+            val fixture = Fixture(backgroundScope)
             fixture.preferences.setConfig(
                 RingGesture.ClickHold,
                 IndexWebhookConfig(
@@ -97,7 +99,7 @@ class IndexWebhookSettingsViewModelTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         try {
-            val fixture = Fixture()
+            val fixture = Fixture(backgroundScope)
             fixture.preferences.setConfig(
                 RingGesture.Hold,
                 IndexWebhookConfig(url = "https://hold.example/hook", saved = true),
@@ -123,7 +125,7 @@ class IndexWebhookSettingsViewModelTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         try {
-            val fixture = Fixture()
+            val fixture = Fixture(backgroundScope)
             fixture.preferences.setConfig(
                 RingGesture.Hold,
                 IndexWebhookConfig(
@@ -146,18 +148,48 @@ class IndexWebhookSettingsViewModelTest {
         }
     }
 
-    private class Fixture {
+    @Test
+    fun retryHidesTheButtonAndRequeuesTheDelivery() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val fixture = Fixture(backgroundScope)
+            fixture.runRepository.record(
+                gesture = RingGesture.Hold,
+                ok = false,
+                status = "404 ERROR",
+                detail = "Not Found",
+                byteSize = 0,
+                durationMs = 0,
+                retryDeliveryId = "rec-1",
+            )
+            fixture.viewModel.openDialog(RingGesture.Hold)
+            advanceUntilIdle()
+
+            fixture.viewModel.retry(fixture.runRepository.runs(RingGesture.Hold).first().single())
+            advanceUntilIdle()
+
+            assertEquals(listOf("rec-1"), fixture.deliveryDao.resetFailedIds)
+            assertNull(fixture.runRepository.runs(RingGesture.Hold).first().single().retryDeliveryId)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private class Fixture(scope: CoroutineScope) {
         val settings = MapSettings()
         val preferences = IndexWebhookPreferences(settings)
         private val tokenStorage = MemoryTokenStorage()
         val secretStorage = IndexWebhookSigningSecretStorage(tokenStorage)
         val api = FakeWebhookApi()
-        private val runRepository = IndexWebhookRunRepository(settings)
+        val runRepository = IndexWebhookRunRepository(settings)
+        val deliveryDao = FakeWebhookDeliveryDao()
         val viewModel = IndexWebhookSettingsViewModel(
             preferences,
             api,
             runRepository,
             secretStorage,
+            testDeliveryQueue(scope, dao = deliveryDao),
         )
     }
 
