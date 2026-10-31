@@ -295,11 +295,11 @@ class IndexWebhookApiImpl(
                 header(WEBHOOK_VERSION_HEADER, WEBHOOK_VERSION)
                 header(WEBHOOK_TRIGGER_HEADER, triggerValue)
                 if (isTest) header(WEBHOOK_TEST_HEADER, "true")
+                header(WEBHOOK_DELIVERY_HEADER, deliveryId)
                 if (audioSize != null) header(WEBHOOK_AUDIO_SIZE_HEADER, audioSize.toString())
                 if (signature != null) {
                     header(WEBHOOK_SIGNATURE_HEADER, signature)
                     header(WEBHOOK_TIMESTAMP_HEADER, timestamp.toString())
-                    header(WEBHOOK_DELIVERY_HEADER, deliveryId)
                 }
                 setBody(
                     ByteArrayContent(bytes = bodyBytes, contentType = contentType)

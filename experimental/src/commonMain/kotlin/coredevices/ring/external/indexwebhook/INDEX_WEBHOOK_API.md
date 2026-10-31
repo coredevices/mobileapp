@@ -24,9 +24,9 @@ X-Audio-Size: <byte count>  (when audio is included)
 X-Index-Webhook-Version: 1
 X-Index-Trigger: single-click-hold | double-click-hold | test-event
 X-Index-Test: true  (test events only)
+X-Index-Delivery: <stable delivery ID>
 X-Index-Signature: <lowercase hex HMAC-SHA256>  (when signing is enabled)
 X-Index-Timestamp: <Unix time in seconds>  (when signing is enabled)
-X-Index-Delivery: <stable delivery ID>  (when signing is enabled)
 ```
 
 ## Multipart Fields
@@ -74,6 +74,8 @@ Headers are fully user-configurable in the webhook settings — add as many name
 `X-Index-Trigger` is added automatically to identify the gesture that started the recording — `single-click-hold`, `double-click-hold`, or `test-event` for a manually sent test. The gesture is persisted with the processing task and preserved when a failed recording is retried. Recordings with no known gesture do not fire a webhook at all.
 
 `X-Index-Webhook-Version` is sent on every request and versions the complete webhook protocol, including its automatic headers, multipart fields, and signing rules. This document describes version `1`. A missing version identifies a request from an older, pre-version app build; receivers that depend on a particular contract should require a supported explicit version.
+
+`X-Index-Delivery` identifies a recording: it is the same every time that recording is delivered, so a receiver can use it to drop duplicates. Test and button events get a fresh UUID.
 
 User-configured headers cannot override `X-Audio-Size`, `X-Index-Webhook-Version`, `X-Index-Trigger`, `X-Index-Test`, `X-Index-Signature`, `X-Index-Timestamp`, or `X-Index-Delivery`. Header-name matching is case-insensitive.
 
