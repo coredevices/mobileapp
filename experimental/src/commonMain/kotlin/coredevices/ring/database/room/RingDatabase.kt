@@ -40,6 +40,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.PluginGrantDenial
+import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
 import coredevices.ring.data.entity.room.RingRssiReading
@@ -54,6 +55,7 @@ import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.PluginGrantDao
+import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
 import coredevices.ring.database.room.dao.RingRssiReadingDao
@@ -83,6 +85,7 @@ import kotlin.uuid.Uuid
         HttpMcpServerEntity::class,
         DisabledBuiltinMcp::class,
         RecordingProcessingTaskEntity::class,
+        IndexWebhookDeliveryEntity::class,
         TraceSessionEntity::class,
         TraceEntryEntity::class,
         CachedItem::class,
@@ -95,7 +98,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 44,
+    version = 45,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -151,6 +154,8 @@ import kotlin.uuid.Uuid
         // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
         AutoMigration(from = 42, to = 43, Migrate42To43::class),
         // 43→44 is Migrate43To44, added to the builder in experimentalModule.
+        // 44→45: adds IndexWebhookDeliveryEntity.
+        AutoMigration(from = 44, to = 45),
     ]
 )
 @TypeConverters(Converters::class)
@@ -166,6 +171,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun httpMcpServerDao(): HttpMcpServerDao
     abstract fun disabledBuiltinMcpDao(): DisabledBuiltinMcpDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
+    abstract fun indexWebhookDeliveryDao(): IndexWebhookDeliveryDao
     abstract fun traceSessionDao(): TraceSessionDao
     abstract fun traceEntryDao(): TraceEntryDao
     abstract fun cachedItemDao(): CachedItemDao

@@ -10,7 +10,7 @@ import coredevices.ring.agent.integrations.providers.IntegrationProviderReposito
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
-import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.sendsFor
@@ -21,16 +21,14 @@ import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.ring.service.recordings.RecordingProcessingQueue
-import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
 
 class RecordingOperationFactory(
     private val agentFactory: AgentFactory,
     private val mcpSessionFactory: McpSessionFactory,
     private val gestureRouting: GestureRoutingPreferences,
-    private val indexWebhookApi: IndexWebhookApi,
+    private val indexWebhookQueue: IndexWebhookDeliveryQueue,
     private val indexWebhookPreferences: IndexWebhookPreferences,
-    private val recordingStorage: RecordingStorage,
     private val trace: RingTraceSession,
     private val itemFactory: ItemFactory,
     private val itemRepository: ItemRepository,
@@ -85,9 +83,8 @@ class RecordingOperationFactory(
             inner
         }
         return IndexWebhookUploadRecordingOperation(
-            webhookApi = indexWebhookApi,
+            enqueue = indexWebhookQueue::enqueue,
             webhookPreferences = indexWebhookPreferences,
-            recordingStorage = recordingStorage,
             fileId = fileId,
             recordingId = recordingId,
             gesture = gesture,

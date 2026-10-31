@@ -120,7 +120,7 @@ Receivers should:
 3. Reject unsupported webhook versions and malformed timestamps.
 4. Reconstruct the signed bytes and compare signatures in constant time.
 5. Reject timestamps outside a short window; five minutes is a reasonable default.
-6. Cache accepted delivery IDs for at least that window and reject replays.
+6. Cache accepted delivery IDs for at least that window, and answer a repeated ID with a 2xx without processing it again. The app retries any delivery for which it did not receive a successful response.
 
 Use a unique, cryptographically random secret for each endpoint. At least 32 random bytes encoded as base64url or hex is recommended. Do not use a memorable password or reuse an API token.
 
@@ -176,7 +176,7 @@ def receive():
         return 'Invalid signature', 401
 
     if delivery_id in seen_deliveries:
-        return 'Duplicate delivery', 409
+        return 'Already received', 200
     seen_deliveries[delivery_id] = now
 
     audio = request.files.get('audio')
@@ -201,6 +201,6 @@ The in-memory replay cache above is only illustrative. A production service shou
 ## Notes
 
 - Uploads are async and non-blocking — they don't delay the normal recording pipeline
-- Failed uploads are retried on the next recording (no persistent retry queue)
+- Network errors and HTTP 408, 429 and 5xx responses are retried every minute, up to 10 attempts, including after the app restarts. Other failures are not retried
 - The webhook fires as early as its payload allows, in parallel with the rest of the pipeline: `RecordingOnly` sends as soon as the audio is on disk (before transcription); modes that include the transcript send once it is transcribed, concurrently with agent processing. The webhook therefore fires even if agent processing (or, for the recording-only mode, transcription) later fails.
 - Audio is the same 16kHz resampled version used for transcription
