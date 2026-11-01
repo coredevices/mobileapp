@@ -18,6 +18,9 @@ interface SystemMusicControl {
     /** Whether this platform can supply album art at all. */
     val supportsAlbumArt: Boolean
 
+    /** [getAlbumArt] works from the requested title/artist alone, without [playbackState]. */
+    val albumArtByRequestedTrack: Boolean get() = false
+
     /**
      * Render the album art for [title]/[artist] at [width] x [height], or null if that isn't what's
      * playing any more or there's no art for it. [title]/[artist] come from the watch and are
