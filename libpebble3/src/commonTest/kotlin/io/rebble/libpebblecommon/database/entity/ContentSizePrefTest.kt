@@ -22,15 +22,15 @@ class ContentSizePrefTest {
             prefId,
             WatchType.EMERY,
         )
-        assertEquals(CONTENT_SIZE_FOLLOW_SYSTEM_CODE, wire)
+        assertEquals(NotificationContentSize.SameAsSystem.code, wire)
         val decoded = wire.applyOffsetForReceiveFromWatch(prefId, WatchType.EMERY)
-        assertEquals(CONTENT_SIZE_FOLLOW_SYSTEM_CODE, decoded)
+        assertEquals(NotificationContentSize.SameAsSystem.code, decoded)
     }
 
     @Test
     fun notificationTextSizeDecodesSameAsSystem() {
         val pref = EnumWatchPref.NotificationTextSize
-        val decoded = pref.decodeValue(CONTENT_SIZE_FOLLOW_SYSTEM_CODE.toString())
+        val decoded = pref.decodeValue(NotificationContentSize.SameAsSystem.code.toString())
         assertEquals(NotificationContentSize.SameAsSystem, decoded)
     }
 }

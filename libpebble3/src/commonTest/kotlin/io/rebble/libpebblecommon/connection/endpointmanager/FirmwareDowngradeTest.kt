@@ -22,9 +22,9 @@ class FirmwareDowngradeTest {
         isSlot0 = true,
     )!!
 
-    private fun update(tag: String, canDowngrade: Boolean = true) =
+    private fun update(tag: String, canDowngrade: Boolean = true, isRecovery: Boolean = false) =
         FirmwareUpdateCheckResult.FoundUpdate(
-            version = version(tag),
+            version = version(tag, isRecovery = isRecovery),
             url = "",
             notes = "",
             canDowngrade = canDowngrade,
@@ -52,6 +52,14 @@ class FirmwareDowngradeTest {
     @Test
     fun alreadyInRecoveryDoesNot() {
         assertFalse(needsPrfToDowngrade(update("v4.30.1"), version("v4.31.1", isRecovery = true)))
+    }
+
+    /** A recovery image writes the recovery slot, which is only writable from normal firmware. */
+    @Test
+    fun recoveryImageDowngradeDoesNot() {
+        assertFalse(
+            needsPrfToDowngrade(update("v4.30.1", isRecovery = true), version("v4.31.1"))
+        )
     }
 
     /** A server claiming a downgrade that isn't one must not push a healthy watch into recovery. */

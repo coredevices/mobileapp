@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /**
  * Verifies that completing (MOB-7831) or deleting (MOB-8390) a reminder item cancels its backing
- * reminder exactly once, and only on a genuine false->true `done`/`deleted` transition.
+ * reminder exactly once, and only on a genuine false->true `done`/`deleted` transition — keyed by
+ * the item's own id, and never on the sync-down (`upsertLocal`) path.
  */
 class ItemRepositoryDoneTransitionTest {
 
@@ -31,6 +33,7 @@ class ItemRepositoryDoneTransitionTest {
         override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
         override suspend fun getAllActive(): List<CachedItem> = items.values.filter { !it.deleted }
+        override suspend fun getAllIncludingDeleted(): List<CachedItem> = items.values.toList()
         override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
         override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
         override suspend fun deleteById(id: String) { items.remove(id) }
@@ -39,29 +42,33 @@ class ItemRepositoryDoneTransitionTest {
         override suspend fun countLocked(): Int = items.values.count { it.locked }
     }
 
+    private data class Rescheduled(val itemId: String, val message: String, val newTime: Instant?, val notifyBefore: Duration?)
+
     private data class Fixture(
         val repo: ItemRepository,
-        val cancelled: MutableList<Int>,
-        val rescheduled: MutableList<Triple<Int, String?, Instant?>>,
+        val cancelled: MutableList<String>,
+        val rescheduled: MutableList<Rescheduled>,
     )
 
     private fun fixture(): Fixture {
-        val cancelled = mutableListOf<Int>()
-        val rescheduled = mutableListOf<Triple<Int, String?, Instant?>>()
+        val cancelled = mutableListOf<String>()
+        val rescheduled = mutableListOf<Rescheduled>()
         val repo = ItemRepository(
             FakeCachedItemDao(),
             cancelReminder = { cancelled += it },
-            rescheduleReminder = { id, recordingId, time -> rescheduled += Triple(id, recordingId, time) },
+            rescheduleReminder = { itemId, message, newTime, notifyBefore ->
+                rescheduled += Rescheduled(itemId, message, newTime, notifyBefore)
+            },
         )
         return Fixture(repo, cancelled, rescheduled)
     }
 
-    private fun reminderItem(done: Boolean, localReminderId: Int? = 7, dueAt: Instant? = null) = ItemDocument(
+    private fun reminderItem(done: Boolean, dueAt: Instant? = null) = ItemDocument(
         title = "Call Lee",
         done = done,
         dueAt = dueAt,
         sourceRecordingId = "rec-1",
-        metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push", localReminderId = localReminderId),
+        metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push"),
     )
 
     @Test
@@ -69,15 +76,7 @@ class ItemRepositoryDoneTransitionTest {
         val (repo, cancelled) = fixture()
         repo.setItem("a", reminderItem(done = false))
         repo.setItem("a", reminderItem(done = true))
-        assertEquals(listOf(7), cancelled)
-    }
-
-    @Test
-    fun completingReminderItemWithNoLinkedReminderDoesNothing() = runBlocking {
-        val (repo, cancelled) = fixture()
-        repo.setItem("a", reminderItem(done = false, localReminderId = null))
-        repo.setItem("a", reminderItem(done = true, localReminderId = null))
-        assertEquals(emptyList(), cancelled)
+        assertEquals(listOf("a"), cancelled)
     }
 
     @Test
@@ -106,24 +105,19 @@ class ItemRepositoryDoneTransitionTest {
 
     @Test
     fun softDeleteCancelsReminder() = runBlocking {
-        // Deleting a reminder item (from the feed, a list, or a recording's
-        // "delete recording and items") must cancel the scheduled alarm so the
-        // notification doesn't fire for a deleted reminder (MOB-8390).
         val (repo, cancelled) = fixture()
         repo.setItem("a", reminderItem(done = false))
         repo.softDelete("a")
-        assertEquals(listOf(7), cancelled)
+        assertEquals(listOf("a"), cancelled)
     }
 
     @Test
     fun softDeleteOfDoneReminderCancelsAgainHarmlessly() = runBlocking {
-        // done=true already cancelled once; the delete transition cancels again,
-        // which is a no-op at the alarm layer (row already gone).
         val (repo, cancelled) = fixture()
         repo.setItem("a", reminderItem(done = false))
         repo.setItem("a", reminderItem(done = true))
         repo.softDelete("a")
-        assertEquals(listOf(7, 7), cancelled)
+        assertEquals(listOf("a", "a"), cancelled)
     }
 
     @Test
@@ -132,7 +126,7 @@ class ItemRepositoryDoneTransitionTest {
         repo.setItem("a", reminderItem(done = false))
         repo.softDelete("a")
         repo.softDelete("a")   // no deleted transition the second time
-        assertEquals(listOf(7), cancelled)
+        assertEquals(listOf("a"), cancelled)
     }
 
     @Test
@@ -158,7 +152,7 @@ class ItemRepositoryDoneTransitionTest {
         val t2 = Instant.fromEpochMilliseconds(2_000_000)
         repo.setItem("a", reminderItem(done = false, dueAt = t1))
         repo.setItem("a", reminderItem(done = false, dueAt = t2))
-        assertEquals(listOf(Triple(7, "rec-1" as String?, t2 as Instant?)), rescheduled)
+        assertEquals(listOf(Rescheduled("a", "Call Lee", t2, null)), rescheduled)
         assertEquals(emptyList(), cancelled)
     }
 
@@ -168,7 +162,7 @@ class ItemRepositoryDoneTransitionTest {
         val t1 = Instant.fromEpochMilliseconds(1_000_000)
         repo.setItem("a", reminderItem(done = false, dueAt = t1))
         repo.setItem("a", reminderItem(done = false, dueAt = null))
-        assertEquals(listOf(Triple(7, "rec-1" as String?, null as Instant?)), rescheduled)
+        assertEquals(listOf(Rescheduled("a", "Call Lee", null, null)), rescheduled)
     }
 
     @Test
@@ -187,16 +181,7 @@ class ItemRepositoryDoneTransitionTest {
         val t2 = Instant.fromEpochMilliseconds(2_000_000)
         repo.setItem("a", reminderItem(done = false, dueAt = t1))
         repo.setItem("a", reminderItem(done = true, dueAt = t2))
-        assertEquals(listOf(7), cancelled)
-        assertEquals(emptyList(), rescheduled)
-    }
-
-    @Test
-    fun dueDateChangeOnItemWithoutLinkedReminderDoesNothing() = runBlocking {
-        val (repo, _, rescheduled) = fixture()
-        val t1 = Instant.fromEpochMilliseconds(1_000_000)
-        repo.setItem("a", reminderItem(done = false, localReminderId = null, dueAt = t1))
-        repo.setItem("a", reminderItem(done = false, localReminderId = null, dueAt = null))
+        assertEquals(listOf("a"), cancelled)
         assertEquals(emptyList(), rescheduled)
     }
 

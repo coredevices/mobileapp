@@ -2,12 +2,14 @@ package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.AgentToolCall
+import coredevices.indexai.agent.FinalMessageMarker
 import coredevices.indexai.agent.IterativeAgent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
+import coredevices.mcp.client.compositeName
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
@@ -41,6 +43,7 @@ open class AgentNenya(
     conversation: List<ConversationMessageDocument>,
 ): KoinComponent, IterativeAgent(conversation) {
     override val label = "Nenya"
+    override val isCloud = true
 
     override val logger: Logger = Logger.withTag("AgentNenya")
 
@@ -58,19 +61,15 @@ open class AgentNenya(
         return locationLine
     }
 
-    /**
-     * Sanitizing to the most strict subset providers use, which is the MCP spec (a-z,A-Z,_,-,.) + no dots (.),
-     * + 64 max chars. Covers Gemini + Claude
-     */
-    private fun sanitizeToolName(name: String): String {
-        return name.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_").take(64)
-    }
+    /** Sanitized composite name -> (integration, tool) as declared on the last inference round. */
+    private val declaredTools = mutableMapOf<String, Pair<String, String>>()
 
-    private fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
+    internal fun prepareTools(tools: List<McpSessionTool>): List<ToolDeclaration> {
         return tools.mapNotNull {
             val definition = it.tool.definition
             val compositeNameRaw = "${it.integrationName}__${definition.name}"
-            val compositeName = sanitizeToolName(compositeNameRaw)
+            val compositeName = it.compositeName()
+            declaredTools[compositeName] = it.integrationName to definition.name
             if (compositeName != compositeNameRaw) {
                 logger.w { "Tool name '${definition.name}' from integration '${it.integrationName}' was sanitized to '$compositeName' to meet provider requirements" }
             }
@@ -142,7 +141,8 @@ open class AgentNenya(
             nenyaClient.run(
                 conversationHistory = history,
                 toolSpecs = tools,
-                additionalContext = context + "\n" + currentTimeContext(Clock.System.now()) +
+                additionalContext = context + "\n" + FinalMessageMarker.PROMPT_INSTRUCTION + "\n" +
+                    currentTimeContext(Clock.System.now()) +
                     (locationLine()?.let { "\n" + it } ?: "") + "\n" +
                     mcpSession.getExtraContext(sessionContext, includePromptsFromMcps).orEmpty(),
                 model = model
@@ -171,14 +171,14 @@ open class AgentNenya(
                 logger.w { "Failed to deserialize tool call arguments for tool ${call.function!!.name}" }
                 emptyMap()
             }
-            val composite = call.function!!.name.split("__", limit = 2)
-            if (composite.size != 2) {
-                throw Exception("Invalid tool name: ${call.function!!.name}")
-            }
+            val name = call.function!!.name
+            val (integrationName, toolName) = declaredTools[name]
+                ?: name.split("__", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] }
+                ?: throw Exception("Invalid tool name: $name")
             AgentToolCall(
                 id = call.id,
-                integrationName = composite[0],
-                toolName = composite[1],
+                integrationName = integrationName,
+                toolName = toolName,
                 arguments = args
             )
         }

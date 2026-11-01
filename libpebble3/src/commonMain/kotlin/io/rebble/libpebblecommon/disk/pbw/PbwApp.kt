@@ -81,7 +81,7 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         // A pbw with a plugin but no watchapp build is plugin-only: its own type, so it stays out
         // of the app lists and off the watch (see AppType.Plugin).
         type = when {
-            info.plugin != null && !hasWatchappBuild() -> "plugin"
+            info.loadablePlugin != null && !hasWatchappBuild() -> "plugin"
             info.watchapp.watchface -> "watchface"
             else -> "watchapp"
         },
@@ -95,9 +95,10 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         appstoreData = null,
         orderIndex = orderIndex,
         capabilities = info.capabilities,
-        pluginManifest = info.plugin
+        pluginManifest = info.loadablePlugin
             ?.let { pbwPluginJson.encodeToString(PluginManifest.serializer(), it) },
         configPage = info.configPage,
+        manifestVersion = info.manifestVersion,
     )
 }
 

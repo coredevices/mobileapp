@@ -39,6 +39,8 @@ internal fun listenForUserPresent(recordingsDao: FirestoreRecordingsDao, configH
 }
 
 expect class RingDelegate {
+    /** Called once at process start, before any activity exists. */
+    fun appInit()
     suspend fun init()
     fun requiredRuntimePermissions(): Set<Permission>
     /** Should be called whenever an iOS background sync is triggered. */

@@ -60,9 +60,6 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  * circle on the right. Mirrors the JSX prototype's `ComposeBar`. Holding
  * the mic kicks the existing audio-record path; in `isRecording` mode the
  * pill gets replaced by an animated waveform with Stop / Cancel buttons.
- *
- * Public API is unchanged from the previous version so all callers
- * (FeedTabContents, RecordingDetails, IndexFeedScreen, …) keep working.
  */
 @Composable
 fun ChatInput(

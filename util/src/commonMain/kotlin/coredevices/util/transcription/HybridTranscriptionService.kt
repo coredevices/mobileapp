@@ -7,6 +7,9 @@ import coredevices.util.CoreConfigFlow
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadManager
 import coredevices.util.models.inProgress
+import io.rebble.libpebblecommon.plugin.Connections
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -43,20 +47,32 @@ class HybridTranscriptionService(
     private val analytics: CoreAnalytics,
     private val platform: PlatformSpeechRecognizer,
     private val modelDownloads: ModelDownloadManager,
+    private val networkConnection: Flow<String?>? = null,
 ) : LocalTranscriptionService {
     companion object {
         private val logger = Logger.withTag("HybridTranscriptionService")
         private val wisprSkipInterval = 1.seconds
 
-        private const val LOCAL_TIMEOUT_FACTOR = 4.0
+        private const val LOCAL_TIMEOUT_FACTOR = 3.5
         private const val BYTES_PER_SAMPLE = 2
-        private val minLocalTimeout = 8.seconds
+        private val localTimeoutBaseline = 10.seconds
+        private val minLocalTimeout = 10.seconds
         private val maxLocalTimeout = 45.seconds
         private val remoteFallbackReserve = 7.seconds
+        private val connectionQueryTimeout = 1.seconds
+
+        /** Warm the local model when it is the preferred engine, or likely to be the fallback. */
+        internal fun shouldWarmUpLocalModel(mode: CactusSTTMode, connection: String?): Boolean =
+            when (mode) {
+                CactusSTTMode.LocalOnly, CactusSTTMode.LocalFirst -> true
+                CactusSTTMode.RemoteFirst, CactusSTTMode.RebbleFirst, CactusSTTMode.RebbleFallback ->
+                    connection == Connections.NONE
+                else -> false
+            }
 
         /**
-         * Budget for a local run: scales with clip length, capped by what is left of the caller's
-         * [remaining] budget after keeping [reserve] for a fallback leg.
+         * Budget for a local run: a fixed baseline plus a per-second allowance, capped by what is
+         * left of the caller's [remaining] budget after keeping [reserve] for a fallback leg.
          */
         internal fun localTimeout(
             audio: ByteArray,
@@ -65,7 +81,8 @@ class HybridTranscriptionService(
             reserve: Duration = Duration.ZERO,
         ): Duration {
             val seconds = audio.size / (sampleRate * BYTES_PER_SAMPLE).coerceAtLeast(1).toDouble()
-            val byClip = (seconds * LOCAL_TIMEOUT_FACTOR).seconds.coerceIn(minLocalTimeout, maxLocalTimeout)
+            val byClip = (localTimeoutBaseline + (seconds * LOCAL_TIMEOUT_FACTOR).seconds)
+                .coerceIn(minLocalTimeout, maxLocalTimeout)
             if (remaining == null) return byClip
             return minOf(byClip, (remaining - reserve).coerceAtLeast(Duration.ZERO))
         }
@@ -74,6 +91,8 @@ class HybridTranscriptionService(
     // Read fresh from the config StateFlow on every access so a runtime mode/model change takes
     // effect without restarting the app (not cached in a stateIn that nothing collects).
     private val sttConfig get() = coreConfigFlow.value.sttConfig
+
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     private val lastErrorMutex = Mutex()
     private var lastWisprError = Instant.DISTANT_PAST
@@ -96,8 +115,16 @@ class HybridTranscriptionService(
     override val onInitialized: Channel<Boolean> get() = cactus.onInitialized
 
     override fun earlyInit() {
-        if (sttConfig.mode.usesLocalCactus()) {
+        val mode = sttConfig.mode
+        if (!mode.usesLocalCactus()) return
+        if (shouldWarmUpLocalModel(mode, connection = null)) {
             cactus.earlyInit()
+            return
+        }
+        val connection = networkConnection ?: return
+        scope.launch {
+            val current = withTimeoutOrNull(connectionQueryTimeout) { connection.first() }
+            if (shouldWarmUpLocalModel(mode, current)) cactus.earlyInit()
         }
     }
 
@@ -120,7 +147,8 @@ class HybridTranscriptionService(
     private data class RoutedResult(
         val text: String?,
         val modeUsed: CactusSTTMode,
-        val modelUsed: String?
+        val modelUsed: String?,
+        val localFallback: Boolean = false,
     )
 
     private suspend fun remoteAvailable(): Boolean = wisprFlow.isAvailable() || kirinki.isAvailable()
@@ -326,7 +354,7 @@ class HybridTranscriptionService(
             CactusSTTMode.RemoteFirst -> {
                 suspend fun localFallback(remoteError: Exception): RoutedResult = try {
                     val text = local(cloudFallback = false)
-                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel)
+                    RoutedResult(text, CactusSTTMode.LocalOnly, configuredModel, localFallback = true)
                 } catch (_: TranscriptionException.TranscriptionRequiresDownload) {
                     throw remoteError
                 }
@@ -403,7 +431,7 @@ class HybridTranscriptionService(
         }
 
         try {
-            val (text, modeUsed, modelUsed) = route(
+            val (text, modeUsed, modelUsed, localFallback) = route(
                 audio = buffer.readByteArray(),
                 sampleRate = sampleRate,
                 language = language,
@@ -430,7 +458,8 @@ class HybridTranscriptionService(
             emit(TranscriptionSessionStatus.Transcription(
                 text?.ifBlank { null }
                     ?: throw TranscriptionException.NoSpeechDetected("Failed to understand audio", modelUsed = modelUsed),
-                modelUsed
+                modelUsed,
+                localFallback,
             ))
         } catch (e: TimeoutCancellationException) {
             logger.e(e) { "Uncaught timeout during transcription" }

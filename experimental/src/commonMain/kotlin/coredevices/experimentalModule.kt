@@ -18,16 +18,20 @@ import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LLMLocationProvider
 import coredevices.ring.agent.IndexAgentNenya
-import coredevices.ring.agent.McpSandboxAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
-import coredevices.ring.agent.ContextualActionPredictor
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.agent.confirmation.AgentUserConfirmation
+import coredevices.ring.agent.confirmation.RealAgentUserConfirmation
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
+import coredevices.pebble.ui.IndexTabBadge
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.LegacyDestinations
+import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -41,14 +45,19 @@ import coredevices.ring.audio.M4aEncoder
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.Migrate33To34
+import coredevices.ring.database.room.Migrate36To37
+import coredevices.ring.database.room.Migrate43To44
 import coredevices.ring.database.room.RingDatabase
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.SeedDefaultPluginGrants
+import coredevices.ring.database.room.repository.McpServerRepository
+import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import coredevices.ring.reminders.ReminderReconciler
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -76,18 +85,25 @@ import coredevices.ring.service.recordings.RecordingPreprocessor
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
+import coredevices.ring.backup.BackupExporter
+import coredevices.ring.backup.BackupImporter
+import coredevices.ring.backup.BackupManager
 import coredevices.ring.encryption.DocumentEncryptor
 import coredevices.ring.encryption.EncryptionManager
 import coredevices.ring.service.RingHacksDelegate
 import coredevices.ring.storage.RealRecordingStorage
 import coredevices.ring.storage.RecordingStorage
+import coredevices.ring.storage.RecordingUploadSyncHandler
 import coredevices.ring.util.trace.RingTraceSession
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.ring.bugreport.IndexRebootLogStore
+import coredevices.ring.bugreport.RingRssiStatistics
+import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.util.PermissionRequester
+import coredevices.util.sync.SyncHandler
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import kotlinx.coroutines.CoroutineScope
@@ -117,7 +133,12 @@ val experimentalModule = module {
     single {
         val builder: RoomDatabase.Builder<RingDatabase> = get()
         builder
-            .addMigrations(Migrate33To34(isAndroid = get<Platform>().isAndroid))
+            .addMigrations(
+                Migrate33To34(isAndroid = get<Platform>().isAndroid),
+                Migrate36To37(isAndroid = get<Platform>().isAndroid),
+                Migrate43To44(),
+            )
+            .addCallback(SeedDefaultPluginGrants)
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
@@ -145,16 +166,10 @@ val experimentalModule = module {
         get<RingDatabase>().ringTransferDao()
     }
     single {
-        get<RingDatabase>().builtinMcpGroupAssociationDao()
-    }
-    single {
-        get<RingDatabase>().httpMcpGroupAssociationDao()
-    }
-    single {
         get<RingDatabase>().httpMcpServerDao()
     }
     single {
-        get<RingDatabase>().mcpSandboxGroupDao()
+        get<RingDatabase>().disabledBuiltinMcpDao()
     }
     single {
         get<RingDatabase>().recordingProcessingTaskDao()
@@ -171,6 +186,16 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().cachedListDao()
     }
+    single {
+        get<RingDatabase>().pluginGrantDao()
+    }
+    single {
+        get<RingDatabase>().agentIterationDao()
+    }
+    single {
+        get<RingDatabase>().ringRssiReadingDao()
+    }
+    singleOf(::PluginGrantRepository)
     singleOf(::RecordingRepository)
     single {
         RingTransferRepository(get(), get<RingDatabase>())
@@ -180,9 +205,9 @@ val experimentalModule = module {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
             get(),
-            cancelReminder = { builtInReminders.cancelReminder(it) },
-            rescheduleReminder = { id, recordingId, newTime ->
-                builtInReminders.rescheduleReminder(id, recordingId, newTime)
+            cancelReminder = { itemId -> builtInReminders.cancelReminder(itemId) },
+            rescheduleReminder = { itemId, message, newTime, notifyBefore ->
+                builtInReminders.syncReminder(itemId, message, newTime, notifyBefore)
             },
         )
     }
@@ -192,6 +217,7 @@ val experimentalModule = module {
     singleOf(::ItemFactory)
     singleOf(::ReminderDeepLinkResolver)
     singleOf(::ReminderCompleter)
+    singleOf(::ReminderReconciler)
     singleOf(::PreferencesImpl) binds arrayOf(Preferences::class, BasePreferences::class)
     singleOf(::RingTraceSession)
     singleOf(::TraceSessionExporter)
@@ -228,17 +254,22 @@ val experimentalModule = module {
     } bind IndexWebhookApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
-    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
+    singleOf(::RecordingUploadSyncHandler) bind SyncHandler::class
+    singleOf(::BackupExporter)
+    singleOf(::BackupImporter)
+    singleOf(::BackupManager)
     singleOf(::DocumentEncryptor)
     singleOf(::EncryptionManager)
     singleOf(::RecordingPreprocessor)
     singleOf(::RingSync)
-    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), getOrNull()) }
+    single { IndexNotificationManager(get(), get(), get(), get(), get(), get(), get(), get(), getOrNull(), get()) }
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
     singleOf(::IndexRebootLogStore)
+    single { RingRssiStatistics(get()) } bind HeartbeatMetricsSource::class
     singleOf(::ExperimentalDevices)
     single { TargetCalendarSeeder(get(), get<LibPebble>(), get()) }
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
@@ -246,28 +277,29 @@ val experimentalModule = module {
     singleOf(::LLMLocationProvider)
     factory { p -> AgentNenya(get(), p.getOrNull() ?: "", p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
     factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: DefaultCaptureType.Note) }
-    factory { p -> McpSandboxAgentNenya(get(), p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
     factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
-    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
+    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), get(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
     singleOf(::AgentFactory)
     singleOf(::RecordingProcessor)
     singleOf(::IndexButtonActionHandler)
     singleOf(::IndexButtonSequenceRecorder)
     singleOf(::FirestoreRingDebugDelegate) bind KMPHaversineDebugDelegate::class
     singleOf(::RingHacksDelegate) bind KMPHaversineHacksDelegate::class
-    singleOf(::McpSandboxRepository)
+    singleOf(::McpServerRepository)
     singleOf(::BuiltinServletRepository) bind ServletRepository::class
     factory { GTasksIntegration(get()) }
     factoryOf(::UIEmailIntegration)
     single { createBuiltInReminderIntegration() }
     singleOf(::BuiltInReminderFeedItems)
     singleOf(::DelegatedIntegrationItems)
-    singleOf(::ReminderIntegrationFactory)
-    singleOf(::ContextualActionPredictor)
+    single { IntegrationProviderRepository(get(), get(), get(), get()) }
+    single { DefaultDestinationPrompter(get(), get()) }
+    single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)
+    singleOf(::RealAgentUserConfirmation) bind AgentUserConfirmation::class
 }
 
 expect val platformRingModule: Module

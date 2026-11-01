@@ -90,7 +90,9 @@ class RealIndexPairing(
     private suspend fun bond(device: PairableIndexDevice): PairingRequestResult {
         try {
             return withTimeout(30.seconds) {
+                logger.d { "Attempting createBond with ${device.name}: ${device.identifier.asPlatformAddress}" }
                 if (!createBond(context, device.identifier)) {
+                    logger.w { "createBond failed for device ${device.identifier.asString}" }
                     return@withTimeout PairingRequestResult.CreateBondFailed
                 }
 

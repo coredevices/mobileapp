@@ -22,6 +22,7 @@ class AppMetadata(
     appFaceBgColor: UByte = 0u,
     appFaceTemplateId: UByte = 0u,
     appName: String = "Untitled",
+    microphoneGranted: Boolean? = null,
 ) : StructMappable() {
     /**
      * UUID of the app
@@ -72,5 +73,10 @@ class AppMetadata(
      * Name of the app
      */
     val appName: SFixedString = SFixedString(m, 96, appName)
+
+    // Optional AppDB extension, sent only to firmware advertising local microphone support.
+    val watchPermissions: SUInt? = microphoneGranted?.let {
+        SUInt(m, if (it) 1u else 0u, endianness = Endian.Little)
+    }
 }
 

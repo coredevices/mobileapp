@@ -5,6 +5,7 @@
     <application>
         <receiver android:name=".ui.TestActionReceiver" android:exported="false" />
         <receiver android:name="coredevices.pebble.firmware.UpdateActionReceiver" android:exported="false" />
+        <receiver android:name="coredevices.pebble.permissions.PermissionRequestReceiver" android:exported="false" />
         <receiver
             android:name="coredevices.pebble.firmware.FirmwareSideloadReceiver"
             android:exported="true"

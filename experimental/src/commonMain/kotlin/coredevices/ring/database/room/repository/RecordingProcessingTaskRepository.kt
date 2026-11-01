@@ -18,6 +18,10 @@ class RecordingProcessingTaskRepository(
     suspend fun getLatestButtonSequenceForTransfer(transferId: Long): String? =
         dao.getLatestButtonSequenceForTransfer(transferId)
 
+    /** True when the recording came from a ring click's agent command rather than typing. */
+    suspend fun isGestureCommandRecording(recordingId: Long): Boolean =
+        dao.isGestureCommandRecording(recordingId)
+
     private fun RecordingProcessingTask.toEntity(): RecordingProcessingTaskEntity {
         when (task) {
             is ProcessingTask.AudioRecording -> {
@@ -59,7 +63,7 @@ class RecordingProcessingTaskRepository(
                     status = status,
                     lastSuccessfulStage = lastSuccessfulStage,
                     type = RecordingProcessingTaskType.TextRecording,
-                    buttonSequence = null,
+                    buttonSequence = task.buttonSequence,
                     transferId = null,
                     fileId = null,
                     transcription = task.transcription,
@@ -110,6 +114,7 @@ class RecordingProcessingTaskRepository(
                     lastSuccessfulStage = lastSuccessfulStage,
                     task = ProcessingTask.TextRecording(
                         transcription = transcription ?: error("transcription is null for TextRecording task"),
+                        buttonSequence = buttonSequence,
                         created = created,
                     ),
                 )

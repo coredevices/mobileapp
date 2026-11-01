@@ -1,8 +1,15 @@
 package coredevices.ring.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,22 +23,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Webhook
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -50,15 +65,19 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.external.indexwebhook.IndexWebhookConfig
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureKind
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.theme.IndexTheme
+import coredevices.ring.ui.viewmodel.DestinationItem
+import coredevices.ring.ui.viewmodel.isConnected
 
 private val DOT = 9.dp
 private val TILE_WIDTH = 168.dp
@@ -84,54 +103,91 @@ val RingGesture.glyph: List<Dp>
         RingGesture.ClickHold -> listOf(DOT, 26.dp)
     }
 
-fun destinationsFor(kind: GestureKind, hasSandboxGroups: Boolean): List<GestureDestination> = when (kind) {
-    GestureKind.Music -> listOf(
-        GestureDestination.PlayPause,
-        GestureDestination.NextTrack,
+val DestinationItem.Installed.route: GestureDestination.AgentPlugin get() = GestureDestination.AgentPlugin(id)
+
+/** Tile labels for agent plugin routes, by provider id; null while the agents are still loading. */
+fun List<DestinationItem>?.agentTitles(): Map<String, String>? =
+    this?.filterIsInstance<DestinationItem.Installed>()?.associate { it.id to it.title }
+
+/** The installed plugin [destination] routes to, when it is connected and has a locker page to open. */
+internal fun List<DestinationItem>.configurableAgentFor(destination: GestureDestination): DestinationItem.Installed? =
+    filterIsInstance<DestinationItem.Installed>().firstOrNull { it.route == destination && it.isConfigurable() }
+
+/** [current] when it routes to an agent plugin that is no longer installed, kept listed so it can be changed.
+ *  Null while [agents] are still loading: the plugin is not known to be gone yet. */
+fun missingAgentRoute(current: GestureDestination, agents: List<DestinationItem>?): GestureDestination.AgentPlugin? =
+    (current as? GestureDestination.AgentPlugin)
+        ?.takeIf { route -> agents != null && agents.none { it is DestinationItem.Installed && it.route == route } }
+
+/** Agent plugins are not listed here: the sheet groups them under "Other agents" after [GestureDestination.LocalAgent].
+ *  [musicControl] is false where the platform can't control media; clicks can still go to a webhook or agent command. */
+fun destinationsFor(
+    kind: GestureKind,
+    musicControl: Boolean = true,
+): List<GestureDestination> = when (kind) {
+    GestureKind.Music -> listOfNotNull(
+        GestureDestination.PlayPause.takeIf { musicControl },
+        GestureDestination.NextTrack.takeIf { musicControl },
+        GestureDestination.PreviousTrack.takeIf { musicControl },
+        GestureDestination.AgentCommand,
+        GestureDestination.Webhook,
         GestureDestination.Nothing,
     )
-    GestureKind.Recording -> buildList {
-        add(GestureDestination.IndexAgent)
-        add(GestureDestination.WebSearch)
-        add(GestureDestination.WebhookOnly)
-        if (hasSandboxGroups) add(GestureDestination.McpSandbox(null))
-        add(GestureDestination.Nothing)
-    }
+    GestureKind.Recording -> listOf(
+        GestureDestination.IndexAgent,
+        GestureDestination.LocalAgent,
+        GestureDestination.WebSearch,
+        GestureDestination.WebhookOnly,
+        GestureDestination.Nothing,
+    )
 }
 
-/** True while the sheet still shows something to configure below the choice — the sandbox
- *  group list, or the webhook row. Otherwise picking a destination is the whole interaction
- *  and the sheet closes itself. Mirrors what [GestureDestinationSheet] renders. */
+/** True while the sheet still shows something to configure below the choice — the webhook row.
+ *  Otherwise picking a destination is the whole interaction and the sheet closes itself.
+ *  Mirrors what [GestureDestinationSheet] renders. */
 internal fun gestureSheetStaysOpenFor(
     gesture: RingGesture,
     destination: GestureDestination,
-): Boolean = destination is GestureDestination.McpSandbox ||
+): Boolean = destination == GestureDestination.Webhook ||
+    destination == GestureDestination.AgentCommand ||
     (gesture.kind == GestureKind.Recording && destination != GestureDestination.Nothing)
 
-val GestureDestination.tileLabel: String
-    get() = when (this) {
-        GestureDestination.PlayPause -> "Play/Pause"
-        GestureDestination.NextTrack -> "Next track"
-        GestureDestination.IndexAgent -> "Index agent"
-        GestureDestination.WebSearch -> "Web search"
-        GestureDestination.WebhookOnly -> "Webhook only"
-        is GestureDestination.McpSandbox -> "MCP sandbox"
-        GestureDestination.Nothing -> "Nothing"
-    }
+/** [agentTitles] names agent plugins by provider id, or is null while they are still loading;
+ *  a route to one that has loaded as not installed reads as unavailable. */
+fun GestureDestination.tileLabel(agentTitles: Map<String, String>?): String = when (this) {
+    GestureDestination.PlayPause -> "Play/Pause"
+    GestureDestination.NextTrack -> "Next track"
+    GestureDestination.PreviousTrack -> "Previous track"
+    GestureDestination.IndexAgent -> "Index agent"
+    GestureDestination.LocalAgent -> "Local agent"
+    GestureDestination.WebSearch -> "Web search"
+    GestureDestination.WebhookOnly -> "Webhook only"
+    GestureDestination.Webhook -> "Webhook"
+    GestureDestination.AgentCommand -> "Agent command"
+    is GestureDestination.AgentPlugin ->
+        if (agentTitles == null) "Agent plugin" else agentTitles[providerId] ?: "Unavailable agent"
+    GestureDestination.Nothing -> "Nothing"
+}
 
-private val GestureDestination.optionLabel: String
-    get() = when (this) {
-        GestureDestination.PlayPause -> "Play or pause music"
-        GestureDestination.NextTrack -> "Skip to the next track"
-        else -> tileLabel
-    }
+val GestureDestination.tileLabel: String get() = tileLabel(emptyMap())
+
+private fun GestureDestination.optionLabel(agentTitles: Map<String, String>?): String = when (this) {
+    GestureDestination.PlayPause -> "Play or pause music"
+    GestureDestination.NextTrack -> "Skip to the next track"
+    GestureDestination.Webhook -> "Send to webhook"
+    GestureDestination.AgentCommand -> "Run an Index agent command"
+    GestureDestination.PreviousTrack -> "Go back to the last track"
+    else -> tileLabel(agentTitles)
+}
 
 private val GestureDestination.optionSub: String?
     get() = when (this) {
-        GestureDestination.IndexAgent -> "Transcribes and takes actions for you"
+        GestureDestination.IndexAgent -> "Takes actions for you in the cloud, on this phone when offline"
+        GestureDestination.LocalAgent -> "Runs on this phone only. Experimental, supports fewer actions"
         GestureDestination.WebSearch -> "Answer lands in your feed"
         GestureDestination.WebhookOnly -> "Raw recording to your endpoint, nothing else"
-        is GestureDestination.McpSandbox -> "Runs a chosen sandbox group's model and tools"
+        GestureDestination.Webhook -> "Click count and your payload to your endpoint"
+        GestureDestination.AgentCommand -> "Sends a command, eg \"Unlock front door\""
         else -> null
     }
 
@@ -139,30 +195,35 @@ private val GestureDestination.icon: ImageVector
     get() = when (this) {
         GestureDestination.PlayPause -> Icons.Default.PlayArrow
         GestureDestination.NextTrack -> Icons.Default.SkipNext
+        GestureDestination.PreviousTrack -> Icons.Default.SkipPrevious
         GestureDestination.IndexAgent -> Icons.Default.GraphicEq
+        GestureDestination.LocalAgent -> Icons.Default.Smartphone
         GestureDestination.WebSearch -> Icons.Default.Search
-        GestureDestination.WebhookOnly -> Icons.Default.Webhook
-        is GestureDestination.McpSandbox -> Icons.Default.Extension
+        GestureDestination.WebhookOnly, GestureDestination.Webhook -> Icons.Default.Webhook
+        GestureDestination.AgentCommand -> Icons.Default.Bolt
+        is GestureDestination.AgentPlugin -> Icons.AutoMirrored.Filled.Send
         GestureDestination.Nothing -> Icons.Default.Block
     }
 
-/** Sandbox routes differ by group id, so option identity ignores it. */
-private fun GestureDestination.isSameChoiceAs(other: GestureDestination): Boolean =
-    if (this is GestureDestination.McpSandbox && other is GestureDestination.McpSandbox) true
-    else this == other
-
 @Composable
-fun ButtonSwitchboard(
+internal fun ButtonSwitchboard(
     routes: Map<RingGesture, GestureDestination>,
-    sandboxGroups: List<McpSandboxGroupEntity>,
+    commands: Map<RingGesture, String>,
     musicEnabled: Boolean,
     webhookConfigFor: (RingGesture) -> IndexWebhookConfig,
     onSetRoute: (RingGesture, GestureDestination) -> Unit,
+    onSetCommand: (RingGesture, String) -> Unit,
     onOpenWebhookSettings: (RingGesture) -> Unit,
     onDisableWebhook: (RingGesture) -> Unit,
+    /** Null while the agents are still loading. */
+    agentDestinations: List<DestinationItem>? = emptyList(),
+    onConnectAgentPlugin: (IntegrationProvider) -> Unit = {},
+    onInstallAgentPlugin: (StorePlugin) -> Unit = {},
+    onConfigureAgentPlugin: (IntegrationProvider) -> Unit = {},
 ) {
     var sheetGesture by remember { mutableStateOf<RingGesture?>(null) }
     val webhookCopies = { gesture: RingGesture -> webhookConfigFor(gesture).isActive }
+    val agentTitles = agentDestinations.agentTitles()
 
     Column(
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
@@ -170,13 +231,19 @@ fun ButtonSwitchboard(
     ) {
         RingGesture.entries.forEach { gesture ->
             val destination = routes[gesture] ?: GestureDestination.Nothing
-            val enabled = musicEnabled || gesture.kind == GestureKind.Recording
-            Column(modifier = Modifier.alpha(if (enabled) 1f else 0.38f)) {
+            val inert = !musicEnabled && destination is GestureDestination.Music &&
+                destination != GestureDestination.Webhook &&
+                destination != GestureDestination.AgentCommand
+            Column(modifier = Modifier.alpha(if (inert) 0.38f else 1f)) {
                 GestureRow(
                     gesture = gesture,
                     destination = destination,
-                    enabled = enabled,
+                    agentTitles = agentTitles,
+                    command = commands[gesture].orEmpty(),
                     onEdit = { sheetGesture = gesture },
+                    onConfigure = agentDestinations?.configurableAgentFor(destination)?.let { plugin ->
+                        { onConfigureAgentPlugin(plugin.provider) }
+                    },
                 )
                 if (gesture.kind == GestureKind.Recording &&
                     destination != GestureDestination.WebhookOnly &&
@@ -193,12 +260,27 @@ fun ButtonSwitchboard(
         GestureDestinationSheet(
             gesture = gesture,
             current = routes[gesture] ?: GestureDestination.Nothing,
-            sandboxGroups = sandboxGroups,
+            agentDestinations = agentDestinations,
+            musicControl = musicEnabled,
+            command = commands[gesture].orEmpty(),
+            onSetCommand = { onSetCommand(gesture, it) },
             webhookUrl = webhookConfigFor(gesture).takeIf { it.isActive }?.url,
             webhookCopyOn = webhookCopies(gesture),
             onSelect = {
                 onSetRoute(gesture, it)
                 if (!gestureSheetStaysOpenFor(gesture, it)) sheetGesture = null
+            },
+            onConnectAgentPlugin = {
+                sheetGesture = null
+                onConnectAgentPlugin(it)
+            },
+            onInstallAgentPlugin = {
+                sheetGesture = null
+                onInstallAgentPlugin(it)
+            },
+            onConfigureAgentPlugin = {
+                sheetGesture = null
+                onConfigureAgentPlugin(it)
             },
             onOpenWebhookSettings = {
                 sheetGesture = null
@@ -221,11 +303,14 @@ fun ButtonSwitchboard(
 private fun GestureRow(
     gesture: RingGesture,
     destination: GestureDestination,
-    enabled: Boolean,
+    agentTitles: Map<String, String>?,
+    command: String,
     onEdit: () -> Unit,
+    onConfigure: (() -> Unit)?,
 ) {
     val recording = gesture.kind == GestureKind.Recording
-    val isIndexAgent = destination == GestureDestination.IndexAgent
+    val isIndexAgent = destination == GestureDestination.IndexAgent ||
+        destination == GestureDestination.LocalAgent
     val colors = IndexTheme.colors
     val accent = colors.primary
     Row(
@@ -271,7 +356,7 @@ private fun GestureRow(
                         color = if (isIndexAgent) accent else colors.outlineVariant,
                         shape = TILE_SHAPE,
                     )
-                    .clickable(enabled = enabled, onClick = onEdit)
+                    .clickable(onClick = onEdit)
                     .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -283,11 +368,27 @@ private fun GestureRow(
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
-                    destination.tileLabel,
+                    command.trim().takeIf { destination == GestureDestination.AgentCommand && it.isNotEmpty() }
+                        ?.let { "“$it”" }
+                        ?: destination.tileLabel(agentTitles),
                     fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     fontWeight = if (isIndexAgent) FontWeight.Medium else FontWeight.Normal,
                     color = colors.onSurface,
+                    modifier = Modifier.weight(1f),
                 )
+                if (onConfigure != null) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "Configure",
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onConfigure),
+                    )
+                }
             }
         }
     }
@@ -356,17 +457,28 @@ private fun WebhookCopyRow(onClick: () -> Unit) {
 private fun GestureDestinationSheet(
     gesture: RingGesture,
     current: GestureDestination,
-    sandboxGroups: List<McpSandboxGroupEntity>,
+    agentDestinations: List<DestinationItem>?,
+    musicControl: Boolean,
+    command: String,
+    onSetCommand: (String) -> Unit,
     webhookUrl: String?,
     webhookCopyOn: Boolean,
     onSelect: (GestureDestination) -> Unit,
+    onConnectAgentPlugin: (IntegrationProvider) -> Unit,
+    onInstallAgentPlugin: (StorePlugin) -> Unit,
+    onConfigureAgentPlugin: (IntegrationProvider) -> Unit,
     onOpenWebhookSettings: () -> Unit,
     onSetWebhookCopy: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = IndexTheme.colors
+    var commandDraft by remember(command) { mutableStateOf(command) }
+    val commitCommand = { if (commandDraft != command) onSetCommand(commandDraft) }
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            commitCommand()
+            onDismiss()
+        },
         sheetState = rememberModalBottomSheetState(),
         containerColor = colors.sheetSurface,
     ) {
@@ -387,39 +499,52 @@ private fun GestureDestinationSheet(
                 color = colors.onSurface,
             )
         }
-        destinationsFor(gesture.kind, sandboxGroups.isNotEmpty()).forEach { option ->
-            val selected = option.isSameChoiceAs(current)
-            DestinationOption(
-                option = option,
-                selected = selected,
+        val agentTitles = agentDestinations.agentTitles()
+        val missingAgent = missingAgentRoute(current, agentDestinations)
+        destinationsFor(gesture.kind, musicControl).forEach { option ->
+            SheetChoiceRow(
+                icon = option.icon,
+                title = option.optionLabel(agentTitles),
+                subtitle = option.optionSub,
+                selected = option == current,
                 onClick = {
-                    onSelect(
-                        if (option is GestureDestination.McpSandbox) {
-                            current as? GestureDestination.McpSandbox
-                                ?: GestureDestination.McpSandbox(sandboxGroups.firstOrNull()?.id)
-                        } else {
-                            option
-                        }
-                    )
+                    commitCommand()
+                    onSelect(option)
                 },
             )
-            if (selected && option is GestureDestination.McpSandbox) {
-                sandboxGroups.forEach { group ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(GestureDestination.McpSandbox(group.id)) }
-                            .padding(start = 48.dp, end = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = (current as? GestureDestination.McpSandbox)?.groupId == group.id,
-                            onClick = { onSelect(GestureDestination.McpSandbox(group.id)) },
-                        )
-                        Text(group.title, fontSize = 15.sp)
-                    }
-                }
+            val showOtherAgents = agentDestinations == null || agentDestinations.isNotEmpty() || missingAgent != null
+            if (option == GestureDestination.LocalAgent && showOtherAgents) {
+                OtherAgentsGroup(
+                    agents = agentDestinations,
+                    missing = missingAgent,
+                    current = current,
+                    agentTitles = agentTitles,
+                    onSelect = {
+                        commitCommand()
+                        onSelect(it)
+                    },
+                    onConnect = onConnectAgentPlugin,
+                    onInstall = onInstallAgentPlugin,
+                    onConfigure = onConfigureAgentPlugin,
+                )
             }
+        }
+        if (current == GestureDestination.AgentCommand) {
+            OutlinedTextField(
+                value = commandDraft,
+                onValueChange = { commandDraft = it },
+                singleLine = true,
+                label = { Text("Command") },
+                placeholder = { Text("Unlock front door") },
+                supportingText = {
+                    Text(
+                        "Runs as if you'd said it to Index, using your plugins and actions. " +
+                            "For example: \"Unlock front door\", \"Turn off the living room lights\" " +
+                            "or \"Start a 25 minute timer\""
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            )
         }
         if (gesture.kind == GestureKind.Recording &&
             current != GestureDestination.WebhookOnly &&
@@ -438,8 +563,9 @@ private fun GestureDestinationSheet(
                 Switch(checked = webhookCopyOn, onCheckedChange = onSetWebhookCopy)
             }
         }
-        if (gesture.kind == GestureKind.Recording &&
-            (current == GestureDestination.WebhookOnly || webhookCopyOn)
+        if (current == GestureDestination.Webhook ||
+            (gesture.kind == GestureKind.Recording &&
+                (current == GestureDestination.WebhookOnly || webhookCopyOn))
         ) {
             WebhookSheetRow(
                 icon = Icons.Default.SettingsEthernet,
@@ -458,37 +584,140 @@ private fun GestureDestinationSheet(
     }
 }
 
+/** Agent plugins folded into one row: installed ones, then the store's, each a tap away from connecting. */
 @Composable
-private fun DestinationOption(
-    option: GestureDestination,
+private fun OtherAgentsGroup(
+    agents: List<DestinationItem>?,
+    missing: GestureDestination.AgentPlugin?,
+    current: GestureDestination,
+    agentTitles: Map<String, String>?,
+    onSelect: (GestureDestination) -> Unit,
+    onConnect: (IntegrationProvider) -> Unit,
+    onInstall: (StorePlugin) -> Unit,
+    onConfigure: (IntegrationProvider) -> Unit,
+) {
+    val colors = IndexTheme.colors
+    val routed = current as? GestureDestination.AgentPlugin
+    var expanded by remember { mutableStateOf(routed != null) }
+    val chevron by animateFloatAsState(if (expanded) 180f else 0f)
+    SheetChoiceRow(
+        icon = Icons.AutoMirrored.Filled.Send,
+        title = "Other agents",
+        subtitle = when {
+            agents == null -> "Loading…"
+            routed != null -> routed.tileLabel(agentTitles)
+            else -> "What you say goes straight to the agent you pick"
+        },
+        selected = routed != null && !expanded,
+        onClick = { expanded = !expanded },
+        trailing = {
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(20.dp).rotate(chevron),
+            )
+        },
+    )
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        Column {
+            agents.orEmpty().forEach { item ->
+                val installed = item as? DestinationItem.Installed
+                val configurable = item.isConfigurable()
+                val connect = {
+                    when (item) {
+                        is DestinationItem.Installed -> onConnect(item.provider)
+                        is DestinationItem.InStore -> onInstall(item.plugin)
+                    }
+                }
+                OtherAgentChoiceRow(
+                    title = item.title,
+                    subtitle = item.rowSubtitle(configurable),
+                    selected = installed?.route == current,
+                    onClick = {
+                        if (installed != null && installed.connected) onSelect(installed.route) else connect()
+                    },
+                    onConnect = connect.takeUnless { item.isConnected },
+                    onLongClick = installed?.takeIf { configurable }?.let { { onConfigure(it.provider) } },
+                )
+            }
+            missing?.let {
+                OtherAgentChoiceRow(
+                    title = it.tileLabel(agentTitles),
+                    subtitle = "No longer installed",
+                    selected = true,
+                    onClick = {},
+                    onConnect = null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OtherAgentChoiceRow(
+    title: String,
+    subtitle: String?,
     selected: Boolean,
     onClick: () -> Unit,
+    onConnect: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
+) {
+    SheetChoiceRow(
+        icon = Icons.Default.Power,
+        title = title,
+        subtitle = subtitle,
+        selected = selected,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        trailing = if (onConnect == null) null else {
+            { TextButton(onClick = onConnect) { Text("Connect") } }
+        },
+        modifier = Modifier.padding(start = 34.dp),
+    )
+}
+
+@Composable
+private fun SheetChoiceRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val colors = IndexTheme.colors
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) colors.redSurface else Color.Transparent)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 8.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Icon(
-            option.icon,
+            icon,
             contentDescription = null,
             tint = if (selected) colors.primary
             else colors.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(option.optionLabel, fontSize = 15.sp, color = colors.onSurface)
-            option.optionSub?.let {
+            Text(title, fontSize = 15.sp, color = colors.onSurface)
+            subtitle?.let {
                 Text(it, fontSize = 12.sp, color = colors.onSurfaceVariant)
             }
         }
+        trailing?.invoke()
         if (selected) {
             Icon(
                 Icons.Default.Check,

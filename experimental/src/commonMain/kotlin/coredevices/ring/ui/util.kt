@@ -2,7 +2,6 @@ package coredevices.ring.ui
 
 import androidx.compose.runtime.Composable
 import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -176,15 +175,3 @@ object UITimeUtil {
     }
 }
 
-/** "just now" / "5m ago" / "3h ago" / "2d ago" — short relative time
- *  used by the index feed list rows. Single source of truth. */
-internal fun relativeTime(at: Instant): String {
-    val now = Clock.System.now().toEpochMilliseconds()
-    val s = ((now - at.toEpochMilliseconds()) / 1000L).toInt()
-    if (s < 60) return "just now"
-    val m = s / 60
-    if (m < 60) return "${m}m ago"
-    val h = m / 60
-    if (h < 24) return "${h}h ago"
-    return "${h / 24}d ago"
-}

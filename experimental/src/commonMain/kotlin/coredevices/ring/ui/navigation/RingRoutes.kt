@@ -21,7 +21,6 @@ import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
-import coredevices.ring.ui.screens.settings.mcp.McpSandboxGroups
 import coredevices.ring.ui.theme.IndexThemeHost
 
 /** Marker for routes that belong to the Index/Ring feature. The
@@ -57,8 +56,6 @@ object RingRoutes {
     @Serializable
     data object RingSyncInspector : RingRoute
     @Serializable
-    data object McpSandboxGroups : RingRoute
-    @Serializable
     data object AddIntegration : RingRoute
 
     /** Deep link that opens the [ObjectDetails] screen for an index item by
@@ -77,6 +74,10 @@ object RingRoutes {
     const val RECORDING_DEEP_LINK_PATH = "recording"
     fun recordingDeepLink(recordingId: Long) =
         "pebblecore://$OBJECT_DEEP_LINK_HOST/$RECORDING_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$recordingId"
+
+    /** Deep link that opens [Settings]. Parsed by `CoreDeepLinkHandler`. */
+    const val SETTINGS_DEEP_LINK_PATH = "index-settings"
+    const val SETTINGS_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$SETTINGS_DEEP_LINK_PATH"
 }
 
 /** Registers a ring destination inside [IndexThemeHost], so screens read
@@ -126,9 +127,6 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     }
     indexComposable<RingRoutes.RingSyncInspector> {
         RingSyncInspectorScreen(coreNav)
-    }
-    indexComposable<RingRoutes.McpSandboxGroups> {
-        McpSandboxGroups(coreNav)
     }
     indexComposable<RingRoutes.AddIntegration> {
         AddIntegration(coreNav)

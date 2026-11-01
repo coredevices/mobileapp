@@ -105,7 +105,6 @@ kotlin {
                 implementation(libs.firebase.crashlytics)
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
-                implementation(libs.coredevices.speex)
                 api(project(":cactus"))
                 api(libs.algolia)
                 implementation(libs.reorderable)
@@ -120,6 +119,8 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
+                implementation(libs.coroutines.test)
+                implementation(libs.ktor.client.mock)
             }
         }
 
@@ -130,6 +131,7 @@ kotlin {
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.documentfile)
                 // gitlive's compile variant declares com.google.firebase:* without versions.
                 implementation(project.dependencies.platform(libs.firebase.bom))
             }

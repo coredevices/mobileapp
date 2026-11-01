@@ -10,10 +10,13 @@ import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.services.blobdb.WriteType
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.datetime.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private val TIMESTAMP = Instant.fromEpochSeconds(1757376000)
@@ -89,5 +92,23 @@ class QuietTimeScheduleTest {
             writeType = WriteType.Write,
         )
         assertEquals(item, write.asWatchPrefItem(PARAMS))
+    }
+
+    @Test
+    fun containsTimesWithinTheWindow() {
+        val window = QuietTimeSchedule(2, 0, 5, 0)
+        assertFalse(window.contains(LocalTime(1, 59)))
+        assertTrue(window.contains(LocalTime(2, 0)))
+        assertTrue(window.contains(LocalTime(4, 59)))
+        assertFalse(window.contains(LocalTime(5, 0)))
+    }
+
+    @Test
+    fun containsTimesInAnOvernightWindow() {
+        val window = QuietTimeSchedule(23, 0, 1, 30)
+        assertTrue(window.contains(LocalTime(23, 30)))
+        assertTrue(window.contains(LocalTime(0, 15)))
+        assertFalse(window.contains(LocalTime(1, 30)))
+        assertFalse(window.contains(LocalTime(12, 0)))
     }
 }

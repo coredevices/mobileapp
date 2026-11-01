@@ -6,11 +6,15 @@ import com.russhwolf.settings.Settings
 import coredevices.CoreBackgroundSync
 import coredevices.EnableExperimentalDevices
 import coredevices.analytics.CoreAnalytics
+import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.analytics.RealCoreAnalytics
 import coredevices.api.EngDashOtaApi
 import coredevices.api.EngDashOtaApiImpl
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
+import coredevices.coreapp.plugins.AppstorePluginStore
+import coredevices.pebble.config.ConfigPageClosedListener
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.coreapp.push.PushMessaging
@@ -20,9 +24,11 @@ import coredevices.coreapp.ui.screens.OnboardingViewModel
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.database.CoreDatabase
 import coredevices.database.UserConfigDao
+import coredevices.database.SyncTaskDao
 import coredevices.database.getCoreRoomDatabase
 import coredevices.firestore.UsersDao
 import coredevices.firestore.UsersDaoImpl
+import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.util.AppResumed
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigFlow
@@ -31,6 +37,8 @@ import coredevices.util.DoneInitialOnboarding
 import coredevices.util.SecondaryProfileWarning
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.models.ModelManager
+import coredevices.util.sync.SyncHandler
+import coredevices.util.sync.SyncManager
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.CactusTranscriptionService
 import coredevices.util.transcription.HybridTranscriptionService
@@ -45,6 +53,7 @@ import dev.gitlive.firebase.firestore.FirebaseFirestoreSettings
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.firestoreSettings
 import dev.gitlive.firebase.firestore.persistentCacheSettings
+import io.rebble.libpebblecommon.plugin.PhoneNetworkMonitor
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
@@ -78,7 +87,7 @@ val utilModule = module {
     singleOf(::DoneInitialOnboarding)
     single { SecondaryProfileWarning(get(), get<coredevices.util.Platform>().isSecondaryProfile) }
     singleOf(::AppUpdateTracker)
-    singleOf(::RealCoreAnalytics) bind CoreAnalytics::class
+    single { RealCoreAnalytics(get(), get(), get(), metricsSources = { getAll<HeartbeatMetricsSource>() }) } bind CoreAnalytics::class
     single { getCoreRoomDatabase(get()) }
     single { get<CoreDatabase>().analyticsDao() }
     single { get<CoreDatabase>().appstoreSourceDao() }
@@ -87,11 +96,15 @@ val utilModule = module {
     single { get<CoreDatabase>().heartsDao() }
     single { get<CoreDatabase>().memfaultChunkDao() }
     single { get<CoreDatabase>().analyticsHeartbeatDao() }
+    single { get<CoreDatabase>().syncTaskDao() }
+    single { SyncManager(store = get<SyncTaskDao>(), handlers = { getAll<SyncHandler>() }, scheduler = get()) }
     single { UserConfigDao { get() } }
     single { CoreConfigHolder(defaultValue = CoreConfig(), get(), get()) }
     single { CoreConfigFlow(get<CoreConfigHolder>().config) }
     single { ModelManager(get(), get(), getOrNull()) }
     singleOf(::OAuthRedirectHandler)
+    singleOf(::AppstorePluginStore) bind PluginStore::class
+    single { ConfigPageClosedListener(get<DefaultDestinationPrompter>()::configPageClosed) }
     singleOf(::WisprFlowAuth)
     single {
         CactusTranscriptionService(
@@ -113,7 +126,7 @@ val utilModule = module {
     }
     singleOf(::PlatformSpeechRecognizer)
     single {
-        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get())
+        HybridTranscriptionService(get(), get(), get(), get(), get(), get(), get(), getOrNull<PhoneNetworkMonitor>()?.connection)
     } binds arrayOf(TranscriptionService::class, LocalTranscriptionService::class)
     singleOf(::WisprFlowRESTTranscriptionService)
     singleOf(::KirinkiTranscriptionService)

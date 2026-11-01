@@ -2,7 +2,7 @@
 
 package coredevices.ring.ui.screens.indexfeed
 
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -276,7 +276,7 @@ internal fun SortPill(sort: ObjectDetailViewModel.ListSort, onClick: () -> Unit)
 }
 
 // `relativeTime` and `relativeTimeWithCreated` (identical body) moved to
-// `coredevices.ring.ui.util` so home + index-feed screens share one impl.
+// `coredevices.util` so home + index-feed screens share one impl.
 
 internal fun relativeTimeWithCreated(at: Instant): String = relativeTime(at)
 

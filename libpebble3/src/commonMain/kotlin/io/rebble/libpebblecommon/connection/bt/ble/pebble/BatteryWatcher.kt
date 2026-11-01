@@ -55,7 +55,7 @@ class BatteryWatcher(
             collect { bytes ->
                 val batteryLevel = bytes.asBatteryLevel()
                 batteryLevel.also { logger.v { "battery level changed: $batteryLevel (raw: ${bytes.toHexString()})" } }
-                _battery.value = batteryLevel
+                batteryLevel?.let { _battery.value = it }
             }
             return true
         } catch (e: GattStatusException) {
@@ -69,7 +69,12 @@ class BatteryWatcher(
         }
     }
 
-    private fun ByteArray.asBatteryLevel(): Int? = getOrNull(0)?.toInt()
+    private fun ByteArray.asBatteryLevel(): Int? {
+        if (size != 1) return null
+        val level = this[0].toInt()
+        if (level !in 0..100) return null
+        return level
+    }
 
     companion object {
         private const val BLUETOOTH_BASE_UUID_POSTFIX = "0000-1000-8000-00805F9B34FB"

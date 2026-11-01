@@ -174,11 +174,13 @@ data class TimelineItemFields(
 )
 
 // Sending an attribute a watch doesn't know is not harmless: firmware indexes a fixed-size array by
-// attribute id when it verifies an item, so an unknown id writes out of bounds.
+// attribute id when it verifies an item, so an unknown id writes out of bounds. Watches advertising
+// SupportsUnknownTimelineAttributes skip unknown ids, so newer attributes are gated on it.
 private val TimelineAttribute.requiredCapability: ProtocolCapsFlag?
     get() = when (this) {
         TimelineAttribute.VibrationPattern -> ProtocolCapsFlag.SupportsCustomVibePatterns
         TimelineAttribute.ImageAspectRatio -> ProtocolCapsFlag.SupportsNotificationImages
+        TimelineAttribute.WeatherPinKind -> ProtocolCapsFlag.SupportsUnknownTimelineAttributes
         else -> null
     }
 

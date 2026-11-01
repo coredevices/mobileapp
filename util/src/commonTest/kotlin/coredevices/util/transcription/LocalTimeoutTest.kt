@@ -45,13 +45,13 @@ class LocalTimeoutTest {
     @Test
     fun scalesWithLength() {
         assertTrue(budgetFor(12.0) > budgetFor(6.0))
-        assertEquals(40.seconds, budgetFor(10.0))
+        assertEquals(38.seconds, budgetFor(8.0))
     }
 
     @Test
-    fun shortClipsStayTightlyBounded() {
-        assertEquals(8.seconds, budgetFor(0.5))
-        assertEquals(8.seconds, budgetFor(2.0))
+    fun shortClipsGetTheBaselinePlusAllowance() {
+        assertEquals(11.75.seconds, budgetFor(0.5))
+        assertEquals(17.seconds, budgetFor(2.0))
     }
 
     @Test
@@ -69,7 +69,7 @@ class LocalTimeoutTest {
 
     @Test
     fun clipBudgetWinsWhenSmallerThanRemaining() {
-        assertEquals(8.seconds, budgetFor(1.0, remaining = 45.seconds, reserve = 7.seconds))
+        assertEquals(13.5.seconds, budgetFor(1.0, remaining = 45.seconds, reserve = 7.seconds))
         assertEquals(budgetFor(10.0), budgetFor(10.0, remaining = 45.seconds))
     }
 
@@ -81,7 +81,7 @@ class LocalTimeoutTest {
 
     @Test
     fun degenerateInputsDoNotThrow() {
-        assertEquals(8.seconds, HybridTranscriptionService.localTimeout(ByteArray(0), 0))
+        assertEquals(10.seconds, HybridTranscriptionService.localTimeout(ByteArray(0), 0))
         assertEquals(45.seconds, HybridTranscriptionService.localTimeout(ByteArray(1000), 0))
         assertEquals(45.seconds, HybridTranscriptionService.localTimeout(ByteArray(32000), -16000))
     }

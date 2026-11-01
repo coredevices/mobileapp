@@ -8,8 +8,8 @@ import kotlinx.serialization.json.put
 
 /**
  * What Index captures when a request is ambiguous or the agent took no other action.
- * The destination is the existing [coredevices.ring.database.Preferences.noteProvider] /
- * [coredevices.ring.database.Preferences.reminderProvider].
+ * The destination is the provider selected in
+ * [coredevices.ring.agent.integrations.providers.IntegrationProviderRepository].
  */
 enum class DefaultCaptureType(
     val id: Int,

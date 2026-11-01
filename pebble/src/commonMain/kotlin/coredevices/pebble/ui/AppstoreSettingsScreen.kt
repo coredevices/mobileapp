@@ -42,6 +42,8 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.isPebbleFeed
@@ -69,11 +71,10 @@ class AppstoreSettingsScreenViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun updateCollections() {
-        viewModelScope.launch {
-            pebbleWebServices.fetchAppStoreHome(AppType.Watchapp, null, enabledOnly = false, useCache = false)
-        }
-        viewModelScope.launch {
-            pebbleWebServices.fetchAppStoreHome(AppType.Watchface, null, enabledOnly = false, useCache = false)
+        AppType.entries.forEach { type ->
+            viewModelScope.launch {
+                pebbleWebServices.fetchAppStoreHome(type, null, enabledOnly = false, useCache = false)
+            }
         }
     }
 
@@ -121,7 +122,13 @@ fun AppstoreSettingsScreen(
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
-    val collections by viewModel.collections.collectAsState()
+    val allCollections by viewModel.collections.collectAsState()
+    val pluginsEnabled = rememberLibPebble().config.collectAsState().value.watchConfig.enablePlugins
+    val collections = remember(allCollections, pluginsEnabled) {
+        if (pluginsEnabled) allCollections else allCollections?.mapValues { (_, byType) ->
+            (byType - AppType.Plugin).mapValues { (_, cols) -> cols.filter { it.slug != PLUGIN_DATA_APPS_SLUG } }
+        }
+    }
     val pebbleAccount: PebbleAccount = koinInject()
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()
@@ -268,8 +275,9 @@ fun AppstoreSourceItem(
                     if (cols.isNotEmpty()) {
                         Text(
                             text = when (appType) {
-                                AppType.Watchapp, AppType.Plugin -> "Watchapp Collections"
+                                AppType.Watchapp -> "Watchapp Collections"
                                 AppType.Watchface -> "Watchface Collections"
+                                AppType.Plugin -> "Plugin Collections"
                             },
                             modifier = Modifier.padding(start = 32.dp),
                             style = MaterialTheme.typography.labelSmall,

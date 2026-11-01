@@ -3,6 +3,7 @@ package coredevices.indexai.agent
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSession
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.io.files.Path
@@ -29,11 +30,27 @@ interface Agent {
     )
 
     /**
+     * Continue the conversation from its current state without a new user message, e.g. after
+     * the app has answered a tool call the agent was waiting on.
+     */
+    suspend fun resume(
+        mcpSession: McpSession,
+        sessionContext: SessionContext,
+        includePromptsFromMcps: Map<String, Set<String>> = emptyMap(),
+    ) {}
+
+    /**
      * Add a message to the conversation, without triggering any processing.
      * @param message The message to add
      * @return The index of the added message in the conversation
      */
     suspend fun addMessage(message: ConversationMessageDocument)
     val conversation: SharedFlow<List<ConversationMessageDocument>>
+    /** Each inference round as it starts. Emits nothing by default. */
+    val iterations: SharedFlow<AgentIteration> get() = NoIterations
     val label: String
+    /** Inference runs on a remote model rather than on-device. */
+    val isCloud: Boolean
 }
+
+private val NoIterations = MutableSharedFlow<AgentIteration>()

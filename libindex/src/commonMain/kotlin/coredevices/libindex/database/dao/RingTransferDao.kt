@@ -35,6 +35,9 @@ interface RingTransferDao {
     @Query("SELECT * FROM RingTransfer WHERE isCurrentIndexIteration = 1 AND status = 'Started' AND transferInfo_collectionStartIndex < :index")
     suspend fun getStartedTransfersBelowIndex(index: Int): List<RingTransfer>
 
+    @Query("SELECT * FROM RingTransfer WHERE status = 'Started' AND transferInfo_collectionStartIndex = :startIndex ORDER BY createdAt")
+    suspend fun getStartedTransfersByStartIndex(startIndex: Int): List<RingTransfer>
+
     @Query("UPDATE RingTransfer SET isCurrentIndexIteration = 0 WHERE isCurrentIndexIteration = 1")
     suspend fun markTransfersAsPreviousIndexIteration()
 
@@ -52,6 +55,14 @@ interface RingTransferDao {
 
     @Query("SELECT * FROM RingTransfer WHERE createdAt > :timestamp")
     fun getTransfersAfterFlow(timestamp: Instant): Flow<List<RingTransfer>>
+
+    @Query("""
+        SELECT * FROM RingTransfer
+        WHERE isCurrentIndexIteration = 1 AND recordingId IS NULL
+        AND status IN ('Started', 'Saving', 'Completed')
+        ORDER BY createdAt
+    """)
+    fun getPendingTransfersFlow(): Flow<List<RingTransfer>>
 
     @Query("UPDATE RingTransfer SET fileId = :fileId WHERE id = :id")
     suspend fun updateTransferFileId(
@@ -138,6 +149,7 @@ data class TransferInfoUpdate(
             RF.fileName AS feedItem_fileName,
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
+            RF.transcribedViaLocalFallback AS feedItem_transcribedViaLocalFallback,
             RF.error AS feedItem_error,
             RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,
@@ -171,6 +183,7 @@ data class TransferInfoUpdate(
             RF.fileName AS feedItem_fileName,
             RF.status AS feedItem_status,
             RF.transcription AS feedItem_transcription,
+            RF.transcribedViaLocalFallback AS feedItem_transcribedViaLocalFallback,
             RF.error AS feedItem_error,
             RF.errorType AS feedItem_errorType,
             RF.ringTransferInfo AS feedItem_ringTransferInfo,

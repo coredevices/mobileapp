@@ -45,6 +45,8 @@ interface UsersDao {
     suspend fun updateRingLifetimeCollectionCount(serial: String, count: Int)
     suspend fun updateRingBatteryVoltage(serial: String, voltageMilliV: Int)
     suspend fun updateEncryptionInfo(info: EncryptionInfo) {}
+    suspend fun updatePermissionSettings(policy: String, askLegacyApps: Boolean) {}
+    suspend fun clearPermissionSettings() {}
     /** Sign out of Firebase. Must be used instead of calling Firebase.auth.signOut() directly. */
     suspend fun signOut()
     fun init()
@@ -329,6 +331,14 @@ class UsersDaoImpl(
     override suspend fun updateEncryptionInfo(info: EncryptionInfo) {
         val doc = userDoc ?: throw IllegalStateException("Not signed in — cannot store encryption info")
         doc.update("encryption" to info)
+    }
+
+    override suspend fun updatePermissionSettings(policy: String, askLegacyApps: Boolean) {
+        userDoc?.update(mapOf("permission_policy" to policy, "ask_legacy_apps_for_permissions" to askLegacyApps))
+    }
+
+    override suspend fun clearPermissionSettings() {
+        userDoc?.update(mapOf("permission_policy" to null, "ask_legacy_apps_for_permissions" to null))
     }
 
     override suspend fun signOut() {

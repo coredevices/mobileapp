@@ -19,6 +19,10 @@ class InferenceActivity : ComponentActivity() {
             lp.height = 1
             lp.dimAmount = 0f
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            addFlags(
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            )
             attributes = lp
         }
 

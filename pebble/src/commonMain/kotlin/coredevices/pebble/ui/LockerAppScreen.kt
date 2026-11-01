@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Launch
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.HealthAndSafety
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -83,6 +86,7 @@ import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.SettingsPageState
 import coredevices.pebble.services.isPebbleFeed
+import coredevices.pebble.services.pluginMetadata
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
@@ -94,6 +98,7 @@ import io.rebble.libpebblecommon.locker.AppCapability
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.orderIndexForInsert
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.InstallReview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.TimeoutCancellationException
@@ -217,6 +222,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val platform: Platform = koinInject()
         val urlLauncher = LocalUriHandler.current
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
+        var adding by remember { mutableStateOf(false) }
+        var storeReview by remember { mutableStateOf<InstallReview?>(null) }
 
         fun reloadFromStore(useCache: Boolean) {
             if (storeId != null && storeSource != null) {
@@ -242,6 +249,10 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         title = "Remove ${entry.title}?",
                         text = "Are you sure you want to remove this app from your Pebble?",
                         onConfirm = {
+                            // Store apps stay here to show the store listing; nothing to show otherwise
+                            if (viewModel.selectedStoreEntry == null) {
+                                navBarNav.goBack()
+                            }
                             // Don't use local scope: that will die because we moved back
                             GlobalScope.launch {
                                 logger.d { "removing app ${entry.uuid}" }
@@ -295,7 +306,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     AsyncImage(
                                         model = entry.listImageUrl,
                                         contentDescription = null,
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(28.dp),
+                                        colorFilter = entry.listImageColorFilter(),
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
                                 }
@@ -470,14 +482,6 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             modifier = Modifier.padding(5.dp),
                         )
                     }
-                    // Only show for store, right now (until we figure out populating data or locker)
-                    if (storeEntry?.capabilities?.isNotEmpty() == true) {
-                        FlowRow(modifier = Modifier.padding(5.dp)) {
-                            storeEntry.capabilities.forEach { permission ->
-                                PermissionItem(permission, entry, topBarParams)
-                            }
-                        }
-                    }
                     if (entry.commonAppType is CommonAppType.Store && !viewModel.addedToLocker) {
 //                    val hasUuidConflict = remember(viewModel.storeEntries) { // One store has multiple entries with same uuid
 //                        viewModel.storeEntries?.let {
@@ -489,32 +493,50 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             Modifier.padding(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PebbleElevatedButton(
-                                text = "Add To Watch",
-                                onClick = {
-                                    // Global scope because it could take a second to download/sync/load app
-                                    GlobalScope.launch {
-                                        val watch = lastConnectedWatch as? ConnectedPebbleDevice
-                                        viewModel.addedToLocker = true
-                                        val addResult = nativeLockerAddUtil.addAppToLocker(
-                                            entry.commonAppType,
-                                            entry.commonAppType.storeSource
+                            val storeApp = entry.commonAppType
+                            fun addToWatch(granted: Map<String, Boolean?>) {
+                                // Global scope because it could take a second to download/sync/load app
+                                GlobalScope.launch {
+                                    val watch = lastConnectedWatch as? ConnectedPebbleDevice
+                                    viewModel.addedToLocker = true
+                                    val addResult = nativeLockerAddUtil.addAppToLocker(
+                                        storeApp,
+                                        storeApp.storeSource,
+                                        granted,
+                                    )
+                                    if (!addResult) {
+                                        topBarParams.showSnackbar("Failed to add app")
+                                        return@launch
+                                    }
+                                    // A plugin-only app runs on the phone: nothing to sync or open on the watch.
+                                    if (watch != null && entry.type != AppType.Plugin) {
+                                        libPebble.launchApp(
+                                            entry = entry,
+                                            snackbarDisplay = topBarParams,
+                                            connectedIdentifier = watch.identifier,
                                         )
-                                        if (!addResult) {
-                                            topBarParams.showSnackbar("Failed to add app")
-                                            return@launch
-                                        }
-                                        if (watch != null) {
-                                            libPebble.launchApp(
-                                                entry = entry,
-                                                snackbarDisplay = topBarParams,
-                                                connectedIdentifier = watch.identifier,
-                                            )
-                                        }
+                                    }
+                                }
+                            }
+                            storeReview?.let { review ->
+                                InstallReviewDialog(review) { granted ->
+                                    storeReview = null
+                                    if (granted != null) addToWatch(granted) else adding = false
+                                }
+                            }
+                            val addText = if (entry.type == AppType.Plugin) "Add" else "Add To Watch"
+                            PebbleElevatedButton(
+                                text = addText,
+                                onClick = {
+                                    adding = true
+                                    scope.launch {
+                                        val review = nativeLockerAddUtil.review(storeApp)
+                                        if (review == null) addToWatch(emptyMap()) else storeReview = review
                                     }
                                 },
+                                enabled = !adding,
                                 icon = Icons.Default.Add,
-                                contentDescription = "Add To Watch",
+                                contentDescription = addText,
                                 primaryColor = true,
                                 modifier = Modifier.padding(end = 8.dp),
                             )
@@ -640,6 +662,25 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         }
                     }
+                    val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
+                    val storeApp = (entry.commonAppType as? CommonAppType.Store)?.storeApp
+                    if (entry.commonAppType is CommonAppType.Locker) {
+                        AppPermissionsSection(entry.uuid)
+                    } else if (pluginsEnabled && storeApp != null) {
+                        StorePermissionsSection(storeApp.requestedPermissions())
+                    } else if (storeEntry?.capabilities?.isNotEmpty() == true) {
+                        FlowRow(modifier = Modifier.padding(5.dp)) {
+                            storeEntry.capabilities.forEach { permission ->
+                                PermissionItem(permission, topBarParams)
+                            }
+                        }
+                    }
+                    val pluginMetadata = remember(pluginsEnabled, entry, storeApp) {
+                        if (!pluginsEnabled) null
+                        else libPebble.getAllPlugins().firstOrNull { it.pluginUuid == entry.uuid }
+                            ?: storeApp?.pluginMetadata()
+                    }
+                    pluginMetadata?.let { PluginCapabilitiesSection(it) }
                     Spacer(Modifier.height(5.dp))
                     // Shared minimum width for the name column — grows to fit the widest label.
                     var propertyNameWidthPx by remember { mutableIntStateOf(0) }
@@ -712,6 +753,22 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             value = "$version$sideloadedText$updatedDateText"
                         )
                     }
+                    commonAppStore?.storeApp?.batteryImpact?.takeIf { it.isNotEmpty() }?.let { impacts ->
+                        val connected = sharedViewModel.watchType.value.codename
+                        val platform = if (connected in impacts) connected else impacts.keys.first()
+                        var showDetails by remember { mutableStateOf(false) }
+                        val otherWatchText = if (platform != connected) " (${batteryImpactWatchName(platform, short = true)})" else ""
+                        PropertyRow(
+                            name = "BATTERY IMPACT",
+                            nameModifier = propertyNameModifier,
+                            value = impacts.getValue(platform).level.capitalized() + otherWatchText,
+                            onClick = { showDetails = true },
+                            onClickIcon = Icons.Outlined.Info,
+                        )
+                        if (showDetails) {
+                            BatteryImpactDialog(impacts, initialPlatform = platform, onDismiss = { showDetails = false })
+                        }
+                    }
                     (viewModel.selectedStoreEntry?.sourceLink ?: entry.sourceLink)?.let { sourceLink ->
                         if (sourceLink.isNotEmpty()) {
                             PropertyRow(
@@ -719,6 +776,28 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                 nameModifier = propertyNameModifier,
                                 value = "External Link",
                                 onClick = { urlLauncher.open(sourceLink) }
+                            )
+                        }
+                    }
+                    pluginMetadata?.scriptPath?.let { script ->
+                        val installed = entry.commonAppType is CommonAppType.Locker
+                        val pbwUrl = storeApp?.latestRelease?.pbwFile
+                        if (installed || pbwUrl != null) {
+                            PropertyRow(
+                                name = "PLUGIN CODE",
+                                nameModifier = propertyNameModifier,
+                                value = "View Source",
+                                onClick = {
+                                    navBarNav.navigateTo(
+                                        PebbleNavBarRoutes.PluginSourceRoute(
+                                            uuid = entry.uuid.toString().takeIf { installed },
+                                            pbwUrl = pbwUrl,
+                                            script = script,
+                                            title = entry.title,
+                                        )
+                                    )
+                                },
+                                onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
                             )
                         }
                     }
@@ -889,37 +968,36 @@ private fun PropertyRow(
 }
 
 @Composable
-fun PermissionItem(permission: AppCapability, entry: CommonApp, topBarParams: TopBarParams) {
-    if (entry.commonAppType is CommonAppType.Locker) {
-        // TODO
-    } else {
-        AssistChip(
-            onClick = {
-                topBarParams.showSnackbar(permission.description())
-            },
-            label = { Text(permission.name()) },
-            leadingIcon = { Icon(permission.icon(), null) },
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-    }
+fun PermissionItem(permission: AppCapability, topBarParams: TopBarParams) {
+    AssistChip(
+        onClick = {
+            topBarParams.showSnackbar(permission.description())
+        },
+        label = { Text(permission.name()) },
+        leadingIcon = { Icon(permission.icon(), null) },
+        modifier = Modifier.padding(horizontal = 6.dp)
+    )
 }
 
 fun AppCapability.icon(): ImageVector = when (this) {
     AppCapability.Health -> Icons.Default.HealthAndSafety
     AppCapability.Location -> Icons.Default.LocationSearching
     AppCapability.Timeline -> Icons.Default.LocationOn
+    AppCapability.WebSignIn -> Icons.Default.AccountCircle
 }
 
 fun AppCapability.name(): String = when (this) {
     AppCapability.Health -> "Health"
     AppCapability.Location -> "Location"
     AppCapability.Timeline -> "Timeline"
+    AppCapability.WebSignIn -> "Web sign-in"
 }
 
 fun AppCapability.description(): String = when (this) {
     AppCapability.Health -> "Can access health data"
     AppCapability.Location -> "Can access location"
     AppCapability.Timeline -> "Can create timeline pins"
+    AppCapability.WebSignIn -> "Can ask you to sign in to web accounts"
 }
 
 suspend fun LibPebble.launchApp(
@@ -992,7 +1070,7 @@ suspend fun CommonApp.showSettings(
                 }
                 WatchappSettingsUrlCache.put(uuid.toString(), url)
                 navBarNav.navigateTo(
-                    PebbleRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title)
+                    CommonRoutes.WatchappSettingsRoute(uuid = uuid.toString(), title = title)
                 )
                 return
             }
@@ -1025,7 +1103,7 @@ suspend fun CommonApp.showSettings(
                 logger.d { "Got app settings URL" }
                 WatchappSettingsUrlCache.put(uuid.toString(), url)
                 navBarNav.navigateTo(
-                    PebbleRoutes.WatchappSettingsRoute(
+                    CommonRoutes.WatchappSettingsRoute(
                         uuid = uuid.toString(),
                         title = title,
                     )

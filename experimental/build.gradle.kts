@@ -188,6 +188,7 @@ kotlin {
                 implementation(compose.components.resources)
                 implementation(libs.androidx.navigation.compose)
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.kmpio)
                 implementation(libs.kermit)
                 implementation(project(":util"))
                 implementation(libs.serialization)
@@ -226,6 +227,7 @@ kotlin {
                 implementation(libs.settings.test)
                 implementation(libs.coroutines.test)
                 implementation(libs.ktor.client.mock)
+                implementation(libs.firebase.common.internal)
             }
         }
 
@@ -248,6 +250,8 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.test.runner)
                 implementation(libs.kotlin.test)
+                implementation(libs.settings.test)
+                implementation(libs.room.testing)
             }
         }
 

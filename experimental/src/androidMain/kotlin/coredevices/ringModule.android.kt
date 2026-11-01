@@ -1,44 +1,44 @@
 package coredevices
 
 import android.content.Context
-import coredevices.ring.agent.integrations.obsidian.AndroidObsidianVault
-import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.builtin_servlets.js.AndroidWebviewJsEngine
 import coredevices.ring.agent.builtin_servlets.js.JsEngine
-import coredevices.util.integrations.IntegrationTokenStorage
+import coredevices.ring.agent.integrations.obsidian.AndroidObsidianVault
+import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.ring.database.IntegrationTokenStorageImpl
-import coredevices.ring.encryption.EncryptionKeyManager
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.RingDatabase
+import coredevices.ring.encryption.EncryptionKeyManager
+import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.service.PlatformIndexNotificationManager
+import coredevices.ring.service.RingOta
+import coredevices.ring.service.RingPresenceObserver
 import coredevices.ring.service.RingSync
+import coredevices.ring.transcription.AndroidInferenceBoostProvider
+import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.ui.screens.settings.SettingsBeeperContactsDialogViewModel
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.AudioRecorder
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
+import coredevices.util.integrations.IntegrationTokenStorage
+import coredevices.util.transcription.CactusModelPathProvider
+import coredevices.util.transcription.InferenceBoost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
-import coredevices.ring.model.CactusModelProvider
-import coredevices.ring.service.RingOta
-import coredevices.ring.transcription.AndroidInferenceBoostProvider
-import coredevices.ring.transcription.InferenceBoostProvider
-import coredevices.util.transcription.CactusModelPathProvider
-import coredevices.util.transcription.InferenceBoost
 import org.koin.dsl.module
 
 actual val platformRingModule = module {
     single<InferenceBoostProvider> { AndroidInferenceBoostProvider(get()) } bind InferenceBoost::class
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)
+    singleOf(::RingPresenceObserver)
     single {
         val prefs = get<Preferences>()
         val ringOTA = get<RingOta>()
@@ -51,6 +51,7 @@ actual val platformRingModule = module {
             hwVersion = RingSync.SATELLITE_HW_VER,
             CoroutineScope(Dispatchers.Default),
             useScanReceiver = prefs.usePendingIntentScan.value,
+            scanByPairedAddress = prefs.scanByPairedAddress.value,
             updateJsonProvider = { it?.let { ringOTA.getLatestFirmware(it) } }
         )
     }

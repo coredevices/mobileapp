@@ -15,8 +15,8 @@ import kotlin.time.Instant
  * Local Room mirror of [ItemDocument]. Same pattern as the existing Room
  * mirror of `RecordingDocument` (`LocalRecording`) — Room is the read path
  * for the UI flows so we get fast, indexed, offline-capable reads without
- * relying on Firestore's offline cache. Writes flow through Firestore via
- * the manual Sync-now pipeline (see `SettingsViewModel.downloadFeedHistory`).
+ * relying on Firestore's offline cache. Writes are pushed to Firestore by
+ * the IndexFeedSyncService observer.
  *
  * Shape matches `ItemDocument` exactly with [firestoreId] as the primary
  * key. [parentListIdsCsv] flattens the multi-list array into a

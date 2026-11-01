@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonElement
 
 interface McpIntegration {
     val name: String
+    val description: String? get() = null
     suspend fun connect()
     suspend fun close()
     suspend fun listTools(): List<McpTool>

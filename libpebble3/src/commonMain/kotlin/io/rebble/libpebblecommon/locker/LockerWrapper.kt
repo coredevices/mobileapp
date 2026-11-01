@@ -16,9 +16,6 @@ enum class AppType(val code: String) {
 
     companion object {
         fun fromString(value: String): AppType? = entries.firstOrNull { it.code == value }
-
-        /** Types with an app store, so home feeds are preloaded per-type. Plugins have no store. */
-        val storeTypes = listOf(Watchface, Watchapp)
     }
 }
 
@@ -26,6 +23,8 @@ enum class AppCapability(val code: String) {
     Health("health"),
     Location("location"),
     Timeline("timeline"),
+    /** Signing in to a web account from the app's config page. Our store only grants it to our own apps. */
+    WebSignIn("web_sign_in"),
     // Not included: "configurable" (separate field in database, doesn't require permission grant)
     ;
 
@@ -43,6 +42,7 @@ data class AppPlatform(
     val listImageUrl: String? = null,
     val iconImageUrl: String? = null,
     val description: String? = null,
+    val listImageTintable: Boolean = false,
 )
 
 data class AppProperties(
@@ -61,6 +61,10 @@ data class AppProperties(
     val sourceLink: String?,
     val storeId: String?,
     val capabilities: List<AppCapability>,
+    /** Where the pbw is downloaded from; null when sideloaded. */
+    val pbwUrl: String? = null,
+    /** Built before permissions (`manifestVersion` below 2). */
+    val legacy: Boolean = false,
 )
 
 data class AppBasicProperties(

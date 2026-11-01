@@ -93,6 +93,32 @@ class IndexWebhookSettingsViewModelTest {
     }
 
     @Test
+    fun copyOnlyOffersGesturesOfTheSameKind() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val fixture = Fixture()
+            fixture.preferences.setConfig(
+                RingGesture.Hold,
+                IndexWebhookConfig(url = "https://hold.example/hook", saved = true),
+            )
+
+            fixture.viewModel.openDialog(RingGesture.Click)
+            advanceUntilIdle()
+            assertNull(fixture.viewModel.copyableGesture.value)
+
+            fixture.preferences.setConfig(
+                RingGesture.TripleClick,
+                IndexWebhookConfig(url = "https://click.example/hook", saved = true),
+            )
+            advanceUntilIdle()
+            assertEquals(RingGesture.TripleClick, fixture.viewModel.copyableGesture.value)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun removingWebhookAlsoDeletesItsSigningSecret() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -154,12 +180,15 @@ class IndexWebhookSettingsViewModelTest {
             gesture: RingGesture,
         ) = Unit
 
+        override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+
         override suspend fun sendTestEvent(
             gesture: RingGesture,
             url: String,
             headers: Map<String, String>,
             signRequests: Boolean,
             signingSecret: String?,
+            clickPayload: String,
         ): IndexWebhookRunResult {
             lastTestRequest = TestRequest(gesture, url, signRequests, signingSecret)
             return IndexWebhookRunResult(true, "200 OK", "test event", 0, 0)

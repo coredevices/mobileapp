@@ -33,6 +33,7 @@ class WebSyncManager(
             }
             locker.update(response)
             result.complete(Unit)
+            locker.prefetchStaleAppUpdates()
         }
         return result
     }

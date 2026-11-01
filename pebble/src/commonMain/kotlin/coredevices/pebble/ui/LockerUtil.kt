@@ -58,6 +58,7 @@ import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.AppstoreCache
+import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.PebbleAccountProvider
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.SettingsPageState
@@ -82,6 +83,9 @@ import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.locker.SystemApps
 import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.declaredPermissions
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
 import io.rebble.libpebblecommon.web.LockerEntryCompatibilityWatchPlatformDetails
@@ -386,7 +390,8 @@ private suspend fun AppstoreSource.cachedCategoriesOrDefaultsForType(
 ): List<StoreCategory> {
     return cache.readCategories(appType, this) ?: when (appType) {
         AppType.Watchface -> DEFAULT_CATEGORIES_FACES
-        AppType.Watchapp, AppType.Plugin -> DEFAULT_CATEGORIES_APPS
+        AppType.Watchapp -> DEFAULT_CATEGORIES_APPS
+        AppType.Plugin -> emptyList()
     }
 }
 
@@ -414,6 +419,7 @@ data class CommonApp(
     val category: String?,
     val version: String?,
     val listImageUrl: String?,
+    val listImageTintable: Boolean = false,
     val screenshotImageUrl: String?,
     val isCompatible: Boolean,
     val isNativelyCompatible: Boolean,
@@ -488,6 +494,7 @@ fun LockerWrapper.asCommonApp(
         category = properties.category,
         version = properties.version,
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
+        listImageTintable = (compatiblePlatform ?: anyPlatform)?.listImageTintable == true,
         screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
             ?: anyPlatform?.screenshotImageUrl,
         // Plugins run on the phone, so they're compatible with any (or no) connected watch.
@@ -569,11 +576,13 @@ fun StoreApplication.asCommonApp(
         category = category,
         version = latestRelease.version,
         listImageUrl = listImage.values.firstOrNull(),
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotImages.firstOrNull()?.values?.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 when {
                     // If store doesn't report binary info, mark as compatible
@@ -630,12 +639,14 @@ fun StoreSearchResult.asCommonApp(
         category = category,
         version = null,
         listImageUrl = listImage,
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull()
             ?: screenshotImages.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 val platformCompatibility = compatibility.findPlatform(watchType)
                 // Mark as compatible if API doesn't set the field
@@ -665,14 +676,31 @@ fun CommonAppType.canStartApp(): Boolean = when (this) {
     is CommonAppType.System -> true
 }
 
+/** The listing doesn't say whether the app has PKJS, so assume it does. */
+internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
+    declared = declaredPermissions(usesPermissions, manifestVersion),
+    hasPkjs = true,
+    hasCompanionApp = companions.android != null || companions.ios != null,
+    hasAndroidCompanion = companions.android != null,
+    pebbleKit2Packages = pebbleKit2Packages,
+)
+
 class NativeLockerAddUtil(
     private val libPebble: LibPebble,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val webServices: PebbleWebServices,
 ) {
+    /** Null if there's nothing to ask. */
+    suspend fun review(app: CommonAppType.Store): InstallReview? {
+        val storeApp = app.storeApp ?: return null
+        val uuid = storeApp.uuid ?: return null
+        return libPebble.reviewInstall(Uuid.parse(uuid), storeApp.title, storeApp.requestedPermissions())
+    }
+
     suspend fun addAppToLocker(
         app: CommonAppType.Store,
         source: AppstoreSource,
+        granted: Map<String, Boolean?>,
     ): Boolean {
         val storeApp = app.storeApp
         if (storeApp == null || storeApp.uuid == null) {
@@ -689,7 +717,7 @@ class NativeLockerAddUtil(
             logger.w { "failed to add to locker" }
             return false
         }
-        libPebble.addAppToLocker(lockerEntry)
+        libPebble.addAppToLocker(lockerEntry, granted)
         // Don't delay return for this
         GlobalScope.launch {
             webServices.addToLocker(
@@ -726,6 +754,16 @@ fun CommonApp.isSynced(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.sync
     is CommonAppType.Store -> false
     is CommonAppType.System -> true
+}
+
+/**
+ * Our store only publishes [AppCapability.WebSignIn] for our own apps, so it counts only for a pbw
+ * downloaded from our store. Debug builds also trust sideloaded copies, for developing them.
+ */
+fun LockerWrapper.mayUseWebSignIn(debugBuild: Boolean): Boolean {
+    if (AppCapability.WebSignIn !in properties.capabilities) return false
+    if (debugBuild) return true
+    return this is LockerWrapper.NormalApp && !sideloaded && properties.pbwUrl?.startsWith("$PEBBLE_FEED_URL/") == true
 }
 
 fun LockerWrapper.isSynced(): Boolean = when (this) {
@@ -765,7 +803,7 @@ fun AppsFilterRow(
     showWatchfaceOrderSetting: Boolean,
 ) {
     val config by rememberLibPebble().config.collectAsState()
-    val tabTypes = if (config.watchConfig.enablePlugins) AppType.entries else AppType.storeTypes
+    val tabTypes = AppType.entries.filter { it != AppType.Plugin || config.watchConfig.enablePlugins }
     LaunchedEffect(tabTypes) {
         if (selectedType != null && selectedType.value !in tabTypes) {
             selectedType.value = AppType.Watchface

@@ -1,11 +1,9 @@
 package coredevices.ring.service.recordings.button
 
-import coredevices.indexai.data.entity.mcp_sandbox.McpSandboxGroupEntity
 import coredevices.ring.agent.ChatMode
 import coredevices.ring.service.button.GestureDestination
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 
 class TextChatModeTest {
 
@@ -13,7 +11,15 @@ class TextChatModeTest {
     fun indexAgentRouteRunsTheNormalAgent() {
         assertEquals(
             ChatMode.Normal,
-            textChatModeFor(GestureDestination.IndexAgent, sandboxGroup = null),
+            textChatModeFor(GestureDestination.IndexAgent),
+        )
+    }
+
+    @Test
+    fun localAgentRouteRunsTheOnDeviceAgent() {
+        assertEquals(
+            ChatMode.Local,
+            textChatModeFor(GestureDestination.LocalAgent),
         )
     }
 
@@ -21,25 +27,15 @@ class TextChatModeTest {
     fun webSearchRouteRunsTheSearchAgent() {
         assertEquals(
             ChatMode.Search,
-            textChatModeFor(GestureDestination.WebSearch, sandboxGroup = null),
+            textChatModeFor(GestureDestination.WebSearch),
         )
     }
 
     @Test
-    fun sandboxRouteRunsThatGroup() {
-        val group = McpSandboxGroupEntity(id = 7, title = "Work")
-
-        val mode = textChatModeFor(GestureDestination.McpSandbox(7), sandboxGroup = group)
-
-        assertIs<ChatMode.McpSandbox>(mode)
-        assertEquals(group, mode.group)
-    }
-
-    @Test
-    fun sandboxRouteFallsBackWhenTheGroupIsGone() {
+    fun agentPluginRouteFallsBackToTheNormalAgentWhenThePluginIsGone() {
         assertEquals(
             ChatMode.Normal,
-            textChatModeFor(GestureDestination.McpSandbox(7), sandboxGroup = null),
+            textChatModeFor(GestureDestination.AgentPlugin("plugin:claude")),
         )
     }
 
@@ -47,7 +43,7 @@ class TextChatModeTest {
     fun disabledRouteStillAnswersTypedInput() {
         assertEquals(
             ChatMode.Normal,
-            textChatModeFor(GestureDestination.Nothing, sandboxGroup = null),
+            textChatModeFor(GestureDestination.Nothing),
         )
     }
 }

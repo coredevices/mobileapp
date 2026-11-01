@@ -25,6 +25,8 @@ actual val pkjsPlatformModule: Module = module {
             notificationConfigFlow = get(),
             pluginRegistry = get(),
             httpClient = get(),
+            permissions = get(),
+            pluginClient = get(),
         )
     } bind JsRunner::class
 }

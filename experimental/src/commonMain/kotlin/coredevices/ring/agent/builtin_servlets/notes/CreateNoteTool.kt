@@ -6,7 +6,13 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
+import coredevices.ring.agent.builtin_servlets.destinationProperty
+import coredevices.ring.agent.builtin_servlets.withoutDestination
 import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.integrations.providers.externalDestination
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -16,47 +22,50 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 
-class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory) : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "text" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The text of the note, usually a direct quote from the user"
-                        ).toJson()
-                    )
-                )
-            ),
-            required = listOf("text")
-        ),
-        outputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "note_id" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The unique identifier of the created note"
-                        ).toJson()
-                    )
-                )
-            ),
-            required = emptyList()
-        )
-    ),
+class CreateNoteTool(private val providers: IntegrationProviderRepository) : BuiltInMcpTool(
+    definition = DEFINITION,
+    localDefinition = DEFINITION.withoutDestination(),
 ), KoinComponent {
 
     companion object {
         const val TOOL_NAME = "create_note"
         const val TOOL_DESCRIPTION = "Save a note, idea, or thought for later. Use when the user wants to jot down or note something, or remember a fact or piece of information. Not for 'remember to do something' requests - those are reminders."
         private val logger = Logger.withTag("CreateNoteTool")
+        private val DEFINITION = Tool(
+            name = TOOL_NAME,
+            description = TOOL_DESCRIPTION,
+            inputSchema = ToolSchema(
+                properties = JsonObject(
+                    mapOf(
+                        "text" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The text of the note, usually a direct quote from the user"
+                            ).toJson()
+                        ),
+                        DESTINATION_ARG to destinationProperty("note"),
+                    )
+                ),
+                required = listOf("text")
+            ),
+            outputSchema = ToolSchema(
+                properties = JsonObject(
+                    mapOf(
+                        "note_id" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The unique identifier of the created note"
+                            ).toJson()
+                        )
+                    )
+                ),
+                required = emptyList()
+            )
+        )
     }
 
     @Serializable
-    data class CreateNoteArgs(val text: String, val automatic: Boolean = false)
+    data class CreateNoteArgs(val text: String, val automatic: Boolean = false, val destination: String? = null)
     @Serializable
     data class CreateNoteResult(
         @EncodeDefault(EncodeDefault.Mode.NEVER)
@@ -74,18 +83,26 @@ class CreateNoteTool(private val noteIntegrationFactory: NoteIntegrationFactory)
                 createNoteArgs.text.trim()
             }
         logger.d { "Creating note with text length: ${text.length}" }
+        val provider = providers.destinationProvider(createNoteArgs.destination, IntegrationSupport.Note)
+            ?: return ToolCallResult(
+                JsonSnake.encodeToString(CreateNoteResult()),
+                SemanticResult.GenericFailure(
+                    "Unknown note destination '${createNoteArgs.destination}'. Use a name from the " +
+                        "context, or omit $DESTINATION_ARG to use the default.",
+                    llmRecoverable = true
+                )
+            )
         return try {
-            val noteClient = noteIntegrationFactory.createNoteClient()
-            val noteId = noteClient.createNote(text, context.itemSource())
+            val noteId = providers.noteIntegration(provider).createNote(text, context.itemSource())
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult(noteId = noteId)),
-                SemanticResult.ListItemCreation(text)
+                SemanticResult.ListItemCreation(text, destination = provider.externalDestination)
             )
         } catch (e: Exception) {
             logger.e(e) { "Failed to create note" }
             ToolCallResult(
                 JsonSnake.encodeToString(CreateNoteResult()),
-                SemanticResult.GenericFailure("Failed to create note: ${e.message}")
+                SemanticResult.GenericFailure(e.message)
             )
         }
     }

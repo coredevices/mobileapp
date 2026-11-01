@@ -620,11 +620,16 @@ private fun FirmwareVersion.sameVersionNumberAs(other: FirmwareVersion): Boolean
 private fun FirmwareVersion.lowerVersionNumberThan(other: FirmwareVersion): Boolean =
     compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch }) < 0
 
-/** Dual-slot firmware refuses to install a version lower than the one running; PRF doesn't. */
+/**
+ * Dual-slot firmware refuses to install a version lower than the one running; PRF doesn't. This
+ * trick is only for the normal slot: a recovery image writes the recovery slot, which the watch
+ * only permits from normal firmware, so rebooting into PRF to install it can never succeed.
+ */
 internal fun needsPrfToDowngrade(
     update: FirmwareUpdateCheckResult.FoundUpdate,
     running: FirmwareVersion,
 ): Boolean = update.canDowngrade && running.isDualSlot && !running.isRecovery &&
+        !update.version.isRecovery &&
         update.version.lowerVersionNumberThan(running)
 
 fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {

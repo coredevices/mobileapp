@@ -34,6 +34,7 @@ import io.rebble.libpebblecommon.util.Endian
 import io.rebble.libpebblecommon.util.asTimelineColor
 import io.rebble.libpebblecommon.util.toPebbleColor
 import io.rebble.libpebblecommon.util.toProtocolNumber
+import kotlinx.datetime.LocalTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
@@ -187,6 +188,7 @@ class QLMappable(
  * (e.g. 22:00 to 07:00).
  */
 @Immutable
+@Serializable
 data class QuietTimeSchedule(
     val fromHour: Int,
     val fromMinute: Int,
@@ -196,6 +198,12 @@ data class QuietTimeSchedule(
     fun fromTime(): String = time(fromHour, fromMinute)
     fun toTime(): String = time(toHour, toMinute)
     fun encode(): String = "${fromTime()}-${toTime()}"
+
+    fun contains(time: LocalTime): Boolean {
+        val from = LocalTime(fromHour, fromMinute)
+        val to = LocalTime(toHour, toMinute)
+        return if (from < to) time >= from && time < to else time >= from || time < to
+    }
 
     companion object {
         private fun time(hour: Int, minute: Int): String =
@@ -256,6 +264,7 @@ enum class BoolWatchPref(
     Backlight("lightEnabled", "Backlight", true),
     AmbientLightSensor("lightAmbientSensorEnabled", "Ambient Light Sensor", true, description = "Only enable backlight when in a dark environment (using light sensor)"),
     BacklightMotion("lightMotion", "Backlight Motion", true, description = "Turn on backlight by flicking wrist"),
+    BacklightColorDayNightEnabled("lightColorDayNightEnabled", "Change Backlight Color at Night", false, description = "Use a different backlight color between sunset and sunrise (color-backlight watches only)"),
     TimelineQuickViewEnabled("timelineQuickViewEnabled", "Timeline Quick View", true, description = "Show upcoming events below watchface"),
     QuietTimeManuallyEnabled("dndManuallyEnabled", "Quiet Time - Manual", false, description = "Notifications are muted (and will stay on-screen without a timeout) when in quiet time"),
     CalendarAwareQuietTime("dndSmartEnabled", "Quiet Time - Calendar Aware", false, description = "Automatically enable Quiet Time during calendar events"),
@@ -264,8 +273,11 @@ enum class BoolWatchPref(
     AlternativeNotificationStyle("notifDesignStyle", "Alternative notification banner Style (B/W watches)", false),
     NotificationVibeDelay("notifVibeDelay", "Delay Notification Vibration", true, description = "Delay notification vibration until the notification is visible (after animations)"),
     NotificationBacklight("notifBacklight", "Notifications - Backlight", true, description = "Turn on the backlight when a notification arrives"),
+    RespectPhoneSilence("notifRespectPhoneSilence", "Respect Phone Do Not Disturb", false, description = "Notifications silenced by the phone's Do Not Disturb / Focus are delivered quietly (no popup, vibration or backlight)"),
     MenuScrollWrapAround("menuScrollWrapAround", "Menu Scrolling - Wrap Around", false, description = "Up button will go to the bottom of menus"),
     QuietTimeMotionBacklight("dndMotionBacklight", "Quiet Time - Motion Backlight", true, description = "Enable motion backlight during Quiet Time"),
+    QuietTimeTouchBacklight("dndTouchBacklight", "Quiet Time - Touch Backlight", true, description = "Enable touch backlight during Quiet Time"),
+    QuietTimeNotificationBacklight("dndNotificationBacklight", "Quiet Time - Notification Backlight", true, description = "Turn on the backlight for notifications during Quiet Time"),
     QuietTimeAutoDismiss("dndAutoDismiss", "Quiet Time - Auto Dismiss", false, description = "When notifications are shown in Quiet Time, automatically dismiss them instead of leaving them on-screen"),
     MusicShowVolumeControls("musicShowVolumeControls", "Show Volume Controls", true),
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
@@ -342,36 +354,31 @@ sealed interface WatchPrefEnum {
     val displayName: String
 }
 
-/** Matches NumPreferredContentSizes / NotificationContentSizeSystem in PebbleOS. */
-const val CONTENT_SIZE_FOLLOW_SYSTEM_CODE: UByte = 4u
-
-private val CONTENT_SIZE_PREF_IDS = setOf(
-    EnumWatchPref.SystemTextSize.id,
-    EnumWatchPref.NotificationTextSize.id,
-)
-
-fun UByte.applyOffsetForSendToWatch(prefId: String, watchType: WatchType): UByte = when {
-    // Apply offset for obelix/etc so we can keep the same base enum in the app. The "Same as
-    // System" sentinel is never offset.
-    prefId in CONTENT_SIZE_PREF_IDS && this < CONTENT_SIZE_FOLLOW_SYSTEM_CODE ->
-        (this + watchType.textSizeOffset()).toUByte()
+// Apply offset for obelix/etc so we can keep the same base enum in the app.
+fun UByte.applyOffsetForSendToWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
+    EnumWatchPref.SystemTextSize.id -> contentSizeToWatch(watchType)
+    EnumWatchPref.NotificationTextSize.id ->
+        if (this == NotificationContentSize.SameAsSystem.code) this else contentSizeToWatch(watchType)
     else -> this
 }
 
-fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): UByte = when {
-    prefId !in CONTENT_SIZE_PREF_IDS -> this
-    this >= CONTENT_SIZE_FOLLOW_SYSTEM_CODE -> this
-    else -> {
-        val adjusted = (this - watchType.textSizeOffset()).toUByte()
-        if (adjusted > ContentSize.Larger.code) {
-            ContentSize.Larger.code
-        } else if (adjusted < ContentSize.Smaller.code) {
-            ContentSize.Smaller.code
-        } else {
-            adjusted
-        }
-    }
+fun UByte.applyOffsetForReceiveFromWatch(prefId: String, watchType: WatchType): UByte = when (prefId) {
+    EnumWatchPref.SystemTextSize.id -> contentSizeFromWatch(watchType)
+    EnumWatchPref.NotificationTextSize.id ->
+        if (this == NotificationContentSize.SameAsSystem.code) this else contentSizeFromWatch(watchType)
+    else -> this
 }
+
+private fun UByte.contentSizeToWatch(watchType: WatchType): UByte =
+    (this + watchType.textSizeOffset()).toUByte()
+
+private fun UByte.contentSizeFromWatch(watchType: WatchType): UByte =
+    (this - watchType.textSizeOffset()).toUByte().let {
+        // Clamp so we don't write an invalid enum value, e.g. for a new watch type
+        if (it > ContentSize.Larger.code) ContentSize.Larger.code
+        else if (it < ContentSize.Smaller.code) ContentSize.Smaller.code
+        else it
+    }
 
 // These watch types use a different set of enum values (e.g. 1,2,3 instead of 0,1,2). So that we
 // can use the same enum and map to all watch models, we offset them when writing to/from the watch.
@@ -388,12 +395,14 @@ enum class ContentSize(override val code: UByte, override val displayName: Strin
     Larger(2u, "Larger"),
 }
 
-enum class NotificationContentSize(override val code: UByte, override val displayName: String) :
-    WatchPrefEnum {
+// Same sizes as ContentSize (and offset the same way), plus SameAsSystem, the firmware's
+// NotificationContentSizeSystem sentinel (NumPreferredContentSizes) meaning "follow the system
+// Text Size". The sentinel is platform-independent so it is NOT offset. See textSizeOffset().
+enum class NotificationContentSize(override val code: UByte, override val displayName: String) : WatchPrefEnum {
     Smaller(0u, "Smaller"),
     Default(1u, "Default"),
     Larger(2u, "Larger"),
-    SameAsSystem(CONTENT_SIZE_FOLLOW_SYSTEM_CODE, "Same as System"),
+    SameAsSystem(4u, "Same as System"),
 }
 
 enum class AlertMask(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -441,6 +450,8 @@ enum class WindUnits(override val code: UByte, override val displayName: String)
     FromDistance(0u, "Automatic"),
     KmH(1u, "km/h"),
     Mph(2u, "mph"),
+    MetersPerSecond(3u, "m/s"),
+    Knots(4u, "knots"),
 }
 
 enum class MotionSensitivityLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -489,21 +500,13 @@ enum class BacklightPresetMode(override val code: UByte, override val displayNam
     Advanced(3u, "Advanced"),
 }
 
-// Built-in firmware languages. Codes MUST match the ShellLanguage enum in
-// pebble-firmware:src/fw/shell/prefs.h. "Custom" (0) means the watch uses whatever language pack
-// was uploaded via PutBytes (see LanguagePackInstaller); the rest are baked into the firmware.
-// Labels mirror the on-watch Settings > Display > Language menu.
-enum class WatchLanguage(override val code: UByte, override val displayName: String) : WatchPrefEnum {
-    Custom(0u, "Custom (Language Pack)"),
-    English(1u, "English"),
-    Catalan(2u, "Català"),
-    German(3u, "Deutsch"),
-    Spanish(4u, "Español"),
-    French(5u, "Français"),
-    Italian(6u, "Italiano"),
-    Dutch(7u, "Nederlands"),
-    Portuguese(8u, "Português"),
-    Polish(9u, "Polski"),
+// How the Timeline Quick View peek is drawn on watchfaces that don't support it. Codes match
+// TimelinePeekUnsupportedFaceMode in pebble-firmware:fw/shell/prefs.h. Only watch models with
+// TIMELINE_PEEK_WATCHFACE_FIT_SUPPORTED honour this; others discard the synced value.
+enum class TimelinePeekFaceMode(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Overlay(0u, "Overlay"),
+    ShiftUp(2u, "Shift Up"),
+    SquishUp(1u, "Squish Up"),
 }
 
 enum class EnumWatchPref(
@@ -639,12 +642,12 @@ enum class EnumWatchPref(
         defaultValue = WindUnits.FromDistance,
         options = WindUnits.entries,
     ),
-    Language(
-        id = "language",
-        displayName = "Language",
-        description = "Built-in firmware language. Choose Custom to use an uploaded language pack.",
-        defaultValue = WatchLanguage.Custom,
-        options = WatchLanguage.entries,
+    TimelineQuickViewUnsupportedFaces(
+        id = "timelineQuickViewWatchfaceFit",
+        displayName = "Timeline Quick View - Unsupported Faces",
+        description = "How the Quick View peek is drawn on watchfaces that don't support it (supported watch models only)",
+        defaultValue = TimelinePeekFaceMode.Overlay,
+        options = TimelinePeekFaceMode.entries,
     ),
     ;
 
@@ -707,6 +710,24 @@ enum class NumberWatchPref(
         max = 10.minutes.inWholeMilliseconds.toInt(),
         unit = "ms",
     ),
+    BacklightColorSunriseMinute(
+        id = "lightColorSunriseMinute",
+        displayName = "Sunrise Time",
+        defaultValue = 6L * 60,
+        type = WatchPrefType.TypeUInt16,
+        min = 0,
+        max = 1439,
+        unit = "",
+    ),
+    BacklightColorSunsetMinute(
+        id = "lightColorSunsetMinute",
+        displayName = "Sunset Time",
+        defaultValue = 18L * 60,
+        type = WatchPrefType.TypeUInt16,
+        min = 0,
+        max = 1439,
+        unit = "",
+    ),
     ;
 
     override fun decodeValue(value: String): Long = value.toLongOrNull() ?: defaultValue
@@ -750,6 +771,13 @@ enum class RgbColorWatchPref(
         defaultValue = LED_WARM_WHITE_RGB,
         presets = BACKLIGHT_COLOR_PRESETS,
         description = "LED color used when the backlight is on, unless over-ridden by an app (color-backlight watches only)",
+    ),
+    BacklightColorNight(
+        id = "lightColorNight",
+        displayName = "Night Backlight Color",
+        defaultValue = LED_WARM_WHITE_RGB,
+        presets = BACKLIGHT_COLOR_PRESETS,
+        description = "LED color used at night when \"Change Backlight Color at Night\" is on",
     ),
     ;
 
@@ -821,7 +849,10 @@ enum class ColorWatchPref(
 - alarmsAppOpened
 - hrmPreferences (see HealthSettingsEntry)
 - heartRatePreferences (see HealthSettingsEntry)
+- spo2Preferences / bloodOxygenPreferences / bloodOxygenActivityPreferences (health toggles - belong with HealthSettingsEntry, not here)
 - workerId (need UI to figure out which apps are eligible)
+- language / langEnglish (holds a per-watch pack slot; set through LanguagePackInstaller instead)
+- textStyle (legacy content size; firmware no longer reads it - superseded by systemTextSize/notifTextSize)
  */
 
 private val logger = Logger.withTag("WatchPrefItem")

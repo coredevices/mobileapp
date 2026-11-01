@@ -1,5 +1,6 @@
 package coredevices.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Entity
@@ -25,6 +26,7 @@ data class WeatherLocationEntity(
     val latitude: Double?,
     val longitude: Double?,
     val currentLocation: Boolean,
+    @ColumnInfo(defaultValue = "0") val manual: Boolean = false,
 )
 
 @Dao

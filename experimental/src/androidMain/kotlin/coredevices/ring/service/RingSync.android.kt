@@ -2,50 +2,22 @@ package coredevices.ring.service
 
 import android.content.Context
 import android.view.KeyEvent
-import org.koin.core.Koin
 import org.koin.mp.KoinPlatform
 
-actual fun onPlayPause() {
+private fun dispatchMediaKey(keyCode: Int) {
     val context: Context = KoinPlatform.getKoin().get()
-    // Send play/pause media button event
     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
     val eventTime = System.currentTimeMillis()
-    val downEvent = KeyEvent(
-        eventTime,
-        eventTime,
-        KeyEvent.ACTION_DOWN,
-        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-        0
+    audioManager.dispatchMediaKeyEvent(
+        KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0)
     )
-    val upEvent = KeyEvent(
-        eventTime,
-        eventTime,
-        KeyEvent.ACTION_UP,
-        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-        0
+    audioManager.dispatchMediaKeyEvent(
+        KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0)
     )
-    audioManager.dispatchMediaKeyEvent(downEvent)
-    audioManager.dispatchMediaKeyEvent(upEvent)
 }
 
-actual fun onNextTrack() {
-    val context: Context = KoinPlatform.getKoin().get()
-    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-    val eventTime = System.currentTimeMillis()
-    val downEvent = KeyEvent(
-        eventTime,
-        eventTime,
-        KeyEvent.ACTION_DOWN,
-        KeyEvent.KEYCODE_MEDIA_NEXT,
-        0
-    )
-    val upEvent = KeyEvent(
-        eventTime,
-        eventTime,
-        KeyEvent.ACTION_UP,
-        KeyEvent.KEYCODE_MEDIA_NEXT,
-        0
-    )
-    audioManager.dispatchMediaKeyEvent(downEvent)
-    audioManager.dispatchMediaKeyEvent(upEvent)
-}
+actual fun onPlayPause() = dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+
+actual fun onNextTrack() = dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT)
+
+actual fun onPreviousTrack() = dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS)

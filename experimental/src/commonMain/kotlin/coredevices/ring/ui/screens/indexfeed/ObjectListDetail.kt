@@ -3,6 +3,11 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import CoreNav
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +43,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -53,12 +59,16 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -435,36 +445,38 @@ internal fun ListView(
             }
             items(active.size, key = { active[it].firestoreId }) { idx ->
                 val child = active[idx]
-                if (inlineNoteEditor) {
-                    EditableNoteRow(
-                        child = child,
-                        requestFocus = focusItemId == child.firestoreId,
-                        onFocusConsumed = { focusItemId = null },
-                        onToggle = { vm.toggleChildDone(child) },
-                        onSave = { text -> vm.patchChildItem(child.firestoreId, title = text) },
-                        onDelete = { vm.deleteChildItem(child.firestoreId) },
-                        onEnter = { text ->
-                            vm.patchChildItem(child.firestoreId, title = text)
-                            focusItemId = NEW_NOTE_FOCUS_ID
-                        },
-                        onOpen = {
-                            coreNav.navigateTo(RingRoutes.ObjectDetails(child.firestoreId))
-                        },
-                        onToggleKind = { text ->
-                            vm.patchChildItem(
-                                child.firestoreId,
-                                title = text.trim().ifBlank { null },
-                                kind = if (child.kind == "checklist") "note" else "checklist",
-                            )
-                        },
-                    )
-                } else {
-                    ListChildRow(
-                        child = child,
-                        isChecklistKind = s.list.listKind == "checklist" || isTodos,
-                        onToggle = { vm.toggleChildDone(child) },
-                        onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(child.firestoreId)) },
-                    )
+                SwipeToDeleteRow(onDelete = { vm.deleteChildItem(child.firestoreId) }) {
+                    if (inlineNoteEditor) {
+                        EditableNoteRow(
+                            child = child,
+                            requestFocus = focusItemId == child.firestoreId,
+                            onFocusConsumed = { focusItemId = null },
+                            onToggle = { vm.toggleChildDone(child) },
+                            onSave = { text -> vm.patchChildItem(child.firestoreId, title = text) },
+                            onDelete = { vm.deleteChildItem(child.firestoreId) },
+                            onEnter = { text ->
+                                vm.patchChildItem(child.firestoreId, title = text)
+                                focusItemId = NEW_NOTE_FOCUS_ID
+                            },
+                            onOpen = {
+                                coreNav.navigateTo(RingRoutes.ObjectDetails(child.firestoreId))
+                            },
+                            onToggleKind = { text ->
+                                vm.patchChildItem(
+                                    child.firestoreId,
+                                    title = text.trim().ifBlank { null },
+                                    kind = if (child.kind == "checklist") "note" else "checklist",
+                                )
+                            },
+                        )
+                    } else {
+                        ListChildRow(
+                            child = child,
+                            isChecklistKind = s.list.listKind == "checklist" || isTodos,
+                            onToggle = { vm.toggleChildDone(child) },
+                            onClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(child.firestoreId)) },
+                        )
+                    }
                 }
             }
             if (inlineNoteEditor && s.query.isBlank() && s.sort != ObjectDetailViewModel.ListSort.Newest) {
@@ -489,6 +501,7 @@ internal fun ListView(
                         onToggleExpand = { vm.setShowDone(!s.showDone) },
                         onChildToggle = vm::toggleChildDone,
                         onChildClick = { coreNav.navigateTo(RingRoutes.ObjectDetails(it.firestoreId)) },
+                        onChildDelete = { vm.deleteChildItem(it.firestoreId) },
                     )
                 }
             }
@@ -822,6 +835,83 @@ private fun ListChildRow(
 }
 
 private const val NEW_NOTE_FOCUS_ID = "__new_note__"
+
+/** Swipe a row left to delete it — the fast path; the item detail menu still works.
+ *
+ *  The delete runs off [SwipeToDismissBox]'s `onDismiss`, which fires only after
+ *  the row has finished flinging off-screen, then the row collapses and the
+ *  repository call goes out. Deleting from `confirmValueChange` instead pulls
+ *  the row out of the list the moment the threshold is crossed, cutting both
+ *  animations short. */
+@Composable
+private fun SwipeToDeleteRow(
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val colors = IndexTheme.colors
+    val latestOnDelete = rememberUpdatedState(onDelete)
+    val rowVisible = remember { MutableTransitionState(true) }
+    var deleted by remember { mutableStateOf(false) }
+    val dismissState = rememberSwipeToDismissBoxState()
+
+    fun commitDelete() {
+        if (!deleted) {
+            deleted = true
+            latestOnDelete.value()
+        }
+    }
+
+    LaunchedEffect(rowVisible.isIdle, rowVisible.currentState) {
+        if (rowVisible.isIdle && !rowVisible.currentState) commitDelete()
+    }
+    // Navigating away mid-animation would otherwise drop the delete on the floor:
+    // the row is either collapsing, or settled off-screen with onDismiss not yet
+    // delivered. currentValue (not targetValue) so a drag still under the user's
+    // finger never counts as a dismissal.
+    DisposableEffect(Unit) {
+        onDispose {
+            if (!rowVisible.targetState ||
+                dismissState.currentValue == SwipeToDismissBoxValue.EndToStart
+            ) {
+                commitDelete()
+            }
+        }
+    }
+
+    AnimatedVisibility(
+        visibleState = rowVisible,
+        exit = shrinkVertically(animationSpec = tween(durationMillis = 220)) +
+            fadeOut(animationSpec = tween(durationMillis = 160)),
+    ) {
+        SwipeToDismissBox(
+            state = dismissState,
+            enableDismissFromStartToEnd = false,
+            onDismiss = { rowVisible.targetState = false },
+            backgroundContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.error)
+                        .padding(end = 22.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+        ) {
+            // Rows are transparent by default; an opaque surface behind the row
+            // keeps the red delete background hidden until the swipe reveals it.
+            Box(modifier = Modifier.background(colors.surface)) {
+                content()
+            }
+        }
+    }
+}
 
 @Composable
 private fun ListEmojiPicker(
@@ -1236,6 +1326,7 @@ private fun DoneSection(
     onToggleExpand: () -> Unit,
     onChildToggle: (CachedItem) -> Unit,
     onChildClick: (CachedItem) -> Unit,
+    onChildDelete: (CachedItem) -> Unit,
 ) {
     val colors = IndexTheme.colors
     Column(modifier = Modifier.padding(top = 18.dp)) {
@@ -1261,12 +1352,19 @@ private fun DoneSection(
         }
         if (expanded) {
             done.forEach { c ->
-                ListChildRow(
-                    child = c,
-                    isChecklistKind = listKind == "checklist" || isTodos,
-                    onToggle = { onChildToggle(c) },
-                    onClick = { onChildClick(c) },
-                )
+                // Keyed: SwipeToDismissBox holds remembered offset state, and
+                // without a key a deleted row hands its dismissed state to
+                // whichever item slides into that position.
+                key(c.firestoreId) {
+                    SwipeToDeleteRow(onDelete = { onChildDelete(c) }) {
+                        ListChildRow(
+                            child = c,
+                            isChecklistKind = listKind == "checklist" || isTodos,
+                            onToggle = { onChildToggle(c) },
+                            onClick = { onChildClick(c) },
+                        )
+                    }
+                }
             }
         }
     }

@@ -1,54 +1,35 @@
 package coredevices
 
-import BugReportButton
-import CoreNav
 import DocumentAttachment
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavGraphBuilder
 import com.eygraber.uri.Uri
 import com.mmk.kmpnotifier.notification.NotifierManager
+import coredevices.indexai.database.dao.AgentIterationDao
 import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
-import coredevices.libindex.device.IndexPlatformBluetoothAssociations
+import coredevices.ring.RingDelegate
+import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.bugreport.IndexRebootLogEntry
 import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
-import coredevices.pebble.ui.TopBarParams
-import coredevices.ring.RingDelegate
-import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
-import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.IndexNotificationManager
 import coredevices.ring.service.RingSync
-import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
-import coredevices.ring.ui.navigation.RingRoutes
-import coredevices.ring.ui.navigation.addRingRoutes
-import coredevices.ring.ui.screens.home.FeedTabContents
-import coredevices.ring.ui.screens.home.IndexFeedScreen
-import coredevices.ring.ui.theme.IndexThemeHost
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.auth.FirebaseUser
+import dev.gitlive.firebase.auth.auth
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -61,18 +42,15 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.writeString
 import kotlinx.serialization.json.Json
-import org.koin.compose.koinInject
-import rememberOpenDocumentLauncher
 import size
-import kotlin.time.Clock
 
 class ExperimentalDevices(
     private val ringSync: RingSync,
     private val recordingStorage: RecordingStorage,
     private val ringDelegate: RingDelegate,
-    private val sandboxRepository: McpSandboxRepository,
     private val recordingRepository: RecordingRepository,
     private val conversationMessageDao: ConversationMessageDao,
+    private val agentIterationDao: AgentIterationDao,
     private val preferences: Preferences,
     private val shortcutActionHandler: ShortcutActionHandler,
     private val libIndex: LibIndex,
@@ -83,13 +61,18 @@ class ExperimentalDevices(
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
+    private val reminderReconciler: coredevices.ring.reminders.ReminderReconciler,
     private val indexSettingsSummary: IndexSettingsSummary,
     private val rebootLogStore: IndexRebootLogStore,
+    private val rssiStatistics: RingRssiStatistics,
     private val platform: Platform,
     private val targetCalendarSeeder: TargetCalendarSeeder,
+    private val indexNotificationManager: IndexNotificationManager,
+    private val libPebble: LibPebble,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
+        ringDelegate.appInit()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
                 (Permission.Bluetooth in old && Permission.Bluetooth !in new) || (Permission.Bluetooth !in old && Permission.Bluetooth in new)
@@ -98,6 +81,9 @@ class ExperimentalDevices(
             }
         )
         indexFeedSyncService.hashCode()
+        // Arm alarms for any reminder synced in while this device was away, then keep them in
+        // step as items sync (a new phone, the web app, a second device).
+        reminderReconciler.start()
         // Self-healing: creates the three system seed lists in Firestore
         // (Notes-to-self / Todos / Shopping) if any are missing. Idempotent.
         // Runs after each auth event because [DefaultListsBootstrap] reads
@@ -121,11 +107,19 @@ class ExperimentalDevices(
     }
 
     suspend fun init() {
-        withContext(Dispatchers.IO) {
-            sandboxRepository.seedDatabase()
-        }
         ringDelegate.init()
         scope.launch { targetCalendarSeeder.seedIfNeeded() }
+        scope.launch { indexNotificationManager.notifyLegacyDestinationUse() }
+        scope.launch {
+            preferences.ringPaired.map { it != null }.distinctUntilChanged().collect { paired ->
+                val config = libPebble.config.value
+                if (config.watchConfig.notificationWindowState != paired) {
+                    libPebble.updateConfig(
+                        config.copy(watchConfig = config.watchConfig.copy(notificationWindowState = paired))
+                    )
+                }
+            }
+        }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
             NotifierManager.getLocalNotifier().notify {
@@ -172,7 +166,7 @@ class ExperimentalDevices(
     /**
      * Export the most recent [limit] recordings for a bug report: one
      * `recent_recordings.json` capturing each recording's [LocalRecording],
-     * entries and conversation messages (the data shown in `RecordingDetails`),
+     * entries, conversation messages (the data shown in `RecordingDetails`) and agent iterations,
      * plus one WAV per recording entry that has audio. Audio export per entry is
      * best-effort — an un-uploaded or missing file is skipped, not fatal.
      */
@@ -185,6 +179,7 @@ class ExperimentalDevices(
         val exports = recordings.map { recording ->
             val entries = recordingRepository.getRecordingEntriesFlow(recording.id).first()
             val messages = conversationMessageDao.getMessagesForRecording(recording.id).first()
+            val iterations = agentIterationDao.getForRecording(recording.id).first()
 
             entries.mapNotNull { it.fileName }.distinct().forEach { fileName ->
                 // Export both the processed audio (what was transcribed) and the
@@ -208,7 +203,7 @@ class ExperimentalDevices(
                 }
             }
 
-            RecentRecordingExport(recording, entries, messages)
+            RecentRecordingExport(recording, entries, messages, iterations)
         }
 
         val json = Json.encodeToString(exports)
@@ -236,10 +231,13 @@ class ExperimentalDevices(
             append("Secondary profile: ${platform.isSecondaryProfile}\n")
             if (platform.isAndroid) {
                 append("PendingIntent scan enabled: ${preferences.usePendingIntentScan.value}\n")
+                append("Scan by paired address: ${preferences.scanByPairedAddress.value}\n")
             }
-            append("LLM mode: ${preferences.llmMode.value}\n")
             append(runCatching { indexSettingsSummary.summary() }
                 .getOrElse { "\nIndex Settings unavailable: ${it.message}" })
+            append("\n")
+            append(runCatching { rssiStatistics.summary() }
+                .getOrElse { "Ring Rx RSSI statistics unavailable: ${it.message}\n" })
         }
     }
 }

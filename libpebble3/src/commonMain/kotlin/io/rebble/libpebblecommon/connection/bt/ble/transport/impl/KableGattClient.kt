@@ -91,12 +91,20 @@ class KableGattConnector(
             throw e
         } catch (e: Exception) {
             val disconnectReason = withTimeoutOrNull(2.seconds) { _disconnected.await() }
-            if (timedOut) {
-                GattConnectionResult.Failure(ConnectionFailureReason.ConnectTimeout)
+            val reason = if (timedOut) {
+                ConnectionFailureReason.ConnectTimeout
             } else {
                 logger.e("error connecting.. waiting for disconnection to reason", e)
-                GattConnectionResult.Failure(disconnectReason ?: ConnectionFailureReason.FailedToConnect)
+                disconnectReason ?: ConnectionFailureReason.FailedToConnect
             }
+            // Kable never reports Disconnected if connect() threw before the GATT client existed
+            // (but we aren't certain that is what happened here, so delay before marking
+            // disconnected to allow cleanup to happen naturally)
+            scope.launch {
+                delay(FAILED_CONNECT_DISCONNECT_DELAY)
+                _disconnected.complete(reason)
+            }
+            GattConnectionResult.Failure(reason)
         } finally {
             connectTimeoutJob.cancel()
         }
@@ -122,6 +130,7 @@ class KableGattConnector(
         // The OS can stop honouring a pending autoConnect without telling us; re-arm periodically
         // rather than waiting forever.
         private val AUTO_CONNECT_TIMEOUT = 20.minutes
+        private val FAILED_CONNECT_DISCONNECT_DELAY = 5.seconds
     }
 }
 

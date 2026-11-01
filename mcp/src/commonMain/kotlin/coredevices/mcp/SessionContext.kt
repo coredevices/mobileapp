@@ -15,12 +15,15 @@ import kotlin.time.Instant
  * transcription failed.
  * @property recordingFirestoreId id of the recording this session processes, so tools that
  * create local objects can link them back to it. Null outside a recording (e.g. share sheet).
+ * @property userConfirmed the user has approved this call, so a tool that normally asks for
+ * confirmation first should run.
  */
 data class SessionContext(
     val timeBase: Instant?,
     val userMessageText: Deferred<String?>,
     val recordingFirestoreId: String? = null,
-    val toolCallId: String? = null
+    val toolCallId: String? = null,
+    val userConfirmed: Boolean = false,
 )
 
 /** A clock frozen at this instant, for resolving relative/ambiguous times against the recording time. */

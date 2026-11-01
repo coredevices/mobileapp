@@ -8,7 +8,7 @@ import kotlin.time.Instant
 /**
  * Manages reminders for one provider. Like [NoteIntegration], implementations are singletons that
  * manage reminders on a platform/service — not objects representing a single reminder. Obtain the
- * active provider's instance from `ReminderIntegrationFactory`.
+ * active provider's instance from `IntegrationProviderRepository`.
  */
 interface ReminderIntegration : Integration {
     /**
@@ -79,6 +79,20 @@ private fun String.containsPhrase(phrase: String): Boolean {
 interface NoteIntegration : Integration {
     suspend fun createNote(content: String, source: ItemSource? = null): String?
 }
+
+/** Sends messages to an external agent, optionally into one of its chats (see [getAllChats]). */
+interface AgentIntegration : Integration {
+    /** Delivers [message] and returns the agent's acknowledgement text (throws on failure).
+     *  External integrations ignore [source]. */
+    suspend fun sendToAgent(message: String, chatId: String? = null, source: ItemSource? = null): String
+
+    suspend fun getAllChats(): List<AgentChatEntry> = emptyList()
+}
+
+data class AgentChatEntry(
+    val id: String,
+    val nickname: String,
+)
 
 /**
  * Identifies the recording a tool-created object came from, so builtin integrations can stamp

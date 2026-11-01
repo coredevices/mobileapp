@@ -36,6 +36,7 @@ class CalendarPlugin(
 ) : NativePlugin {
     override val pluginUuid: Uuid = BUILT_IN_CALENDAR_UUID
     override val name: String = "Calendar"
+    override val description: String = "Upcoming events from the phone's calendars, soonest first."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(

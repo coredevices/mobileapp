@@ -4,9 +4,11 @@ import android.app.ActivityManager
 import android.app.Application
 import android.app.ApplicationExitInfo
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.StrictMode
@@ -43,6 +45,7 @@ import coredevices.pebble.watchModule
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.R
+import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
@@ -66,7 +69,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
 
     override fun onCreate() {
         super.onCreate()
-        if (isDebuggableBuild) {
+        if (AppContext(this).isDebugBuild()) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
         }
         startKoin {
@@ -82,7 +85,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
             )
         }
         initLogging()
-        logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (isDebuggableBuild) "debug" else "release"}" }
+        logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (AppContext(this).isDebugBuild()) "debug" else "release"}" }
         dumpPreviousExitInfo()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         registerReceiver(object : BroadcastReceiver() {
@@ -91,6 +94,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
             }
         }, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
         registerBluetoothPairingDebugLogger(this)
+        configureFileOpenAliases()
         setupExceptionHandler()
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
@@ -105,6 +109,25 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         scheduleBackgroundJob(AppContext(this), coreConfigHolder.config.value)
         commonAppDelegate.init()
         pebbleBackgroundManager.monitorToStartBackground()
+    }
+
+    private fun configureFileOpenAliases() {
+        val isSamsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+        setComponentEnabled("coredevices.coreapp.FileOpenActivity", !isSamsung)
+        setComponentEnabled("coredevices.coreapp.SamsungFileOpenActivity", isSamsung)
+    }
+
+    private fun setComponentEnabled(className: String, enabled: Boolean) {
+        val state = if (enabled) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        packageManager.setComponentEnabledSetting(
+            ComponentName(this, className),
+            state,
+            PackageManager.DONT_KILL_APP,
+        )
     }
 
     private fun dumpPreviousExitInfo() {
@@ -145,7 +168,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     }
 
     private fun configureStrictMode() {
-        if (isDebuggableBuild) {
+        if (AppContext(this).isDebugBuild()) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy.Builder()
                     .detectDiskReads()

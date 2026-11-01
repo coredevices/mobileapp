@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.ConversationMessageEntity
 import coredevices.indexai.data.entity.LocalRecording
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.database.dao.ConversationMessageDao
+import coredevices.ring.agent.confirmation.AgentUserConfirmation
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -21,6 +22,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.NonCancellable
@@ -50,6 +52,7 @@ class RecordingDetailsViewModel(
     private val ringTransferDao: RingTransferDao,
     private val itemRepo: ItemRepository,
     private val listRepo: ListRepository,
+    private val agentUserConfirmation: AgentUserConfirmation,
 ): ViewModel() {
     companion object {
         private val logger = Logger.withTag(RecordingDetailsViewModel::class.simpleName!!)
@@ -185,6 +188,8 @@ class RecordingDetailsViewModel(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
                 )
                 onAfter()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 logger.e(e) { "deleteRecording failed" }
                 snackbarHostState.showSnackbar("Couldn't delete: ${e.message ?: e}")
@@ -197,6 +202,8 @@ class RecordingDetailsViewModel(
         playbackState.value = MessagePlaybackState.Buffering(item.userMessageId ?: -1)
         val (samples, info) = try {
             recordingStorage.openRecordingSource(fileName)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "No playable audio for $fileName" }
             playbackState.value = MessagePlaybackState.Stopped
@@ -281,6 +288,10 @@ class RecordingDetailsViewModel(
                 }
             }
         }
+    }
+
+    fun respondToConfirmation(toolCallId: String, approved: Boolean) {
+        agentUserConfirmation.respond(recordingId, toolCallId, approved)
     }
 
     fun beginRecordingReply() {

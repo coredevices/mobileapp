@@ -67,7 +67,7 @@ import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_N
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.ui.navigation.RingRoutes
-import coredevices.ring.ui.relativeTime
+import coredevices.util.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.theme.toggleButtonColors
@@ -97,11 +97,9 @@ internal fun ItemView(
     var menuOpen by remember { mutableStateOf(false) }
     val title = s.parentList?.title?.takeIf { it.isNotBlank() } ?: kindLabel(it.kind)
 
-    // Early heads-up notification metadata (built-in reminders only carry a
-    // localReminderId, which is what lets us actually cancel the extra alarm).
     val reminderMeta = it.metadata as? coredevices.indexai.data.entity.ItemDocument.ItemMetadata.Reminder
     val notifyBeforeMillis = reminderMeta?.notifyBeforeMillis
-    val canRemoveExtraNotification = reminderMeta?.localReminderId != null
+    val canRemoveExtraNotification = notifyBeforeMillis != null
 
     // Always-edit, Apple Notes style. No "Save" button — the draft is
     // persisted automatically when the user navigates away (DisposableEffect

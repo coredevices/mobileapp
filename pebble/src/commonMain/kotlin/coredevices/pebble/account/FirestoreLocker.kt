@@ -15,6 +15,9 @@ import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.QuerySnapshot
 import dev.gitlive.firebase.firestore.code
 import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
+import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
@@ -47,15 +50,30 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
         entry: FirestoreLockerEntry
     ) {
         try {
-            firestore.collection("lockers")
-                .document(uid)
-                .collection("entries")
-                .document("${entry.appstoreId}-${entry.uuid}")
-                .set(entry)
+            // Merged, leaving out unset fields: the web store may have written the permissions.
+            entryDoc(uid, entry).set(entry, merge = true) { encodeDefaults = false }
         } catch (e: FirebaseFirestoreException) {
             throw FirestoreDaoException.fromFirebaseException(e)
         }
     }
+
+    /** Merged key by key, so other devices' decisions for other keys are kept. */
+    suspend fun mergePermissionsForUser(
+        uid: String,
+        entry: FirestoreLockerEntry,
+        permissions: Map<String, PermissionDecisionRecord>,
+    ) {
+        try {
+            entryDoc(uid, entry).set(PermissionsField(permissions), merge = true)
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
+    }
+
+    private fun entryDoc(uid: String, entry: FirestoreLockerEntry) = firestore.collection("lockers")
+        .document(uid)
+        .collection("entries")
+        .document("${entry.appstoreId}-${entry.uuid}")
 
     suspend fun removeLockerEntryForUser(
         uid: String,
@@ -125,8 +143,10 @@ class RealFirestoreLocker(
                         }
                         logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
                         val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
-                        handleFirestoreChanges(lockerData)
+                        val previous = _locker.value
+                        // Before handling: a locker sync it requests reads this snapshot.
                         _locker.value = lockerData
+                        handleFirestoreChanges(lockerData, previous)
                     }
             }
         }
@@ -135,8 +155,19 @@ class RealFirestoreLocker(
     /**
      * Handle individual changes from firebase pushes (only for pebble store)
      */
-    private suspend fun handleFirestoreChanges(locker: List<FirestoreLockerEntry>) {
+    private suspend fun handleFirestoreChanges(locker: List<FirestoreLockerEntry>, previous: List<FirestoreLockerEntry>?) {
         val existingLocker = libPebbleLockerProxy.getAllLockerUuids().first()
+        // A decision made elsewhere for an app already here: a locker sync brings it in. Our own
+        // uploads change entries too, so only one newer than this device's counts.
+        if (previous != null) {
+            val before = previous.syncedPermissions()
+            val changed = locker.syncedPermissions().filter { (uuid, decisions) -> uuid in existingLocker && before[uuid] != decisions }
+            if (changed.isNotEmpty() && hasNewerDecisions(changed, libPebbleLockerProxy.permissionDecisions())) {
+                // It adds any new apps too.
+                libPebbleLockerProxy.requestLockerSync()
+                return
+            }
+        }
         val added = locker.filter {
             it.uuid !in existingLocker && it.appstoreSource != REBBLE_FEED_URL
         }
@@ -157,8 +188,9 @@ class RealFirestoreLocker(
             appstore.fetchAppStoreApps(lockerForSource, useCache = false) ?: emptyList()
         }
         logger.d { "Adding ${appsToAdd.size} apps to locker from firestore update" }
-        libPebbleLockerProxy.addAppsToLocker(appsToAdd)
-        if (appsToAdd.size == 1) {
+        libPebbleLockerProxy.addAppsToLocker(appsToAdd, added.syncedPermissions())
+        // A plugin-only app never reaches the watch.
+        if (appsToAdd.size == 1 && AppType.fromString(appsToAdd.first().type) != AppType.Plugin) {
             logger.d { "...and starting single new app on watch" }
             val app = appsToAdd.first()
             val uuid = Uuid.parse(app.uuid)
@@ -247,6 +279,7 @@ class RealFirestoreLocker(
                 applications = dedupedApps
             ),
             failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
+            permissions = fsLocker.syncedPermissions(),
         )
         } finally {
             // Re-read locker from Firestore since we skipped listener updates during sync.
@@ -326,10 +359,28 @@ sealed class FirestoreDaoException(override val cause: Throwable? = null, privat
  */
 interface LibPebbleLockerProxy {
     fun getAllLockerUuids(): Flow<List<Uuid>>
-    suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, timeout: Duration): Boolean
     suspend fun startAppOnWatch(id: Uuid): Boolean
+    fun requestLockerSync()
+    suspend fun permissionDecisions(): List<LockerAppPermission>
 }
+
+/** Whether [remote] holds a decision this device hasn't got, or has an older one of. */
+internal fun hasNewerDecisions(
+    remote: Map<Uuid, Map<String, PermissionDecisionRecord>>,
+    local: List<LockerAppPermission>,
+): Boolean {
+    val held = local.associateBy { it.appUuid to it.permission }
+    return remote.any { (uuid, decisions) ->
+        decisions.any { (key, record) -> (held[uuid to key]?.decidedAtMs ?: -1) < record.decidedAtMs }
+    }
+}
+
+/** The decisions to bring onto this device, by app. */
+private fun List<FirestoreLockerEntry>.syncedPermissions(): Map<Uuid, Map<String, PermissionDecisionRecord>> =
+    mapNotNull { entry -> entry.permissions?.filterKeys(::isSynced)?.takeIf { it.isNotEmpty() }?.let { entry.uuid to it } }
+        .toMap()
 
 @Serializable
 data class FirestoreLockerEntry(
@@ -337,7 +388,12 @@ data class FirestoreLockerEntry(
     val appstoreId: String,
     val appstoreSource: String,
     val timelineToken: String?,
+    /** The user's decisions, by permission key, from any device or the web store. */
+    val permissions: Map<String, PermissionDecisionRecord>? = null,
 )
+
+@Serializable
+private data class PermissionsField(val permissions: Map<String, PermissionDecisionRecord>)
 
 /**
  * Compare two version strings numerically by major.minor segments.

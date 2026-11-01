@@ -2,11 +2,13 @@ package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import coredevices.ring.agent.confirmation.AgentUserConfirmation
+import coredevices.ring.agent.confirmation.CONFIRM_TOOL_PATH
+import coredevices.ring.agent.confirmation.parseConfirmationDeepLink
 import coredevices.ring.agent.integrations.UIEmailIntegration
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.supportsNotes
+import coredevices.ring.agent.integrations.providers.supportsReminders
 import coredevices.ring.database.room.repository.RecordingRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +18,8 @@ import kotlinx.coroutines.launch
 class ShortcutActionHandler(
     private val uiEmailIntegration: UIEmailIntegration,
     private val recordingRepository: RecordingRepository,
-    private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val reminderIntegrationFactory: ReminderIntegrationFactory
+    private val providers: IntegrationProviderRepository,
+    private val agentUserConfirmation: AgentUserConfirmation,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     companion object {
@@ -42,16 +44,16 @@ class ShortcutActionHandler(
                 "send-to-note-provider" -> {
                     val recordingId = uri.getQueryParameter("recordingId")?.toLongOrNull() ?: return false
                     val provider = uri.getQueryParameter("provider")
-                        ?.toIntOrNull()
-                        ?.let { NoteProvider.fromId(it) }
+                        ?.let { providers.findProvider(it) }
+                        ?.takeIf { it.supportsNotes }
                         ?: return false
                     scope.launch {
-                        val integration = noteIntegrationFactory.createNoteClient(provider)
+                        val integration = providers.noteIntegration(provider)
                         try {
                             val entry = recordingRepository.getRecordingEntriesFlow(recordingId).first().first()
                             integration.createNote(entry.transcription ?: "<No transcription>")
                         } catch (e: Exception) {
-                            logger.e(e) { "Failed to send recording $recordingId to note provider ${provider.name}" }
+                            logger.e(e) { "Failed to send recording $recordingId to note provider ${provider.id}" }
                         }
                     }
                     return true
@@ -59,20 +61,25 @@ class ShortcutActionHandler(
                 "send-to-reminder-provider" -> {
                     val recordingId = uri.getQueryParameter("recordingId")?.toLongOrNull() ?: return false
                     val provider = uri.getQueryParameter("provider")
-                        ?.toIntOrNull()
-                        ?.let { ReminderProvider.fromId(it) }
+                        ?.let { providers.findProvider(it) }
+                        ?.takeIf { it.supportsReminders }
                         ?: return false
                     scope.launch {
                         try {
                             val entry = recordingRepository.getRecordingEntriesFlow(recordingId).first().first()
-                            reminderIntegrationFactory.createReminderIntegration(provider).createReminder(
+                            providers.reminderIntegration(provider).createReminder(
                                 title = entry.transcription ?: "<No transcription>",
                                 deadline = null,
                             )
                         } catch (e: Exception) {
-                            logger.e(e) { "Failed to send recording $recordingId to reminder provider $provider" }
+                            logger.e(e) { "Failed to send recording $recordingId to reminder provider ${provider.id}" }
                         }
                     }
+                    return true
+                }
+                CONFIRM_TOOL_PATH -> {
+                    val response = parseConfirmationDeepLink(uri) ?: return false
+                    agentUserConfirmation.respond(response.recordingId, response.toolCallId, response.approved)
                     return true
                 }
                 else -> return false

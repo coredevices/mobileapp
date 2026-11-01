@@ -2,8 +2,6 @@ package coredevices.ring.agent.integrations
 
 import coredevices.util.integrations.IntegrationAuthException
 import coredevices.ring.api.GoogleTasksApi
-import coredevices.ring.data.IntegrationDefinition
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -16,14 +14,6 @@ class GTasksIntegration(
 ): GoogleAPIIntegration(
     scopes = GoogleTasksApi.SCOPES
 ), ReminderIntegration {
-    companion object {
-        val DEFINITION = IntegrationDefinition(
-            title = "Google Tasks",
-            reminder = ReminderProvider.GoogleTasks,
-            notes = null
-        )
-    }
-
     override suspend fun createReminder(
         title: String,
         deadline: Instant?,

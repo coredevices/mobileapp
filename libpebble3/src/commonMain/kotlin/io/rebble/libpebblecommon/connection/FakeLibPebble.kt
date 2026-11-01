@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
+import io.rebble.libpebblecommon.connection.endpointmanager.WatchLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -37,6 +38,7 @@ import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.health.HealthDebugStats
 import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.js.PKJSApp
@@ -54,9 +56,23 @@ import io.rebble.libpebblecommon.music.RepeatType
 import io.rebble.libpebblecommon.notification.NotificationDecision
 import io.rebble.libpebblecommon.notification.VibePattern
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.permissions.PluginDefinedPermission
+import io.rebble.libpebblecommon.plugin.ActionResult
 import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
+import io.rebble.libpebblecommon.plugin.IconPixelSize
+import io.rebble.libpebblecommon.permissions.AppPermissionStatus
+import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
+import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.NativePlugin
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginErrors
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.SourceUpdate
+import io.rebble.libpebblecommon.permissions.PermissionDecision
+import io.rebble.libpebblecommon.plugin.files.FileAccessMode
+import io.rebble.libpebblecommon.plugin.files.FileEntryKind
+import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import io.rebble.libpebblecommon.services.DailySleep
 import io.rebble.libpebblecommon.services.FirmwareVersion
@@ -80,6 +96,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.io.files.Path
+import kotlinx.serialization.json.JsonObject
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -113,6 +130,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun markNotificationRead(itemId: Uuid) {
         // No-op
     }
+
+    override suspend fun replyToDisplayedNotification(text: String, at: Instant) =
+        DisplayedNotificationReplyResult.Unsupported
 
     override suspend fun sendPing(cookie: UInt) {
         // No-op
@@ -169,7 +189,7 @@ class FakeLibPebble : LibPebble {
     }
 
     // LockerApi interface
-    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean): Boolean {
+    override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean?>): Boolean {
         // No-op
         return true
     }
@@ -192,6 +212,8 @@ class FakeLibPebble : LibPebble {
         return locker
     }
 
+    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
+
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }
     }
@@ -209,11 +231,23 @@ class FakeLibPebble : LibPebble {
     ): Boolean = true
 
     override suspend fun removeApp(id: Uuid): Boolean = true
-    override suspend fun addAppToLocker(app: LockerEntry) {
+    override suspend fun reviewSideload(pbwPath: Path): InstallReview? = null
+    override suspend fun getAppFile(uuid: Uuid, name: String): String? = null
+
+    override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? = null
+
+    override suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?>) {
     }
 
-    override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
     }
+
+    override suspend fun clearSideloaded(id: Uuid) {
+    }
+
+    override suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean = true
+
+    override suspend fun configPageDomains(uuid: Uuid): List<String>? = null
 
     override fun restoreSystemAppOrder() {
     }
@@ -371,6 +405,8 @@ class FakeLibPebble : LibPebble {
 
     override val analyticsEvents: Flow<AnalyticsEvent>
         get() = flow { }
+    override val heartbeatCounterIncrements: Flow<String>
+        get() = flow { }
     override val healthSettings: Flow<HealthSettings>
         get() = flow { emit(HealthSettings(
             heightMm = 1700,
@@ -487,12 +523,74 @@ class FakeLibPebble : LibPebble {
 
     override val currentWeather: Flow<List<WeatherAppEntry>> = flowOf(emptyList())
 
-    override fun registerPlugin(plugin: Plugin) {
+    override fun registerPlugin(plugin: NativePlugin) {
     }
 
-    override fun nativePlugins(): Flow<List<NativePlugin>> = flowOf(emptyList())
+    override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
+
+    override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) {
+    }
+
+    override fun activePermissionRequests(): Flow<List<LockerAppPermission>> = flowOf(emptyList())
+    override val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
+
+
+    override suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>) {
+    }
+
+    override suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>) {
+    }
+
+    override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = flowOf(emptyMap())
+
+    override fun permissionDecisions(): Flow<List<LockerAppPermission>> = flowOf(emptyList())
+
+    override fun nativePlugins(): Flow<List<PluginMetadata>> = flowOf(emptyList())
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
+
+    override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> = MutableStateFlow(emptyMap())
+
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) {}
+
+    override fun sourcePlugin(category: String, item: String): PluginMetadata? = null
+
+    override suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo> = emptyList()
+
+    override suspend fun checkFilePermission(appUuid: Uuid, mode: FileAccessMode) = PermissionDecision.Denied
+
+    override suspend fun grantPluginFile(appUuid: Uuid, scope: String, mode: FileAccessMode, handle: String) =
+        FileHandleInfo(scope, FileEntryKind.File, scope, mode)
+
+    override suspend fun revokePluginFile(appUuid: Uuid, scope: String) = Unit
+
+    override fun getAllPlugins(): List<PluginMetadata> = emptyList()
+
+    override fun observe(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
+        category: String,
+        item: String,
+        properties: List<String>?,
+        iconPixelSize: IconPixelSize?,
+    ): Flow<SourceUpdate> = emptyFlow()
+
+    override suspend fun read(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
+        category: String,
+        item: String,
+        properties: List<String>?,
+        timeout: Duration,
+    ): SourceUpdate = SourceUpdate.Error(PluginErrors.PLUGIN_UNAVAILABLE, "fake")
+
+    override suspend fun invoke(
+        caller: PluginCaller,
+        plugin: PluginMetadata,
+        action: String,
+        args: JsonObject,
+        timeout: Duration?,
+    ): ActionResult = ActionResult.error(PluginErrors.PLUGIN_UNAVAILABLE, "fake")
 
     override suspend fun getLatestTimestamp(): Long? = 0
 
@@ -647,6 +745,7 @@ class FakeConnectedDevice(
     override suspend fun stopApp(uuid: Uuid) {}
 
     override val runningApp: StateFlow<Uuid?> = MutableStateFlow(null)
+    override val previousApp: StateFlow<Uuid?> = MutableStateFlow(null)
     override val watchInfo: WatchInfo = WatchInfo(
         runningFwVersion = FirmwareVersion.from(
             runningFwVersion,
@@ -733,10 +832,16 @@ class FakeConnectedDevice(
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
 
-    override fun installLanguagePack(path: Path, name: String) {
+    override suspend fun setActiveLanguage(pack: WatchLanguagePack?): Boolean = false
+
+    override suspend fun listLanguagePacks(): List<WatchLanguagePack> = emptyList()
+
+    override suspend fun removeLanguagePack(pack: WatchLanguagePack): Boolean = false
+
+    override fun installLanguagePack(path: Path, name: String, activate: Boolean) {
     }
 
-    override fun installLanguagePack(url: String, name: String) {
+    override fun installLanguagePack(url: String, name: String, activate: Boolean) {
     }
 
     override val languagePackInstallState: LanguagePackInstallState =

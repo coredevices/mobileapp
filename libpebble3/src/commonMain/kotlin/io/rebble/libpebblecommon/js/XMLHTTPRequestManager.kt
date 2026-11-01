@@ -9,11 +9,12 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
-import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
+import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,12 +40,7 @@ class XMLHTTPRequestManager(
     private val httpInterceptorManager: HttpInterceptorManager,
     private val appUuid: Uuid,
     private val client: HttpClient,
-    /**
-     * What this context is allowed to reach. A plugin gets the policy its manifest declared;
-     * PKJS and the app's own JS are unrestricted, being the user's own apps rather than
-     * something a plugin author wrote.
-     */
-    private val networkPolicy: PluginNetworkPolicy = PluginNetworkPolicy.unrestricted,
+    private val networkAccess: NetworkAccess,
     /**
      * The JS object responses are delivered into: `<jsTarget>._instances.get(id)`. PKJS gets the
      * `XMLHttpRequest` class it writes against; a plugin gets `fetch`'s own registry, so nothing
@@ -165,26 +161,35 @@ class XMLHTTPRequestManager(
             headers[header] = value
         }
 
+        /**
+         * Checks network access against both the host in the URL and the host in the headers
+         */
+        private suspend fun checkAccess(url: String, headers: Map<String, Any>): PluginNetworkVerdict {
+            val verdict = networkAccess.check(url, wait = false)
+            if (verdict is PluginNetworkVerdict.Denied) return verdict
+            val hostUrl = hostHeaderUrl(url, headers) ?: return verdict
+            return networkAccess.check(hostUrl, wait = false)
+        }
+
         private fun dispatchError() {
             changeReadyState(DONE)
             dispatchEvent(XHREvent.Error)
         }
 
         fun send(data: ByteArray?, responseType: String?) {
+            // What was checked is what's sent, whatever open()/setRequestHeader() do meanwhile.
+            val url = url!!
+            val method = method!!
+            val user = user
+            val password = password
+            val headers = headers.toMap()
             suspend fun execute() {
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
                 }
-                // Before anything else, including interception: a plugin must not reach a host
-                // it never declared, whoever would have served it.
-                val verdict = networkPolicy.check(url!!)
-                if (verdict is PluginNetworkVerdict.Denied) {
-                    logger.w { "$appUuid blocked: ${verdict.reason}" }
-                    dispatchError()
-                    return
-                }
-                if (httpInterceptorManager.shouldIntercept(url!!)) {
-                    val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)
+                // Served on the phone, so no network check; interceptors check their own permissions.
+                if (httpInterceptorManager.shouldIntercept(url)) {
+                    val response = httpInterceptorManager.onIntercepted(url, method.value, data?.decodeToString(), appUuid)
                     scope.launch {
                         val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
                         val status = Json.encodeToString(response.status)
@@ -197,17 +202,23 @@ class XMLHTTPRequestManager(
                     }
                     return
                 }
+                val verdict = checkAccess(url, headers)
+                if (verdict is PluginNetworkVerdict.Denied) {
+                    logger.w { "$appUuid blocked: ${verdict.reason}" }
+                    dispatchError()
+                    return
+                }
                 val response = try {
                     client.request {
-                        this.method = this@XHRInstance.method!!
-                        this.url(this@XHRInstance.url!!)
+                        this.method = method
+                        this.url(url)
                         if (user != null && password != null) {
-                            basicAuth(user!!, password!!)
+                            basicAuth(user, password)
                         }
                         if (data != null) {
                             setBody(data)
                         }
-                        this@XHRInstance.headers.entries.forEach {
+                        headers.entries.forEach {
                             header(it.key, it.value)
                         }
                     }
@@ -289,6 +300,16 @@ class XMLHTTPRequestManager(
         instances.values.forEach { it.requestJob?.cancel("Closing") }
         instances.clear()
     }
+}
+
+/** Internally  */
+internal fun hostHeaderUrl(url: String, headers: Map<String, Any>): String? {
+    val host = headers.entries
+        .firstOrNull { it.key.equals(HttpHeaders.Host, ignoreCase = true) }
+        ?.value?.toString()?.trim()
+        ?.ifEmpty { null }
+        ?: return null
+    return "${url.substringBefore("://")}://$host/"
 }
 
 enum class XHREvent {

@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -37,14 +38,25 @@ import com.multiplatform.webview.web.rememberWebViewState
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.config.ConfigPageBridge
+import coredevices.pebble.config.ConfigPageClosedListener
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.config.ConfigScriptIds
+import coredevices.pebble.config.PluginConfigFileAccess
+import coredevices.pebble.config.performWebSignIn
+import coredevices.pebble.config.webSignInSupported
+import coredevices.util.isDebugBuild
+import coredevices.util.rememberUiContext
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
+import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.stringResource
@@ -67,13 +79,22 @@ internal expect fun webViewFactory(
     uuid: Uuid,
     /** Null leaves the page with no `Pebble` object, which is what a plain webview should be. */
     bridge: ConfigPageBridge?,
+    /** Blocking; whatever the page loads or connects to is checked against the app's permissions. */
+    mayLoad: (String) -> Boolean,
+    network: ConfigPageNetwork,
 ): NativeWebView
+
+/** Limits what a config page may connect to, on top of [webViewFactory]'s per-request checks. */
+internal expect class ConfigPageNetwork
+
+/** [domains] each cover their subdomains; null leaves the page unrestricted. */
+internal expect suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?): ConfigPageNetwork
 
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
 internal expect fun persistLocalStorage(webView: NativeWebView)
 
 @Composable
-internal expect fun rememberWebViewFileChooserParams(): PlatformWebViewParams?
+internal expect fun rememberPlatformWebViewParams(mayLoad: (String) -> Boolean): PlatformWebViewParams?
 
 private val logger = Logger.withTag("WatchappSettingsScreen")
 
@@ -84,11 +105,21 @@ fun WatchappSettingsScreen(
     uuid: String,
     title: String,
 ) {
-    val url = remember(uuid) {
-        normalizeWatchappSettingsUrl(WatchappSettingsUrlCache.get(uuid) ?: "")
+    val libPebble = koinInject<LibPebble>()
+    // Opened from outside the locker (a plugin picked as an Index destination), nothing is cached.
+    val resolvedUrl by produceState(initialValue = WatchappSettingsUrlCache.get(uuid), uuid) {
+        if (value == null) {
+            value = runCatching { Uuid.parse(uuid) }.getOrNull()
+                ?.let { libPebble.appConfigPageUrl(it) } ?: ""
+        }
     }
+    val url = resolvedUrl?.let(::normalizeWatchappSettingsUrl) ?: return
+    val closedListener: ConfigPageClosedListener = koinInject()
     DisposableEffect(uuid) {
-        onDispose { WatchappSettingsUrlCache.remove(uuid) }
+        onDispose {
+            WatchappSettingsUrlCache.remove(uuid)
+            runCatching { Uuid.parse(uuid) }.getOrNull()?.let(closedListener::onConfigPageClosed)
+        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val sessions: ConfigPageSessions = koinInject()
@@ -102,7 +133,14 @@ fun WatchappSettingsScreen(
             }
         }
         val webViewUuid = remember(uuid) { runCatching { Uuid.parse(uuid) }.getOrNull() }
-        val fileChooserParams = rememberWebViewFileChooserParams()
+        val mayLoad = remember(webViewUuid) {
+            { url: String -> webViewUuid != null && runBlocking { libPebble.mayLoadInConfigPage(webViewUuid, url) } }
+        }
+        val platformParams = rememberPlatformWebViewParams(mayLoad)
+        // Fixed when the page opens: a domain approved later applies from the next visit.
+        val network by produceState<ConfigPageNetwork?>(null, webViewUuid) {
+            value = webViewUuid?.let { configPageNetwork(it, libPebble.configPageDomains(it)) }
+        }
         val state = rememberWebViewState(url) {
             androidWebSettings.domStorageEnabled = true
             iOSWebSettings.isInspectable = true
@@ -129,6 +167,33 @@ fun WatchappSettingsScreen(
         // One bridge for the life of the screen: it is installed when the WebView is built,
         // before any page has loaded, and picks up scripts as they resolve.
         val bridge = remember { if (sessions.enabled) ConfigPageBridge(scope) else null }
+        val uiContext = rememberUiContext()
+        val appContext: AppContext = koinInject()
+        val debugBuild = remember { appContext.isDebugBuild() }
+        val webSignInApp by remember(webViewUuid) {
+            webViewUuid?.let { libPebble.getLockerApp(it) } ?: flowOf(null)
+        }.collectAsState(null)
+        LaunchedEffect(bridge, webSignInApp, uiContext, debugBuild) {
+            val ctx = uiContext
+            // Only offer web sign-in where the platform can isolate its cookie jar.
+            bridge?.webSignIn = if (ctx != null && webSignInSupported() &&
+                webSignInApp?.mayUseWebSignIn(debugBuild) == true) {
+                { request -> performWebSignIn(ctx, request) }
+            } else {
+                null
+            }
+        }
+        LaunchedEffect(bridge, session, uiContext, webViewUuid) {
+            val ctx = uiContext
+            val pluginUuid = webViewUuid
+            // Only a plugin can use a granted file, so a page with none behind it gets no picker.
+            bridge?.fileAccess = if (ctx != null && pluginUuid != null &&
+                session?.scripts?.containsKey(ConfigScriptIds.PLUGIN) == true) {
+                PluginConfigFileAccess(libPebble, pluginUuid, ctx)
+            } else {
+                null
+            }
+        }
         DisposableEffect(session) {
             val open = session
             bridge?.scripts = open?.scripts.orEmpty()
@@ -174,13 +239,14 @@ fun WatchappSettingsScreen(
                 )
             }
         ) { paddingValues ->
-            webViewUuid?.let { uuid ->
+            val pageNetwork = network
+            if (webViewUuid != null && pageNetwork != null) {
                 WebView(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     navigator = navigator,
-                    platformWebViewParams = fileChooserParams,
-                    factory = { webViewFactory(it, uuid, bridge) }
+                    platformWebViewParams = platformParams,
+                    factory = { webViewFactory(it, webViewUuid, bridge, mayLoad, pageNetwork) }
                 )
             }
         }

@@ -30,6 +30,9 @@ import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.AndroidOAuthLauncher
 import coredevices.util.integrations.OAuthLauncher
 import coredevices.util.models.ModelDownloadManager
+import coredevices.util.sync.AndroidSyncScheduler
+import coredevices.util.sync.SyncManager
+import coredevices.util.sync.SyncScheduler
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.flow.combine
@@ -74,4 +77,5 @@ val androidDefaultModule = module {
     single { createAndroidAnalytics(get()) }
     singleOf(::ModelDownloadManager)
     singleOf(::PebbleBackgroundManager)
+    single<SyncScheduler> { AndroidSyncScheduler(get(), lazy { get<SyncManager>() }) }
 }

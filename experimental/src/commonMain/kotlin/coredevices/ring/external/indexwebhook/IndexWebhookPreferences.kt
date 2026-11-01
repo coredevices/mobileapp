@@ -25,7 +25,8 @@ enum class IndexWebhookPayloadMode(val id: Int) {
     }
 }
 
-/** Webhook configuration for a single recording gesture. */
+/** Webhook configuration for a single gesture. [payloadMode] applies to recording gestures,
+ *  [clickPayload] to click gestures. */
 @Serializable
 data class IndexWebhookConfig(
     val url: String? = null,
@@ -33,6 +34,7 @@ data class IndexWebhookConfig(
     val headers: Map<String, String> = emptyMap(),
     val signRequests: Boolean = false,
     val saved: Boolean = false,
+    val clickPayload: String = "",
 ) {
     val isActive: Boolean get() = saved && !url.isNullOrBlank()
 }
@@ -46,7 +48,7 @@ fun IndexWebhookConfig.sendsFor(destination: GestureDestination.Recording): Bool
     isActive && destination != GestureDestination.Nothing
 
 /**
- * Stores one [IndexWebhookConfig] per recording gesture.
+ * Stores one [IndexWebhookConfig] per gesture.
  */
 class IndexWebhookPreferences(private val settings: Settings) {
 
@@ -100,7 +102,7 @@ class IndexWebhookPreferences(private val settings: Settings) {
     private fun migrateAndLoad(): Map<RingGesture, IndexWebhookConfig> {
         migrateLegacySingleConfig()
         migrateTriggerKeyedConfigs()
-        return gestures.associateWith { gesture ->
+        return RingGesture.entries.associateWith { gesture ->
             settings.getStringOrNull(configKey(gesture))
                 ?.let {
                     try {

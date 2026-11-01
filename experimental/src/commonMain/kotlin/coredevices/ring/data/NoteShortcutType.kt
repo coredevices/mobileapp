@@ -1,15 +1,16 @@
 package coredevices.ring.data
 
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderProvider
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/** Where the notification shortcut sends a recording. Provider ids resolve through
+ *  [coredevices.ring.agent.integrations.providers.IntegrationProviderRepository]. */
 @Serializable
 sealed interface NoteShortcutType {
     @Serializable
     data object SendToMe: NoteShortcutType
     @Serializable
-    data class SendToNoteProvider(val provider: NoteProvider): NoteShortcutType
+    data class SendToNoteProvider(@SerialName("provider") val providerId: String): NoteShortcutType
     @Serializable
-    data class SendToReminderProvider(val provider: ReminderProvider): NoteShortcutType
+    data class SendToReminderProvider(@SerialName("provider") val providerId: String): NoteShortcutType
 }

@@ -55,6 +55,17 @@ class CoreDeepLinkHandlerTest {
     }
 
     @Test
+    fun settingsDeepLinkOpensIndexSettings() {
+        assertNotNull(handler.settingsRouteFor(Uri.parse(RingRoutes.SETTINGS_DEEP_LINK)))
+    }
+
+    @Test
+    fun settingsDeepLinkWithWrongSchemeOrPathDoesNotParse() {
+        assertNull(handler.settingsRouteFor(Uri.parse("pebble://deep-link/index-settings")))
+        assertNull(handler.settingsRouteFor(Uri.parse("pebblecore://deep-link/speech-model")))
+    }
+
+    @Test
     fun objectDeepLinkWithBlankIdDoesNotParse() {
         assertNull(handler.objectRouteFor(Uri.parse("pebblecore://deep-link/object?id=")))
     }

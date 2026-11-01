@@ -19,6 +19,8 @@ actual class RingDelegate(
     companion object {
         private val logger = Logger.withTag("RingDelegate")
     }
+    actual fun appInit() {}
+
     /**
      * Called by activity onCreate / didFinishLaunching to initialize the Ring module.
      */

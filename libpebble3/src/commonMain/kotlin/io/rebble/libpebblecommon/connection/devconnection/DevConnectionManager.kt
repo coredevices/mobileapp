@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.plugin.PluginLogs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,10 +15,17 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Watches with an active dev connection (value = forceLan), resumed on reconnection. */
+class DevConnectionResumer {
+    val active = MutableStateFlow<Map<PebbleIdentifier, Boolean>>(emptyMap())
+}
 
 class DevConnectionManager(
     private val transport: Flow<DevConnectionTransport>,
@@ -25,6 +33,8 @@ class DevConnectionManager(
     private val identifier: PebbleIdentifier,
     private val protocolHandler: PebbleProtocolHandler,
     private val companionAppLifecycleManager: CompanionAppLifecycleManager,
+    private val pluginLogs: PluginLogs,
+    private val resumer: DevConnectionResumer,
     private val scope: ConnectionCoroutineScope
 ): ConnectedPebble.DevConnection {
     private val job: MutableStateFlow<Job?> = MutableStateFlow(null)
@@ -34,11 +44,25 @@ class DevConnectionManager(
             SharingStarted.Companion.Eagerly,
             false
         )
+
+    fun init() {
+        val forceLan = resumer.active.value[identifier] ?: return
+        start(forceLan)
+    }
+
     override suspend fun startDevConnection(forceLan: Boolean) {
+        resumer.active.update { it + (identifier to forceLan) }
+        start(forceLan)
+    }
+
+    private fun start(forceLan: Boolean) {
         // Must never complete: onCompletion below stops the transport, so a finite flow would
         // tear the server down as soon as it emitted.
         val transport = if (forceLan) MutableStateFlow(lanServer) else transport
-        val inboundPKJSLogs = companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() }
+        val inboundPKJSLogs = merge(
+            companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() },
+            pluginLogs.messages,
+        )
         job.value = scope.launch {
             var last: DevConnectionTransport? = null
             try {
@@ -68,6 +92,7 @@ class DevConnectionManager(
     }
 
     override suspend fun stopDevConnection() {
+        resumer.active.update { it - identifier }
         job.value?.cancel()
     }
 }

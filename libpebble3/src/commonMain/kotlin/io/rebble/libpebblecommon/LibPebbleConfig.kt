@@ -6,6 +6,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +63,8 @@ class LibPebbleConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
 data class WatchConfig(
     val multipleConnectedWatchesSupported: Boolean = false,
     val lockerSyncLimitV2: Int = 50,
+    val proactivelyDownloadAppUpdates: Boolean = true,
+    val appUpdateDownloadWifiOnly: Boolean = true,
     val calendarPins: Boolean = true,
     val calendarReminders: Boolean = true,
     val calendarShowDeclinedEvents: Boolean = false,
@@ -85,6 +88,7 @@ data class WatchConfig(
      * Do AppMessages get delivered to both PKJS and (android) PebbleKit companion apps?
      */
     val appMessageToMultipleCompanions: Boolean = true,
+    val enableLegacyPebbleKit: Boolean = true,
     val orderWatchfacesByLastUsed: Boolean = false,
     val unknownWatchTypePlatform: WatchType = WatchType.EMERY,
     /**
@@ -99,6 +103,11 @@ data class WatchConfig(
     val enableWatchSettingsSync: Boolean = true,
     val musicSeekWhenAvailable: Boolean = true,
     val enablePlugins: Boolean = false,
+    val permissionPolicy: PermissionPolicy = PermissionPolicy.AskIfExfiltrating,
+    /** When false, legacy apps keep what they had before permissions (see `isLegacyImplicit`). */
+    val askLegacyAppsForPermissions: Boolean = false,
+    /** Ask the watch to report which notification it is displaying. Sent on connection. */
+    val notificationWindowState: Boolean = false,
 )
 
 class WatchConfigFlow(val flow: StateFlow<LibPebbleConfig>) {
@@ -165,9 +174,7 @@ data class NotificationConfig(
      * Mute all call alerts on the phone when at least one watch is connected
      */
     val mutePhoneCallSoundsWhenConnected: Boolean = false,
-    /**
-     * When [true], any notifications muted by the phone's do not disturb will not be forwarded to the watch
-     */
+    /** Legacy; only read to migrate into the RespectPhoneSilence watch pref. */
     val respectDoNotDisturb: Boolean = false,
     /**
      * Default new apps to be enabled (else they will be disabled).

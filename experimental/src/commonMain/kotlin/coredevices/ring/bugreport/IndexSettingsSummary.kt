@@ -1,13 +1,14 @@
 package coredevices.ring.bugreport
 
 import coredevices.ring.agent.IndexActionsRepository
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.database.Preferences
-import coredevices.ring.database.room.repository.McpSandboxRepository
+import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.screens.settings.gestureLabel
-import coredevices.ring.ui.screens.settings.settingsTitle
 import coredevices.ring.ui.screens.settings.tileLabel
 import kotlinx.coroutines.flow.first
 
@@ -19,18 +20,20 @@ import kotlinx.coroutines.flow.first
  */
 class IndexSettingsSummary(
     private val preferences: Preferences,
+    private val providers: IntegrationProviderRepository,
     private val gestureRouting: GestureRoutingPreferences,
     private val webhookPreferences: IndexWebhookPreferences,
     private val actionsRepository: IndexActionsRepository,
-    private val sandboxRepository: McpSandboxRepository,
+    private val mcpServerRepository: McpServerRepository,
 ) {
     suspend fun summary(): String = buildString {
         appendLine()
         appendLine("Index Settings")
 
         appendLine("Ring button:")
+        val agentTitles = providers.providers(IntegrationSupport.Agent).associate { it.id to it.title }
         RingGesture.entries.forEach { gesture ->
-            appendLine("  ${gesture.gestureLabel}: ${gestureRouting.destinationFor(gesture).tileLabel}")
+            appendLine("  ${gesture.gestureLabel}: ${gestureRouting.destinationFor(gesture).tileLabel(agentTitles)}")
         }
 
         val webhooks = RingGesture.entries.mapNotNull { gesture ->
@@ -48,13 +51,13 @@ class IndexSettingsSummary(
             appendLine("  ${action.title}: $state$reason")
         }
 
-        appendLine("Notes save to: ${preferences.noteProvider.value.settingsTitle}")
-        appendLine("Reminders save to: ${preferences.reminderProvider.value.settingsTitle}")
+        appendLine("Notes save to: ${providers.selectedNoteProvider.value.notesTitle}")
+        appendLine("Reminders save to: ${providers.selectedReminderProvider.value.remindersTitle}")
         appendLine("Unclear requests become: ${preferences.defaultCaptureType.value}")
         appendLine("Phone calendar connected: ${preferences.phoneCalendarEnabled.value}")
 
-        val groups = sandboxRepository.getAllGroupsFlow().first()
-        append("MCP sandbox groups: ${groups.size}")
+        val servers = mcpServerRepository.httpServersFlow().first()
+        append("HTTP MCP servers: ${servers.count { it.enabled }} of ${servers.size} enabled")
     }
 
     private fun hostOf(url: String?): String =

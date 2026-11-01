@@ -66,9 +66,7 @@ abstract class PKJSInterface(
      * Open a URL e.g. configuration page
      */
     open fun openURL(url: String): String {
-        runBlocking {
-            jsRunner.loadUrl(url)
-        }
+        jsRunner.loadUrl(url)
         return url
     }
 }

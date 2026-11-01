@@ -41,6 +41,12 @@ expect class PlatformSpeechRecognizer() {
     fun downloadModel(languageTag: String?): Boolean
 
     /**
+     * Let the OS drop the models reserved for languages other than [languageTag] (null for the
+     * device locale). The OS caps reservations per app.
+     */
+    fun releaseUnusedModels(languageTag: String?)
+
+    /**
      * Transcribe a complete PCM_16BIT mono buffer. [languageTag] is a BCP-47 tag or null for the
      * device locale. Returns the recognized text (may be blank); throws [TranscriptionException]
      * on failure, including [TranscriptionException.TranscriptionRequiresDownload] when the

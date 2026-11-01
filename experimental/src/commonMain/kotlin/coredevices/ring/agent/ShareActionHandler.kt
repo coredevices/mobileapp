@@ -3,8 +3,7 @@ package coredevices.ring.agent
 import co.touchlab.kermit.Logger
 import coredevices.indexai.time.HumanDateTimeParser
 import coredevices.ring.agent.builtin_servlets.clock.SetTimerTool
-import coredevices.ring.agent.builtin_servlets.notes.NoteIntegrationFactory
-import coredevices.ring.agent.builtin_servlets.reminders.ReminderIntegrationFactory
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,8 +16,7 @@ import kotlin.time.Instant
  * note or reminder.
  */
 class ShareActionHandler(
-    private val noteIntegrationFactory: NoteIntegrationFactory,
-    private val reminderIntegrationFactory: ReminderIntegrationFactory,
+    private val providers: IntegrationProviderRepository,
 ) {
     enum class Action { Note, Reminder }
 
@@ -58,11 +56,10 @@ class ShareActionHandler(
     // The integration creates the feed item itself when builtin; external providers own the
     // note/reminder remotely, so no local item is created.
     private suspend fun createNote(text: String) {
-        noteIntegrationFactory.createNoteClient().createNote(text)
+        providers.noteIntegration().createNote(text)
     }
 
     private suspend fun createReminder(text: String) {
-        reminderIntegrationFactory.createReminderIntegration()
-            .createReminder(text, parseReminderTime(text))
+        providers.reminderIntegration().createReminder(text, parseReminderTime(text))
     }
 }

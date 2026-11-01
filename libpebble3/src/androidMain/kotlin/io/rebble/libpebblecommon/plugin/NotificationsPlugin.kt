@@ -37,8 +37,9 @@ class NotificationsPlugin(
     private val notificationAppDao: NotificationAppRealDao,
     private val appContext: AppContext,
 ) : NativePlugin {
-    override val pluginUuid: Uuid = BUILT_IN_NOTIFICATIONS_UUID
+    override val pluginUuid: Uuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID
     override val name: String = "Notifications"
+    override val description: String = "Notifications currently in the phone's notification shade, newest first."
 
     override val sources: List<SourceDeclaration> = listOf(
         SourceDeclaration(
@@ -48,6 +49,7 @@ class NotificationsPlugin(
                 SourceInstance.PROPERTY_NAME to TEXT_SHAPES,
                 PROPERTY_BODY to TEXT_SHAPES,
                 PROPERTY_APP to listOf(SourceShapeNames.SHORT_TEXT),
+                SourceInstance.PROPERTY_PACKAGE to listOf(SourceShapeNames.LONG_TEXT),
                 PROPERTY_APP_ICON to listOf(SourceShapeNames.IMAGE),
             ),
             supportsMultiple = true,
@@ -111,6 +113,10 @@ class NotificationsPlugin(
                     PROPERTY_APP,
                     mapOf(SourceShapeNames.SHORT_TEXT to encode(ShortTextShape(appName))),
                 )
+                put(
+                    SourceInstance.PROPERTY_PACKAGE,
+                    mapOf(SourceShapeNames.LONG_TEXT to encode(LongTextShape(notification.packageName))),
+                )
                 iconSize
                     ?.let { appIcon(notification.packageName, it) }
                     ?.let { put(PROPERTY_APP_ICON, mapOf(SourceShapeNames.IMAGE to it)) }
@@ -164,10 +170,6 @@ class NotificationsPlugin(
 
         private val TEXT_SHAPES =
             listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.LONG_TEXT)
-
-        // Reserved built-in UUID namespace: prefix 00000000-0000-0000-0001-* for built-ins.
-        val BUILT_IN_NOTIFICATIONS_UUID: Uuid =
-            Uuid.parse("00000000-0000-0000-0001-000000000005")
     }
 }
 

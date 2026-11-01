@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.packets.blobdb.AppMetadata
 import io.rebble.libpebblecommon.structmapper.SUUID
 import io.rebble.libpebblecommon.structmapper.StructMapper
@@ -53,17 +54,27 @@ data class LockerEntry(
     val capabilities: List<String>? = null,
     @ColumnInfo(defaultValue = "NULL")
     val grantedPermissions: List<String>? = null,
+    @ColumnInfo(defaultValue = "0")
+    val microphoneGranted: Boolean = false,
     /** Serialized [io.rebble.libpebblecommon.plugin.PluginManifest] when this pbw carries a plugin. Phone-only; not synced to the watch. */
     @ColumnInfo(defaultValue = "NULL")
     val pluginManifest: String? = null,
     /** The pbw's appinfo `configPage` (an http(s) URL, or a filename in the pbw). Phone-only. */
     @ColumnInfo(defaultValue = "NULL")
     val configPage: String? = null,
+    /** Below 2 is a legacy app. */
+    @ColumnInfo(defaultValue = "1")
+    val manifestVersion: Int = 1,
 ) : BlobDbItem {
     override fun key(): UByteArray = SUUID(StructMapper(), id).toBytes()
 
     override fun value(params: ValueParams): UByteArray? {
-        return asMetadata(params.platform)?.toBytes()
+        return asMetadata(
+            params.platform,
+            microphoneGranted = if (ProtocolCapsFlag.SupportsAppPermissions in params.capabilities) {
+                microphoneGranted
+            } else null,
+        )?.toBytes()
     }
 
     // Only some fields should trigger a watch resync if changed:
@@ -77,11 +88,12 @@ data class LockerEntry(
         result = 31 * result + sideloaded.hashCode()
         result = 31 * result + (sideloadeTimestamp?.hashCode() ?: 0)
         result = 31 * result + platforms.recordHashCode()
+        result = 31 * result + microphoneGranted.hashCode()
         return result
     }
 }
 
-fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
+fun LockerEntry.asMetadata(platform: WatchType, microphoneGranted: Boolean? = null): AppMetadata? {
     // Pick the best-matching variant for this watch.
     val entryPlatform = platform.getCompatibleAppVariants().firstNotNullOfOrNull { variant ->
         platforms.firstOrNull { it.name == variant.codename }
@@ -112,7 +124,8 @@ fun LockerEntry.asMetadata(platform: WatchType): AppMetadata? {
         appVersionMinor = appVersionMinor.toVersionByte(),
         sdkVersionMajor = sdkVersionMajor.toVersionByte(),
         sdkVersionMinor = sdkVersionMinor.toVersionByte(),
-        appName = title
+        appName = title,
+        microphoneGranted = microphoneGranted,
     )
 }
 
@@ -152,6 +165,7 @@ data class LockerEntryPlatform(
     val iconImageUrl: String? = null,
     val pbwIconResourceId: Int,
     val description: String? = null,
+    val listImageTintable: Boolean = false,
 )
 
 // Only some fields should trigger a watch resync if changed:

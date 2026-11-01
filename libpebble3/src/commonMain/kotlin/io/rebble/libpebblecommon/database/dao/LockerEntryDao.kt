@@ -81,6 +81,28 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     suspend fun getAll(): List<LockerEntry>
 
+    @Query("""
+        SELECT * FROM LockerEntryEntity WHERE deleted = 0 AND id IN (:ids)
+    """)
+    fun getEntriesFlow(ids: List<Uuid>): Flow<List<LockerEntry>>
+
+    @Query("""
+        UPDATE LockerEntryEntity
+        SET microphoneGranted = :granted, recordHashcode = :hashcode
+        WHERE id = :id AND microphoneGranted != :granted
+    """)
+    suspend fun updateMicrophoneGrant(id: Uuid, granted: Boolean, hashcode: Int)
+
+    @Transaction
+    suspend fun syncMicrophoneGrants(grants: Set<Uuid>) {
+        getAll().forEach { entry ->
+            val granted = entry.id in grants
+            if (entry.microphoneGranted != granted) {
+                updateMicrophoneGrant(entry.id, granted, entry.copy(microphoneGranted = granted).recordHashCode())
+            }
+        }
+    }
+
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
         insertOrReplace(entry)
@@ -163,6 +185,12 @@ interface LockerEntryRealDao : LockerEntryDao {
             WHEN systemApp = 1 THEN 0
             WHEN type = 'plugin' THEN 0
             WHEN orderIndex < :syncLimit THEN 1
+            WHEN EXISTS (
+                SELECT 1 FROM WatchPrefItemEntity
+                WHERE WatchPrefItemEntity.id LIKE 'ql%'
+                AND WatchPrefItemEntity.value LIKE '%"enabled":true%'
+                AND WatchPrefItemEntity.value LIKE '%"' || LockerEntryEntity.id || '"%'
+            ) THEN 1
             ELSE 0
         END
     """)

@@ -2,16 +2,15 @@ package io.rebble.libpebblecommon.plugin
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.js.JsRunner
+import io.rebble.libpebblecommon.permissions.AppPermissions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlin.uuid.Uuid
 
 /**
  * Per-PKJS-session dispatcher for source subscriptions. Created alongside each
@@ -26,6 +25,8 @@ class SourceDispatcher(
     private val registry: PluginRegistry,
     private val jsRunner: JsRunner,
     private val scope: CoroutineScope,
+    private val permissions: AppPermissions,
+    private val client: PluginClient,
 ) {
     private val logger = Logger.withTag("SourceDispatcher")
     private val subscriptions = mutableMapOf<Int, Job>()
@@ -57,40 +58,37 @@ class SourceDispatcher(
             return
         }
 
-        val declaration = plugin.sources.firstOrNull { it.serves(request.category, request.item) }
-        val missing = declaration
-            ?.let { requiredOfCaller(it) - grantedToCaller(jsRunner.appInfo.usesPermissions) }
-            .orEmpty()
-        if (missing.isNotEmpty()) {
-            scope.launch {
-                emitError(
-                    subscriptionId,
-                    PluginErrors.PERMISSION_DENIED,
-                    "${jsRunner.appInfo.shortName} did not ask for ${missing.sorted().joinToString()}",
-                )
+        subscriptions[subscriptionId] = scope.launch {
+            val appName = jsRunner.appInfo.shortName
+            val subject = permissions.subjectOf(Uuid.parse(jsRunner.appInfo.uuid))
+            if (subject == null) {
+                emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, "$appName isn't installed")
+                return@launch
             }
-            return
+            if (subject.legacy) {
+                emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, LEGACY_CALLER_MESSAGE)
+                return@launch
+            }
+            client.observe(
+                PluginCaller.App(subject, appName),
+                plugin.metadata,
+                request.category,
+                request.item,
+                request.properties,
+                request.iconPixelSize,
+            ).collect { update ->
+                when (update) {
+                    is SourceUpdate.Data -> {
+                        val payload = Json.encodeToString(SourceEnvelope.serializer(), update.envelope)
+                        // Quote the JSON so it becomes a JS string literal, then JSON.parse it
+                        // back inside the JS shim. Same pattern as the existing app-message ACK path.
+                        val quoted = Json.encodeToString(String.serializer(), payload)
+                        jsRunner.eval("globalThis._signalSourceUpdate($subscriptionId, $quoted)")
+                    }
+                    is SourceUpdate.Error -> emitError(subscriptionId, update.code, update.message)
+                }
+            }
         }
-
-        val job = plugin
-            .observe(request.category, request.item, request.properties, request.iconPixelSize)
-            .onEach { envelope ->
-                val payload = Json.encodeToString(SourceEnvelope.serializer(), envelope)
-                // Quote the JSON so it becomes a JS string literal, then JSON.parse it
-                // back inside the JS shim. Same pattern as the existing app-message ACK path.
-                val quoted = Json.encodeToString(String.serializer(), payload)
-                jsRunner.eval("globalThis._signalSourceUpdate($subscriptionId, $quoted)")
-            }
-            .catch { t ->
-                logger.w(t) { "subscription $subscriptionId failed" }
-                emitError(
-                    subscriptionId,
-                    PluginErrors.UNKNOWN,
-                    t.message ?: t::class.simpleName ?: "error",
-                )
-            }
-            .launchIn(scope)
-        subscriptions[subscriptionId] = job
     }
 
     fun unsubscribe(subscriptionId: Int) {

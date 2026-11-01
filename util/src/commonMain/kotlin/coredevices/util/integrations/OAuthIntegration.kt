@@ -2,11 +2,13 @@ package coredevices.util.integrations
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
+import coredevices.util.sha256
+import kotlin.io.encoding.Base64
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 internal expect fun generateSecureRandomString(length: Int, charset: List<Char>): String
-internal expect fun sha256(input: String): String
+internal fun sha256(input: String): String = Base64.UrlSafe.encode(sha256(input.encodeToByteArray()))
 
 abstract class OAuthIntegration(
     private val api: OAuthProxyApi,

@@ -19,7 +19,7 @@ import okio.openZip
 object DiskUtil {
     private const val MANIFEST_FILENAME = "manifest.json"
     private const val APPINFO_FILENAME = "appinfo.json"
-    private val pbwJson = Json {
+    val pbwJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }

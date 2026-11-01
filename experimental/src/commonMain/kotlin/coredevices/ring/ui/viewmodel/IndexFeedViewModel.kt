@@ -5,14 +5,16 @@ package coredevices.ring.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.LocalRecording
+import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.RecordingEntryStatus
+import coredevices.indexai.database.dao.RecordingToolMessage
 import coredevices.libindex.database.dao.RingTransferDao
+import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
-import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.IndexAgentCactus
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
-import coredevices.ring.data.entity.room.indexfeed.fields
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
@@ -29,17 +31,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 
 /**
  * Single source for everything the Index home screen needs: recordings,
@@ -86,15 +82,15 @@ class IndexFeedViewModel(
         ) { recordings, items, lists, entries, q ->
             Quintuple(recordings, items, lists, entries, q)
         },
-        recordingRepo.getLatestToolSemanticResults()
-            .map { results -> results.associate { it.recordingId to it.semanticResult } }
-            .distinctUntilChanged(),
+        recordingRepo.getToolMessages(),
         animatingDoneIds,
-    ) { tuple, semanticResults, animating ->
+        ringTransferDao.getPendingTransfersFlow(),
+    ) { tuple, toolMessages, animating, pendingTransfers ->
         compute(
             tuple.recordings, tuple.items, tuple.lists, tuple.entries,
             tuple.query.trim(), animating,
-            semanticResults = semanticResults,
+            toolMessages = toolMessages,
+            pendingTransfers = pendingTransfers,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -212,6 +208,9 @@ class IndexFeedViewModel(
 
     data class UiState(
         val recordings: List<RecordingPeek>,
+        /** Ring transfers still in flight (or queued for processing) with no
+         *  recording yet — shown as "Transferring…" peek cards. */
+        val pendingTransfers: List<RingTransfer> = emptyList(),
         /** Tasks shown in the home Todos section, paged horizontally by the UI. */
         val todosPreview: List<CachedItem>,
         /** Total Todos count (for the section header). */
@@ -237,9 +236,8 @@ class IndexFeedViewModel(
             /** First-entry transcription (the user's spoken text). May be
              *  empty if the recording is still being processed. */
             val transcription: String,
-            /** Localized label for the most-relevant extracted item, e.g.
-             *  "Added to Notes to self", "Reminder · take out the trash",
-             *  "Alarm · 09:00", or "No action taken" when nothing was made. */
+            /** Label of the first successful action, e.g. "Added to Notes to self",
+             *  "Alarm · 09:00", or "No action taken" when the agent did nothing. */
             val primaryChip: String,
             val orphan: Boolean,
             /** Latest entry when its transcription failed and can be retried.
@@ -250,6 +248,9 @@ class IndexFeedViewModel(
              *  in place of the action chip so the failure is actionable
              *  without opening the recording. */
             val actionError: String? = null,
+            /** The agent ran on-device (local-only or after a cloud failure), or
+             *  speech-to-text fell back to the local model. */
+            val processedOffline: Boolean = false,
         )
 
         companion object {
@@ -282,19 +283,20 @@ class IndexFeedViewModel(
             entries: List<RecordingEntryEntity>,
             query: String,
             animatingDoneIds: Set<String> = emptySet(),
-            /** Latest tool-call semantic result per recording id, for labelling actions
-             *  that don't produce a feed item (calendar events live only in the phone
-             *  calendar). */
-            semanticResults: Map<Long, SemanticResult?> = emptyMap(),
+            toolMessages: List<RecordingToolMessage> = emptyList(),
+            pendingTransfers: List<RingTransfer> = emptyList(),
         ): UiState {
             val isSearching = query.isNotEmpty()
             val q = query.lowercase()
             fun match(s: String?) = !isSearching || (s ?: "").lowercase().contains(q)
 
-            val itemsByRecording = items
-                .filter { !it.deleted }
-                .groupBy { it.sourceRecordingId.orEmpty() }
+            val actionsByRec = recordingActions(toolMessages, lists)
             val entriesByRec = entries.groupBy { it.recordingId }
+            val localAgentRecs = toolMessages.asSequence()
+                .filter { it.role == MessageRole.assistant }
+                .filter { it.languageModelUsed?.startsWith(IndexAgentCactus.LANGUAGE_MODEL_PREFIX) == true }
+                .map { it.recordingId }
+                .toSet()
             val transcriptionByRec = entriesByRec
                 .mapValues { (_, es) -> es.firstOrNull()?.transcription.orEmpty() }
             val recordingsView = (if (isSearching) {
@@ -303,9 +305,8 @@ class IndexFeedViewModel(
                 recordings
             }).sortedByDescending { it.localTimestamp.toEpochMilliseconds() }
                 .map { rec ->
-                    val recItems = itemsByRecording[rec.firestoreId.orEmpty()].orEmpty() +
-                        itemsByRecording["local:${rec.id}"].orEmpty()
-                    val primary = recItems.firstOrNull()
+                    val actions = actionsByRec[rec.id].orEmpty().filterNot { it.assistive }
+                    val primary = actions.firstOrNull { !it.failed }
                     // Latest entry decides the error state — a recording can
                     // accrue retries, so only the most recent attempt's status
                     // is meaningful. Matches FullFeedViewModel.
@@ -314,23 +315,19 @@ class IndexFeedViewModel(
                         .lastOrNull()
                     val retryEntry = latestEntry
                         ?.takeIf { it.status == RecordingEntryStatus.transcription_error }
-                    // A calendar event takes an action but creates no feed item — fall back to
-                    // the recording's semantic result so the peek doesn't read "No action taken".
-                    val calendarAction = semanticResults[rec.id] as? SemanticResult.CalendarEventCreation
-                    val failure = semanticResults[rec.id] as? SemanticResult.GenericFailure
                     UiState.RecordingPeek(
                         recording = rec,
                         transcription = transcriptionByRec[rec.id].orEmpty(),
-                        primaryChip = primary?.let { chipLabel(it, lists) }
-                            ?: calendarAction?.let { "Added to calendar" }
-                            ?: "No action taken",
-                        orphan = primary == null && calendarAction == null,
+                        primaryChip = primary?.label ?: "No action taken",
+                        orphan = primary == null,
                         retryEntry = retryEntry,
                         // A retryable transcription failure means the agent
                         // never ran this time round; any stored failure is from
                         // an earlier attempt, so don't surface it.
-                        actionError = failure?.userErrorMessage
-                            ?.takeIf { it.isNotBlank() && retryEntry == null },
+                        actionError = actions.lastOrNull()?.errorMessage
+                            ?.takeIf { retryEntry == null },
+                        processedOffline = rec.id in localAgentRecs ||
+                            entriesByRec[rec.id].orEmpty().any { it.transcribedViaLocalFallback },
                     )
                 }
 
@@ -443,6 +440,9 @@ class IndexFeedViewModel(
 
             return UiState(
                 recordings = recordingsView,
+                pendingTransfers = if (isSearching) emptyList() else {
+                    pendingTransfers.sortedByDescending { it.createdAt.toEpochMilliseconds() }
+                },
                 todosPreview = todosPreview,
                 totalTodos = rawTodos.size,
                 notesLists = notesListsFiltered,
@@ -452,83 +452,6 @@ class IndexFeedViewModel(
                 searching = isSearching,
                 matches = matches,
             )
-        }
-
-        @Suppress("unused")
-        private fun Instant?.orMax(): Long = this?.toEpochMilliseconds() ?: Long.MAX_VALUE
-
-        /** Pretty-print the primary action chip for a recording's first
-         *  extracted item. Mirrors the prototype's `objectChip`. */
-        internal fun chipLabel(item: CachedItem, lists: List<CachedList>): String {
-            if (item.locked) return "🔒 Encrypted"
-            val fields = item.fields()
-            fun strField(key: String): String? = (fields[key] as? JsonPrimitive)?.contentOrNull
-            return when (item.kind) {
-                "reminder" -> item.title.ifBlank { "Reminder" }
-                "scheduled" -> when (strField("fireKind")) {
-                    "alarm" -> strField("fireTime")?.let { "Alarm · $it" } ?: item.title.ifBlank { "Alarm" }
-                    "timer" -> {
-                        // Prefer a formatted "Timer · 20 min" over the raw
-                        // ISO that older items have stored in the title.
-                        val durRaw = strField("duration")
-                        val pretty = formatDuration(durRaw)
-                        if (!pretty.isNullOrBlank()) "Timer · $pretty"
-                        else item.title.ifBlank { "Timer" }
-                    }
-                    else -> item.title.ifBlank { "Scheduled" }
-                }
-                "note" -> {
-                    val parentId = item.parentListIds().firstOrNull()
-                    val parent = parentId?.let { id -> lists.firstOrNull { it.firestoreId == id } }
-                    val parentName = parent?.title?.takeIf { it.isNotBlank() } ?: "Notes to self"
-                    "Added to $parentName"
-                }
-                "answer" -> "Answered"
-                "message" -> {
-                    val raw = strField("recipientName") ?: strField("contact")
-                    val name = raw?.let { messageRecipientLabel(it) }
-                    if (!name.isNullOrBlank()) "Sent to $name" else "Message sent"
-                }
-                "action_log" -> item.title.ifBlank { "Action" }
-                "delegated" -> {
-                    val integration = strField("integration")
-                    if (!integration.isNullOrBlank()) "Sent to $integration" else "Sent"
-                }
-                else -> item.title.ifBlank { "Saved" }
-            }
-        }
-
-        /** Pretty-print a Beeper / messaging recipient — strips homeserver
-         *  suffixes and shortens long room ids the way the prototype does. */
-        private fun messageRecipientLabel(raw: String): String {
-            if (raw.startsWith("!")) {
-                val local = raw.substringBefore(":").drop(1)
-                return if (local.length > 12) local.take(12) + "…" else local
-            }
-            return raw
-        }
-
-        /** Turn an ISO-8601 duration (`PT20M`, `PT1H30M`, `PT45S`) or a raw
-         *  millisecond value (legacy cached rows) into a human label like
-         *  "20 min", "1 hr 30 min", "45 sec". Falls back to the raw string
-         *  if parsing fails. Used everywhere we surface a timer's duration. */
-        fun formatDuration(raw: String?): String? {
-            if (raw.isNullOrBlank()) return null
-            // Parse ISO-8601 ("PT3M") or fall back to raw milliseconds for older cached rows
-            val d = try {
-                kotlin.time.Duration.parseIsoString(raw)
-            } catch (e: Throwable) {
-                raw.toLongOrNull()?.milliseconds ?: return raw
-            }
-            val totalSec = d.inWholeSeconds
-            val h = totalSec / 3600
-            val m = (totalSec % 3600) / 60
-            val s = totalSec % 60
-            return buildString {
-                if (h > 0) append("$h hr ")
-                if (m > 0) append("$m min ")
-                if (s > 0 && h == 0L) append("$s sec")
-            }.trim().ifBlank { raw }
         }
     }
 }

@@ -15,6 +15,7 @@ data class InterceptResponse(
     companion object {
         val OK = InterceptResponse(result = "", status = 200)
         val ERROR = InterceptResponse(result = "", status = 500)
+        val FORBIDDEN = InterceptResponse(result = "", status = 403)
     }
 }
 

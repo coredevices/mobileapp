@@ -42,8 +42,13 @@ import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.disk.pbw.DiskUtil
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.plugin.PluginManifest
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.LockerAddResponse
 import io.rebble.libpebblecommon.web.LockerEntry
@@ -73,6 +78,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNull
@@ -477,8 +483,9 @@ data class AppStoreHomeResult(
 )
 
 fun AppType.storeString() = when (this) {
-    AppType.Watchapp, AppType.Plugin -> "apps"
+    AppType.Watchapp -> "apps"
     AppType.Watchface -> "faces"
+    AppType.Plugin -> "plugins"
 }
 
 fun Platform.storeString() = when (this) {
@@ -590,6 +597,8 @@ data class StoreSearchResult(
     val iconImage: String,
     @SerialName("list_image")
     val listImage: String,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     val title: String,
     val type: String,
     val uuid: String,
@@ -660,13 +669,13 @@ data class AppStoreHome(
 
 @Serializable
 data class StoreOnboarding(
-    val aplite: List<String>,
-    val basalt: List<String>,
-    val chalk: List<String>,
-    val diorite: List<String>,
-    val emery: List<String>,
-    val flint: List<String>,
-    val gabbro: List<String>,
+    val aplite: List<String> = emptyList(),
+    val basalt: List<String> = emptyList(),
+    val chalk: List<String> = emptyList(),
+    val diorite: List<String> = emptyList(),
+    val emery: List<String> = emptyList(),
+    val flint: List<String> = emptyList(),
+    val gabbro: List<String> = emptyList(),
 )
 
 @Serializable
@@ -772,10 +781,26 @@ object HeaderImageSerializer : KSerializer<String?> {
     }
 }
 
+/** What our appstore says about a pbw's plugin; other stores never send it. */
+@Serializable
+data class StorePlugin(
+    @SerialName("config_page")
+    val configPage: String? = null,
+    /** appinfo's `plugin` block, verbatim. */
+    val manifest: JsonObject? = null,
+)
+
 @Serializable
 data class StoreApplication(
     val author: String,
     val capabilities: List<String>? = null,
+    @SerialName("uses_permissions")
+    val usesPermissions: List<PluginPermission> = emptyList(),
+    @SerialName("manifest_version")
+    val manifestVersion: Int = 1,
+    @SerialName("pebblekit2_packages")
+    val pebbleKit2Packages: List<String> = emptyList(),
+    val plugin: StorePlugin? = null,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,
@@ -805,6 +830,8 @@ data class StoreApplication(
     val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     @SerialName("published_date")
     @Serializable(with = PublishedDateSerializer::class)
     val publishedDate: Instant?,
@@ -819,6 +846,24 @@ data class StoreApplication(
     val visible: Boolean,
     val website: String?,
     val contactable: Boolean = false,
+    /** Keyed by platform codename; only platforms with enough telemetry are present. */
+    @SerialName("battery_impact")
+    val batteryImpact: Map<String, StoreBatteryImpact>? = null,
+)
+
+/** Levels are relative to TicToc: negligible / small / medium / large. */
+@Serializable
+data class StoreBatteryImpact(
+    val level: String,
+    val modes: List<StoreBatteryImpactMode> = emptyList(),
+    @SerialName("app_version")
+    val appVersion: String? = null,
+)
+
+@Serializable
+data class StoreBatteryImpactMode(
+    val mode: String,
+    val level: String,
 )
 
 @Serializable
@@ -943,8 +988,19 @@ fun StoreApplication.asLockerEntryPlatform(
     )
 }
 
+fun StoreApplication.pluginMetadata(): PluginMetadata? {
+    val raw = plugin?.manifest ?: return null
+    if (isLegacy(manifestVersion) || uuid == null) return null
+    val manifest = runCatching { DiskUtil.pbwJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
+        .onFailure { logger.w(it) { "unreadable plugin manifest for $uuid" } }
+        .getOrNull() ?: return null
+    return PluginMetadata(Uuid.parse(uuid), title, manifest.description, manifest.sources, manifest.actions, manifest.script)
+}
+
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
-    val app = this
+    // A plugin-only app has no binaries, so no hardware_platforms: build every platform from the
+    // fallbacks, which is also where the locker gets its description and images.
+    val app = if (type == AppType.Plugin.code && hardwarePlatforms.isNullOrEmpty()) copy(hardwarePlatforms = null) else this
     if (app.latestRelease == null) {
         logger.v { "no latest release for ${app.uuid}" }
         return null
@@ -961,7 +1017,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         title = app.title,
         type = app.type,
         developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
-        isConfigurable = app.capabilities.orEmpty().contains("configurable"),
+        isConfigurable = app.capabilities.orEmpty().contains("configurable") || app.plugin?.configPage != null,
         isTimelineEnabled = app.capabilities.orEmpty().contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
@@ -983,6 +1039,10 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         companions = app.companions,
         category = app.category,
         userToken = timelineToken,
+        manifestVersion = app.manifestVersion,
+        pluginManifest = app.plugin?.manifest,
+        configPage = app.plugin?.configPage,
+        iconTintable = app.iconTintable,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {

@@ -9,11 +9,18 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
+import coredevices.ring.agent.builtin_servlets.destinationProperty
+import coredevices.ring.agent.builtin_servlets.withoutDestination
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.agent.integrations.fuzzyFilter
 import coredevices.ring.agent.integrations.itemSource
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.integrations.providers.externalDestination
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ListRepository
+import coredevices.util.capitalizeFirstWord
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import io.modelcontextprotocol.kotlin.sdk.types.toJson
@@ -31,44 +38,13 @@ import org.koin.core.component.inject
 import kotlin.time.Clock
 
 class ListTool: BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "list_name" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The name of the list to add the item to e.g. 'shopping', 'todo'. " +
-                                    "Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists."
-                        ).toJson()
-                    ),
-                    "message" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The text of the list item to add"
-                        ).toJson()
-                    ),
-                    "reminder_date_time_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'"
-                        ).toJson()
-                    ),
-                )
-            ),
-            required = listOf(
-                "list_name",
-                "message"
-            )
-        )
-    ),
+    definition = DEFINITION,
+    localDefinition = DEFINITION.withoutDestination(),
     extraContext = """
         Never guess 'reminder_date_time_human' — only pass a time the user actually said, otherwise omit it.
     """.trimIndent()
 ), KoinComponent {
-    val reminderIntegrationFactory: ReminderIntegrationFactory by inject()
+    private val providers: IntegrationProviderRepository by inject()
     private val listRepo: ListRepository by inject()
 
     companion object Companion {
@@ -108,13 +84,48 @@ class ListTool: BuiltInMcpTool(
                 ?.id
             return bestMatchOn { it.title } ?: bestMatchOn { it.seed }
         }
+        private val DEFINITION = Tool(
+            name = TOOL_NAME,
+            description = TOOL_DESCRIPTION,
+            inputSchema = ToolSchema(
+                properties = JsonObject(
+                    mapOf(
+                        "list_name" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The name of the list to add the item to e.g. 'shopping', 'todo'. " +
+                                        "Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists."
+                            ).toJson()
+                        ),
+                        "message" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The text of the list item to add"
+                            ).toJson()
+                        ),
+                        "reminder_date_time_human" to JsonObject(
+                            mapOf(
+                                "type" to "string",
+                                "description" to "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'"
+                            ).toJson()
+                        ),
+                        DESTINATION_ARG to destinationProperty("list item"),
+                    )
+                ),
+                required = listOf(
+                    "list_name",
+                    "message"
+                )
+            )
+        )
     }
 
     @Serializable
     private data class ListItemArgs(
         val list_name: String,
         val reminder_date_time_human: String? = null,
-        val message: String
+        val message: String,
+        val destination: String? = null,
     )
 
     @Serializable
@@ -126,6 +137,7 @@ class ListTool: BuiltInMcpTool(
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val listItemArgs = JsonSnake.decodeFromString<ListItemArgs>(jsonInput)
+            .let { it.copy(message = it.message.capitalizeFirstWord()) }
         val instant = listItemArgs.reminder_date_time_human?.let {
             val tz = TimeZone.currentSystemDefault()
             // Anchor time resolution to when the user actually spoke. When that's unknown, only
@@ -205,8 +217,20 @@ class ListTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
+        val provider = providers.destinationProvider(listItemArgs.destination, IntegrationSupport.Reminder)
+            ?: return ToolCallResult(
+                JsonSnake.encodeToString(
+                    ListAddResult(
+                        success = false,
+                        errorMessage = "Unknown list destination '${listItemArgs.destination}'. Use a " +
+                                "name from the context, or omit $DESTINATION_ARG to use the default."
+                    )
+                ),
+                SemanticResult.GenericFailure("Unknown list destination '${listItemArgs.destination}'", llmRecoverable = true)
+            )
+
         return try {
-            val integration = reminderIntegrationFactory.createReminderIntegration()
+            val integration = providers.reminderIntegration(provider)
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
             val reminderId = integration.createReminder(
                 listItemArgs.message,
@@ -222,6 +246,7 @@ class ListTool: BuiltInMcpTool(
                     listUsed = list?.title,
                     remindAt = instant,
                     resolvedListId = resolvedListId,
+                    destination = provider.externalDestination,
                 )
             )
         } catch (e: Exception) {
@@ -233,7 +258,7 @@ class ListTool: BuiltInMcpTool(
                         errorMessage = e.message
                     )
                 ),
-                SemanticResult.GenericFailure("Failed to create reminder: ${e.message}")
+                SemanticResult.GenericFailure(e.message)
             )
         }
     }

@@ -66,7 +66,7 @@ data class RunResult(val statusCode: HttpStatusCode, val response: RunResponse?)
 enum class NenyaModel {
     @SerialName("default") Default,
     @SerialName("search") Search,
-    @SerialName("high_capability") HighCapability,
+    //@SerialName("high_capability") HighCapability,
 }
 
 @Serializable

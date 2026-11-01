@@ -24,6 +24,7 @@ import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotification
 import platform.UserNotifications.UNNotificationAction
 import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationRequest
@@ -33,7 +34,6 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
@@ -68,42 +68,36 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         require(deadline == null || deadline > Clock.System.now()) { "Time must be in the future" }
         check(requestAuthorization()) { "Notification permission not granted" }
 
-        val id = db.localReminderDao().insertReminder(
-            LocalReminderData(
-                0,
-                deadline,
-                title,
-                recordingId = source?.recordingFirestoreId,
-                notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
-        ).toInt()
-
+        val itemId = feedItems.newItemId()
         deadline?.let { scheduledTime ->
-            scheduleNotification(id, title, scheduledTime, notificationId(id), notificationTitle = "Reminder")
+            scheduleNotification(itemId, title, scheduledTime, notificationId(itemId), notificationTitle = "Reminder")
             // The early heads-up notification is only scheduled when its trigger time is still ahead.
             notifyBefore?.let { lead ->
                 val preTime = scheduledTime - lead
                 if (preTime > Clock.System.now()) {
-                    scheduleNotification(id, title, preTime, preNotificationId(id), notificationTitle = "Upcoming reminder")
+                    scheduleNotification(itemId, title, preTime, preNotificationId(itemId), notificationTitle = "Upcoming reminder")
                 }
             }
         }
+        db.localReminderDao().upsert(LocalReminderData(itemId, deadline, title, notifyBefore?.inWholeMilliseconds))
+
         try {
-            feedItems.createFeedItem(id, title, deadline, listId, notifyBefore, source)
+            feedItems.createFeedItem(itemId, title, deadline, listId, notifyBefore, source)
         } catch (e: Exception) {
             // If the feed item creation fails, cancel the scheduled notifications and delete the reminder.
-            notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(notificationId(id), preNotificationId(id)))
-            notificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(notificationId(id), preNotificationId(id)))
-            db.localReminderDao().deleteReminder(id)
+            notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(notificationId(itemId), preNotificationId(itemId)))
+            notificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(notificationId(itemId), preNotificationId(itemId)))
+            db.localReminderDao().deleteReminder(itemId)
             throw e
         }
-        return id.toString()
+        return itemId
     }
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> =
         feedItems.searchForList(listName)
 
     private suspend fun scheduleNotification(
-        reminderId: Int,
+        itemId: String,
         message: String,
         triggerTime: Instant,
         identifier: String,
@@ -113,7 +107,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             setTitle(notificationTitle)
             setBody(message)
             setSound(UNNotificationSound.defaultSound)
-            setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to reminderId.toString()))
+            setUserInfo(mapOf<Any?, Any?>(ReminderDeepLinkResolver.USERINFO_REMINDER_ID to itemId))
             setCategoryIdentifier(REMINDER_CATEGORY_ID)
         }
         val components = NSCalendar.currentCalendar.components(
@@ -129,39 +123,63 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         check(error == null) { "Failed to schedule reminder notification: ${error?.localizedDescription}" }
     }
 
-    override suspend fun cancelReminder(reminderId: Int) {
-        db.localReminderDao().getReminder(reminderId) ?: return
-        val identifiers = listOf(notificationId(reminderId), preNotificationId(reminderId))
+    override suspend fun cancelReminder(itemId: String) {
+        val identifiers = listOf(notificationId(itemId), preNotificationId(itemId))
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
-        db.localReminderDao().deleteReminder(reminderId)
+        db.localReminderDao().deleteReminder(itemId)
     }
 
-    override suspend fun rescheduleReminder(reminderId: Int, expectedRecordingId: String?, newTime: Instant?) {
-        val reminder = db.localReminderDao().getReminder(reminderId) ?: return
-        if (reminder.recordingId != expectedRecordingId) return
-        val identifiers = listOf(notificationId(reminderId), preNotificationId(reminderId))
+    override suspend fun syncReminder(itemId: String, message: String, time: Instant?, notifyBefore: Duration?) {
+        if (!requestAuthorization()) {
+            logger.w { "Skipping reminder sync: notification permission not granted" }
+            return
+        }
+        val identifiers = listOf(notificationId(itemId), preNotificationId(itemId))
         notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
         notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
 
-        db.localReminderDao().setTime(reminderId, newTime)
-
-        if (newTime == null || newTime <= Clock.System.now()) return
-        scheduleNotification(reminderId, reminder.message, newTime, notificationId(reminderId), notificationTitle = "Reminder")
-        reminder.notifyBeforeMillis?.let { lead ->
-            val preTime = newTime - lead.milliseconds
-            if (preTime > Clock.System.now()) {
-                scheduleNotification(reminderId, reminder.message, preTime, preNotificationId(reminderId), notificationTitle = "Upcoming reminder")
+        // Schedule before recording the row, so a scheduling failure leaves the ledger stale and
+        // the next reconcile retries rather than believing this reminder is armed.
+        if (time != null && time > Clock.System.now()) {
+            scheduleNotification(itemId, message, time, notificationId(itemId), notificationTitle = "Reminder")
+            notifyBefore?.let { lead ->
+                val preTime = time - lead
+                if (preTime > Clock.System.now()) {
+                    scheduleNotification(itemId, message, preTime, preNotificationId(itemId), notificationTitle = "Upcoming reminder")
+                }
             }
+        }
+        db.localReminderDao().upsert(LocalReminderData(itemId, time, message, notifyBefore?.inWholeMilliseconds))
+    }
+
+    override suspend fun cancelExtraNotification(itemId: String) {
+        val identifiers = listOf(preNotificationId(itemId))
+        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
+        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        db.localReminderDao().clearNotifyBefore(itemId)
+    }
+
+    override suspend fun purgeLegacySchedules() {
+        val pending = pendingIdentifiers().filter { isLegacyReminderId(it) }
+        if (pending.isNotEmpty()) notificationCenter.removePendingNotificationRequestsWithIdentifiers(pending)
+        val delivered = deliveredIdentifiers().filter { isLegacyReminderId(it) }
+        if (delivered.isNotEmpty()) notificationCenter.removeDeliveredNotificationsWithIdentifiers(delivered)
+        if (pending.isNotEmpty() || delivered.isNotEmpty()) {
+            logger.i { "Purged ${pending.size + delivered.size} legacy reminder schedule(s)" }
         }
     }
 
-    override suspend fun cancelExtraNotification(reminderId: Int) {
-        db.localReminderDao().getReminder(reminderId) ?: return
-        val identifiers = listOf(preNotificationId(reminderId))
-        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
-        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
-        db.localReminderDao().clearNotifyBefore(reminderId)
+    private suspend fun pendingIdentifiers(): List<String> = suspendCoroutine { cont ->
+        notificationCenter.getPendingNotificationRequestsWithCompletionHandler { requests ->
+            cont.resume(requests.orEmpty().mapNotNull { (it as? UNNotificationRequest)?.identifier })
+        }
+    }
+
+    private suspend fun deliveredIdentifiers(): List<String> = suspendCoroutine { cont ->
+        notificationCenter.getDeliveredNotificationsWithCompletionHandler { notifications ->
+            cont.resume(notifications.orEmpty().mapNotNull { (it as? UNNotification)?.request?.identifier })
+        }
     }
 
     override suspend fun getAllLists(): List<ReminderListEntry> {
@@ -183,8 +201,18 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         /** Action id for the "Done" button; matched in the notification-response handler. */
         const val REMINDER_ACTION_DONE = "ring-reminder-done"
 
-        private fun notificationId(reminderId: Int) = "ring-reminder-$reminderId"
-        private fun preNotificationId(reminderId: Int) = "ring-reminder-pre-$reminderId"
+        private fun notificationId(itemId: String) = "ring-reminder-$itemId"
+        private fun preNotificationId(itemId: String) = "ring-reminder-pre-$itemId"
+
+        /** A reminder notification whose id ends in the old device-local int (all digits) rather
+         *  than a global feed-item id. A global id that happened to be all digits would be a false
+         *  positive, but the reconciler re-arms it on its next pass, so purging it self-heals. */
+        private fun isLegacyReminderId(id: String): Boolean {
+            val body = id.removePrefix("ring-reminder-")
+            if (body.length == id.length) return false
+            val suffix = body.removePrefix("pre-")
+            return suffix.isNotEmpty() && suffix.all { it in '0'..'9' }
+        }
 
         /** Registers the reminder notification category carrying the "Done" action (MOB-8439), once.
          *  Merges with any already-registered categories so we don't clobber other notification

@@ -2,10 +2,8 @@ package coredevices.ring.agent.integrations.obsidian
 
 import PlatformUiContext
 import co.touchlab.kermit.Logger
-import coredevices.ring.agent.builtin_servlets.notes.NoteProvider
 import coredevices.ring.agent.integrations.ItemSource
 import coredevices.ring.agent.integrations.NoteIntegration
-import coredevices.ring.data.IntegrationDefinition
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
@@ -24,11 +22,6 @@ class ObsidianIntegration(
 ) : NoteIntegration {
 
     companion object {
-        val DEFINITION = IntegrationDefinition(
-            title = "Obsidian",
-            reminder = null,
-            notes = NoteProvider.Obsidian,
-        )
         private val logger = Logger.withTag("ObsidianIntegration")
 
         // Serialises note writes across all instances (the vault + prefs are singletons, but this

@@ -35,24 +35,14 @@ class ItemFactoryCreateFromSemanticResultTest {
     @Test
     fun reminderItemRoutesToTodosWithReminderMetadata() {
         val due = createdAt + 5.minutes
-        val item = factory.reminderItem(recordingId, createdAt, "Call mom", due, toolCallId = null, localReminderId = 42)
+        val item = factory.reminderItem(recordingId, createdAt, "Call mom", due, toolCallId = null)
 
         assertEquals("Call mom", item.title)
         assertEquals(due, item.dueAt)
         assertEquals(listOf(LIST_TODOS_ID), item.parentListIds)
         assertEquals(recordingId, item.sourceRecordingId)
         assertNull(item.sourceToolCallId)
-        val meta = item.metadata
-        assertTrue(meta is ItemMetadata.Reminder)
-        assertEquals(42, meta.localReminderId)
-    }
-
-    @Test
-    fun reminderItemWithoutLocalReminderIdLeavesItNull() {
-        val item = factory.reminderItem(recordingId, createdAt, "Call mom", dueAt = null, toolCallId = null)
-        val meta = item.metadata
-        assertTrue(meta is ItemMetadata.Reminder)
-        assertNull(meta.localReminderId)
+        assertTrue(item.metadata is ItemMetadata.Reminder)
     }
 
     @Test
@@ -63,7 +53,6 @@ class ItemFactoryCreateFromSemanticResultTest {
             "Leave for airport",
             createdAt + 5.minutes,
             toolCallId = null,
-            localReminderId = 7,
             notifyBeforeMillis = 2.hours.inWholeMilliseconds,
         )
         val meta = item.metadata
@@ -80,12 +69,13 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun reminderMetadataFromOlderJsonDecodesWithNullLocalReminderId() {
-        // Records written before localReminderId existed must still decode.
-        val legacy = """{"type":"reminder","repeat":"one_time","notification":"push"}"""
+    fun reminderMetadataFromOlderJsonWithLocalReminderIdStillDecodes() {
+        // Docs written before the reminder id moved onto the feed item still carry a
+        // `local_reminder_id` key; it must be ignored, not brick decoding.
+        val legacy = """{"type":"reminder","repeat":"one_time","notification":"push","local_reminder_id":42}"""
         val meta = JsonSnake.decodeFromString(ItemMetadata.serializer(), legacy)
         assertTrue(meta is ItemMetadata.Reminder)
-        assertNull(meta.localReminderId)
+        assertNull(meta.notifyBeforeMillis)
     }
 
     @Test
@@ -205,26 +195,11 @@ class ItemFactoryCreateFromSemanticResultTest {
     }
 
     @Test
-    fun nonAssistiveSupportingDataMapsToAnswerItem() {
-        val item = map(
-            SemanticResult.SupportingData("75F and sunny", assistiveOnly = false, question = "weather in NY?")
-        )!!
-        val meta = item.metadata
-        assertTrue(meta is ItemMetadata.Answer)
-        assertEquals("weather in NY?", meta.question)
-        assertEquals("weather in NY?", item.title)
-        assertEquals("75F and sunny", item.body)
-        assertEquals(emptyList(), item.parentListIds)
-        assertEquals(toolCallId, item.sourceToolCallId)
-    }
-
-    @Test
     fun nonItemResultsMapToNull() {
         // Notes and reminders are created by the owning integration, never centrally.
         assertNull(map(SemanticResult.TaskCreation(title = "Call mom", deadline = createdAt + 5.minutes)))
         assertNull(map(SemanticResult.ListItemCreation(content = "Milk", resolvedListId = "list_custom")))
-        assertNull(map(SemanticResult.SupportingData("info", assistiveOnly = true)))
-        assertNull(map(SemanticResult.Response("hello there")))
+        assertNull(map(SemanticResult.SupportingData("info")))
         assertNull(map(SemanticResult.GenericSuccess))
         assertNull(map(SemanticResult.GenericFailure("nope")))
     }

@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
+import io.rebble.libpebblecommon.permissions.PermissionKind
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -16,18 +17,21 @@ data class PluginManifest(
     val description: String = "",
     val script: String = "plugin.js",
     /**
-     * What the user has to let this plugin do. Declared once for the whole plugin rather than
-     * per source: a plugin reaches its API the same way whichever of its sources is being read,
-     * and the network permissions are enforced at the plugin's one way out.
-     */
-    val usesPermissions: List<PluginPermission> = emptyList(),
-    /**
      * Hosted OAuth connectors this plugin may use, keyed by slug. The host will only run a broker
      * flow for a slug declared here, so a plugin cannot reach a connector by guessing its name.
      */
     val oauth: Map<String, OAuthConnector> = emptyMap(),
+    val definesPermissions: List<PermissionDeclaration> = emptyList(),
     val sources: List<SourceDeclaration> = emptyList(),
     val actions: List<ActionDeclaration> = emptyList(),
+)
+
+@Serializable
+data class PermissionDeclaration(
+    val name: String,
+    /** Completes "<app> wants to", e.g. "Control your lights". */
+    val label: String,
+    val kind: PermissionKind,
 )
 
 /**
@@ -96,11 +100,17 @@ data class ActionDeclaration(
 @Serializable
 data class ActionResult(
     val ok: Boolean,
-    /** Shown as a toast on the watch; returned verbatim to an LLM caller. */
+    /** Shown as a toast on the watch; returned verbatim to an LLM caller. Ignored if ok = false */
     val text: String? = null,
     /** `"<category>/<item>"` entries whose cached envelopes this action invalidated. */
     val refreshed: List<String> = emptyList(),
+    /**
+     * Used to programmatically determine the error type by the app & LLMs.
+     *
+     * Should be one of [PluginErrors].
+     */
     val code: String? = null,
+    /** Error message. Shown to user and LLM */
     val message: String? = null,
 ) {
     companion object {
@@ -109,6 +119,9 @@ data class ActionResult(
     }
 }
 
+/**
+ * Plugin error codes known to the app
+ */
 object PluginErrors {
     const val PLUGIN_UNAVAILABLE = "PLUGIN_UNAVAILABLE"
     const val PERMISSION_DENIED = "PERMISSION_DENIED"
@@ -119,3 +132,5 @@ object PluginErrors {
     const val INVALID_REQUEST = "INVALID_REQUEST"
     const val UNKNOWN = "UNKNOWN"
 }
+
+internal const val LEGACY_CALLER_MESSAGE = "Using plugins needs \"manifestVersion\": 2 in appinfo.json"

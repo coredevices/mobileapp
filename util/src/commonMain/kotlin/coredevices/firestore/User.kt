@@ -38,4 +38,9 @@ data class User(
     @SerialName("ring_voltages")
     val ringVoltages: Map<String, Int>? = null,
     val encryption: EncryptionInfo? = null,
+    /** A `PermissionPolicy` name; account-wide, so the web store asks what the phone would. */
+    @SerialName("permission_policy")
+    val permissionPolicy: String? = null,
+    @SerialName("ask_legacy_apps_for_permissions")
+    val askLegacyAppsForPermissions: Boolean? = null,
 )

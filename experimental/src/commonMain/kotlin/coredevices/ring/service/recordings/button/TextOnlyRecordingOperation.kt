@@ -8,12 +8,12 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.McpSessionFactory
-import coredevices.ring.database.room.repository.McpSandboxRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.service.recordings.RecordingProcessor.RecordingStatus
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.coroutineScope
@@ -22,23 +22,15 @@ import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-open class TextOnlyRecordingOperation(
-    private val recordingId: Long,
-    private val chatAgent: Agent,
-    private val text: String,
-    private val mcpSandboxRepository: McpSandboxRepository,
-    private val mcpSessionFactory: McpSessionFactory,
-    private val forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
-    private val sandboxGroupId: Long? = null,
+/** Creates the recording entry for typed [text], then hands it to [processText]. */
+abstract class TextRecordingOperation(
+    protected val recordingId: Long,
+    protected val text: String,
 ) : TranscribingRecordingOperation, KoinComponent {
-    companion object {
-        private val logger = Logger.withTag("TextOnlyRecordingOperation")
-    }
-
     override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
 
-    private val recordingProcessor: RecordingProcessor by inject()
-    private val recordingEntryDao: RecordingEntryDao by inject()
+    protected val recordingProcessor: RecordingProcessor by inject()
+    protected val recordingEntryDao: RecordingEntryDao by inject()
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         val entryId = withContext(Dispatchers.IO) {
@@ -60,32 +52,46 @@ open class TextOnlyRecordingOperation(
             }
         }
         onTranscriptionPersisted?.invoke(text)
-        coroutineScope {
-            val mcpSession = mcpSessionFactory.createForSandboxGroup(
-                sandboxGroupId ?: mcpSandboxRepository.getDefaultGroupId(),
-                this
+        coroutineScope { processText(this, entryId) }
+    }
+
+    /** Runs once the entry holds the text; [scope] lives for the rest of the operation. */
+    protected abstract suspend fun processText(scope: CoroutineScope, entryId: Long)
+}
+
+open class TextOnlyRecordingOperation(
+    recordingId: Long,
+    private val chatAgent: Agent,
+    text: String,
+    private val mcpSessionFactory: McpSessionFactory,
+    private val forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
+) : TextRecordingOperation(recordingId, text) {
+    companion object {
+        private val logger = Logger.withTag("TextOnlyRecordingOperation")
+    }
+
+    override suspend fun processText(scope: CoroutineScope, entryId: Long) {
+        val mcpSession = mcpSessionFactory.create(scope, lazyToolLoading = chatAgent.isCloud)
+        try {
+            recordingProcessor.processText(
+                recordingId = recordingId,
+                mcpSession = mcpSession,
+                recordingEntryId = entryId,
+                agent = chatAgent,
+                forcedTool = forcedTool?.let { { _, sessionContext -> it(sessionContext) } },
+                text = text
             )
-            try {
-                recordingProcessor.processText(
-                    recordingId = recordingId,
-                    mcpSession = mcpSession,
-                    recordingEntryId = entryId,
-                    agent = chatAgent,
-                    forcedTool = forcedTool?.let { { _, sessionContext -> it(sessionContext) } },
-                    text = text
-                )
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.completed,
-                )
-            } catch (e: Exception) {
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.agent_error,
-                    error = e.message,
-                )
-                throw e
-            }
+            recordingEntryDao.updateRecordingEntryStatus(
+                entryId,
+                status = RecordingEntryStatus.completed,
+            )
+        } catch (e: Exception) {
+            recordingEntryDao.updateRecordingEntryStatus(
+                entryId,
+                status = RecordingEntryStatus.agent_error,
+                error = e.message,
+            )
+            throw e
         }
     }
 }

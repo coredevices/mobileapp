@@ -4,9 +4,7 @@ package coredevices.ring.reminders
 
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
-import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
-import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.reminders.ReminderDeepLinkResolver.Companion.FALLBACK_DEEP_LINK
 import coredevices.ring.ui.navigation.RingRoutes
 import kotlinx.coroutines.flow.Flow
@@ -17,73 +15,36 @@ import kotlin.time.ExperimentalTime
 
 class ReminderDeepLinkResolverTest {
 
-    private val reminderId = 7
-    private val recordingId = "rec-1"
-    private val firestoreId = "item-xyz"
+    private val itemId = "item-xyz"
 
-    private fun resolver(reminder: LocalReminderData?, items: List<CachedItem>) =
-        ReminderDeepLinkResolver(
-            FakeLocalReminderDao(reminder),
-            FakeCachedItemDao(items),
-        )
+    private fun resolver(items: List<CachedItem>) = ReminderDeepLinkResolver(FakeCachedItemDao(items))
 
-    private fun reminderItem(localReminderId: Int?, firestoreId: String = this.firestoreId) =
-        CachedItem(
-            firestoreId = firestoreId,
-            sourceRecordingId = recordingId,
-            metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push", localReminderId = localReminderId),
-        )
+    private fun reminderItem(firestoreId: String) = CachedItem(
+        firestoreId = firestoreId,
+        metadata = ItemMetadata.Reminder(repeat = "one_time", notification = "push"),
+    )
 
     @Test
-    fun fallsBackWhenReminderHasNoRecordingId() = runBlocking {
-        val reminder = LocalReminderData(reminderId, time = null, message = "x", recordingId = null)
-        assertEquals(FALLBACK_DEEP_LINK, resolver(reminder, emptyList()).resolveDeepLink(reminderId))
-    }
-
-    @Test
-    fun fallsBackWhenReminderMissing() = runBlocking {
-        assertEquals(FALLBACK_DEEP_LINK, resolver(null, emptyList()).resolveDeepLink(reminderId))
-    }
-
-    @Test
-    fun resolvesObjectDeepLinkForMatchingItem() = runBlocking {
-        val reminder = LocalReminderData(reminderId, time = null, message = "x", recordingId = recordingId)
-        val items = listOf(reminderItem(localReminderId = reminderId))
+    fun resolvesObjectDeepLinkForItemPresentLocally() = runBlocking {
         assertEquals(
-            RingRoutes.objectDeepLink(firestoreId),
-            resolver(reminder, items).resolveDeepLink(reminderId),
+            RingRoutes.objectDeepLink(itemId),
+            resolver(listOf(reminderItem(itemId))).resolveDeepLink(itemId),
         )
     }
 
     @Test
-    fun fallsBackWhenNoItemMatchesLocalReminderId() = runBlocking {
-        val reminder = LocalReminderData(reminderId, time = null, message = "x", recordingId = recordingId)
-        // An item from the same recording but for a different reminder.
-        val items = listOf(reminderItem(localReminderId = 99))
-        assertEquals(FALLBACK_DEEP_LINK, resolver(reminder, items).resolveDeepLink(reminderId))
+    fun fallsBackWhenItemNotSyncedHere() = runBlocking {
+        assertEquals(FALLBACK_DEEP_LINK, resolver(emptyList()).resolveDeepLink(itemId))
     }
-}
-
-private class FakeLocalReminderDao(private val reminder: LocalReminderData?) : LocalReminderDao {
-    override suspend fun getReminder(id: Int): LocalReminderData? = reminder?.takeIf { it.id == id }
-    override suspend fun insertReminder(reminder: LocalReminderData): Long = error("unused")
-    override suspend fun getAllReminders(): List<LocalReminderData> = error("unused")
-    override suspend fun getAllRemindersInRange(start: kotlin.time.Instant, end: kotlin.time.Instant): List<LocalReminderData> = error("unused")
-    override fun getAllRemindersFlow(): Flow<List<LocalReminderData>> = error("unused")
-    override suspend fun setRecordingId(id: Int, recordingId: String) = error("unused")
-    override suspend fun clearNotifyBefore(id: Int) = error("unused")
-    override suspend fun setTime(id: Int, time: kotlin.time.Instant?) = error("unused")
-
-    override suspend fun deleteReminder(id: Int) = error("unused")
 }
 
 private class FakeCachedItemDao(private val items: List<CachedItem>) : CachedItemDao {
-    override suspend fun getByRecording(recordingId: String): List<CachedItem> =
-        items.filter { it.sourceRecordingId == recordingId }
-    override suspend fun getAllActive(): List<CachedItem> = items.filter { !it.deleted }
+    override suspend fun getById(id: String): CachedItem? = items.firstOrNull { it.firestoreId == id }
+    override suspend fun getByRecording(recordingId: String): List<CachedItem> = error("unused")
+    override suspend fun getAllActive(): List<CachedItem> = error("unused")
+    override suspend fun getAllIncludingDeleted(): List<CachedItem> = error("unused")
     override suspend fun upsert(item: CachedItem) = error("unused")
     override suspend fun upsertAll(items: List<CachedItem>) = error("unused")
-    override suspend fun getById(id: String): CachedItem? = error("unused")
     override fun getByIdFlow(id: String): Flow<CachedItem?> = error("unused")
     override fun getAllFlow(): Flow<List<CachedItem>> = error("unused")
     override fun getAllForSyncFlow(): Flow<List<CachedItem>> = error("unused")

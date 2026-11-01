@@ -4,7 +4,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.net.toUri
 import kotlin.math.roundToInt
@@ -23,6 +25,25 @@ actual class PlatformIndexNotificationManager(
     private val context: Context,
 ) {
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private var channelsCreated = false
+
+    // Notifications are also posted while the ring service is down, so create the channels here.
+    private fun ensureChannels() {
+        if (channelsCreated) return
+        val manager = NotificationManagerCompat.from(context)
+        manager.createNotificationChannel(
+            NotificationChannelCompat.Builder(INDEX_TRANSFER_NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
+                .setName(INDEX_TRANSFER_NOTIFICATION_CHANNEL_NAME)
+                .build()
+        )
+        manager.createNotificationChannel(
+            NotificationChannelCompat.Builder(INDEX_ACTION_NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
+                .setName(INDEX_ACTION_NOTIFICATION_CHANNEL_NAME)
+                .build()
+        )
+        channelsCreated = true
+    }
+
     private fun buildDebugNotification(channelId: String) =
         NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -30,6 +51,7 @@ actual class PlatformIndexNotificationManager(
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
     actual fun notify(notification: GenericNotification) {
+        ensureChannels()
         val uriIntent = notification.deepLink?.let {
             Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
                 data = it.toUri()
@@ -65,24 +87,39 @@ actual class PlatformIndexNotificationManager(
                 }
                 notification.actions.forEach { act ->
                     addAction(
-                        0,
-                        act.title,
-                        PendingIntentCompat.getActivity(
-                            context,
-                            0,
-                            Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
-                                data = act.deepLink.toUri()
-                                action = Intent.ACTION_VIEW
-                                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            },
-                            PendingIntent.FLAG_UPDATE_CURRENT,
-                            false
-                        )
+                        NotificationCompat.Action.Builder(0, act.title, actionPendingIntent(act))
+                            .setShowsUserInterface(!act.background)
+                            .build()
                     )
                 }
             }
             .build()
         notificationManager.notify(notification.id, notif)
+    }
+
+    private fun actionPendingIntent(act: NotificationAction): PendingIntent? = if (act.background) {
+        PendingIntentCompat.getBroadcast(
+            context,
+            0,
+            Intent(context, IndexNotificationActionReceiver::class.java).apply {
+                data = act.deepLink.toUri()
+                action = Intent.ACTION_VIEW
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
+    } else {
+        PendingIntentCompat.getActivity(
+            context,
+            0,
+            Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
+                data = act.deepLink.toUri()
+                action = Intent.ACTION_VIEW
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
     }
 
     actual fun cancel(notificationId: Int) {

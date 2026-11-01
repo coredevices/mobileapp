@@ -48,6 +48,7 @@ class HttpMcpIntegration(
     protocol: HttpMcpProtocol = HttpMcpProtocol.Sse,
     authHeader: String? = null,
     private val cache: McpServerCache = McpServerCache(),
+    override val description: String? = null,
 ): McpIntegration, PromptProvider {
     companion object {
         private val logger = Logger.withTag("HttpMcpIntegration")

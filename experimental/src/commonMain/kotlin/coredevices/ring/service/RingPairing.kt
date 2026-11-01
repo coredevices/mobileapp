@@ -34,6 +34,7 @@ class RingPairing(
         val uid = Firebase.auth.currentUser?.uid ?: throw RingPairingException.NoUserId()
         logger.d { "Starting pairing process for satellite $satelliteId and user ID $uid" }
         withContext(Dispatchers.IO) {
+            preferences.setRingPairingKeyHash(null)
             if (platform.isIOS) {
                 // iOS: Mark as paired immediately to enable service as connection attempt pairs
                 preferences.setRingPaired(satelliteId)

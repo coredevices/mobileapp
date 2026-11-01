@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- TODO: Remove this when we use CompanionDeviceManager -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- TODO: Remove this permission for non-QA flavors -->
@@ -42,6 +43,7 @@
         <package android:name="net.dinglisch.android.taskerm"/>
     </queries>
     <application>
+        <!-- Widget disabled. Keep it out of the manifest: older installs persisted an enabled component state.
         <receiver android:name=".glance.VoiceWidgetReceiver"
                   android:exported="true"
                   android:enabled="false">
@@ -52,7 +54,11 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/voice_widget_info" />
         </receiver>
+        -->
         <receiver android:name="coredevices.ring.reminders.ReminderReceiver"
+                    android:exported="false">
+        </receiver>
+        <receiver android:name="coredevices.ring.service.IndexNotificationActionReceiver"
                     android:exported="false">
         </receiver>
         <receiver android:name="coredevices.ring.reminders.ReminderBootReceiver"
@@ -66,6 +72,13 @@
         <service android:name="coredevices.ring.service.InferenceForegroundService"
             android:foregroundServiceType="shortService"
             android:exported="false"/>
+        <service android:name="coredevices.ring.service.RingCompanionDeviceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
         <activity android:name="coredevices.ring.service.InferenceActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"

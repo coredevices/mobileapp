@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import CommonRoutes
 import CoreNav
 import CoreRoute
 import androidx.compose.animation.AnimatedContentScope
@@ -27,19 +28,15 @@ object PebbleRoutes {
     @Serializable
     data class FirmwareSideloadRoute(val identifier: String) : CoreRoute
 
-    /** Settings for whatever is registered under [uuid]: a watchapp, a plugin, or both. */
-    @Serializable
-    data class WatchappSettingsRoute(
-        val uuid: String,
-        val title: String,
-    ) : CoreRoute
-
     @Serializable
     data class ContactDeveloperRoute(
         val appId: String,
         val appTitle: String,
     ) : CoreRoute
 }
+
+fun CommonRoutes.LockerAppRoute.toNavBarRoute(): PebbleNavBarRoutes.LockerAppRoute =
+    PebbleNavBarRoutes.LockerAppRoute(uuid = uuid, storedId = null, storeSource = null)
 
 @Stable
 interface NavBarNav {
@@ -102,6 +99,12 @@ object PebbleNavBarRoutes {
     data object WeatherRoute : NavBarRoute
 
     @Serializable
+    data object ComplicationsRoute : NavBarRoute
+
+    @Serializable
+    data object PreferredSourcesRoute : NavBarRoute
+
+    @Serializable
     data object CannedRepliesRoute : NavBarRoute
 
     @Serializable
@@ -118,10 +121,20 @@ object PebbleNavBarRoutes {
     data class MyCollectionRoute(val appType: String) : NavBarRoute
 
     @Serializable
+    data class TopChartsRoute(val sourceId: Int, val appType: String) : NavBarRoute
+
+    @Serializable
     data object OfflineModelsRoute : NavBarRoute
 
     @Serializable
     data class WatchSettingsCategoryRoute(val section: String, val topLevelType: String) : NavBarRoute
+
+    /** [uuid] reads the installed pbw; [pbwUrl] fetches a store app's. */
+    @Serializable
+    data class NativePluginRoute(val uuid: String) : NavBarRoute
+
+    @Serializable
+    data class PluginSourceRoute(val uuid: String?, val pbwUrl: String?, val script: String, val title: String) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -240,6 +253,15 @@ fun NavGraphBuilder.addNavBarRoutes(
             appType = route.appType?.let { AppType.fromString(it) },
         )
     }
+    composableWithAnimations<PebbleNavBarRoutes.TopChartsRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TopChartsRoute = it.toRoute()
+        TopChartsScreen(
+            navBarNav = nav,
+            topBarParams = topBarParams,
+            sourceId = route.sourceId,
+            type = AppType.fromString(route.appType) ?: AppType.Watchface,
+        )
+    }
     composableWithAnimations<PebbleNavBarRoutes.MyCollectionRoute>(viewModel) {
         val route: PebbleNavBarRoutes.MyCollectionRoute = it.toRoute()
         MyCollectionScreen(
@@ -253,6 +275,12 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.ComplicationsRoute> {
+        ComplicationsScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PreferredSourcesRoute> {
+        PreferredSourcesScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
         CannedRepliesScreen(nav, topBarParams)
@@ -271,6 +299,20 @@ fun NavGraphBuilder.addNavBarRoutes(
             topBarParams,
             Section.valueOf(route.section),
             TopLevelType.valueOf(route.topLevelType),
+        )
+    }
+    composableWithAnimations<PebbleNavBarRoutes.NativePluginRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.NativePluginRoute = it.toRoute()
+        NativePluginScreen(nav, topBarParams, Uuid.parse(route.uuid))
+    }
+    composableWithAnimations<PebbleNavBarRoutes.PluginSourceRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.PluginSourceRoute = it.toRoute()
+        PluginSourceScreen(
+            topBarParams = topBarParams,
+            uuid = route.uuid?.let { id -> Uuid.parse(id) },
+            pbwUrl = route.pbwUrl,
+            script = route.script,
+            title = route.title,
         )
     }
 }
@@ -297,8 +339,8 @@ fun NavGraphBuilder.addPebbleRoutes(
         val route: PebbleRoutes.FirmwareSideloadRoute = it.toRoute()
         DebugFirmwareSideload(route.identifier, coreNav)
     }
-    composable<PebbleRoutes.WatchappSettingsRoute> {
-        val route: PebbleRoutes.WatchappSettingsRoute = it.toRoute()
+    composable<CommonRoutes.WatchappSettingsRoute> {
+        val route: CommonRoutes.WatchappSettingsRoute = it.toRoute()
         WatchappSettingsScreen(
             coreNav = coreNav,
             uuid = route.uuid,

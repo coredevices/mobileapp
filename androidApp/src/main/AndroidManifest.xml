@@ -55,23 +55,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="pebblejs" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:host="*" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\.pbl" />
-                <data android:pathPattern=".*\.pbw" />
-                <data android:pathPattern=".*\.pbz" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" android:scheme="content"/>
-            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -82,6 +65,81 @@
                 <data android:path="/githubAuth" />
             </intent-filter>
         </activity>
+        <!--
+            File opening. Exactly one of these aliases is enabled at runtime (see MainApplication),
+            and all file filters live on it, so the app never appears twice in a chooser.
+        -->
+        <activity-alias
+            android:name=".FileOpenActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <!-- PatternMatcher only matches up to the first dot, so each dot count needs a pattern. -->
+                <data android:pathPattern=".*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbz" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" android:scheme="content" />
+            </intent-filter>
+        </activity-alias>
+        <!-- Samsung My Files sends MediaStore URIs with an empty mime type, which only */* matches. -->
+        <activity-alias
+            android:name=".SamsungFileOpenActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <!-- PatternMatcher only matches up to the first dot, so each dot count needs a pattern. -->
+                <data android:pathPattern=".*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbl" />
+                <data android:pathPattern=".*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbw" />
+                <data android:pathPattern=".*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\..*\\.pbz" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.pbz" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" android:scheme="content" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" android:scheme="content" android:host="media" />
+            </intent-filter>
+        </activity-alias>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

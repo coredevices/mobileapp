@@ -3,8 +3,11 @@ package coredevices.ring.agent.builtin_servlets.reminders
 import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.builtin_servlets.destinationHints
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
-import coredevices.ring.database.Preferences
+import coredevices.ring.agent.builtin_servlets.userMessageIfReady
+import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.database.room.repository.ListRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -15,8 +18,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class ReminderServlet(
     private val listsRepository: ListRepository,
-    private val reminderIntegrationFactory: ReminderIntegrationFactory,
-    private val preferences: Preferences,
+    private val providers: IntegrationProviderRepository,
 ): BuiltInMcpIntegration(
     name = NAME,
     tools = listOf(
@@ -30,14 +32,14 @@ class ReminderServlet(
         private val logger = Logger.withTag("ReminderServlet")
     }
 
-    // create_list only writes the app's own (built-in) lists, so hide it when an
-    // external reminder provider is selected — create_list_item wouldn't find the list there.
+    // create_list only writes the app's own lists, so hide it when an external reminder
+    // provider is selected — create_list_item wouldn't find the list there.
     override suspend fun getDisabledTools(): List<String> =
-        if (preferences.reminderProvider.value == ReminderProvider.BuiltIn) emptyList()
+        if (providers.selectedReminderProvider.value.storesItemsLocally) emptyList()
         else listOf(CreateListTool.TOOL_NAME)
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
-        val reminderIntegration = reminderIntegrationFactory.createReminderIntegration()
+        val reminderIntegration = providers.reminderIntegration()
         val lists = try {
             withContext(Dispatchers.IO) {
                 withTimeout(5.seconds) {
@@ -49,13 +51,14 @@ class ReminderServlet(
             emptyList()
         }
         logger.d { "Fetched ${lists.size} lists from reminder integration" }
-        val words = sessionContext?.userMessageText
-            .takeIf { it?.isCompleted ?: false }
-            ?.await()
-            ?.split(" ")
-            ?.map { it.lowercase() } ?: emptyList()
+        val message = sessionContext.userMessageIfReady()
+        val words = message?.split(" ")?.map { it.lowercase() } ?: emptyList()
+        val hints = providers.destinationHints(
+            message, IntegrationSupport.Reminder, ReminderTool.TOOL_NAME, ListTool.TOOL_NAME,
+        )
         return buildString {
             super.getExtraContext(sessionContext)?.let { appendLine(it) }
+            hints.forEach { appendLine(it) }
             if (lists.isEmpty()) {
                 return@buildString
             }

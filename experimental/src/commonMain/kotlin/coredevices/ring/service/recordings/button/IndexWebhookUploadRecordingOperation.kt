@@ -9,6 +9,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,6 +45,7 @@ class IndexWebhookUploadRecordingOperation(
 
     private val localRecordingDao: LocalRecordingDao by inject()
     private val recordingBackgroundScope: RecordingBackgroundScope by inject()
+    private var transcriptDelivered = false
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         // One mode snapshot drives the whole delivery, so a mid-operation settings
@@ -57,12 +59,25 @@ class IndexWebhookUploadRecordingOperation(
             }
             // Send from the transcript hook, carrying the exact persisted transcript.
             decorated is TranscribingRecordingOperation -> {
-                decorated.onTranscriptionPersisted = { transcription -> launchSend(payloadMode, transcription) }
+                decorated.onTranscriptionPersisted = { transcription ->
+                    transcriptDelivered = true
+                    launchSend(payloadMode, transcription)
+                }
                 true
             }
             else -> false
         }
-        decorated.run(handle)
+        try {
+            decorated.run(handle)
+        } catch (e: Exception) {
+            // A transcription that failed for good (e.g. no speech detected) must still deliver the audio.
+            if (e !is CancellationException && !transcriptDelivered &&
+                fileId != null && payloadMode == IndexWebhookPayloadMode.Both
+            ) {
+                launchSend(payloadMode, transcription = null)
+            }
+            throw e
+        }
         // Only operations that never sent above (e.g. webhook-only) fall back to a send
         // here — otherwise this could race the hook's send and win with a null transcript.
         // A webhook failure must never fail the recording.

@@ -278,4 +278,15 @@ class WatchSettingsPluginTest {
         // it is already drawing.
         assertFalse(setOn!!.bindable)
     }
+
+    @Test
+    fun readingNeedsReadAndChangingNeedsWrite() {
+        val plugin = WatchSettingsPlugin(FakeWatchPrefs())
+        plugin.sources.forEach {
+            assertEquals(setOf(PluginPermissions.READ_WATCH_SETTINGS), requiredOfCaller(it))
+        }
+        plugin.actions.forEach {
+            assertEquals(setOf(PluginPermissions.WRITE_WATCH_SETTINGS), requiredOfCaller(it))
+        }
+    }
 }

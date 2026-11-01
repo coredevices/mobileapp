@@ -1,6 +1,7 @@
 package io.rebble.libpebblecommon.packets
 
 import assertIs
+import io.rebble.libpebblecommon.connection.endpointmanager.toWatchLanguagePacks
 import io.rebble.libpebblecommon.protocolhelpers.PebblePacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +16,13 @@ internal class SystemMessageTest {
         val newMessage = PebblePacket.deserialize(bytes)
 
         assertIs<PhoneAppVersion.AppVersionRequest>(newMessage)
+    }
+
+    @Test
+    fun multipleLanguagePacksCapabilityUsesBit28() {
+        val flags = ProtocolCapsFlag.makeFlags(listOf(ProtocolCapsFlag.SupportsMultipleLanguagePacks))
+        assertEquals(0x10u.toUByte(), flags[3])
+        assertEquals(setOf(ProtocolCapsFlag.SupportsMultipleLanguagePacks), ProtocolCapsFlag.fromFlags(flags))
     }
 
     @Test
@@ -120,5 +128,78 @@ internal class SystemMessageTest {
         assertEquals(12345678u, newMessage.unixTime.get())
         assertEquals(2500, newMessage.utcOffset.get())
         assertEquals("Europe/Berlin", newMessage.timeZoneName.get())
+    }
+
+    @Test
+    fun serializeLanguagePackRemoval() {
+        val bytes = SystemMessage.LanguagePackRemoveRequest(7u, 2u, 0x1234u, "fr_FR").serialize()
+        assertEquals(
+            listOf(0x00u, 0x0cu, 0x00u, 0x12u, 0x00u, 0x0fu, 7u, 2u, 0x34u, 0x12u,
+                0x66u, 0x72u, 0x5fu, 0x46u, 0x52u, 0x00u).map { it.toUByte() },
+            bytes.toList(),
+        )
+    }
+
+    @Test
+    fun deserializeInstalledLanguagePacks() {
+        val records = UByteArray(160)
+        for (slot in 0 until 4) records[slot * 40] = slot.toUByte()
+        records[1] = 7u
+        records[2] = 0x34u
+        records[3] = 0x12u
+        "fr_FR".encodeToByteArray().asUByteArray().copyInto(records, 4)
+        "Français".encodeToByteArray().asUByteArray().copyInto(records, 10)
+        records[41] = 3u
+        records[81] = 1u
+        val wire = ubyteArrayOf(0u, 0xa4u, 0u, 0x12u, 0u, 0x0eu, 9u, 0u) + records
+        val packet = PebblePacket.deserialize(wire)
+        assertIs<SystemMessage.LanguagePacksResponse>(packet)
+        assertEquals(9u.toUByte(), packet.token.get())
+        val packs = packet.toWatchLanguagePacks()
+        assertEquals(3, packs.size)
+        assertEquals("Français", packs[0].name)
+        assertEquals("fr_FR", packs[0].locale)
+        assertEquals(0x1234, packs[0].version)
+        assertEquals(true, packs[0].hasTranslation)
+        assertEquals(true, packs[0].isActive)
+        assertEquals(true, packs[1].readable)
+        assertEquals(false, packs[1].hasTranslation)
+        assertEquals("", packs[1].name)
+        assertEquals(false, packs[2].readable)
+        assertEquals(2, packs[2].slot)
+    }
+
+    @Test
+    fun noPackActiveWhenEnglishSelected() {
+        val records = UByteArray(160)
+        for (slot in 0 until 4) records[slot * 40] = slot.toUByte()
+        records[1] = 7u
+        records[41] = 7u
+        val wire = ubyteArrayOf(0u, 0xa4u, 0u, 0x12u, 0u, 0x0eu, 1u, 0xffu) + records
+        val packet = PebblePacket.deserialize(wire)
+        assertIs<SystemMessage.LanguagePacksResponse>(packet)
+        val packs = packet.toWatchLanguagePacks()
+        assertEquals(2, packs.size)
+        assertEquals(false, packs.any { it.isActive })
+    }
+
+    @Test
+    fun serializeBuiltInEnglishSelection() {
+        val bytes = SystemMessage.LanguageSelectRequest(8u, 0xffu, 0u, "").serialize()
+        assertEquals(
+            listOf(0x00u, 0x0cu, 0x00u, 0x12u, 0x00u, 0x11u, 8u, 0xffu,
+                0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u).map { it.toUByte() },
+            bytes.toList(),
+        )
+    }
+
+    @Test
+    fun deserializeLanguageSelectionAcknowledgment() {
+        val bytes = ubyteArrayOf(0u, 5u, 0u, 0x12u, 0u, 0x13u, 9u, 2u, 1u)
+        val packet = PebblePacket.deserialize(bytes)
+        assertIs<SystemMessage.LanguageSelectResponse>(packet)
+        assertEquals(9u.toUByte(), packet.token.get())
+        assertEquals(2u.toUByte(), packet.slot.get())
+        assertEquals(1u.toUByte(), packet.success.get())
     }
 }

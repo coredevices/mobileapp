@@ -13,6 +13,8 @@ enum class RingGesture(val sequence: List<ButtonPress>, val kind: GestureKind) {
     Hold(listOf(ButtonPress.Long), GestureKind.Recording),
     ClickHold(listOf(ButtonPress.Short, ButtonPress.Long), GestureKind.Recording);
 
+    val isClick: Boolean get() = kind == GestureKind.Music
+
     companion object {
         fun forSequence(sequence: List<ButtonPress>): RingGesture? =
             entries.firstOrNull { it.sequence == sequence }
@@ -27,10 +29,21 @@ sealed interface GestureDestination {
 
     data object PlayPause : Music
     data object NextTrack : Music
+    data object PreviousTrack : Music
+    /** Cloud agent, falling back to the on-device one when the cloud can't be reached and the
+     *  phone supports it. */
     data object IndexAgent : Recording
+    /** On-device agent only. */
+    data object LocalAgent : Recording
     data object WebSearch : Recording
-    data class McpSandbox(val groupId: Long?) : Recording
     data object WebhookOnly : Recording
+    /** An installed plugin offering `send_to_agent`; [providerId] resolves through
+     *  [coredevices.ring.agent.integrations.providers.IntegrationProviderRepository]. */
+    data class AgentPlugin(val providerId: String) : Recording
+    /** Posts the click count, plus the user's optional payload, to the gesture's webhook. */
+    data object Webhook : Music
+    /** Runs the gesture's typed command through the Index agent, as if it had been spoken. */
+    data object AgentCommand : Music
     data object Nothing : Music, Recording
 }
 
@@ -38,6 +51,11 @@ fun RingGesture.accepts(destination: GestureDestination): Boolean = when (kind) 
     GestureKind.Music -> destination is GestureDestination.Music
     GestureKind.Recording -> destination is GestureDestination.Recording
 }
+
+/** True while the local agent is the only Index agent any gesture reaches, so what it can't run
+ *  is out of reach too. */
+fun Map<RingGesture, GestureDestination>.routesOnlyToLocalAgent(): Boolean =
+    GestureDestination.LocalAgent in values && GestureDestination.IndexAgent !in values
 
 fun musicRoutesFor(mode: MusicControlMode): Map<RingGesture, GestureDestination.Music> = when (mode) {
     MusicControlMode.Disabled -> mapOf(
@@ -57,18 +75,16 @@ fun musicRoutesFor(mode: MusicControlMode): Map<RingGesture, GestureDestination.
     )
 }
 
-fun recordingRouteFor(mode: SecondaryMode, mcpGroupId: Long?): GestureDestination.Recording = when (mode) {
-    SecondaryMode.Disabled -> GestureDestination.IndexAgent
+fun recordingRouteFor(mode: SecondaryMode): GestureDestination.Recording = when (mode) {
+    SecondaryMode.Disabled, SecondaryMode.McpSandbox -> GestureDestination.IndexAgent
     SecondaryMode.Search -> GestureDestination.WebSearch
     SecondaryMode.IndexWebhook -> GestureDestination.WebhookOnly
-    SecondaryMode.McpSandbox -> GestureDestination.McpSandbox(mcpGroupId)
 }
 
 fun migratedRoutes(
     musicControlMode: MusicControlMode,
     secondaryMode: SecondaryMode,
-    secondaryModeMcpGroupId: Long?,
 ): Map<RingGesture, GestureDestination> = musicRoutesFor(musicControlMode) + mapOf(
     RingGesture.Hold to GestureDestination.IndexAgent,
-    RingGesture.ClickHold to recordingRouteFor(secondaryMode, secondaryModeMcpGroupId),
+    RingGesture.ClickHold to recordingRouteFor(secondaryMode),
 )
