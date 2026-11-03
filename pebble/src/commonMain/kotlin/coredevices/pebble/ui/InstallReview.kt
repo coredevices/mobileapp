@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewTimeline
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
@@ -64,6 +65,7 @@ import coredevices.util.relativeTime
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.PermissionKind
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.permissions.PermissionStatus
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.permissions.domainOf
@@ -82,6 +84,7 @@ import kotlin.uuid.Uuid
 fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?) -> Unit) {
     val defined = rememberPluginPermissions()
     val decisions = remember(review) { mutableStateMapOf<String, Boolean>() }
+    val policy = rememberLibPebble().config.collectAsState().value.watchConfig.permissionPolicy
     // Allowing WriteFiles includes reading, so ReadFiles follows it.
     fun decisionOf(key: String): Boolean? =
         if (key == PluginPermissions.READ_FILES && decisions[PluginPermissions.WRITE_FILES] == true) true else decisions[key]
@@ -90,28 +93,70 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
         title = { Text("Install ${review.appName}?") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
-                review.toReview.forEach { key ->
-                    PermissionRow(key, defined) {
-                        val decision = decisionOf(key)
-                        DecisionChoice(decision, enabled = decision == decisions[key]) { decisions[key] = it }
+                if (review.toReview.isNotEmpty()) {
+                    Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
+                    review.toReview.byKind(defined).forEach { key ->
+                        PermissionRow(key, defined) {
+                            val decision = decisionOf(key)
+                            DecisionChoice(decision, enabled = decision == decisions[key]) { decisions[key] = it }
+                        }
+                    }
+                    // At the end of the list, so it's only reached after scrolling past every permission.
+                    TextButton(
+                        onClick = { review.toReview.forEach { decisions[it] = true } },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("Allow all") }
+                }
+                if (review.automatic.isNotEmpty()) {
+                    var expanded by remember(review) { mutableStateOf(false) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { expanded = !expanded },
+                    ) {
+                        Text(
+                            "Allowed automatically (${review.automatic.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                        )
+                    }
+                    if (expanded) {
+                        Text(
+                            automaticExplanation(review.appName, policy),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        review.automatic.byKind(defined).forEach { key ->
+                            PermissionRow(key, defined) {
+                                DecisionChoice(decisions[key], enabled = true) { decisions[key] = it }
+                            }
+                        }
                     }
                 }
-                // At the end of the list, so it's only reached after scrolling past every permission.
-                TextButton(
-                    onClick = { review.toReview.forEach { decisions[it] = true } },
-                    modifier = Modifier.align(Alignment.End),
-                ) { Text("Allow all") }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onAnswer(review.toReview.associateWith { decisionOf(it)!! }) },
+                onClick = {
+                    val automatic = review.automatic.mapNotNull { key -> decisions[key]?.let { key to it } }
+                    onAnswer(review.toReview.associateWith { decisionOf(it)!! } + automatic)
+                },
                 enabled = review.toReview.all { decisionOf(it) != null },
             ) { Text("Install") }
         },
         dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text("Cancel") } },
     )
+}
+
+private fun automaticExplanation(appName: String, policy: PermissionPolicy) = when (policy) {
+    PermissionPolicy.NeverAsk ->
+        "You don't need to do anything here: your settings allow these. Deny any you'd rather $appName didn't use."
+    else ->
+        "You don't need to do anything here. $appName can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use."
 }
 
 @Composable
@@ -137,31 +182,45 @@ private fun PermissionRow(
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (permissionKind(key, defined) == PermissionKind.Exfiltrating) ExfiltratingInfo(key)
+        when (permissionKind(key, defined)) {
+            PermissionKind.Exfiltrating ->
+                KindInfo(Icons.Outlined.Info, "Sends data off your phone", exfiltratingExplanation(key))
+            PermissionKind.Dangerous ->
+                KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
+            else -> {}
+        }
         control()
     }
 }
 
 @Composable
-private fun ExfiltratingInfo(key: String) {
+private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
     var explaining by remember { mutableStateOf(false) }
     Icon(
-        Icons.Outlined.Info,
-        contentDescription = "Can send data off your phone",
+        icon,
+        contentDescription = title,
         tint = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(end = 8.dp).size(18.dp).clickable { explaining = true },
     )
     if (explaining) {
         AlertDialog(
             onDismissRequest = { explaining = false },
-            title = { Text("Sends data off your phone") },
-            text = {
-                Text(exfiltratingExplanation(key))
-            },
+            title = { Text(title) },
+            text = { Text(explanation) },
             confirmButton = { TextButton(onClick = { explaining = false }) { Text("OK") } },
         )
     }
 }
+
+private fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>) = when (permissionKind(key, defined)) {
+    PermissionKind.Dangerous -> 0
+    PermissionKind.Exfiltrating -> 1
+    PermissionKind.Write -> 2
+    PermissionKind.Read -> 3
+    null -> 4
+}
+
+private fun List<String>.byKind(defined: Map<String, PluginDefinedPermission>) = sortedBy { kindRank(it, defined) }
 
 private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
     PluginPermissions.GLOBAL_INTERNET ->
@@ -336,7 +395,7 @@ fun AppPermissionsSection(appUuid: Uuid) {
         } else {
             Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
         }
-        statuses.forEach { row ->
+        statuses.sortedBy { kindRank(it.permission, defined) }.forEach { row ->
             val lastUsedAtMs = row.lastUsedAtMs
             val used = if (lastUsedAtMs == null) "Not used yet" else "Used ${relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs))}"
             val note = if (row.status == PermissionStatus.AllowedAutomatically) "Allowed automatically · $used" else used
@@ -422,7 +481,7 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
             }
             Text(text, style = MaterialTheme.typography.bodyMedium)
         } else {
-            keys.forEach { PermissionRow(it, defined) {} }
+            keys.byKind(defined).forEach { PermissionRow(it, defined) {} }
         }
     }
 }

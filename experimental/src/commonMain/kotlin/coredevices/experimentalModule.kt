@@ -28,6 +28,7 @@ import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
 import coredevices.pebble.ui.IndexTabBadge
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
 import coredevices.ring.agent.integrations.providers.pluginsEnabled
@@ -50,6 +51,7 @@ import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.SeedDefaultPluginGrants
 import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.database.room.repository.PluginGrantRepository
+import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
@@ -63,6 +65,7 @@ import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
 import coredevices.ring.external.indexwebhook.IndexWebhookApiImpl
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.external.indexwebhook.IndexWebhookSigningSecretStorage
 import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
@@ -174,6 +177,9 @@ val experimentalModule = module {
         get<RingDatabase>().recordingProcessingTaskDao()
     }
     single {
+        get<RingDatabase>().indexWebhookDeliveryDao()
+    }
+    single {
         get<RingDatabase>().traceSessionDao()
     }
     single {
@@ -200,6 +206,7 @@ val experimentalModule = module {
         RingTransferRepository(get(), get<RingDatabase>())
     }
     singleOf(::RecordingProcessingTaskRepository)
+    singleOf(::IndexWebhookDeliveryRepository)
     single {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
@@ -254,6 +261,7 @@ val experimentalModule = module {
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
     singleOf(::RecordingUploadSyncHandler) bind SyncHandler::class
@@ -294,6 +302,7 @@ val experimentalModule = module {
     singleOf(::BuiltInReminderFeedItems)
     singleOf(::DelegatedIntegrationItems)
     single { IntegrationProviderRepository(get(), get(), get(), get()) }
+    single { DefaultDestinationPrompter(get(), get()) }
     single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)

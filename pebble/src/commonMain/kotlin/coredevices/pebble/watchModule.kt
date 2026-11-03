@@ -11,6 +11,8 @@ import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
+import coredevices.pebble.account.PermissionDecisionSync
+import coredevices.pebble.account.PermissionSettingsSync
 import coredevices.pebble.account.RealBootConfigProvider
 import coredevices.pebble.account.RealFirestoreKnownWatchesSync
 import coredevices.pebble.account.RealFirestoreLocker
@@ -92,7 +94,9 @@ import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
@@ -101,6 +105,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -145,6 +150,8 @@ val watchModule = module {
     } } bind PebbleAccountProvider::class
     singleOf(::PebbleAppDelegate)
     singleOf(::BundledAppMigration)
+    singleOf(::PermissionSettingsSync)
+    singleOf(::PermissionDecisionSync)
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     single<BatteryChargedNotifier> {
         val appContext: AppContext = get()
@@ -181,9 +188,16 @@ val watchModule = module {
                 return get<LibPebble>().getAllLockerUuids()
             }
 
-            override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
-                get<LibPebble>().addAppsToLocker(apps)
+            override suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
+                get<LibPebble>().addAppsToLocker(apps, permissions)
             }
+
+            override fun requestLockerSync() {
+                get<LibPebble>().requestLockerSync()
+            }
+
+            override suspend fun permissionDecisions(): List<LockerAppPermission> =
+                get<LibPebble>().permissionDecisions().first()
 
             override suspend fun waitUntilAppSyncedToWatch(
                 id: Uuid,

@@ -1,6 +1,7 @@
 package coredevices.ring.agent.pebble_plugin
 
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
+import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.plugin.WatchStatePlugin
@@ -32,6 +33,7 @@ fun PluginMetadata.offers(grant: PluginGrant): Boolean = when (grant) {
 
 /** Built-in plugins that only do anything once a watch is paired. */
 private val WATCH_PLUGIN_UUIDS: Set<Uuid> = setOf(
+    PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID,
     WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID,
     WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
 )

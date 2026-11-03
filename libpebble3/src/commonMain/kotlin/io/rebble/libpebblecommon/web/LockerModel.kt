@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.web
 
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -16,6 +17,8 @@ import kotlin.uuid.Uuid
 data class LockerModelWrapper(
     val locker: LockerModel,
     val failedToFetchUuids: Set<Uuid>,
+    /** The user's decisions from other devices and the web store, by app; newest wins. */
+    val permissions: Map<Uuid, Map<String, PermissionDecisionRecord>> = emptyMap(),
 )
 
 @Serializable

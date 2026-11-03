@@ -5,6 +5,7 @@ import io.rebble.cobble.shared.data.js.ActivePebbleWatchInfo
 import io.rebble.cobble.shared.data.js.fromWatchInfo
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.ActionDispatcher
@@ -269,7 +270,7 @@ abstract class PrivatePKJSInterface(
 
     open fun enumeratePlugins(): String = Json.encodeToString(
         ListSerializer(PluginSummary.serializer()),
-        pluginRegistry.getAllPlugins().map { plugin ->
+        if (isLegacy(jsRunner.appInfo.manifestVersion)) emptyList() else pluginRegistry.getAllPlugins().map { plugin ->
             PluginSummary(
                 uuid = plugin.pluginUuid.toString(),
                 name = plugin.name,

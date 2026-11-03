@@ -132,3 +132,5 @@ object PluginErrors {
     const val INVALID_REQUEST = "INVALID_REQUEST"
     const val UNKNOWN = "UNKNOWN"
 }
+
+internal const val LEGACY_CALLER_MESSAGE = "Using plugins needs \"manifestVersion\": 2 in appinfo.json"

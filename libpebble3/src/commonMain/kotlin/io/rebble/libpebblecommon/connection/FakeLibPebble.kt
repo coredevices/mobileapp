@@ -62,6 +62,7 @@ import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.NativePlugin
@@ -238,11 +239,15 @@ class FakeLibPebble : LibPebble {
     override suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?>) {
     }
 
-    override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
     }
 
     override suspend fun clearSideloaded(id: Uuid) {
     }
+
+    override suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean = true
+
+    override suspend fun configPageDomains(uuid: Uuid): List<String>? = null
 
     override fun restoreSystemAppOrder() {
     }
@@ -538,6 +543,7 @@ class FakeLibPebble : LibPebble {
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = flowOf(emptyMap())
 
+    override fun permissionDecisions(): Flow<List<LockerAppPermission>> = flowOf(emptyList())
 
     override fun nativePlugins(): Flow<List<PluginMetadata>> = flowOf(emptyList())
 

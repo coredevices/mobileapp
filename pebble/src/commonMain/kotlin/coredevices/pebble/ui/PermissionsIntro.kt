@@ -38,20 +38,22 @@ fun PermissionPolicy.description(): String = when (this) {
     PermissionPolicy.AskIfExfiltrating ->
         "Apps ask before connecting to the internet or acting for you (e.g. controlling your music or ringing your phone)"
     PermissionPolicy.AlwaysAsk -> "Apps ask before using any permission."
-    PermissionPolicy.NeverAsk -> "Apps can use any permission, unless you explicitly turn it off on the app's page"
+    PermissionPolicy.NeverAsk -> "Apps can use any permission except reading notifications, unless you explicitly turn it off on the app's page"
 }
 
 private fun PermissionPolicy.details(): String = when (this) {
     PermissionPolicy.AskIfExfiltrating ->
         "Apps that can't send anything off your phone (no internet access and no phone companion app) can read your data, " +
-            "like your location, calendar, notifications or music, without asking, because it can't go anywhere. " +
+            "like your location, calendar or music, without asking, because it can't go anywhere. " +
             "Apps that could send it off your phone ask first.\n\n" +
             "Every app asks before going online, and before acting for you: adding timeline pins, controlling " +
-            "music, launching apps, changing watch settings, ringing your phone, or using a plugin's actions."
+            "music, launching apps, changing watch settings, ringing your phone, or using a plugin's actions. " +
+            "Every app also asks before reading your notifications."
     PermissionPolicy.AlwaysAsk ->
         "Apps ask the first time they use any permission, including reading data they couldn't send anywhere."
     PermissionPolicy.NeverAsk ->
-        "Apps get any permission they ask for without asking you, including going online. Anything you've " +
+        "Apps get any permission they ask for without asking you, including going online, except reading your " +
+            "notifications, which every app still asks for. Anything you've " +
             "turned off on an app's page stays off. Not recommended!"
 }
 

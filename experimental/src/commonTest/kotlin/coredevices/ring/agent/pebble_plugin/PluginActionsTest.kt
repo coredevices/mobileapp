@@ -1,6 +1,7 @@
 package coredevices.ring.agent.pebble_plugin
 
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
+import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.plugin.WatchStatePlugin
@@ -50,6 +51,11 @@ class PluginActionsTest {
         name = "Watch State",
         pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
     ).metadata
+    private val notifications = FakePlugin(
+        actions = listOf(ActionDeclaration(name = "reply")),
+        name = "Notifications",
+        pluginUuid = PlatformPlugins.BUILT_IN_NOTIFICATIONS_UUID,
+    ).metadata
 
     @Test
     fun `destination actions are not agent actions, but send_to_agent is`() {
@@ -96,8 +102,9 @@ class PluginActionsTest {
 
     @Test
     fun `watch plugins drop out while no watch is paired`() {
-        val all = listOf(things, watchSettings, music, watchState)
+        val all = listOf(things, watchSettings, music, watchState, notifications)
         assertTrue(watchSettings.needsWatch())
+        assertTrue(notifications.needsWatch())
         assertFalse(things.needsWatch())
         assertEquals(listOf(things, music), all.forWatchPaired(watchPaired = false))
         assertEquals(all, all.forWatchPaired(watchPaired = true))

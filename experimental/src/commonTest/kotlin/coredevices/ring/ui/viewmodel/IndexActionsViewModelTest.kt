@@ -13,6 +13,7 @@ import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.ItemSource
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
@@ -118,6 +119,16 @@ class IndexActionsViewModelTest {
     }
 
     @Test
+    fun connectingFromASheetCountsAsHavingBeenAskedAboutTheDefault() = runMainTest {
+        val fixture = Fixture()
+
+        fixture.viewModel.noteConnectStarted(fixture.notion.id)
+        fixture.viewModel.reminderConnectStarted(fixture.googleTasks.id)
+
+        assertEquals(setOf(fixture.notion.id, fixture.googleTasks.id), fixture.preferences.defaultDestinationAsked)
+    }
+
+    @Test
     fun selectingAProviderCancelsAPendingConnect() = runMainTest {
         val fixture = Fixture()
         backgroundScope.launch { fixture.viewModel.noteDestinations.collect {} }
@@ -184,6 +195,7 @@ class IndexActionsViewModelTest {
             ),
             destinations = DestinationCatalog(repository, FakePluginStore(), pluginsEnabled, lockerUuids),
             providers = repository,
+            destinationPrompter = DefaultDestinationPrompter(repository, preferences),
             preferences = preferences,
             gestureRouting = routing,
             platform = FakePlatform("Android 15"),

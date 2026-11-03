@@ -64,6 +64,8 @@ interface Preferences: BasePreferences {
     fun setLastBackupCount(count: Int?)
     fun setPlatformSttDefaulted()
     fun setUsePendingIntentScan(enabled: Boolean)
+    val defaultDestinationAsked: Set<String>
+    fun markDefaultDestinationAsked(providerId: String)
     val defaultCaptureType: StateFlow<DefaultCaptureType>
     fun setDefaultCaptureType(type: DefaultCaptureType)
     val targetCalendar: StateFlow<Int?>
@@ -302,6 +304,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
 
     override fun setPlatformSttDefaulted() {
         settings.putBoolean("platform_stt_defaulted", true)
+    }
+
+    override val defaultDestinationAsked: Set<String>
+        get() = settings.getStringOrNull("default_destination_asked")
+            ?.let { runCatching { Json.decodeFromString<Set<String>>(it) }.getOrNull() }
+            .orEmpty()
+
+    override fun markDefaultDestinationAsked(providerId: String) {
+        settings.putString("default_destination_asked", Json.encodeToString(defaultDestinationAsked + providerId))
     }
 
     override fun setUsePendingIntentScan(enabled: Boolean) {

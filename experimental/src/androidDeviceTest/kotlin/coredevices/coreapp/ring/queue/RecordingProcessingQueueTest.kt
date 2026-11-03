@@ -40,7 +40,10 @@ import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.external.indexwebhook.IndexWebhookRunResult
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
@@ -274,14 +277,14 @@ class RecordingProcessingQueueTest {
 
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(
+                override suspend fun upload(
                     samples: ShortArray?,
                     sampleRate: Int,
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
                     gesture: coredevices.ring.service.button.RingGesture,
-                ) {}
+                ): IndexWebhookRunResult? = null
                 override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
 
                 override suspend fun sendTestEvent(
@@ -300,6 +303,9 @@ class RecordingProcessingQueueTest {
 
         single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 
+        single { get<RingDatabase>().indexWebhookDeliveryDao() }
+        singleOf(::IndexWebhookDeliveryRepository)
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
         singleOf(::RecordingPreprocessor)

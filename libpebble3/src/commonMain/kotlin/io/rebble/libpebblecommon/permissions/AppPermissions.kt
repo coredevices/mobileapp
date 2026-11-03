@@ -38,7 +38,7 @@ enum class PermissionPolicy {
     AskIfExfiltrating,
     /** Asks for everything. */
     AlwaysAsk,
-    /** Grants requests automatically. */
+    /** Grants requests automatically, except dangerous ones. */
     NeverAsk,
 }
 
@@ -96,7 +96,12 @@ interface AppPermissionsApi {
     /** Hides [permissions] from the locker's request cards while leaving them undecided. */
     suspend fun markPermissionRequestsSeen(appUuid: Uuid, permissions: Collection<String>)
     fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>>
+    /** Every decision the user has made, for every app. */
+    fun permissionDecisions(): Flow<List<LockerAppPermission>>
 }
+
+@Serializable
+data class PermissionDecisionRecord(val granted: Boolean, val decidedAtMs: Long)
 
 /** Undecided rows are decided by the policy on every check, so policy changes apply immediately. */
 class AppPermissions(
@@ -124,6 +129,19 @@ class AppPermissions(
             rows.coveringRow(permission)?.let { markUsed(it) }
         }
         return decision
+    }
+
+    /** The domains (each covering its subdomains) [appUuid] may reach; null if it may reach any host. */
+    suspend fun grantedDomains(appUuid: Uuid): List<String>? {
+        val config = watchConfig.value
+        if (!config.enablePlugins) return null
+        val subject = subjectOf(appUuid) ?: return emptyList()
+        val rows = dao.getByAppUuid(appUuid)
+        fun granted(permission: String) =
+            decidePermission(permission, subject, rows, config, emptyMap()) == PermissionDecision.Granted
+        if (subject.legacy) return if (granted(PluginPermissions.GLOBAL_INTERNET)) null else emptyList()
+        if (granted(PluginPermissions.INTERNET) || granted(PluginPermissions.LOCAL_NETWORK)) return null
+        return rows.mapNotNull { domainOf(it.permission) }.filter { isHostname(it) && granted(internetKey(it)) }
     }
 
     /** As [check], but records the use. [wait] waits for the user's answer: never from a blocking callback. */
@@ -256,16 +274,30 @@ class AppPermissions(
         )
     }
 
-    suspend fun toReview(appUuid: Uuid, requested: RequestedPermissions): List<String> {
+    suspend fun toReview(appUuid: Uuid, requested: RequestedPermissions): List<String> =
+        reviewDecisions(appUuid, requested)
+            .filter { it.value == PermissionDecision.NeedsApproval }
+            .keys.toList()
+
+    /** A legacy app's are implied, not declared, so it has none to show. */
+    suspend fun automaticallyGranted(appUuid: Uuid, requested: RequestedPermissions): List<String> {
+        if (requested.declared == null) return emptyList()
+        val decided = dao.getByAppUuid(appUuid).filter { it.granted != null }.map { it.permission }.toSet()
+        return reviewDecisions(appUuid, requested)
+            .filter { (key, decision) -> decision == PermissionDecision.Granted && key !in decided }
+            .keys.toList()
+    }
+
+    /** What the policy would decide for each requested key, as if the app were installed. */
+    private suspend fun reviewDecisions(appUuid: Uuid, requested: RequestedPermissions): Map<String, PermissionDecision> {
         val existing = dao.getByAppUuid(appUuid)
         val rows = existing + (requested.all - existing.map { it.permission }.toSet())
             .map { LockerAppPermission(appUuid, it, granted = null, requestedAtMs = 0) }
         val subject = requested.subject(appUuid)
         val pluginDefined = pluginDefinitionsFor(rows, *requested.all.toTypedArray())
-        return requested.all.filter {
-            decidePermission(it, subject, rows, watchConfig.value, pluginDefined) == PermissionDecision.NeedsApproval &&
-                !isUnneededInvokeAction(it, pluginDefined)
-        }
+        return requested.all
+            .filterNot { isUnneededInvokeAction(it, pluginDefined) }
+            .associateWith { decidePermission(it, subject, rows, watchConfig.value, pluginDefined) }
     }
 
     /** Only asked of callers while the plugin can exfiltrate (see `ActionDispatcher`). */
@@ -311,6 +343,31 @@ class AppPermissions(
         dao.markSeen(appUuid, permissions.toList(), clock.now().toEpochMilliseconds())
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = installed.pluginPermissions()
+
+    override fun permissionDecisions(): Flow<List<LockerAppPermission>> =
+        dao.allFlow().map { rows -> rows.filter { it.granted != null } }
+
+    /** Takes each of [decisions] that is newer than the one held for [appUuid], e.g. from another device. */
+    suspend fun mergePermissionDecisions(appUuid: Uuid, decisions: Map<String, PermissionDecisionRecord>) {
+        val existing = dao.getByAppUuid(appUuid).associateBy { it.permission }
+        val newer = decisions.filter { (key, record) ->
+            val held = existing[key]
+            held?.granted == null || (held.decidedAtMs ?: 0) < record.decidedAtMs
+        }
+        if (newer.isEmpty()) return
+        dao.insertOrReplaceAll(newer.map { (key, record) ->
+            val held = existing[key]
+            LockerAppPermission(
+                appUuid = appUuid,
+                permission = key,
+                granted = record.granted,
+                requestedAtMs = held?.requestedAtMs ?: record.decidedAtMs,
+                decidedAtMs = record.decidedAtMs,
+                lastUsedAtMs = held?.lastUsedAtMs,
+                seenAtMs = held?.seenAtMs ?: record.decidedAtMs,
+            )
+        })
+    }
 
     suspend fun canExfiltrate(appUuid: Uuid): Boolean {
         val subject = subjectOf(appUuid) ?: return false
@@ -396,7 +453,11 @@ internal fun decidePermission(
     if (!config.enablePlugins) return PermissionDecision.Granted
     val rows = rows.filterNot { config.disables(it.permission) }
     val decision = decideAsking(permission, subject, rows, config, pluginDefined)
-    return if (decision == PermissionDecision.NeedsApproval && config.permissionPolicy == PermissionPolicy.NeverAsk) {
+    return if (
+        decision == PermissionDecision.NeedsApproval &&
+        config.permissionPolicy == PermissionPolicy.NeverAsk &&
+        permissionKind(permission, pluginDefined) != PermissionKind.Dangerous
+    ) {
         PermissionDecision.Granted
     } else {
         decision

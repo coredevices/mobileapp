@@ -159,6 +159,11 @@ private object PreferencesTestImpl: Preferences {
         get() = MutableStateFlow(false)
     override val scanByPairedAddress: StateFlow<Boolean>
         get() = MutableStateFlow(false)
+    override val defaultDestinationAsked: Set<String> = emptySet()
+
+    override fun markDefaultDestinationAsked(providerId: String) {
+        TODO("Not yet implemented")
+    }
 
     override fun setUsePendingIntentScan(enabled: Boolean) {
         TODO("Not yet implemented")

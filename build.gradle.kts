@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.targets.native.tasks.PodGenTask
+
 plugins {
     // this is necessary to avoid the plugins to be loaded multiple times
     // in each subproject's classloader
@@ -34,5 +36,18 @@ val podInstallLock = gradle.sharedServices.registerIfAbsent("podInstallLock", Po
 subprojects {
     tasks.matching { it.name.startsWith("podInstallSynthetic") }.configureEach {
         usesService(podInstallLock)
+    }
+    // Xcode 27 rejects pod deployment targets below iOS 15; the generated Podfile only raises them to 12.
+    tasks.withType<PodGenTask>().configureEach {
+        val podfileProvider = podfile
+        doLast {
+            val file = podfileProvider.get()
+            file.writeText(
+                file.readText()
+                    .replace("deployment_target_major < 12 ", "deployment_target_major < 15 ")
+                    .replace("deployment_target_major == 12 ", "deployment_target_major == 15 ")
+                    .replace("#{12}", "#{15}")
+            )
+        }
     }
 }

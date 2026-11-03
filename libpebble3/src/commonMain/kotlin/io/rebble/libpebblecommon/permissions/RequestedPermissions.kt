@@ -45,4 +45,6 @@ data class InstallReview(
     val appUuid: Uuid,
     val appName: String,
     val toReview: List<String>,
+    /** Declared, undecided, and granted by the policy without asking: shown so they can be denied. */
+    val automatic: List<String> = emptyList(),
 )

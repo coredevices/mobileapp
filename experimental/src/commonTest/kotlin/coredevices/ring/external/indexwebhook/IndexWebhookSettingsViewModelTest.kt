@@ -171,14 +171,14 @@ class IndexWebhookSettingsViewModelTest {
     private class FakeWebhookApi : IndexWebhookApi {
         var lastTestRequest: TestRequest? = null
 
-        override fun uploadIfEnabled(
+        override suspend fun upload(
             samples: ShortArray?,
             sampleRate: Int,
             recordingId: String,
             transcription: String?,
             recordedAt: Instant,
             gesture: RingGesture,
-        ) = Unit
+        ): IndexWebhookRunResult? = null
 
         override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
 

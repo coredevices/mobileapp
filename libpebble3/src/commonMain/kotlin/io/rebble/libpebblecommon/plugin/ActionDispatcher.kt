@@ -53,6 +53,7 @@ class ActionDispatcher(
             )
         val subject = permissions.subjectOf(Uuid.parse(jsRunner.appInfo.uuid))
             ?: return ActionResult.error(PluginErrors.PERMISSION_DENIED, "${jsRunner.appInfo.shortName} isn't installed")
+        if (subject.legacy) return ActionResult.error(PluginErrors.PERMISSION_DENIED, LEGACY_CALLER_MESSAGE)
         return client.invoke(
             PluginCaller.App(subject, jsRunner.appInfo.shortName),
             plugin.metadata,

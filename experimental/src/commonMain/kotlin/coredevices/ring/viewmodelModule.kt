@@ -44,6 +44,7 @@ internal val viewmodelModule = module {
             mcpServerRepository = get(),
             destinations = get(),
             providers = get(),
+            destinationPrompter = get(),
             preferences = get(),
             gestureRouting = get(),
             platform = get(),

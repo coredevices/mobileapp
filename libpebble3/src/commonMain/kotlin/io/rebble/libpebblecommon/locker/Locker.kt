@@ -38,6 +38,7 @@ import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.NetworkGate
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.requestedPermissions
@@ -219,6 +220,15 @@ class Locker(
         return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
     }
 
+    override suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean {
+        val title = lockerEntryDao.getEntry(uuid)?.title ?: return false
+        val verdict = NetworkGate(permissions, title, uuid).check(url, wait = false)
+        if (verdict is PluginNetworkVerdict.Denied) logger.w { "Blocked $title's config page loading $url: ${verdict.reason}" }
+        return verdict is PluginNetworkVerdict.Allowed
+    }
+
+    override suspend fun configPageDomains(uuid: Uuid): List<String>? = permissions.grantedDomains(uuid)
+
     override suspend fun getAppFile(uuid: Uuid, name: String): String? = pbwFor(uuid)?.getTextFile(name)
 
     override suspend fun setAppOrder(id: Uuid, order: Int) {
@@ -292,8 +302,10 @@ class Locker(
     }
 
     override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? {
+        if (!config.value.enablePlugins) return null
         val toReview = permissions.toReview(appUuid, requested)
-        return if (toReview.isEmpty()) null else InstallReview(appUuid, appName, toReview)
+        val automatic = permissions.automaticallyGranted(appUuid, requested)
+        return if (toReview.isEmpty() && automatic.isEmpty()) null else InstallReview(appUuid, appName, toReview, automatic)
     }
 
     internal suspend fun recordDeclaredPermissions(appId: Uuid, pbwPath: Path) {
@@ -322,7 +334,12 @@ class Locker(
         permissions.setDecisions(Uuid.parse(app.uuid), granted)
     }
 
-    override suspend fun addAppsToLocker(apps: List<io.rebble.libpebblecommon.web.LockerEntry>) {
+    override suspend fun addAppsToLocker(
+        apps: List<io.rebble.libpebblecommon.web.LockerEntry>,
+        permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>,
+    ) {
+        // Before the apps exist, so none starts without the answers the user already gave.
+        mergeDecisions(permissions)
         lockerEntryDao.insertOrReplaceAndOrder(apps.map { app ->
             val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
             app.asEntity(orderIndex)
@@ -339,8 +356,13 @@ class Locker(
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
 
+    private suspend fun mergeDecisions(byApp: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
+        byApp.forEach { (uuid, decisions) -> permissions.mergePermissionDecisions(uuid, decisions) }
+    }
+
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
+        mergeDecisions(locker.permissions)
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
@@ -412,7 +434,8 @@ class Locker(
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)
         }
-        val tasks = if (loadOnWatch) {
+        // A plugin-only pbw never reaches the watch.
+        val tasks = if (loadOnWatch && type != AppType.Plugin) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
                 libPebbleCoroutineScope.async {
                     val entryStatus = lockerEntryDao.existsOnWatch(

@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -269,16 +270,6 @@ fun WatchHomeScreen(
         }
         val pebbleNavHostController = navControllers[currentTab]!!
 
-        // The Index tab — and EVERY destination inside it (home, recording
-        // detail, list/object detail, full feed, all-lists, all-answers,
-        // settings, etc.) — renders its own inline header. Hide the chrome
-        // TopAppBar for the entire Index tab regardless of which inner
-        // route is active so we don't get a stacked "double top bar" when
-        // navigating from home into a detail screen.
-        LaunchedEffect(currentTab) {
-            viewModel.setHidden(currentTab == WatchHomeNavTab.Index)
-        }
-
         LaunchedEffect(Unit) {
             watchOnboardingFinished.finished.receiveAsFlow().collect {
                 logger.d { "Onboarding finished - switching to apps tab" }
@@ -297,6 +288,12 @@ fun WatchHomeScreen(
                         viewModel.disableNextTransitionAnimation.value = false
                     }
                     viewModel.setCanGoBack(pebbleNavHostController.previousBackStackEntry != null)
+                    // Index screens render their own inline header; a locker page pushed inside
+                    // the tab still needs the chrome's.
+                    viewModel.setHidden(
+                        currentTab == WatchHomeNavTab.Index &&
+                            !destination.hasRoute<PebbleNavBarRoutes.LockerAppRoute>()
+                    )
                 }
             pebbleNavHostController.addOnDestinationChangedListener(listener)
             onDispose {
@@ -683,7 +680,9 @@ fun WatchHomeScreen(
             val scopedCoreNav = remember(pebbleNavHostController, coreNav, isInnerScopedRoute) {
                 object : CoreNav {
                     override fun navigateTo(route: CoreRoute) {
-                        if (isInnerScopedRoute(route)) {
+                        if (route is CommonRoutes.LockerAppRoute) {
+                            pebbleNavHostController.navigate(route.toNavBarRoute())
+                        } else if (isInnerScopedRoute(route)) {
                             pebbleNavHostController.navigate(route)
                         } else {
                             coreNav.navigateTo(route)

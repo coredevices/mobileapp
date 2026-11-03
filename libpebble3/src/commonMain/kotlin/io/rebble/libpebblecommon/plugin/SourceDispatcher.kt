@@ -65,6 +65,10 @@ class SourceDispatcher(
                 emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, "$appName isn't installed")
                 return@launch
             }
+            if (subject.legacy) {
+                emitError(subscriptionId, PluginErrors.PERMISSION_DENIED, LEGACY_CALLER_MESSAGE)
+                return@launch
+            }
             client.observe(
                 PluginCaller.App(subject, appName),
                 plugin.metadata,

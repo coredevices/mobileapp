@@ -438,6 +438,21 @@ fun IndexSettings(coreNav: CoreNav) {
                 )
             }
             item {
+                val uriHandler = LocalUriHandler.current
+                SettingsRow(
+                    title = "Index on the web (experimental)",
+                    subtitle = "View your Index notes and reminders in a browser at index.rePebble.com",
+                    onClick = { uriHandler.openUrlSafely("https://index.rePebble.com") },
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            item {
                 SettingsRow(
                     title = "Backup",
                     subtitle = "Sync, manage, or delete cloud backup",

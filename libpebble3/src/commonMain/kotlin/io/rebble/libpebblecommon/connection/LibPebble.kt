@@ -58,6 +58,7 @@ import io.rebble.libpebblecommon.performPlatformSpecificInit
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.AppPermissionsApi
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
@@ -426,13 +427,21 @@ interface LockerApi {
      * none, so callers fall back to the PKJS `showConfiguration` flow.
      */
     suspend fun appConfigPageUrl(uuid: Uuid): String?
+    /** Whether [uuid]'s config page may load [url], checked like the app's own requests. */
+    suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean
+    /** The domains [uuid]'s config page may connect to, each covering its subdomains; null for any. */
+    suspend fun configPageDomains(uuid: Uuid): List<String>?
     /** A text file from an installed app's pbw, or null if the app or file is missing. */
     suspend fun getAppFile(uuid: Uuid, name: String): String?
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
-    suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    /** [permissions]: the user's decisions for these apps from other devices or the web store. */
+    suspend fun addAppsToLocker(
+        apps: List<LockerEntry>,
+        permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>,
+    )
     /** Lets the next locker sync replace a sideloaded app with its copy in the user's locker. */
     suspend fun clearSideloaded(id: Uuid)
     fun restoreSystemAppOrder()

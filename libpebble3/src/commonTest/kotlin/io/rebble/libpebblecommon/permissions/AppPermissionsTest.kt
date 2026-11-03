@@ -47,6 +47,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -91,6 +92,17 @@ class DecidePermissionTest {
         assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET))))
         assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, subject(hasCompanionApp = true)))
         assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+    }
+
+    @Test
+    fun dangerousPermissionsAlwaysNeedApproval() {
+        for (policy in PermissionPolicy.entries) {
+            val config = WatchConfig(enablePlugins = true, permissionPolicy = policy)
+            assertEquals(NeedsApproval, decide(NOTIFICATIONS, config = config))
+            assertEquals(NeedsApproval, decide(notificationsKey("com.example"), config = config))
+            assertEquals(NeedsApproval, decide("Messages", config = config, pluginDefined = mapOf("Messages" to PermissionKind.Dangerous)))
+            assertEquals(Granted, decide(NOTIFICATIONS, rows = listOf(row(NOTIFICATIONS, true)), config = config))
+        }
     }
 
     @Test
@@ -636,6 +648,38 @@ class WaitingRequestsTest {
     }
 
     @Test
+    fun configPagesReachOnlyGrantedDomainsUnlessTheAppMayReachAnyHost() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(APP, listOf(internetKey("a.example.com"), internetKey("b.example.com")))
+        permissions.setDecisions(APP, mapOf(internetKey("a.example.com") to true, internetKey("b.example.com") to false))
+        assertEquals(listOf("a.example.com"), permissions.grantedDomains(APP))
+        permissions.setDecisions(APP, mapOf(LOCAL_NETWORK to true))
+        assertNull(permissions.grantedDomains(APP))
+        assertNull(permissions(dao, config = WatchConfig(enablePlugins = false)).grantedDomains(APP))
+        assertNull(permissions(FakePermissionDao(), installed = installedAs(subject(legacy = true))).grantedDomains(APP))
+    }
+
+    @Test
+    fun aSyncedDecisionReplacesOnlyAnOlderOrMissingOne() = runTest {
+        val permissions = permissions(dao, clock = FixedClock(5_000))
+        permissions.setDecisions(APP, mapOf(CALENDAR to true, LOCATION to true))
+        permissions.recordRequested(APP, listOf(TIMELINE))
+        permissions.mergePermissionDecisions(
+            APP,
+            mapOf(
+                CALENDAR to PermissionDecisionRecord(granted = false, decidedAtMs = 9_000),
+                LOCATION to PermissionDecisionRecord(granted = false, decidedAtMs = 1_000),
+                TIMELINE to PermissionDecisionRecord(granted = true, decidedAtMs = 1_000),
+            ),
+        )
+        assertEquals(false, dao.row(CALENDAR)!!.granted)
+        assertEquals(9_000, dao.row(CALENDAR)!!.decidedAtMs)
+        assertEquals(true, dao.row(LOCATION)!!.granted)
+        assertEquals(true, dao.row(TIMELINE)!!.granted)
+        assertEquals(listOf(CALENDAR, LOCATION, TIMELINE), permissions.permissionDecisions().first().map { it.permission }.sorted())
+    }
+
+    @Test
     fun aNullDecisionRecordsASeenUndecidedRow() = runTest {
         permissions(dao).setDecisions(APP, mapOf(CALENDAR to null))
         val row = dao.row(CALENDAR)!!
@@ -784,6 +828,30 @@ class InstallReviewTest {
             declares(internet("a.example.com", ".B.example.com"), PluginPermission(LOCAL_NETWORK)).all,
         )
         assertEquals(listOf(INTERNET), declares(PluginPermission(INTERNET)).all)
+    }
+
+    @Test
+    fun readsAnAppCantSendAnywhereAreListedAsAutomaticRatherThanReviewed() = runTest {
+        val offline = declares(PluginPermission(LOCATION), PluginPermission(TIMELINE))
+        assertEquals(listOf(TIMELINE), permissions.toReview(APP, offline))
+        assertEquals(listOf(LOCATION), permissions.automaticallyGranted(APP, offline))
+
+        val online = declares(PluginPermission(LOCATION), internet("example.com"))
+        assertEquals(emptyList(), permissions.automaticallyGranted(APP, online))
+
+        permissions.setDecisions(APP, mapOf(LOCATION to false))
+        assertEquals(emptyList(), permissions.automaticallyGranted(APP, offline))
+    }
+
+    @Test
+    fun aLegacyAppHasNoAutomaticListBecauseNothingWasDeclared() = runTest {
+        assertEquals(emptyList(), permissions.automaticallyGranted(APP, RequestedPermissions(declared = null, hasPkjs = true)))
+    }
+
+    @Test
+    fun aDomainThatIsntAPlainHostnameIsDropped() {
+        assertEquals(listOf(internetKey("ok.example.com")), declares(internet("ok.example.com", "*", "x.com https:", "a.com;b")).all)
+        assertEquals(emptyList(), declares(internet("*")).all)
     }
 
     @Test

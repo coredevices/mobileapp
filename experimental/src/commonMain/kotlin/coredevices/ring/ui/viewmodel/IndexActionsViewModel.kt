@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.IndexActionsRepository
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
@@ -39,6 +40,7 @@ class IndexActionsViewModel(
     private val mcpServerRepository: McpServerRepository,
     private val destinations: DestinationCatalog,
     private val providers: IntegrationProviderRepository,
+    private val destinationPrompter: DefaultDestinationPrompter,
     private val preferences: Preferences,
     gestureRouting: GestureRoutingPreferences,
     platform: Platform,
@@ -133,10 +135,12 @@ class IndexActionsViewModel(
 
     fun noteConnectStarted(providerId: String) {
         pendingNoteConnect.value = providerId
+        destinationPrompter.pickedFromSheet(providerId)
     }
 
     fun reminderConnectStarted(providerId: String) {
         pendingReminderConnect.value = providerId
+        destinationPrompter.pickedFromSheet(providerId)
     }
 
     suspend fun reviewInstall(plugin: StorePlugin): InstallReview? = destinations.reviewInstall(plugin)

@@ -38,6 +38,7 @@ import com.multiplatform.webview.web.rememberWebViewState
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.config.ConfigPageBridge
+import coredevices.pebble.config.ConfigPageClosedListener
 import coredevices.pebble.config.ConfigPageSessions
 import coredevices.pebble.config.ConfigScriptIds
 import coredevices.pebble.config.PluginConfigFileAccess
@@ -55,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.jetbrains.compose.resources.stringResource
@@ -77,13 +79,22 @@ internal expect fun webViewFactory(
     uuid: Uuid,
     /** Null leaves the page with no `Pebble` object, which is what a plain webview should be. */
     bridge: ConfigPageBridge?,
+    /** Blocking; whatever the page loads or connects to is checked against the app's permissions. */
+    mayLoad: (String) -> Boolean,
+    network: ConfigPageNetwork,
 ): NativeWebView
+
+/** Limits what a config page may connect to, on top of [webViewFactory]'s per-request checks. */
+internal expect class ConfigPageNetwork
+
+/** [domains] each cover their subdomains; null leaves the page unrestricted. */
+internal expect suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?): ConfigPageNetwork
 
 internal expect suspend fun restoreLocalStorage(webView: NativeWebView)
 internal expect fun persistLocalStorage(webView: NativeWebView)
 
 @Composable
-internal expect fun rememberWebViewFileChooserParams(): PlatformWebViewParams?
+internal expect fun rememberPlatformWebViewParams(mayLoad: (String) -> Boolean): PlatformWebViewParams?
 
 private val logger = Logger.withTag("WatchappSettingsScreen")
 
@@ -103,8 +114,12 @@ fun WatchappSettingsScreen(
         }
     }
     val url = resolvedUrl?.let(::normalizeWatchappSettingsUrl) ?: return
+    val closedListener: ConfigPageClosedListener = koinInject()
     DisposableEffect(uuid) {
-        onDispose { WatchappSettingsUrlCache.remove(uuid) }
+        onDispose {
+            WatchappSettingsUrlCache.remove(uuid)
+            runCatching { Uuid.parse(uuid) }.getOrNull()?.let(closedListener::onConfigPageClosed)
+        }
     }
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val sessions: ConfigPageSessions = koinInject()
@@ -118,7 +133,14 @@ fun WatchappSettingsScreen(
             }
         }
         val webViewUuid = remember(uuid) { runCatching { Uuid.parse(uuid) }.getOrNull() }
-        val fileChooserParams = rememberWebViewFileChooserParams()
+        val mayLoad = remember(webViewUuid) {
+            { url: String -> webViewUuid != null && runBlocking { libPebble.mayLoadInConfigPage(webViewUuid, url) } }
+        }
+        val platformParams = rememberPlatformWebViewParams(mayLoad)
+        // Fixed when the page opens: a domain approved later applies from the next visit.
+        val network by produceState<ConfigPageNetwork?>(null, webViewUuid) {
+            value = webViewUuid?.let { configPageNetwork(it, libPebble.configPageDomains(it)) }
+        }
         val state = rememberWebViewState(url) {
             androidWebSettings.domStorageEnabled = true
             iOSWebSettings.isInspectable = true
@@ -217,13 +239,14 @@ fun WatchappSettingsScreen(
                 )
             }
         ) { paddingValues ->
-            webViewUuid?.let { uuid ->
+            val pageNetwork = network
+            if (webViewUuid != null && pageNetwork != null) {
                 WebView(
                     state = state,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     navigator = navigator,
-                    platformWebViewParams = fileChooserParams,
-                    factory = { webViewFactory(it, uuid, bridge) }
+                    platformWebViewParams = platformParams,
+                    factory = { webViewFactory(it, webViewUuid, bridge, mayLoad, pageNetwork) }
                 )
             }
         }

@@ -13,6 +13,8 @@ import coredevices.api.EngDashOtaApiImpl
 import coredevices.api.WisprFlowAuth
 import coredevices.coreapp.CommonAppDelegate
 import coredevices.coreapp.plugins.AppstorePluginStore
+import coredevices.pebble.config.ConfigPageClosedListener
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.pebble.health.HealthSyncTracker
 import coredevices.pebble.health.PlatformHealthSync
 import coredevices.coreapp.push.PushMessaging
@@ -102,6 +104,7 @@ val utilModule = module {
     single { ModelManager(get(), get(), getOrNull()) }
     singleOf(::OAuthRedirectHandler)
     singleOf(::AppstorePluginStore) bind PluginStore::class
+    single { ConfigPageClosedListener(get<DefaultDestinationPrompter>()::configPageClosed) }
     singleOf(::WisprFlowAuth)
     single {
         CactusTranscriptionService(

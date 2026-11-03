@@ -351,9 +351,9 @@ open class WatchFactoryData(message: Message) : SystemPacket(endpoint) {
     }
 }
 
-@Serializable
 const val MAX_LANGUAGE_PACKS = 4
 
+@Serializable
 enum class ProtocolCapsFlag(val value: Int) {
     SupportsAppRunStateProtocol(0),
     SupportsInfiniteLogDump(1),
