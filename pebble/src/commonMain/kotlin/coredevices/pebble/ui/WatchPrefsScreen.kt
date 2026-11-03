@@ -197,6 +197,7 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(EnumWatchPref.MenuScrollVibe, Section.Display, SettingsGroup.MenuScrolling, "Vibration"),
     PrefLayout(BoolWatchPref.LeftHandedMode, Section.Display),
 
+    PrefLayout(EnumWatchPref.Temperature, Section.Weather),
     PrefLayout(EnumWatchPref.WindSpeed, Section.Weather),
 
     PrefLayout(EnumWatchPref.LegacyVibeIntensity, Section.Notifications, SettingsGroup.Vibration, "System Intensity"),
@@ -252,7 +253,7 @@ internal fun List<WatchPreference<*>>.inLayoutOrder(): List<WatchPreference<*>> 
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
     // Weather is configured on the phone, even though the unit it sets is a watch pref.
-    EnumWatchPref.WindSpeed -> TopLevelType.Phone
+    EnumWatchPref.WindSpeed, EnumWatchPref.Temperature -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
 

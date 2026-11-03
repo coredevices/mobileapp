@@ -5,6 +5,7 @@ import coredevices.database.WeatherLocationEntity
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
+import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.imaging.EncodedImage
 import io.rebble.libpebblecommon.plugin.BitmapSeries
@@ -126,10 +127,11 @@ class WeatherPlugin(
         return combine(
             weather.currentWeather,
             weatherLocationDao.getAllLocationsFlow(),
-            libPebble.healthSettings,
-        ) { entries, locations, healthSettings ->
-            val unit = if (healthSettings.imperialUnits) "°F" else "°C"
-            toEnvelope(entries.inLocationOrder(locations), iconPixelSize, unit, wanted)
+            libPebble.weatherInFahrenheit(),
+            libPebble.windUnits(),
+        ) { entries, locations, fahrenheit, wind ->
+            val unit = if (fahrenheit) "°F" else "°C"
+            toEnvelope(entries.inLocationOrder(locations), iconPixelSize, unit, wind, wanted)
         }
     }
 
@@ -137,17 +139,19 @@ class WeatherPlugin(
         entries: List<WeatherAppEntry>,
         iconSize: IconPixelSize?,
         unit: String,
+        wind: WindUnits,
         wanted: (String) -> Boolean,
     ) = SourceEnvelope(
         pluginUuid = pluginUuid.toString(),
         validUntilMs = null,
-        instances = entries.map { entry -> toInstance(entry, iconSize, unit, wanted) },
+        instances = entries.map { entry -> toInstance(entry, iconSize, unit, wind, wanted) },
     )
 
     private fun toInstance(
         entry: WeatherAppEntry,
         iconSize: IconPixelSize?,
         unit: String,
+        wind: WindUnits,
         wanted: (String) -> Boolean,
     ): SourceInstance {
         return SourceInstance(
@@ -171,7 +175,7 @@ class WeatherPlugin(
                     iconSize,
                 ),
                 PROPERTY_CONDITION_CODE to conditionCode(entry.currentWeatherType),
-            ) + uvShapes(entry) + precipitationShapes(entry) + todayShapes(entry, unit) + seriesShapes(entry, iconSize, unit, wanted),
+            ) + uvShapes(entry) + precipitationShapes(entry) + todayShapes(entry, wind) + seriesShapes(entry, iconSize, unit, wanted),
         )
     }
 
@@ -242,11 +246,16 @@ class WeatherPlugin(
     )
 
     /** Wind, humidity, the place's UTC offset and today's sun, each left off when the forecast lacked it. */
-    private fun todayShapes(entry: WeatherAppEntry, unit: String): Map<String, Map<String, JsonElement>> = buildMap {
+    private fun todayShapes(entry: WeatherAppEntry, wind: WindUnits): Map<String, Map<String, JsonElement>> = buildMap {
         val today = entry.dailyForecast?.firstOrNull()
         entry.todayWindSpeed?.let { mph ->
-            val imperial = unit == "°F"
-            val text = if (imperial) "$mph mph" else "${(mph * 1.609344).roundToInt()} km/h"
+            val speed = when (wind) {
+                WindUnits.FromDistance, WindUnits.Mph -> mph.toDouble()
+                WindUnits.KmH -> mph * 1.609344
+                WindUnits.MetersPerSecond -> mph * 0.44704
+                WindUnits.Knots -> mph * 0.868976
+            }
+            val text = "${speed.roundToInt()} ${wind.displayName}"
             put(
                 PROPERTY_WIND_SPEED,
                 mapOf(

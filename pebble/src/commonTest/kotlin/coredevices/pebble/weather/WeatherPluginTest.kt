@@ -4,10 +4,14 @@ import coredevices.database.WeatherLocationEntity
 import coredevices.database.WeatherLocationDao
 import io.rebble.libpebblecommon.connection.FakeLibPebble
 import io.rebble.libpebblecommon.connection.Weather
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
+import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.plugin.NumericValueShape
 import io.rebble.libpebblecommon.plugin.SeriesShape
+import io.rebble.libpebblecommon.plugin.ShortTextShape
 import io.rebble.libpebblecommon.plugin.SourceShapeNames
 import io.rebble.libpebblecommon.plugin.TimestampShape
 import io.rebble.libpebblecommon.weather.WeatherDailyForecast
@@ -154,10 +158,12 @@ class WeatherSeriesTest {
         ),
     )
 
+    private val libPebble = FakeLibPebble()
+
     private val plugin = WeatherPlugin(
         FakeWeather(listOf(london)),
         FakeWeatherLocationDao(listOf(location(LONDON, "London", 0))),
-        FakeLibPebble(),
+        libPebble,
     )
 
     private suspend fun read(properties: List<String>?, iconPixelSize: IconPixelSize? = null) =
@@ -182,6 +188,16 @@ class WeatherSeriesTest {
             Json.decodeFromJsonElement<TimestampShape>(properties.getValue(WeatherPlugin.PROPERTY_SUNRISE).getValue(SourceShapeNames.TIMESTAMP)).value,
         )
         assertEquals(listOf(midnight + 17 * 3600, null), properties.series(WeatherPlugin.PROPERTY_DAILY_SUNSET).timestamp!!.values)
+    }
+
+    @Test
+    fun windTextFollowsTheWindSpeedSetting() = runTest {
+        libPebble.setWatchPref(WatchPreference(EnumWatchPref.WindSpeed, WindUnits.Knots))
+        val properties = read(listOf(WeatherPlugin.PROPERTY_WIND_SPEED))
+        val text = Json.decodeFromJsonElement<ShortTextShape>(
+            properties.getValue(WeatherPlugin.PROPERTY_WIND_SPEED).getValue(SourceShapeNames.SHORT_TEXT),
+        ).text
+        assertEquals("9 knots", text)
     }
 
     @Test

@@ -788,7 +788,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 basicSettingsToggleItem(
                     id = SettingsIds.HealthImperialUnits,
                     title = "Imperial Units",
-                    description = "Use miles/feet/inches/lb and Fahrenheit instead of metric units",
+                    description = "Use miles/feet/inches/lb instead of metric units, and Fahrenheit unless Temperature is set under Weather",
                     keywords = "weather health degrees celsius temperature miles",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
@@ -796,7 +796,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     onCheckChanged = {
                         GlobalScope.launch {
                             libPebble.updateImperialUnits(it)
-                            weatherFetcher.fetchWeather(this)
                         }
                     },
                 ),
