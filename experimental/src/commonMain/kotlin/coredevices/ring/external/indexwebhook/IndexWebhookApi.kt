@@ -145,14 +145,6 @@ class IndexWebhookApiImpl(
             isTest = false,
             okDetail = contentsLabel(m4aData != null, transcription != null),
         )
-        runRepository.record(
-            gesture = gesture,
-            ok = result.ok,
-            status = result.status,
-            detail = result.detail,
-            byteSize = result.byteSize,
-            durationMs = result.durationMs,
-        )
         if (result.ok) {
             logger.i { "Webhook upload succeeded for $recordingId" }
         } else {

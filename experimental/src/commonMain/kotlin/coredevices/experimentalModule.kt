@@ -261,7 +261,7 @@ val experimentalModule = module {
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
     single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get()) }
+    single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
     singleOf(::RecordingUploadSyncHandler) bind SyncHandler::class

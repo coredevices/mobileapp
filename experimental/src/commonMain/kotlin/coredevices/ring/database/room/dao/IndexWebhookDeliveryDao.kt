@@ -31,4 +31,10 @@ interface IndexWebhookDeliveryDao {
 
     @Query("UPDATE IndexWebhookDeliveryEntity SET attempts = attempts + 1, lastAttempt = :currentTime WHERE id = :taskId")
     suspend fun incrementAttempts(taskId: Long, currentTime: Instant)
+
+    @Query("UPDATE IndexWebhookDeliveryEntity SET status = 'Pending', attempts = 0 WHERE deliveryId = :deliveryId AND status = 'Failed'")
+    suspend fun resetFailed(deliveryId: String): Int
+
+    @Query("SELECT id FROM IndexWebhookDeliveryEntity WHERE deliveryId = :deliveryId")
+    suspend fun getIdByDeliveryId(deliveryId: String): Long?
 }

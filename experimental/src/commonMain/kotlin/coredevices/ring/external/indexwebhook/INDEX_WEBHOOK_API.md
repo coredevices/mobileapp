@@ -201,6 +201,6 @@ The in-memory replay cache above is only illustrative. A production service shou
 ## Notes
 
 - Uploads are async and non-blocking — they don't delay the normal recording pipeline
-- Network errors and HTTP 408, 429 and 5xx responses are retried every minute, up to 10 attempts, including after the app restarts. Other failures are not retried
+- Network errors and HTTP 408, 429 and 5xx responses are retried every minute, up to 10 attempts, including after the app restarts. A delivery that still fails can be sent again with **Retry** in **Recent runs**
 - The webhook fires as early as its payload allows, in parallel with the rest of the pipeline: `RecordingOnly` sends as soon as the audio is on disk (before transcription); modes that include the transcript send once it is transcribed, concurrently with agent processing. The webhook therefore fires even if agent processing (or, for the recording-only mode, transcription) later fails.
 - Audio is the same 16kHz resampled version used for transcription
