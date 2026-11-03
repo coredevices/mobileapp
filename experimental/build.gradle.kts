@@ -121,18 +121,18 @@ kotlin {
             version = "8.0.0"
             linkOnly = true
         }
-        pod("FirebaseCore", "11.10.0")
+        pod("FirebaseCore", "12.19.3")
         pod("FirebaseAuth") {
-            version = "11.10.0"
+            version = "12.19.0"
             linkOnly = true
             extraOpts += listOf("-compiler-option", "-fmodules")
         }
         pod("FirebaseFirestore") {
             linkOnly = true
             source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
-                // 11.10.0 — keep in step with :composeApp, or the two modules resolve
+                // 12.19.3 — keep in step with :composeApp, or the two modules resolve
                 // different Firestore builds
-                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+                commit = "cc9a5e005ca9b5a08e0811490a76a189f50642bb"
             }
         }
         pod("nanopb") {
@@ -145,15 +145,15 @@ kotlin {
             linkOnly = true
         }
         pod("FirebaseStorage") {
-            version = "11.10.0"
+            version = "12.19.0"
             linkOnly = true
         }
         pod("FirebaseCrashlytics") {
-            version = "11.10.0"
+            version = "12.19.0"
             linkOnly = true
         }
         pod("FirebaseMessaging") {
-            version = "11.10.0"
+            version = "12.19.0"
             linkOnly = true
         }
     }
