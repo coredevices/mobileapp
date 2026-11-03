@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Block
@@ -479,7 +481,7 @@ private fun GestureDestinationSheet(
             commitCommand()
             onDismiss()
         },
-        sheetState = rememberModalBottomSheetState(),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.sheetSurface,
     ) {
         Row(
@@ -499,86 +501,88 @@ private fun GestureDestinationSheet(
                 color = colors.onSurface,
             )
         }
-        val agentTitles = agentDestinations.agentTitles()
-        val missingAgent = missingAgentRoute(current, agentDestinations)
-        destinationsFor(gesture.kind, musicControl).forEach { option ->
-            SheetChoiceRow(
-                icon = option.icon,
-                title = option.optionLabel(agentTitles),
-                subtitle = option.optionSub,
-                selected = option == current,
-                onClick = {
-                    commitCommand()
-                    onSelect(option)
-                },
-            )
-            val showOtherAgents = agentDestinations == null || agentDestinations.isNotEmpty() || missingAgent != null
-            if (option == GestureDestination.LocalAgent && showOtherAgents) {
-                OtherAgentsGroup(
-                    agents = agentDestinations,
-                    missing = missingAgent,
-                    current = current,
-                    agentTitles = agentTitles,
-                    onSelect = {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            val agentTitles = agentDestinations.agentTitles()
+            val missingAgent = missingAgentRoute(current, agentDestinations)
+            destinationsFor(gesture.kind, musicControl).forEach { option ->
+                SheetChoiceRow(
+                    icon = option.icon,
+                    title = option.optionLabel(agentTitles),
+                    subtitle = option.optionSub,
+                    selected = option == current,
+                    onClick = {
                         commitCommand()
-                        onSelect(it)
+                        onSelect(option)
                     },
-                    onConnect = onConnectAgentPlugin,
-                    onInstall = onInstallAgentPlugin,
-                    onConfigure = onConfigureAgentPlugin,
                 )
-            }
-        }
-        if (current == GestureDestination.AgentCommand) {
-            OutlinedTextField(
-                value = commandDraft,
-                onValueChange = { commandDraft = it },
-                singleLine = true,
-                label = { Text("Command") },
-                placeholder = { Text("Unlock front door") },
-                supportingText = {
-                    Text(
-                        "Runs as if you'd said it to Index, using your plugins and actions. " +
-                            "For example: \"Unlock front door\", \"Turn off the living room lights\" " +
-                            "or \"Start a 25 minute timer\""
+                val showOtherAgents = agentDestinations == null || agentDestinations.isNotEmpty() || missingAgent != null
+                if (option == GestureDestination.LocalAgent && showOtherAgents) {
+                    OtherAgentsGroup(
+                        agents = agentDestinations,
+                        missing = missingAgent,
+                        current = current,
+                        agentTitles = agentTitles,
+                        onSelect = {
+                            commitCommand()
+                            onSelect(it)
+                        },
+                        onConnect = onConnectAgentPlugin,
+                        onInstall = onInstallAgentPlugin,
+                        onConfigure = onConfigureAgentPlugin,
                     )
-                },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            )
-        }
-        if (gesture.kind == GestureKind.Recording &&
-            current != GestureDestination.WebhookOnly &&
-            current != GestureDestination.Nothing
-        ) {
-            HorizontalDivider(
-                color = colors.outlineVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            )
-            WebhookSheetRow(
-                icon = Icons.Default.Webhook,
-                title = "Also send to webhook",
-                webhookUrl = webhookUrl,
-                onClick = onOpenWebhookSettings,
-            ) {
-                Switch(checked = webhookCopyOn, onCheckedChange = onSetWebhookCopy)
+                }
             }
-        }
-        if (current == GestureDestination.Webhook ||
-            (gesture.kind == GestureKind.Recording &&
-                (current == GestureDestination.WebhookOnly || webhookCopyOn))
-        ) {
-            WebhookSheetRow(
-                icon = Icons.Default.SettingsEthernet,
-                title = "Webhook settings",
-                webhookUrl = webhookUrl,
-                onClick = onOpenWebhookSettings,
-            ) {
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+            if (current == GestureDestination.AgentCommand) {
+                OutlinedTextField(
+                    value = commandDraft,
+                    onValueChange = { commandDraft = it },
+                    singleLine = true,
+                    label = { Text("Command") },
+                    placeholder = { Text("Unlock front door") },
+                    supportingText = {
+                        Text(
+                            "Runs as if you'd said it to Index, using your plugins and actions. " +
+                                "For example: \"Unlock front door\", \"Turn off the living room lights\" " +
+                                "or \"Start a 25 minute timer\""
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 )
+            }
+            if (gesture.kind == GestureKind.Recording &&
+                current != GestureDestination.WebhookOnly &&
+                current != GestureDestination.Nothing
+            ) {
+                HorizontalDivider(
+                    color = colors.outlineVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+                WebhookSheetRow(
+                    icon = Icons.Default.Webhook,
+                    title = "Also send to webhook",
+                    webhookUrl = webhookUrl,
+                    onClick = onOpenWebhookSettings,
+                ) {
+                    Switch(checked = webhookCopyOn, onCheckedChange = onSetWebhookCopy)
+                }
+            }
+            if (current == GestureDestination.Webhook ||
+                (gesture.kind == GestureKind.Recording &&
+                    (current == GestureDestination.WebhookOnly || webhookCopyOn))
+            ) {
+                WebhookSheetRow(
+                    icon = Icons.Default.SettingsEthernet,
+                    title = "Webhook settings",
+                    webhookUrl = webhookUrl,
+                    onClick = onOpenWebhookSettings,
+                ) {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
