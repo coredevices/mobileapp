@@ -9,6 +9,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         UIImagePickerController.hideCameraSource()
         let mixpanel = Mixpanel.initialize(token: "2c9c89f4bc233ba9317f82abe488511a", trackAutomaticEvents: true)
+        AlarmKitBridge.register()
         let res = IOSDelegate.shared.didFinishLaunching(application: application, logAnalyticsEvent: { (name: String, params: [String: Any]?) -> Void in
             if let params = params as? Properties {
                 let properties = params

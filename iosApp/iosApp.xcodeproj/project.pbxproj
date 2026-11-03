@@ -20,6 +20,8 @@
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
 		7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */; };
 		7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */; };
+		7E8F9A102D5E6F780012345A /* AlarmKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */; };
+		7E8F9A122D5E6F780012345C /* ring-clock-alarm.caf in Resources */ = {isa = PBXBuildFile; fileRef = 7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */; };
 		AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +46,8 @@
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleShortcuts.swift; sourceTree = "<group>"; };
 		7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBridge.swift; sourceTree = "<group>"; };
+		7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmKitBridge.swift; sourceTree = "<group>"; };
+		7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ring-clock-alarm.caf"; sourceTree = "<group>"; };
 		8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		D4856F81B1A7C6FB5B8CEFA0 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
@@ -134,6 +138,8 @@
 				7555FF8C242A565B00829871 /* Info.plist */,
 				7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */,
 				7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */,
+				7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */,
+				7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */,
 				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
@@ -219,6 +225,7 @@
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
 				058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */,
 				058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */,
+				7E8F9A122D5E6F780012345C /* ring-clock-alarm.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -333,6 +340,7 @@
 				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
 				7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */,
 				7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */,
+				7E8F9A102D5E6F780012345A /* AlarmKitBridge.swift in Sources */,
 				7555FF83242A565900829871 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

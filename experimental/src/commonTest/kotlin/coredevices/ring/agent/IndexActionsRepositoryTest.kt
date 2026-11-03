@@ -5,6 +5,7 @@ import coredevices.indexai.data.McpServerDefinition
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
+import coredevices.ring.agent.builtin_servlets.clock.IOS_26_REQUIRED_REASON
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
@@ -99,22 +100,25 @@ class IndexActionsRepositoryTest {
         val ios = builtinServletDefinitions(isAndroid = false).associateBy { it.name }
 
         assertEquals(android.keys, ios.keys)
-        assertTrue(ClockServlet.name in ios)
         assertTrue(MessagingServlet.name in ios)
 
-        assertNull(android.getValue(ClockServlet.name).unavailableReason)
         assertNull(android.getValue(MessagingServlet.name).unavailableReason)
-        assertEquals(ANDROID_ONLY_REASON, ios.getValue(ClockServlet.name).unavailableReason)
         assertEquals(ANDROID_ONLY_REASON, ios.getValue(MessagingServlet.name).unavailableReason)
+        assertNull(android.getValue(ClockServlet.name).unavailableReason)
+        assertTrue(ios.getValue(ClockServlet.name).available)
         assertTrue(ios.getValue(NoteServlet.NAME).available)
+
+        val olderIos = builtinServletDefinitions(isAndroid = false, clockUnavailableReason = IOS_26_REQUIRED_REASON)
+            .associateBy { it.name }
+        assertEquals(IOS_26_REQUIRED_REASON, olderIos.getValue(ClockServlet.name).unavailableReason)
     }
 
     @Test
     fun androidOnlyActionsSurfaceTheirReasonOnIos() = runTest {
         val actions = Fixture(isAndroid = false).repo.actions.first()
-        val clock = actions.single { it.name == ClockServlet.name }
-        assertEquals(ANDROID_ONLY_REASON, clock.disabledReason)
-        assertEquals(false, clock.enabled)
+        val messaging = actions.single { it.name == MessagingServlet.name }
+        assertEquals(ANDROID_ONLY_REASON, messaging.disabledReason)
+        assertEquals(false, messaging.enabled)
     }
 
     @Test

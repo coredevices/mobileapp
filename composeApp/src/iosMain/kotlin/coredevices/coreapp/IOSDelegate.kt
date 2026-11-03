@@ -40,6 +40,7 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.sync.IosSyncScheduler
+import coredevices.util.clock.NativeAlarmKitBridge
 import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -67,6 +68,7 @@ import platform.Foundation.NSData
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
+import platform.Foundation.NSDate
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
@@ -109,6 +111,18 @@ object IOSDelegate : KoinComponent {
 
     fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {
         NativeSpeechAnalyzerBridge.supportedLanguageTags.value = tags
+    }
+
+    fun registerNativeAlarmKit(
+        authorizationState: () -> String,
+        requestAuthorization: ((Boolean) -> Unit) -> Unit,
+        schedule: (String, String, NSDate, String, (String?) -> Unit) -> Unit,
+        cancel: (String) -> Unit,
+    ) {
+        NativeAlarmKitBridge.authorizationState = authorizationState
+        NativeAlarmKitBridge.requestAuthorization = requestAuthorization
+        NativeAlarmKitBridge.schedule = schedule
+        NativeAlarmKitBridge.cancel = cancel
     }
 
     fun handleOpenUrl(url: NSURL): Boolean {

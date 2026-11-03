@@ -200,6 +200,9 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().ringRssiReadingDao()
     }
+    single {
+        get<RingDatabase>().localClockDao()
+    }
     singleOf(::PluginGrantRepository)
     singleOf(::RecordingRepository)
     single {

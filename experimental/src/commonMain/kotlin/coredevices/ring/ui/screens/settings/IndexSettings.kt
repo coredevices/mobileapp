@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
+import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestination
@@ -80,6 +81,7 @@ import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -436,6 +438,15 @@ fun IndexSettings(coreNav: CoreNav) {
                     },
                     trailingContent = {}
                 )
+            }
+            if (platform.isIOS && clockUnavailableReason() == null) {
+                item {
+                    SettingsRow(
+                        title = "Timers & alarms",
+                        subtitle = "View and cancel timers and alarms set by your Index",
+                        onClick = { coreNav.navigateTo(RingRoutes.TimersAndAlarms) },
+                    )
+                }
             }
             item {
                 val uriHandler = LocalUriHandler.current

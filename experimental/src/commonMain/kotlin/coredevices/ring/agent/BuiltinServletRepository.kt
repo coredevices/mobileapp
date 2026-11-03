@@ -5,6 +5,7 @@ import coredevices.indexai.data.McpServerDefinition
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
+import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
 import coredevices.ring.agent.builtin_servlets.js.JsServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
@@ -33,7 +34,10 @@ val LOCAL_MODEL_UNSUPPORTED_SERVLETS = setOf(
     NotificationReplyServlet.NAME,
 )
 
-internal fun builtinServletDefinitions(isAndroid: Boolean): List<McpServerDefinition> {
+internal fun builtinServletDefinitions(
+    isAndroid: Boolean,
+    clockUnavailableReason: String? = null,
+): List<McpServerDefinition> {
     val androidOnly = if (isAndroid) null else ANDROID_ONLY_REASON
     return listOf(
         McpServerDefinition(
@@ -51,7 +55,7 @@ internal fun builtinServletDefinitions(isAndroid: Boolean): List<McpServerDefini
         McpServerDefinition(
             name = ClockServlet.name,
             title = "Timers & Alarms",
-            unavailableReason = androidOnly
+            unavailableReason = clockUnavailableReason
         ),
         McpServerDefinition(
             name = MessagingServlet.name,
@@ -75,7 +79,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
      * is false; [resolveName] returns null for them.
      */
     override fun getAllServlets(): List<McpServerDefinition> =
-        builtinServletDefinitions(platform.isAndroid)
+        builtinServletDefinitions(platform.isAndroid, clockUnavailableReason())
 
     override fun resolveName(name: String): McpIntegration? {
         return when (name) {
@@ -83,7 +87,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
                 createNoteTool = CreateNoteTool(get()),
                 providers = get(),
             )
-            ClockServlet.name -> ClockServlet.takeIf { platform.isAndroid }
+            ClockServlet.name -> ClockServlet.takeIf { clockUnavailableReason() == null }
             JsServlet.name -> JsServlet
             ReminderServlet.NAME -> ReminderServlet(get(), get())
             CalendarServlet.NAME -> CalendarServlet

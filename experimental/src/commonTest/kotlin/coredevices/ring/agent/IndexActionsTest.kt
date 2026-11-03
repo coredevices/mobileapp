@@ -2,6 +2,7 @@ package coredevices.ring.agent
 
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
+import coredevices.ring.agent.builtin_servlets.clock.IOS_26_REQUIRED_REASON
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
@@ -33,10 +34,13 @@ class IndexActionsTest {
         val ios = builtinServletDefinitions(isAndroid = false).associateBy { it.name }
 
         assertEquals(android.keys, ios.keys)
-        assertNull(android.getValue(ClockServlet.name).unavailableReason)
         assertNull(android.getValue(MessagingServlet.name).unavailableReason)
-        assertEquals(ANDROID_ONLY_REASON, ios.getValue(ClockServlet.name).unavailableReason)
         assertEquals(ANDROID_ONLY_REASON, ios.getValue(MessagingServlet.name).unavailableReason)
+        assertNull(android.getValue(ClockServlet.name).unavailableReason)
+        assertTrue(ios.getValue(ClockServlet.name).available)
+        val olderIos = builtinServletDefinitions(isAndroid = false, clockUnavailableReason = IOS_26_REQUIRED_REASON)
+            .associateBy { it.name }
+        assertEquals(IOS_26_REQUIRED_REASON, olderIos.getValue(ClockServlet.name).unavailableReason)
         assertNull(android.getValue(NotificationReplyServlet.NAME).unavailableReason)
         assertEquals(ANDROID_ONLY_REASON, ios.getValue(NotificationReplyServlet.NAME).unavailableReason)
         assertTrue(ios.getValue(NoteServlet.NAME).available)
@@ -44,11 +48,11 @@ class IndexActionsTest {
 
     @Test
     fun anActionUnavailableOnThisPlatformIsNeverEnabled() {
-        val clock = actions(isAndroid = false)
-            .getValue(ClockServlet.name)
+        val messaging = actions(isAndroid = false)
+            .getValue(MessagingServlet.name)
 
-        assertEquals(ANDROID_ONLY_REASON, clock.disabledReason)
-        assertFalse(clock.enabled)
+        assertEquals(ANDROID_ONLY_REASON, messaging.disabledReason)
+        assertFalse(messaging.enabled)
     }
 
     @Test
