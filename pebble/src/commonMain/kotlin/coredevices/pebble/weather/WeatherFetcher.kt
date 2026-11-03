@@ -418,11 +418,16 @@ fun GeocoderResult<Place>.usefulName(): String? {
     return place?.usefulName()
 }
 
+private val PLUS_CODE = Regex("^[23456789CFGHJMPQRVWX]{2,8}\\+", RegexOption.IGNORE_CASE)
+
 fun Place.usefulName(): String? {
 //    logger.v { "usefulName: name=$name street=$street isoCountryCode=$isoCountryCode country=$country " +
 //            "postalCode=$postalCode administrativeArea=$administrativeArea subAdministrativeArea=$subAdministrativeArea " +
 //            "locality=$locality subLocality=$subLocality thoroughfare=$thoroughfare subThoroughfare=$subThoroughfare" }
-    return locality ?: street
+    return locality
+        ?: subAdministrativeArea
+        ?: administrativeArea
+        ?: street?.takeUnless { PLUS_CODE.containsMatchIn(it) }
 }
 
 internal enum class WeatherPinKind(val value: UByte) {
