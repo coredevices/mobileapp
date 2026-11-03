@@ -404,7 +404,13 @@ class ObjectDetailViewModel(
      *  delete), so they must run one at a time or a late edit un-deletes. */
     private val childWriteMutex = Mutex()
 
-    fun patchChildItem(childId: String, title: String?, body: String? = null, kind: String? = null) {
+    fun patchChildItem(
+        childId: String,
+        title: String?,
+        body: String? = null,
+        kind: String? = null,
+        dueAt: DueAtChange = DueAtChange.NoChange,
+    ) {
         // appScope: flushed from the inline note row's onDispose on navigate-away
         // (same scope-cancellation race as [patchItem]).
         appScope.launch {
@@ -417,6 +423,10 @@ class ObjectDetailViewModel(
                     title = trimmed ?: existing.title,
                     body = body ?: existing.body,
                     metadata = metadataForKind(nextKind, existing = existing.metadata),
+                    dueAt = when (dueAt) {
+                        DueAtChange.NoChange -> existing.dueAt
+                        is DueAtChange.Set -> dueAt.value
+                    },
                     parentListIds = normalizeParentLists(
                         kind = nextKind,
                         requestedParents = null,
