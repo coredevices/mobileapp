@@ -26,7 +26,7 @@ enum AlarmKitBridge {
                 }
                 Task {
                     let state = try? await AlarmManager.shared.requestAuthorization()
-                    completion(KotlinBoolean(state == .authorized))
+                    completion(KotlinBoolean(value: state == .authorized))
                 }
             },
             schedule: { id, title, fireAt, deepLink, completion in
