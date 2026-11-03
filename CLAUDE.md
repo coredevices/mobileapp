@@ -115,6 +115,10 @@ Comments should be concise. Specifically:
 
 Always use imports where possible, rather than fully-qualified references in the code. Don't ever use wildcard imports.
 
+### 13. Firmware compatibility
+
+Never write checks like "firmwareVersion > 1.2.3". Either use a capability bit, or don't do the check. New preferences do not warrant capability bits (they are ignored by firmware if unknown)
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.
