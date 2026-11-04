@@ -73,15 +73,18 @@ enum class TopChartSort(val slug: String, val label: String) {
 }
 
 enum class TopChartPeriod(val value: String, val label: String) {
-    SinceOct2025("2025-10", "Published since Oct 2025"),
-    Last30Days("30d", "Published in the last 30 days"),
-    Last7Days("7d", "Published in the last 7 days"),
-    AllTime("all", "Published any time"),
+    SinceOct2025("2025-10", "since Oct 2025"),
+    Last30Days("30d", "in the last 30 days"),
+    Last7Days("7d", "in the last 7 days"),
+    AllTime("all", "any time"),
 }
 
 /** Usage is only measured for watchfaces. */
 private fun AppType.topChartSorts(): List<TopChartSort> =
     if (this == AppType.Watchface) TopChartSort.entries else listOf(TopChartSort.MostHearted)
+
+/** Faces are filtered by latest release; apps rank by hearts received in the period. */
+private fun AppType.topChartPeriodVerb(): String = if (this == AppType.Watchface) "Updated" else "Hearted"
 
 data class TopChartSelection(val sort: TopChartSort, val period: TopChartPeriod)
 
@@ -181,7 +184,7 @@ private fun TopChartControls(type: AppType, modifier: Modifier = Modifier) {
         } else {
             Text(selection.sort.label, color = Color.Gray)
         }
-        TopChartDropdown(selection.period, TopChartPeriod.entries, { it.label }) {
+        TopChartDropdown(selection.period, TopChartPeriod.entries, { "${type.topChartPeriodVerb()} ${it.label}" }) {
             viewModel.select(type, selection.copy(period = it))
         }
     }
