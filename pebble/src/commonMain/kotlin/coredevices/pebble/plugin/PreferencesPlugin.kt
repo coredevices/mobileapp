@@ -197,8 +197,8 @@ class PreferencesPlugin(
 
         /** Until the user sets their own. */
         val DEFAULT_COMPLICATIONS = listOf(
-            ComplicationSlot("phone", "phone_state", 0, "battery_level"),
             ComplicationSlot("weather", "location", 0, "temperature"),
+            ComplicationSlot("phone", "phone_state", 0, "battery_level"),
             ComplicationSlot("calendar", "event", 0, "starts_at"),
             ComplicationSlot("finance", "stock", 0, "price"),
         )
