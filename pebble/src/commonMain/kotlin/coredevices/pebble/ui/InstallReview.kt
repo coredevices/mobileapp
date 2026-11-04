@@ -242,7 +242,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.TIMELINE -> Icons.Filled.ViewTimeline
     PluginPermissions.READ_WATCH_SETTINGS, PluginPermissions.WRITE_WATCH_SETTINGS -> Icons.Filled.Watch
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
-    PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
+    PluginPermissions.READ_APPS, PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
     PluginPermissions.FIND_MY_PHONE -> Icons.Filled.PhonelinkRing
     PluginPermissions.READ_FILES, PluginPermissions.WRITE_FILES -> Icons.Filled.Folder
     PluginPermissions.LEGACY_PEBBLEKIT -> Icons.Filled.Campaign
@@ -265,6 +265,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.WRITE_WATCH_SETTINGS -> "Change your watch settings"
     PluginPermissions.READ_MUSIC -> "See what music is playing"
     PluginPermissions.CONTROL_MUSIC -> "Control music playback"
+    PluginPermissions.READ_APPS -> "See which apps and watchfaces you have"
     PluginPermissions.LAUNCH_APPS -> "Launch apps on your watch"
     PluginPermissions.FIND_MY_PHONE -> "Ring your phone to find it"
     PluginPermissions.READ_FILES -> fileScopeOf(key)?.let { "Read '${fileScopeLabel(it)}' in device storage" } ?: "Read files from device storage you permit"
