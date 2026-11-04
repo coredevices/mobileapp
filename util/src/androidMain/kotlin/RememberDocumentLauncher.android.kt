@@ -5,45 +5,57 @@ import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import co.touchlab.kermit.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.io.asSource
 import kotlinx.io.buffered
+
+private val logger = Logger.withTag("DocumentLauncher")
 
 @Composable
 actual fun rememberOpenDocumentLauncher(onResult: (List<DocumentAttachment>?) -> Unit): (mimeTypeFilter: List<String>) -> Unit {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val launcher =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
-            val contentResolver = context.contentResolver
-            val sources = it.map { uri ->
-                val stream = contentResolver.openInputStream(uri) ?: error("Provider crashed")
-                val size = stream.available().toLong()
-                val source = stream
-                    .asSource()
-                    .buffered()
-                val mimeType = if (uri.scheme == "content") {
-                    contentResolver.getType(uri)
-                } else {
-                    val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
-                    MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            scope.launch {
+                // Cloud providers (e.g. Nextcloud) download the file while it's opened.
+                val sources = withContext(Dispatchers.IO) {
+                    uris.mapNotNull { uri ->
+                        try {
+                            context.contentResolver.openAttachment(uri)
+                        } catch (e: Exception) {
+                            logger.w(e) { "Couldn't open $uri" }
+                            null
+                        }
+                    }
                 }
-                val sourceName = getNameFromUri(uri, contentResolver) ?: "unknown"
-                DocumentAttachment(
-                    fileName = sourceName,
-                    mimeType = mimeType,
-                    source = source,
-                    size = size,
-                )
-            }
-            if (sources.isEmpty()) {
-                onResult(null)
-            } else {
-                onResult(sources)
+                onResult(sources.ifEmpty { null })
             }
         }
     return { mimeTypeFilter ->
         launcher.launch(mimeTypeFilter.toTypedArray())
     }
+}
+
+private fun ContentResolver.openAttachment(uri: Uri): DocumentAttachment {
+    val stream = openInputStream(uri) ?: error("Provider crashed")
+    val mimeType = if (uri.scheme == "content") {
+        getType(uri)
+    } else {
+        val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+        MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+    }
+    return DocumentAttachment(
+        fileName = getNameFromUri(uri, this) ?: "unknown",
+        mimeType = mimeType,
+        source = stream.asSource().buffered(),
+        size = stream.available().toLong(),
+    )
 }
 
 private fun getNameFromUri(uri: Uri, contentResolver: ContentResolver): String? {
