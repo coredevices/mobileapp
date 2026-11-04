@@ -157,9 +157,9 @@ import kotlin.uuid.Uuid
         // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
         AutoMigration(from = 42, to = 43, Migrate42To43::class),
         // 43→44 is Migrate43To44, added to the builder in experimentalModule.
-        // 44→45: adds IndexWebhookDeliveryEntity.
+        // 44→45: adds LocalClockEntry (in-app timers/alarms on iOS).
         AutoMigration(from = 44, to = 45),
-        // 45→46: adds LocalClockEntry (in-app timers/alarms on iOS).
+        // 45→46: adds IndexWebhookDeliveryEntity.
         AutoMigration(from = 45, to = 46),
     ]
 )
