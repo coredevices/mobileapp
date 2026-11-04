@@ -21,6 +21,7 @@ private val DECLARATION = SourceDeclaration(
         "history" to listOf(
             SourceShapeNames.series(SourceShapeNames.NUMERIC_VALUE),
             SourceShapeNames.series(SourceShapeNames.SHORT_TEXT),
+            SourceShapeNames.series(SourceShapeNames.ICON),
         ),
     ),
 )
@@ -107,6 +108,12 @@ class ShapeValidationTest {
             "numericValue": {"values": [1]}}}}"""))
         assertEquals(emptyMap(), kept("""{"history": {"series": {"longText": {"values": ["a"]}}}}"""))
         assertEquals(emptyMap(), kept("""{"history": {"series": {"numericValue": {"values": [1, "2"]}}}}"""))
+    }
+
+    @Test
+    fun aSeriesOfBitmapsSurvives() {
+        assertEquals(1, kept("""{"history": {"series": {"icon": {"values": [${bitmap(5, 4)}, null]}}}}""").size)
+        assertEquals(emptyList(), reports)
     }
 
     @Test
