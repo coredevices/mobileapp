@@ -100,8 +100,8 @@ class PreferencesPluginTest {
     fun theDefaultSlotsUntilTheUserSetsTheirOwn() = runTest {
         val slots = read(PreferencesPlugin.ITEM_COMPLICATIONS)
         assertEquals(PreferencesPlugin.DEFAULT_COMPLICATIONS.size, slots.instances.size)
-        assertEquals("phone", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
-        assertEquals("battery_level", slots.text(0, PreferencesPlugin.PROPERTY_PROPERTY))
+        assertEquals("weather", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
+        assertEquals("temperature", slots.text(0, PreferencesPlugin.PROPERTY_PROPERTY))
     }
 
     @Test
@@ -113,7 +113,7 @@ class PreferencesPluginTest {
         assertEquals(PreferencesPlugin.SLOT_COUNT, reloaded.complications.value.size)
         val slots = read(PreferencesPlugin.ITEM_COMPLICATIONS, reloaded)
         assertEquals(listOf("1", "2", "3", "4"), slots.instances.map { it.instanceId })
-        assertEquals("weather", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
+        assertEquals("phone", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
         assertEquals("stock", slots.text(3, PreferencesPlugin.PROPERTY_ITEM))
         assertEquals(1.0, slots.number(3, PreferencesPlugin.PROPERTY_INDEX))
     }
