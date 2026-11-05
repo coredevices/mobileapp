@@ -1,6 +1,7 @@
 package theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -206,14 +207,12 @@ fun currentColorScheme(): CoreAppColorScheme {
 fun AppTheme(
     content: @Composable() () -> Unit
 ) {
+    val themeProvider: ThemeProvider = koinInject()
+    val dynamicColor by themeProvider.dynamicColor.collectAsState()
     val colorScheme = currentColorScheme()
     val extendedColors = if (colorScheme.isDark) darkExtendedColors else lightExtendedColors
     setStatusBarTheme(colorScheme)
-    val materialColorScheme = when (colorScheme) {
-        CoreAppColorScheme.Light -> lightScheme
-        CoreAppColorScheme.Grey -> greyScheme
-        CoreAppColorScheme.Black -> blackScheme
-    }
+    val materialColorScheme = getMaterialColorScheme(dynamicColor, colorScheme)
     CompositionLocalProvider(LocalExtendedColors provides extendedColors) {
         MaterialTheme(
             colorScheme = materialColorScheme,
@@ -225,9 +224,16 @@ fun AppTheme(
 
 expect @Composable fun setStatusBarTheme(colorScheme: CoreAppColorScheme)
 
+expect fun supportsDynamicTheme(): Boolean
+
+expect @Composable fun getMaterialColorScheme(dynamicColor: Boolean, colorScheme: CoreAppColorScheme): ColorScheme
+
 interface ThemeProvider {
     val theme: StateFlow<CoreAppTheme>
     fun setTheme(theme: CoreAppTheme)
+    val dynamicColor: StateFlow<Boolean>
+        get() = MutableStateFlow(false)
+    fun setDynamicColor(enabled: Boolean) {}
 }
 
 class RealThemeProvider(
@@ -236,9 +242,16 @@ class RealThemeProvider(
     private val _theme = MutableStateFlow(getTheme())
     override val theme: StateFlow<CoreAppTheme> = _theme.asStateFlow()
 
+    private val _dynamicColor = MutableStateFlow(getDynamicColor())
+    override val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
     private fun getTheme(): CoreAppTheme {
         val key = settings.getStringOrNull(THEME_SETTINGS_KEY)
         return key.asCoreAppTheme()
+    }
+
+    private fun getDynamicColor(): Boolean {
+        return settings.getBoolean(DYNAMIC_COLOR_SETTINGS_KEY, false)
     }
 
     override fun setTheme(theme: CoreAppTheme) {
@@ -246,8 +259,14 @@ class RealThemeProvider(
         _theme.value = theme
     }
 
+    override fun setDynamicColor(enabled: Boolean) {
+        settings.putBoolean(DYNAMIC_COLOR_SETTINGS_KEY, enabled)
+        _dynamicColor.value = enabled
+    }
+
     companion object {
         private const val THEME_SETTINGS_KEY = "current_theme"
+        private const val DYNAMIC_COLOR_SETTINGS_KEY = "dynamic_color"
     }
 }
 
