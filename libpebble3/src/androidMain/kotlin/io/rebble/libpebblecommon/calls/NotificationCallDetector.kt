@@ -7,10 +7,13 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.obfuscate
 import io.rebble.libpebblecommon.util.stripBidiIsolates
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 /**
- * Passive store for CATEGORY_CALL notification actions and contact info.
- * Does not drive call state.
+ * Store for CATEGORY_CALL notification actions and contact info.
+ * Drives call state only through [notificationCalls], for calls the system doesn't report.
  */
 class NotificationCallDetector(
     private val privateLogger: PrivateLogger,
@@ -19,16 +22,30 @@ class NotificationCallDetector(
         private val logger = Logger.withTag("NotificationCallDetector")
     }
 
-    private var activeNotificationKey: String? = null
+    private class DetectedCall(
+        val notificationKey: String,
+        val contactName: String?,
+        val contactNumber: String?,
+        val answerAction: Notification.Action?,
+        val declineAction: Notification.Action?,
+    )
 
-    var contactName: String? = null
-        private set
-    var contactNumber: String? = null
-        private set
-    var answerAction: Notification.Action? = null
-        private set
-    var declineAction: Notification.Action? = null
-        private set
+    private val detectedCall = MutableStateFlow<DetectedCall?>(null)
+
+    val contactName: String? get() = detectedCall.value?.contactName
+    val contactNumber: String? get() = detectedCall.value?.contactNumber
+    val answerAction: Notification.Action? get() = detectedCall.value?.answerAction
+    val declineAction: Notification.Action? get() = detectedCall.value?.declineAction
+
+    val notificationCalls: Flow<NotificationCall?> = detectedCall.map { call ->
+        call?.let {
+            NotificationCall(
+                contactName = it.contactName,
+                contactNumber = it.contactNumber,
+                ringing = it.answerAction != null,
+            )
+        }
+    }
 
     fun handleCallNotificationPosted(sbn: StatusBarNotification) {
         val notification = sbn.notification
@@ -43,25 +60,19 @@ class NotificationCallDetector(
 
         logger.d { "Call notification from ${sbn.packageName}: ${title.obfuscate(privateLogger)} / ${text.obfuscate(privateLogger)} (answer=${answer != null}, decline=${decline != null})" }
 
-        activeNotificationKey = sbn.key
-        contactName = title
-        contactNumber = text
-        answerAction = answer
-        declineAction = decline
+        detectedCall.value = DetectedCall(
+            notificationKey = sbn.key,
+            contactName = title,
+            contactNumber = text,
+            answerAction = answer,
+            declineAction = decline,
+        )
     }
 
     fun handleCallNotificationRemoved(sbn: StatusBarNotification) {
-        if (sbn.key != activeNotificationKey) return
+        if (sbn.key != detectedCall.value?.notificationKey) return
         logger.d { "Call notification removed from ${sbn.packageName}" }
-        clear()
-    }
-
-    private fun clear() {
-        activeNotificationKey = null
-        contactName = null
-        contactNumber = null
-        answerAction = null
-        declineAction = null
+        detectedCall.value = null
     }
 
     private fun findAnswerAction(notification: Notification): Notification.Action? {
