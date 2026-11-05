@@ -376,10 +376,7 @@ fun settingsBadgeTotal(): Int {
     }
     val appUpdateTracker: AppUpdateTracker = koinInject()
     val appWasUpdated by appUpdateTracker.appWasUpdated.collectAsState()
-    val appUpdated = when (appWasUpdated) {
-        true -> 1
-        false -> 0
-    }
+    val appUpdated = if (appWasUpdated && coreConfig.showAppUpdatedBadge) 1 else 0
     return permissionBadgeCount + updatesAvailable + appUpdated
 }
 
@@ -716,13 +713,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                    badge = if (showChangelogBadge) "1" else null,
+                    badge = if (showChangelogBadge && coreConfig.showAppUpdatedBadge) "1" else null,
                     onDisplayed = {
                         LaunchedEffect(Unit) {
                             appUpdateTracker.acknowledgeCurrentVersion()
                         }
                     },
                 ) },
+                basicSettingsToggleItem(
+                    title = "Show badge when app was updated",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.About,
+                    checked = coreConfig.showAppUpdatedBadge,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(showAppUpdatedBadge = it))
+                    },
+                ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
                     topLevelType = TopLevelType.Phone,
