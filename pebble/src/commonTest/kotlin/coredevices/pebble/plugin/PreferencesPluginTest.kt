@@ -119,6 +119,20 @@ class PreferencesPluginTest {
     }
 
     @Test
+    fun movingASlotShiftsTheOthers() {
+        plugin.moveComplication(0, 2)
+        val d = PreferencesPlugin.DEFAULT_COMPLICATIONS
+        assertEquals(listOf(d[1], d[2], d[0], d[3], null), plugin().complications.value)
+    }
+
+    @Test
+    fun resetRestoresTheDefaults() {
+        plugin.setComplication(0, null)
+        plugin.resetComplications()
+        assertEquals(PreferencesPlugin.DEFAULT_COMPLICATIONS + null, plugin().complications.value)
+    }
+
+    @Test
     fun weatherLocationsAreKeyedAndOrderedLikeTheUsersList() = runTest {
         val locations = listOf(
             WeatherLocationEntity(HERE, 0, "Current location", null, null, currentLocation = true),

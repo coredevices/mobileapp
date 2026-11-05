@@ -6,15 +6,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -22,15 +29,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,6 +50,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.plugin.ComplicationSlot
 import coredevices.pebble.plugin.PreferencesPlugin
@@ -57,6 +71,8 @@ import io.rebble.libpebblecommon.plugin.SourceInstance
 import io.rebble.libpebblecommon.plugin.SourceShapeNames
 import io.rebble.libpebblecommon.plugin.SourceUpdate
 import io.rebble.libpebblecommon.plugin.TimestampShape
+import kotlin.io.encoding.Base64
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -64,8 +80,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import org.koin.compose.koinInject
-import kotlin.time.Instant
-import kotlin.io.encoding.Base64
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private data class SourceRef(val category: String, val item: String) {
     val label get() = "${humanize(category)}: ${humanize(item).lowercase()}"
@@ -90,14 +106,54 @@ private fun ordinal(n: Int) = when {
 
 @Composable
 fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
+    var confirmingReset by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
-        topBarParams.actions {}
+        topBarParams.actions {
+            TopBarIconButtonWithToolTip(
+                onClick = { confirmingReset = true },
+                icon = Icons.Default.RestartAlt,
+                description = "Reset to defaults",
+            )
+        }
         topBarParams.title("Complications")
     }
     val preferences: PreferencesPlugin = koinInject()
     val slots by preferences.complications.collectAsState()
     var editing by remember { mutableStateOf<Int?>(null) }
+    if (confirmingReset) {
+        AlertDialog(
+            onDismissRequest = { confirmingReset = false },
+            title = { Text("Reset to defaults?") },
+            text = { Text("Your complication slots will be replaced with the default readings.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    preferences.resetComplications()
+                    confirmingReset = false
+                }) { Text("Reset") }
+            },
+            dismissButton = { TextButton(onClick = { confirmingReset = false }) { Text("Cancel") } },
+        )
+    }
+    var showingInfo by remember { mutableStateOf(false) }
+    if (showingInfo) {
+        AlertDialog(
+            onDismissRequest = { showingInfo = false },
+            title = { Text("Complications") },
+            text = {
+                Text(
+                    "Complications are small pieces of information a watchface shows alongside the time, " +
+                        "like the weather, your phone's battery or your next event.\n\n" +
+                        "Instead of each watchface asking you to set these up separately, you choose them once here. " +
+                        "Every watchface can see this list, and the ones that support it fill their complication " +
+                        "slots from it, usually in this order, so put the ones you care about most first.\n\n" +
+                        "Watchfaces have to opt in to using this list. Some don't, and will show their own " +
+                        "choices or have their own settings instead."
+                )
+            },
+            confirmButton = { TextButton(onClick = { showingInfo = false }) { Text("OK") } },
+        )
+    }
     editing?.let { position ->
         ComplicationEditor(
             slot = slots[position],
@@ -108,24 +164,62 @@ fun ComplicationsScreen(nav: NavBarNav, topBarParams: TopBarParams) {
             onDismiss = { editing = null },
         )
     }
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            Text(
-                "Choose which plugin entries you would like watchfaces to display in complication slots, in order",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+    val keys = remember { mutableStateListOf(*Array(PreferencesPlugin.SLOT_COUNT) { it }) }
+    val hapticFeedback = LocalHapticFeedback.current
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        val fromIdx = from.index - 1
+        val toIdx = to.index - 1
+        if (fromIdx in keys.indices && toIdx in keys.indices) {
+            keys.add(toIdx, keys.removeAt(fromIdx))
+            preferences.moveComplication(fromIdx, toIdx)
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
         }
-        itemsIndexed(slots) { position, slot ->
-            ListItem(
-                leadingContent = { Text("${position + 1}", style = MaterialTheme.typography.titleMedium) },
-                headlineContent = { Text(slot?.let { humanize(it.property) } ?: "Empty") },
-                supportingContent = slot?.let {
-                    { Text("${SourceRef(it.category, it.item).label} · ${ordinal(it.index + 1)}") }
-                },
-                modifier = Modifier.clickable { editing = position },
-            )
+    }
+    LazyColumn(state = lazyListState, modifier = Modifier.fillMaxSize()) {
+        item(key = "header") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            ) {
+                Text(
+                    "Choose which data you would like watchfaces to display in complication slots, in order",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { showingInfo = true }) {
+                    Icon(Icons.Outlined.Info, contentDescription = "About complications")
+                }
+            }
+        }
+        itemsIndexed(slots, key = { position, _ -> keys[position] }) { position, slot ->
+            ReorderableItem(reorderableState, key = keys[position]) {
+                val source = slot?.let { SourceRef(it.category, it.item) }
+                val reading = rememberReadings(source).getOrNull(slot?.index ?: 0)
+                ListItem(
+                    leadingContent = { Text("${position + 1}", style = MaterialTheme.typography.titleMedium) },
+                    headlineContent = { Text(slot?.let { humanize(it.property) } ?: "Empty") },
+                    supportingContent = source?.let {
+                        { Text(listOfNotNull(it.label, reading?.name()).joinToString(" · ")) }
+                    },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            slot?.let { s -> reading?.properties?.get(s.property)?.let { ShapesPreview(it) } }
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.draggableHandle(
+                                    onDragStarted = { hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) },
+                                    onDragStopped = { hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd) },
+                                ),
+                            ) {
+                                Icon(Icons.Default.DragHandle, contentDescription = "Reorder")
+                            }
+                        }
+                    },
+                    modifier = Modifier.clickable { editing = position },
+                )
+            }
         }
     }
 }
@@ -148,6 +242,9 @@ private fun rememberReadings(source: SourceRef?): List<SourceInstance> {
     return if (readings.first == source) readings.second else emptyList()
 }
 
+private fun SourceInstance.name(): String? = properties[SourceInstance.PROPERTY_NAME]?.get(SourceShapeNames.SHORT_TEXT)
+    ?.let { Json.decodeFromJsonElement<ShortTextShape>(it).text }
+
 @Composable
 private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlot?) -> Unit, onDismiss: () -> Unit) {
     val libPebble = rememberLibPebble()
@@ -165,13 +262,6 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
     val properties = declaration?.properties?.keys?.toList().orEmpty()
     val chosenProperty = property ?: properties.firstOrNull()
     val readings = rememberReadings(source)
-    val shapes = chosenProperty?.let { readings.getOrNull(index)?.properties?.get(it) }.orEmpty()
-
-    fun choose(ref: SourceRef?) {
-        source = ref
-        index = 0
-        property = null
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -182,56 +272,41 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
                 Picker(
-                    label = "Category",
-                    options = listOf<String?>(null) + served.map { it.category }.distinct(),
-                    selected = source?.category,
-                    text = { it?.let(::humanize) ?: "Nothing" },
-                    onSelect = { category -> choose(served.firstOrNull { it.category == category }) },
-                )
-                Picker(
-                    label = "Item",
-                    options = served.filter { it.category == source?.category }.ifEmpty { listOf(null) },
+                    label = "Source",
+                    options = listOf<SourceRef?>(null) + served,
                     selected = source,
-                    text = { it?.let { ref -> humanize(ref.item) } ?: "—" },
-                    onSelect = ::choose,
-                    enabled = source != null,
+                    text = { it?.label ?: "Nothing" },
+                    onSelect = {
+                        source = it
+                        index = 0
+                        property = null
+                    },
                 )
-                Picker(
-                    label = "Which",
-                    options = readings.indices.toList().ifEmpty { listOf(index) },
-                    selected = index,
-                    text = { ordinal(it + 1) },
-                    onSelect = { index = it },
-                    enabled = source != null,
-                )
-                Picker(
-                    label = "Reading",
-                    options = properties.ifEmpty { listOf(null) },
-                    selected = chosenProperty,
-                    text = { it?.let(::humanize) ?: "—" },
-                    onSelect = { property = it },
-                    enabled = source != null,
-                )
-                if (shapes.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Now", style = MaterialTheme.typography.labelLarge)
-                        shapes.forEach { (name, value) ->
-                            val bitmap = when (name) {
-                                SourceShapeNames.ICON -> Json.decodeFromJsonElement<IconShape>(value)
-                                    .let { PaletteBitmap(it.pixels, it.palette, it.width, it.height) }
-                                SourceShapeNames.IMAGE -> Json.decodeFromJsonElement<ImageShape>(value)
-                                    .let { PaletteBitmap(it.pixels, it.palette, it.width, it.height) }
-                                else -> null
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    if (bitmap == null) "$name: ${shapeSummary(name, value)}" else "$name: ",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                bitmap?.let { PaletteBitmapView(it) }
-                            }
-                        }
+                if (readings.size > 1 || index > 0) {
+                    Picker(
+                        label = "Which",
+                        options = readings.indices.toList().ifEmpty { listOf(index) },
+                        selected = index,
+                        text = { i ->
+                            val name = readings.getOrNull(i)?.name()
+                            if (name == null) ordinal(i + 1) else "${ordinal(i + 1)} (currently: $name)"
+                        },
+                        onSelect = { index = it },
+                    )
+                }
+                properties.forEach { p ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().selectable(
+                            selected = p == chosenProperty,
+                            onClick = { property = p },
+                            role = Role.RadioButton,
+                        ),
+                    ) {
+                        RadioButton(selected = p == chosenProperty, onClick = null)
+                        Text(humanize(p), modifier = Modifier.weight(1f))
+                        readings.getOrNull(index)?.properties?.get(p)?.let { ShapesPreview(it) }
                     }
                 }
             }
@@ -244,6 +319,30 @@ private fun ComplicationEditor(slot: ComplicationSlot?, onSave: (ComplicationSlo
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** An icon/image if there is one, then the first text-like shape. */
+@Composable
+private fun ShapesPreview(shapes: Map<String, JsonElement>) {
+    val bitmap = shapes[SourceShapeNames.ICON]?.let { Json.decodeFromJsonElement<IconShape>(it) }
+        ?.let { PaletteBitmap(it.pixels, it.palette, it.width, it.height) }
+        ?: shapes[SourceShapeNames.IMAGE]?.let { Json.decodeFromJsonElement<ImageShape>(it) }
+            ?.let { PaletteBitmap(it.pixels, it.palette, it.width, it.height) }
+    val text = TEXT_SHAPE_PRIORITY.firstNotNullOfOrNull { name -> shapes[name]?.let { shapeSummary(name, it) } }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        bitmap?.let { PaletteBitmapView(it) }
+        text?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+private val TEXT_SHAPE_PRIORITY = listOf(
+    SourceShapeNames.SHORT_TEXT,
+    SourceShapeNames.NUMERIC_VALUE,
+    SourceShapeNames.TIMESTAMP,
+    SourceShapeNames.BOOLEAN,
+    SourceShapeNames.LONG_TEXT,
+)
 
 private val PREVIEW_ICON_SIZE = IconPixelSize(24, 24)
 
@@ -266,7 +365,7 @@ private class PaletteBitmap(pixels: String, palette: String, val width: Int, val
 
 @Composable
 private fun PaletteBitmapView(bitmap: PaletteBitmap) {
-    Canvas(Modifier.size((bitmap.width * 2).dp, (bitmap.height * 2).dp)) {
+    Canvas(Modifier.height(24.dp).aspectRatio(bitmap.width.toFloat() / bitmap.height)) {
         val cell = Size(size.width / bitmap.width, size.height / bitmap.height)
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
             drawRect(bitmap.colorAt(x, y), Offset(x * cell.width, y * cell.height), cell)

@@ -97,6 +97,11 @@ class PreferencesPlugin(
     fun setComplication(position: Int, slot: ComplicationSlot?) =
         save(_complications.value.toMutableList().apply { set(position, slot) })
 
+    fun moveComplication(from: Int, to: Int) =
+        save(_complications.value.toMutableList().apply { add(to, removeAt(from)) })
+
+    fun resetComplications() = save(withSlotCount(DEFAULT_COMPLICATIONS))
+
     private fun save(slots: List<ComplicationSlot?>) {
         _complications.value = slots
         settings.putString(COMPLICATIONS_KEY, Json.encodeToString(slots))
@@ -110,8 +115,10 @@ class PreferencesPlugin(
                 null
             }
         } ?: DEFAULT_COMPLICATIONS
-        return List(SLOT_COUNT) { stored.getOrNull(it) }
+        return withSlotCount(stored)
     }
+
+    private fun withSlotCount(slots: List<ComplicationSlot?>) = List(SLOT_COUNT) { slots.getOrNull(it) }
 
     override fun observe(
         category: String,
@@ -200,7 +207,7 @@ class PreferencesPlugin(
             ComplicationSlot("weather", "location", 0, "temperature"),
             ComplicationSlot("phone", "phone_state", 0, "battery_level"),
             ComplicationSlot("calendar", "event", 0, "starts_at"),
-            ComplicationSlot("finance", "stock", 0, "price"),
+            ComplicationSlot("weather", "location", 0, "condition"),
         )
 
         val BUILT_IN_PREFERENCES_UUID: Uuid = Uuid.parse("00000000-0000-0000-0001-000000000009")
