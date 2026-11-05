@@ -207,6 +207,7 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(BoolWatchPref.NotificationVibeDelay, Section.Notifications, SettingsGroup.Vibration, "Delay Until Notification Is Visible"),
     PrefLayout(BoolWatchPref.NotificationBacklight, Section.Notifications),
     PrefLayout(BoolWatchPref.RespectPhoneSilence, Section.Notifications),
+    PrefLayout(BoolWatchPref.NotificationDismissalSync, Section.Notifications),
     PrefLayout(EnumWatchPref.NotificationTextSize, Section.Notifications),
     PrefLayout(EnumWatchPref.NotificationFilter, Section.Notifications),
     PrefLayout(NumberWatchPref.NotificationTimeoutMs, Section.Notifications),
