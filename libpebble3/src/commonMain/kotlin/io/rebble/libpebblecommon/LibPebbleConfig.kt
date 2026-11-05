@@ -102,6 +102,8 @@ data class WatchConfig(
      */
     val enableWatchSettingsSync: Boolean = true,
     val musicSeekWhenAvailable: Boolean = true,
+    /** iOS: look up album art on the iTunes Search API. Sends track title and artist to Apple. */
+    val lookUpAlbumArtOnline: Boolean = false,
     val enablePlugins: Boolean = false,
     val permissionPolicy: PermissionPolicy = PermissionPolicy.AskIfExfiltrating,
     /** When false, legacy apps keep what they had before permissions (see `isLegacyImplicit`). */

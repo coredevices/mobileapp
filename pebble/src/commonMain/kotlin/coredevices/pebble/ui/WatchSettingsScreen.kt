@@ -2370,6 +2370,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsMusic() },
                 ),
+                basicSettingsToggleItem(
+                    title = "Look up album art online",
+                    description = "Shows album art in the watch's music app. Sends the track title and artist to Apple (iTunes Search)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Music,
+                    checked = libPebbleConfig.watchConfig.lookUpAlbumArtOnline,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    lookUpAlbumArtOnline = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsOnlineAlbumArtLookup() },
+                ),
             ) + watchPrefs
         }
 

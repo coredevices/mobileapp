@@ -26,6 +26,7 @@ import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.IosSystemGeoloca
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.util.OtherPebbleIosApps
 import io.rebble.libpebblecommon.imaging.NoNotificationImages
 import io.rebble.libpebblecommon.imaging.NotificationImageProvider
+import io.rebble.libpebblecommon.music.ITunesAlbumArtLookup
 import io.rebble.libpebblecommon.music.SystemMusicControl
 import io.rebble.libpebblecommon.notification.NotificationAppsSync
 import io.rebble.libpebblecommon.notification.NotificationListenerConnection
@@ -48,6 +49,7 @@ actual val platformModule: Module = module {
         PhoneCapabilities(
             CommonPhoneCapabilities + setOf(
                 ProtocolCapsFlag.SupportsNotificationFiltering,
+                ProtocolCapsFlag.SupportsImageFetch,
             )
         )
     }
@@ -62,6 +64,7 @@ actual val platformModule: Module = module {
     singleOf(::IosSystemCalendar) bind SystemCalendar::class
     singleOf(::IosCalendarActionHandler) bind PlatformCalendarActionHandler::class
     singleOf(::IosSystemCallLog) bind SystemCallLog::class
+    singleOf(::ITunesAlbumArtLookup)
     singleOf(::IosSystemMusicControl) bind SystemMusicControl::class
     singleOf(::NoNotificationImages) bind NotificationImageProvider::class
     singleOf(::IosSystemGeolocation) bind SystemGeolocation::class

@@ -20,5 +20,6 @@ class PebbleFeatures(
     fun supportsRestartingGattServerAfterBtPowerOn(): Boolean = platform == Platform.IOS
     fun supportsBleAutoConnect(): Boolean = platform == Platform.Android
     fun supportsMusic(): Boolean = platform == Platform.Android
+    fun supportsOnlineAlbumArtLookup(): Boolean = platform == Platform.IOS
     fun supportsCentralStateRestoration(): Boolean = platform == Platform.IOS
 }
