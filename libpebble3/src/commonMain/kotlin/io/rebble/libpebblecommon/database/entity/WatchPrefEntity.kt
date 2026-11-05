@@ -535,12 +535,19 @@ enum class EnumWatchPref(
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
 ) : WatchPref<WatchPrefEnum> {
-    SystemTextSize("systemTextSize", "Text Size", ContentSize.Default, ContentSize.entries),
+    SystemTextSize(
+        "systemTextSize",
+        "Text Size",
+        ContentSize.Default,
+        ContentSize.entries,
+        description = "Text size for system menus and the launcher",
+    ),
     NotificationTextSize(
         "notifTextSize",
-        "Notification Text Size",
+        "Text Size",
         NotificationContentSize.Default,
         NotificationContentSize.entries,
+        description = "Text size for notifications",
     ),
     NotificationFilter(
         "mask",
@@ -875,9 +882,16 @@ enum class ColorWatchPref(
 
 private val logger = Logger.withTag("WatchPrefItem")
 
+/** Pre-v4.38 phone/watch sync key; superseded by systemTextSize and notifTextSize. */
+internal const val LEGACY_TEXT_STYLE_PREF_ID = "textStyle"
+
 fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
     try {
         val id = key.asByteArray().decodeToString().trimEnd('\u0000')
+        if (id == LEGACY_TEXT_STYLE_PREF_ID) {
+            logger.d { "Ignoring legacy textStyle blobdb record" }
+            return null
+        }
         val type = WatchPref.from(id)
         if (type == null) {
             logger.w("Unknown watch pref type from blobdb: $id")
