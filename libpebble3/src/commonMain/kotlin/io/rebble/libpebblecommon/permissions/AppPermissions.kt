@@ -142,7 +142,7 @@ class AppPermissions(
         fun granted(permission: String) =
             decidePermission(permission, subject, rows, config, emptyMap()) == PermissionDecision.Granted
         if (subject.legacy) return if (granted(PluginPermissions.GLOBAL_INTERNET)) null else emptyList()
-        if (granted(PluginPermissions.INTERNET) || granted(PluginPermissions.LOCAL_NETWORK)) return null
+        if (granted(PluginPermissions.INTERNET)) return null
         return rows.mapNotNull { domainOf(it.permission) }.filter { isHostname(it) && granted(internetKey(it)) }
     }
 

@@ -84,12 +84,11 @@ internal actual fun webViewFactory(
             UIScrollViewContentInsetAdjustmentBehavior.UIScrollViewContentInsetAdjustmentNever
     }
 
-internal actual class ConfigPageNetwork(val rules: WKContentRuleList?)
+internal actual class ConfigPageNetwork(val rules: WKContentRuleList?, actual val enforced: Boolean = true)
 
 /**
  * WKWebView can't intercept http(s), so the page gets a content blocker: every http(s) and ws(s)
- * load is blocked except to the granted domains. Null rules if it can't be compiled, which
- * leaves the page unrestricted.
+ * load is blocked except to the granted domains.
  */
 internal actual suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?): ConfigPageNetwork {
     val granted = domains ?: return ConfigPageNetwork(null)
@@ -97,18 +96,18 @@ internal actual suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?
         listOf("^https?://", "^wss?://").forEach { scheme ->
             add(rule(scheme, "block"))
             granted.forEach { domain ->
-                add(rule("$scheme([^/:]+\\.)?${domain.replace(".", "\\.")}[:/]", "ignore-previous-rules"))
+                add(rule(configPageUrlFilter(scheme, domain), "ignore-previous-rules"))
             }
         }
     }
-    val store = WKContentRuleListStore.defaultStore() ?: return ConfigPageNetwork(null)
+    val store = WKContentRuleListStore.defaultStore() ?: return ConfigPageNetwork(null, enforced = false)
     val list = suspendCoroutine { cont ->
         store.compileContentRuleListForIdentifier("config-$uuid", rules.toString()) { list, error ->
             if (error != null) Logger.withTag("configPageNetwork").w { "Couldn't compile rules: ${error.localizedDescription}" }
             cont.resume(list)
         }
     }
-    return ConfigPageNetwork(list)
+    return ConfigPageNetwork(list, enforced = list != null)
 }
 
 private fun rule(urlFilter: String, action: String) = buildJsonObject {

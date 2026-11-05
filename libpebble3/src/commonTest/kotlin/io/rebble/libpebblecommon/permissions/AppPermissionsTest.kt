@@ -648,12 +648,15 @@ class WaitingRequestsTest {
     }
 
     @Test
-    fun configPagesReachOnlyGrantedDomainsUnlessTheAppMayReachAnyHost() = runTest {
+    fun configPagesReachOnlyGrantedDomainsUnlessTheAppMayReachAnyInternetHost() = runTest {
         val permissions = permissions(dao)
         permissions.recordRequested(APP, listOf(internetKey("a.example.com"), internetKey("b.example.com")))
         permissions.setDecisions(APP, mapOf(internetKey("a.example.com") to true, internetKey("b.example.com") to false))
         assertEquals(listOf("a.example.com"), permissions.grantedDomains(APP))
+        // The local network isn't a host list a config page can be held to.
         permissions.setDecisions(APP, mapOf(LOCAL_NETWORK to true))
+        assertEquals(listOf("a.example.com"), permissions.grantedDomains(APP))
+        permissions.setDecisions(APP, mapOf(INTERNET to true))
         assertNull(permissions.grantedDomains(APP))
         assertNull(permissions(dao, config = WatchConfig(enablePlugins = false)).grantedDomains(APP))
         assertNull(permissions(FakePermissionDao(), installed = installedAs(subject(legacy = true))).grantedDomains(APP))

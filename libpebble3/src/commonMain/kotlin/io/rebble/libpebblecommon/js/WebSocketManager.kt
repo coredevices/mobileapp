@@ -20,6 +20,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.atomicfu.atomic
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
@@ -38,6 +40,8 @@ class WebSocketManager(
     private val appUuid: Uuid,
     private val networkAccess: NetworkAccess,
 ) : JsEngineInterface, AutoCloseable {
+    // Calls arrive on the engine's bridge thread while sockets finish on the scope's.
+    private val lock = SynchronizedObject()
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, Instance>()
     private val logger = Logger.withTag("WebSocketManager")
@@ -57,11 +61,11 @@ class WebSocketManager(
                 is Number -> v.toInt() != 0
                 else -> false
             }
-            instances[(args[0] as Number).toInt()]?.send(args[1].toString(), binary)
+            instance(args[0])?.send(args[1].toString(), binary)
             null
         }
         "close" -> {
-            instances[(args[0] as Number).toInt()]?.close(
+            instance(args[0])?.close(
                 (args.getOrNull(1) as? Number)?.toInt() ?: NORMAL_CLOSURE,
                 args.getOrNull(2)?.toString().orEmpty(),
             )
@@ -70,17 +74,19 @@ class WebSocketManager(
         else -> error("Unknown method: $method")
     }
 
+    private fun instance(id: Any?) = synchronized(lock) { instances[(id as Number).toInt()] }
+
     private fun createInstance(url: String, protocols: String, headers: Map<String, String>): Int {
-        val id = ++lastInstance
-        val instance = Instance(id, url, protocols, headers)
-        instances[id] = instance
+        val instance = synchronized(lock) {
+            Instance(++lastInstance, url, protocols, headers).also { instances[it.id] = it }
+        }
         instance.connect()
-        return id
+        return instance.id
     }
 
     override fun close() {
-        instances.values.toList().forEach { it.cancel() }
-        instances.clear()
+        val all = synchronized(lock) { instances.values.toList().also { instances.clear() } }
+        all.forEach { it.cancel() }
     }
 
     private fun handshakeHeaders(json: String): Map<String, String> =
@@ -97,12 +103,12 @@ class WebSocketManager(
     ) {
         private val js = "WebSocket._instances.get($id)"
         private val outgoing = Channel<Frame>(Channel.UNLIMITED)
-        private var job: Job? = null
+        private val job = atomic<Job?>(null)
 
         private val session = atomic<DefaultClientWebSocketSession?>(null)
 
         fun connect() {
-            job = scope.launch { run() }
+            job.value = scope.launch { run() }
         }
 
         private suspend fun run() {
@@ -142,7 +148,7 @@ class WebSocketManager(
                 fail()
             } finally {
                 session.value?.cancel()
-                instances.remove(id)
+                synchronized(lock) { instances.remove(id) }
             }
         }
 
@@ -159,14 +165,14 @@ class WebSocketManager(
         fun close(code: Int, reason: String) {
             // Not connected yet: give up on the connect, which reports an abnormal close.
             if (session.value == null) {
-                job?.cancel()
+                job.value?.cancel()
                 return
             }
             outgoing.trySend(Frame.Close(CloseReason(code.toShort(), reason)))
         }
 
         fun cancel() {
-            job?.cancel()
+            job.value?.cancel()
         }
     }
 }

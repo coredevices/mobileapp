@@ -95,7 +95,17 @@ internal expect fun webViewFactory(
 ): NativeWebView
 
 /** Limits what a config page may connect to, on top of [webViewFactory]'s per-request checks. */
-internal expect class ConfigPageNetwork
+internal expect class ConfigPageNetwork {
+    /** False if the limits couldn't be put in place, so the page mustn't open. */
+    val enforced: Boolean
+}
+
+/**
+ * WebKit content-blocker url-filters allowing [domain] and its subdomains for [scheme] (e.g.
+ * `^https?://`). The host must end at a port or path, so `https://domain:x@evil.com/` doesn't match.
+ */
+internal fun configPageUrlFilter(scheme: String, domain: String) =
+    "$scheme([^/:@]+\\.)?${domain.replace(".", "\\.")}(:[0-9]+)?/"
 
 /** [domains] each cover their subdomains; null leaves the page unrestricted. */
 internal expect suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?): ConfigPageNetwork
@@ -290,13 +300,20 @@ fun WatchappSettingsScreen(
         ) { paddingValues ->
             val pageNetwork = network
             if (webViewUuid != null && pageNetwork != null) {
-                WebView(
-                    state = state,
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    navigator = navigator,
-                    platformWebViewParams = platformParams,
-                    factory = { webViewFactory(it, webViewUuid, bridge, mayLoad, pageNetwork) }
-                )
+                if (!pageNetwork.enforced) {
+                    Text(
+                        "These settings can't be opened safely on this device.",
+                        modifier = Modifier.padding(paddingValues).padding(16.dp),
+                    )
+                } else {
+                    WebView(
+                        state = state,
+                        modifier = Modifier.fillMaxSize().padding(paddingValues),
+                        navigator = navigator,
+                        platformWebViewParams = platformParams,
+                        factory = { webViewFactory(it, webViewUuid, bridge, mayLoad, pageNetwork) }
+                    )
+                }
             }
         }
     }

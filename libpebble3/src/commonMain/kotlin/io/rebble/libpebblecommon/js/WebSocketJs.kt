@@ -1,9 +1,9 @@
 package io.rebble.libpebblecommon.js
 
 /**
- * `WebSocket` backed by [WebSocketManager], for every context whose engine has none of its own:
- * PKJS on iOS and plugins everywhere. Binary frames cross as base64 and need [BASE64_JS]
- * evaluated first. `binaryType` is always `'arraybuffer'`: there is no `Blob`.
+ * `WebSocket` backed by [WebSocketManager], for every context whose engine has none it can gate:
+ * PKJS and plugins everywhere. Binary frames cross as base64 and need [BASE64_JS] evaluated first.
+ * `binaryType` starts as `WebSocket._defaultBinaryType`; `'blob'` only works where there's a `Blob`.
  */
 internal const val WEBSOCKET_JS = """
 (function (global) {
@@ -36,7 +36,7 @@ internal const val WEBSOCKET_JS = """
     this.protocol = '';
     this.extensions = '';
     this.bufferedAmount = 0;
-    this.binaryType = 'arraybuffer';
+    this.binaryType = WebSocket._defaultBinaryType;
     this.onopen = null;
     this.onmessage = null;
     this.onerror = null;
@@ -65,11 +65,27 @@ internal const val WEBSOCKET_JS = """
 
   // What the host evaluates into: `WebSocket._instances.get(id)._on*`.
   WebSocket._instances = new Map();
+  WebSocket._defaultBinaryType = 'arraybuffer';
 
   WebSocket.prototype.send = function (data) {
     if (this.readyState === WebSocket.CONNECTING) {
       throw new Error('InvalidStateError: WebSocket is still connecting');
     }
+    if (this.readyState !== WebSocket.OPEN) return;
+    var self = this;
+    // A Blob is read asynchronously, so everything sent after it waits its turn.
+    if (typeof Blob === 'function' && data instanceof Blob) {
+      this._queue = (this._queue || Promise.resolve())
+        .then(function () { return data.arrayBuffer(); })
+        .then(function (buffer) { self._send(buffer); }, function () {});
+    } else if (this._queue) {
+      this._queue = this._queue.then(function () { self._send(data); });
+    } else {
+      this._send(data);
+    }
+  };
+
+  WebSocket.prototype._send = function (data) {
     if (this.readyState !== WebSocket.OPEN) return;
     if (data instanceof ArrayBuffer) {
       _WebSocketManager.send(this._id, bytesToBase64(new Uint8Array(data)), true);
@@ -109,7 +125,9 @@ internal const val WEBSOCKET_JS = """
     this._dispatchEvent('message', {
       type: 'message',
       target: this,
-      data: isBinary ? base64ToBuffer(data) : data,
+      data: !isBinary ? data
+        : this.binaryType === 'blob' && typeof Blob === 'function' ? new Blob([base64ToBuffer(data)])
+        : base64ToBuffer(data),
       origin: this.url,
       lastEventId: '',
       source: null,

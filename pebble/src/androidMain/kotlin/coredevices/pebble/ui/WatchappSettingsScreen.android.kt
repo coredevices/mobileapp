@@ -2,6 +2,7 @@ package coredevices.pebble.ui
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.webkit.JavascriptInterface
@@ -47,7 +48,7 @@ internal actual fun webViewFactory(
     if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
         // Iframes inherit the policy, so their fresh WebSocket is limited too.
         network.csp?.let { WebViewCompat.addDocumentStartJavaScript(this, cspJs(it), setOf("*")) }
-        WebViewCompat.addDocumentStartJavaScript(this, CONFIG_NETWORK_JS, setOf("*"))
+        WebViewCompat.addDocumentStartJavaScript(this, configNetworkJs(context), setOf("*"))
     }
     if (bridge != null) {
         addJavascriptInterface(NativeConfigBridge(bridge), CONFIG_NATIVE_NAMESPACE)
@@ -77,14 +78,23 @@ internal actual fun webViewFactory(
 
 private const val CONFIG_NETWORK_NAMESPACE = "_PebbleConfigNet"
 
-internal actual class ConfigPageNetwork(val csp: String?)
+internal actual class ConfigPageNetwork(val csp: String?) {
+    // Without document-start scripts there's no CSP and no WebSocket/WebRTC gate.
+    actual val enforced = csp == null || WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+}
 
 internal actual suspend fun configPageNetwork(uuid: Uuid, domains: List<String>?) = ConfigPageNetwork(
     domains?.let { granted ->
         val sources = granted.flatMap { domain ->
             listOf("https", "wss", "http", "ws").flatMap { scheme -> listOf("$scheme://$domain", "$scheme://*.$domain") }
         }
-        "connect-src ${sources.ifEmpty { listOf("'none'") }.joinToString(" ")}"
+        // CSP is checked again on every redirect, which shouldInterceptRequest never sees. Frames
+        // inherit it, so a window the page reaches before realm_guard.js can't open a WebSocket either.
+        // <object>/<embed> make their window later, when nothing would check it. pebblejs: is how
+        // some pages close.
+        val allowed = sources.ifEmpty { listOf("'none'") }.joinToString(" ")
+        "default-src $allowed 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src $allowed; " +
+            "frame-src $allowed; worker-src 'none'; object-src 'none'; form-action $allowed pebblejs:"
     }
 )
 
@@ -102,28 +112,13 @@ private fun cspJs(csp: String) = """
     })();
 """.trimIndent()
 
-// shouldInterceptRequest never sees WebSockets or WebRTC.
-private val CONFIG_NETWORK_JS = """
-    (function (global) {
-      if (typeof $CONFIG_NETWORK_NAMESPACE === 'undefined') return;
-      ['RTCPeerConnection', 'webkitRTCPeerConnection'].forEach(function (key) {
-        try { delete global[key]; } catch (e) {}
-      });
-      var NativeWebSocket = global.WebSocket;
-      if (!NativeWebSocket) return;
-      var GatedWebSocket = function (url, protocols) {
-        var absolute = new URL(String(url), global.location.href).href;
-        if (!$CONFIG_NETWORK_NAMESPACE.allowed(absolute)) {
-          throw new DOMException('This page may not connect to ' + absolute, 'SecurityError');
+// shouldInterceptRequest never sees WebSockets, WebRTC or workers.
+private fun configNetworkJs(context: Context) =
+    context.assets.open("realm_guard.js").bufferedReader().use { it.readText() } + """
+        if (typeof $CONFIG_NETWORK_NAMESPACE !== 'undefined') {
+          __pebbleGuardRealms(globalThis, $CONFIG_NETWORK_NAMESPACE.allowed.bind($CONFIG_NETWORK_NAMESPACE), false);
         }
-        return protocols === undefined ? new NativeWebSocket(url) : new NativeWebSocket(url, protocols);
-      };
-      GatedWebSocket.prototype = NativeWebSocket.prototype;
-      Object.defineProperty(NativeWebSocket.prototype, 'constructor', { value: GatedWebSocket });
-      ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(function (key) { GatedWebSocket[key] = NativeWebSocket[key]; });
-      global.WebSocket = GatedWebSocket;
-    })(globalThis);
-""".trimIndent()
+    """.trimIndent()
 
 private class ConfigNetwork(private val mayLoad: (String) -> Boolean) {
     @JavascriptInterface
