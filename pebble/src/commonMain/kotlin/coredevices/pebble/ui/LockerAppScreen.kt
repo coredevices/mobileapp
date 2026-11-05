@@ -124,6 +124,9 @@ import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("LockerAppScreen")
 
+/** App store developer id of Pebble's own apps (eric@repebble.com). */
+private const val PEBBLE_DEVELOPER_ID = "52d8a44faef8d590d3000029"
+
 class LockerAppViewModel(
 //    private val pebbleWebServices: RealPebbleWebServices,
     private val platform: Platform,
@@ -840,7 +843,21 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                         }
                     }
                     val contactStoreId = entry.storeId
-                    if (
+                    if (entry.developerId == PEBBLE_DEVELOPER_ID) {
+                        // Pebble's own apps: file a bug report instead of messaging the developer.
+                        // Plugins run on the phone, so they're an Index report unless a watch is connected.
+                        PropertyRow(
+                            name = "GET HELP",
+                            nameModifier = propertyNameModifier,
+                            value = "Report a Bug",
+                            onClick = {
+                                navBarNav.navigateTo(
+                                    CommonRoutes.BugReport(pebble = entry.type != AppType.Plugin || connected)
+                                )
+                            },
+                            onClickIcon = Icons.AutoMirrored.Default.ArrowForward,
+                        )
+                    } else if (
                         commonAppStore?.contactable == true &&
                         commonAppStore.storeSource.isPebbleFeed() &&
                         contactStoreId != null
