@@ -125,9 +125,13 @@ class PebbleService: Service(), KoinComponent {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        if (!pebbleBackgroundManager.onServiceStarted()) {
+            logger.i { "Service started but shouldn't be running; stopping" }
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         startRingSyncJob()
         startRecordingDebugNotificationJob()
-        pebbleBackgroundManager.onServiceStarted()
         return START_STICKY
     }
 

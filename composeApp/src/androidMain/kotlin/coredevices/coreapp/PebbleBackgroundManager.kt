@@ -37,7 +37,7 @@ class PebbleBackgroundManager(
     }
 
     @Volatile
-    private var shouldBeRunning = false
+    private var shouldBeRunning: Boolean? = null
 
     private fun startBackground() {
         try {
@@ -99,14 +99,16 @@ class PebbleBackgroundManager(
      * have failed while backgrounded.
      */
     fun retryStartIfNeeded() {
-        if (shouldBeRunning && !isRunning.value) {
+        if (shouldBeRunning == true && !isRunning.value) {
             logger.i { "App foregrounded; retrying background service start (was not running)" }
             startBackground()
         }
     }
 
-    fun onServiceStarted() {
+    /** Returns false if the service should stop: it started after we'd already decided it shouldn't run. */
+    fun onServiceStarted(): Boolean {
         _isRunning.value = true
+        return shouldBeRunning != false
     }
 
     fun onServiceStopped() {
