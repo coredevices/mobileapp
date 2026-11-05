@@ -31,6 +31,8 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.disk.pbw.hasWatchappBuild
 import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
+import io.rebble.libpebblecommon.js.PKJSApp
+import io.rebble.libpebblecommon.js.createJSSettings
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.AppPermissions
@@ -68,6 +70,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
 import kotlinx.io.Source
 import kotlinx.io.buffered
@@ -131,6 +134,8 @@ class Locker(
         private val logger = Logger.withTag("Locker")
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
         private const val PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS = "have_backfilled_declared_permissions"
+        private val WATCH_REMOVAL_TIMEOUT = 20.seconds
+        private val LOCKER_SYNC_TIMEOUT = 15.seconds
     }
 
     override suspend fun sideloadApp(pbwPath: Path, loadOnWatch: Boolean, granted: Map<String, Boolean?>): Boolean =
@@ -262,10 +267,7 @@ class Locker(
         }
     }
 
-    override suspend fun removeApp(id: Uuid): Boolean = removeApp(id, keepSecrets = false)
-
-    /** [keepSecrets] for an app that is about to be reinstalled. */
-    suspend fun removeApp(id: Uuid, keepSecrets: Boolean): Boolean {
+    override suspend fun removeApp(id: Uuid): Boolean {
         val lockerEntry = lockerEntryDao.getEntry(id)
         if (lockerEntry == null) {
             logger.e { "removeApp: not found: $id" }
@@ -281,13 +283,35 @@ class Locker(
                 return false
             }
         }
+        val connected = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>()
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
-        if (!keepSecrets) deletePluginData(listOf(id))
+        // A watch only erases an app's storage when the app is removed: re-added before the removal
+        // reaches it, it's just upgraded. Its PKJS saves localStorage as it stops, so wait for that too.
+        val removed = withTimeoutOrNull(WATCH_REMOVAL_TIMEOUT) {
+            connected.forEach { watch ->
+                val disconnected = watchManager.watches.map { all ->
+                    all.none { it is ConnectedPebbleDevice && it.identifier == watch.identifier }
+                }
+                combine(
+                    lockerEntryDao.existsOnWatch(watch.identifier.asString, id),
+                    watch.currentCompanionAppSessions,
+                    disconnected,
+                ) { onWatch, sessions, gone -> gone || (!onWatch && sessions.none { it is PKJSApp && it.uuid == id }) }
+                    .first { it }
+            }
+        }
+        if (removed == null) logger.w { "removeApp: $id wasn't removed from every connected watch in time" }
+        if (lockerEntryDao.getEntry(id) == null) {
+            deleteAppData(listOf(id))
+        } else {
+            logger.i { "removeApp: $id was reinstalled while being removed; keeping its data" }
+        }
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
-            webSyncManagerProvider.webSyncManager().requestLockerSync()
+            // Awaited: a replacement added next mustn't race this sync.
+            withTimeoutOrNull(LOCKER_SYNC_TIMEOUT) { webSyncManagerProvider.webSyncManager().requestLockerSync().await() }
         }
         return true
     }
@@ -403,18 +427,20 @@ class Locker(
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
-        deletePluginData(toDelete)
+        deleteAppData(toDelete)
         performCacheCleanup()
     }
 
-    private suspend fun deletePluginData(ids: List<Uuid>) = ids.forEach { id ->
+    private suspend fun deleteAppData(ids: List<Uuid>) = ids.forEach { id ->
         try {
+            appPermissionDao.deleteByAppUuid(id)
+            createJSSettings(appContext, id.toString()).clear()
             pluginSecureStorage(appContext, id).destroy()
             pluginFileAccess.destroy(id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logger.w(e) { "Couldn't delete secrets for $id" }
+            logger.w(e) { "Couldn't delete data for $id" }
         }
     }
 
@@ -519,7 +545,6 @@ class Locker(
                 !settings.getBoolean(PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION, false)
             settings[PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION] = true
             insertSystemApps(force = needToInsertAllSystemApps)
-            // Only at startup, so that removing and reinstalling an app keeps its decisions.
             appPermissionDao.deleteForRemovedApps()
         }
         if (!settings.getBoolean(PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS, false)) {

@@ -1,7 +1,6 @@
 package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
-import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.REBBLE_FEED_URL
@@ -224,7 +223,8 @@ class RealFirestoreLocker(
         val failedSources = mutableSetOf<String>()
         val apps = allSources.flatMap { source ->
             val appstore: AppstoreService = get { parametersOf(source) }
-            val appsForSource = appstore.fetchAppStoreApps(fsLocker, useCache = !forceRefresh)
+            val lockerForSource = fsLocker.filter { it.appstoreSource == source.url }
+            val appsForSource = appstore.fetchAppStoreApps(lockerForSource, useCache = !forceRefresh)
             if (appsForSource == null) {
                 logger.w { "Failed to fetch apps from source ${source.url}" }
                 failedSources.add(source.url)
@@ -242,41 +242,16 @@ class RealFirestoreLocker(
                     dao.addLockerEntryForUser(user.uid, firestoreEntry)
                 }
             }
-            appsForSource.map { SourcedLockerEntry(source, it) }
+            appsForSource.fromDesignatedSource(source.url, designatedSourceByUuid)
         }
-        // Deduplicate by UUID (same app can exist in multiple stores).
-        // Prefer highest version, then the source the app is already associated with, then lowest source ID.
-        val dedupedSourcedApps = apps.groupBy { it.entry.uuid }.values.map { duplicates ->
-            if (duplicates.size == 1) {
-                duplicates.first()
-            } else {
-                val designatedSource = designatedSourceByUuid[duplicates.first().entry.uuid]
-                duplicates.maxWith(
-                    Comparator<SourcedLockerEntry> { a, b -> compareVersionStrings(a.entry.version, b.entry.version) }
-                        .thenBy { it.source.url == designatedSource }
-                        .thenByDescending { it.source.id }
-                )
-            }
-        }
-
-        // Update Firestore source for any entry where the winning source changed.
-        val fsLockerByUuid = fsLocker.associateBy { it.uuid.toString() }
-        dedupedSourcedApps.forEach { sourced ->
-            val existingEntry = fsLockerByUuid[sourced.entry.uuid] ?: return@forEach
-            if (existingEntry.appstoreSource != sourced.source.url) {
-                dao.addLockerEntryForUser(user.uid, existingEntry.copy(appstoreSource = sourced.source.url))
-            }
-        }
-
-        val dedupedApps = dedupedSourcedApps.map { it.entry }
-        val fetchedUuids = dedupedApps.map { Uuid.parse(it.uuid) }.toSet()
+        val fetchedUuids = apps.map { Uuid.parse(it.uuid) }.toSet()
         val uuidsFromFailedSources = fsLocker
             .filter { it.appstoreSource in failedSources }
             .map { it.uuid }
             .toSet()
         return LockerModelWrapper(
             locker = LockerModel(
-                applications = dedupedApps
+                applications = apps
             ),
             failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
             permissions = fsLocker.syncedPermissions(),
@@ -366,6 +341,13 @@ interface LibPebbleLockerProxy {
     suspend fun permissionDecisions(): List<LockerAppPermission>
 }
 
+/**
+ * An app only ever updates from the store it was installed from: another store publishing the same
+ * UUID must not take over its permissions and data. Apps not yet in the locker are [sourceUrl]'s.
+ */
+internal fun List<LockerEntry>.fromDesignatedSource(sourceUrl: String, designatedSourceByUuid: Map<String, String>) =
+    filter { (designatedSourceByUuid[it.uuid] ?: sourceUrl) == sourceUrl }
+
 /** Whether [remote] holds a decision this device hasn't got, or has an older one of. */
 internal fun hasNewerDecisions(
     remote: Map<Uuid, Map<String, PermissionDecisionRecord>>,
@@ -399,11 +381,6 @@ private data class PermissionsField(val permissions: Map<String, PermissionDecis
  * Compare two version strings numerically by major.minor segments.
  * null versions sort lower than non-null.
  */
-private data class SourcedLockerEntry(
-    val source: AppstoreSource,
-    val entry: LockerEntry,
-)
-
 internal fun compareVersionStrings(a: String?, b: String?): Int {
     if (a == null && b == null) return 0
     if (a == null) return -1

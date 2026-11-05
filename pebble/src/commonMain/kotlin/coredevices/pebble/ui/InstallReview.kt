@@ -79,6 +79,24 @@ import kotlinx.coroutines.launch
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
+@Composable
+fun ReplaceAppDialog(replaced: ReplacedApp, onAnswer: (replace: Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onAnswer(false) },
+        title = { Text("Replace ${replaced.title}?") },
+        text = {
+            Text(
+                "${replaced.title} is installed from ${replaced.installedFrom}. This copy is from " +
+                    "${replaced.newFrom}, and may not be from the same developer.\n\n" +
+                    "Replacing it erases everything the installed app has stored, including its settings, " +
+                    "sign-ins and permissions, on this phone and on connected watches."
+            )
+        },
+        confirmButton = { TextButton(onClick = { onAnswer(true) }) { Text("Replace") } },
+        dismissButton = { TextButton(onClick = { onAnswer(false) }) { Text("Cancel") } },
+    )
+}
+
 /** [onAnswer] gets null if the install was cancelled. */
 @Composable
 fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?) -> Unit) {

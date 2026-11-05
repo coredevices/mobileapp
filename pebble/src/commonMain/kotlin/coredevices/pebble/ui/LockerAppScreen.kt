@@ -119,6 +119,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.flow.flowOf
 import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("LockerAppScreen")
@@ -224,6 +225,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         val nativeLockerAddUtil: NativeLockerAddUtil = koinInject()
         var adding by remember { mutableStateOf(false) }
         var storeReview by remember { mutableStateOf<InstallReview?>(null) }
+        var storeReplacing by remember { mutableStateOf<ReplacedApp?>(null) }
+        val appReplacements: AppReplacements = koinInject()
 
         fun reloadFromStore(useCache: Boolean) {
             if (storeId != null && storeSource != null) {
@@ -518,23 +521,47 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     }
                                 }
                             }
+                            suspend fun reviewAndAdd() {
+                                val review = nativeLockerAddUtil.review(storeApp)
+                                if (review == null) addToWatch(emptyMap()) else storeReview = review
+                            }
                             storeReview?.let { review ->
                                 InstallReviewDialog(review) { granted ->
                                     storeReview = null
                                     if (granted != null) addToWatch(granted) else adding = false
                                 }
                             }
+                            storeReplacing?.let { replaced ->
+                                ReplaceAppDialog(replaced) { replace ->
+                                    storeReplacing = null
+                                    if (replace) {
+                                        appReplacements.replace(
+                                            replaced,
+                                            newSource = storeApp.storeSource,
+                                            snackbars = topBarParams,
+                                            onStillInstalled = { storeReplacing = it },
+                                            onFailed = { adding = false },
+                                        ) { reviewAndAdd() }
+                                    } else {
+                                        adding = false
+                                    }
+                                }
+                            }
+                            val storeUuid = remember(storeApp) { storeApp.storeApp?.uuid?.let(Uuid::parse) }
+                            val canCheckReplacement by remember(storeUuid) {
+                                storeUuid?.let(appReplacements::canCheck) ?: flowOf(true)
+                            }.collectAsState(false)
                             val addText = if (entry.type == AppType.Plugin) "Add" else "Add To Watch"
                             PebbleElevatedButton(
                                 text = addText,
                                 onClick = {
                                     adding = true
                                     scope.launch {
-                                        val review = nativeLockerAddUtil.review(storeApp)
-                                        if (review == null) addToWatch(emptyMap()) else storeReview = review
+                                        val replaced = storeUuid?.let { appReplacements.check(it, storeApp.storeSource) }
+                                        if (replaced == null) reviewAndAdd() else storeReplacing = replaced
                                     }
                                 },
-                                enabled = !adding,
+                                enabled = !adding && canCheckReplacement,
                                 icon = Icons.Default.Add,
                                 contentDescription = addText,
                                 primaryColor = true,

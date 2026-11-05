@@ -435,6 +435,7 @@ interface LockerApi {
     suspend fun getAppFile(uuid: Uuid, name: String): String?
     suspend fun setAppOrder(id: Uuid, order: Int)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, identifier: PebbleIdentifier, timeout: Duration): Boolean
+    /** Also erases everything the app stored, on this phone and on connected watches. */
     suspend fun removeApp(id: Uuid): Boolean
     suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?> = emptyMap())
     /** [permissions]: the user's decisions for these apps from other devices or the web store. */

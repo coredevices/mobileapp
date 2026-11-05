@@ -24,15 +24,17 @@ class WebSyncManager(
         logger.d { "requestLockerSync()" }
         val result = CompletableDeferred<Unit>()
         libPebbleCoroutineScope.launch {
-            // TODO probably don't want the logic in this class
-            val response = webServices.fetchLocker()
-            if (response == null) {
-                logger.i("locker response is null")
+            try {
+                // TODO probably don't want the logic in this class
+                val response = webServices.fetchLocker()
+                if (response == null) {
+                    logger.i("locker response is null")
+                    return@launch
+                }
+                locker.update(response)
+            } finally {
                 result.complete(Unit)
-                return@launch
             }
-            locker.update(response)
-            result.complete(Unit)
             locker.prefetchStaleAppUpdates()
         }
         return result

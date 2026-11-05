@@ -55,6 +55,7 @@ import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.ModelManagementScreenViewModel
 import coredevices.pebble.ui.NativeLockerAddUtil
+import coredevices.pebble.ui.AppReplacements
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
@@ -239,6 +240,7 @@ val watchModule = module {
     singleOf(::LanguagePackRepository)
     singleOf(::PluginSourceLoader)
     factoryOf(::NativeLockerAddUtil)
+    factoryOf(::AppReplacements)
     singleOf(::PermissionRequestNotifier)
     singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)

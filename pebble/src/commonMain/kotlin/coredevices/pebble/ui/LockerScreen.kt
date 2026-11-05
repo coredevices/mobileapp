@@ -106,6 +106,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.locker.AppType
@@ -271,16 +272,42 @@ fun LockerScreen(
         // Outlives this screen: installing waits for the watch to sync.
         fun install(path: Path, granted: Map<String, Boolean?>) =
             GlobalScope.launch { libPebble.sideloadApp(path, granted = granted) }
+        val appReplacements: AppReplacements = koinInject()
+        var sideloadReplacing by remember { mutableStateOf<Pair<Path, ReplacedApp>?>(null) }
+        suspend fun reviewAndInstall(path: Path) {
+            val review = libPebble.reviewSideload(path)
+            if (review == null) install(path, emptyMap()) else sideloadReview = PendingSideload(path, review)
+        }
         fun sideload(path: Path) {
             scope.launch {
-                val review = libPebble.reviewSideload(path)
-                if (review == null) install(path, emptyMap()) else sideloadReview = PendingSideload(path, review)
+                val uuid = withContext(Dispatchers.IO) {
+                    try {
+                        Uuid.parse(PbwApp(path).info.uuid)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                val replaced = uuid?.let { appReplacements.check(it, newSource = null) }
+                if (replaced == null) reviewAndInstall(path) else sideloadReplacing = path to replaced
             }
         }
         sideloadReview?.let { pending ->
             InstallReviewDialog(pending.review) { granted ->
                 sideloadReview = null
                 if (granted != null) install(pending.path, granted)
+            }
+        }
+        sideloadReplacing?.let { (path, replaced) ->
+            ReplaceAppDialog(replaced) { replace ->
+                sideloadReplacing = null
+                if (replace) {
+                    appReplacements.replace(
+                        replaced,
+                        newSource = null,
+                        snackbars = topBarParams,
+                        onStillInstalled = { sideloadReplacing = path to it },
+                    ) { reviewAndInstall(path) }
+                }
             }
         }
         val deepLinks: PebbleDeepLinkHandler = koinInject()
@@ -312,7 +339,7 @@ fun LockerScreen(
         }
         val launchInstallAppDialog = rememberOpenDocumentLauncher {
             it?.firstOrNull()?.let { file ->
-                val tempAppPath = getTempFilePath(appContext, "temp.pbw")
+                val tempAppPath = getTempFilePath(appContext, "sideload-${Uuid.random()}.pbw")
                 SystemFileSystem.sink(tempAppPath).use { sink ->
                     file.source.use { source ->
                         source.transferTo(sink)
