@@ -4,6 +4,8 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
+import com.algolia.client.configuration.ClientOptions
+import com.algolia.client.configuration.Host
 import com.algolia.client.exception.AlgoliaApiException
 import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
@@ -79,7 +81,8 @@ class AppstoreService(
     }
     private val searchClient = source.algoliaAppId?.let { appId ->
         source.algoliaApiKey?.let { apiKey ->
-            SearchClient(appId, apiKey)
+            val hosts = if (source.isPebbleFeed()) listOf(Host(APPSEARCH_HOST)) else null
+            SearchClient(appId, apiKey, ClientOptions(hosts = hosts))
         }
     }
     private val json = Json {
