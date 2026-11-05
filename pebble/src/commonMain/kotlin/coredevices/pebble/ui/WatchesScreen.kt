@@ -177,6 +177,7 @@ import io.rebble.libpebblecommon.connection.bt.BluetoothState
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.color
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateErrorStarting
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
@@ -1226,7 +1227,11 @@ fun PebbleDevice.stateText(
             is LanguagePackInstallState.Idle -> ""
             is LanguagePackInstallState.Downloading -> " - downloading language pack: ${languagePackInstallState.language}"
         }
-        is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
+        is FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot -> if (firmwareUpdateState.viaPrf) {
+            " - Rebooting watch into recovery to install ${firmwareUpdateState.update.version.stringVersion}"
+        } else {
+            " - Rebooting watch to finish update to ${firmwareUpdateState.update.version.stringVersion}"
+        }
         is FirmwareUpdater.FirmwareUpdateStatus.WaitingToStart -> " - Updating to PebbleOS ${firmwareUpdateState.update.version.stringVersion}"
     }
     val reversePpogState = when {
@@ -1238,12 +1243,12 @@ fun PebbleDevice.stateText(
         is ConnectedPebbleDevice -> "Connected$reversePpogState$installingState"
         is ConnectedPebbleDeviceInRecovery -> "Connected (Factory)$reversePpogState$installingState"
         is ConnectingPebbleDevice -> {
+            val reboot = rebootingForFirmwareUpdate
             val connectingState =
                 when {
-                rebootingAfterFirmwareUpdate -> if (negotiating) {
-                    "Rebooting after update - Negotiating"
-                } else {
-                    "Rebooting after update - Waiting"
+                reboot != null -> {
+                    val rebooting = if (reboot.viaPrf) "Rebooting into recovery to update" else "Rebooting after update"
+                    "$rebooting - ${if (negotiating) "Negotiating" else "Waiting"}"
                 }
 
                 negotiating -> "Negotiating"
@@ -2104,7 +2109,7 @@ fun WatchDetails(
                 confirmButton = {
                     TextButton(onClick = {
                         showFirmwareUpdateConfirmDialog = false
-                        firmwareUpdater.updateFirmware(firmwareUpdateAvailable)
+                        firmwareUpdater.updateFirmware(firmwareUpdateAvailable, FirmwareUpdateTrigger.Ui)
                     }) { Text("Install") }
                 },
                 dismissButton = { TextButton(onClick = { showFirmwareUpdateConfirmDialog = false }) { Text("Cancel") } }

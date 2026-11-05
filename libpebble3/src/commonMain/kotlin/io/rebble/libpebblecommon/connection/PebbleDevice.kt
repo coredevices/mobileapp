@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.ImageBitmap
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.PebbleLeScanRecord
 import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
@@ -86,7 +87,8 @@ interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbl
 
 interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
     val negotiating: Boolean
-    val rebootingAfterFirmwareUpdate: Boolean
+    /** Set while reconnecting after the watch rebooted for a firmware update. */
+    val rebootingForFirmwareUpdate: FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot?
 }
 interface ConnectingKnownPebbleDevice : ConnectingPebbleDevice, KnownPebbleDevice
 
@@ -164,8 +166,8 @@ object ConnectedPebble {
     }
 
     interface FirmwareUpdate {
-        fun sideloadFirmware(path: Path)
-        fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate)
+        fun sideloadFirmware(path: Path, trigger: FirmwareUpdateTrigger)
+        fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate, trigger: FirmwareUpdateTrigger)
         fun checkforFirmwareUpdate(force: Boolean)
     }
 

@@ -53,7 +53,8 @@ class EngDashOta(
                 version = fwVersion,
                 notes = result.notes.orEmpty(),
                 url = result.artifacts.first().url,
-                canDowngrade = result.isDowngrade,
+                // Set by FirmwareUpdateManager, which knows what the watch is running.
+                installsDirectly = false,
             )
         }
     }

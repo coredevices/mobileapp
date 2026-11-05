@@ -112,14 +112,14 @@ class PebbleDeviceFactory {
                     pebbleDevice = pebbleDevice,
                     activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion),
                     negotiating = state is ConnectingPebbleState.Negotiating,
-                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState is FirmwareUpdateStatus.WaitingForReboot
+                    rebootingForFirmwareUpdate = lastFirmwareUpdateState as? FirmwareUpdateStatus.WaitingForReboot
                 )
 
                 else -> RealConnectingKnownPebbleDevice(
                     knownDevice = knownDevice,
                     activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion),
                     negotiating = state is ConnectingPebbleState.Negotiating,
-                    rebootingAfterFirmwareUpdate = lastFirmwareUpdateState is FirmwareUpdateStatus.WaitingForReboot
+                    rebootingForFirmwareUpdate = lastFirmwareUpdateState as? FirmwareUpdateStatus.WaitingForReboot
                 )
             }
 
@@ -225,7 +225,7 @@ internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
     private val activeDevice: ActiveDevice,
     override val negotiating: Boolean,
-    override val rebootingAfterFirmwareUpdate: Boolean,
+    override val rebootingForFirmwareUpdate: FirmwareUpdateStatus.WaitingForReboot?,
 ) :
     PebbleDevice by pebbleDevice, ConnectingPebbleDevice, ActiveDevice by activeDevice {
     override fun toString(): String = "ConnectingPebbleDevice: $pebbleDevice reversePpogVersion=$reversePpogVersion"
@@ -235,7 +235,7 @@ internal class RealConnectingKnownPebbleDevice(
     private val knownDevice: KnownPebbleDevice,
     private val activeDevice: ActiveDevice,
     override val negotiating: Boolean,
-    override val rebootingAfterFirmwareUpdate: Boolean,
+    override val rebootingForFirmwareUpdate: FirmwareUpdateStatus.WaitingForReboot?,
 ) : ConnectingKnownPebbleDevice, ActiveDevice by activeDevice, KnownPebbleDevice by knownDevice {
     override fun toString(): String = "ConnectingKnownPebbleDevice: $knownDevice reversePpogVersion=$reversePpogVersion"
 }

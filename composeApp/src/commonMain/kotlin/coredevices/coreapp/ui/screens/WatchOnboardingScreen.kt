@@ -93,6 +93,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
 import io.rebble.libpebblecommon.connection.endpointmanager.installing
@@ -205,7 +206,7 @@ fun WatchOnboardingScreen(
                                 logger.d { "Starting firmware update from onboarding screen" }
                                 haveStartedFwupSinceLastConnection = true
                                 haveUpdatedFirmware = true
-                                connectedWatch.updateFirmware(firmwareUpdateAvailable)
+                                connectedWatch.updateFirmware(firmwareUpdateAvailable, FirmwareUpdateTrigger.Ui)
                             }
                         }
 

@@ -20,6 +20,7 @@ import io.ktor.websocket.send
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.LastFirmwareUpdateStates
 import io.rebble.libpebblecommon.structmapper.SByte
 import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SUByte
@@ -48,7 +49,10 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
-class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebble) {
+class DevConnectionServer(
+    libPebble: LibPebble,
+    lastStates: LastFirmwareUpdateStates,
+): DevConnectionTransport(libPebble, lastStates) {
     companion object {
         const val PORT = 9000
         private val logger = Logger.withTag("DevConnectionServer")
@@ -87,6 +91,9 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                                 send(PhoneAppLogMessage(it))
                             }
                         }
+                        launch {
+                            reportFirmwareInstall(identifier, { send(PhoneAppLogMessage(it)) }, { send(InstallStatusMessage(it)) })
+                        }
                         delay(10) //XXX: Give the client a moment to set up the connection
                         for (frame in incoming) {
                             when (frame) {
@@ -107,6 +114,10 @@ class DevConnectionServer(libPebble: LibPebble): DevConnectionTransport(libPebbl
                                         ClientMessageType.InstallBundle -> {
                                             logger.d { "Received InstallBundle message with payload size ${payload.size}" }
                                             send(InstallStatusMessage(installPBW(payload)))
+                                        }
+                                        ClientMessageType.InstallFirmware -> {
+                                            logger.d { "Received InstallFirmware message with payload size ${payload.size}" }
+                                            installFirmware(identifier, payload, { send(PhoneAppLogMessage(it)) }, { send(InstallStatusMessage(it)) })
                                         }
                                         // Handle other message types as needed
                                         ClientMessageType.TimelinePin -> {

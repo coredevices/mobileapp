@@ -360,11 +360,8 @@ sealed class FirmwareUpdateCheckResult {
         val version: FirmwareVersion,
         val url: String,
         val notes: String,
-        /**
-         * Whether installing this over a higher version is intended: the update server flagged it
-         * as a downgrade, or the user picked the file themselves.
-         */
-        val canDowngrade: Boolean = false,
+        /** Whether the watch boots this after a normal install, rather than going through recovery. */
+        val installsDirectly: Boolean,
     ) : FirmwareUpdateCheckResult()
 
     data object FoundNoUpdate : FirmwareUpdateCheckResult()

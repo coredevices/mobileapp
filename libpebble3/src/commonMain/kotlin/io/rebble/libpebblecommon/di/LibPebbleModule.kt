@@ -83,7 +83,8 @@ import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycl
 import io.rebble.libpebblecommon.connection.endpointmanager.DebugPebbleProtocolSender
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstaller
-import io.rebble.libpebblecommon.connection.endpointmanager.InterruptedFirmwareUpdates
+import io.rebble.libpebblecommon.connection.endpointmanager.LastFirmwareUpdateStates
+import io.rebble.libpebblecommon.connection.endpointmanager.PendingFirmwareInstalls
 import io.rebble.libpebblecommon.connection.endpointmanager.RealFirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.RealLanguagePackInstaller
 import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
@@ -461,6 +462,7 @@ fun initKoin(
                 single {
                     DevConnectionCloudpebbleProxy(
                         libPebble = get(),
+                        lastStates = get(),
                         url = "wss://cloudpebble-proxy.repebble.com/device-v2",
                         protocolVersion = CloudpebbleProxyProtocolVersion.V2,
                         scope = get(),
@@ -510,7 +512,8 @@ fun initKoin(
                 single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
                 singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)
-                singleOf(::InterruptedFirmwareUpdates)
+                singleOf(::PendingFirmwareInstalls)
+                singleOf(::LastFirmwareUpdateStates)
                 singleOf(::JsTokenUtil)
                 singleOf(::Datalogging)
                 singleOf(::Health)

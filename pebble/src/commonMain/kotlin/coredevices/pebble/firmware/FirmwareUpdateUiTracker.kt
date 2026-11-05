@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -50,9 +51,10 @@ class RealFirmwareUpdateUiTracker(
     }
 
     override fun onConnectedWatch(watch: CommonConnectedDevice) {
-        if (watch.firmwareUpdateState is FirmwareUpdateStatus.InProgress) {
+        if (watch.firmwareUpdateState is FirmwareUpdateStatus.Active) {
             logger.d { "Firmware update in progress; removing notification" }
             removeNotification(watch.identifier.asString)
+            return
         }
         if (autoUpdateTargetVersions[watch.identifier] == watch.runningFwVersion) {
             autoUpdateTargetVersions.remove(watch.identifier)
@@ -65,16 +67,17 @@ class RealFirmwareUpdateUiTracker(
                 showUpdateAction = false,
             )
         }
-        if (watch.watchInfo.runningFwVersion.suffix?.isNotEmpty() == true) {
-            logger.d { "Not doing notification of auto-update because watch is running custom build" }
+        if (watch.watchInfo.runningFwVersion.stringVersion.endsWith("-dirty")) {
+            logger.d { "Not doing notification of auto-update because watch is running a local build" }
             return
         }
         val update = watch.firmwareUpdateAvailable.result as? FirmwareUpdateCheckResult.FoundUpdate ?: return
         val key = update.hashCode() + watch.identifier.asString.hashCode()
         val config = coreConfigFlow.value
         val now = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
-        // Recovery mode is left to the user.
+        // Recovery mode, and an update that has to go through it, are left to the user.
         if (config.autoFirmwareUpdate &&
+            update.installsDirectly &&
             watch is ConnectedPebbleDevice &&
             config.autoFirmwareUpdateWindow?.contains(now) != false &&
             watch.firmwareUpdateState is FirmwareUpdateStatus.NotInProgress &&
@@ -84,7 +87,7 @@ class RealFirmwareUpdateUiTracker(
             haveNotifiedForUpdate.add(key)
             removeNotification(watch.identifier.asString)
             autoUpdateTargetVersions[watch.identifier] = update.version.stringVersion
-            watch.updateFirmware(update)
+            watch.updateFirmware(update, FirmwareUpdateTrigger.AutoUpdate)
             return
         }
         if (config.disableFirmwareUpdateNotifications) {
@@ -132,7 +135,7 @@ class RealFirmwareUpdateUiTracker(
             return
         }
         logger.d { "Starting update for $identifier to $update" }
-        updater.updateFirmware(update)
+        updater.updateFirmware(update, FirmwareUpdateTrigger.Ui)
     }
 
     companion object {

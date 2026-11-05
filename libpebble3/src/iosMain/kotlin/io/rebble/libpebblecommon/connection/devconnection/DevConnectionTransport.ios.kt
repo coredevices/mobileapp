@@ -7,11 +7,11 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSUUID
 import platform.Foundation.NSUserDomainMask
 
-internal actual fun getTempPbwPath(): Path {
+internal actual fun getTempPath(extension: String): Path {
     val cacheURL = NSFileManager.defaultManager
         .URLsForDirectory(NSCachesDirectory, NSUserDomainMask)
         .firstOrNull() as NSURL
     val cacheDir = cacheURL.path!!
     val uuid = NSUUID.UUID().UUIDString
-    return Path(cacheDir, "devconn-$uuid.pbw")
+    return Path(cacheDir, "devconn-$uuid.$extension")
 }

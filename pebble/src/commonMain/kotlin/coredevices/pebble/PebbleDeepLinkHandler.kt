@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -291,7 +292,7 @@ class RealPebbleDeepLinkHandler(
             navigateToTab(PebbleNavBarRoutes.WatchesRoute)
             _snackBarMessages.tryEmit("Sideloading firmware...")
             watches.forEach {
-                it.sideloadFirmware(file)
+                it.sideloadFirmware(file, FirmwareUpdateTrigger.Sideload)
             }
         }
     }
