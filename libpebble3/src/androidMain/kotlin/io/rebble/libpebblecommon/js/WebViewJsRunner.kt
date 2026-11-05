@@ -301,12 +301,23 @@ class WebViewJsRunner(
                         originalClear.call(this);
                         window._localStorage.clear();
                     };
+                    ${/* For persistLocalStorage(): clears the DOM copy without touching the store */ ""}
+                    window.__localStorageNativeClear = originalClear;
+                    window.__localStorageShimmed = true;
+                    return Object.keys(localStorageData).length;
                 })();
-                window.__localStorageShimmed = true;
             """.trimIndent()
-            ) {
-                restoreCompleted = true
-                logger.d { "localStorage shimmed" }
+            ) { result ->
+                // A throw anywhere above (after the leading clear()) leaves window.localStorage
+                // empty and unshimmed, and evaluates to "null". Persisting from that state would
+                // replace the user's stored settings with nothing, so it must not count as restored.
+                val restored = result?.toIntOrNull()
+                restoreCompleted = restored != null
+                if (restored != null) {
+                    logger.d { "localStorage shimmed, $restored keys restored" }
+                } else {
+                    logger.e { "localStorage restore failed (result=$result); will not persist on stop" }
+                }
             }
         }
     }
@@ -354,11 +365,14 @@ class WebViewJsRunner(
                         const value = window.localStorage.getItem(key);
                         data[key] = value;
                     }
-                    window.localStorage.clear();
                     window._localStorage.saveState(JSON.stringify(data));
+                    ${/* The shimmed clear() would empty the store that was just written */ ""}
+                    window.__localStorageNativeClear.call(window.localStorage);
+                    return Object.keys(data).length;
                 })();
                     """.trimIndent()
-            ) {
+            ) { result ->
+                logger.d { "localStorage persisted, ${result?.toIntOrNull() ?: "?"} keys" }
                 cont.resume(Unit)
             }
         }
