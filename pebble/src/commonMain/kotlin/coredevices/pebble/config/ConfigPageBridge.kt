@@ -1,6 +1,7 @@
 package coredevices.pebble.config
 
 import co.touchlab.kermit.Logger
+import coredevices.pebble.RealPebbleDeepLinkHandler
 import io.ktor.http.Url
 import io.rebble.libpebblecommon.plugin.PluginNativeException
 import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
@@ -189,7 +190,7 @@ class ConfigPageBridge(
                     return
                 }
                 val url = (call.message as? JsonPrimitive)?.takeIf { it.isString }?.content
-                if (url == null || !isWebUrl(url)) {
+                if (url == null || (!isWebUrl(url) && RealPebbleDeepLinkHandler.storeAppLink(url) == null)) {
                     reply(call.id, error("openUrl needs an http(s) url"))
                     return
                 }

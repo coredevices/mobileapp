@@ -363,6 +363,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override fun confirmPendingFirmwareSideload() {}
         override fun dismissPendingFirmwareSideload() {}
         override fun sideloadFirmware(file: Path) {}
+        override fun openStoreAppLink(url: String): Boolean = false
         override fun showMessage(message: String) {}
         override fun handle(uri: Uri?): Boolean = true
         override fun navigateToTab(route: NavBarRoute) {}

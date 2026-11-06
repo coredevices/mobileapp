@@ -46,6 +46,8 @@ import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
+import coredevices.pebble.PebbleDeepLinkHandler
+import coredevices.pebble.RealPebbleDeepLinkHandler
 import coredevices.pebble.config.ConfigPageBridge
 import coredevices.pebble.config.ConfigPageClosedListener
 import coredevices.pebble.config.ConfigPageSessions
@@ -165,8 +167,23 @@ fun WatchappSettingsScreen(
             androidWebSettings.domStorageEnabled = true
             iOSWebSettings.isInspectable = true
         }
+        val deepLinks: PebbleDeepLinkHandler = koinInject()
+        val scope = rememberCoroutineScope()
+        // Leaves the page for the linked app's page in the locker. Called on the main thread, which
+        // persistLocalStorage blocks on.
+        val openStoreAppLink = { url: String ->
+            val isStoreLink = RealPebbleDeepLinkHandler.storeAppLink(url) != null
+            if (isStoreLink) {
+                scope.launch(Dispatchers.Default) {
+                    runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
+                    deepLinks.openStoreAppLink(url)
+                }
+            }
+            isStoreLink
+        }
         val interceptor = remember {
             SettingsRequestInterceptor(
+                openStoreAppLink = openStoreAppLink,
                 onSuccess = { data ->
                     runCatching { state.nativeWebView }.getOrNull()?.let { persistLocalStorage(it) }
                     session?.onPageClosed(data)
@@ -183,7 +200,6 @@ fun WatchappSettingsScreen(
             )
         }
         val navigator = rememberWebViewNavigator(requestInterceptor = interceptor)
-        val scope = rememberCoroutineScope()
         // One bridge for the life of the screen: it is installed when the WebView is built,
         // before any page has loaded, and picks up scripts as they resolve.
         val bridge = remember { if (sessions.enabled) ConfigPageBridge(scope) else null }
@@ -206,8 +222,10 @@ fun WatchappSettingsScreen(
         var linkRequest by remember { mutableStateOf<LinkRequest?>(null) }
         LaunchedEffect(bridge) {
             bridge?.openUrl = { url ->
-                // One at a time, so a page can't swap the url while the user is reading it.
-                if (linkRequest != null) {
+                if (openStoreAppLink(url)) {
+                    true
+                } else if (linkRequest != null) {
+                    // One at a time, so a page can't swap the url while the user is reading it.
                     false
                 } else {
                     val answer = CompletableDeferred<Boolean>()
@@ -334,6 +352,7 @@ internal fun normalizeWatchappSettingsUrl(url: String): String {
 }
 
 private class SettingsRequestInterceptor(
+    private val openStoreAppLink: (String) -> Boolean,
     private val onError: suspend () -> Unit,
     private val onSuccess: suspend (String) -> Unit,
 ) : RequestInterceptor {
@@ -344,6 +363,9 @@ private class SettingsRequestInterceptor(
         request: WebRequest,
         navigator: WebViewNavigator,
     ): WebRequestInterceptResult {
+        if (request.isForMainFrame && openStoreAppLink(request.url)) {
+            return WebRequestInterceptResult.Reject
+        }
         if (!request.url.startsWith(PREFIX)) {
             return WebRequestInterceptResult.Allow
         }
