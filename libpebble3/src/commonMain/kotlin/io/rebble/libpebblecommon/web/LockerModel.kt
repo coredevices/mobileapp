@@ -52,8 +52,8 @@ data class LockerEntry(
     val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null,
     val source: String? = null,
-    // Might not be present from all stores.
-    @SerialName("manifest_version") val manifestVersion: Int = 1,
+    // Might not be present from all stores. Absent means none of the appinfo fields below were sent.
+    @SerialName("manifest_version") val manifestVersion: Int? = null,
     @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
     @SerialName("config_page") val configPage: String? = null,
     @SerialName("icon_tintable") val iconTintable: Boolean = false,

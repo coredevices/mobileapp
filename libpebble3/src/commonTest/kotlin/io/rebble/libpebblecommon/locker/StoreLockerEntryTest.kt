@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class StoreLockerEntryTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -40,6 +41,18 @@ class StoreLockerEntryTest {
         val other = entry("").asEntity(0)
         assertEquals(1, other.manifestVersion)
         assertNull(other.pluginManifest)
+    }
+
+    @Test
+    fun aStoreThatSendsNoAppinfoKeepsWhatThePbwGave() {
+        val fromPbw = entry(""","manifest_version":2,$manifest,"config_page":"config.html"""").asEntity(0)
+        val other = entry("")
+        assertNull(other.manifestVersion)
+        val kept = other.asEntity(0).withAppInfoOf(fromPbw)
+        assertEquals(2, kept.manifestVersion)
+        assertEquals(fromPbw.pluginManifest, kept.pluginManifest)
+        assertEquals("config.html", kept.configPage)
+        assertTrue(kept.configurable)
     }
 
     @Test

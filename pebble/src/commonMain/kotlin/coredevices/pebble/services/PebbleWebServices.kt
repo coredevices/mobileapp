@@ -796,8 +796,9 @@ data class StoreApplication(
     val capabilities: List<String>? = null,
     @SerialName("uses_permissions")
     val usesPermissions: List<PluginPermission> = emptyList(),
+    /** Null from a store that sends no appinfo fields. */
     @SerialName("manifest_version")
-    val manifestVersion: Int = 1,
+    val manifestVersion: Int? = null,
     @SerialName("pebblekit2_packages")
     val pebbleKit2Packages: List<String> = emptyList(),
     val plugin: StorePlugin? = null,
@@ -992,7 +993,7 @@ fun StoreApplication.asLockerEntryPlatform(
 
 fun StoreApplication.pluginMetadata(): PluginMetadata? {
     val raw = plugin?.manifest ?: return null
-    if (isLegacy(manifestVersion) || uuid == null) return null
+    if (isLegacy(manifestVersion ?: 1) || uuid == null) return null
     val manifest = runCatching { DiskUtil.pbwJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
         .onFailure { logger.w(it) { "unreadable plugin manifest for $uuid" } }
         .getOrNull() ?: return null

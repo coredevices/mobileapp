@@ -681,7 +681,7 @@ fun CommonAppType.canStartApp(): Boolean = when (this) {
 
 /** The listing doesn't say whether the app has PKJS, so assume it does. */
 internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
-    declared = declaredPermissions(usesPermissions, manifestVersion),
+    declared = declaredPermissions(usesPermissions, manifestVersion ?: 1),
     hasPkjs = true,
     hasCompanionApp = companions.android != null || companions.ios != null,
     hasAndroidCompanion = companions.android != null,
