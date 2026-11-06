@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 45,
-    "identityHash": "cad6a1aab31963d68e37fc1aa851fc09",
+    "identityHash": "019adcaa83ae32970a3104192b2c6d26",
     "entities": [
       {
         "tableName": "LocalReminderData",
@@ -807,95 +807,6 @@
         ]
       },
       {
-        "tableName": "IndexWebhookDeliveryEntity",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `created` INTEGER NOT NULL, `lastAttempt` INTEGER, `attempts` INTEGER NOT NULL, `status` TEXT NOT NULL, `deliveryId` TEXT NOT NULL, `gesture` TEXT NOT NULL, `recordingId` INTEGER NOT NULL, `fileId` TEXT, `transcription` TEXT)",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "created",
-            "columnName": "created",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "lastAttempt",
-            "columnName": "lastAttempt",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "attempts",
-            "columnName": "attempts",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "status",
-            "columnName": "status",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "deliveryId",
-            "columnName": "deliveryId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "gesture",
-            "columnName": "gesture",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "recordingId",
-            "columnName": "recordingId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "fileId",
-            "columnName": "fileId",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "transcription",
-            "columnName": "transcription",
-            "affinity": "TEXT"
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_IndexWebhookDeliveryEntity_deliveryId",
-            "unique": true,
-            "columnNames": [
-              "deliveryId"
-            ],
-            "orders": [],
-            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_IndexWebhookDeliveryEntity_deliveryId` ON `${TABLE_NAME}` (`deliveryId`)"
-          },
-          {
-            "name": "index_IndexWebhookDeliveryEntity_status",
-            "unique": false,
-            "columnNames": [
-              "status"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_IndexWebhookDeliveryEntity_status` ON `${TABLE_NAME}` (`status`)"
-          }
-        ]
-      },
-      {
         "tableName": "TraceSessionEntity",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `started` INTEGER NOT NULL)",
         "fields": [
@@ -1393,6 +1304,52 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_RingRssiReading_ringSerialHash` ON `${TABLE_NAME}` (`ringSerialHash`)"
           }
         ]
+      },
+      {
+        "tableName": "LocalClockEntry",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `fireAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `label` TEXT, `durationMillis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fireAt",
+            "columnName": "fireAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "durationMillis",
+            "columnName": "durationMillis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
       }
     ],
     "views": [
@@ -1407,7 +1364,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cad6a1aab31963d68e37fc1aa851fc09')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '019adcaa83ae32970a3104192b2c6d26')"
     ]
   }
 }

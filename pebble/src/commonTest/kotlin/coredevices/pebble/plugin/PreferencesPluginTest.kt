@@ -3,7 +3,12 @@ package coredevices.pebble.plugin
 import com.russhwolf.settings.MapSettings
 import coredevices.database.WeatherLocationDao
 import coredevices.database.WeatherLocationEntity
+import coredevices.pebble.weather.fahrenheitFor
+import coredevices.pebble.weather.windUnitsFor
 import io.rebble.libpebblecommon.connection.FakeLibPebble
+import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.TemperatureUnits
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.plugin.BooleanShape
 import io.rebble.libpebblecommon.plugin.NumericValueShape
@@ -57,13 +62,13 @@ class PreferencesPluginTest {
                 "locale" to "de-DE", "temperature" to "°C", "distance" to "km", "wind_speed" to "km/h",
                 "pressure" to "hPa", "precipitation" to "mm", "clock" to "24h",
             ),
-            units(imperial = false, wind = WindUnits.FromDistance, clock24h = true, locale = "de-DE"),
+            units(imperial = false, fahrenheit = false, wind = WindUnits.KmH, clock24h = true, locale = "de-DE"),
         )
     }
 
     @Test
     fun imperialUnitsWithAnExplicitWindUnit() {
-        val units = units(imperial = true, wind = WindUnits.Knots, clock24h = false, locale = "en-US")
+        val units = units(imperial = true, fahrenheit = true, wind = WindUnits.Knots, clock24h = false, locale = "en-US")
         assertEquals("°F", units["temperature"])
         assertEquals("mi", units["distance"])
         assertEquals("knots", units["wind_speed"])
@@ -73,17 +78,30 @@ class PreferencesPluginTest {
     }
 
     @Test
-    fun automaticWindFollowsDistance() {
-        assertEquals("mph", units(true, WindUnits.FromDistance, false, "en-GB")["wind_speed"])
-        assertEquals("km/h", units(false, WindUnits.FromDistance, false, "en-GB")["wind_speed"])
+    fun automaticUnitsFollowDistance() {
+        val automatic = emptyList<WatchPreference<*>>()
+        assertEquals(WindUnits.Mph, automatic.windUnitsFor(imperialUnits = true))
+        assertEquals(WindUnits.KmH, automatic.windUnitsFor(imperialUnits = false))
+        assertEquals(true, automatic.fahrenheitFor(imperialUnits = true))
+        assertEquals(false, automatic.fahrenheitFor(imperialUnits = false))
+    }
+
+    @Test
+    fun explicitUnitsOverrideDistance() {
+        val uk = listOf(
+            WatchPreference(EnumWatchPref.Temperature, TemperatureUnits.Celsius),
+            WatchPreference(EnumWatchPref.WindSpeed, WindUnits.Mph),
+        )
+        assertEquals(false, uk.fahrenheitFor(imperialUnits = true))
+        assertEquals(WindUnits.Mph, uk.windUnitsFor(imperialUnits = false))
     }
 
     @Test
     fun theDefaultSlotsUntilTheUserSetsTheirOwn() = runTest {
         val slots = read(PreferencesPlugin.ITEM_COMPLICATIONS)
         assertEquals(PreferencesPlugin.DEFAULT_COMPLICATIONS.size, slots.instances.size)
-        assertEquals("phone", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
-        assertEquals("battery_level", slots.text(0, PreferencesPlugin.PROPERTY_PROPERTY))
+        assertEquals("weather", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
+        assertEquals("temperature", slots.text(0, PreferencesPlugin.PROPERTY_PROPERTY))
     }
 
     @Test
@@ -95,7 +113,7 @@ class PreferencesPluginTest {
         assertEquals(PreferencesPlugin.SLOT_COUNT, reloaded.complications.value.size)
         val slots = read(PreferencesPlugin.ITEM_COMPLICATIONS, reloaded)
         assertEquals(listOf("1", "2", "3", "4"), slots.instances.map { it.instanceId })
-        assertEquals("weather", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
+        assertEquals("phone", slots.text(0, PreferencesPlugin.PROPERTY_CATEGORY))
         assertEquals("stock", slots.text(3, PreferencesPlugin.PROPERTY_ITEM))
         assertEquals(1.0, slots.number(3, PreferencesPlugin.PROPERTY_INDEX))
     }

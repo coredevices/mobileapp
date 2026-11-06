@@ -132,6 +132,6 @@ val utilModule = module {
     singleOf(::KirinkiTranscriptionService)
     single<UsersDao> { UsersDaoImpl({ get() }, get(), get(), get(), get()) }
     singleOf(::HealthSyncTracker)
-    singleOf(::PlatformHealthSync)
+    single { PlatformHealthSync(get(), get(), get(), lazy { get() }, get()) }
     single { EngDashOtaApiImpl() } bind EngDashOtaApi::class
 }

@@ -171,7 +171,8 @@ class XMLHTTPRequestManager(
             return networkAccess.check(hostUrl, wait = false)
         }
 
-        private fun dispatchError() {
+        private fun dispatchError(notAllowed: Boolean = false) {
+            if (notAllowed) eval("$jsInstance && ($jsInstance._notAllowed = true)")
             changeReadyState(DONE)
             dispatchEvent(XHREvent.Error)
         }
@@ -205,7 +206,7 @@ class XMLHTTPRequestManager(
                 val verdict = checkAccess(url, headers)
                 if (verdict is PluginNetworkVerdict.Denied) {
                     logger.w { "$appUuid blocked: ${verdict.reason}" }
-                    dispatchError()
+                    dispatchError(notAllowed = true)
                     return
                 }
                 val response = try {

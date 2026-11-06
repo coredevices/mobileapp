@@ -64,11 +64,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.back
 import coreapp.util.generated.resources.settings
+import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestination
 import coredevices.ring.data.NoteShortcutType
-import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.components.SectionHeader
 import coredevices.ring.ui.navigation.RingRoutes
@@ -80,6 +80,7 @@ import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
 import coredevices.util.isAndroid
+import coredevices.util.isIOS
 import coredevices.util.rememberUiContext
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -155,7 +156,6 @@ internal fun UriHandler.openUrlSafely(url: String) {
 fun IndexSettings(coreNav: CoreNav) {
     val viewModel = koinViewModel<SettingsViewModel>()
     val snackbarHostState = remember { SnackbarHostState() }
-    val webhookViewModel = koinViewModel<IndexWebhookSettingsViewModel>()
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
@@ -183,9 +183,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val platformSttAvailable by produceState(false) {
         value = withContext(Dispatchers.Default) { platformSpeechRecognizer.isAvailable() }
     }
-    val webhookUrl by webhookViewModel.webhookUrl.collectAsState()
-    val configuredWebhookGesture by webhookViewModel.configuredGesture.collectAsState()
-    val webhookIsLinked = !webhookUrl.isNullOrBlank()
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
@@ -437,6 +434,15 @@ fun IndexSettings(coreNav: CoreNav) {
                     trailingContent = {}
                 )
             }
+            if (platform.isIOS && clockUnavailableReason() == null) {
+                item {
+                    SettingsRow(
+                        title = "Timers & alarms",
+                        subtitle = "View and cancel timers and alarms set by your Index",
+                        onClick = { coreNav.navigateTo(RingRoutes.TimersAndAlarms) },
+                    )
+                }
+            }
             item {
                 val uriHandler = LocalUriHandler.current
                 SettingsRow(
@@ -477,17 +483,6 @@ fun IndexSettings(coreNav: CoreNav) {
                         onCheckedChange = { viewModel.toggleAutoDismissActionNotifications() }
                     )
                 }
-            }
-            item {
-                SettingsRow(
-                    title = "Webhook",
-                    subtitle = if (webhookIsLinked) "Configured, tap to modify" else "Not Linked",
-                    onClick = {
-                        configuredWebhookGesture
-                            ?.let { webhookViewModel.openDialog(it) }
-                            ?: webhookViewModel.openDialog()
-                    },
-                )
             }
             item {
                 SettingsRow(

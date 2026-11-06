@@ -38,7 +38,8 @@ interface LockerAppPermissionDao {
     @Query("SELECT * FROM AppPermission WHERE appUuid = :appUuid")
     suspend fun getByAppUuid(appUuid: Uuid): List<LockerAppPermission>
 
-    @Query("SELECT * FROM AppPermission WHERE appUuid = :appUuid")
+    // A decision replaces its row, so without an order it would move to the end.
+    @Query("SELECT * FROM AppPermission WHERE appUuid = :appUuid ORDER BY requestedAtMs, permission")
     fun flowByAppUuid(appUuid: Uuid): Flow<List<LockerAppPermission>>
 
     @Query("SELECT * FROM AppPermission ORDER BY requestedAtMs")

@@ -148,6 +148,11 @@ class WebViewPrivatePKJSInterface(
     override fun enumeratePlugins(): String = super.enumeratePlugins()
 
     @JavascriptInterface
+    override fun queryPermission(callId: Int, permission: String) {
+        super.queryPermission(callId, permission)
+    }
+
+    @JavascriptInterface
     override fun configMessageReply(requestId: Int, json: String) {
         super.configMessageReply(requestId, json)
     }

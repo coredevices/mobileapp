@@ -17,6 +17,7 @@ import coredevices.ring.model.CactusModelProvider
 import coredevices.ring.service.PlatformIndexNotificationManager
 import coredevices.ring.service.RingOta
 import coredevices.ring.service.RingPresenceObserver
+import coredevices.ring.service.RingScanWatchdog
 import coredevices.ring.service.RingSync
 import coredevices.ring.transcription.AndroidInferenceBoostProvider
 import coredevices.ring.transcription.InferenceBoostProvider
@@ -39,6 +40,14 @@ actual val platformRingModule = module {
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)
     singleOf(::RingPresenceObserver)
+    single {
+        val ringSync = get<RingSync>()
+        RingScanWatchdog(
+            advertisements = get<KMPHaversineSatelliteManager>().advertisements,
+            hadRecentConnection = ringSync::hadRecentConnection,
+            restartScan = ringSync::restartScan,
+        )
+    }
     single {
         val prefs = get<Preferences>()
         val ringOTA = get<RingOta>()

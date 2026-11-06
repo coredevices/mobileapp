@@ -2,6 +2,7 @@ package coredevices.ring
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
 import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.dao.FirestoreRecordingsDao
@@ -37,8 +38,9 @@ actual class RingDelegate(
         firestoreKnownRingsSync.init()
     }
 
-    actual fun requiredRuntimePermissions(): Set<Permission> {
-        return setOf(Permission.Reminders)
+    actual fun requiredRuntimePermissions(): Set<Permission> = buildSet {
+        add(Permission.Reminders)
+        if (clockUnavailableReason() == null) add(Permission.AlarmKit)
     }
 
     actual fun onBackgroundSync() {

@@ -20,7 +20,10 @@ class CoreConfigHolder(
     private val json: Json,
 ) {
     private fun defaultValue(): CoreConfig {
-        return loadFromStorage() ?: defaultValue.also { saveToStorage(it) }
+        val stored = loadFromStorage()
+        val config = (stored ?: defaultValue).migrateNavBarTabs()
+        if (config != stored) saveToStorage(config)
+        return config
     }
 
     private fun migrateCactusSettings(oldConfig: CoreConfig): CoreConfig {
@@ -69,6 +72,14 @@ class CoreConfigFlow(val flow: StateFlow<CoreConfig>) {
 
 private const val SETTINGS_KEY = "coreapp.config"
 
+internal fun CoreConfig.migrateNavBarTabs(): CoreConfig =
+    if (navBarTabs != null) this
+    else copy(
+        navBarTabs = listOf("WatchFaces", "Index", "Watches") +
+            (if (preferHealthTab) listOf("Health", "Notifications") else listOf("Notifications", "Health")) +
+            "Settings"
+    )
+
 enum class WeatherUnit(val code: String) {
     Metric("m"),
     Imperial("e"),
@@ -93,7 +104,14 @@ data class CoreConfig(
     val interceptPKJSWeather: Boolean = true,
     val regularSyncInterval: Duration = 6.hours,
     val weatherSyncInterval: Duration = 1.hours,
+    /** No longer written; only seeds [navBarTabs] in [migrateNavBarTabs]. */
     val preferHealthTab: Boolean = true,
+    /** `WatchHomeNavTab` names in bottom bar order; only null before [migrateNavBarTabs]. */
+    val navBarTabs: List<String>? = null,
+    /** Bottom bar slots; if the available tabs don't fit, the last one is More. */
+    val navBarSlots: Int = 5,
+    /** Otherwise the launch tab is picked from the paired devices. */
+    val startOnFirstNavBarTab: Boolean = false,
     val obfuscateSensitiveLogs: Boolean = true,
     val hidePermissionWarningBadges: Boolean = false,
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,

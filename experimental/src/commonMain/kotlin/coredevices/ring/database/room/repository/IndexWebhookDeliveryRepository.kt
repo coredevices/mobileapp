@@ -26,4 +26,8 @@ class IndexWebhookDeliveryRepository(
 
     override suspend fun incrementAttempts(taskId: Long, currentTime: Instant) =
         dao.incrementAttempts(taskId, currentTime)
+
+    /** The delivery's task id, if it had failed and is now pending again. */
+    suspend fun resetFailed(deliveryId: String): Long? =
+        if (dao.resetFailed(deliveryId) > 0) dao.getIdByDeliveryId(deliveryId) else null
 }

@@ -6,8 +6,8 @@ use_frameworks!
 target 'iosApp' do
         pod 'composeApp', :path => '../composeApp'
         # Precompiled Firestore: avoids building gRPC/BoringSSL/abseil from source
-        # 11.10.0
-        pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :commit => 'e43715cc392c819b522c7a189bed9400e757c788'
+        # 12.19.3
+        pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :commit => 'cc9a5e005ca9b5a08e0811490a76a189f50642bb'
         pod 'Mixpanel-swift'
 end
 

@@ -149,6 +149,7 @@ internal fun ListView(
     var menuOpen by remember { mutableStateOf(false) }
     var deleteDialogOpen by remember { mutableStateOf(false) }
     var entryTypeDialogOpen by remember { mutableStateOf(false) }
+    var convertToReminder by remember { mutableStateOf<ConvertToReminderRequest?>(null) }
     var deleteAction by remember(s.list.firestoreId) { mutableStateOf(DeleteListAction.MoveItems) }
     var deleteTargetListId by remember(s.list.firestoreId) { mutableStateOf(LIST_NOTES_SELF_ID) }
     var editing by remember(s.list.firestoreId) { mutableStateOf(startEditing && !isTodos) }
@@ -468,6 +469,12 @@ internal fun ListView(
                                     kind = if (child.kind == "checklist") "note" else "checklist",
                                 )
                             },
+                            onConvertToReminder = { text ->
+                                convertToReminder = ConvertToReminderRequest(
+                                    childId = child.firestoreId,
+                                    title = text.trim().ifBlank { null },
+                                )
+                            },
                         )
                     } else {
                         ListChildRow(
@@ -509,6 +516,22 @@ internal fun ListView(
         }
     }
 
+    convertToReminder?.let { request ->
+        DueAtPickerFlow(
+            initial = null,
+            onPicked = { dueAt ->
+                convertToReminder = null
+                vm.patchChildItem(
+                    request.childId,
+                    title = request.title,
+                    kind = "reminder",
+                    dueAt = ObjectDetailViewModel.DueAtChange.Set(dueAt),
+                )
+            },
+            onDismiss = { convertToReminder = null },
+        )
+    }
+
     if (entryTypeDialogOpen) {
         EntryTypeDialog(
             listKind = s.list.listKind,
@@ -547,6 +570,8 @@ internal fun ListView(
 }
 
 private enum class DeleteListAction { MoveItems, DeleteItems }
+
+private data class ConvertToReminderRequest(val childId: String, val title: String?)
 
 @Composable
 private fun EntryTypeDialog(
@@ -828,21 +853,11 @@ private fun ListChildRow(
                 }
             }
         }
-        // Per Eric's request, dropped the row divider here to test the
-        // tighter, divider-less look. Easy to re-enable if it reads as
-        // too dense.
     }
 }
 
 private const val NEW_NOTE_FOCUS_ID = "__new_note__"
 
-/** Swipe a row left to delete it — the fast path; the item detail menu still works.
- *
- *  The delete runs off [SwipeToDismissBox]'s `onDismiss`, which fires only after
- *  the row has finished flinging off-screen, then the row collapses and the
- *  repository call goes out. Deleting from `confirmValueChange` instead pulls
- *  the row out of the list the moment the threshold is crossed, cutting both
- *  animations short. */
 @Composable
 private fun SwipeToDeleteRow(
     onDelete: () -> Unit,
@@ -864,10 +879,7 @@ private fun SwipeToDeleteRow(
     LaunchedEffect(rowVisible.isIdle, rowVisible.currentState) {
         if (rowVisible.isIdle && !rowVisible.currentState) commitDelete()
     }
-    // Navigating away mid-animation would otherwise drop the delete on the floor:
-    // the row is either collapsing, or settled off-screen with onDismiss not yet
-    // delivered. currentValue (not targetValue) so a drag still under the user's
-    // finger never counts as a dismissal.
+    // Navigating away mid-animation would otherwise drop the delete on the floor
     DisposableEffect(Unit) {
         onDispose {
             if (!rowVisible.targetState ||
@@ -1085,21 +1097,14 @@ private fun EditableNoteRow(
     onEnter: (String) -> Unit,
     onOpen: () -> Unit,
     onToggleKind: (String) -> Unit,
+    onConvertToReminder: (String) -> Unit,
 ) {
     val colors = IndexTheme.colors
     var draft by remember(child.firestoreId) { mutableStateOf(child.title) }
     var hadFocus by remember(child.firestoreId) { mutableStateOf(false) }
     var isFocused by remember(child.firestoreId) { mutableStateOf(false) }
-    // Tracks whether this entry's text wraps to more than one line. Set
-    // from the text field's layout result (see onTextLayout below).
     var isMultiLine by remember(child.firestoreId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    // Per-item kind indicator: a checklist item shows the same tickable
-    // circle the home Todos carousel uses; a plain note has no glyph
-    // (keeps the column visually clean — note text starts at 22dp
-    // exactly like the rest of the screen). Mixing both within a single
-    // notes-domain list (e.g. Index features holding a checklist among
-    // notes) now reads correctly at a glance.
     val isChecklist = child.kind == "checklist"
 
     fun flush() {
@@ -1113,12 +1118,7 @@ private fun EditableNoteRow(
             onFocusConsumed()
         }
     }
-    // Refresh the draft when the title changes from outside (an edit made on
-    // the item's detail screen, or a Firestore sync) while this row isn't
-    // being actively edited. draft is keyed only on firestoreId, so without
-    // this the row keeps rendering the title captured at first composition and
-    // external edits wouldn't appear until the list is fully reopened. Mirrors
-    // the list-header refresh above.
+    // Refresh the draft when the title changes from outside
     LaunchedEffect(child.title) {
         if (!isFocused) draft = child.title
     }
@@ -1132,22 +1132,11 @@ private fun EditableNoteRow(
             .padding(
                 start = 22.dp,
                 end = 14.dp,
-                // Single-line notes stay tight (the compact, divider-less
-                // look). A note that wraps to multiple lines gets extra
-                // vertical air so it doesn't blur into its neighbours —
-                // otherwise the gap between entries is smaller than the line
-                // spacing within a wrapped entry and several notes read as
-                // one block (MOB-8502).
                 top = if (isMultiLine) 7.dp else 1.dp,
                 bottom = if (isMultiLine) 7.dp else 1.dp,
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Reserve the same left "gutter" on every row regardless of kind
-        // so all titles in a mixed list (notes and checklists side by
-        // side) align at the same x-coordinate. Checklist rows fill that
-        // gutter with the tickable circle; plain-note rows leave it
-        // empty. Width = TodoCheckCircle.Small (19dp) + 12dp gap.
         if (isChecklist) {
             TodoCheckCircle(
                 done = child.done,
@@ -1199,6 +1188,13 @@ private fun EditableNoteRow(
                         onToggleKind(draft)
                         close()
                     }
+                    textContextMenuItem(
+                        key = ConvertToReminderMenuKey,
+                        label = "Convert to Reminder",
+                    ) {
+                        onConvertToReminder(draft)
+                        close()
+                    }
                 },
             textStyle = TextStyle(
                 color = colors.onSurface,
@@ -1236,6 +1232,7 @@ private fun EditableNoteRow(
 }
 
 private data object ToggleCheckboxMenuKey
+private data object ConvertToReminderMenuKey
 
 @Composable
 private fun NewNoteRow(

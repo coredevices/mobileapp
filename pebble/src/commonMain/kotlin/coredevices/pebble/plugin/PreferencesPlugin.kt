@@ -4,11 +4,12 @@ import androidx.compose.ui.text.intl.Locale
 import com.russhwolf.settings.Settings
 import coredevices.database.WeatherLocationDao
 import coredevices.database.WeatherLocationEntity
+import coredevices.pebble.weather.fahrenheitFor
+import coredevices.pebble.weather.valueOf
+import coredevices.pebble.weather.windUnitsFor
 import io.rebble.libpebblecommon.connection.ConnectedWatchInfo
 import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
-import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.plugin.BooleanShape
 import io.rebble.libpebblecommon.plugin.IconPixelSize
@@ -125,7 +126,8 @@ class PreferencesPlugin(
                 val locale = watchLanguage?.takeIf { it.isNotBlank() }?.replace('_', '-') ?: Locale.current.toLanguageTag()
                 val units = units(
                     imperial = health.imperialUnits,
-                    wind = prefs.valueOf(EnumWatchPref.WindSpeed) as? WindUnits ?: WindUnits.FromDistance,
+                    fahrenheit = prefs.fahrenheitFor(health.imperialUnits),
+                    wind = prefs.windUnitsFor(health.imperialUnits),
                     clock24h = prefs.valueOf(BoolWatchPref.Clock24h) as? Boolean ?: false,
                     locale = locale,
                 )
@@ -139,8 +141,6 @@ class PreferencesPlugin(
             }
         }
     }
-
-    private fun List<WatchPreference<*>>.valueOf(pref: Any) = firstOrNull { it.pref == pref }?.valueOrDefault()
 
     private fun ComplicationSlot.properties() = mapOf(
         PROPERTY_CATEGORY to text(category),
@@ -197,8 +197,8 @@ class PreferencesPlugin(
 
         /** Until the user sets their own. */
         val DEFAULT_COMPLICATIONS = listOf(
-            ComplicationSlot("phone", "phone_state", 0, "battery_level"),
             ComplicationSlot("weather", "location", 0, "temperature"),
+            ComplicationSlot("phone", "phone_state", 0, "battery_level"),
             ComplicationSlot("calendar", "event", 0, "starts_at"),
             ComplicationSlot("finance", "stock", 0, "price"),
         )
@@ -207,17 +207,17 @@ class PreferencesPlugin(
     }
 }
 
-internal fun units(imperial: Boolean, wind: WindUnits, clock24h: Boolean, locale: String): Map<String, String> = mapOf(
+internal fun units(
+    imperial: Boolean,
+    fahrenheit: Boolean,
+    wind: WindUnits,
+    clock24h: Boolean,
+    locale: String,
+): Map<String, String> = mapOf(
     PreferencesPlugin.PROPERTY_LOCALE to locale,
-    PreferencesPlugin.PROPERTY_TEMPERATURE to if (imperial) "°F" else "°C",
+    PreferencesPlugin.PROPERTY_TEMPERATURE to if (fahrenheit) "°F" else "°C",
     PreferencesPlugin.PROPERTY_DISTANCE to if (imperial) "mi" else "km",
-    PreferencesPlugin.PROPERTY_WIND_SPEED to when (wind) {
-        WindUnits.FromDistance -> if (imperial) "mph" else "km/h"
-        WindUnits.KmH -> "km/h"
-        WindUnits.Mph -> "mph"
-        WindUnits.MetersPerSecond -> "m/s"
-        WindUnits.Knots -> "knots"
-    },
+    PreferencesPlugin.PROPERTY_WIND_SPEED to wind.displayName,
     PreferencesPlugin.PROPERTY_PRESSURE to if (imperial) "inHg" else "hPa",
     PreferencesPlugin.PROPERTY_PRECIPITATION to if (imperial) "in" else "mm",
     PreferencesPlugin.PROPERTY_CLOCK to if (clock24h) "24h" else "12h",

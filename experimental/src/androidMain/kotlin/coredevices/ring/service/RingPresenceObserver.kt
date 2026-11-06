@@ -5,6 +5,7 @@ import android.companion.ObservingDevicePresenceRequest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.RequiresApi
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
@@ -24,15 +25,22 @@ import kotlin.time.TimeSource
  * Asks the system to watch for the paired ring via its CompanionDeviceManager association. The
  * system's own BLE scan is not subject to the OEM screen-off restrictions placed on app scans
  * (Xiaomi "Deep Doze" refuses non-system scans), so when the ring wakes the system binds
- * [RingCompanionDeviceService] and the presence is handed to haversine as an advertisement.
+ * [RingCompanionDeviceService]. The presence is used to confirm the app's own scan still sees the
+ * ring, restarting it via [RingScanWatchdog] when it has locked up.
  */
 class RingPresenceObserver(
     private val context: Context,
     private val preferences: Preferences,
-    private val coreConfigHolder: CoreConfigHolder
+    private val coreConfigHolder: CoreConfigHolder,
+    private val scanWatchdog: RingScanWatchdog,
 ) {
     private val logger = Logger.withTag("RingPresence")
     private val scope = CoroutineScope(Dispatchers.Main)
+    private val wakeLock: PowerManager.WakeLock? by lazy {
+        context.getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "coreapp:ringScanWatchdog")
+            ?.apply { setReferenceCounted(false) }
+    }
     private var observed: Observation? = null
     private val lastLogged = mutableMapOf<String, TimeMark>()
 
@@ -46,6 +54,7 @@ class RingPresenceObserver(
             logger.i { "Companion device setup unavailable; not observing ring presence" }
             return
         }
+        scanWatchdog.start(scope)
         preferences.ringPaired
             .map { it?.toBleAddress() }
             .distinctUntilChanged()
@@ -59,6 +68,23 @@ class RingPresenceObserver(
 
     fun onRingAppeared(address: String) {
         logThrottled("Ring $address appeared (companion presence)")
+        // The system only keeps the CPU awake for this callback; the watchdog's wait and any
+        // restart need it held a little longer.
+        val check = scanWatchdog.onRingPresent() ?: return
+        try {
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT.inWholeMilliseconds)
+        } catch (e: Exception) {
+            logger.w(e) { "Unable to acquire scan watchdog wake lock" }
+        }
+        check.invokeOnCompletion { releaseWakeLock() }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            logger.w(e) { "Unable to release scan watchdog wake lock" }
+        }
     }
 
     fun onRingDisappeared(address: String) {
@@ -118,6 +144,7 @@ class RingPresenceObserver(
 
     private companion object {
         val LOG_THROTTLE = 30.seconds
+        val WAKE_LOCK_TIMEOUT = 10.seconds
     }
 }
 

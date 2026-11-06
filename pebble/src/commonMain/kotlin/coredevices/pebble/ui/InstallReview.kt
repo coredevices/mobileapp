@@ -160,10 +160,11 @@ private fun automaticExplanation(appName: String, policy: PermissionPolicy) = wh
 }
 
 @Composable
-private fun PermissionRow(
+internal fun PermissionRow(
     key: String,
     defined: Map<String, PluginDefinedPermission>,
     status: String? = null,
+    label: String = permissionLabel(key, defined),
     control: @Composable () -> Unit,
 ) {
     Row(
@@ -177,7 +178,7 @@ private fun PermissionRow(
             modifier = Modifier.size(20.dp),
         )
         Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(permissionLabel(key, defined), style = MaterialTheme.typography.bodyMedium)
+            Text(label, style = MaterialTheme.typography.bodyMedium)
             status?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -212,7 +213,7 @@ private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
     }
 }
 
-private fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>) = when (permissionKind(key, defined)) {
+internal fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>) = when (permissionKind(key, defined)) {
     PermissionKind.Dangerous -> 0
     PermissionKind.Exfiltrating -> 1
     PermissionKind.Write -> 2
@@ -220,7 +221,7 @@ private fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>)
     null -> 4
 }
 
-private fun List<String>.byKind(defined: Map<String, PluginDefinedPermission>) = sortedBy { kindRank(it, defined) }
+internal fun List<String>.byKind(defined: Map<String, PluginDefinedPermission>) = sortedBy { kindRank(it, defined) }
 
 private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
     PluginPermissions.GLOBAL_INTERNET ->
@@ -241,7 +242,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.TIMELINE -> Icons.Filled.ViewTimeline
     PluginPermissions.READ_WATCH_SETTINGS, PluginPermissions.WRITE_WATCH_SETTINGS -> Icons.Filled.Watch
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
-    PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
+    PluginPermissions.READ_APPS, PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
     PluginPermissions.FIND_MY_PHONE -> Icons.Filled.PhonelinkRing
     PluginPermissions.READ_FILES, PluginPermissions.WRITE_FILES -> Icons.Filled.Folder
     PluginPermissions.LEGACY_PEBBLEKIT -> Icons.Filled.Campaign
@@ -264,6 +265,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.WRITE_WATCH_SETTINGS -> "Change your watch settings"
     PluginPermissions.READ_MUSIC -> "See what music is playing"
     PluginPermissions.CONTROL_MUSIC -> "Control music playback"
+    PluginPermissions.READ_APPS -> "See which apps and watchfaces you have"
     PluginPermissions.LAUNCH_APPS -> "Launch apps on your watch"
     PluginPermissions.FIND_MY_PHONE -> "Ring your phone to find it"
     PluginPermissions.READ_FILES -> fileScopeOf(key)?.let { "Read '${fileScopeLabel(it)}' in device storage" } ?: "Read files from device storage you permit"
@@ -281,7 +283,7 @@ internal fun fileScopeLabel(scope: String): String {
 }
 
 @Composable
-private fun rememberPluginPermissions(): Map<String, PluginDefinedPermission> {
+internal fun rememberPluginPermissions(): Map<String, PluginDefinedPermission> {
     val libPebble = rememberLibPebble()
     return remember { libPebble.pluginPermissions() }.collectAsState(emptyMap()).value
 }

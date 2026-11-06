@@ -43,13 +43,18 @@ class LegacyDestinationsTest {
         supports = setOf(IntegrationSupport.Note),
         isExternalPlugin = true,
     )
+    private val iosReminders = FakeProvider(
+        id = "ios_reminders",
+        supports = setOf(IntegrationSupport.Reminder),
+        isHiddenByPlugins = false,
+    )
     private val preferences = PreferencesImpl(MapSettings())
     private val repository = IntegrationProviderRepository(
         preferences = preferences,
         plugins = FakePlugins(),
         platform = FakePlatform(),
         delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
-        builtIn = listOf(index, notion, googleTasks, tasker, plugin),
+        builtIn = listOf(index, notion, googleTasks, tasker, plugin, iosReminders),
     )
     private val pluginsEnabled = MutableStateFlow(true)
     private val legacy = LegacyDestinations(repository, preferences, pluginsEnabled)
@@ -70,6 +75,15 @@ class LegacyDestinationsTest {
 
         assertEquals(emptyList<LegacyDestination>(), legacy.pending.first())
         assertEquals(0, legacy.count.first())
+    }
+
+    @Test
+    fun nativeDestinationsExemptFromHidingAreNotPending() = runTest {
+        repository.selectReminderProvider(iosReminders)
+        preferences.setNoteShortcut(NoteShortcutType.SendToReminderProvider(iosReminders.id))
+
+        assertEquals(emptyList<LegacyDestination>(), legacy.pending.first())
+        assertFalse(legacy.isLegacy(iosReminders))
     }
 
     @Test
@@ -142,6 +156,7 @@ class LegacyDestinationsTest {
         override val storesItemsLocally: Boolean = false,
         override val isExternalPlugin: Boolean = false,
         override val title: String = id,
+        override val isHiddenByPlugins: Boolean = !storesItemsLocally && !isExternalPlugin,
     ) : IntegrationProvider {
         override fun notes(): NoteIntegration = FakeNoteIntegration()
         override fun reminders(): ReminderIntegration = FakeReminderIntegration()

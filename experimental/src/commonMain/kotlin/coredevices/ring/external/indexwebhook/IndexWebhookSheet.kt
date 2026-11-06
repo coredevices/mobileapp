@@ -368,7 +368,7 @@ fun IndexWebhookSheet(
                     )
                 }
                 runs.forEach { run ->
-                    RunRow(run)
+                    RunRow(run, onRetry = { viewModel.retry(run) })
                     HorizontalDivider(color = colors.outlineVariant)
                 }
             }
@@ -377,7 +377,7 @@ fun IndexWebhookSheet(
 }
 
 @Composable
-private fun RunRow(run: IndexWebhookRun) {
+private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
     val colors = IndexTheme.colors
     val color =
         if (run.ok) colors.onSurfaceVariant else colors.error
@@ -414,6 +414,11 @@ private fun RunRow(run: IndexWebhookRun) {
             color = colors.outline,
             maxLines = 1,
         )
+        if (run.retryDeliveryId != null) {
+            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("Retry")
+            }
+        }
     }
 }
 

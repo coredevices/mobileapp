@@ -14,7 +14,9 @@ import coredevices.ring.storage.StagedRecordingUpload
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.queue.TaskStatus
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.io.Buffer
 import kotlin.test.Test
@@ -39,14 +41,9 @@ class IndexWebhookDeliveryQueueTest {
         transcription = transcription,
     )
 
-    private fun TestScope.queue(api: FakeWebhookApi) = IndexWebhookDeliveryQueue(
-        repository = IndexWebhookDeliveryRepository(FakeDeliveryDao()),
-        webhookApi = api,
-        recordingStorage = FakeRecordingStorage,
-        localRecordingDao = FakeLocalRecordingDao,
-        scope = RecordingBackgroundScope(backgroundScope),
-        settings = MapSettings(),
-    )
+    private val runRepository = IndexWebhookRunRepository(MapSettings())
+
+    private fun TestScope.queue(api: FakeWebhookApi) = testDeliveryQueue(backgroundScope, api, runRepository)
 
     @Test
     fun sendsTheQueuedPayload() = runTest {
@@ -83,6 +80,21 @@ class IndexWebhookDeliveryQueueTest {
     }
 
     @Test
+    fun runOffersRetryOnlyOnceTheDeliveryFailedForGood() = runTest {
+        val retryable = FakeWebhookApi(result(ok = false, retryable = true))
+        assertFailsWith<RecoverableTaskException> { queue(retryable).processTask(delivery()) }
+        assertNull(runRepository.runs(RingGesture.Hold).first().single().retryDeliveryId)
+
+        val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
+        assertFailsWith<RecoverableTaskException> { queue(retryable).processTask(lastAttempt) }
+        assertEquals("text-7", runRepository.runs(RingGesture.Hold).first().first().retryDeliveryId)
+
+        val permanent = FakeWebhookApi(result(ok = false, retryable = false))
+        assertFailsWith<IllegalStateException> { queue(permanent).processTask(delivery(fileId = "rec-2")) }
+        assertEquals("rec-2", runRepository.runs(RingGesture.Hold).first().first().retryDeliveryId)
+    }
+
+    @Test
     fun disabledWebhookIsDone() = runTest {
         val api = FakeWebhookApi(result = null)
         queue(api).processTask(delivery())
@@ -108,6 +120,21 @@ class IndexWebhookDeliveryQueueTest {
         retryable = retryable,
     )
 }
+
+internal fun testDeliveryQueue(
+    scope: CoroutineScope,
+    api: IndexWebhookApi = FakeWebhookApi(result = null),
+    runRepository: IndexWebhookRunRepository = IndexWebhookRunRepository(MapSettings()),
+    dao: IndexWebhookDeliveryDao = FakeWebhookDeliveryDao(),
+) = IndexWebhookDeliveryQueue(
+    repository = IndexWebhookDeliveryRepository(dao),
+    webhookApi = api,
+    runRepository = runRepository,
+    recordingStorage = FakeRecordingStorage,
+    localRecordingDao = FakeLocalRecordingDao,
+    scope = RecordingBackgroundScope(scope),
+    settings = MapSettings(),
+)
 
 private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : IndexWebhookApi {
     data class Call(
@@ -144,7 +171,15 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
     ) = throw NotImplementedError("unused")
 }
 
-private class FakeDeliveryDao : IndexWebhookDeliveryDao {
+internal class FakeWebhookDeliveryDao : IndexWebhookDeliveryDao {
+    val resetFailedIds = mutableListOf<String>()
+
+    override suspend fun resetFailed(deliveryId: String): Int {
+        resetFailedIds += deliveryId
+        return 0
+    }
+
+    override suspend fun getIdByDeliveryId(deliveryId: String): Long? = TODO()
     override suspend fun insertTask(task: IndexWebhookDeliveryEntity): Long = TODO()
     override suspend fun getPendingTasks(): List<IndexWebhookDeliveryEntity> = emptyList()
     override suspend fun updateTaskStatus(taskId: Long, status: TaskStatus) = TODO()

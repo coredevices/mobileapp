@@ -42,6 +42,7 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.WRITE_WATCH_SETTINGS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_MUSIC, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTROL_MUSIC, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.READ_APPS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.LAUNCH_APPS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.FIND_MY_PHONE, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_FILES, PermissionKind.Read),

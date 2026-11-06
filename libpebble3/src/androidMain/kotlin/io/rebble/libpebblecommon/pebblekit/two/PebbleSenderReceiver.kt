@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.disk.pbw.PbwApp
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.js.TimelineLayoutJson
+import io.rebble.libpebblecommon.js.TimelineReminderJson
 import io.rebble.libpebblecommon.js.TimelinePinJson
 import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
@@ -18,6 +19,7 @@ import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.permissions.pebbleKit2Key
 import io.rebble.libpebblecommon.services.appmessage.AppMessageResult
 import io.rebble.pebblekit2.common.model.PebbleDictionary
+import io.rebble.pebblekit2.common.model.TimelineLayout
 import io.rebble.pebblekit2.common.model.TimelinePin
 import io.rebble.pebblekit2.common.model.TimelineResult
 import io.rebble.pebblekit2.common.model.TransmissionResult
@@ -171,25 +173,35 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
     }
 }
 
-private fun TimelinePin.toPinJson(): TimelinePinJson {
+internal fun TimelinePin.toPinJson(): TimelinePinJson {
     return TimelinePinJson(
-        id,
-        startTime,
-        duration?.inWholeMinutes?.toInt(),
-        layout = TimelineLayoutJson(
-            type  = layout.type.code,
-            title = layout.title,
-            subtitle = layout.subtitle,
-            body = layout.body,
-            tinyIcon = layout.tinyIcon,
-            smallIcon = layout.smallIcon,
-            largeIcon = layout.largeIcon,
-            primaryColor = layout.primaryColor,
-            secondaryColor = layout.secondaryColor,
-            backgroundColor = layout.backgroundColor,
-            headings = layout.headings,
-            paragraphs = layout.paragraphs,
-            lastUpdated = layout.lastUpdated,
-        )
+        id = id,
+        time = startTime,
+        durationMinutes = duration?.inWholeMinutes?.toInt(),
+        layout = layout.toLayoutJson(),
+        reminders = reminders.map { reminder ->
+            TimelineReminderJson(
+                time = reminder.time,
+                layout = reminder.layout.toLayoutJson(),
+            )
+        },
+    )
+}
+
+private fun TimelineLayout.toLayoutJson(): TimelineLayoutJson {
+    return TimelineLayoutJson(
+        type = type.code,
+        title = title,
+        subtitle = subtitle,
+        body = body,
+        tinyIcon = tinyIcon,
+        smallIcon = smallIcon,
+        largeIcon = largeIcon,
+        primaryColor = primaryColor,
+        secondaryColor = secondaryColor,
+        backgroundColor = backgroundColor,
+        headings = headings,
+        paragraphs = paragraphs,
+        lastUpdated = lastUpdated,
     )
 }

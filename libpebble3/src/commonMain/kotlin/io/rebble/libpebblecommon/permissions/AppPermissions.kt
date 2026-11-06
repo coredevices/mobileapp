@@ -58,7 +58,7 @@ enum class PermissionStatus {
     Waiting,
 }
 
-data class AppPermissionStatus(val permission: String, val status: PermissionStatus, val lastUsedAtMs: Long? = null)
+data class AppPermissionStatus(val appUuid: Uuid, val permission: String, val status: PermissionStatus, val lastUsedAtMs: Long? = null)
 
 enum class PermissionDecision {
     Granted,
@@ -113,6 +113,8 @@ class AppPermissions(
     private val scope: LibPebbleCoroutineScope,
 ) : AppPermissionsApi {
     fun init() {
+        // Any watch-synced permission added here must also be carried over in Locker.sideloadApp: the
+        // watch won't reload the binary on a permissions-only change.
         localMicrophoneGrants().onEach { installed.syncMicrophoneGrants(it) }.launchIn(scope)
     }
 
@@ -185,6 +187,15 @@ class AppPermissions(
             .map { decidePermission(permission, subject, it, watchConfig.value, pluginDefined) }
             .first { it != PermissionDecision.NeedsApproval }
     } ?: PermissionDecision.NeedsApproval
+
+    /** What using [permission] would get [appUuid] now, without counting as a use. */
+    suspend fun query(appUuid: Uuid, permission: String): PermissionDecision {
+        val subject = subjectOf(appUuid) ?: return PermissionDecision.Denied
+        // A legacy app's network access is all one permission.
+        val key = if (subject.legacy && permissionOf(permission) in LEGACY_NETWORK) PluginPermissions.GLOBAL_INTERNET else permission
+        val rows = dao.getByAppUuid(appUuid)
+        return decidePermission(key, subject, rows, watchConfig.value, pluginDefinitionsFor(rows, key))
+    }
 
     suspend fun request(appUuid: Uuid, permission: String, wait: Boolean = false): PermissionDecision =
         subjectOf(appUuid)?.let { request(it, permission, wait) } ?: PermissionDecision.Denied
@@ -306,14 +317,17 @@ class AppPermissions(
         return key == invokeActionKey(plugin) && !canExfiltrate(plugin)
     }
 
-    fun statuses(appUuid: Uuid): Flow<List<AppPermissionStatus>> = combine(
-        dao.flowByAppUuid(appUuid),
-        watchConfig.flow,
-        installed.pluginPermissions(),
-        installed.subjectsOf(setOf(appUuid)),
-    ) { rows, config, defined, subjects ->
-        permissionStatuses(subjects[appUuid], rows, config.watchConfig, defined)
-    }
+    /** [appUuid]'s permissions, or every installed app's if null. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun statuses(appUuid: Uuid?): Flow<List<AppPermissionStatus>> =
+        combine(appUuid?.let(dao::flowByAppUuid) ?: dao.allFlow(), watchConfig.flow, installed.pluginPermissions(), ::Triple)
+            .flatMapLatest { (rows, config, defined) ->
+                installed.subjectsOf(rows.map { it.appUuid }.toSet() + listOfNotNull(appUuid)).map { subjects ->
+                    rows.groupBy { it.appUuid }
+                        .filterKeys { appUuid != null || it in subjects }
+                        .flatMap { (app, appRows) -> permissionStatuses(subjects[app], appRows, config.watchConfig, defined) }
+                }
+            }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val waiting: Flow<List<LockerAppPermission>> by lazy {
@@ -407,6 +421,15 @@ fun refusalMessage(appName: String, refused: Map<String, PermissionDecision>): S
     ).joinToString("; ")
 }
 
+private val LEGACY_NETWORK = setOf(PluginPermissions.INTERNET, PluginPermissions.LOCAL_NETWORK)
+
+/** As `Pebble.permissions.query` reports it, after the browser's PermissionState. */
+fun PermissionDecision.queryState(): String = when (this) {
+    PermissionDecision.Granted -> "granted"
+    PermissionDecision.Denied -> "denied"
+    PermissionDecision.NeedsApproval -> "prompt"
+}
+
 internal fun permissionStatuses(
     subject: PermissionSubject?,
     rows: List<LockerAppPermission>,
@@ -424,7 +447,7 @@ internal fun permissionStatuses(
             PermissionDecision.Denied -> return@mapNotNull null
         }
     }
-    AppPermissionStatus(row.permission, status, row.lastUsedAtMs)
+    AppPermissionStatus(row.appUuid, row.permission, status, row.lastUsedAtMs)
 }
 
 internal fun waitingRows(

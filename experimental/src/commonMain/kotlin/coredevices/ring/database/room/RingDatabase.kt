@@ -49,10 +49,12 @@ import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
+import coredevices.ring.data.entity.room.clock.LocalClockEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
+import coredevices.ring.database.room.dao.LocalClockDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.PluginGrantDao
 import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
@@ -93,12 +95,13 @@ import kotlin.uuid.Uuid
         PluginGrantDenial::class,
         AgentIterationEntity::class,
         RingRssiReading::class,
+        LocalClockEntry::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 45,
+    version = 46,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -154,8 +157,10 @@ import kotlin.uuid.Uuid
         // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
         AutoMigration(from = 42, to = 43, Migrate42To43::class),
         // 43→44 is Migrate43To44, added to the builder in experimentalModule.
-        // 44→45: adds IndexWebhookDeliveryEntity.
+        // 44→45: adds LocalClockEntry (in-app timers/alarms on iOS).
         AutoMigration(from = 44, to = 45),
+        // 45→46: adds IndexWebhookDeliveryEntity.
+        AutoMigration(from = 45, to = 46),
     ]
 )
 @TypeConverters(Converters::class)
@@ -179,6 +184,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun pluginGrantDao(): PluginGrantDao
     abstract fun agentIterationDao(): AgentIterationDao
     abstract fun ringRssiReadingDao(): RingRssiReadingDao
+    abstract fun localClockDao(): LocalClockDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")

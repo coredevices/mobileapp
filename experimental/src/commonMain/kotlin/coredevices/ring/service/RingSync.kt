@@ -28,6 +28,7 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.util.SecondaryProfileWarning
+import coredevices.util.flow.takeUntil
 import coredevices.util.isIOS
 import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlin.time.measureTime
 import kotlin.uuid.Uuid
@@ -159,12 +161,16 @@ class RingSync(
         const val TARGET_SAMPLE_RATE = 16000
         private val SCAN_INTERVAL = 3.seconds
         private val SCAN_ERROR_BACKOFF = 3.seconds
+        private val RECENT_CONNECTION_WINDOW = 30.seconds
         val SATELLITE_HW_VER = Pair(11, 0)
         val badCollectionsDir: Path = Path(SystemTemporaryDirectory, "bad_collections").also {
             SystemFileSystem.createDirectories(it, mustCreate = false)
         }
     }
     private var syncJob: Job? = null
+    private val scanRestartRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private var scanRestartRequested = false
+    private var lastConnectionActivity: TimeMark? = null
     private val saveSemaphore = Semaphore(permits = 8)
     private val pairingKeyMonitor = RingPairingKeyMonitor(prefs)
     private val _lastRing: MutableStateFlow<KMPHaversineSatellite?> = MutableStateFlow(null)
@@ -332,8 +338,13 @@ class RingSync(
                                 .flowOn(Dispatchers.IO)
                                 .catch {
                                     logger.e(it) { "Error during satellite scanning: ${it.message}" }
-                                }.collect { satelliteStatus ->
+                                }
+                                .takeUntil(scanRestartRequests)
+                                .collect { satelliteStatus ->
                                     val t = Clock.System.now()
+                                    if (satelliteStatus !is SatelliteStatus.BluetoothFailure) {
+                                        lastConnectionActivity = TimeSource.Monotonic.markNow()
+                                    }
                                     when (satelliteStatus) {
                                         is SatelliteStatus.Transferring -> {
                                             logger.d { "Status ${satelliteStatus.transferStatus} $t lastRSSI = ${satelliteStatus.satellite.lastAdvertisement?.rssi} lastRxRSSI = ${satelliteStatus.satellite.state.value?.rxRSSI}" }
@@ -947,7 +958,11 @@ class RingSync(
                                     }
                                     //logger.d { "Handled satellite status ${satelliteStatus::class.simpleName} in $dur" }
                                 }
-                            delay(SCAN_INTERVAL)
+                            if (scanRestartRequested) {
+                                scanRestartRequested = false
+                            } else {
+                                delay(SCAN_INTERVAL)
+                            }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -979,6 +994,17 @@ class RingSync(
 
     fun stop() {
         syncJob?.cancel()
+    }
+
+    /** Whether a connection (transfer, firmware update or programming) started, progressed or ended recently. */
+    fun hadRecentConnection(): Boolean =
+        lastConnectionActivity?.let { it.elapsedNow() < RECENT_CONNECTION_WINDOW } == true
+
+    /** Tears the scan down; the sync loop brings it straight back up. */
+    fun restartScan() {
+        logger.w { "Restarting ring scan" }
+        scanRestartRequested = true
+        scanRestartRequests.tryEmit(Unit)
     }
 
     suspend fun lastRingSummary(): String? = lastRing.value?.let {

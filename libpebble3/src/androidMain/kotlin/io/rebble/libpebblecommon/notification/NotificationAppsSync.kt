@@ -209,6 +209,10 @@ class AndroidPackageChangedReceiver(private val context: Application) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 logger.d { "Package changed: ${intent.action}" }
+                // An update sends REMOVED then ADDED; syncing in between would delete the app's settings.
+                if (intent.action == Intent.ACTION_PACKAGE_REMOVED &&
+                    intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+                ) return
                 onChanged()
             }
         }

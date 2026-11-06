@@ -90,6 +90,7 @@ private fun SignInButton(
                 val credential = try {
                     credentialProvider(context!!) ?: return@launch
                 } catch (e: Exception) {
+                    Logger.e(e) { "Error getting sign-in credential: ${e.message}" }
                     onError(e.message ?: "Unknown error")
                     return@launch
                 }

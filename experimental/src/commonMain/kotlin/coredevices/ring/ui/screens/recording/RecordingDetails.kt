@@ -235,6 +235,9 @@ fun RecordingDetails(id: Long, coreNav: CoreNav) {
                         onOpenObject = { id ->
                             coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.ObjectDetails(id))
                         },
+                        onOpenTimersAlarms = {
+                            coreNav.navigateTo(coredevices.ring.ui.navigation.RingRoutes.TimersAndAlarms)
+                        },
                         onCopied = { scope.launch { snackbarHostState.showSnackbar("Copied to clipboard") } },
                         onRespondToConfirmation = viewModel::respondToConfirmation,
                     )
@@ -354,6 +357,7 @@ private fun RecordingDetailsContents(
     showTraceTimeline: Boolean,
     onRetry: () -> Unit,
     onOpenObject: (String) -> Unit,
+    onOpenTimersAlarms: () -> Unit,
     onCopied: () -> Unit,
     onRespondToConfirmation: (callId: String, approved: Boolean) -> Unit,
 ) {
@@ -410,6 +414,7 @@ private fun RecordingDetailsContents(
                         turn = turn,
                         active = agentProcessing && i == lastTurn,
                         onOpenObject = onOpenObject,
+                        onOpenTimersAlarms = onOpenTimersAlarms,
                         onCopied = onCopied,
                         onRespondToConfirmation = onRespondToConfirmation,
                     )
@@ -608,6 +613,7 @@ private fun AssistantTurn(
     /** The agent is still working on this turn, so its tool calls may grow. */
     active: Boolean,
     onOpenObject: (String) -> Unit,
+    onOpenTimersAlarms: () -> Unit,
     onCopied: () -> Unit,
     onRespondToConfirmation: (callId: String, approved: Boolean) -> Unit,
 ) {
@@ -635,7 +641,9 @@ private fun AssistantTurn(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        part.actions.forEach { RecordingActionChip(action = it, onOpenObject = onOpenObject) }
+                        part.actions.forEach {
+                            RecordingActionChip(action = it, onOpenObject = onOpenObject, onOpenTimersAlarms = onOpenTimersAlarms)
+                        }
                     }
                     // Only the newest group can still grow; anything after it has already superseded it.
                     is AssistantPart.ToolCalls -> ToolCallGroup(

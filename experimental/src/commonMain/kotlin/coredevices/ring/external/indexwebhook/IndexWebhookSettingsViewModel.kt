@@ -29,6 +29,7 @@ class IndexWebhookSettingsViewModel(
     private val webhookApi: IndexWebhookApi,
     private val runRepository: IndexWebhookRunRepository,
     private val signingSecretStorage: IndexWebhookSigningSecretStorage,
+    private val deliveryQueue: IndexWebhookDeliveryQueue,
 ) : ViewModel() {
 
     private val _gesture = MutableStateFlow<RingGesture?>(null)
@@ -188,6 +189,15 @@ class IndexWebhookSettingsViewModel(
                 ok = result.ok,
                 label = "${result.status} · ${result.durationMs} ms",
             )
+        }
+    }
+
+    fun retry(run: IndexWebhookRun) {
+        val gesture = _gesture.value ?: return
+        val deliveryId = run.retryDeliveryId ?: return
+        viewModelScope.launch {
+            runRepository.clearRetry(gesture, deliveryId)
+            deliveryQueue.retry(deliveryId)
         }
     }
 

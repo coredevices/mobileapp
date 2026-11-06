@@ -184,13 +184,15 @@ class Locker(
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
 
-    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> =
-        combine(permissions.statuses(id), lockerEntryDao.getEntryFlow(id)) { statuses, entry ->
+    override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> {
+        if (id == null) return permissions.statuses(null).flowOn(Dispatchers.IO)
+        return combine(permissions.statuses(id), lockerEntryDao.getEntryFlow(id)) { statuses, entry ->
             statuses.takeIf {
                 it.isNotEmpty() || entry == null || entry.systemApp ||
                     lockerPBWCache.cachedPBWFileForApp(id, entry.version) != null
             }
         }.flowOn(Dispatchers.IO)
+    }
 
     private suspend fun pbwFor(uuid: Uuid): PbwApp? {
         val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null
@@ -429,7 +431,10 @@ class Locker(
             pbwApp.info.watchapp.watchface -> AppType.Watchface
             else -> AppType.Watchapp
         }
-        val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type))
+        val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type)).let { new ->
+            // A permissions-only change doesn't make the watch reload the binary
+            new.copy(microphoneGranted = lockerEntryDao.getEntry(new.id)?.microphoneGranted ?: false)
+        }
         lockerPBWCache.deleteApp(lockerEntry.id)  // Clear old version(s) if re-sideloading
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)

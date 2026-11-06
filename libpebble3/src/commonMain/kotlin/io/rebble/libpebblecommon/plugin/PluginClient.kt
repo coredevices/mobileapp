@@ -107,9 +107,12 @@ class PluginClient(
             emit(SourceUpdate.Error(PluginErrors.PLUGIN_UNAVAILABLE, "${plugin.name} has no source $category/$item"))
             return@flow
         }
+        // Whatever the caller chooses reaches the plugin, which may send it off the phone.
+        val declared = properties?.filter { it in declaration.properties }
+        val pixels = iconPixelSize?.clamped()
         count(caller, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
         if (caller !is PluginCaller.App) {
-            emitAll(serve(caller, target, declaration, category, item, properties, iconPixelSize))
+            emitAll(serve(caller, target, declaration, category, item, declared, pixels))
             return@flow
         }
         val required = requiredOfCaller(declaration)
@@ -125,8 +128,8 @@ class PluginClient(
                 .flatMapLatest { scope ->
                     if (scope != null) {
                         // The scoping properties are needed to filter by, whether asked for or not.
-                        val wanted = properties?.plus(scope.keys)?.distinct()
-                        serve(caller, target, declaration, category, item, wanted, iconPixelSize).map { it.scopedTo(scope) }
+                        val wanted = declared?.plus(scope.keys)?.distinct()
+                        serve(caller, target, declaration, category, item, wanted, pixels).map { it.scopedTo(scope) }
                     } else {
                         val refused = asked.associateWith { permissions.check(caller.subject, it) }
                             .filterValues { it != PermissionDecision.Granted }

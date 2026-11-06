@@ -101,7 +101,7 @@ private fun pointProblem(
         SourceShapeNames.BOOLEAN ->
             if (primitive == null || primitive.isString || primitive.booleanOrNull == null) "boolean needs true or false" else null
         SourceShapeNames.ICON, SourceShapeNames.IMAGE ->
-            (reading as? JsonObject)?.let { bitmapProblem(shape, it, iconPixelSize) } ?: "$shape isn't an object"
+            if (reading is JsonObject) bitmapProblem(shape, reading, iconPixelSize) else "$shape isn't an object"
         // A shape this build doesn't know: the plugin declared it, so its consumers know what to expect.
         else -> null
     }

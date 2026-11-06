@@ -18,9 +18,10 @@ import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
 import io.rebble.libpebblecommon.database.entity.NumberWatchPref
+import io.rebble.libpebblecommon.database.entity.TemperatureUnits
+import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
-import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
@@ -35,10 +36,16 @@ import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherType
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -74,6 +81,7 @@ class WeatherFetcher(
     companion object {
         private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
         private const val SETTINGS_KEY_MIGRATED_UNITS = "migrated_weather_units_to_watch_pref"
+        private const val SETTINGS_KEY_MIGRATED_UK_TEMPERATURE = "migrated_uk_weather_units_to_temperature_pref"
         private val PLUGIN_READ_TIMEOUT = 45.seconds
     }
 
@@ -81,6 +89,18 @@ class WeatherFetcher(
 
     suspend fun init() {
         migrateUnitsToWatchPref()
+        migrateUkUnitsToTemperaturePref()
+        GlobalScope.launch {
+            libPebble.weatherInFahrenheit().distinctUntilChanged().drop(1).collect {
+                try {
+                    fetchWeather(this)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Refetching weather after a units change failed" }
+                }
+            }
+        }
         fetchIfNotFetchedYet()
     }
 
@@ -91,13 +111,23 @@ class WeatherFetcher(
      */
     private suspend fun migrateUnitsToWatchPref() {
         if (settings.getBoolean(SETTINGS_KEY_MIGRATED_UNITS, false)) return
-        val previous = coreConfigFlow.value.weatherUnits ?: deviceDefaultWeatherUnit()
-        libPebble.updateImperialUnits(previous == WeatherUnit.Imperial)
+        val previous = previousWeatherUnits()
+        libPebble.updateImperialUnits(previous == WeatherUnit.Imperial || previous == WeatherUnit.UkHybrid)
         if (previous == WeatherUnit.UkHybrid) {
             libPebble.setWatchPref(WatchPreference(EnumWatchPref.WindSpeed, WindUnits.Mph))
         }
         settings.putBoolean(SETTINGS_KEY_MIGRATED_UNITS, true)
     }
+
+    private fun migrateUkUnitsToTemperaturePref() {
+        if (settings.getBoolean(SETTINGS_KEY_MIGRATED_UK_TEMPERATURE, false)) return
+        if (previousWeatherUnits() == WeatherUnit.UkHybrid) {
+            libPebble.setWatchPref(WatchPreference(EnumWatchPref.Temperature, TemperatureUnits.Celsius))
+        }
+        settings.putBoolean(SETTINGS_KEY_MIGRATED_UK_TEMPERATURE, true)
+    }
+
+    private fun previousWeatherUnits(): WeatherUnit = coreConfigFlow.value.weatherUnits ?: deviceDefaultWeatherUnit()
 
     suspend fun fetchIfNotFetchedYet() {
         // One-off sync on first launch after this ships
@@ -112,7 +142,7 @@ class WeatherFetcher(
     suspend fun fetchWeather(scope: CoroutineScope) = mutex.withLock {
         val weatherEnabled = coreConfigFlow.value.fetchWeather
         val pinsEnabled = coreConfigFlow.value.weatherPinsV2
-        val units = libPebble.healthSettings.first().weatherUnit()
+        val units = weatherUnit(libPebble.weatherInFahrenheit().first())
         if (!pinsEnabled || !weatherEnabled) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)
@@ -418,11 +448,16 @@ fun GeocoderResult<Place>.usefulName(): String? {
     return place?.usefulName()
 }
 
+private val PLUS_CODE = Regex("^[23456789CFGHJMPQRVWX]{2,8}\\+", RegexOption.IGNORE_CASE)
+
 fun Place.usefulName(): String? {
 //    logger.v { "usefulName: name=$name street=$street isoCountryCode=$isoCountryCode country=$country " +
 //            "postalCode=$postalCode administrativeArea=$administrativeArea subAdministrativeArea=$subAdministrativeArea " +
 //            "locality=$locality subLocality=$subLocality thoroughfare=$thoroughfare subThoroughfare=$subThoroughfare" }
-    return locality ?: street
+    return locality
+        ?: subAdministrativeArea
+        ?: administrativeArea
+        ?: street?.takeUnless { PLUS_CODE.containsMatchIn(it) }
 }
 
 internal enum class WeatherPinKind(val value: UByte) {
@@ -640,8 +675,22 @@ internal fun String.utcOffsetMinutes(): Int? {
     return sign * (hours * 60 + minutes)
 }
 
-internal fun HealthSettings.weatherUnit(): WeatherUnit =
-    if (imperialUnits) WeatherUnit.Imperial else WeatherUnit.Metric
+internal fun List<WatchPreference<*>>.valueOf(pref: WatchPref<*>) = firstOrNull { it.pref == pref }?.valueOrDefault()
+
+internal fun List<WatchPreference<*>>.fahrenheitFor(imperialUnits: Boolean): Boolean =
+    (valueOf(EnumWatchPref.Temperature) as? TemperatureUnits ?: TemperatureUnits.FromDistance).isFahrenheit(imperialUnits)
+
+internal fun List<WatchPreference<*>>.windUnitsFor(imperialUnits: Boolean): WindUnits =
+    (valueOf(EnumWatchPref.WindSpeed) as? WindUnits ?: WindUnits.FromDistance).resolved(imperialUnits)
+
+fun LibPebble.weatherInFahrenheit(): Flow<Boolean> =
+    combine(healthSettings, watchPrefs) { health, prefs -> prefs.fahrenheitFor(health.imperialUnits) }
+
+fun LibPebble.windUnits(): Flow<WindUnits> =
+    combine(healthSettings, watchPrefs) { health, prefs -> prefs.windUnitsFor(health.imperialUnits) }
+
+internal fun weatherUnit(fahrenheit: Boolean): WeatherUnit =
+    if (fahrenheit) WeatherUnit.Imperial else WeatherUnit.Metric
 
 /** The watch is sent wind in mph whatever the units, and converts for display itself. */
 internal fun Int?.toMph(units: WeatherUnit): Int? = when {

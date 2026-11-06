@@ -79,7 +79,14 @@ data class PluginMetadata(
 }
 
 @Serializable
-data class IconPixelSize(val w: Int, val h: Int)
+data class IconPixelSize(val w: Int, val h: Int) {
+    /** No bigger than the largest watch screen. */
+    fun clamped() = IconPixelSize(w.coerceIn(1, MAX_SIDE), h.coerceIn(1, MAX_SIDE))
+
+    companion object {
+        const val MAX_SIDE = 260
+    }
+}
 
 sealed interface SourceUpdate {
     data class Data(val envelope: SourceEnvelope) : SourceUpdate

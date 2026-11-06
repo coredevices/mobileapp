@@ -74,6 +74,7 @@ object PluginPermissions {
     const val WRITE_WATCH_SETTINGS = "WriteWatchSettings"
     const val READ_MUSIC = "ReadMusic"
     const val CONTROL_MUSIC = "ControlMusic"
+    const val READ_APPS = "ReadApps"
     const val LAUNCH_APPS = "LaunchApps"
     const val FIND_MY_PHONE = "FindMyPhone"
     const val READ_FILES = "ReadFiles"

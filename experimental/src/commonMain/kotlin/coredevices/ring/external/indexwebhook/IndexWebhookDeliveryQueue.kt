@@ -20,6 +20,7 @@ import kotlin.time.Duration.Companion.minutes
 class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
     private val webhookApi: IndexWebhookApi,
+    private val runRepository: IndexWebhookRunRepository,
     private val recordingStorage: RecordingStorage,
     private val localRecordingDao: LocalRecordingDao,
     scope: RecordingBackgroundScope,
@@ -43,6 +44,11 @@ class IndexWebhookDeliveryQueue(
         if (id != -1L) scheduleTask(id)
     }
 
+    /** Gives a delivery that failed for good another round of attempts. */
+    suspend fun retry(deliveryId: String) {
+        repository.resetFailed(deliveryId)?.let { scheduleTask(it) }
+    }
+
     override suspend fun processTask(task: IndexWebhookDeliveryEntity) {
         val audio = task.fileId?.let { readAudio(it) }
         val recordedAt = localRecordingDao.getRecording(task.recordingId)?.localTimestamp ?: task.created
@@ -54,6 +60,17 @@ class IndexWebhookDeliveryQueue(
             recordedAt = recordedAt,
             gesture = task.gesture,
         ) ?: return
+        // The scheduler counts this attempt before running it.
+        val failedForGood = !result.ok && (!result.retryable || task.attempts + 1 >= MAX_ATTEMPTS)
+        runRepository.record(
+            gesture = task.gesture,
+            ok = result.ok,
+            status = result.status,
+            detail = result.detail,
+            byteSize = result.byteSize,
+            durationMs = result.durationMs,
+            retryDeliveryId = task.deliveryId.takeIf { failedForGood },
+        )
         when {
             result.ok -> Unit
             result.retryable -> throw RecoverableTaskException("Webhook delivery failed: ${result.status}")

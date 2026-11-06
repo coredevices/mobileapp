@@ -169,7 +169,7 @@ class BugApi(
                 
                 // Check for authentication errors
                 if (resp.status.value == 401) {
-                    throw Exception("Authentication failed. Please sign in with Google and try again.")
+                    throw Exception("Authentication failed. Please sign in and try again.")
                 } else {
                     // Parse and provide user-friendly error messages
                     val errorMessage = try {

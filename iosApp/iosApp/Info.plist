@@ -134,6 +134,8 @@
 	<string>$(PRODUCT_NAME) writes health data recorded by your Pebble watch, such as steps and sleep.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>$(PRODUCT_NAME) writes health data recorded by your Pebble watch, such as steps and sleep.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>$(PRODUCT_NAME) schedules the timers and alarms you ask your Index to set.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>This app needs bluetooth access to connect to your Pebble Watch.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

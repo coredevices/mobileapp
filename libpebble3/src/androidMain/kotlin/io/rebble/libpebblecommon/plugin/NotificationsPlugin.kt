@@ -84,7 +84,7 @@ class NotificationsPlugin(
      */
     private fun readShade(): List<ShadeNotification>? =
         connection.activeNotifications()
-            ?.mapNotNull { it.toShadeNotification() }
+            ?.mapNotNull { it.toShadeNotification(sensitive = connection.hasSensitiveContent(it.key)) }
             ?.sortedByDescending { it.postedAt }
 
     private suspend fun toEnvelope(
@@ -181,9 +181,10 @@ internal data class ShadeNotification(
     val postedAt: Long,
 )
 
-internal fun StatusBarNotification.toShadeNotification(): ShadeNotification? {
+internal fun StatusBarNotification.toShadeNotification(sensitive: Boolean): ShadeNotification? {
     val extras = notification.extras
     return shadeNotification(
+        sensitive = sensitive,
         key = key,
         packageName = packageName,
         isOngoing = isOngoing,
@@ -197,9 +198,11 @@ internal fun StatusBarNotification.toShadeNotification(): ShadeNotification? {
 
 /**
  * Null for the things a user doesn't count as a notification: ongoing ones (media players,
- * foreground services) can't be dismissed, and a group summary repeats its children.
+ * foreground services) can't be dismissed, and a group summary repeats its children. A one-time
+ * code, by Android's [sensitive] flag or by its look, is never published: its text is replaced.
  */
 internal fun shadeNotification(
+    sensitive: Boolean,
     key: String,
     packageName: String,
     isOngoing: Boolean,
@@ -213,12 +216,30 @@ internal fun shadeNotification(
     val cleanTitle = stripBidiIsolates(title).orEmpty()
     val cleanBody = stripBidiIsolates(bigText ?: text).orEmpty()
     if (cleanTitle.isBlank() && cleanBody.isBlank()) return null
+    val redact = sensitive || looksLikeOneTimeCode("$cleanTitle $cleanBody")
     // A titleless notification still needs something to render as its name.
+    val title = cleanTitle.ifBlank { cleanBody }
+    val titleHasCode = cleanTitle.isBlank() || ONE_TIME_CODE.containsMatchIn(cleanTitle)
     return ShadeNotification(
         key = key,
         packageName = packageName,
-        title = cleanTitle.ifBlank { cleanBody },
-        body = if (cleanTitle.isBlank()) "" else cleanBody,
+        title = if (redact && titleHasCode) SENSITIVE_CONTENT else title,
+        body = if (cleanTitle.isBlank()) "" else if (redact) SENSITIVE_CONTENT else cleanBody,
         postedAt = postedAt,
     )
 }
+
+internal const val SENSITIVE_CONTENT = "Sensitive content"
+
+// After Beeper's: 4-8 digits, or 3-4 and 3 split by a space or dash, standing alone; or Google's G-123456.
+private val ONE_TIME_CODE =
+    Regex("""(?:^|[^a-zA-Z0-9.-])(\d{3,4}[-\s]\d{3}|\d{4,8})(?:\b|\.|$)(?![a-zA-Z0-9-']|[,.;:]\s*\d)|\bG-\d{4,8}\b""")
+
+// ponytail: English only; a code without one of these words, or in another language, gets through unless Android flags it.
+private val ONE_TIME_CODE_WORDS = Regex(
+    """\b(codes?|verif\w*|otp|passcodes?|passwords?|2fa|two[- ]factor|one[- ]time|security|log ?in|sign[- ]?in|pin|authenticat\w*|do not share|don'?t share)\b""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** A code-shaped number in text that talks about codes, so a lone order number or year isn't one. */
+internal fun looksLikeOneTimeCode(text: String) = ONE_TIME_CODE_WORDS.containsMatchIn(text) && ONE_TIME_CODE.containsMatchIn(text)
