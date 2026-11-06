@@ -801,6 +801,8 @@ data class StoreApplication(
     @SerialName("pebblekit2_packages")
     val pebbleKit2Packages: List<String> = emptyList(),
     val plugin: StorePlugin? = null,
+    @SerialName("config_page")
+    val configPage: String? = null,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,
@@ -1009,6 +1011,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         logger.w { "no uuid" }
         return null
     }
+    val configPage = app.configPage ?: app.plugin?.configPage
     return LockerEntry(
         id = app.id,
         uuid = app.uuid,
@@ -1017,7 +1020,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         title = app.title,
         type = app.type,
         developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
-        isConfigurable = app.capabilities.orEmpty().contains("configurable") || app.plugin?.configPage != null,
+        isConfigurable = app.capabilities.orEmpty().contains("configurable") || configPage != null,
         isTimelineEnabled = app.capabilities.orEmpty().contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
@@ -1041,7 +1044,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         userToken = timelineToken,
         manifestVersion = app.manifestVersion,
         pluginManifest = app.plugin?.manifest,
-        configPage = app.plugin?.configPage,
+        configPage = configPage,
         iconTintable = app.iconTintable,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0

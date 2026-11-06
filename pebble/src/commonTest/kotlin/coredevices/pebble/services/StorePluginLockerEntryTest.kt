@@ -67,6 +67,15 @@ class StorePluginLockerEntryTest {
     }
 
     @Test
+    fun aNonPluginAppKeepsItsBundledConfigPage() {
+        val app = stocks.replace(""""title":"Stocks",""", """"config_page":"config.html","title":"Stocks",""")
+        val entry = json.decodeFromString(StoreApplication.serializer(), app)
+            .toLockerEntry(sourceUrl = "https://store/api", timelineToken = null)!!
+        assertTrue(entry.isConfigurable)
+        assertEquals("config.html", entry.configPage)
+    }
+
+    @Test
     fun anIconIsOnlyTintableWhenTheStoreSaysSo() {
         fun tintable(app: String) = json.decodeFromString(StoreApplication.serializer(), app).iconTintable
         val tintableStocks = stocks.replace(""""title":"Stocks",""", """"icon_tintable":true,"title":"Stocks",""")
