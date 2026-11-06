@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhonelinkRing
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -258,6 +259,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.CALENDAR -> Icons.Filled.CalendarMonth
     PluginPermissions.CONTACTS -> Icons.Filled.Contacts
     PluginPermissions.TIMELINE -> Icons.Filled.ViewTimeline
+    PluginPermissions.SHOW_NOTIFICATIONS -> Icons.Filled.NotificationsActive
     PluginPermissions.READ_WATCH_SETTINGS, PluginPermissions.WRITE_WATCH_SETTINGS -> Icons.Filled.Watch
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
     PluginPermissions.READ_APPS, PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
@@ -279,6 +281,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.CALENDAR -> "Read your calendar"
     PluginPermissions.CONTACTS -> "Read your contacts"
     PluginPermissions.TIMELINE -> "Add pins to your timeline"
+    PluginPermissions.SHOW_NOTIFICATIONS -> "Show notifications on your watch"
     PluginPermissions.READ_WATCH_SETTINGS -> "Read your watch settings"
     PluginPermissions.WRITE_WATCH_SETTINGS -> "Change your watch settings"
     PluginPermissions.READ_MUSIC -> "See what music is playing"
@@ -510,6 +513,7 @@ private fun legacyAccessName(key: String) = when (permissionOf(key)) {
     PluginPermissions.GLOBAL_INTERNET -> "the internet"
     PluginPermissions.LOCATION -> "location"
     PluginPermissions.TIMELINE -> "timeline pins"
+    PluginPermissions.SHOW_NOTIFICATIONS -> "watch notifications"
     else -> "phone apps"
 }
 

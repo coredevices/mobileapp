@@ -56,6 +56,25 @@ internal const val PLUGIN_HOST_JS = """
     _JsBridge.refreshSources(JSON.stringify(keys || []));
   };
 
+  function asJson(value) { return typeof value === 'string' ? value : JSON.stringify(value); }
+
+  /**
+   * Show a notification on the watch: `{ layout, actions }`, as a timeline pin's are. A
+   * `pluginAction` action runs this plugin's action of that name with its `args`.
+   */
+  global.Pebble.showNotification = function (notification) {
+    _JsBridge.showNotification(asJson(notification));
+  };
+
+  /** As in PKJS: the timeline web API's pin JSON, inserted or replaced by its `id`. */
+  global.Pebble.insertTimelinePin = function (pin) {
+    _JsBridge.insertTimelinePin(asJson(pin));
+  };
+
+  global.Pebble.deleteTimelinePin = function (id) {
+    _JsBridge.deleteTimelinePin(String(id));
+  };
+
   /** Push at the open config page. No reply. */
   global.Pebble.sendConfigMessage = function (message) {
     _JsBridge.configMessage(JSON.stringify(message === undefined ? null : message));

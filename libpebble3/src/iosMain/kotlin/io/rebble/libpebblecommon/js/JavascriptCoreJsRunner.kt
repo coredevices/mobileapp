@@ -95,7 +95,7 @@ class JavascriptCoreJsRunner(
             ),
             JSTimeout(interfacesScope, evalRawFn),
             WebSocketManager(interfacesScope, { evalFn(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess),
-            JSCPKJSInterface(this, device, libPebble, jsTokenUtil),
+            JSCPKJSInterface(this, device, remoteTimelineEmulator, jsTokenUtil),
             JSCPrivatePKJSInterface(jsPath, this, device, interfacesScope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient),
             JSCJSLocalStorageInterface(jsContext, appInfo.uuid, appContext, evalRawFn),
             JSCGeolocationInterface(interfacesScope, this)

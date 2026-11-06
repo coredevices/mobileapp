@@ -38,6 +38,7 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.CALENDAR, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTACTS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.TIMELINE, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.SHOW_NOTIFICATIONS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_WATCH_SETTINGS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WRITE_WATCH_SETTINGS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_MUSIC, PermissionKind.Read),
@@ -62,6 +63,7 @@ private val LEGACY_PKJS = listOf(
     PluginPermissions.GLOBAL_INTERNET,
     PluginPermissions.LOCATION,
     PluginPermissions.TIMELINE,
+    PluginPermissions.SHOW_NOTIFICATIONS,
 )
 
 /** What a legacy app keeps without asking, unless `askLegacyAppsForPermissions` is on. */

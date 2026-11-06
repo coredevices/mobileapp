@@ -70,6 +70,7 @@ object PluginPermissions {
     const val CALENDAR = "Calendar"
     const val CONTACTS = "Contacts"
     const val TIMELINE = "Timeline"
+    const val SHOW_NOTIFICATIONS = "ShowNotifications"
     const val READ_WATCH_SETTINGS = "ReadWatchSettings"
     const val WRITE_WATCH_SETTINGS = "WriteWatchSettings"
     const val READ_MUSIC = "ReadMusic"

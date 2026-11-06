@@ -1,12 +1,17 @@
 package io.rebble.libpebblecommon.js
 
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.argsWithReply
 import io.rebble.libpebblecommon.database.entity.BaseAttribute
+import io.rebble.libpebblecommon.database.entity.PluginActionRef
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.util.PebbleColor
+import io.rebble.libpebblecommon.util.TimelineAttributeFactory
 import io.rebble.libpebblecommon.util.toProtocolNumber
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -19,6 +24,9 @@ private val PIN_UUID = Uuid.parse("9c29c20c-1c1c-43f6-9f9a-2b90a596c15e")
 
 private fun pinFrom(pinJson: String) =
     asPin(json.decodeFromString(TimelinePinJson.serializer(), pinJson), APP_UUID, PIN_UUID)
+
+private fun notificationFrom(notificationJson: String) =
+    asNotification(json.decodeFromString(TimelineNotificationJson.serializer(), notificationJson), APP_UUID)
 
 private fun List<BaseAttribute>.text(attribute: TimelineAttribute): String? =
     filterIsInstance<BaseAttribute.TextAttribute>().find { it.attribute == attribute }?.text
@@ -33,6 +41,94 @@ private fun List<BaseAttribute>.icon(attribute: TimelineAttribute): TimelineIcon
     filterIsInstance<BaseAttribute.IconAttribute>().find { it.attribute == attribute }?.icon
 
 class RemoteTimelineEmulatorTest {
+    @Test
+    fun pluginActionsKeepTheirActionAndArgsOnThePhone() {
+        val pin = pinFrom(
+            """
+            {
+              "id": "task-1",
+              "time": "2026-09-15T23:30:00Z",
+              "layout": { "type": "genericPin", "title": "Buy milk" },
+              "actions": [
+                { "title": "Done", "type": "pluginAction", "action": "complete", "args": { "id": "42" } },
+                { "title": "Broken", "type": "pluginAction" }
+              ]
+            }
+            """.trimIndent()
+        )!!
+        val (done, remove) = pin.content.actions
+        assertEquals(2, pin.content.actions.size)
+        assertEquals(TimelineItem.Action.Type.Generic, done.type)
+        assertEquals("Done", done.attributes.text(TimelineAttribute.Title))
+        assertEquals(PluginActionRef("complete", buildJsonObject { put("id", "42") }), done.pluginAction)
+        assertEquals(TimelineItem.Action.Type.Remove, remove.type)
+        assertNull(remove.pluginAction)
+    }
+
+    @Test
+    fun createNotificationIsForANewPinAndUpdateNotificationForAChangedOne() {
+        fun json(title: String) = json.decodeFromString(
+            TimelinePinJson.serializer(),
+            """
+            {
+              "id": "p", "time": "2026-09-15T23:30:00Z",
+              "layout": { "type": "genericPin", "title": "$title" },
+              "createNotification": { "layout": { "type": "genericNotification", "title": "created" } },
+              "updateNotification": { "layout": { "type": "genericNotification", "title": "updated" } }
+            }
+            """.trimIndent()
+        )
+        val first = json("a")
+        val firstPin = asPin(first, APP_UUID, PIN_UUID)!!
+        assertEquals("created", first.notificationFor(null, firstPin)?.layout?.title)
+        assertNull(first.notificationFor(firstPin, asPin(first, APP_UUID, PIN_UUID)!!))
+        val changed = json("b")
+        assertEquals("updated", changed.notificationFor(firstPin, asPin(changed, APP_UUID, PIN_UUID)!!)?.layout?.title)
+    }
+
+    @Test
+    fun aReplyActionAsksTheWatchAndPassesTheReplyInItsArg() {
+        val notification = notificationFrom(
+            """
+            {
+              "layout": { "type": "genericNotification", "title": "Chat" },
+              "actions": [{ "title": "Reply", "type": "pluginAction", "action": "send", "args": { "chat": "1" },
+                            "inputArg": "text", "replies": ["Yes", "No"] }]
+            }
+            """.trimIndent()
+        )!!
+        val reply = notification.content.actions.single()
+        assertEquals(TimelineItem.Action.Type.Response, reply.type)
+        assertEquals(
+            listOf("Yes", "No"),
+            reply.attributes.filterIsInstance<BaseAttribute.TextListAttribute>().single().text,
+        )
+        val ref = reply.pluginAction!!
+        val fromWatch = listOf(TimelineAttributeFactory.createTextAttribute(TimelineAttribute.Title, "On my way"))
+        assertEquals(
+            buildJsonObject { put("chat", "1"); put("text", "On my way") },
+            ref.argsWithReply(fromWatch),
+        )
+        assertNull(ref.argsWithReply(emptyList()))
+    }
+
+    @Test
+    fun notificationsTakeANotificationLayoutAndActions() {
+        val notification = notificationFrom(
+            """
+            {
+              "layout": { "type": "genericNotification", "title": "New task", "body": "Buy milk" },
+              "actions": [{ "title": "Done", "type": "pluginAction", "action": "complete" }]
+            }
+            """.trimIndent()
+        )!!
+        assertEquals(APP_UUID, notification.content.parentId)
+        assertEquals(TimelineItem.Layout.GenericNotification, notification.content.layout)
+        assertEquals("Buy milk", notification.content.attributes.text(TimelineAttribute.Body))
+        assertEquals("complete", notification.content.actions.single().pluginAction?.action)
+        assertNull(notificationFrom("""{ "layout": { "type": "genericPin", "title": "x" } }"""))
+    }
+
     /** The pin from MOB-6823: everything below title/subtitle used to be dropped. */
     @Test
     fun sportsPinKeepsScoreboardAttributes() {

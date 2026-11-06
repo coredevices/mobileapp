@@ -509,7 +509,7 @@ fun initKoin(
                         },
                     )
                 }
-                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
+                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
                 singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)
                 singleOf(::PendingFirmwareInstalls)

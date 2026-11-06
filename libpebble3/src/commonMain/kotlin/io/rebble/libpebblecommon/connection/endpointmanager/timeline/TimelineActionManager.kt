@@ -6,17 +6,24 @@ import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.PluginActionRef
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
+import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginClient
+import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.services.blobdb.TimelineService
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
 
@@ -38,6 +45,8 @@ class TimelineActionManager(
     private val actionOverrides: ActionOverrides,
     private val pinDao: TimelinePinRealDao,
     private val reminderDao: TimelineReminderRealDao,
+    private val pluginRegistry: PluginRegistry,
+    private val pluginClient: PluginClient,
 ) {
     companion object {
         private val logger = Logger.withTag(TimelineActionManager::class.simpleName!!)
@@ -76,6 +85,7 @@ class TimelineActionManager(
                     title = "Removed",
                 )
             }
+            action.pluginAction != null -> invokePluginAction(pin.content.parentId, action.pluginAction, invocation.attributes)
             pin.content.parentId == CALENDAR_APP_UUID -> calendarActionHandler(pin, action)
             else -> failedResult()
         }
@@ -117,7 +127,25 @@ class TimelineActionManager(
                 }
                 return failedResult()
             }
+        action.pluginAction?.let { return invokePluginAction(notification.content.parentId, it, invocation.attributes) }
         return notifActionHandler(invocation.itemId, action, invocation.attributes)
+    }
+
+    /** Only ever the item's own plugin: whoever made the item chose the action and its args. */
+    private suspend fun invokePluginAction(
+        parentId: Uuid,
+        ref: PluginActionRef,
+        attributes: List<TimelineItem.Attribute>,
+    ): TimelineActionResult {
+        val plugin = pluginRegistry.findPlugin(parentId.toString()) ?: return failedResult()
+        val args = ref.argsWithReply(attributes) ?: return failedResult()
+        val result = pluginClient.invoke(PluginCaller.Host(), plugin.metadata, ref.action, args, timeout = null)
+        if (!result.ok) return failedResult()
+        return TimelineActionResult(
+            success = true,
+            icon = TimelineIcon.ResultSent,
+            title = result.text ?: "Done",
+        )
     }
 
     private suspend fun handleAction(
@@ -160,6 +188,14 @@ class TimelineActionManager(
         icon = TimelineIcon.ResultFailed,
         title = "Failed",
     )
+}
+
+/** Null when the action asks for a reply and the watch sent none. */
+internal fun PluginActionRef.argsWithReply(attributes: List<TimelineItem.Attribute>): JsonObject? {
+    val arg = inputArg ?: return args
+    val reply = attributes.firstOrNull { it.attributeId.get() == TimelineAttribute.Title.id }
+        ?.content?.get()?.asByteArray()?.decodeToString()?.trimEnd('\u0000') ?: return null
+    return JsonObject(args + (arg to JsonPrimitive(reply)))
 }
 
 typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult

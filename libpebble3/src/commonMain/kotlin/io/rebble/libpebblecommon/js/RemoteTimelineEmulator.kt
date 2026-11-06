@@ -5,11 +5,16 @@ import androidx.compose.ui.text.toLowerCase
 import co.touchlab.kermit.Logger
 import com.eygraber.uri.Uri
 import io.rebble.libpebblecommon.WatchConfigFlow
+import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.ActionsListBuilder
 import io.rebble.libpebblecommon.database.entity.AttributesListBuilder
+import io.rebble.libpebblecommon.database.entity.PluginActionRef
+import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
+import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
 import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
@@ -32,6 +37,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -43,6 +50,7 @@ class RemoteTimelineEmulator(
     private val json: Json,
     private val timelinePinRealDao: TimelinePinRealDao,
     private val timelineReminderRealDao: TimelineReminderRealDao,
+    private val timelineNotificationRealDao: TimelineNotificationRealDao,
     private val permissions: AppPermissions,
 ) : HttpInterceptor {
     override fun shouldIntercept(url: String): Boolean {
@@ -109,15 +117,48 @@ class RemoteTimelineEmulator(
             logger.w { "insert pin == null" }
             return
         }
-        // TODO create/update notifications
         logger.v { "inserting pin ${timelinePin.itemId} (${pin.id})" }
         timelinePinRealDao.insertOrReplace(timelinePin)
+        pin.notificationFor(existingPin, timelinePin)
+            ?.takeIf { mayShowNotifications(appUuid) }
+            ?.let { asNotification(it, appUuid) }
+            ?.let { timelineNotificationRealDao.insertOrReplace(it) }
         timelineReminderRealDao.markForDeletionByParentId(timelinePin.itemId)
         pin.reminders?.forEach { reminder ->
             val timelineReminder = asReminder(jsonReminder = reminder, pinUuid = pinUuid)
             timelineReminder?.let { timelineReminderRealDao.insertOrReplace(it) }
         }
     }
+
+    suspend fun showNotification(appUuid: Uuid, notificationJson: String) {
+        val notification = try {
+            json.decodeFromString(TimelineNotificationJson.serializer(), notificationJson)
+        } catch (e: SerializationException) {
+            logger.w(e) { "Failed to parse notification JSON" }
+            return
+        } catch (e: IllegalArgumentException) {
+            logger.w(e) { "Failed to parse notification JSON" }
+            return
+        }
+        if (!mayShowNotifications(appUuid)) return
+        asNotification(notification, appUuid)?.let { timelineNotificationRealDao.insertOrReplace(it) }
+    }
+
+    suspend fun showSimpleNotification(appUuid: Uuid, title: String, body: String) {
+        if (!mayShowNotifications(appUuid)) return
+        timelineNotificationRealDao.insertOrReplace(
+            buildTimelineNotification(parentId = appUuid, timestamp = Clock.System.now()) {
+                layout = TimelineItem.Layout.GenericNotification
+                attributes {
+                    title { title }
+                    body { body }
+                }
+            }
+        )
+    }
+
+    private suspend fun mayShowNotifications(appUuid: Uuid): Boolean =
+        permissions.request(appUuid, PluginPermissions.SHOW_NOTIFICATIONS) == PermissionDecision.Granted
 
     suspend fun mayAddPins(appUuid: Uuid): Boolean =
         permissions.request(appUuid, PluginPermissions.TIMELINE) == PermissionDecision.Granted
@@ -186,26 +227,65 @@ internal fun asPin(jsonPin: TimelinePinJson, appUuid: Uuid, pinUuid: Uuid): Time
             applyAttributesFrom(jsonPin.layout)
         }
         actions {
-            jsonPin.actions?.forEach { a ->
-                val actionType = a.type.asActionType()
-                when (actionType) {
-                    null -> logger.w { "Unknown action type: ${a.type}" }
-                    // Handled entirely on the watch: launches the pin's parent app with
-                    // the launch code in launch_get_args().
-                    TimelineItem.Action.Type.OpenWatchapp -> action(actionType) {
-                        attributes {
-                            title { a.title }
-                            a.launchCode?.let { code -> launchCode { code } }
-                        }
-                    }
-                    // Anything invoked on the phone without a handler shows "Failed" on
-                    // the watch (TimelineActionManager), so don't offer it.
-                    else -> logger.w { "Dropping unsupported action type: ${a.type}" }
-                }
-            }
+            applyActionsFrom(jsonPin.actions)
             action(TimelineItem.Action.Type.Remove) {
                 attributes { title { "Remove" } }
             }
+        }
+    }
+}
+
+/** Apps re-PUT unchanged pins when they poll, so only a real change is an update. */
+internal fun TimelinePinJson.notificationFor(existing: TimelinePin?, updated: TimelinePin): TimelineNotificationJson? =
+    if (existing == null) createNotification else updateNotification?.takeIf { existing.content != updated.content }
+
+internal fun asNotification(jsonNotification: TimelineNotificationJson, appUuid: Uuid): TimelineNotification? {
+    val timelineLayout = fromCode(jsonNotification.layout.type)
+        ?.takeIf { it == TimelineItem.Layout.GenericNotification || it == TimelineItem.Layout.CommNotification }
+    if (timelineLayout == null) {
+        logger.w { "Not a notification layout: ${jsonNotification.layout.type}" }
+        return null
+    }
+    return buildTimelineNotification(
+        parentId = appUuid,
+        timestamp = jsonNotification.time ?: Clock.System.now(),
+    ) {
+        layout = timelineLayout
+        attributes {
+            applyAttributesFrom(jsonNotification.layout)
+        }
+        actions {
+            applyActionsFrom(jsonNotification.actions)
+        }
+    }
+}
+
+private fun ActionsListBuilder.applyActionsFrom(jsonActions: List<TimelineActionJson>?) {
+    jsonActions?.forEach { a ->
+        when (a.type) {
+            // Handled entirely on the watch: launches the item's parent app with
+            // the launch code in launch_get_args().
+            "openWatchApp" -> action(TimelineItem.Action.Type.OpenWatchapp) {
+                attributes {
+                    title { a.title }
+                    a.launchCode?.let { code -> launchCode { code } }
+                }
+            }
+            "pluginAction" -> if (a.action == null) {
+                logger.w { "pluginAction without an action: ${a.title}" }
+            } else {
+                val type = if (a.inputArg == null) TimelineItem.Action.Type.Generic else TimelineItem.Action.Type.Response
+                action(type) {
+                    attributes {
+                        title { a.title }
+                        a.replies?.let { cannedResponse { it } }
+                    }
+                    pluginAction = PluginActionRef(a.action, a.args ?: JsonObject(emptyMap()), a.inputArg)
+                }
+            }
+            // Anything invoked on the phone without a handler shows "Failed" on
+            // the watch (TimelineActionManager), so don't offer it.
+            else -> logger.w { "Dropping unsupported action type: ${a.type}" }
         }
     }
 }
@@ -248,12 +328,6 @@ private fun AttributesListBuilder.applyAttributesFrom(timelineLayoutJson: Timeli
     timelineLayoutJson.broadcaster?.let { string(TimelineAttribute.Broadcaster) { it } }
 }
 
-
-private fun String.asActionType(): TimelineItem.Action.Type? = when (this) {
-    "openWatchApp" -> TimelineItem.Action.Type.OpenWatchapp
-    "http" -> TimelineItem.Action.Type.HTTP
-    else -> null
-}
 
 private fun String.asTimelineIcon(): TimelineIcon? =
     TimelineIcon.fromCode(this).also {
@@ -322,6 +396,7 @@ data class TimelinePinJson(
 data class TimelineNotificationJson(
     val layout: TimelineLayoutJson,
     val time: Instant? = null,
+    val actions: List<TimelineActionJson>? = null,
 )
 
 @Serializable
@@ -336,6 +411,12 @@ data class TimelineActionJson(
     val type: String,
     /** uint32 passed to the watchapp via launch args (openWatchApp actions only). */
     val launchCode: UInt? = null,
+    /** The parent plugin's action to run, and its args (pluginAction actions only). */
+    val action: String? = null,
+    val args: JsonObject? = null,
+    /** Asks the user for a reply (voice, emoji or one of [replies]), passed in this arg. */
+    val inputArg: String? = null,
+    val replies: List<String>? = null,
 )
 
 /**

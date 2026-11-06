@@ -98,7 +98,7 @@ class WebViewJsRunner(
     private var restoreCompleted: Boolean = false
     private val initializedLock = Object()
     override val networkAccess = NetworkGate(permissions, appInfo.shortName, Uuid.parse(appInfo.uuid))
-    private val publicJsInterface = WebViewPKJSInterface(this, device, context, libPebble, jsTokenUtil)
+    private val publicJsInterface = WebViewPKJSInterface(this, device, context, remoteTimelineEmulator, jsTokenUtil)
     private val privateJsInterface = WebViewPrivatePKJSInterface(this, device, scope, _outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient)
     private val localStorageInterface = WebViewJSLocalStorageInterface(appInfo.uuid, appContext) {
         runBlocking(Dispatchers.Main) {

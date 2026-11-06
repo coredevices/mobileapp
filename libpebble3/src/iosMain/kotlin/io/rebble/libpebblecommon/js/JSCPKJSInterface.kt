@@ -1,10 +1,9 @@
 package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.connection.LibPebble
 
-class JSCPKJSInterface(jsRunner: JsRunner, device: CompanionAppDevice, libPebble: LibPebble, jsTokenUtil: JsTokenUtil) :
-    PKJSInterface(jsRunner, device, libPebble, jsTokenUtil), RegisterableJsInterface {
+class JSCPKJSInterface(jsRunner: JsRunner, device: CompanionAppDevice, remoteTimelineEmulator: RemoteTimelineEmulator, jsTokenUtil: JsTokenUtil) :
+    PKJSInterface(jsRunner, device, remoteTimelineEmulator, jsTokenUtil), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPKJSInterface")
     override val interf = mapOf(
         "showSimpleNotificationOnPebble" to this::showSimpleNotificationOnPebble,

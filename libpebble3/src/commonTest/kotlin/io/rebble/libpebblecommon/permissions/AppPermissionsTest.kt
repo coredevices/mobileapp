@@ -27,6 +27,7 @@ import io.rebble.libpebblecommon.plugin.PluginPermissions.NOTIFICATIONS
 import io.rebble.libpebblecommon.plugin.PluginPermissions.PARAM_PACKAGES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_FILES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.READ_WATCH_SETTINGS
+import io.rebble.libpebblecommon.plugin.PluginPermissions.SHOW_NOTIFICATIONS
 import io.rebble.libpebblecommon.plugin.PluginPermissions.TIMELINE
 import io.rebble.libpebblecommon.plugin.PluginPermissions.WRITE_FILES
 import io.rebble.libpebblecommon.plugin.PluginPermissions.WRITE_WATCH_SETTINGS
@@ -875,7 +876,7 @@ class InstallReviewTest {
     @Test
     fun aLegacyAppAsksForWhatItUsedToGetImplicitly() {
         val legacy = RequestedPermissions(declared = null, hasPkjs = true)
-        assertEquals(setOf(GLOBAL_INTERNET, LOCATION, TIMELINE), legacy.all.toSet())
+        assertEquals(setOf(GLOBAL_INTERNET, LOCATION, TIMELINE, SHOW_NOTIFICATIONS), legacy.all.toSet())
         assertEquals(emptySet(), legacy.copy(hasPkjs = false).all.toSet())
     }
 
@@ -965,7 +966,7 @@ class InstallReviewTest {
         val legacy = RequestedPermissions(declared = null, hasPkjs = true)
         assertEquals(emptySet(), reviewed(legacy))
         config = WatchConfig(enablePlugins = true, askLegacyAppsForPermissions = true)
-        assertEquals(setOf(GLOBAL_INTERNET, LOCATION, TIMELINE), reviewed(legacy))
+        assertEquals(setOf(GLOBAL_INTERNET, LOCATION, TIMELINE, SHOW_NOTIFICATIONS), reviewed(legacy))
     }
 }
 

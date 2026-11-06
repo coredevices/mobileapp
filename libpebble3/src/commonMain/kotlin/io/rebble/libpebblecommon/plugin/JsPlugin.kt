@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.JsEngine
 import io.rebble.libpebblecommon.js.JsEngineInterface
 import io.rebble.libpebblecommon.js.JsEngineLocalStorage
+import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.js.WebSocketManager
 import io.rebble.libpebblecommon.js.XMLHTTPRequestManager
 import io.rebble.libpebblecommon.js.BASE64_JS
@@ -74,6 +75,7 @@ class JsPlugin(
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
     private val otherSources: PluginSources,
+    private val timeline: RemoteTimelineEmulator,
 ) : Plugin, ConfigMessageTarget {
 
     override val description: String = manifest.description
@@ -409,7 +411,7 @@ class JsPlugin(
     /** What plugin JS calls back into: settling a request, and console output. */
     private inner class Bridge(private val runsRequests: Boolean) : JsEngineInterface {
         override val name = "_JsBridge"
-        override val methods = listOf("respond", "log", "configMessage", "refreshSources", "subscribeSource")
+        override val methods = listOf("respond", "log", "configMessage", "refreshSources", "subscribeSource", "showNotification", "insertTimelinePin", "deleteTimelinePin")
 
         override fun dispatch(method: String, args: List<Any?>): Any? = when (method) {
             "respond" -> {
@@ -430,6 +432,21 @@ class JsPlugin(
             }
             "configMessage" -> {
                 _configMessages.tryEmit(args[0].toString())
+                null
+            }
+            "showNotification" -> {
+                val notification = args[0].toString()
+                scope.launch { timeline.showNotification(pluginUuid, notification) }
+                null
+            }
+            "insertTimelinePin" -> {
+                val pin = args[0].toString()
+                scope.launch { if (timeline.mayAddPins(pluginUuid)) timeline.insertPin(pin, pluginUuid) }
+                null
+            }
+            "deleteTimelinePin" -> {
+                val id = args[0].toString()
+                scope.launch { timeline.deletePin(pluginUuid, id) }
                 null
             }
             "refreshSources" -> {

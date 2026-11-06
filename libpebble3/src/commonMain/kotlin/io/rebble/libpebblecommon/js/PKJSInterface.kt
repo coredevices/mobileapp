@@ -1,34 +1,19 @@
 package io.rebble.libpebblecommon.js
 
-import io.rebble.libpebblecommon.connection.LibPebble
-import io.rebble.libpebblecommon.database.entity.buildTimelineNotification
-import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.runBlocking
-import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 abstract class PKJSInterface(
     protected val jsRunner: JsRunner,
     protected val device: CompanionAppDevice,
-    private val libPebble: LibPebble,
+    private val remoteTimelineEmulator: RemoteTimelineEmulator,
     private val jsTokenUtil: JsTokenUtil,
 ) {
     open fun showSimpleNotificationOnPebble(title: String, notificationText: String) {
         runBlocking {
-            libPebble.sendNotification(
-                buildTimelineNotification(
-                    timestamp = Clock.System.now(),
-                    parentId = Uuid.parse(jsRunner.appInfo.uuid),
-                ) {
-                    layout = TimelineItem.Layout.GenericNotification
-                    attributes {
-                        title { title }
-                        body { notificationText }
-                    }
-                }
-            )
+            remoteTimelineEmulator.showSimpleNotification(Uuid.parse(jsRunner.appInfo.uuid), title, notificationText)
         }
     }
 
