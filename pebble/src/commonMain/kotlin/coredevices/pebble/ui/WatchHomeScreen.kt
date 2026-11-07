@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -932,6 +933,7 @@ fun TopBarIconButtonWithToolTip(
     icon: ImageVector,
     description: String,
     enabled: Boolean = true,
+    badge: @Composable BoxScope.() -> Unit = {},
 ) {
     val tooltipState = remember { TooltipState(isPersistent = false) }
     TooltipBox(
@@ -944,10 +946,12 @@ fun TopBarIconButtonWithToolTip(
         state = tooltipState
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(
-                imageVector = icon,
-                contentDescription = description
-            )
+            BadgedBox(badge = badge) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = description
+                )
+            }
         }
     }
 }

@@ -4,18 +4,27 @@ import CoreNav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -24,14 +33,25 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import co.touchlab.kermit.Logger
 import com.multiplatform.webview.request.RequestInterceptor
 import com.multiplatform.webview.request.WebRequest
@@ -53,6 +73,7 @@ import coredevices.pebble.config.ConfigPageClosedListener
 import coredevices.pebble.config.ConfigPageSessions
 import coredevices.pebble.config.ConfigScriptIds
 import coredevices.pebble.config.PluginConfigFileAccess
+import coredevices.pebble.config.VisibleConfigPage
 import coredevices.pebble.config.performWebSignIn
 import coredevices.pebble.config.webSignInSupported
 import coredevices.util.isDebugBuild
@@ -62,11 +83,14 @@ import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.permissions.PermissionStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -286,6 +310,41 @@ fun WatchappSettingsScreen(
         LaunchedEffect(session) {
             session?.messages?.collect { (target, json) -> bridge?.push(target, json) }
         }
+        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
+        val visibleConfigPage: VisibleConfigPage = koinInject()
+        if (webViewUuid != null) {
+            LifecycleResumeEffect(webViewUuid) {
+                visibleConfigPage.shown(webViewUuid)
+                onPauseOrDispose { visibleConfigPage.hidden(webViewUuid) }
+            }
+        }
+        var showPermissions by remember { mutableStateOf(false) }
+        val snackbarHostState = remember { SnackbarHostState() }
+        val definedPermissions by rememberUpdatedState(rememberPluginPermissions())
+        // Only what the app asks for while the page is open; anything already waiting has the badge.
+        // From the statuses, which don't wait for a plugin's config session to start running.
+        LaunchedEffect(webViewUuid) {
+            val appUuid = webViewUuid ?: return@LaunchedEffect
+            var known: Set<String>? = null
+            libPebble.appPermissionStatuses(appUuid)
+                .filterNotNull()
+                .map { all -> all.filter { it.status == PermissionStatus.Waiting }.map { it.permission } }
+                .collect { keys ->
+                    val new = known?.let { keys - it }.orEmpty()
+                    known = keys.toSet()
+                    // In the background the notifier tells the user instead.
+                    if (new.isEmpty() || visibleConfigPage.app.value != appUuid) return@collect
+                    // Launched: showing waits until it's dismissed.
+                    launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "$title wants to ${requestSummary(new, definedPermissions)}",
+                            actionLabel = "Review",
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) showPermissions = true
+                    }
+                }
+        }
         LaunchedEffect(state.loadingState) {
             if (state.loadingState is LoadingState.Loading) {
                 logger.d { "Page load finished, applying shims" }
@@ -295,6 +354,7 @@ fun WatchappSettingsScreen(
         }
 
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -312,7 +372,25 @@ fun WatchappSettingsScreen(
                                 )
                             )
                         }
-                    }
+                    },
+                    actions = {
+                        if (webViewUuid != null && pluginsEnabled) {
+                            Box {
+                                TopBarIconButtonWithToolTip(
+                                    onClick = { showPermissions = true },
+                                    icon = Icons.Outlined.Shield,
+                                    description = "Permissions",
+                                    badge = { PermissionRequestBadge(webViewUuid) },
+                                )
+                                MenuBelowAnchor(
+                                    expanded = showPermissions,
+                                    onDismissRequest = { showPermissions = false },
+                                ) {
+                                    AppPermissionsSection(webViewUuid)
+                                }
+                            }
+                        }
+                    },
                 )
             }
         ) { paddingValues ->
@@ -333,6 +411,57 @@ fun WatchappSettingsScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+/** Always opens below its anchor, so the anchor stays visible and tappable to close it. */
+@Composable
+private fun MenuBelowAnchor(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (!expanded) return
+    val density = LocalDensity.current
+    val margin = with(density) { 8.dp.roundToPx() }
+    var maxHeight by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    val positionProvider = remember(margin) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                maxHeight = windowSize.height - anchorBounds.bottom - margin
+                val x = if (layoutDirection == LayoutDirection.Ltr) {
+                    anchorBounds.right - popupContentSize.width
+                } else {
+                    anchorBounds.left
+                }
+                return IntOffset(x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)), anchorBounds.bottom)
+            }
+        }
+    }
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Surface(
+            shape = MenuDefaults.shape,
+            color = MenuDefaults.containerColor,
+            tonalElevation = MenuDefaults.TonalElevation,
+            shadowElevation = MenuDefaults.ShadowElevation,
+        ) {
+            Column(
+                modifier = Modifier.widthIn(max = 400.dp)
+                    .heightIn(max = with(density) { maxHeight.coerceAtLeast(0).toDp() })
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 8.dp),
+                content = content,
+            )
         }
     }
 }

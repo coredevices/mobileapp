@@ -68,6 +68,7 @@ import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.config.VisibleConfigPage
 import coredevices.pebble.plugin.HostedPluginOAuthApi
 import coredevices.pebble.weather.WeatherPlugin
 import coredevices.pebble.plugin.PreferencesPlugin
@@ -242,6 +243,7 @@ val watchModule = module {
     factoryOf(::NativeLockerAddUtil)
     factoryOf(::AppReplacements)
     singleOf(::PermissionRequestNotifier)
+    singleOf(::VisibleConfigPage)
     singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)

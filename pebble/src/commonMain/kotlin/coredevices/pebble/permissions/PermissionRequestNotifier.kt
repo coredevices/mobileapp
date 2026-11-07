@@ -1,6 +1,7 @@
 package coredevices.pebble.permissions
 
 import coredevices.pebble.RealPebbleDeepLinkHandler
+import coredevices.pebble.config.VisibleConfigPage
 import coredevices.pebble.ui.requestSummary
 import coredevices.util.WatchNotificationAction
 import coredevices.util.WatchNotifier
@@ -36,6 +37,7 @@ class PermissionRequestNotifier(
     private val libPebble: LibPebble,
     private val appContext: AppContext,
     private val watchNotifier: WatchNotifier,
+    private val visibleConfigPage: VisibleConfigPage,
 ) {
     /** Before the watch connects, so it can answer notifications sent before an app restart. */
     fun registerWatchActions() {
@@ -53,7 +55,10 @@ class PermissionRequestNotifier(
             libPebble.activePermissionRequests().collect { active ->
                 val current = active.groupBy({ it.appUuid }, { it.permission })
                 // Only something new is worth a notification: answering one of several shouldn't re-alert.
-                current.filter { (appUuid, keys) -> !shown[appUuid].orEmpty().containsAll(keys) }
+                // The app's open config page asks instead.
+                current.filter { (appUuid, keys) ->
+                    !shown[appUuid].orEmpty().containsAll(keys) && appUuid != visibleConfigPage.app.value
+                }
                     .forEach { (appUuid, keys) -> notify(notificationFor(appUuid, keys)) }
                 (shown.keys - current.keys).forEach { appUuid ->
                     removePermissionRequestNotification(appContext, keyOf(appUuid))
