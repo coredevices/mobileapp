@@ -20,6 +20,7 @@ import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -56,14 +58,19 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
         }
     }
 
-    /** Merged key by key, so other devices' decisions for other keys are kept. */
+    /**
+     * Merged key by key, so other devices' decisions for other keys are kept. Fails if the entry is
+     * gone: it mustn't be recreated with only permissions.
+     */
     suspend fun mergePermissionsForUser(
         uid: String,
         entry: FirestoreLockerEntry,
         permissions: Map<String, PermissionDecisionRecord>,
     ) {
         try {
-            entryDoc(uid, entry).set(PermissionsField(permissions), merge = true)
+            entryDoc(uid, entry).updateFields {
+                permissions.forEach { (key, record) -> FieldPath("permissions", key) to record }
+            }
         } catch (e: FirebaseFirestoreException) {
             throw FirestoreDaoException.fromFirebaseException(e)
         }
@@ -72,7 +79,7 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
     private fun entryDoc(uid: String, entry: FirestoreLockerEntry) = firestore.collection("lockers")
         .document(uid)
         .collection("entries")
-        .document("${entry.appstoreId}-${entry.uuid}")
+        .document(entry.documentId ?: "${entry.appstoreId}-${entry.uuid}")
 
     suspend fun removeLockerEntryForUser(
         uid: String,
@@ -141,11 +148,18 @@ class RealFirestoreLocker(
                             return@collect
                         }
                         logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
-                        val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
+                        val lockerData = it.lockerEntries()
                         val previous = _locker.value
                         // Before handling: a locker sync it requests reads this snapshot.
                         _locker.value = lockerData
-                        handleFirestoreChanges(lockerData, previous)
+                        // Keep listening: in GlobalScope, a throw here would crash the app.
+                        try {
+                            handleFirestoreChanges(lockerData, previous)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logger.w(e) { "Error handling firestore locker changes" }
+                        }
                     }
             }
         }
@@ -263,7 +277,7 @@ class RealFirestoreLocker(
                     dao.observeLockerEntriesForUser(user.uid).first()
                 }
                 if (snapshot != null) {
-                    _locker.value = snapshot.documents.map { doc -> doc.data() }
+                    _locker.value = snapshot.lockerEntries()
                 } else {
                     logger.w { "Timed out waiting for server-confirmed snapshot after sync" }
                 }
@@ -372,10 +386,19 @@ data class FirestoreLockerEntry(
     val timelineToken: String?,
     /** The user's decisions, by permission key, from any device or the web store. */
     val permissions: Map<String, PermissionDecisionRecord>? = null,
+    /** Set when read: another client may have stored the entry under a different ID. */
+    @Transient val documentId: String? = null,
 )
 
-@Serializable
-private data class PermissionsField(val permissions: Map<String, PermissionDecisionRecord>)
+/** One undecodable entry (e.g. written by another client) mustn't take the rest of the locker down with it. */
+private fun QuerySnapshot.lockerEntries(): List<FirestoreLockerEntry> = documents.mapNotNull { doc ->
+    try {
+        doc.data<FirestoreLockerEntry>().copy(documentId = doc.id)
+    } catch (e: Exception) {
+        logger.w(e) { "Skipping invalid locker entry ${doc.id}" }
+        null
+    }
+}
 
 /**
  * Compare two version strings numerically by major.minor segments.
