@@ -7,7 +7,14 @@ import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.ListRepository
+import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import coredevices.util.setWatchNotificationActionHandler
+import coredevices.util.sha256
+import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.database.entity.buildTimelineReminder
+import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
+import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toNSDate
 import org.koin.core.component.KoinComponent
@@ -35,6 +42,7 @@ import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * iOS counterpart to [AndroidBuiltInReminderIntegration]: schedules local notifications via
@@ -45,6 +53,8 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
     private val listRepository: ListRepository by inject()
+    private val libPebble: LibPebble by inject()
+    private val completer: ReminderCompleter by inject()
     private val notificationCenter get() = UNUserNotificationCenter.currentNotificationCenter()
 
     private suspend fun requestAuthorization(): Boolean = suspendCoroutine { continuation ->
@@ -85,8 +95,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             feedItems.createFeedItem(itemId, title, deadline, listId, notifyBefore, source)
         } catch (e: Exception) {
             // If the feed item creation fails, cancel the scheduled notifications and delete the reminder.
-            notificationCenter.removePendingNotificationRequestsWithIdentifiers(listOf(notificationId(itemId), preNotificationId(itemId)))
-            notificationCenter.removeDeliveredNotificationsWithIdentifiers(listOf(notificationId(itemId), preNotificationId(itemId)))
+            removeScheduled(listOf(notificationId(itemId), preNotificationId(itemId)))
             db.localReminderDao().deleteReminder(itemId)
             throw e
         }
@@ -121,12 +130,41 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             notificationCenter.addNotificationRequest(request) { error -> continuation.resume(error) }
         }
         check(error == null) { "Failed to schedule reminder notification: ${error?.localizedDescription}" }
+        libPebble.insertOrReplace(
+            buildTimelineReminder(parentId = Uuid.NIL, timestamp = triggerTime) {
+                itemID = watchReminderId(identifier)
+                attributes {
+                    title { message }
+                    if (identifier == preNotificationId(itemId)) body { "Upcoming" }
+                    tinyIcon { TimelineIcon.NotificationReminder }
+                }
+                actions {
+                    action(TimelineItem.Action.Type.Generic, internalType = WATCH_ACTION_DONE) {
+                        attributes { title { "Done" } }
+                        internalData = itemId
+                    }
+                    action(TimelineItem.Action.Type.Dismiss) {
+                        attributes { title { "Dismiss" } }
+                    }
+                }
+            }
+        )
+    }
+
+    private suspend fun removeScheduled(identifiers: List<String>) {
+        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
+        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        identifiers.forEach { libPebble.deleteReminder(watchReminderId(it)) }
+    }
+
+    fun registerWatchActions() {
+        libPebble.setWatchNotificationActionHandler(WATCH_ACTION_DONE) { itemId ->
+            completer.markDone(requireNotNull(itemId))
+        }
     }
 
     override suspend fun cancelReminder(itemId: String) {
-        val identifiers = listOf(notificationId(itemId), preNotificationId(itemId))
-        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
-        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        removeScheduled(listOf(notificationId(itemId), preNotificationId(itemId)))
         db.localReminderDao().deleteReminder(itemId)
     }
 
@@ -135,9 +173,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
             logger.w { "Skipping reminder sync: notification permission not granted" }
             return
         }
-        val identifiers = listOf(notificationId(itemId), preNotificationId(itemId))
-        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
-        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        removeScheduled(listOf(notificationId(itemId), preNotificationId(itemId)))
 
         // Schedule before recording the row, so a scheduling failure leaves the ledger stale and
         // the next reconcile retries rather than believing this reminder is armed.
@@ -154,9 +190,7 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
     }
 
     override suspend fun cancelExtraNotification(itemId: String) {
-        val identifiers = listOf(preNotificationId(itemId))
-        notificationCenter.removePendingNotificationRequestsWithIdentifiers(identifiers)
-        notificationCenter.removeDeliveredNotificationsWithIdentifiers(identifiers)
+        removeScheduled(listOf(preNotificationId(itemId)))
         db.localReminderDao().clearNotifyBefore(itemId)
     }
 
@@ -201,8 +235,12 @@ class IOSBuiltInReminderIntegration : BuiltInReminderIntegration, KoinComponent 
         /** Action id for the "Done" button; matched in the notification-response handler. */
         const val REMINDER_ACTION_DONE = "ring-reminder-done"
 
+        private const val WATCH_ACTION_DONE = "ring_reminder_done"
+
         private fun notificationId(itemId: String) = "ring-reminder-$itemId"
         private fun preNotificationId(itemId: String) = "ring-reminder-pre-$itemId"
+        private fun watchReminderId(identifier: String) =
+            Uuid.fromByteArray(sha256(identifier.encodeToByteArray()).copyOf(Uuid.SIZE_BYTES))
 
         /** A reminder notification whose id ends in the old device-local int (all digits) rather
          *  than a global feed-item id. A global id that happened to be all digits would be a false

@@ -19,6 +19,7 @@ import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.WatchNotifier
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
@@ -66,6 +67,7 @@ abstract class TranscribedRecordingOperation(
     override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
 
     private val recordingStorage: RecordingStorage by inject()
+    private val watchNotifier: WatchNotifier by inject()
     protected val recordingEntryDao: RecordingEntryDao by inject()
     protected val recordingProcessor: RecordingProcessor by inject()
     private val ringTransferRepository: RingTransferRepository by inject()
@@ -76,10 +78,13 @@ abstract class TranscribedRecordingOperation(
     fun sendNotEnoughMemoryNotification() {
         val now = Clock.System.now()
         if (lastNotEnoughMemoryNotif == null || now - lastNotEnoughMemoryNotif!! > 5.minutes) {
+            val title = "Low Memory Warning"
+            val body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
             NotifierManager.getLocalNotifier().notify {
-                title = "Low Memory Warning"
-                body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
+                this.title = title
+                this.body = body
             }
+            watchNotifier.send("stt-low-memory", title, body)
             lastNotEnoughMemoryNotif = now
         }
     }

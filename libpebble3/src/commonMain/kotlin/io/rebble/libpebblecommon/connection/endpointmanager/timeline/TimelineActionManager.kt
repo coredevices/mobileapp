@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.calendar.PlatformCalendarActionHandler
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
+import io.rebble.libpebblecommon.database.entity.BaseAction
 import io.rebble.libpebblecommon.database.entity.PluginActionRef
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
@@ -30,6 +31,10 @@ import kotlin.uuid.Uuid
 class ActionOverrides {
     val actionHandlerOverrides =
         mutableMapOf<Uuid, Map<UByte, CustomTimelineActionHandler>>()
+    val internalActionHandlers = mutableMapOf<String, InternalActionHandler>()
+
+    suspend fun invokeInternal(action: BaseAction, attributes: List<TimelineItem.Attribute>): TimelineActionResult? =
+        action.internalType?.let { internalActionHandlers[it] }?.invoke(action.internalData, attributes)
 
     fun setActionHandlers(itemId: Uuid, actionHandlers: Map<UByte, CustomTimelineActionHandler>) {
         actionHandlerOverrides[itemId] = actionHandlers
@@ -111,7 +116,7 @@ class TimelineActionManager(
                 icon = TimelineIcon.ResultDismissed,
                 title = "Dismissed",
             )
-            else -> failedResult()
+            else -> actionOverrides.invokeInternal(action, invocation.attributes) ?: failedResult()
         }
     }
 
@@ -128,6 +133,7 @@ class TimelineActionManager(
                 return failedResult()
             }
         action.pluginAction?.let { return invokePluginAction(notification.content.parentId, it, invocation.attributes) }
+        actionOverrides.invokeInternal(action, invocation.attributes)?.let { return it }
         return notifActionHandler(invocation.itemId, action, invocation.attributes)
     }
 
@@ -199,3 +205,6 @@ internal fun PluginActionRef.argsWithReply(attributes: List<TimelineItem.Attribu
 }
 
 typealias CustomTimelineActionHandler = (List<TimelineItem.Attribute>) -> TimelineActionResult
+
+/** Gets the action's `internalData`. */
+typealias InternalActionHandler = suspend (data: String?, attributes: List<TimelineItem.Attribute>) -> TimelineActionResult

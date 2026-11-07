@@ -23,6 +23,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
+import coredevices.util.WatchNotifier
 import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
@@ -46,6 +47,7 @@ import kotlinx.serialization.json.Json
 import size
 
 class ExperimentalDevices(
+    private val watchNotifier: WatchNotifier,
     private val ringSync: RingSync,
     private val recordingStorage: RecordingStorage,
     private val ringDelegate: RingDelegate,
@@ -125,10 +127,13 @@ class ExperimentalDevices(
         }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
+            val title = "Re-pairing required"
+            val body = "Please re-pair your Index 01 device to continue using it."
             NotifierManager.getLocalNotifier().notify {
-                title = "Re-pairing required"
-                body = "Please re-pair your Index 01 device to continue using it."
+                this.title = title
+                this.body = body
             }
+            watchNotifier.send("ring-repair-required", title, body)
         }
     }
 

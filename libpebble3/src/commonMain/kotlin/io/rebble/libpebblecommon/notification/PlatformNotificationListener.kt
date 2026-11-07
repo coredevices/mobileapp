@@ -29,6 +29,9 @@ interface NotificationListenerConnection {
 }
 
 interface NotificationAppsSync {
+    /** Apps kept out of [NotificationApps.notificationApps]. */
+    val hiddenPackages: Set<String> get() = emptySet()
+
     fun init()
 }
 
@@ -56,7 +59,9 @@ class NotificationApi(
     }
 
     override fun notificationApps(): Flow<List<AppWithCount>> =
-        notificationAppDao.allAppsWithCountsFlow()
+        notificationAppDao.allAppsWithCountsFlow().map { apps ->
+            apps.filter { it.app.packageName !in notificationAppsSync.hiddenPackages }
+        }
 
     override fun notificationAppChannelCounts(packageName: String): Flow<List<ChannelAndCount>> =
         notificationsDao.channelNotificationCounts(packageName)

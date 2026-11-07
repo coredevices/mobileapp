@@ -9,6 +9,7 @@ import coredevices.database.WeatherLocationDao
 import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.BatteryChargedNotifier
+import coredevices.pebble.firmware.FIRMWARE_UPDATE_NOW_WATCH_ACTION
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.BundledAppMigration
@@ -21,6 +22,7 @@ import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.util.AppResumed
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.PermissionRequester
+import coredevices.util.setWatchNotificationActionHandler
 import coredevices.pebble.permissions.PermissionRequestNotifier
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -83,6 +85,10 @@ class PebbleAppDelegate(
         memfaultChunkQueue.startProcessing(GlobalScope)
         analyticsHeartbeatQueue.startProcessing(GlobalScope)
         permissionsRequester.init()
+        libPebble.setWatchNotificationActionHandler(FIRMWARE_UPDATE_NOW_WATCH_ACTION) { identifier ->
+            firmwareUpdateUiTracker.updateWatchNow(libPebble, requireNotNull(identifier))
+        }
+        permissionRequestNotifier.registerWatchActions()
         if (platform == Platform.Android) {
             // We need to init on android synchronously, so that koin graph is ready when e.g.
             // notification listener is created.

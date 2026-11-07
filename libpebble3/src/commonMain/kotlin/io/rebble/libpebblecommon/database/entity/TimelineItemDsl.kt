@@ -14,6 +14,7 @@ class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     private var attributes = listOf<BaseAttribute>()
     var internalType: String? = null
     var pluginAction: PluginActionRef? = null
+    var internalData: String? = null
 
     fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
@@ -22,7 +23,7 @@ class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     }
 
     fun build(): BaseAction {
-        return BaseAction(actionId, type, attributes, internalType, pluginAction)
+        return BaseAction(actionId, type, attributes, internalType, pluginAction, internalData)
     }
 }
 

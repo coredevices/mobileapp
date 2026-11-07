@@ -24,9 +24,11 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import com.russhwolf.settings.Settings
 import coredevices.coreapp.STT_MODE_BEFORE_UPDATE_KEY
 import coredevices.coreapp.STT_UPDATE_NOTIFICATION_ID
+import coredevices.coreapp.STT_UPDATE_WATCH_KEY
 import coredevices.ui.M3Dialog
 import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfigHolder
+import coredevices.util.WatchNotifier
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.models.ModelDownloadStatus
 import coredevices.util.models.ModelManager
@@ -41,6 +43,7 @@ import org.koin.compose.koinInject
 fun SttModelUpdatePrompt() {
     val modelProvider: CactusModelPathProvider = koinInject()
     val modelManager: ModelManager = koinInject()
+    val watchNotifier: WatchNotifier = koinInject()
     val configHolder: CoreConfigHolder = koinInject()
     val settings: Settings = koinInject()
     val scope = rememberCoroutineScope()
@@ -94,6 +97,7 @@ fun SttModelUpdatePrompt() {
         runCatching {
             NotifierManager.getLocalNotifier().remove(STT_UPDATE_NOTIFICATION_ID)
         }
+        watchNotifier.remove(STT_UPDATE_WATCH_KEY)
         scope.launch {
             val info = modelManager.getAvailableSTTModels().firstOrNull { it.slug == sttModel }
             if (info != null && modelManager.downloadSTTModel(info, allowMetered = true)) {

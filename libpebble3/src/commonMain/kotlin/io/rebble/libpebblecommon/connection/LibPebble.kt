@@ -19,6 +19,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.transport.GattServerManager
 import io.rebble.libpebblecommon.connection.bt.ble.transport.impl.configureKableCentral
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.ActionOverrides
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
+import io.rebble.libpebblecommon.connection.endpointmanager.timeline.InternalActionHandler
 import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.dao.AppWithCount
 import io.rebble.libpebblecommon.database.dao.ChannelAndCount
@@ -37,6 +38,7 @@ import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.TimelinePin
+import io.rebble.libpebblecommon.database.entity.TimelineReminder
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
 import io.rebble.libpebblecommon.health.Health
@@ -308,6 +310,14 @@ sealed interface DisplayedNotificationReplyResult {
 interface Timeline {
     fun insertOrReplace(pin: TimelinePin)
     fun delete(pinUuid: Uuid)
+    suspend fun insertOrReplace(reminder: TimelineReminder)
+    suspend fun deleteReminder(reminderUuid: Uuid)
+
+    /**
+     * Handles notification and reminder actions with this `internalType`. The action is stored
+     * with its item, so this works for items sent before an app restart.
+     */
+    fun setActionHandler(internalType: String, handler: InternalActionHandler)
 }
 
 interface Errors {

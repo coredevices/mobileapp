@@ -160,6 +160,8 @@ data class BaseAction(
     val attributes: List<BaseAttribute>,
     val internalType: String? = null,
     val pluginAction: PluginActionRef? = null,
+    /** Phone-only: passed to the handler registered for [internalType]. */
+    val internalData: String? = null,
 ) {
     fun asAction(): TimelineItem.Action =
         TimelineItem.Action(actionID, type, attributes.map { it.asAttribute() })

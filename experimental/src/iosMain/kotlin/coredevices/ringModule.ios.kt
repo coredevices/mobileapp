@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.RingDelegate
+import coredevices.ring.agent.ShortcutActionHandler
 import coredevices.ring.agent.integrations.obsidian.IosObsidianVault
 import coredevices.ring.agent.integrations.obsidian.ObsidianVault
 import coredevices.ring.clock.IosLocalClockNotifier
@@ -68,7 +69,7 @@ actual val platformRingModule = module {
     single {
         RingOta(get(), get(), get())
     }
-    singleOf(::PlatformIndexNotificationManager)
+    single { PlatformIndexNotificationManager(get(), get(), lazy { get<ShortcutActionHandler>() }) }
     singleOf(::BackgroundRingService)
     singleOf(::IntegrationTokenStorageImpl) bind IntegrationTokenStorage::class
     single { EncryptionKeyManager() }

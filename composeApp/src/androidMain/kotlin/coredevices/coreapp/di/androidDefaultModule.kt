@@ -24,7 +24,9 @@ import coredevices.util.CoreConfigFlow
 import coredevices.util.auth.GoogleAuthUtil
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
+import coredevices.util.NoOpWatchNotifier
 import coredevices.util.RequiredPermissions
+import coredevices.util.WatchNotifier
 import coredevices.util.auth.GitHubAuthUtil
 import coredevices.util.auth.SilentSignIn
 import coredevices.util.integrations.AndroidOAuthLauncher
@@ -62,6 +64,7 @@ val androidDefaultModule = module {
     factory { AppUpdateManagerFactory.create(get()) }
     singleOf(::PlatformContext)
     singleOf(::AndroidPermissionRequester) bind PermissionRequester::class
+    singleOf(::NoOpWatchNotifier) bind WatchNotifier::class
     singleOf(::AndroidCompanionDevice) bind CompanionDevice::class
     singleOf(::AndroidAppUpdate) bind AppUpdate::class
     single {

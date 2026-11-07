@@ -25,6 +25,7 @@ import coredevices.util.CommonBuildKonfig
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
+import coredevices.util.WatchNotifier
 import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.sync.SyncManager
@@ -47,8 +48,10 @@ import kotlin.time.Instant
 internal const val STT_UPDATE_NOTIFIED_VERSION_KEY = "stt_update_notified_version"
 internal const val STT_MODE_BEFORE_UPDATE_KEY = "stt_mode_before_update"
 internal val STT_UPDATE_NOTIFICATION_ID = "stt_update_notif".hashCode()
+internal const val STT_UPDATE_WATCH_KEY = "stt_update_notif"
 
 class CommonAppDelegate(
+    private val watchNotifier: WatchNotifier,
     private val pushMessaging: PushMessaging,
     private val bugReports: BugReports,
     private val settings: Settings,
@@ -113,11 +116,10 @@ class CommonAppDelegate(
                 val sttVersion = "${CommonBuildKonfig.CACTUS_STT_WEIGHTS_VERSION}:${CommonBuildKonfig.CACTUS_STT_ENG_WEIGHTS_VERSION}"
                 if (settings.getStringOrNull(STT_UPDATE_NOTIFIED_VERSION_KEY) != sttVersion) {
                     settings.putString(STT_UPDATE_NOTIFIED_VERSION_KEY, sttVersion)
-                    NotifierManager.getLocalNotifier().notify(
-                        STT_UPDATE_NOTIFICATION_ID,
-                        "Offline voice recognition",
-                        "We've improved offline voice recognition. Open the app to update the model."
-                    )
+                    val title = "Offline voice recognition"
+                    val body = "We've improved offline voice recognition. Open the app to update the model."
+                    NotifierManager.getLocalNotifier().notify(STT_UPDATE_NOTIFICATION_ID, title, body)
+                    watchNotifier.send(STT_UPDATE_WATCH_KEY, title, body)
                 }
             } else if (settings.hasKey(STT_MODE_BEFORE_UPDATE_KEY)) {
                 val saved = CactusSTTMode.fromId(settings.getInt(STT_MODE_BEFORE_UPDATE_KEY, CactusSTTMode.RemoteOnly.id))
