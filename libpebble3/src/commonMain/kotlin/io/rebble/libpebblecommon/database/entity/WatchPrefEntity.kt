@@ -438,6 +438,12 @@ enum class VibeScore(override val code: UByte, override val displayName: String)
     Mario(12u, "Mario"),
     AlarmsLPM(13u, "ALARMS LPM"),
     Gentle(14u, "Gentle"),
+    DoublePulseMedium(15u, "Double Pulse Medium"),
+    PebbleMorse(16u, "Pebble Morse"),
+    Heartbeat(17u, "Heartbeat"),
+    DoubleTap(18u, "Double Tap"),
+    Wave(19u, "Wave"),
+    Imperial(20u, "Imperial"),
 }
 
 enum class MenuScrollVibeBehaviour(override val code: UByte, override val displayName: String) : WatchPrefEnum {
@@ -579,6 +585,12 @@ enum class EnumWatchPref(
             VibeScore.NudgeNudge,
             VibeScore.Jackhammer,
             VibeScore.Mario,
+            VibeScore.DoublePulseMedium,
+            VibeScore.PebbleMorse,
+            VibeScore.Heartbeat,
+            VibeScore.DoubleTap,
+            VibeScore.Wave,
+            VibeScore.Imperial,
         ),
     ),
     VibeScoreCalls(
@@ -593,6 +605,12 @@ enum class EnumWatchPref(
             VibeScore.NudgeNudge,
             VibeScore.Jackhammer,
             VibeScore.Mario,
+            VibeScore.DoublePulseMedium,
+            VibeScore.PebbleMorse,
+            VibeScore.Heartbeat,
+            VibeScore.DoubleTap,
+            VibeScore.Wave,
+            VibeScore.Imperial,
         ),
     ),
     VibeScoreAlarms(
@@ -606,6 +624,12 @@ enum class EnumWatchPref(
             VibeScore.Reveille,
             VibeScore.Mario,
             VibeScore.Gentle,
+            VibeScore.DoublePulseMedium,
+            VibeScore.PebbleMorse,
+            VibeScore.Heartbeat,
+            VibeScore.DoubleTap,
+            VibeScore.Wave,
+            VibeScore.Imperial,
         ),
     ),
     MenuScrollVibe(
