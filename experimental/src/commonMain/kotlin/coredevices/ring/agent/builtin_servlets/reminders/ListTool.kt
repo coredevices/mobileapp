@@ -164,11 +164,9 @@ class ListTool: BuiltInMcpTool(
             }
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
-                    logger.d { "Parsed absolute date: $parsed will assume 9am" }
-                    LocalDateTime(
-                        date = parsed.date,
-                        time = kotlinx.datetime.LocalTime(9, 0)
-                    )
+                    val resolved = parsed.resolveDefaultTime(Clock.System.now(), tz)
+                    logger.d { "Parsed absolute date: $parsed resolved to $resolved" }
+                    resolved
                 }
                 is InterpretedDateTime.AbsoluteDateTime -> {
                     logger.d { "Parsed absolute date time: $parsed" }
