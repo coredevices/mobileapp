@@ -133,6 +133,8 @@ sealed class SemanticResult {
      * @param integrationName Integration the tool belongs to, for re-dispatching the call
      * @param arguments The call's parameters, for the user to review
      * @param destructive Whether the action cannot be undone
+     * @param title Short question shown in place of the generic prompt, with [description] as the body
+     * @param allowLabel / [denyLabel] Button text in place of "Allow" / "Deny"
      */
     @Serializable
     @SerialName("RequiresConfirmation")
@@ -142,6 +144,9 @@ sealed class SemanticResult {
         val arguments: JsonObject,
         val destructive: Boolean,
         val description: String? = null,
+        val title: String? = null,
+        val allowLabel: String? = null,
+        val denyLabel: String? = null,
     ): SemanticResult()
     /** The user refused a [RequiresConfirmation] request, so the tool was not run. */
     @Serializable

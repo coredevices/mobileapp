@@ -385,7 +385,7 @@ class RecordingProcessor(
             ?.semantic_result as? SemanticResult.RequiresConfirmation
         val userText = conversation.lastOrNull { it.role == MessageRole.user }?.content
         val sessionContext = sessionContextFor(recordingId, firestoreId, createdAt, userText)
-            .copy(toolCallId = toolCallId, userConfirmed = true)
+            .copy(toolCallId = toolCallId)
         val convEndIdx = conversation.size
         val scope = CoroutineScope(currentCoroutineContext())
         val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
@@ -393,7 +393,12 @@ class RecordingProcessor(
         try {
             if (request != null) {
                 val result = if (approved) {
-                    mcpSession.callTool(request.integrationName, request.toolName, request.arguments, sessionContext)
+                    mcpSession.callTool(
+                        request.integrationName,
+                        request.toolName,
+                        request.arguments,
+                        sessionContext.copy(userConfirmed = true),
+                    )
                 } else {
                     ToolCallResult(DENIED_RESULT, SemanticResult.UserDenied)
                 }

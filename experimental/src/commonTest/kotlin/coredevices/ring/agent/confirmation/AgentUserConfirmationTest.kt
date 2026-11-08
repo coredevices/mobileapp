@@ -53,4 +53,17 @@ class AgentUserConfirmationTest {
         assertContains(content, "destructive")
         assertEquals(confirmationNotificationId("c1"), notification.id)
     }
+
+    @Test
+    fun notificationUsesCustomTitleAndLabels() {
+        val notification = confirmationNotification(
+            recordingId = 7,
+            toolCallId = "c1",
+            request.copy(description = "hello", title = "Send to Liz?", allowLabel = "Send", denyLabel = "Dismiss"),
+        )
+
+        assertEquals("Send to Liz?", notification.title)
+        assertEquals("hello", notification.contentText)
+        assertEquals(listOf("Send", "Dismiss"), notification.actions.map { it.title })
+    }
 }

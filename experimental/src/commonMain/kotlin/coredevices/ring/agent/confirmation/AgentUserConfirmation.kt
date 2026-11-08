@@ -97,7 +97,7 @@ internal fun confirmationNotification(
     request: SemanticResult.RequiresConfirmation,
 ): GenericNotification {
     val tool = humanizeToolName(request.toolName) ?: request.toolName
-    val content = buildString {
+    val content = if (request.title != null) request.description.orEmpty() else buildString {
         appendLine("Allow agent to run $tool from ${request.integrationName}?")
         request.description?.let {
             appendLine()
@@ -110,13 +110,13 @@ internal fun confirmationNotification(
     }.trim()
     return GenericNotification(
         id = confirmationNotificationId(toolCallId),
-        title = "Confirm agent action",
+        title = request.title ?: "Confirm agent action",
         contentText = content.takeIf { it.isNotBlank() },
         deepLink = RingRoutes.recordingDeepLink(recordingId),
         channel = IndexNotificationChannel.IndexAction,
         actions = listOf(
-            NotificationAction("Allow", confirmationDeepLink(recordingId, toolCallId, approved = true), background = true),
-            NotificationAction("Deny", confirmationDeepLink(recordingId, toolCallId, approved = false), background = true),
+            NotificationAction(request.allowLabel ?: "Allow", confirmationDeepLink(recordingId, toolCallId, approved = true), background = true),
+            NotificationAction(request.denyLabel ?: "Deny", confirmationDeepLink(recordingId, toolCallId, approved = false), background = true),
         ),
     )
 }
