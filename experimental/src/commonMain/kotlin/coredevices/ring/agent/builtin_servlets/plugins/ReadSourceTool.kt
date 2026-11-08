@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceInstance
 import io.rebble.libpebblecommon.plugin.SourceUpdate
+import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -20,6 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 class ReadSourceTool(
     private val sourcePlugins: suspend () -> List<PluginMetadata>,
     private val plugins: Plugins,
+    private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ): BuiltInMcpTool(
     definition = Tool(
         name = TOOL_NAME,
@@ -102,9 +104,9 @@ class ReadSourceTool(
             resultString = JsonSnake.encodeToString(
                 ReadSourceResult(
                     pluginUuid = envelope.pluginUuid,
-                    instances = args.instance?.let { instanceId ->
+                    instances = (args.instance?.let { instanceId ->
                         envelope.instances.filter { it.instanceId == instanceId }
-                    } ?: envelope.instances
+                    } ?: envelope.instances).map { it.renderTimesForModel(zone) }
                 )
             ),
             semanticResult = SemanticResult.SupportingData(
@@ -116,7 +118,8 @@ class ReadSourceTool(
     companion object {
         const val TOOL_NAME = "read_source"
         const val TOOL_DESCRIPTION = "Read data from a data source path: <category>/<item>/[instance]." +
-                " Returns data for all instances if unspecified"
+                " Returns data for all instances if unspecified. Time series and timestamps are given" +
+                " in local wall-clock time; quote those times rather than computing your own"
         private val logger = Logger.withTag("ReadSourceTool")
     }
 }
