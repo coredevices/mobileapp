@@ -70,6 +70,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.IOException
@@ -318,9 +319,11 @@ class Locker(
     }
 
     override suspend fun reviewSideload(pbwPath: Path): InstallReview? = try {
-        val pbwApp = PbwApp(pbwPath)
-        val info = pbwApp.info
-        reviewInstall(Uuid.parse(info.uuid), info.longName.ifBlank { info.shortName }, pbwApp.requestedPermissions())
+        val (info, requested) = withContext(Dispatchers.IO) {
+            val pbwApp = PbwApp(pbwPath)
+            pbwApp.info to pbwApp.requestedPermissions()
+        }
+        reviewInstall(Uuid.parse(info.uuid), info.longName.ifBlank { info.shortName }, requested)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
