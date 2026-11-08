@@ -373,16 +373,18 @@ class BlobDB(
         val bytes = command.serialize().asByteArray()
         val result = sendWithTimeout(command)
         logger.d("insert: result = ${result?.responseValue}")
-        when (result?.responseValue) {
-            BlobResponse.BlobStatus.Success,
-            // Stale = mark as synced (watch will never accept this record)
-            BlobResponse.BlobStatus.DataStale-> db.markSyncedToWatch(
+        val markSynced = when (result?.responseValue) {
+            BlobResponse.BlobStatus.Success -> true
+            // Firmware also returns stale for pref keys it doesn't know (yet), so keep retrying those.
+            BlobResponse.BlobStatus.DataStale -> db.databaseId() != BlobDatabase.WatchPrefs
+            else -> false
+        }
+        if (markSynced) {
+            db.markSyncedToWatch(
                 transport = identifier.asString,
                 item = item,
                 hashcode = item.recordHashcode,
             )
-
-            else -> Unit
         }
     }
 
