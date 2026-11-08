@@ -207,6 +207,29 @@ class PluginClientTest {
     }
 
     @Test
+    fun onlyANonProbeCallRunsThePlugin() = runTest {
+        val runningDuring = mutableListOf<Boolean>()
+        val plugin = ClientFakePlugin(
+            envelopes = flow {
+                runningDuring += PLUGIN in running.running.first()
+                emit(SourceUpdate.Data(ENVELOPE))
+            },
+            onInvoke = {
+                runningDuring += PLUGIN in running.running.first()
+                ActionResult(ok = true)
+            },
+        ).registered()
+
+        client.read(PluginCaller.Host(probe = true), plugin, "weather", "now")
+        client.invoke(PluginCaller.Host(probe = true), plugin, "do_it", ARGS)
+        client.read(PluginCaller.Host(), plugin, "weather", "now")
+        client.invoke(PluginCaller.Host(), plugin, "do_it", ARGS)
+
+        assertEquals(listOf(false, false, true, true), runningDuring)
+        assertEquals(emptySet(), running.running.first())
+    }
+
+    @Test
     fun aSourceThatEndsWithoutDataIsAnError() = runTest {
         val update = client.read(PluginCaller.Host(), ClientFakePlugin(envelopes = emptyFlow()).registered(), "weather", "now")
 

@@ -184,7 +184,7 @@ class PluginClient(
             return ActionResult.error(PluginErrors.INVALID_ARGS, "missing required: ${missing.joinToString()}")
         }
         count(caller, PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.PKJS_INVOCATIONS)
-        return runningApps.whileRunning(plugin.pluginUuid) {
+        val run = suspend {
             withTimeoutOrNull(timeout ?: Duration.INFINITE) {
                 try {
                     target.invoke(action, args, prompt = !caller.probe)
@@ -196,6 +196,8 @@ class PluginClient(
                 }
             } ?: ActionResult.error(PluginErrors.TIMEOUT, "no response in $timeout")
         }
+        // A probe can't ask for anything, so it doesn't bring the plugin's requests to the user.
+        return if (caller.probe) run() else runningApps.whileRunning(plugin.pluginUuid) { run() }
     }
 
     private fun serve(
@@ -222,8 +224,8 @@ class PluginClient(
             logger.w(t) { "${caller.label} reading ${plugin.pluginUuid}/$category/$item failed" }
             emit(SourceUpdate.Error(PluginErrors.UNKNOWN, t.message ?: t::class.simpleName ?: "error"))
         }
-        .onStart { runningApps.started(plugin.pluginUuid) }
-        .onCompletion { runningApps.stopped(plugin.pluginUuid) }
+        .onStart { if (!caller.probe) runningApps.started(plugin.pluginUuid) }
+        .onCompletion { if (!caller.probe) runningApps.stopped(plugin.pluginUuid) }
 
     // A plugin polled every minute would otherwise say the same thing every minute.
     private val reported = MutableStateFlow(emptySet<String>())
