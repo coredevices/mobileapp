@@ -14,6 +14,7 @@ import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.HEARTED_COLLECTION_SLUG
 import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.database.HeartEntity
 import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
@@ -409,6 +410,18 @@ class AppstoreService(
                         synthetic = true,
                     )
                 )
+                if (source.isPebbleFeed()) {
+                    appstoreCollectionDao.insertCollectionIfMissing(
+                        AppstoreCollection(
+                            sourceId = source.id,
+                            title = "Top Charts",
+                            slug = TOP_CHARTS_COLLECTION_SLUG,
+                            type = type,
+                            enabled = true,
+                            synthetic = true,
+                        )
+                    )
+                }
                 cache.writeHome(fetched, type, source, parameters)
             }
             fetched

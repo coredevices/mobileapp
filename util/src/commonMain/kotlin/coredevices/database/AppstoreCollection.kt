@@ -39,6 +39,7 @@ data class AppstoreCollection(
 
 const val HEARTED_COLLECTION_SLUG = "__hearted__"
 const val PLUGIN_DATA_APPS_SLUG = "plugin-data-apps"
+const val TOP_CHARTS_COLLECTION_SLUG = "__top_charts__"
 
 @Dao
 interface AppstoreCollectionDao {

@@ -90,6 +90,7 @@ import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
@@ -377,16 +378,19 @@ fun LockerScreen(
         val storeHome = remember(storeHomeForType, collections, viewModel.type.value, pluginsEnabled) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
+                val sourceRules = collectionRules[source.id].orEmpty().filter { it.type == viewModel.type.value }
                 val homeFiltered = home.let {
                     it.copy(collections = it.collections.filter { col ->
                         (pluginsEnabled || col.slug != PLUGIN_DATA_APPS_SLUG) &&
-                            collectionRules[source.id]?.firstOrNull { it.slug == col.slug && it.type == viewModel.type.value }?.enabled ?: false
+                            sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
                     })
                 }
                 val categories = homeFiltered.categories.filter{
                     it.slug != "index"
                 }.chunked(2)
-                StoreHomeDisplay(source, homeFiltered, categories)
+                val showTopCharts = source.isPebbleFeed() &&
+                    sourceRules.firstOrNull { it.slug == TOP_CHARTS_COLLECTION_SLUG }?.enabled ?: true
+                StoreHomeDisplay(source, homeFiltered, categories, showTopCharts)
             } ?: emptyList()
         }
         val settings: Settings = koinInject()
@@ -711,7 +715,7 @@ fun LockerScreen(
                                         }
                                     }
                                 }
-                                if (source.isPebbleFeed()) {
+                                if (it.showTopCharts) {
                                     item(contentType = "top_charts", key = "top_charts_${source.id}") {
                                         TopChartsSection(
                                             source = source,
@@ -812,6 +816,7 @@ data class StoreHomeDisplay(
     val source: AppstoreSource,
     val home: AppStoreHome,
     val categories: List<List<StoreCategory>>,
+    val showTopCharts: Boolean,
 )
 
 @Composable
