@@ -15,7 +15,9 @@ expect class SendBeeperMessageTool() : BuiltInMcpTool {
 @Serializable
 internal data class SendBeeperMessageArgs(
     val contactName: String,
-    val text: String
+    val text: String,
+    /** Set only on the confirmed re-dispatch of a message to a non-approved contact. */
+    val roomId: String? = null,
 )
 
 internal object SendBeeperMessageToolConstants {

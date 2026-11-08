@@ -1,6 +1,5 @@
 package coredevices.ring.agent.builtin_servlets.messaging
 
-import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.BuiltInMcpIntegration
 import coredevices.ring.database.Preferences
@@ -18,29 +17,27 @@ object MessagingServlet: BuiltInMcpIntegration(
         SendBeeperMessageTool(),
     )
 ), KoinComponent {
-    private val logger by lazy { Logger.withTag("MessagingServlet") }
     private val prefs: Preferences by inject()
     override suspend fun getDisabledTools(): List<String> {
-        val approvedContacts = prefs.approvedBeeperContacts.value
-        return if (approvedContacts.isEmpty()) {
-            logger.d { "No approved contacts for messaging tools, disabling them." }
-            listOf(SendBeeperMessageToolConstants.TOOL_NAME)
-        } else {
-            emptyList()
-        }
+        val canMessage = prefs.approvedBeeperContacts.value.isNotEmpty() || prefs.beeperMessageAnyone.value
+        return if (canMessage) emptyList() else listOf(SendBeeperMessageToolConstants.TOOL_NAME)
     }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
-        return if (prefs.approvedBeeperContacts.value.isNotEmpty()) {
-            buildString {
-                appendLine(super.getExtraContext(sessionContext))
+        val approved = prefs.approvedBeeperContacts.value
+        val messageAnyone = prefs.beeperMessageAnyone.value
+        if (approved.isEmpty() && !messageAnyone) return super.getExtraContext(sessionContext)
+        return buildString {
+            appendLine(super.getExtraContext(sessionContext))
+            if (approved.isNotEmpty()) {
                 appendLine("Approved contacts for ${SendBeeperMessageToolConstants.TOOL_NAME}:")
-                prefs.approvedBeeperContacts.value.forEach { contact ->
+                approved.forEach { contact ->
                     appendLine("- ${contact.name} ${contact.nickname?.let { "(Nickname: $it)" } ?: ""}".trim())
                 }
             }
-        } else {
-            super.getExtraContext(sessionContext)
+            if (messageAnyone) {
+                appendLine("Messages to anyone other than the approved contacts are held for the user to confirm before sending.")
+            }
         }
     }
 }

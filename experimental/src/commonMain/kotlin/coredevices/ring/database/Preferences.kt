@@ -23,6 +23,7 @@ interface Preferences: BasePreferences {
     val musicControlMode: StateFlow<MusicControlMode>
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
+    val beeperMessageAnyone: StateFlow<Boolean>
     val secondaryMode: StateFlow<SecondaryMode>
     /** Ids of [coredevices.ring.agent.integrations.providers.IntegrationProvider]s; resolve them
      *  through `IntegrationProviderRepository`, which also handles a selection that no longer exists. */
@@ -51,6 +52,7 @@ interface Preferences: BasePreferences {
     fun setMusicControlMode(mode: MusicControlMode)
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
+    fun setBeeperMessageAnyone(enabled: Boolean)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setReminderProviderId(id: String)
     fun setNoteProviderId(id: String)
@@ -125,6 +127,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         } ?: emptyList()
     )
     override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
+    private val _beeperMessageAnyone = MutableStateFlow(settings.getBoolean("beeper_message_anyone", false))
+    override val beeperMessageAnyone = _beeperMessageAnyone.asStateFlow()
     private val _secondaryMode = MutableStateFlow(
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
@@ -232,6 +236,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             }
             _approvedBeeperContacts.value = contacts ?: emptyList()
         }
+    }
+
+    override fun setBeeperMessageAnyone(enabled: Boolean) {
+        settings.putBoolean("beeper_message_anyone", enabled)
+        _beeperMessageAnyone.value = enabled
     }
 
     override fun setSecondaryMode(mode: SecondaryMode) {

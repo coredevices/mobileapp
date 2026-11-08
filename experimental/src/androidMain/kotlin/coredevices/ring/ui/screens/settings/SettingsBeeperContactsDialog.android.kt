@@ -287,13 +287,6 @@ class BeeperContactsPagingSource(
         }
     }
 
-    private data class ChatInfo(
-        val roomId: String,
-        val timestamp: Long,
-        val title: String?,
-        val isOneToOne: Boolean
-    )
-
     private data class ContactWithTimestamp(
         val id: String,
         val name: String,
@@ -349,84 +342,21 @@ class BeeperContactsPagingSource(
     }
 
     /** Slow path: search contacts by name, then resolve each to their latest chat */
-    private fun fetchContactsWithTimestamps(limit: Int, offset: Int): List<ContactWithTimestamp> {
-        val uriBuilder = BeeperAPI.CONTACTS_URI.toUri().buildUpon()
-            .appendQueryParameter("limit", limit.toString())
-            .appendQueryParameter("offset", offset.toString())
-
-        if (!query.isNullOrBlank()) {
-            uriBuilder.appendQueryParameter("query", query)
+    private fun fetchContactsWithTimestamps(limit: Int, offset: Int): List<ContactWithTimestamp> =
+        BeeperAPI.searchContacts(contentResolver, query, limit, offset).map { contact ->
+            val chatInfo = contact.roomIds
+                ?.takeIf { it.isNotBlank() }
+                ?.let { BeeperAPI.latestChat(contentResolver, it) }
+            ContactWithTimestamp(
+                id = contact.id,
+                name = contact.name,
+                protocol = contact.protocol,
+                roomId = chatInfo?.roomId,
+                chatTitle = chatInfo?.title,
+                isGroupChat = chatInfo?.isOneToOne == false,
+                timestamp = chatInfo?.timestamp ?: 0L
+            )
         }
-
-        val uri = uriBuilder.build()
-        val contacts = mutableListOf<ContactWithTimestamp>()
-
-        contentResolver.query(uri, arrayOf("id", "displayName", "protocol", "roomIds"), null, null, null)?.use { c ->
-            val idIdx = c.getColumnIndexOrThrow("id")
-            val nameIdx = c.getColumnIndexOrThrow("displayName")
-            val protocolIdx = c.getColumnIndexOrThrow("protocol")
-            val roomIdsIdx = c.getColumnIndex("roomIds")
-
-            while (c.moveToNext()) {
-                val id = c.getString(idIdx)
-                val name = c.getString(nameIdx)
-                val protocol = c.getString(protocolIdx)
-                val roomIds = if (roomIdsIdx >= 0) c.getStringOrNull(roomIdsIdx) else null
-
-                val chatInfo = if (!roomIds.isNullOrBlank()) {
-                    getLatestChatInfo(roomIds)
-                } else null
-
-                contacts.add(ContactWithTimestamp(
-                    id = id,
-                    name = name,
-                    protocol = protocol,
-                    roomId = chatInfo?.roomId,
-                    chatTitle = chatInfo?.title,
-                    isGroupChat = chatInfo?.isOneToOne == false,
-                    timestamp = chatInfo?.timestamp ?: 0L
-                ))
-            }
-        }
-
-        return contacts
-    }
-
-    /** Returns ChatInfo for the most recent one-to-one chat, or most recent group chat as fallback */
-    private fun getLatestChatInfo(roomIds: String): ChatInfo? {
-        val chatsUri = BeeperAPI.CHATS_URI.toUri().buildUpon()
-            .appendQueryParameter("roomIds", roomIds)
-            .build()
-
-        var bestChat: ChatInfo? = null
-
-        contentResolver.query(
-            chatsUri,
-            arrayOf("roomId", "timestamp", "oneToOne", "title"),
-            null, null, "timestamp DESC"
-        )?.use { c ->
-            val roomIdIdx = c.getColumnIndexOrThrow("roomId")
-            val tsIdx = c.getColumnIndexOrThrow("timestamp")
-            val oneToOneIdx = c.getColumnIndex("oneToOne")
-            val titleIdx = c.getColumnIndex("title")
-
-            while (c.moveToNext()) {
-                val roomId = c.getString(roomIdIdx)
-                val timestamp = c.getLong(tsIdx)
-                val isOneToOne = if (oneToOneIdx >= 0) c.getInt(oneToOneIdx) == 1 else true
-                val title = if (titleIdx >= 0) c.getStringOrNull(titleIdx) else null
-
-                if (isOneToOne) {
-                    return ChatInfo(roomId, timestamp, title, true)
-                }
-                if (bestChat == null || timestamp > bestChat!!.timestamp) {
-                    bestChat = ChatInfo(roomId, timestamp, title, false)
-                }
-            }
-        }
-
-        return bestChat
-    }
 
     override fun getRefreshKey(state: PagingState<Int, SettingsBeeperContact>): Int? {
         return state.anchorPosition?.let { anchorPosition ->
