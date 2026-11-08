@@ -77,6 +77,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.files.Path
@@ -226,12 +227,12 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 
         override suspend fun addToLegacyLocker(uuid: String): Boolean = true
 
-        override suspend fun fetchAppStoreHome(
+        override fun appStoreHomes(
             type: AppType,
             hardwarePlatform: WatchType?,
             enabledOnly: Boolean,
             useCache: Boolean
-        ): List<AppStoreHomeResult> = emptyList()
+        ): Flow<List<AppStoreHomeResult>> = emptyFlow()
 
         override suspend fun fetchPebbleAppStoreHomes(
             hardwarePlatform: WatchType?,

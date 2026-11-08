@@ -66,7 +66,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -262,7 +268,10 @@ interface PebbleWebServices {
     suspend fun fetchUsersMeCore(): CoreUsersMe?
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
+    /** The homes fetched so far, in source order, emitted again as each source answers. */
+    fun appStoreHomes(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): Flow<List<AppStoreHomeResult>>
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> =
+        appStoreHomes(type, hardwarePlatform, enabledOnly, useCache).lastOrNull().orEmpty()
     suspend fun fetchPebbleAppStoreHomes(hardwarePlatform: WatchType?, useCache: Boolean): Map<AppType, AppStoreHomeResult?>
     suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<Pair<AppstoreSource, StoreSearchResult>>
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
@@ -400,16 +409,22 @@ class RealPebbleWebServices(
 
     override suspend fun fetchUsersMeCore(): CoreUsersMe? = httpClient.get("https://appstore-api.repebble.com/api/v1/users/me", auth = HttpClientAuthType.Core)
 
-    override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
-        return coroutineScope {
-            getAllSources(enabledOnly).map {
-                async {
-                    val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
-                    home?.let { h -> AppStoreHomeResult(it, h) }
+    override fun appStoreHomes(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): Flow<List<AppStoreHomeResult>> =
+        channelFlow {
+            val sources = getAllSources(enabledOnly)
+            val results = arrayOfNulls<AppStoreHomeResult>(sources.size)
+            val lock = Mutex()
+            sources.forEachIndexed { i, source ->
+                launch {
+                    val home = appstoreServiceForSource(source).fetchAppStoreHome(type, hardwarePlatform, useCache)
+                        ?: return@launch
+                    lock.withLock {
+                        results[i] = AppStoreHomeResult(source, home)
+                        send(results.filterNotNull())
+                    }
                 }
-            }.awaitAll().filterNotNull()
+            }
         }
-    }
 
     override suspend fun fetchPebbleAppStoreHomes(
         hardwarePlatform: WatchType?,

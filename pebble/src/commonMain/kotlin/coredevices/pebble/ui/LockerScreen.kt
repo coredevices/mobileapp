@@ -121,6 +121,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -198,11 +199,18 @@ class LockerViewModel(
             val finished = CompletableDeferred<Unit>()
             viewModelScope.launch {
                 try {
-                    val result = withContext(Dispatchers.IO) {
-                        pebbleWebServices.fetchAppStoreHome(it, platform, enabledOnly = true, useCache = useCache)
-                    }
-                    if (!result.isEmpty()) {
-                        storeHomeAllFeeds[it] = result
+                    var latest = emptyList<AppStoreHomeResult>()
+                    pebbleWebServices.appStoreHomes(it, platform, enabledOnly = true, useCache = useCache)
+                        .flowOn(Dispatchers.IO)
+                        .collect { result ->
+                            latest = result
+                            // Keep showing what a refresh hasn't reached yet.
+                            val answered = result.map { home -> home.source.id }.toSet()
+                            storeHomeAllFeeds[it] = result +
+                                storeHomeAllFeeds[it].orEmpty().filter { home -> home.source.id !in answered }
+                        }
+                    if (latest.isNotEmpty()) {
+                        storeHomeAllFeeds[it] = latest
                     }
                 } finally {
                     finished.complete(Unit)
@@ -230,12 +238,17 @@ class LockerViewModel(
         }
     }
 
+    private var refreshingStores: List<Int>? = null
+
     fun maybeRefreshStore(watchType: WatchType) {
         viewModelScope.launch {
             val currentEnabledStores = storeSourceDao.getAllEnabledSources().map { it.id }
+            // Part-way through a refresh, only some stores have loaded.
+            if (storeIsRefreshing && refreshingStores == currentEnabledStores) return@launch
             val loadedStores = storeHomeAllFeeds.values.firstOrNull()?.map { it.source.id }
             if (loadedStores == null || loadedStores != currentEnabledStores) {
                 logger.v { "refreshing store" }
+                refreshingStores = currentEnabledStores
                 refreshStore(watchType, useCache = true)
             }
         }
