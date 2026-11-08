@@ -134,7 +134,7 @@ class Locker(
     companion object {
         private val logger = Logger.withTag("Locker")
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
-        private const val PREF_KEY_HAVE_BACKFILLED_APP_INFO = "have_backfilled_app_info"
+        private const val PREF_KEY_HAVE_BACKFILLED_APP_INFO = "have_backfilled_app_info_2"
         private val WATCH_REMOVAL_TIMEOUT = 20.seconds
         private val LOCKER_SYNC_TIMEOUT = 15.seconds
     }
@@ -332,7 +332,7 @@ class Locker(
         if (!config.value.enablePlugins) return null
         val toReview = permissions.toReview(appUuid, requested)
         val automatic = permissions.automaticallyGranted(appUuid, requested)
-        return if (toReview.isEmpty() && automatic.isEmpty()) null else InstallReview(appUuid, appName, toReview, automatic)
+        return if (toReview.isEmpty() && automatic.isEmpty()) null else InstallReview(appUuid, appName, toReview, automatic, requested.declared)
     }
 
     internal suspend fun recordAppInfo(appId: Uuid, version: String, pbwPath: Path) {

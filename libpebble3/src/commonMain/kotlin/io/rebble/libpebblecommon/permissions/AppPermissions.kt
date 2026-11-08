@@ -5,6 +5,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
+import io.rebble.libpebblecommon.database.entity.PermissionDeclaration
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.plugin.PluginPermissions
@@ -58,7 +59,18 @@ enum class PermissionStatus {
     Waiting,
 }
 
-data class AppPermissionStatus(val appUuid: Uuid, val permission: String, val status: PermissionStatus, val lastUsedAtMs: Long? = null)
+data class AppPermissionStatus(
+    val appUuid: Uuid,
+    val permission: String,
+    val status: PermissionStatus,
+    val lastUsedAtMs: Long? = null,
+    /** From the app's manifest. */
+    val reason: String? = null,
+    /** Null when the app doesn't say which permissions are required. */
+    val required: Boolean? = null,
+    /** See [LockerAppPermission.askedAtMs]. */
+    val askedAtMs: Long? = null,
+)
 
 enum class PermissionDecision {
     Granted,
@@ -89,7 +101,10 @@ private fun LockerEntry.permissionSubject() = PermissionSubject(
 )
 
 interface AppPermissionsApi {
-    /** Undecided permissions the policy needs the user to answer, from apps running now (see [RunningApps]). */
+    /**
+     * Undecided permissions the policy needs the user to answer, that the app has asked for
+     * ([LockerAppPermission.askedAtMs]), from apps running now (see [RunningApps]).
+     */
     fun activePermissionRequests(): Flow<List<LockerAppPermission>>
     val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>>
     suspend fun setPermissionDecisions(appUuid: Uuid, decisions: Map<String, Boolean>)
@@ -169,12 +184,24 @@ class AppPermissions(
         if (decision == PermissionDecision.Denied) return
         val granted = decision == PermissionDecision.Granted
         val row = rows.coveringRow(permission)
+        val now = clock.now().toEpochMilliseconds()
         if (row == null) {
-            val now = clock.now().toEpochMilliseconds()
-            val newRow = LockerAppPermission(appUuid, permission, granted = null, requestedAtMs = now, lastUsedAtMs = if (granted) now else null)
+            val declaredBy = rows.associateBy { it.permission }.declaringRow(permission)
+            val newRow = LockerAppPermission(
+                appUuid,
+                permission,
+                granted = null,
+                requestedAtMs = now,
+                lastUsedAtMs = if (granted) now else null,
+                askedAtMs = if (granted) null else now,
+                reason = declaredBy?.reason,
+                required = declaredBy?.required,
+            )
             dao.insertIfAbsent(listOf(newRow))
         } else if (granted) {
             markUsed(row)
+        } else if (row.askedAtMs == null) {
+            dao.markAsked(appUuid, listOf(row.permission), now)
         }
     }
 
@@ -252,12 +279,24 @@ class AppPermissions(
             val undeclared = legacyRequested(hasPkjs = true, hasAndroidCompanion = true) - all.toSet()
             dao.deleteByAppUuidAndPermissions(appUuid, undeclared)
         }
-        recordRequested(appUuid, all)
+        val declared = requested.declared
+        val describesRequired = declared?.describesRequired() == true
+        // An optional one isn't asked about until the app uses it.
+        val asked = if (describesRequired) all.filter { declared?.isRequired(it) == true } else all
+        recordRequested(appUuid, all, asked)
+        dao.replaceDeclarations(appUuid, all.mapNotNull { key ->
+            val declaration = declared?.declarationOf(key) ?: return@mapNotNull null
+            key to PermissionDeclaration(declaration.reason, if (describesRequired) declaration.required == true else null)
+        }.toMap())
     }
 
-    suspend fun recordRequested(appUuid: Uuid, permissions: Collection<String>) {
+    suspend fun recordRequested(appUuid: Uuid, permissions: Collection<String>, asked: Collection<String> = permissions) {
         val now = clock.now().toEpochMilliseconds()
-        dao.insertIfAbsent(permissions.map { LockerAppPermission(appUuid, it, granted = null, requestedAtMs = now) })
+        dao.insertIfAbsent(permissions.map { key ->
+            LockerAppPermission(appUuid, key, granted = null, requestedAtMs = now, askedAtMs = if (key in asked) now else null)
+        })
+        // An update can make one required.
+        if (asked.isNotEmpty()) dao.markAsked(appUuid, asked.toList(), now)
     }
 
     /** Lists [permission] for the user to allow, without asking. */
@@ -272,6 +311,7 @@ class AppPermissions(
         val existing = dao.getByAppUuid(appUuid).associateBy { it.permission }
         dao.insertOrReplaceAll(
             decisions.map { (permission, granted) ->
+                val declaredBy = existing.declaringRow(permission)
                 LockerAppPermission(
                     appUuid = appUuid,
                     permission = permission,
@@ -280,6 +320,9 @@ class AppPermissions(
                     decidedAtMs = granted?.let { now },
                     lastUsedAtMs = existing[permission]?.lastUsedAtMs,
                     seenAtMs = now,
+                    askedAtMs = existing[permission]?.askedAtMs,
+                    reason = declaredBy?.reason,
+                    required = declaredBy?.required,
                 )
             }
         )
@@ -342,7 +385,9 @@ class AppPermissions(
     internal fun pendingPermissionRequests(): Flow<List<LockerAppPermission>> = waiting
 
     override fun activePermissionRequests(): Flow<List<LockerAppPermission>> =
-        combine(waiting, runningApps.running) { pending, running -> pending.filter { it.appUuid in running } }
+        combine(waiting, runningApps.running) { pending, running ->
+            pending.filter { it.appUuid in running && it.askedAtMs != null }
+        }
 
     override val appsWithPendingPermissionRequests: StateFlow<Set<Uuid>> by lazy {
         waiting
@@ -371,6 +416,7 @@ class AppPermissions(
         if (newer.isEmpty()) return
         dao.insertOrReplaceAll(newer.map { (key, record) ->
             val held = existing[key]
+            val declaredBy = existing.declaringRow(key)
             LockerAppPermission(
                 appUuid = appUuid,
                 permission = key,
@@ -379,6 +425,9 @@ class AppPermissions(
                 decidedAtMs = record.decidedAtMs,
                 lastUsedAtMs = held?.lastUsedAtMs,
                 seenAtMs = held?.seenAtMs ?: record.decidedAtMs,
+                askedAtMs = held?.askedAtMs,
+                reason = declaredBy?.reason,
+                required = declaredBy?.required,
             )
         })
     }
@@ -447,8 +496,20 @@ internal fun permissionStatuses(
             PermissionDecision.Denied -> return@mapNotNull null
         }
     }
-    AppPermissionStatus(row.appUuid, row.permission, status, row.lastUsedAtMs)
+    AppPermissionStatus(
+        row.appUuid,
+        row.permission,
+        status,
+        row.lastUsedAtMs,
+        reason = row.reason,
+        required = row.required,
+        askedAtMs = row.askedAtMs,
+    )
 }
+
+/** The row holding [key]'s declaration: its own, else (for a picked file) its bare permission's. */
+private fun Map<String, LockerAppPermission>.declaringRow(key: String): LockerAppPermission? =
+    get(key)?.takeIf { it.reason != null || it.required != null } ?: get(permissionOf(key))
 
 internal fun waitingRows(
     rows: List<LockerAppPermission>,

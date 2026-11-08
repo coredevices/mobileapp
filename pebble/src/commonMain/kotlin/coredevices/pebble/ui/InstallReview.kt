@@ -1,15 +1,20 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
@@ -33,11 +38,13 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewTimeline
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -45,6 +52,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,7 +65,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import coredevices.pebble.rememberLibPebble
 import io.rebble.libpebblecommon.permissions.PluginDefinedPermission
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
@@ -70,7 +82,10 @@ import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.permissions.PermissionStatus
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.permissions.domainOf
+import io.rebble.libpebblecommon.permissions.declarationOf
+import io.rebble.libpebblecommon.permissions.describesRequired
 import io.rebble.libpebblecommon.permissions.fileScopeOf
+import io.rebble.libpebblecommon.permissions.isRequired
 import io.rebble.libpebblecommon.permissions.packageOf
 import io.rebble.libpebblecommon.permissions.permissionOf
 import io.rebble.libpebblecommon.plugin.PluginPermissions
@@ -109,50 +124,85 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
         if (key == PluginPermissions.READ_FILES && decisions[PluginPermissions.WRITE_FILES] == true) true else decisions[key]
     AlertDialog(
         onDismissRequest = { onAnswer(null) },
+        // The default width leaves a permission row too little room.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.padding(horizontal = 16.dp),
         title = { Text("Install ${review.appName}?") },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                if (review.toReview.isNotEmpty()) {
-                    Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
-                    review.toReview.byKind(defined).forEach { key ->
-                        PermissionRow(key, defined) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                // The dialog is surfaceContainerHigh, a group's usual colour.
+                val cardColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                @Composable
+                fun Group(title: String?, keys: List<String>, automatic: Boolean, subtitle: String? = null) {
+                    CardGroup(
+                        title,
+                        keys,
+                        subtitle = subtitle,
+                        containerColor = cardColor,
+                        dividerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) { key ->
+                        PermissionRow(
+                            key,
+                            defined,
+                            reason = review.reasonFor(key),
+                            required = automatic && review.isRequired(key),
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        ) {
                             val decision = decisionOf(key)
-                            DecisionChoice(decision, enabled = decision == decisions[key]) { decisions[key] = it }
+                            DecisionChoice(decision, enabled = decision == decisions[key], automatic = automatic) { decisions[key] = it }
                         }
                     }
-                    // At the end of the list, so it's only reached after scrolling past every permission.
-                    TextButton(
-                        onClick = { review.toReview.forEach { decisions[it] = true } },
-                        modifier = Modifier.align(Alignment.End),
-                    ) { Text("Allow all") }
                 }
+                // At the end of what it allows, so it's only reached after scrolling past every permission.
+                @Composable
+                fun AllowAll(label: String, keys: List<String>) {
+                    TextButton(
+                        onClick = { keys.forEach { decisions[it] = true } },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text(label) }
+                }
+                val toReview = review.toReview.byKind(defined)
+                if (review.describesRequired) {
+                    val (required, optional) = toReview.partition(review::isRequired)
+                    if (required.isNotEmpty()) {
+                        Group("Required", required, automatic = false)
+                        if (optional.isNotEmpty()) AllowAll("Allow all required", required)
+                    }
+                    if (optional.isNotEmpty()) {
+                        Group("Optional", optional, automatic = false, subtitle = "Decide now, or when ${review.appName} first uses them.")
+                    }
+                } else if (toReview.isNotEmpty()) {
+                    Group("It wants to", toReview, automatic = false)
+                }
+                if (toReview.isNotEmpty()) AllowAll("Allow all", toReview)
                 if (review.automatic.isNotEmpty()) {
                     var expanded by remember(review) { mutableStateOf(false) }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { expanded = !expanded },
-                    ) {
-                        Text(
-                            "Allowed automatically (${review.automatic.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Icon(
-                            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                            contentDescription = if (expanded) "Collapse" else "Expand",
-                        )
-                    }
-                    if (expanded) {
-                        Text(
-                            automaticExplanation(review.appName, policy),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        review.automatic.byKind(defined).forEach { key ->
-                            PermissionRow(key, defined) {
-                                DecisionChoice(decisions[key], enabled = true) { decisions[key] = it }
-                            }
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(start = 4.dp),
+                        ) {
+                            Text(
+                                "Allowed automatically (${review.automatic.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                contentDescription = if (expanded) "Collapse" else "Expand",
+                            )
+                        }
+                        if (expanded) {
+                            Group(
+                                null,
+                                review.automatic.requiredFirst(defined, { it }, review::isRequired),
+                                automatic = true,
+                                subtitle = automaticExplanation(review.appName, policy),
+                            )
                         }
                     }
                 }
@@ -161,10 +211,10 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
         confirmButton = {
             TextButton(
                 onClick = {
-                    val automatic = review.automatic.mapNotNull { key -> decisions[key]?.let { key to it } }
-                    onAnswer(review.toReview.associateWith { decisionOf(it)!! } + automatic)
+                    // Optional ones left undecided are asked about when the app uses them.
+                    onAnswer((review.toReview + review.automatic).mapNotNull { key -> decisionOf(key)?.let { key to it } }.toMap())
                 },
-                enabled = review.toReview.all { decisionOf(it) != null },
+                enabled = review.toReview.filter(review::needsAnswer).all { decisionOf(it) != null },
             ) { Text("Install") }
         },
         dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text("Cancel") } },
@@ -178,39 +228,134 @@ private fun automaticExplanation(appName: String, policy: PermissionPolicy) = wh
         "You don't need to do anything here. $appName can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use."
 }
 
+/** The label shares its line with the control; the reason and [status] get the width below it. */
 @Composable
 internal fun PermissionRow(
     key: String,
     defined: Map<String, PluginDefinedPermission>,
     status: String? = null,
     label: String = permissionLabel(key, defined),
+    reason: String? = null,
+    required: Boolean = false,
+    modifier: Modifier = Modifier,
     control: @Composable () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
-        Icon(
-            permissionIcon(key, defined),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            status?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                permissionIcon(key, defined),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (required) RequiredTag()
+                when (permissionKind(key, defined)) {
+                    PermissionKind.Exfiltrating ->
+                        KindInfo(Icons.Outlined.Info, "Sends data off your phone", exfiltratingExplanation(key))
+                    PermissionKind.Dangerous ->
+                        KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
+                    else -> {}
+                }
+            }
+            control()
+        }
+        if (reason != null || status != null) {
+            // Lined up with the label, past the icon.
+            Column(modifier = Modifier.padding(start = 32.dp)) {
+                reason?.let { ReasonText(label, it) }
+                status?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.History,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(end = 4.dp).size(12.dp),
+                        )
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
             }
         }
-        when (permissionKind(key, defined)) {
-            PermissionKind.Exfiltrating ->
-                KindInfo(Icons.Outlined.Info, "Sends data off your phone", exfiltratingExplanation(key))
-            PermissionKind.Dangerous ->
-                KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
-            else -> {}
-        }
-        control()
     }
+}
+
+@Composable
+private fun RequiredTag() {
+    Text(
+        "Required",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 6.dp)
+            .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    )
+}
+
+/** A developer's reason can be any length: two lines here, tapped for the rest. */
+@Composable
+internal fun ReasonText(title: String, reason: String) {
+    var truncated by remember(reason) { mutableStateOf(false) }
+    var showing by remember(reason) { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = if (truncated) Modifier.clickable { showing = true } else Modifier,
+    ) {
+        Text(
+            reason,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { truncated = it.hasVisualOverflow },
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (truncated) ReasonIcon(title, Modifier.padding(start = 4.dp).size(16.dp))
+    }
+    if (showing) ReasonDialog(title, reason) { showing = false }
+}
+
+/** Shows [reason] in full when tapped. */
+@Composable
+internal fun ReasonInfoButton(title: String, reason: String, modifier: Modifier = Modifier) {
+    var showing by remember(reason) { mutableStateOf(false) }
+    ReasonIcon(title, modifier.clickable { showing = true })
+    if (showing) ReasonDialog(title, reason) { showing = false }
+}
+
+/** "?", so it isn't confused with the kind's info icon. */
+@Composable
+private fun ReasonIcon(title: String, modifier: Modifier) {
+    Icon(
+        Icons.AutoMirrored.Outlined.HelpOutline,
+        contentDescription = "Why $title",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun ReasonDialog(title: String, reason: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(reason, modifier = Modifier.verticalScroll(rememberScrollState())) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
 }
 
 @Composable
@@ -220,7 +365,7 @@ private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
         icon,
         contentDescription = title,
         tint = MaterialTheme.colorScheme.error,
-        modifier = Modifier.padding(end = 8.dp).size(18.dp).clickable { explaining = true },
+        modifier = Modifier.padding(start = 6.dp).size(18.dp).clickable { explaining = true },
     )
     if (explaining) {
         AlertDialog(
@@ -241,6 +386,13 @@ internal fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>
 }
 
 internal fun List<String>.byKind(defined: Map<String, PluginDefinedPermission>) = sortedBy { kindRank(it, defined) }
+
+/** Required ones first: the user can't usefully skip them. */
+internal fun <T> List<T>.requiredFirst(
+    defined: Map<String, PluginDefinedPermission>,
+    key: (T) -> String,
+    required: (T) -> Boolean,
+) = sortedWith(compareByDescending<T> { required(it) }.thenBy { kindRank(key(it), defined) })
 
 private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
     PluginPermissions.GLOBAL_INTERNET ->
@@ -328,12 +480,18 @@ fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
             val appName by remember(appUuid) {
                 libPebble.getLockerApp(appUuid).map { it?.properties?.title }
             }.collectAsState(null)
+            val reason by remember(appUuid, keys) {
+                libPebble.appPermissionStatuses(appUuid).map { statuses ->
+                    keys.singleOrNull()?.let { key -> statuses?.firstOrNull { it.permission == key }?.reason }
+                }
+            }.collectAsState(null)
             Card(onClick = { onReview(appUuid) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp)) {
                     Text(
                         "${appName ?: "An app"} wants to ${requestSummary(keys, defined)}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    reason?.let { ReasonText(appName ?: "Why", it) }
                     Row(modifier = Modifier.align(Alignment.End)) {
                         if (keys.size == 1) {
                             fun answer(granted: Boolean) = scope.launch {
@@ -374,7 +532,8 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val legacy by remember(appUuid) {
         libPebble.getLockerApp(appUuid).map { it?.properties?.legacy == true }
     }.collectAsState(false)
-    var expanded by remember(appUuid) { mutableStateOf(false) }
+    // Null until the user toggles it: open, except for a legacy app's.
+    var expandedByUser by remember(appUuid) { mutableStateOf<Boolean?>(null) }
     val statuses = (loaded ?: return).statuses
     if (statuses.isNullOrEmpty()) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -390,24 +549,11 @@ fun AppPermissionsSection(appUuid: Uuid) {
     }
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        // A legacy app's are collapsed, and never hidden while a request waits for an answer.
+        val open = (legacy && statuses.any { it.status == PermissionStatus.Waiting }) || (expandedByUser ?: !legacy)
+        SectionHeader(if (legacy) "Permissions (Legacy App)" else "Permissions", open) { expandedByUser = !open }
+        if (!open) return@Column
         if (legacy) {
-            // Never hide a request still waiting for an answer.
-            val open = expanded || statuses.any { it.status == PermissionStatus.Waiting }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !open },
-            ) {
-                Text(
-                    "Permissions (Legacy App)",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).padding(bottom = 4.dp),
-                )
-                Icon(
-                    if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (open) "Collapse" else "Expand",
-                )
-            }
-            if (!open) return@Column
             Text(
                 "Apps built before permissions existed can use these by default. To be asked first, turn on " +
                     "\"Ask before older apps use permissions\" in Settings.",
@@ -415,13 +561,14 @@ fun AppPermissionsSection(appUuid: Uuid) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 4.dp),
             )
-        } else {
-            Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
         }
-        statuses.sortedBy { kindRank(it.permission, defined) }.forEach { row ->
+        @Composable
+        fun StatusRow(row: AppPermissionStatus, inGroups: Boolean) {
             val lastUsedAtMs = row.lastUsedAtMs
             val used = if (lastUsedAtMs == null) "Not used yet" else "Used ${relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs))}"
-            val note = if (row.status == PermissionStatus.AllowedAutomatically) "Allowed automatically · $used" else used
+            val automatic = row.status == PermissionStatus.AllowedAutomatically
+            // Grouped, "Allowed automatically" is the group's title.
+            val note = if (automatic && !inGroups) "Allowed automatically · $used" else used
             val decide = { granted: Boolean ->
                 val decisions = buildMap {
                     put(row.permission, granted)
@@ -437,7 +584,14 @@ fun AppPermissionsSection(appUuid: Uuid) {
                 statuses.any { it.permission == PluginPermissions.WRITE_FILES && it.status == PermissionStatus.Granted }
             // A picked entry follows its bare permission: off while that is denied, back when it's allowed again.
             val bareDenied = fileScopeOf(row.permission) != null && statuses.deniesBareFilePermission(permissionOf(row.permission))
-            PermissionRow(row.permission, defined, note) {
+            PermissionRow(
+                row.permission,
+                defined,
+                note,
+                reason = row.reason,
+                required = automatic && inGroups && row.required == true,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) {
                 when {
                     impliedByWrite -> DecisionChoice(true, enabled = false) {}
                     bareDenied -> DecisionChoice(false, enabled = false) {}
@@ -447,11 +601,48 @@ fun AppPermissionsSection(appUuid: Uuid) {
                             PermissionStatus.Denied -> false
                             else -> null
                         },
+                        automatic = automatic,
                         onDecide = decide,
                     )
                 }
             }
         }
+        // Grouped only once the app says which are required.
+        if (statuses.any { it.required != null }) {
+            val (automatic, asked) = statuses.partition { it.status == PermissionStatus.AllowedAutomatically }
+            val (required, optional) = asked.partition { it.required == true }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (required.isNotEmpty()) {
+                    CardGroup("Required", required.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
+                }
+                if (optional.isNotEmpty()) {
+                    CardGroup("Optional", optional.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = true) }
+                }
+                if (automatic.isNotEmpty()) {
+                    CardGroup(
+                        "Allowed automatically",
+                        automatic.requiredFirst(defined, { it.permission }, { it.required == true }),
+                    ) { StatusRow(it, inGroups = true) }
+                }
+            }
+        } else {
+            CardGroup(null, statuses.sortedBy { kindRank(it.permission, defined) }) { StatusRow(it, inGroups = false) }
+        }
+    }
+}
+
+/** A section's title, which collapses and expands it. */
+@Composable
+private fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(bottom = 4.dp))
+        Icon(
+            if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (open) "Collapse" else "Expand",
+        )
     }
 }
 
@@ -466,21 +657,31 @@ private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Bo
         any { it.permission == PluginPermissions.WRITE_FILES && it.status == PermissionStatus.Denied }
 }
 
-/** Nothing is selected while [granted] is null. */
+/** Nothing is selected while [granted] is null, except that an [automatic] grant shows Allow faded. */
 @Composable
-private fun DecisionChoice(granted: Boolean?, enabled: Boolean = true, onDecide: (Boolean) -> Unit) {
+private fun DecisionChoice(granted: Boolean?, enabled: Boolean = true, automatic: Boolean = false, onDecide: (Boolean) -> Unit) {
     val options = listOf(Triple(false, Icons.Filled.Close, "Deny"), Triple(true, Icons.Filled.Check, "Allow"))
-    SingleChoiceSegmentedButtonRow {
-        options.forEachIndexed { index, (value, icon, label) ->
-            SegmentedButton(
-                selected = granted == value,
-                onClick = { onDecide(value) },
-                shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                enabled = enabled,
-                icon = {},
-                modifier = Modifier.width(48.dp),
-            ) {
-                Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+    val implied = granted == null && automatic
+    val impliedColors = SegmentedButtonDefaults.colors(
+        activeContainerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+        activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
+    )
+    // Short, so the reason below sits close to the label: without the 48dp touch target's padding.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        SingleChoiceSegmentedButtonRow {
+            options.forEachIndexed { index, (value, icon, label) ->
+                val impliedAllow = implied && value
+                SegmentedButton(
+                    selected = granted == value || impliedAllow,
+                    onClick = { onDecide(value) },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    enabled = enabled,
+                    colors = if (impliedAllow) impliedColors else SegmentedButtonDefaults.colors(),
+                    icon = {},
+                    modifier = Modifier.width(40.dp).height(32.dp),
+                ) {
+                    Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+                }
             }
         }
     }
@@ -493,8 +694,10 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
     val defined = rememberPluginPermissions()
     val keys = requested.all
     if (keys.isEmpty()) return
+    var open by remember(requested) { mutableStateOf(true) }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+        SectionHeader("Permissions", open) { open = !open }
+        if (!open) return@Column
         if (requested.declared == null) {
             val access = keys.map(::legacyAccessName).distinct().joinToString()
             val text = if (config.watchConfig.askLegacyAppsForPermissions) {
@@ -504,7 +707,25 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
             }
             Text(text, style = MaterialTheme.typography.bodyMedium)
         } else {
-            keys.byKind(defined).forEach { PermissionRow(it, defined) {} }
+            val declared = requested.declared.orEmpty()
+            val sorted = keys.byKind(defined)
+            // Reasons are behind an info button here: this is an overview, not where the user decides.
+            @Composable
+            fun ListingRow(key: String) {
+                val label = permissionLabel(key, defined)
+                PermissionRow(key, defined, label = label, modifier = Modifier.padding(horizontal = 12.dp)) {
+                    declared.declarationOf(key)?.reason?.let { ReasonInfoButton(label, it, Modifier.padding(start = 8.dp).size(20.dp)) }
+                }
+            }
+            if (declared.describesRequired()) {
+                val (required, optional) = sorted.partition(declared::isRequired)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (required.isNotEmpty()) CardGroup("Required", required) { ListingRow(it) }
+                    if (optional.isNotEmpty()) CardGroup("Optional", optional) { ListingRow(it) }
+                }
+            } else {
+                CardGroup(null, sorted) { ListingRow(it) }
+            }
         }
     }
 }
@@ -517,9 +738,20 @@ private fun legacyAccessName(key: String) = when (permissionOf(key)) {
     else -> "phone apps"
 }
 
+/** A dot for anything waiting for an answer; "!" if something the app needs is among it. */
 @Composable
 fun PermissionRequestBadge(appUuid: Uuid, modifier: Modifier = Modifier) {
     val libPebble = rememberLibPebble()
     val pending by libPebble.appsWithPendingPermissionRequests.collectAsState()
-    if (appUuid in pending) Badge(modifier = modifier)
+    if (appUuid !in pending) return
+    val requiredWaiting by remember(appUuid) {
+        libPebble.appPermissionStatuses(appUuid).map { statuses ->
+            statuses.orEmpty().any { it.required == true && it.status == PermissionStatus.Waiting }
+        }
+    }.collectAsState(false)
+    if (requiredWaiting) {
+        Badge(modifier = modifier) { Text("!") }
+    } else {
+        Badge(modifier = modifier)
+    }
 }

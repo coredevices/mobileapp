@@ -48,6 +48,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -481,6 +482,20 @@ internal class FakePermissionDao : LockerAppPermissionDao {
         }
     }
 
+    override suspend fun markAsked(appUuid: Uuid, permissions: List<String>, atMs: Long) {
+        permissions.forEach { permission ->
+            rows.value[appUuid to permission]?.takeIf { it.askedAtMs == null }?.let { insertOrReplace(it.copy(askedAtMs = atMs)) }
+        }
+    }
+
+    override suspend fun clearDeclarations(appUuid: Uuid) {
+        rows.value = rows.value.mapValues { (key, row) -> if (key.first == appUuid) row.copy(reason = null, required = null) else row }
+    }
+
+    override suspend fun setDeclaration(appUuid: Uuid, permission: String, reason: String?, required: Boolean?) {
+        rows.value[appUuid to permission]?.let { insertOrReplace(it.copy(reason = reason, required = required)) }
+    }
+
     override suspend fun deleteByAppUuid(appUuid: Uuid) {
         rows.value = rows.value.filterKeys { it.first != appUuid }
     }
@@ -701,6 +716,97 @@ class WaitingRequestsTest {
             assertEquals(listOf(INTERNET), permissions.activePermissionRequests().first().map { it.permission })
         }
         assertEquals(emptyList(), permissions.activePermissionRequests().first())
+    }
+
+    @Test
+    fun anOptionalPermissionIsOnlyAskedAboutOnceTheAppUsesIt() = runTest {
+        val permissions = permissions(
+            dao,
+            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            running = running,
+        )
+        permissions.recordRequested(
+            APP,
+            RequestedPermissions(
+                declared = listOf(PluginPermission(LOCATION, required = true), PluginPermission(TIMELINE, required = false)),
+                hasPkjs = true,
+            ),
+        )
+        running.whileRunning(APP) {
+            assertEquals(listOf(LOCATION), permissions.activePermissionRequests().first().map { it.permission })
+        }
+        // Both wait for an answer on the app's page all along.
+        assertEquals(setOf(LOCATION, TIMELINE), permissions.pendingPermissionRequests().first().map { it.permission }.toSet())
+        permissions.request(subject(), TIMELINE)
+        assertNotNull(dao.row(TIMELINE)!!.askedAtMs)
+        // A fresh instance: the first one's waiting list is shared, with its last value replayed.
+        val after = permissions(
+            dao,
+            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            running = running,
+        )
+        running.whileRunning(APP) {
+            assertEquals(setOf(LOCATION, TIMELINE), after.activePermissionRequests().first().map { it.permission }.toSet())
+        }
+    }
+
+    @Test
+    fun withoutSayingWhichAreRequiredEveryDeclaredPermissionIsAskedAbout() = runTest {
+        val permissions = permissions(
+            dao,
+            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            running = running,
+        )
+        permissions.recordRequested(
+            APP,
+            RequestedPermissions(declared = listOf(PluginPermission(LOCATION), PluginPermission(TIMELINE)), hasPkjs = true),
+        )
+        running.whileRunning(APP) {
+            assertEquals(setOf(LOCATION, TIMELINE), permissions.activePermissionRequests().first().map { it.permission }.toSet())
+        }
+    }
+
+    @Test
+    fun theInstalledVersionsDeclarationsAreRecordedAndReplacedByAnUpdate() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(
+            APP,
+            RequestedPermissions(
+                declared = listOf(PluginPermission(LOCATION, reason = "Weather", required = true), PluginPermission(TIMELINE)),
+                hasPkjs = true,
+            ),
+        )
+        assertEquals("Weather", dao.row(LOCATION)!!.reason)
+        assertEquals(true, dao.row(LOCATION)!!.required)
+        assertEquals(false, dao.row(TIMELINE)!!.required)
+        // An update that no longer says which are required, or why.
+        permissions.recordRequested(
+            APP,
+            RequestedPermissions(declared = listOf(PluginPermission(LOCATION), PluginPermission(TIMELINE)), hasPkjs = true),
+        )
+        assertNull(dao.row(LOCATION)!!.reason)
+        assertNull(dao.row(LOCATION)!!.required)
+    }
+
+    @Test
+    fun aDecisionKeepsTheDeclarationAndAPickedFileTakesItsPermissions() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(
+            APP,
+            RequestedPermissions(declared = listOf(PluginPermission(READ_FILES, reason = "Reads your notes", required = false)), hasPkjs = true),
+        )
+        permissions.setDecisions(APP, mapOf(READ_FILES to true, readFilesKey("notes") to true))
+        assertEquals("Reads your notes", dao.row(READ_FILES)!!.reason)
+        assertEquals("Reads your notes", dao.row(readFilesKey("notes"))!!.reason)
+        assertEquals(false, dao.row(readFilesKey("notes"))!!.required)
+    }
+
+    @Test
+    fun aDecisionKeepsWhenThePermissionWasAsked() = runTest {
+        val permissions = permissions(dao, clock = FixedClock(5_000))
+        permissions.recordRequested(APP, listOf(CALENDAR))
+        permissions.setDecisions(APP, mapOf(CALENDAR to null))
+        assertEquals(5_000, dao.row(CALENDAR)!!.askedAtMs)
     }
 
     @Test

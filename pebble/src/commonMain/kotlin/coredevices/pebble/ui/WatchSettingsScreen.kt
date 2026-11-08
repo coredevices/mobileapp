@@ -101,6 +101,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
@@ -335,23 +336,46 @@ private fun LazyListScope.settingsItems(items: List<SettingsItem>) {
             return@forEach
         }
         item(key = "group:${group.name}") {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(
-                    group.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-                )
-                val cardColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardColor)) {
-                    // The items' ListItems paint `surface`, which would hide the card's colour.
-                    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(surface = cardColor)) {
-                        Column {
-                            run.forEachIndexed { index, item ->
-                                if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.background)
-                                item.Item()
-                            }
-                        }
+            CardGroup(group.title, run, Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { it.Item() }
+        }
+    }
+}
+
+/** [items] in a rounded card under [title], as the settings screen groups its items. */
+@Composable
+internal fun <T> CardGroup(
+    title: String?,
+    items: List<T>,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    dividerColor: Color = MaterialTheme.colorScheme.background,
+    item: @Composable (T) -> Unit,
+) {
+    Column(modifier = modifier) {
+        title?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = if (subtitle == null) 6.dp else 0.dp),
+            )
+        }
+        subtitle?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            )
+        }
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = containerColor)) {
+            // The items' ListItems paint `surface`, which would hide the card's colour.
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(surface = containerColor)) {
+                Column {
+                    items.forEachIndexed { index, value ->
+                        if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = dividerColor)
+                        item(value)
                     }
                 }
             }

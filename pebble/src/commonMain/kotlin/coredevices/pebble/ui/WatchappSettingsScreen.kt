@@ -321,14 +321,14 @@ fun WatchappSettingsScreen(
         var showPermissions by remember { mutableStateOf(false) }
         val snackbarHostState = remember { SnackbarHostState() }
         val definedPermissions by rememberUpdatedState(rememberPluginPermissions())
-        // Only what the app asks for while the page is open; anything already waiting has the badge.
-        // From the statuses, which don't wait for a plugin's config session to start running.
+        // Only what the app asks for while the page is open, as a notification would; anything already
+        // waiting has the badge. From the statuses, which don't wait for a plugin's config session to start running.
         LaunchedEffect(webViewUuid) {
             val appUuid = webViewUuid ?: return@LaunchedEffect
             var known: Set<String>? = null
             libPebble.appPermissionStatuses(appUuid)
                 .filterNotNull()
-                .map { all -> all.filter { it.status == PermissionStatus.Waiting }.map { it.permission } }
+                .map { all -> all.filter { it.status == PermissionStatus.Waiting && it.askedAtMs != null }.map { it.permission } }
                 .collect { keys ->
                     val new = known?.let { keys - it }.orEmpty()
                     known = keys.toSet()

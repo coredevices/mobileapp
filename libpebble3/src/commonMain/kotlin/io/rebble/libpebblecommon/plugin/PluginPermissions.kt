@@ -23,7 +23,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *   "LocalNetwork",
  *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } },
  *   { "name": "Notifications", "parameters": { "packages": ["com.google.android.apps.maps"] } },
- *   { "name": "HomeControl", "plugin": "<plugin uuid>" }
+ *   { "name": "HomeControl", "plugin": "<plugin uuid>" },
+ *   { "name": "Location", "reason": "Shows the weather where you are", "required": true }
  * ]
  * ```
  */
@@ -33,6 +34,10 @@ data class PluginPermission(
     val parameters: Map<String, List<String>> = emptyMap(),
     /** Set for a permission another plugin defines. */
     val plugin: String? = null,
+    /** Why the app wants it, shown to the user wherever it's asked about. */
+    val reason: String? = null,
+    /** The app can't do its job without it, so installing waits for an answer. Null: not said. */
+    val required: Boolean? = null,
 )
 
 @Serializable
@@ -40,6 +45,8 @@ private data class PermissionObject(
     val name: String,
     val parameters: Map<String, List<String>> = emptyMap(),
     val plugin: String? = null,
+    val reason: String? = null,
+    val required: Boolean? = null,
 )
 
 internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
@@ -50,12 +57,12 @@ internal object PluginPermissionSerializer : KSerializer<PluginPermission> {
         val element = input.decodeJsonElement()
         if (element is JsonPrimitive) return PluginPermission(element.content)
         val parsed = input.json.decodeFromJsonElement(PermissionObject.serializer(), element)
-        return PluginPermission(parsed.name, parsed.parameters, parsed.plugin)
+        return PluginPermission(parsed.name, parsed.parameters, parsed.plugin, parsed.reason?.takeIf { it.isNotBlank() }, parsed.required)
     }
 
     override fun serialize(encoder: Encoder, value: PluginPermission) {
         PermissionObject.serializer()
-            .serialize(encoder, PermissionObject(value.name, value.parameters, value.plugin))
+            .serialize(encoder, PermissionObject(value.name, value.parameters, value.plugin, value.reason, value.required))
     }
 }
 

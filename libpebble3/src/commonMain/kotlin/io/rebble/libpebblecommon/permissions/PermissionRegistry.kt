@@ -112,6 +112,16 @@ fun PluginPermission.keys(): List<String> {
     return domains.map { it.lowercase().removePrefix(".").trimEnd('.') }.filter(::isHostname).map(::internetKey)
 }
 
+/** The developer said which permissions the app needs; otherwise none are treated as required. */
+fun List<PluginPermission>.describesRequired(): Boolean = any { it.required != null }
+
+/** Only once the developer has said which are required (see [describesRequired]). */
+fun List<PluginPermission>.isRequired(key: String): Boolean = describesRequired() && declarationOf(key)?.required == true
+
+/** The declaration [key] was granted under: its own entry, else a bare permission's (a file scope's `ReadFiles`). */
+fun List<PluginPermission>.declarationOf(key: String): PluginPermission? =
+    firstOrNull { key in it.keys() } ?: firstOrNull { it.plugin == null && it.name == permissionOf(key) }
+
 private val HOSTNAME = Regex("[a-z0-9-]+(\\.[a-z0-9-]+)*")
 
 /** Domains end up in CSPs and content-blocker patterns, so nothing but a plain hostname. */

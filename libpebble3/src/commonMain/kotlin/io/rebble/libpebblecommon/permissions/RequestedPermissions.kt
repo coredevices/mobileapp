@@ -47,4 +47,16 @@ data class InstallReview(
     val toReview: List<String>,
     /** Declared, undecided, and granted by the policy without asking: shown so they can be denied. */
     val automatic: List<String> = emptyList(),
-)
+    /** Null for a legacy app. */
+    val declared: List<PluginPermission>? = null,
+) {
+    /** The developer said which permissions are required. */
+    val describesRequired: Boolean get() = declared?.describesRequired() == true
+
+    fun isRequired(key: String) = declared?.isRequired(key) == true
+
+    /** Installing waits for these: all of them, unless the developer said which are required. */
+    fun needsAnswer(key: String) = !describesRequired || isRequired(key)
+
+    fun reasonFor(key: String) = declared?.declarationOf(key)?.reason
+}
