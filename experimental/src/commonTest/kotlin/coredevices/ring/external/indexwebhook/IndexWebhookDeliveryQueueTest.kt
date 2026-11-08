@@ -15,6 +15,8 @@ import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.queue.TaskStatus
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -99,6 +101,25 @@ class IndexWebhookDeliveryQueueTest {
         val api = FakeWebhookApi(result = null)
         queue(api).processTask(delivery())
         assertEquals(1, api.calls.size)
+    }
+
+    @Test
+    fun reportsEachAttemptsOutcome() = runTest {
+        val failure = result(ok = false, retryable = true)
+        val queue = queue(FakeWebhookApi(failure))
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<RecoverableTaskException> { queue.processTask(delivery()) }
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", failure, willRetry = true), outcome.await())
+
+        val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
+        val finalOutcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<RecoverableTaskException> { queue.processTask(lastAttempt) }
+        assertEquals(false, finalOutcome.await().willRetry)
+
+        val off = queue(FakeWebhookApi(result = null))
+        val offOutcome = async(start = CoroutineStart.UNDISPATCHED) { off.outcomes.first() }
+        off.processTask(delivery())
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", result = null, willRetry = false), offOutcome.await())
     }
 
     @Test

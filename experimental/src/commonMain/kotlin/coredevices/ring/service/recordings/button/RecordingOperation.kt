@@ -97,7 +97,8 @@ abstract class TranscribedRecordingOperation(
         }
     }
 
-    override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
+    /** Creates this recording's feed entry, or reuses the one an earlier attempt created. */
+    protected suspend fun createRecordingEntry(handle: RecordingProcessingQueue.TaskHandle?): Long {
         val entryId = withContext(Dispatchers.IO) {
             if (handle?.stage is RecordingProcessingStage.RecordingEntryCreated) {
                 val id = (handle.stage as RecordingProcessingStage.RecordingEntryCreated).recordingEntryId
@@ -133,6 +134,11 @@ abstract class TranscribedRecordingOperation(
                 entryId
             )
         }
+        return entryId
+    }
+
+    override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
+        val entryId = createRecordingEntry(handle)
         val (source, meta) = recordingStorage.openRecordingSource(fileId)
         // Stage the upload for the sync queue on the long-lived background scope. The local
         // cache file is already fully written by the time we get here, so the rest of the

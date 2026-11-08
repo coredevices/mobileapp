@@ -49,16 +49,17 @@ class RecordingOperationFactory(
     ): RecordingOperation {
         val gesture = sequence?.let { RingGesture.forSequence(it) }
         val destination = gestureRouting.recordingDestinationFor(gesture)
+        // The phone's own hold-to-record has no gesture and borrows Hold & Talk's webhook, so the
+        // send is gated on Hold & Talk's route too — not the agent route resolved above.
+        val webhookGesture = gesture ?: RingGesture.Hold
         val inner = createForDestination(
             destination = destination,
             recordingId = recordingId,
             fileId = fileId,
             transferId = transferId,
+            webhookGesture = webhookGesture,
             forcedTool = forcedNoteTool
         )
-        // The phone's own hold-to-record has no gesture and borrows Hold & Talk's webhook, so the
-        // send is gated on Hold & Talk's route too — not the agent route resolved above.
-        val webhookGesture = gesture ?: RingGesture.Hold
         return maybeWrapWithWebhook(
             recordingId = recordingId,
             fileId = fileId,
@@ -168,6 +169,7 @@ class RecordingOperationFactory(
         recordingId: Long,
         transferId: Long?,
         fileId: String,
+        webhookGesture: RingGesture,
         forcedTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult)
     ): RecordingOperation {
         return when (destination) {
@@ -197,7 +199,7 @@ class RecordingOperationFactory(
             is GestureDestination.AgentPlugin -> {
                 val delivery = agentDelivery(destination)
                 if (delivery == null) {
-                    createForDestination(GestureDestination.IndexAgent, recordingId, transferId, fileId, forcedTool)
+                    createForDestination(GestureDestination.IndexAgent, recordingId, transferId, fileId, webhookGesture, forcedTool)
                 } else {
                     SendToAgentRecordingOperation(
                         delivery = delivery,
@@ -208,8 +210,16 @@ class RecordingOperationFactory(
                     )
                 }
             }
-            // maybeWrapWithWebhook layers the webhook send on top of this no-op.
-            GestureDestination.WebhookOnly, GestureDestination.Nothing -> NoAgentRecordingOperation
+            // maybeWrapWithWebhook layers the webhook send on top of this.
+            GestureDestination.WebhookOnly -> WebhookOnlyRecordingOperation(
+                deliveryQueue = indexWebhookQueue,
+                webhookConfigured = indexWebhookPreferences.configFor(webhookGesture).isActive,
+                recordingId = recordingId,
+                transferId = transferId,
+                fileId = fileId,
+                trace = trace,
+            )
+            GestureDestination.Nothing -> NoAgentRecordingOperation
         }
     }
 

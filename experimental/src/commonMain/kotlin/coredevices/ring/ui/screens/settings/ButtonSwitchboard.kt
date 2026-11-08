@@ -187,7 +187,7 @@ private val GestureDestination.optionSub: String?
         GestureDestination.IndexAgent -> "Takes actions for you in the cloud, on this phone when offline"
         GestureDestination.LocalAgent -> "Runs on this phone only. Experimental, supports fewer actions"
         GestureDestination.WebSearch -> "Answer lands in your feed"
-        GestureDestination.WebhookOnly -> "Raw recording to your endpoint, nothing else"
+        GestureDestination.WebhookOnly -> "Recording to your endpoint, kept in your feed"
         GestureDestination.Webhook -> "Click count and your payload to your endpoint"
         GestureDestination.AgentCommand -> "Sends a command, eg \"Unlock front door\""
         else -> null
