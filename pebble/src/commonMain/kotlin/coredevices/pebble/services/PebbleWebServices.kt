@@ -268,7 +268,7 @@ interface PebbleWebServices {
     suspend fun fetchUsersMeCore(): CoreUsersMe?
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
-    /** The homes fetched so far, in source order, emitted again as each source answers. */
+    /** The homes fetched so far, in source order. Each source is held back until every source before it has answered. */
     fun appStoreHomes(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): Flow<List<AppStoreHomeResult>>
     suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> =
         appStoreHomes(type, hardwarePlatform, enabledOnly, useCache).lastOrNull().orEmpty()
@@ -413,14 +413,20 @@ class RealPebbleWebServices(
         channelFlow {
             val sources = getAllSources(enabledOnly)
             val results = arrayOfNulls<AppStoreHomeResult>(sources.size)
+            val answered = BooleanArray(sources.size)
+            var shown = 0
             val lock = Mutex()
             sources.forEachIndexed { i, source ->
                 launch {
                     val home = appstoreServiceForSource(source).fetchAppStoreHome(type, hardwarePlatform, useCache)
-                        ?: return@launch
                     lock.withLock {
-                        results[i] = AppStoreHomeResult(source, home)
-                        send(results.filterNotNull())
+                        results[i] = home?.let { AppStoreHomeResult(source, it) }
+                        answered[i] = true
+                        val ready = answered.indexOfFirst { !it }.takeIf { it >= 0 } ?: sources.size
+                        if (ready > shown) {
+                            shown = ready
+                            send(results.take(ready).filterNotNull())
+                        }
                     }
                 }
             }
