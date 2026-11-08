@@ -2,8 +2,10 @@ package io.rebble.libpebblecommon.plugin.files
 
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
 import com.russhwolf.settings.Settings
@@ -12,6 +14,7 @@ import io.rebble.libpebblecommon.plugin.PluginErrors
 import io.rebble.libpebblecommon.plugin.PluginNativeException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 internal actual fun platformPluginFileSystem(appContext: AppContext, settings: Settings): PluginFileSystem =
     AndroidPluginFileSystem(appContext.context)
@@ -20,11 +23,13 @@ internal actual fun platformPluginFileSystem(appContext: AppContext, settings: S
 internal class AndroidPluginFileSystem(context: Context) : PluginFileSystem {
     private val context = context.applicationContext
     private val resolver get() = context.contentResolver
+    private val uris = ConcurrentHashMap<String, Uri>()
 
     /** The persistable permission was taken when the entry was picked; the uri is the scope. */
     override suspend fun retain(scope: String, handle: String) = Unit
 
     override suspend fun release(scope: String) = withContext(Dispatchers.IO) {
+        forget(scope)
         runCatching {
             resolver.releasePersistableUriPermission(
                 Uri.parse(scope),
@@ -41,13 +46,14 @@ internal class AndroidPluginFileSystem(context: Context) : PluginFileSystem {
     }
 
     override suspend fun stat(scope: String, path: List<String>): FileEntryInfo? = withContext(Dispatchers.IO) {
-        resolve(scope, path)?.takeIf { it.exists() }?.info()
+        resolveUri(scope, path)?.let { query(it) }
     }
 
     override suspend fun list(scope: String, path: List<String>): List<FileEntryInfo> = withContext(Dispatchers.IO) {
-        val dir = require(scope, path)
-        if (!dir.isDirectory) throw typeMismatch("'${dir.name}' is not a directory")
-        dir.listFiles().map { it.info() }
+        val uri = resolveUri(scope, path) ?: throw notFound(path)
+        val dir = query(uri) ?: throw notFound(path)
+        if (dir.kind != FileEntryKind.Directory) throw typeMismatch("'${dir.name}' is not a directory")
+        children(scope, path, uri)
     }
 
     override suspend fun read(scope: String, path: List<String>): ByteArray = withContext(Dispatchers.IO) {
@@ -90,6 +96,7 @@ internal class AndroidPluginFileSystem(context: Context) : PluginFileSystem {
         if (entry.isDirectory && !recursive && entry.listFiles().isNotEmpty()) {
             throw PluginNativeException(PluginFileErrors.INVALID_MODIFICATION, "'${entry.name}' is not empty")
         }
+        forget(scope)
         if (!entry.delete()) throw io("couldn't delete '${entry.name}'")
     }
 
@@ -103,22 +110,67 @@ internal class AndroidPluginFileSystem(context: Context) : PluginFileSystem {
     }
 
     private fun resolve(scope: String, path: List<String>): DocumentFile? {
-        val root = root(scope) ?: return null
-        if (path.isEmpty()) return root
-        if (!root.isDirectory) throw typeMismatch("'${root.name}' is a file, not a directory")
-        return path.fold<String, DocumentFile?>(root) { dir, segment -> dir?.findFile(segment) }
+        if (path.isEmpty()) return root(scope)
+        return resolveUri(scope, path)?.let { DocumentFile.fromTreeUri(context, it) }
     }
+
+    private fun resolveUri(scope: String, path: List<String>): Uri? {
+        val root = root(scope) ?: return null
+        if (path.isEmpty()) return root.uri
+        if (!root.isDirectory) throw typeMismatch("'${root.name}' is a file, not a directory")
+        var uri = root.uri
+        for (i in path.indices) {
+            val key = key(scope, path.subList(0, i + 1))
+            val cached = uris[key]
+            uri = if (cached != null && query(cached)?.name == path[i]) {
+                cached
+            } else {
+                children(scope, path.subList(0, i), uri)
+                uris[key] ?: return null
+            }
+        }
+        return uri
+    }
+
+    private fun children(scope: String, path: List<String>, dir: Uri): List<FileEntryInfo> {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(dir, DocumentsContract.getDocumentId(dir))
+        val prefix = key(scope, path)
+        uris.keys.removeAll { it.startsWith("$prefix/") && '/' !in it.substring(prefix.length + 1) }
+        return resolver.query(childrenUri, COLUMNS, null, null, null)?.use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val info = cursor.info()
+                    uris["$prefix/${info.name}"] = DocumentsContract.buildDocumentUriUsingTree(dir, cursor.getString(0))
+                    add(info)
+                }
+            }
+        }.orEmpty()
+    }
+
+    private fun query(uri: Uri): FileEntryInfo? = runCatching {
+        resolver.query(uri, COLUMNS, null, null, null)?.use { if (it.moveToFirst()) it.info() else null }
+    }.getOrNull()
+
+    private fun forget(scope: String) {
+        uris.keys.removeAll { it.startsWith("$scope/") }
+    }
+
+    private fun key(scope: String, path: List<String>) = (listOf(scope) + path).joinToString("/")
 
     private fun require(scope: String, path: List<String>): DocumentFile =
         resolve(scope, path)?.takeIf { it.exists() } ?: throw notFound(path)
 
-    private fun DocumentFile.info() = FileEntryInfo(
-        name = name.orEmpty(),
-        kind = if (isDirectory) FileEntryKind.Directory else FileEntryKind.File,
-        size = length(),
-        lastModified = lastModified(),
-        type = if (isDirectory) null else type,
-    )
+    private fun Cursor.info(): FileEntryInfo {
+        val mime = getString(2)
+        val directory = mime == Document.MIME_TYPE_DIR
+        return FileEntryInfo(
+            name = getString(1).orEmpty(),
+            kind = if (directory) FileEntryKind.Directory else FileEntryKind.File,
+            size = if (isNull(3)) 0 else getLong(3),
+            lastModified = if (isNull(4)) 0 else getLong(4),
+            type = if (directory) null else mime,
+        )
+    }
 
     // SAF appends the extension it derives from the MIME type, so derive the type from the name.
     private fun mimeTypeFor(name: String): String =
@@ -127,4 +179,14 @@ internal class AndroidPluginFileSystem(context: Context) : PluginFileSystem {
             ?: "application/octet-stream"
 
     private fun io(message: String) = PluginNativeException(PluginErrors.UNKNOWN, message)
+
+    private companion object {
+        val COLUMNS = arrayOf(
+            Document.COLUMN_DOCUMENT_ID,
+            Document.COLUMN_DISPLAY_NAME,
+            Document.COLUMN_MIME_TYPE,
+            Document.COLUMN_SIZE,
+            Document.COLUMN_LAST_MODIFIED,
+        )
+    }
 }
