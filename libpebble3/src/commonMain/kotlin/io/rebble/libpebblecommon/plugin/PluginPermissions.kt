@@ -24,7 +24,7 @@ import kotlinx.serialization.json.JsonPrimitive
  *   { "name": "Internet", "parameters": { "domains": ["query1.finance.yahoo.com"] } },
  *   { "name": "Notifications", "parameters": { "packages": ["com.google.android.apps.maps"] } },
  *   { "name": "HomeControl", "plugin": "<plugin uuid>" },
- *   { "name": "Location", "reason": "Shows the weather where you are", "required": true }
+ *   { "name": "Location", "reason": "To show the weather where you are", "required": true }
  * ]
  * ```
  */

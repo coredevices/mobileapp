@@ -48,6 +48,27 @@ class PermissionDeclarationsTest {
     }
 
     @Test
+    fun eachDomainCanHaveItsOwnDeclaration() {
+        val prices = PluginPermission(
+            PluginPermissions.INTERNET,
+            mapOf(PluginPermissions.PARAM_DOMAINS to listOf("prices.example.com")),
+            reason = "To show share prices",
+            required = true,
+        )
+        val logos = PluginPermission(
+            PluginPermissions.INTERNET,
+            mapOf(PluginPermissions.PARAM_DOMAINS to listOf("logos.example.com")),
+            reason = "To show company logos",
+            required = false,
+        )
+        val declared = listOf(prices, logos)
+        assertEquals(prices, declared.declarationOf(internetKey("prices.example.com")))
+        assertEquals(logos, declared.declarationOf(internetKey("logos.example.com")))
+        assertTrue(declared.isRequired(internetKey("prices.example.com")))
+        assertFalse(declared.isRequired(internetKey("logos.example.com")))
+    }
+
+    @Test
     fun onlyRequiredPermissionsNeedAnAnswerBeforeInstalling() {
         val review = InstallReview(
             appUuid = REVIEWED_APP,
