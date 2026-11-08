@@ -661,6 +661,20 @@ class HumanDateTimeParserTest {
     }
 
     @Test
+    fun testAbsoluteDateTimeDayOfWeekThenMonthDayAtTime() {
+        val result = parser.parse("Wednesday, November 4, at 7 pm")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 11, 4, 19, 0), result.dateTime)
+    }
+
+    @Test
+    fun testAbsoluteDateTimeDayOfWeekThenOrdinalMonthDayAtTime() {
+        val result = parser.parse("Wednesday, September 2nd, at 11am")
+        assertIs<InterpretedDateTime.AbsoluteDateTime>(result)
+        assertEquals(LocalDateTime(2025, 9, 2, 11, 0), result.dateTime)
+    }
+
+    @Test
     fun testAbsoluteDateTimeTomorrowAtMidnight() {
         val result = parser.parse("tomorrow at midnight")
         assertIs<InterpretedDateTime.AbsoluteDateTime>(result)

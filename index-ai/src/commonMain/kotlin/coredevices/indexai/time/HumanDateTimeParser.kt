@@ -368,20 +368,6 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
-        dayOfWeekTimePattern.find(input)?.let { match ->
-            val date = parseNextDayOfWeek(match.groupValues[1]) ?: return null
-            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
-                ?: return null
-            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
-        }
-
-        timeDayOfWeekPattern.find(input)?.let { match ->
-            val date = parseNextDayOfWeek(match.groupValues[3]) ?: return null
-            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
-                ?: return null
-            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
-        }
-
         monthDayTimePattern.find(input)?.let { match ->
             val day = parseDayOfMonth(match.groupValues[2]) ?: return null
             val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
@@ -422,6 +408,20 @@ class HumanDateTimeParser(
             val day = match.groupValues[2].toIntOrNull() ?: return null
             val date = parseNumericDate(month, day) ?: return null
             val time = parseTimeString(match.groupValues[4], allowBareHour = match.groupValues[3].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        dayOfWeekTimePattern.find(input)?.let { match ->
+            val date = parseNextDayOfWeek(match.groupValues[1]) ?: return null
+            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        timeDayOfWeekPattern.find(input)?.let { match ->
+            val date = parseNextDayOfWeek(match.groupValues[3]) ?: return null
+            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
                 ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
