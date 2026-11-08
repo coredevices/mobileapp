@@ -323,6 +323,14 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                                     modifier = Modifier.padding(vertical = 5.dp),
                                 )
                             }
+                            Row {
+                                Text(
+                                    text = entry.developerName,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    lineHeight = 11.sp,
+                                )
+                            }
                             val hearts = if (viewModel.hearts != null) {
                                 viewModel.hearts
                             } else {

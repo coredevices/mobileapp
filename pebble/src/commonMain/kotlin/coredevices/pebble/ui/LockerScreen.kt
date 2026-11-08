@@ -1313,6 +1313,14 @@ fun NativeWatchfaceListItem(
                 )
             }
             Row {
+                Text(
+                    text = entry.developerName,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    lineHeight = 11.sp,
+                )
+            }
+            Row {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (highlightInLocker) {
                         val inMyCollection = entry.inMyCollection()
