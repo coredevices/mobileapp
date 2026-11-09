@@ -18,6 +18,14 @@ enum class RingGesture(val sequence: List<ButtonPress>, val kind: GestureKind) {
     companion object {
         fun forSequence(sequence: List<ButtonPress>): RingGesture? =
             entries.firstOrNull { it.sequence == sequence }
+
+        /** Presses in quick succession arrive as one sequence (e.g. "long short long"); the
+         *  recording is the hold that ended it. */
+        fun forRecordingSequence(sequence: List<ButtonPress>): RingGesture? = when {
+            sequence.takeLast(2) == ClickHold.sequence -> ClickHold
+            sequence.lastOrNull() == ButtonPress.Long -> Hold
+            else -> null
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package coredevices.ring.external.indexwebhook
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -381,10 +382,13 @@ private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
     val colors = IndexTheme.colors
     val color =
         if (run.ok) colors.onSurfaceVariant else colors.error
+    var expanded by remember(run) { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        modifier = Modifier.fillMaxWidth()
+            .clickable(enabled = !run.ok) { expanded = !expanded }
+            .padding(vertical = 7.dp),
     ) {
         Icon(
             if (run.ok) Icons.Default.CheckCircle else Icons.Default.Error,
@@ -404,7 +408,7 @@ private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
             run.detailLine(),
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = if (expanded) Int.MAX_VALUE else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )

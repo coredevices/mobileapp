@@ -47,7 +47,9 @@ class RecordingOperationFactory(
         forcedNoteTool: (suspend (messageText: String, sessionContext: SessionContext) -> ToolCallResult),
         sequence: List<ButtonPress>?
     ): RecordingOperation {
-        val gesture = sequence?.let { RingGesture.forSequence(it) }
+        // A ring recording's agent and webhook routes must come from the same gesture.
+        val gesture = sequence?.let { RingGesture.forRecordingSequence(it) }
+            ?: RingGesture.Hold.takeIf { transferId != null }
         val destination = gestureRouting.recordingDestinationFor(gesture)
         // The phone's own hold-to-record has no gesture and borrows Hold & Talk's webhook, so the
         // send is gated on Hold & Talk's route too — not the agent route resolved above.
@@ -147,7 +149,8 @@ class RecordingOperationFactory(
         } else {
             queueTaskRepository.getLatestButtonSequenceForTransfer(transfer.id)
                 ?.parseAsButtonSequence()
-                ?.let { RingGesture.forSequence(it) }
+                ?.let { RingGesture.forRecordingSequence(it) }
+                ?: RingGesture.Hold
         }
         val destination = if (transfer == null && queueTaskRepository.isGestureCommandRecording(recordingId)) {
             GestureDestination.IndexAgent
