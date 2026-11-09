@@ -24,6 +24,8 @@ import java.util.TimeZone
 import kotlin.time.Instant
 
 
+private const val GOOGLE_ACCOUNT_TYPE = "com.google"
+
 private val calendarUri: Uri = CalendarContract.Calendars.CONTENT_URI
 private val calendarProjection = arrayOf(
     CalendarContract.Calendars._ID,
@@ -496,13 +498,15 @@ class AndroidSystemCalendar(
     }
 
     /**
-     * The account's own primary calendar (ownerAccount == accountName). IS_PRIMARY is a computed
-     * column some providers reject in queries, so it isn't used.
+     * The account's own primary calendar (ownerAccount == accountName), preferring a Google one:
+     * Samsung's local "My calendar" also matches the ownership rule and has the lowest _ID.
+     * IS_PRIMARY is a computed column some providers reject in queries, so it isn't used.
      */
     override suspend fun defaultCalendarPlatformId(): String? {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.ACCOUNT_TYPE,
             CalendarContract.Calendars.OWNER_ACCOUNT,
         )
         return try {
@@ -513,17 +517,21 @@ class AndroidSystemCalendar(
                 arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
                 null
             )?.use { cursor ->
+                var firstOwned: String? = null
                 while (cursor.moveToNext()) {
                     val account = cursor.getNullableColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
                         ?.let { cursor.getString(it) }
                     val owner = cursor.getNullableColumnIndex(CalendarContract.Calendars.OWNER_ACCOUNT)
                         ?.let { cursor.getString(it) }
-                    if (account != null && account == owner) {
-                        return@use cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
-                            ?.let { cursor.getLong(it).toString() }
-                    }
+                    if (account == null || account != owner) continue
+                    val id = cursor.getNullableColumnIndex(CalendarContract.Calendars._ID)
+                        ?.let { cursor.getLong(it).toString() } ?: continue
+                    val type = cursor.getNullableColumnIndex(CalendarContract.Calendars.ACCOUNT_TYPE)
+                        ?.let { cursor.getString(it) }
+                    if (type == GOOGLE_ACCOUNT_TYPE) return@use id
+                    if (firstOwned == null) firstOwned = id
                 }
-                null
+                firstOwned
             }
         } catch (e: Exception) {
             logger.e(e) { "Error querying default calendar" }
