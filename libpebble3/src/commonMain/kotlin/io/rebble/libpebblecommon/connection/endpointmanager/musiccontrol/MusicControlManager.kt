@@ -123,7 +123,7 @@ class MusicControlManager(
         val title = request.title.get()
         val artist = request.artist.get()
         val art = try {
-            if (matchesCurrentTrack(title, artist)) {
+            if (systemMusicControl.albumArtByRequestedTrack || matchesCurrentTrack(title, artist)) {
                 systemMusicControl.getAlbumArt(
                     title = title,
                     artist = artist,
