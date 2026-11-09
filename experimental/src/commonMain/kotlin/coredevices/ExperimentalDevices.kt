@@ -8,6 +8,7 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.libindex.LibIndex
 import coredevices.ring.RingDelegate
 import coredevices.ring.agent.ShortcutActionHandler
+import coredevices.ring.agent.pebble_plugin.IndexServletPlugins
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.bugreport.IndexRebootLogEntry
 import coredevices.ring.bugreport.IndexRebootLogStore
@@ -73,10 +74,12 @@ class ExperimentalDevices(
     private val indexNotificationManager: IndexNotificationManager,
     private val libPebble: LibPebble,
     private val indexWebhookDeliveryQueue: IndexWebhookDeliveryQueue,
+    private val indexServletPlugins: IndexServletPlugins,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
         ringDelegate.appInit()
+        indexServletPlugins.start(scope)
         indexWebhookDeliveryQueue.resumePendingTasks()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->

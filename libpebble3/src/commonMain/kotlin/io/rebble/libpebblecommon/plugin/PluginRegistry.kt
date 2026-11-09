@@ -81,7 +81,8 @@ class PluginRegistry(
     }
 
     fun unregisterPlugin(pluginUuid: Uuid): Plugin? {
-        val plugin = registered.value[pluginUuid]
+        val plugin = registered.value[pluginUuid] ?: natives.value[pluginUuid]
+        natives.update { it - pluginUuid }
         registered.update { it - pluginUuid }
         return plugin
     }

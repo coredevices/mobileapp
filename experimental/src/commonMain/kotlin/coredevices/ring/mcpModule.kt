@@ -9,6 +9,8 @@ import coredevices.ring.agent.builtin_servlets.calendar.phoneCalendarConnected
 import coredevices.ring.agent.builtin_servlets.messaging.beeperUnavailableReason
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.notes.LocalNoteClient
+import coredevices.ring.agent.pebble_plugin.IndexServletPlugins
+import coredevices.ring.agent.pebble_plugin.indexServletPlugins
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.database.room.repository.PluginGrantRepository
@@ -16,6 +18,7 @@ import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.routesOnlyToLocalAgent
 import coredevices.ring.agent.integrations.NotionIntegration
 import coredevices.ring.agent.integrations.obsidian.ObsidianIntegration
+import coredevices.util.CoreConfigFlow
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Plugins
@@ -57,6 +60,13 @@ internal val mcpModule = module {
             disabledPlugins = get<PluginGrantRepository>()::disabledPlugins,
             persistPluginGrantEnabled = get<PluginGrantRepository>()::setPluginGrantEnabled,
             watchPaired = get<LibPebble>().watches.map { devices -> devices.any { it is KnownPebbleDevice } },
+        )
+    }
+    single {
+        IndexServletPlugins(
+            plugins = get(),
+            indexEnabled = get<CoreConfigFlow>().flow.map { it.enableIndex },
+            servletPlugins = get<BuiltinServletRepository>()::indexServletPlugins,
         )
     }
     factoryOf(::CreateNoteTool)

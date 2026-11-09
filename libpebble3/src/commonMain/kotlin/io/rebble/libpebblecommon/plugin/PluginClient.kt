@@ -66,6 +66,10 @@ class PluginClient(
 
     override fun registerPlugin(plugin: NativePlugin) = registry.registerPlugin(plugin)
 
+    override fun unregisterPlugin(pluginUuid: Uuid) {
+        registry.unregisterPlugin(pluginUuid)
+    }
+
     override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> get() = registry.preferredSources
 
     override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) =

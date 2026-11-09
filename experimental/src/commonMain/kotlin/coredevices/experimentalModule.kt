@@ -280,7 +280,33 @@ val experimentalModule = module {
     singleOf(::IndexSettingsSummary)
     singleOf(::IndexRebootLogStore)
     single { RingRssiStatistics(get()) } bind HeartbeatMetricsSource::class
-    singleOf(::ExperimentalDevices)
+    single {
+        ExperimentalDevices(
+            watchNotifier = get(),
+            ringSync = get(),
+            recordingStorage = get(),
+            ringDelegate = get(),
+            recordingRepository = get(),
+            conversationMessageDao = get(),
+            agentIterationDao = get(),
+            preferences = get(),
+            shortcutActionHandler = get(),
+            libIndex = get(),
+            permissionRequester = get(),
+            indexFeedSyncService = get(),
+            defaultListsBootstrap = get(),
+            reminderReconciler = get(),
+            indexSettingsSummary = get(),
+            rebootLogStore = get(),
+            rssiStatistics = get(),
+            platform = get(),
+            targetCalendarSeeder = get(),
+            indexNotificationManager = get(),
+            libPebble = get(),
+            indexWebhookDeliveryQueue = get(),
+            indexServletPlugins = get(),
+        )
+    }
     single { TargetCalendarSeeder(get(), get<LibPebble>(), get()) }
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }

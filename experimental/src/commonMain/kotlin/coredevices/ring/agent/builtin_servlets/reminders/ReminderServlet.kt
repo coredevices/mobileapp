@@ -2,33 +2,40 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
-import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.pebble_plugin.BuiltInServletPlugin
 import coredevices.ring.agent.builtin_servlets.destinationHints
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.userMessageIfReady
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.database.room.repository.ListRepository
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 class ReminderServlet(
     private val listsRepository: ListRepository,
     private val providers: IntegrationProviderRepository,
-): BuiltInMcpIntegration(
+) : BuiltInServletPlugin(
     name = NAME,
     tools = listOf(
         ReminderTool(),
         ListTool(),
         CreateListTool(),
-    )
+    ),
+    pluginUuid = PLUGIN_UUID,
+    pluginName = "Reminders (Index)",
+    description = "Create reminders and add items to the user's lists.",
+    callerPermission = PluginPermissions.WRITE_INDEX_REMINDERS,
 ) {
     companion object {
         const val NAME = "builtin_reminder"
+        val PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000004")
         private val logger = Logger.withTag("ReminderServlet")
     }
 

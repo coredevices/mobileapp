@@ -34,6 +34,10 @@ internal class FakePlugins(vararg plugins: Plugin) : Plugins {
         install(plugin)
     }
 
+    override fun unregisterPlugin(pluginUuid: Uuid) {
+        plugins.remove(pluginUuid)
+    }
+
     override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
 
     override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) = Unit

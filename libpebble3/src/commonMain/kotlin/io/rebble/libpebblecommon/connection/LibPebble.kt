@@ -240,6 +240,9 @@ interface Plugins {
     /** For plugins outside libpebble3, whose Koin context is isolated. */
     fun registerPlugin(plugin: NativePlugin)
 
+    /** Removes a plugin added with [registerPlugin]; a built-in disappears from every listing. */
+    fun unregisterPlugin(pluginUuid: Uuid)
+
     /** Built-in plugins (phone-side data sources like Music or Weather), not backed by a pbw. */
     fun nativePlugins(): Flow<List<PluginMetadata>>
 

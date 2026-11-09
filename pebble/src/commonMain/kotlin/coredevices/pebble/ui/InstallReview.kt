@@ -14,10 +14,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CloudUpload
@@ -416,6 +420,10 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.READ_MUSIC, PluginPermissions.CONTROL_MUSIC -> Icons.Filled.MusicNote
     PluginPermissions.READ_APPS, PluginPermissions.LAUNCH_APPS -> Icons.Filled.Apps
     PluginPermissions.FIND_MY_PHONE -> Icons.Filled.PhonelinkRing
+    PluginPermissions.SET_INDEX_ALARMS -> Icons.Filled.Alarm
+    PluginPermissions.SEND_MESSAGES_BEEPER -> Icons.AutoMirrored.Filled.Message
+    PluginPermissions.WRITE_INDEX_NOTES -> Icons.AutoMirrored.Filled.Note
+    PluginPermissions.WRITE_INDEX_REMINDERS -> Icons.Filled.Checklist
     PluginPermissions.READ_FILES, PluginPermissions.WRITE_FILES -> Icons.Filled.Folder
     PluginPermissions.LEGACY_PEBBLEKIT -> Icons.Filled.Campaign
     PluginPermissions.PEBBLEKIT_2 -> Icons.Filled.SwapHoriz
@@ -441,6 +449,10 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.READ_APPS -> "See which apps and watchfaces you have"
     PluginPermissions.LAUNCH_APPS -> "Launch apps on your watch"
     PluginPermissions.FIND_MY_PHONE -> "Ring your phone to find it"
+    PluginPermissions.SET_INDEX_ALARMS -> "Set alarms and timers on your phone via Index"
+    PluginPermissions.SEND_MESSAGES_BEEPER -> "Send messages to your contacts through Index & Beeper"
+    PluginPermissions.WRITE_INDEX_NOTES -> "Save Index notes for you"
+    PluginPermissions.WRITE_INDEX_REMINDERS -> "Add Index reminders and list items for you"
     PluginPermissions.READ_FILES -> fileScopeOf(key)?.let { "Read '${fileScopeLabel(it)}' in device storage" } ?: "Read files from device storage you permit"
     PluginPermissions.WRITE_FILES -> fileScopeOf(key)?.let { "Read & write to '${fileScopeLabel(it)}' in device storage" } ?: "Read & write to files in device storage you permit"
     PluginPermissions.LEGACY_PEBBLEKIT -> "Broadcast messages to every app on your phone (legacy PebbleKit)"

@@ -74,13 +74,13 @@ class IndexActionsRepositoryTest {
         pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
     )
 
-    private val thingsUuid = Uuid.parse("00000000-0000-0000-0002-000000000001")
+    private val thingsUuid = Uuid.parse("00000000-0000-0000-0003-000000000001")
     private val things = FakePlugin(
         actions = listOf(ActionDeclaration(name = "create_todo"), ActionDeclaration(name = "complete_todo")),
         name = "Things",
         pluginUuid = thingsUuid,
     )
-    private val weatherUuid = Uuid.parse("00000000-0000-0000-0002-000000000002")
+    private val weatherUuid = Uuid.parse("00000000-0000-0000-0003-000000000002")
     private val weather = FakePlugin(
         name = "Weather",
         pluginUuid = weatherUuid,
@@ -89,10 +89,10 @@ class IndexActionsRepositoryTest {
     private val both = FakePlugin(
         actions = listOf(ActionDeclaration(name = "toggle")),
         name = "Home",
-        pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000003"),
+        pluginUuid = Uuid.parse("00000000-0000-0000-0003-000000000003"),
         sources = listOf(SourceDeclaration(category = "home", items = listOf("light", "lock"))),
     )
-    private val empty = FakePlugin(name = "Empty", pluginUuid = Uuid.parse("00000000-0000-0000-0002-000000000004"))
+    private val empty = FakePlugin(name = "Empty", pluginUuid = Uuid.parse("00000000-0000-0000-0003-000000000004"))
 
     @Test
     fun androidOnlyActionsAreListedButUnavailableOnIos() {

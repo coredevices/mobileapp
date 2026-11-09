@@ -1,7 +1,8 @@
 package coredevices.ring.agent.builtin_servlets.messaging
 
 import coredevices.mcp.SessionContext
-import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.pebble_plugin.BuiltInServletPlugin
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import coredevices.ring.database.Preferences
 import coredevices.ring.isBeeperAvailable
 import coredevices.util.Permission
@@ -10,12 +11,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.uuid.Uuid
 
-object MessagingServlet: BuiltInMcpIntegration(
+val MESSAGING_PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000002")
+
+object MessagingServlet : BuiltInServletPlugin(
     name = "builtin_messaging",
     tools = listOf(
         SendBeeperMessageTool(),
-    )
+    ),
+    pluginUuid = MESSAGING_PLUGIN_UUID,
+    pluginName = "Beeper (Index)",
+    description = "Send instant messages to the user's approved contacts through Beeper.",
+    callerPermission = PluginPermissions.SEND_MESSAGES_BEEPER,
 ), KoinComponent {
     private val prefs: Preferences by inject()
     override suspend fun getDisabledTools(): List<String> {

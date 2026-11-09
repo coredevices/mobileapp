@@ -538,6 +538,9 @@ class FakeLibPebble : LibPebble {
     override fun registerPlugin(plugin: NativePlugin) {
     }
 
+    override fun unregisterPlugin(pluginUuid: Uuid) {
+    }
+
     override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
 
     override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) {

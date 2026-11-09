@@ -71,7 +71,7 @@ class CreateListTool : BuiltInMcpTool(
         val args = runCatching { JsonSnake.decodeFromString<CreateListArgs>(jsonInput) }
             .getOrElse { return failure("Invalid arguments: ${it.message}") }
         val transcript = runCatching { context.userMessageText.await() }.getOrNull()
-        if (!isTriggerPhrase(transcript)) {
+        if (transcript != null && !isTriggerPhrase(transcript)) {
             logger.w { "Refusing create_list: transcript doesn't start with the trigger phrase" }
             return failure(
                 "Lists can only be created when the user's message starts with " +
