@@ -646,7 +646,7 @@ class IndexNotificationManager(
                             val notif = GenericNotification(
                                 id = notifId,
                                 title = "Recovering your Index 01",
-                                contentText = "Your Index 01 ran into a problem and needs to be restored.",
+                                contentText = "Your Index 01 ran into a problem and is being restored.",
                                 inProgress = NotificationProgress.Indeterminate,
                                 localOnly = true
                             )
