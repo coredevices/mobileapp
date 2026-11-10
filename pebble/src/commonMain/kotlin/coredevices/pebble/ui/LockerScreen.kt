@@ -725,7 +725,7 @@ fun LockerScreen(
                                         )
                                     }
                                 }
-                                if (viewModel.type.value == AppType.Watchapp) {
+                                if (viewModel.type.value != AppType.Watchface) {
                                     it.categories.forEachIndexed { i, categories ->
                                         item(
                                             contentType = "categories",
@@ -737,12 +737,14 @@ fun LockerScreen(
                                                         source = source,
                                                         category = categories.first(),
                                                         navBarNav = navBarNav,
+                                                        appType = viewModel.type.value,
                                                     )
                                                     categories.getOrNull(1)?.let {
                                                         CategoryItem(
                                                             source = source,
                                                             category = it,
                                                             navBarNav = navBarNav,
+                                                            appType = viewModel.type.value,
                                                         )
                                                     }
                                                 }
@@ -824,6 +826,7 @@ fun RowScope.CategoryItem(
     source: AppstoreSource,
     category: StoreCategory,
     navBarNav: NavBarNav,
+    appType: AppType,
 ) {
     val color = category.color.toColorKmp()
     Box(
@@ -835,7 +838,7 @@ fun RowScope.CategoryItem(
                         sourceId = source.id,
                         path = "category/${category.slug}",
                         title = category.name,
-                        appType = AppType.Watchapp.code,
+                        appType = appType.code,
                     )
                 )
             }.background(color)
