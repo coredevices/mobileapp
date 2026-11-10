@@ -39,11 +39,9 @@ crashkios = "0.10.1"
 androidx-lifecycle = "2.11.0"
 androidx-navigation = "2.10.0"
 firebase-kotlin = "2.8.0"
-# Deliberately ahead of the BOM firebase-kotlin imports (33.15.0): its firebase-auth 23.2.1 has an
-# acknowledged regression that randomly signs users out (firebase-android-sdk#7111). We avoid the
-# APIs auth 24.x removed (updateEmail/fetchSignInMethodsForEmail), so forcing the newer BOM is safe.
+# Ahead of the BOM firebase-kotlin imports (34.18.0).
 # NEVER downgrade below 34.x - older versions can't read the newer auth persistence, signing everyone out.
-firebase-bom = "34.16.0"
+firebase-bom = "35.1.0"
 # 2.x pulls firebase-ios-sdk via SwiftPM, which the CocoaPods plugin rejects (needs SwiftPM migration)
 kmpnotifier = "1.6.1"
 mixpanel-android = "8.12.0"
