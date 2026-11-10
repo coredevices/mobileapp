@@ -48,6 +48,11 @@ object PluginHeartbeatCounters {
     const val PKJS_OBSERVATIONS = "plugin.pkjs_observation_count"
 
     val all = listOf(HOST_INVOCATIONS, HOST_OBSERVATIONS, PKJS_INVOCATIONS, PKJS_OBSERVATIONS)
+
+    const val SUBSCRIPTIONS = "subscription_count"
+    const val INVOCATIONS = "invocation_count"
+
+    fun perPlugin(pluginUuid: Uuid, metric: String) = "plugin.$pluginUuid.$metric"
 }
 
 class PluginClient(
@@ -114,7 +119,7 @@ class PluginClient(
         // Whatever the caller chooses reaches the plugin, which may send it off the phone.
         val declared = properties?.filter { it in declaration.properties }
         val pixels = iconPixelSize?.clamped()
-        count(caller, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
+        count(caller, target.pluginUuid, PluginHeartbeatCounters.SUBSCRIPTIONS, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
         if (caller !is PluginCaller.App) {
             emitAll(serve(caller, target, declaration, category, item, declared, pixels))
             return@flow
@@ -187,7 +192,7 @@ class PluginClient(
         if (missing.isNotEmpty()) {
             return ActionResult.error(PluginErrors.INVALID_ARGS, "missing required: ${missing.joinToString()}")
         }
-        count(caller, PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.PKJS_INVOCATIONS)
+        count(caller, target.pluginUuid, PluginHeartbeatCounters.INVOCATIONS, PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.PKJS_INVOCATIONS)
         val run = suspend {
             withTimeoutOrNull(timeout ?: Duration.INFINITE) {
                 try {
@@ -239,12 +244,10 @@ class PluginClient(
         logger.w { message }
     }
 
-    private fun count(caller: PluginCaller, host: String, pkjs: String) {
-        when {
-            caller.probe -> Unit
-            caller is PluginCaller.App -> analytics.incrementHeartbeatCounter(pkjs)
-            else -> analytics.incrementHeartbeatCounter(host)
-        }
+    private fun count(caller: PluginCaller, pluginUuid: Uuid, perPlugin: String, host: String, pkjs: String) {
+        if (caller.probe) return
+        analytics.incrementHeartbeatCounter(if (caller is PluginCaller.App) pkjs else host)
+        analytics.incrementHeartbeatCounter(PluginHeartbeatCounters.perPlugin(pluginUuid, perPlugin))
     }
 
     private val PluginCaller.label: String

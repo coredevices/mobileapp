@@ -117,7 +117,7 @@ class PluginClientTest {
         assertTrue(result.ok)
         assertEquals(listOf(ARGS), plugin.invoked)
         assertEquals(listOf(true), plugin.prompting)
-        assertEquals(listOf(PluginHeartbeatCounters.HOST_INVOCATIONS), analytics.counters)
+        assertEquals(listOf(PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.INVOCATIONS)), analytics.counters)
     }
 
     @Test
@@ -136,7 +136,7 @@ class PluginClientTest {
     fun appInvocationsAreCountedSeparately() = runTest {
         client.invoke(APP_CALLER, ClientFakePlugin().registered(), "do_it", ARGS)
 
-        assertEquals(listOf(PluginHeartbeatCounters.PKJS_INVOCATIONS), analytics.counters)
+        assertEquals(listOf(PluginHeartbeatCounters.PKJS_INVOCATIONS, PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.INVOCATIONS)), analytics.counters)
     }
 
     @Test
@@ -191,7 +191,12 @@ class PluginClientTest {
         client.read(APP_CALLER, ClientFakePlugin().registered(), "weather", "now")
 
         assertEquals(
-            listOf(PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS),
+            listOf(
+                PluginHeartbeatCounters.HOST_OBSERVATIONS,
+                PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.SUBSCRIPTIONS),
+                PluginHeartbeatCounters.PKJS_OBSERVATIONS,
+                PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.SUBSCRIPTIONS),
+            ),
             analytics.counters,
         )
     }
