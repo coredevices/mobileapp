@@ -1,22 +1,16 @@
 package coredevices.ring.service.recordings.button
 
 import co.touchlab.kermit.Logger
-import coredevices.indexai.database.dao.LocalRecordingDao
-import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.external.indexwebhook.IndexWebhookPayloadMode
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
-import coredevices.ring.storage.RecordingStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.io.buffered
-import kotlinx.io.readShortLe
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlin.time.Clock
 
 /**
  * Decorator that uploads recording data to a user-configured webhook endpoint.
@@ -27,9 +21,8 @@ import kotlin.time.Clock
  * the inner operation completes.
  */
 class IndexWebhookUploadRecordingOperation(
-    private val webhookApi: IndexWebhookApi,
+    private val enqueue: suspend (IndexWebhookDeliveryEntity) -> Unit,
     private val webhookPreferences: IndexWebhookPreferences,
-    private val recordingStorage: RecordingStorage,
     private val decorated: RecordingOperation,
     private val fileId: String?,
     private val recordingId: Long,
@@ -38,12 +31,10 @@ class IndexWebhookUploadRecordingOperation(
 
     companion object {
         private val logger = Logger.withTag("IndexWebhookUploadRecordingOperation")
-        private val sentRecordingIds = mutableSetOf<String>()
-        private val sentRecordingIdsLock = Mutex()
     }
 
-    private val localRecordingDao: LocalRecordingDao by inject()
     private val recordingBackgroundScope: RecordingBackgroundScope by inject()
+    private var transcriptDelivered = false
 
     override suspend fun run(handle: RecordingProcessingQueue.TaskHandle?) {
         // One mode snapshot drives the whole delivery, so a mid-operation settings
@@ -57,12 +48,25 @@ class IndexWebhookUploadRecordingOperation(
             }
             // Send from the transcript hook, carrying the exact persisted transcript.
             decorated is TranscribingRecordingOperation -> {
-                decorated.onTranscriptionPersisted = { transcription -> launchSend(payloadMode, transcription) }
+                decorated.onTranscriptionPersisted = { transcription ->
+                    transcriptDelivered = true
+                    launchSend(payloadMode, transcription)
+                }
                 true
             }
             else -> false
         }
-        decorated.run(handle)
+        try {
+            decorated.run(handle)
+        } catch (e: Exception) {
+            // A transcription that failed for good (e.g. no speech detected) must still deliver the audio.
+            if (e !is CancellationException && !transcriptDelivered &&
+                fileId != null && payloadMode == IndexWebhookPayloadMode.Both
+            ) {
+                launchSend(payloadMode, transcription = null)
+            }
+            throw e
+        }
         // Only operations that never sent above (e.g. webhook-only) fall back to a send
         // here — otherwise this could race the hook's send and win with a null transcript.
         // A webhook failure must never fail the recording.
@@ -75,7 +79,7 @@ class IndexWebhookUploadRecordingOperation(
         }
     }
 
-    /** Launched so reading the audio payload doesn't delay the inner operation. */
+    /** Launched so queueing the delivery doesn't delay the inner operation. */
     private fun launchSend(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
         recordingBackgroundScope.launch {
             try {
@@ -87,40 +91,15 @@ class IndexWebhookUploadRecordingOperation(
     }
 
     private suspend fun sendWebhook(payloadMode: IndexWebhookPayloadMode, transcription: String?) {
-        val sendKey = fileId ?: "text-$recordingId"
         if (fileId == null && payloadMode == IndexWebhookPayloadMode.RecordingOnly) return
-
-        if (sentRecordingIdsLock.withLock { sendKey in sentRecordingIds }) return
-
-        val samples: ShortArray?
-        val sampleRate: Int
-        if (fileId != null && payloadMode != IndexWebhookPayloadMode.TranscriptionOnly) {
-            val (source, meta) = recordingStorage.openRecordingSource(fileId)
-            samples = ShortArray((meta.size / 2).toInt())
-            source.buffered().use {
-                for (i in samples.indices) {
-                    samples[i] = it.readShortLe()
-                }
-            }
-            sampleRate = meta.cachedMetadata.sampleRate
-        } else {
-            samples = null
-            sampleRate = 16000
-        }
-
-        val transcriptionToSend = if (payloadMode != IndexWebhookPayloadMode.RecordingOnly) {
-            transcription
-        } else null
-
-        val recordedAt = localRecordingDao.getRecording(recordingId)?.localTimestamp
-            ?: Clock.System.now()
-
-        // Claimed only after the payload reads succeeded, so a failed attempt leaves the
-        // key unclaimed for a later queue retry to pick up.
-        if (!sentRecordingIdsLock.withLock { sentRecordingIds.add(sendKey) }) {
-            logger.d { "Webhook already sent for recording $sendKey, skipping" }
-            return
-        }
-        webhookApi.uploadIfEnabled(samples, sampleRate, sendKey, transcriptionToSend, recordedAt, gesture)
+        enqueue(
+            IndexWebhookDeliveryEntity(
+                deliveryId = fileId ?: "text-$recordingId",
+                gesture = gesture,
+                recordingId = recordingId,
+                fileId = fileId.takeIf { payloadMode != IndexWebhookPayloadMode.TranscriptionOnly },
+                transcription = transcription.takeIf { payloadMode != IndexWebhookPayloadMode.RecordingOnly },
+            )
+        )
     }
 }

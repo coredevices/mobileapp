@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,10 +40,11 @@ fun RecordingActionChip(
     action: RecordingAction,
     onOpenObject: (String) -> Unit,
     onNothingToOpen: (() -> Unit)? = null,
+    onOpenTimersAlarms: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val onClick: (() -> Unit)? = when {
-        action.canOpen -> ({ action.open(onOpenObject) })
+        action.canOpen -> ({ action.open(onOpenObject, onOpenTimersAlarms) })
         onNothingToOpen != null -> onNothingToOpen
         else -> null
     }
@@ -51,7 +52,7 @@ fun RecordingActionChip(
         glyph = action.glyph,
         label = action.label.take(64),
         subtext = action.source,
-        subtextGlyph = Icons.Default.Extension.takeIf { action.source != null },
+        subtextGlyph = Icons.Default.Power.takeIf { action.source != null },
         onClick = onClick,
         modifier = modifier,
     )
@@ -61,14 +62,21 @@ val RecordingAction.canOpen: Boolean
     get() = itemId != null || result is SemanticResult.CalendarEventCreation
 
 /** Alarms, timers and calendar events belong to system apps, so those deep link first. */
-fun RecordingAction.open(onOpenObject: (String) -> Unit) {
+fun RecordingAction.open(onOpenObject: (String) -> Unit, onOpenTimersAlarms: (() -> Unit)? = null) {
     val opened = when (val r = result) {
-        is SemanticResult.AlarmCreation -> openSystemClockApp(ItemMetadata.Scheduled.FireKind.Alarm)
-        is SemanticResult.TimerCreation -> openSystemClockApp(ItemMetadata.Scheduled.FireKind.Timer)
+        is SemanticResult.AlarmCreation -> openClock(ItemMetadata.Scheduled.FireKind.Alarm, onOpenTimersAlarms)
+        is SemanticResult.TimerCreation -> openClock(ItemMetadata.Scheduled.FireKind.Timer, onOpenTimersAlarms)
         is SemanticResult.CalendarEventCreation -> { openSystemCalendarAt(r.startTime); true }
         else -> false
     }
     if (!opened) itemId?.let(onOpenObject)
+}
+
+private fun openClock(fireKind: ItemMetadata.Scheduled.FireKind, inApp: (() -> Unit)?): Boolean {
+    if (openSystemClockApp(fireKind)) return true
+    inApp ?: return false
+    inApp()
+    return true
 }
 
 /**

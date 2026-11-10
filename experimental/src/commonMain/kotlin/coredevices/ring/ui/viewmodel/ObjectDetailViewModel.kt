@@ -194,15 +194,14 @@ class ObjectDetailViewModel(
         }
     }
 
-    /** Cancels the reminder's extra early notification and clears it from the item metadata.
-     *  Only meaningful for built-in reminders (which carry a localReminderId). */
+    /** Cancels the reminder's extra early notification and clears it from the item metadata. */
     fun removeExtraNotification() {
         val s = state.value as? UiState.ItemView ?: return
         val item = s.item
         val meta = item.metadata as? ItemDocument.ItemMetadata.Reminder ?: return
         if (meta.notifyBeforeMillis == null) return
         appScope.launch {
-            meta.localReminderId?.let { runCatching { builtInReminders.cancelExtraNotification(it) } }
+            runCatching { builtInReminders.cancelExtraNotification(item.firestoreId) }
             val updated = item.toDocument().copy(
                 metadata = meta.copy(notifyBeforeMillis = null),
                 updatedAt = Clock.System.now(),
@@ -405,7 +404,13 @@ class ObjectDetailViewModel(
      *  delete), so they must run one at a time or a late edit un-deletes. */
     private val childWriteMutex = Mutex()
 
-    fun patchChildItem(childId: String, title: String?, body: String? = null, kind: String? = null) {
+    fun patchChildItem(
+        childId: String,
+        title: String?,
+        body: String? = null,
+        kind: String? = null,
+        dueAt: DueAtChange = DueAtChange.NoChange,
+    ) {
         // appScope: flushed from the inline note row's onDispose on navigate-away
         // (same scope-cancellation race as [patchItem]).
         appScope.launch {
@@ -418,6 +423,10 @@ class ObjectDetailViewModel(
                     title = trimmed ?: existing.title,
                     body = body ?: existing.body,
                     metadata = metadataForKind(nextKind, existing = existing.metadata),
+                    dueAt = when (dueAt) {
+                        DueAtChange.NoChange -> existing.dueAt
+                        is DueAtChange.Set -> dueAt.value
+                    },
                     parentListIds = normalizeParentLists(
                         kind = nextKind,
                         requestedParents = null,

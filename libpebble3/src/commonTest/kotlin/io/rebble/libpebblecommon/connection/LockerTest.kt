@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.connection
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryPlatform
 import io.rebble.libpebblecommon.database.entity.asMetadata
+import io.rebble.libpebblecommon.database.entity.recordHashCode
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -77,5 +78,11 @@ class LockerTest {
         assertEquals(5u, metadata!!.sdkVersionMajor.get())
         assertEquals(86u, metadata.sdkVersionMinor.get())
         assertEquals(2u, metadata.icon.get())
+    }
+
+    @Test
+    fun theTintFlagDoesNotResyncTheWatch() {
+        val platform = LockerEntryPlatform(Uuid.random(), "5.86", 0, "basalt", pbwIconResourceId = 0)
+        assertEquals(platform.recordHashCode(), platform.copy(listImageTintable = true).recordHashCode())
     }
 }

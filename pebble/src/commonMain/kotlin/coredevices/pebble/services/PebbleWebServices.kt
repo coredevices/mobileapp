@@ -42,8 +42,12 @@ import io.ktor.serialization.ContentConvertException
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.disk.pbw.DiskUtil
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.permissions.isLegacy
+import io.rebble.libpebblecommon.plugin.PluginManifest
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.PluginPermission
 import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.web.LockerAddResponse
@@ -62,7 +66,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -74,6 +84,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonNull
@@ -257,7 +268,10 @@ interface PebbleWebServices {
     suspend fun fetchUsersMeCore(): CoreUsersMe?
     suspend fun fetchPebbleLocker(): LockerModel?
     suspend fun addToLegacyLocker(uuid: String): Boolean
-    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult>
+    /** The homes fetched so far, in source order. Each source is held back until every source before it has answered. */
+    fun appStoreHomes(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): Flow<List<AppStoreHomeResult>>
+    suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> =
+        appStoreHomes(type, hardwarePlatform, enabledOnly, useCache).lastOrNull().orEmpty()
     suspend fun fetchPebbleAppStoreHomes(hardwarePlatform: WatchType?, useCache: Boolean): Map<AppType, AppStoreHomeResult?>
     suspend fun searchAppStore(search: String, appType: AppType, watchType: WatchType, page: Int = 0, pageSize: Int = 20): List<Pair<AppstoreSource, StoreSearchResult>>
     suspend fun addToLegacyLockerWithResponse(uuid: String): LockerAddResponse?
@@ -395,16 +409,28 @@ class RealPebbleWebServices(
 
     override suspend fun fetchUsersMeCore(): CoreUsersMe? = httpClient.get("https://appstore-api.repebble.com/api/v1/users/me", auth = HttpClientAuthType.Core)
 
-    override suspend fun fetchAppStoreHome(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): List<AppStoreHomeResult> {
-        return coroutineScope {
-            getAllSources(enabledOnly).map {
-                async {
-                    val home = appstoreServiceForSource(it).fetchAppStoreHome(type, hardwarePlatform, useCache)
-                    home?.let { h -> AppStoreHomeResult(it, h) }
+    override fun appStoreHomes(type: AppType, hardwarePlatform: WatchType?, enabledOnly: Boolean, useCache: Boolean): Flow<List<AppStoreHomeResult>> =
+        channelFlow {
+            val sources = getAllSources(enabledOnly)
+            val results = arrayOfNulls<AppStoreHomeResult>(sources.size)
+            val answered = BooleanArray(sources.size)
+            var shown = 0
+            val lock = Mutex()
+            sources.forEachIndexed { i, source ->
+                launch {
+                    val home = appstoreServiceForSource(source).fetchAppStoreHome(type, hardwarePlatform, useCache)
+                    lock.withLock {
+                        results[i] = home?.let { AppStoreHomeResult(source, it) }
+                        answered[i] = true
+                        val ready = answered.indexOfFirst { !it }.takeIf { it >= 0 } ?: sources.size
+                        if (ready > shown) {
+                            shown = ready
+                            send(results.take(ready).filterNotNull())
+                        }
+                    }
                 }
-            }.awaitAll().filterNotNull()
+            }
         }
-    }
 
     override suspend fun fetchPebbleAppStoreHomes(
         hardwarePlatform: WatchType?,
@@ -592,6 +618,8 @@ data class StoreSearchResult(
     val iconImage: String,
     @SerialName("list_image")
     val listImage: String,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     val title: String,
     val type: String,
     val uuid: String,
@@ -789,11 +817,14 @@ data class StoreApplication(
     val capabilities: List<String>? = null,
     @SerialName("uses_permissions")
     val usesPermissions: List<PluginPermission> = emptyList(),
+    /** Null from a store that sends no appinfo fields. */
     @SerialName("manifest_version")
-    val manifestVersion: Int = 1,
+    val manifestVersion: Int? = null,
     @SerialName("pebblekit2_packages")
     val pebbleKit2Packages: List<String> = emptyList(),
     val plugin: StorePlugin? = null,
+    @SerialName("config_page")
+    val configPage: String? = null,
     val category: String,
     @SerialName("category_color")
     val categoryColor: String,
@@ -823,6 +854,8 @@ data class StoreApplication(
     val links: StoreLinks,
     @SerialName("list_image")
     val listImage: Map<String, String>,
+    @SerialName("icon_tintable")
+    val iconTintable: Boolean = false,
     @SerialName("published_date")
     @Serializable(with = PublishedDateSerializer::class)
     val publishedDate: Instant?,
@@ -837,6 +870,24 @@ data class StoreApplication(
     val visible: Boolean,
     val website: String?,
     val contactable: Boolean = false,
+    /** Keyed by platform codename; only platforms with enough telemetry are present. */
+    @SerialName("battery_impact")
+    val batteryImpact: Map<String, StoreBatteryImpact>? = null,
+)
+
+/** Levels are relative to TicToc: negligible / small / medium / large. */
+@Serializable
+data class StoreBatteryImpact(
+    val level: String,
+    val modes: List<StoreBatteryImpactMode> = emptyList(),
+    @SerialName("app_version")
+    val appVersion: String? = null,
+)
+
+@Serializable
+data class StoreBatteryImpactMode(
+    val mode: String,
+    val level: String,
 )
 
 @Serializable
@@ -961,6 +1012,15 @@ fun StoreApplication.asLockerEntryPlatform(
     )
 }
 
+fun StoreApplication.pluginMetadata(): PluginMetadata? {
+    val raw = plugin?.manifest ?: return null
+    if (isLegacy(manifestVersion ?: 1) || uuid == null) return null
+    val manifest = runCatching { DiskUtil.pbwJson.decodeFromJsonElement(PluginManifest.serializer(), raw) }
+        .onFailure { logger.w(it) { "unreadable plugin manifest for $uuid" } }
+        .getOrNull() ?: return null
+    return PluginMetadata(Uuid.parse(uuid), title, manifest.description, manifest.sources, manifest.actions, manifest.script)
+}
+
 fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): LockerEntry? {
     // A plugin-only app has no binaries, so no hardware_platforms: build every platform from the
     // fallbacks, which is also where the locker gets its description and images.
@@ -973,6 +1033,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         logger.w { "no uuid" }
         return null
     }
+    val configPage = app.configPage ?: app.plugin?.configPage
     return LockerEntry(
         id = app.id,
         uuid = app.uuid,
@@ -981,7 +1042,7 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         title = app.title,
         type = app.type,
         developer = LockerEntryDeveloper(id = app.developerId, name = app.author, contactEmail = ""),
-        isConfigurable = app.capabilities.orEmpty().contains("configurable") || app.plugin?.configPage != null,
+        isConfigurable = app.capabilities.orEmpty().contains("configurable") || configPage != null,
         isTimelineEnabled = app.capabilities.orEmpty().contains("timeline"),
         pbw = LockerEntryPBW(
             file = app.latestRelease.pbwFile.let {
@@ -1005,7 +1066,8 @@ fun StoreApplication.toLockerEntry(sourceUrl: String, timelineToken: String?): L
         userToken = timelineToken,
         manifestVersion = app.manifestVersion,
         pluginManifest = app.plugin?.manifest,
-        configPage = app.plugin?.configPage,
+        configPage = configPage,
+        iconTintable = app.iconTintable,
         hardwarePlatforms = buildList {
             var fallbackFlags = 0
             if (app.type == AppType.Watchface.code) {

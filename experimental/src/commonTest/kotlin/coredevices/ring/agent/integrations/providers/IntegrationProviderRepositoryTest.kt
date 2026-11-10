@@ -2,7 +2,9 @@ package coredevices.ring.agent.integrations.providers
 
 import PlatformUiContext
 import com.russhwolf.settings.MapSettings
+import coredevices.ring.agent.integrations.AgentIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
+import coredevices.ring.agent.integrations.DelegatingAgentIntegration
 import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.DelegatingReminderIntegration
 import coredevices.ring.agent.integrations.ItemSource
@@ -10,6 +12,7 @@ import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.integrations.ReminderListEntry
 import coredevices.ring.agent.pebble_plugin.FakePlugin
+import coredevices.ring.agent.pebble_plugin.FakePlugins
 import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
@@ -18,14 +21,12 @@ import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.util.Platform
-import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
-import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
-import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.SourceEnvelope
 import io.rebble.libpebblecommon.plugin.SourceInstance
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -37,6 +38,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -62,28 +64,32 @@ private class FakeReminderIntegration : ReminderIntegration {
     override suspend fun isAuthorized() = true
 }
 
+private class FakeAgentIntegration : AgentIntegration {
+    override suspend fun sendToAgent(message: String, chatId: String?, source: ItemSource?): String = "sent"
+    override suspend fun signIn(uiContext: PlatformUiContext) = true
+    override suspend fun unlink() {}
+    override suspend fun isAuthorized() = true
+}
+
 private class FakeProvider(
     override val id: String,
     override val supports: Set<IntegrationSupport>,
     override val platforms: Set<SupportedPlatform> = SupportedPlatform.entries.toSet(),
     override val storesItemsLocally: Boolean = false,
     var authorized: Boolean = true,
+    override val title: String = id,
+    private val authorizing: suspend () -> Unit = {},
 ) : IntegrationProvider {
-    override val title = id
     val notes = FakeNoteIntegration()
     val reminders = FakeReminderIntegration()
-    override suspend fun isAuthorized() = authorized
+    val agent = FakeAgentIntegration()
+    override suspend fun isAuthorized(): Boolean {
+        authorizing()
+        return authorized
+    }
     override fun notes(): NoteIntegration = notes
     override fun reminders(): ReminderIntegration = reminders
-}
-
-private class FakePlugins(private val plugins: List<Plugin>) : Plugins {
-    override fun registerPlugin(plugin: Plugin) {}
-    override fun nativePlugins(): Flow<List<NativePlugin>> = flowOf(emptyList())
-    override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
-    override fun findSourcePlugin(category: String, item: String, preferredPluginUuid: String?): Plugin? = null
-    override fun findPlugin(pluginUuid: String): Plugin? = null
-    override fun getAllPlugins(): List<Plugin> = plugins
+    override fun agent(): AgentIntegration = agent
 }
 
 private class FakePlatform(override val name: String) : Platform {
@@ -102,6 +108,7 @@ private class FakeCachedItemDao : CachedItemDao {
     override fun getByRecordingFlow(recordingId: String): Flow<List<CachedItem>> = flowOf(emptyList())
     override suspend fun getByRecording(recordingId: String): List<CachedItem> = emptyList()
     override suspend fun getAllActive(): List<CachedItem> = emptyList()
+    override suspend fun getAllIncludingDeleted(): List<CachedItem> = emptyList()
     override fun getByListFlow(listId: String): Flow<List<CachedItem>> = flowOf(emptyList())
     override suspend fun getByList(listId: String): List<CachedItem> = emptyList()
     override suspend fun deleteById(id: String) {}
@@ -117,7 +124,11 @@ class IntegrationProviderRepositoryTest {
         storesItemsLocally = true,
     )
     private val notion = FakeProvider(id = "notion", supports = setOf(IntegrationSupport.Note))
-    private val googleTasks = FakeProvider(id = "google_tasks", supports = setOf(IntegrationSupport.Reminder))
+    private val googleTasks = FakeProvider(
+        id = "google_tasks",
+        supports = setOf(IntegrationSupport.Reminder),
+        title = "Google Tasks",
+    )
     private val tasker = FakeProvider(
         id = "tasker",
         supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder),
@@ -136,7 +147,7 @@ class IntegrationProviderRepositoryTest {
         plugins: List<Plugin> = emptyList(),
     ) = IntegrationProviderRepository(
         preferences = preferences,
-        plugins = FakePlugins(plugins),
+        plugins = FakePlugins(*plugins.toTypedArray()),
         platform = FakePlatform(platform),
         delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
         builtIn = builtIn,
@@ -154,6 +165,39 @@ class IntegrationProviderRepositoryTest {
 
         assertEquals(listOf(index, notion, tasker), repository.providers(IntegrationSupport.Note))
         assertEquals(listOf(index, googleTasks, tasker), repository.providers(IntegrationSupport.Reminder))
+    }
+
+    @Test
+    fun connectionChecksRunThreeAtATimeInOrder() = runTest {
+        var running = 0
+        var mostAtOnce = 0
+        val slow = (1..7).map { n ->
+            FakeProvider(
+                id = "plugin:$n",
+                supports = setOf(IntegrationSupport.Agent),
+                authorized = n % 2 == 1,
+                authorizing = {
+                    running++
+                    mostAtOnce = maxOf(mostAtOnce, running)
+                    delay(1.seconds)
+                    running--
+                },
+            )
+        }
+        val repository = IntegrationProviderRepository(
+            preferences = preferences,
+            plugins = FakePlugins(),
+            platform = FakePlatform("Android"),
+            delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
+            builtIn = builtIn + slow,
+        )
+
+        val started = testScheduler.currentTime
+        val available = repository.availableProviders(IntegrationSupport.Agent)
+
+        assertEquals(listOf("plugin:1", "plugin:3", "plugin:5", "plugin:7"), available.map { it.id })
+        assertEquals(3, mostAtOnce)
+        assertEquals(3.seconds.inWholeMilliseconds, testScheduler.currentTime - started)
     }
 
     @Test
@@ -257,6 +301,24 @@ class IntegrationProviderRepositoryTest {
     }
 
     @Test
+    fun agentIntegrationsRecordDelegatedItemsAndOnlyAgentProvidersResolveForGestures() {
+        val claude = FakeProvider("plugin:claude", setOf(IntegrationSupport.Agent))
+        val repository = IntegrationProviderRepository(
+            preferences = preferences,
+            plugins = FakePlugins(),
+            platform = FakePlatform("Android"),
+            delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
+            builtIn = builtIn + claude,
+        )
+
+        assertIs<DelegatingAgentIntegration>(repository.agentIntegration(claude))
+        assertSame(claude, repository.agentProvider(claude.id))
+        assertNull(repository.agentProvider(notion.id))
+        assertNull(repository.agentProvider("plugin:gone"))
+        assertSame(claude, repository.destinationProvider(null, IntegrationSupport.Agent))
+    }
+
+    @Test
     fun integrationsDefaultToTheSelectedProvider() {
         val repository = repository()
         repository.selectNoteProvider(notion)
@@ -266,12 +328,48 @@ class IntegrationProviderRepositoryTest {
     }
 
     @Test
+    fun providersAreFoundByNameForTheKindTheySupport() {
+        val repository = repository()
+
+        assertSame(googleTasks, repository.findProviderByName("google tasks", IntegrationSupport.Reminder))
+        assertSame(googleTasks, repository.findProviderByName("GoogleTasks", IntegrationSupport.Reminder))
+        assertNull(repository.findProviderByName("Google Tasks", IntegrationSupport.Note))
+        assertNull(repository.findProviderByName("TickTick", IntegrationSupport.Reminder))
+    }
+
+    @Test
+    fun destinationFallsBackToTheSelectionOnlyWhenUnnamed() {
+        val repository = repository()
+        repository.selectNoteProvider(notion)
+
+        assertSame(notion, repository.destinationProvider(null, IntegrationSupport.Note))
+        assertSame(index, repository.destinationProvider(null, IntegrationSupport.Reminder))
+        assertSame(googleTasks, repository.destinationProvider("google tasks", IntegrationSupport.Reminder))
+        assertNull(repository.destinationProvider("TickTick", IntegrationSupport.Reminder))
+    }
+
+    @Test
+    fun mentionedProvidersAreTheConnectedOnesNamedInTheTextOtherThanTheSelection() = runTest {
+        val repository = repository()
+        val text = "set a reminder on google tasks and tasker to buy milk"
+
+        assertEquals(listOf(googleTasks, tasker), repository.mentionedProviders(text, IntegrationSupport.Reminder))
+
+        tasker.authorized = false
+        assertEquals(listOf(googleTasks), repository.mentionedProviders(text, IntegrationSupport.Reminder))
+
+        repository.selectReminderProvider(googleTasks)
+        assertEquals(emptyList(), repository.mentionedProviders(text, IntegrationSupport.Reminder))
+        assertEquals(emptyList(), repository.mentionedProviders("remind me to buy milk", IntegrationSupport.Reminder))
+    }
+
+    @Test
     fun shortcutTitlesComeFromTheProvider() {
         val repository = repository()
 
         assertNull(repository.shortcutDestinationTitle(NoteShortcutType.SendToMe))
         assertEquals("notion", repository.shortcutDestinationTitle(NoteShortcutType.SendToNoteProvider("notion")))
-        assertEquals("google_tasks", repository.shortcutDestinationTitle(NoteShortcutType.SendToReminderProvider("google_tasks")))
+        assertEquals("Google Tasks", repository.shortcutDestinationTitle(NoteShortcutType.SendToReminderProvider("google_tasks")))
         assertEquals("Unavailable provider", repository.shortcutDestinationTitle(NoteShortcutType.SendToNoteProvider("plugin:gone")))
     }
 }

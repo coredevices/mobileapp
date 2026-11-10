@@ -21,7 +21,10 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
+import coredevices.util.WatchNotifier
 import coredevices.util.models.CactusSTTMode
+import coredevices.util.storage.appStorageBreakdown
+import coredevices.util.storage.formatStorageSummary
 import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -133,8 +136,14 @@ class BugReportProcessor(
     private val coreConfigFlow: CoreConfigFlow,
     private val permissionRequester: PermissionRequester,
     private val companionDevice: CompanionDevice,
+    private val watchNotifier: WatchNotifier,
 ) {
     private val logger = Logger.withTag("BugReportProcessor")
+
+    private fun notifyBugReportState(message: String) {
+        notifyState(message)
+        watchNotifier.send("bug_report_upload", "Bug Report", message)
+    }
 
     companion object {
         private const val MAX_CONCURRENT_UPLOADS = 4
@@ -291,6 +300,9 @@ class BugReportProcessor(
         val pkjsSummary = getPKJSSummary()
         val sttSummary = getSTTSummary()
         val pebbleContext = pebbleScreenContext()
+        val storageSummary = withContext(Dispatchers.IO) {
+            formatStorageSummary(appContext.appStorageBreakdown())
+        }
         val summaryWithAttachmentCount = buildString {
             append(deviceSummary)
             append(pkjsSummary)
@@ -318,6 +330,7 @@ class BugReportProcessor(
             append("\nFirebase uploads enabled: ${settings.getBoolean(KEY_ENABLE_FIREBASE_UPLOADS, true)}")
             append("\nMemfault uploads enabled: ${settings.getBoolean(KEY_ENABLE_MEMFAULT_UPLOADS, true)}")
             append("\nMixpanel uploads enabled: ${settings.getBoolean(KEY_ENABLE_MIXPANEL_UPLOADS, true)}")
+            append(storageSummary)
         }
         return summaryWithAttachmentCount
     }
@@ -445,7 +458,7 @@ class BugReportProcessor(
         state.tryEmit(BugReportState.Creating)
         if (service) {
             startForegroundService()
-            notifyState("Creating bug report...")
+            notifyBugReportState("Creating bug report...")
             GlobalScope.launch {
                 try {
                     state.transformWhile {
@@ -454,10 +467,10 @@ class BugReportProcessor(
                     }.collect {
                         when (it) {
                             BugReportState.Creating -> Unit
-                            BugReportState.GatheringWatchLogs -> notifyState("Gathering watch logs...")
-                            BugReportState.UploadingAttachments -> notifyState("Uploading attachments")
-                            is BugReportState.BugReportResult.Failed -> notifyState("Bug report failed: ${it.error}")
-                            is BugReportState.BugReportResult.Success -> notifyState("Bug report successfully uploaded!")
+                            BugReportState.GatheringWatchLogs -> notifyBugReportState("Gathering watch logs...")
+                            BugReportState.UploadingAttachments -> notifyBugReportState("Uploading attachments")
+                            is BugReportState.BugReportResult.Failed -> notifyBugReportState("Bug report failed: ${it.error}")
+                            is BugReportState.BugReportResult.Success -> notifyBugReportState("Bug report successfully uploaded!")
                             is BugReportState.ReadyToShare -> Unit
                         }
                     }

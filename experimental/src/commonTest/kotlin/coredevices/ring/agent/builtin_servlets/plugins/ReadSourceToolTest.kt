@@ -1,11 +1,11 @@
 package coredevices.ring.agent.builtin_servlets.plugins
 
-import coredevices.analytics.HEARTBEAT_COUNTER_PLUGIN_OBSERVATIONS
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
-import coredevices.ring.agent.RecordingCoreAnalytics
+import coredevices.ring.agent.pebble_plugin.FakePlugins
 import io.rebble.libpebblecommon.plugin.IconPixelSize
+import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import io.rebble.libpebblecommon.plugin.SourceEnvelope
@@ -32,7 +32,7 @@ private val PLUGIN_UUID = Uuid.parse("00000000-0000-0000-0002-00000000000a")
 private class FakePlugin(
     override val sources: List<SourceDeclaration>,
     private val envelopes: Flow<SourceEnvelope>,
-) : Plugin {
+) : NativePlugin {
     override val pluginUuid = PLUGIN_UUID
     override val name = "Fake"
     override val description = ""
@@ -67,9 +67,8 @@ class ReadSourceToolTest {
     private val home = instance("home", "21°C")
     private val work = instance("work", "18°C")
 
-    private val analytics = RecordingCoreAnalytics()
-
-    private fun tool(plugin: Plugin? = null) = ReadSourceTool({ listOfNotNull(plugin) }, analytics)
+    private fun tool(plugin: Plugin? = null) =
+        ReadSourceTool({ listOfNotNull(plugin?.metadata) }, FakePlugins(*listOfNotNull(plugin).toTypedArray()))
 
     private fun servingPlugin(vararg instances: SourceInstance) = FakePlugin(
         sources = listOf(weatherSource()),
@@ -94,7 +93,7 @@ class ReadSourceToolTest {
         assertEquals(listOf("weather" to "location"), plugin.observed)
         assertEquals(listOf(home, work), decodeInstances(result.resultString))
         val semantic = assertIs<SemanticResult.SupportingData>(result.semanticResult)
-        assertEquals("Read weather/location", semantic.summary)
+        assertEquals("Read weather/location from Fake", semantic.summary)
     }
 
     @Test
@@ -106,7 +105,7 @@ class ReadSourceToolTest {
 
         assertEquals(listOf(work), decodeInstances(result.resultString))
         assertEquals(
-            "Read weather/location/work",
+            "Read weather/location/work from Fake",
             assertIs<SemanticResult.SupportingData>(result.semanticResult).summary,
         )
     }
@@ -139,19 +138,8 @@ class ReadSourceToolTest {
 
         val result = tool(silent).call("""{"category":"weather","item":"location"}""", context)
 
-        assertContains(result.resultString, "Timed out")
+        assertContains(result.resultString, "Failed to read weather/location")
         val failure = assertIs<SemanticResult.GenericFailure>(result.semanticResult)
         assertTrue(failure.llmRecoverable)
-    }
-
-    @Test
-    fun observationsAreCountedForTheHeartbeat() = runTest {
-        val tool = tool(servingPlugin(home))
-
-        tool.call("""{"category":"weather","item":"location"}""", context)
-        tool.call("""{"category":"weather","item":"location"}""", context)
-        tool.call("""{"category":"home","item":"light"}""", context)
-
-        assertEquals(mapOf(HEARTBEAT_COUNTER_PLUGIN_OBSERVATIONS to 2), analytics.counters)
     }
 }

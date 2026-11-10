@@ -3,7 +3,7 @@ package io.rebble.libpebblecommon.js
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.permissions.AppPermissions
-import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -23,8 +23,8 @@ class JSCPrivatePKJSInterface(
     notificationConfigFlow: NotificationConfigFlow,
     pluginRegistry: PluginRegistry,
     permissions: AppPermissions,
-    runningApps: RunningApps,
-): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, runningApps), RegisterableJsInterface {
+    pluginClient: PluginClient,
+): PrivatePKJSInterface(jsRunner, device, scope, outgoingAppMessages, logMessages, jsTokenUtil, remoteTimelineEmulator, httpInterceptorManager, notificationConfigFlow, pluginRegistry, permissions, pluginClient), RegisterableJsInterface {
     private val logger = Logger.withTag("JSCPrivatePKJSInterface")
 
     override val interf = mapOf(
@@ -56,6 +56,7 @@ class JSCPrivatePKJSInterface(
         "unsubscribeSource" to this::unsubscribeSource,
         "invokeAction" to this::invokeAction,
         "enumeratePlugins" to this::enumeratePlugins,
+        "queryPermission" to this::queryPermission,
         "configMessageReply" to this::configMessageReply,
         "sendConfigMessage" to this::sendConfigMessage,
     )
@@ -125,6 +126,11 @@ class JSCPrivatePKJSInterface(
             null
         }
         "enumeratePlugins" -> enumeratePlugins()
+        "queryPermission" -> {
+            val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("queryPermission: bad id")
+            queryPermission(id, args.getOrNull(1)?.toString() ?: error("queryPermission: bad permission"))
+            null
+        }
         "configMessageReply" -> {
             val id = (args.getOrNull(0) as? Number)?.toInt() ?: error("configMessageReply: bad id")
             configMessageReply(id, args.getOrNull(1)?.toString() ?: "null")

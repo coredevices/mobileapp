@@ -80,13 +80,14 @@ class NotificationHandler(
 
     private data class NotificationToProcess(
         val sbn: StatusBarNotification,
+        val silent: Boolean,
         val isSummaryRecheck: Boolean = false,
     )
 
     fun init(activeNotifications: () -> List<StatusBarNotification>?) {
         this.activeNotifications = activeNotifications
         notificationsToProcess.consumeAsFlow().onEach {
-            val notification = processNotification(it.sbn, it.isSummaryRecheck) ?: return@onEach
+            val notification = processNotification(it.sbn, it.silent, it.isSummaryRecheck) ?: return@onEach
             sendNotification(notification)
         }.launchIn(libPebbleCoroutineScope)
     }
@@ -130,6 +131,7 @@ class NotificationHandler(
 
     private suspend fun processNotification(
         sbn: StatusBarNotification,
+        silent: Boolean,
         isSummaryRecheck: Boolean,
     ): LibPebbleNotification? {
         // Don't even check (or persist) ongoing notifications
@@ -149,7 +151,7 @@ class NotificationHandler(
                 }
                 libPebbleCoroutineScope.launch {
                     delay(GROUP_SUMMARY_RECHECK_DELAY)
-                    notificationsToProcess.trySend(NotificationToProcess(sbn, isSummaryRecheck = true)).also {
+                    notificationsToProcess.trySend(NotificationToProcess(sbn, silent, isSummaryRecheck = true)).also {
                         if (it.isFailure) {
                             logger.w { "Couldn't write summary recheck to processing queue" }
                         }
@@ -209,7 +211,7 @@ class NotificationHandler(
             sbn.dump(result)
         }
         val notification = when (result) {
-            is NotificationResult.Extracted -> result.notification
+            is NotificationResult.Extracted -> result.notification.copy(silent = silent)
             NotificationResult.NotProcessed -> {
                 verboseLog {
                     "Ignoring notification from ${sbn.packageName.obfuscate(privateLogger)} (not extracted)"
@@ -360,9 +362,9 @@ class NotificationHandler(
         }
     }
 
-    fun handleNotificationPosted(sbn: StatusBarNotification) {
+    fun handleNotificationPosted(sbn: StatusBarNotification, silent: Boolean) {
         logger.d { "onNotificationPosted(${sbn.packageName.obfuscate(privateLogger)})  ($this)" }
-        notificationsToProcess.trySend(NotificationToProcess(sbn)).also {
+        notificationsToProcess.trySend(NotificationToProcess(sbn, silent)).also {
             if (it.isFailure) {
                 logger.w { "Couldn't write notification to processing queue" }
             }

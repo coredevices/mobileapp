@@ -86,9 +86,11 @@ actual fun getIPAddress(): Pair<String?, String?> {
                             val isWifi = ifName.startsWith("en")
                             
                             if (family == AF_INET) {
-                                if (isWifi) {
+                                // Self-assigned, e.g. the USB link to a Mac: not reachable from the LAN.
+                                val isLinkLocal = ipStr.startsWith("169.254.")
+                                if (isWifi && !isLinkLocal) {
                                     wifiV4 = ipStr
-                                } else if (v4 == null) {
+                                } else if (v4 == null && !isLinkLocal) {
                                     v4 = ipStr
                                 }
                             } else {

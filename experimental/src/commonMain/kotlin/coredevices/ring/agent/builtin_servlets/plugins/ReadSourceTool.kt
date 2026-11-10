@@ -1,8 +1,7 @@
 package coredevices.ring.agent.builtin_servlets.plugins
 
+import io.rebble.libpebblecommon.connection.Plugins
 import co.touchlab.kermit.Logger
-import coredevices.analytics.CoreAnalytics
-import coredevices.analytics.HEARTBEAT_COUNTER_PLUGIN_OBSERVATIONS
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
@@ -10,18 +9,17 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceInstance
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
+import io.rebble.libpebblecommon.plugin.SourceUpdate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.time.Duration.Companion.seconds
 
 class ReadSourceTool(
-    private val sourcePlugins: suspend () -> List<Plugin>,
-    private val analytics: CoreAnalytics,
+    private val sourcePlugins: suspend () -> List<PluginMetadata>,
+    private val plugins: Plugins,
 ): BuiltInMcpTool(
     definition = Tool(
         name = TOOL_NAME,
@@ -86,21 +84,18 @@ class ReadSourceTool(
                 )
             }
 
-        analytics.incrementHeartbeatCounter(HEARTBEAT_COUNTER_PLUGIN_OBSERVATIONS)
-        val envelope = withTimeoutOrNull(3.seconds) {
-            plugin.observe(
-                category = args.category,
-                item = args.item
-            ).first()
-        } ?: run {
-            logger.e { "Timed out waiting for flow: ${args.category}/${args.item}" }
-            return ToolCallResult(
-                resultString = "Timed out waiting for data from ${args.category}/${args.item}${args.instance?.let { "/$it" } ?: ""}",
-                semanticResult = SemanticResult.GenericFailure(
-                    userErrorMessage = "Timed out waiting for data",
-                    llmRecoverable = true
+        val envelope = when (val update = plugins.read(PluginCaller.Host(), plugin, args.category, args.item)) {
+            is SourceUpdate.Data -> update.envelope
+            is SourceUpdate.Error -> {
+                logger.e { "Failed to read ${args.category}/${args.item}: ${update.code} ${update.message}" }
+                return ToolCallResult(
+                    resultString = "Failed to read ${args.category}/${args.item}: ${update.message}",
+                    semanticResult = SemanticResult.GenericFailure(
+                        userErrorMessage = update.message,
+                        llmRecoverable = true
+                    )
                 )
-            )
+            }
         }
 
         return ToolCallResult(
@@ -113,7 +108,7 @@ class ReadSourceTool(
                 )
             ),
             semanticResult = SemanticResult.SupportingData(
-                "Read ${args.category}/${args.item}${args.instance?.let { "/$it" } ?: ""}"
+                "Read ${args.category}/${args.item}${args.instance?.let { "/$it" } ?: ""} from ${plugin.name}"
             )
         )
     }

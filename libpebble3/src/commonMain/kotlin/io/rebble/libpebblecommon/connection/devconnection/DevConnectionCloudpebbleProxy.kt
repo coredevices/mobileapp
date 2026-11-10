@@ -11,6 +11,7 @@ import io.ktor.websocket.close
 import io.ktor.websocket.send
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.LastFirmwareUpdateStates
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -33,11 +34,12 @@ enum class CloudpebbleProxyProtocolVersion {
 
 class DevConnectionCloudpebbleProxy(
     libPebble: LibPebble,
+    lastStates: LastFirmwareUpdateStates,
     private val url: String,
     private val protocolVersion: CloudpebbleProxyProtocolVersion,
     private val scope: LibPebbleCoroutineScope,
     private val token: StateFlow<String?>
-): DevConnectionTransport(libPebble) {
+): DevConnectionTransport(libPebble, lastStates) {
     private val client = HttpClient {
         install(WebSockets)
     }
@@ -57,7 +59,7 @@ class DevConnectionCloudpebbleProxy(
             while (true) {
                 val currentToken = token.filterNotNull().first()
                 try {
-                    runSession(currentToken, inboundPKJSLogs, inboundDeviceMessages, outboundDeviceMessages)
+                    runSession(identifier, currentToken, inboundPKJSLogs, inboundDeviceMessages, outboundDeviceMessages)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -72,6 +74,7 @@ class DevConnectionCloudpebbleProxy(
     }
 
     private suspend fun runSession(
+        identifier: PebbleIdentifier,
         currentToken: String,
         inboundPKJSLogs: Flow<String>,
         inboundDeviceMessages: Flow<ByteArray>,
@@ -113,6 +116,7 @@ class DevConnectionCloudpebbleProxy(
                         }
                     },
                 )
+                var reporter: Job? = null
                 try {
                     for (frame in incoming) {
                         when (frame) {
@@ -135,6 +139,10 @@ class DevConnectionCloudpebbleProxy(
                                         logger.d { "Received InstallBundle message with payload size ${payload.size}" }
                                         send(InstallStatusMessage(installPBW(payload)))
                                     }
+                                    ClientMessageType.InstallFirmware -> {
+                                        logger.d { "Received InstallFirmware message with payload size ${payload.size}" }
+                                        installFirmware(identifier, payload, { send(PhoneAppLogMessage(it)) }, { send(InstallStatusMessage(it)) })
+                                    }
                                     // Handle other message types as needed
                                     ClientMessageType.TimelinePin -> {
                                         logger.d { "Received TimelinePin message with payload size ${payload.size}" }
@@ -145,6 +153,11 @@ class DevConnectionCloudpebbleProxy(
                                     ClientMessageType.ConnectionStatus -> {
                                         val connected = payload.getOrNull(0)?.toInt() != 0
                                         logger.i { "Client connection status changed: ${if (connected) "Connected" else "Disconnected"}" }
+                                        if (connected && reporter?.isActive != true) {
+                                            reporter = launch {
+                                                reportFirmwareInstall(identifier, { send(PhoneAppLogMessage(it)) }, { send(InstallStatusMessage(it)) })
+                                            }
+                                        }
                                     }
                                     null -> {
                                         logger.w { "Received unsupported or unknown message type: ${data[0]}" }
@@ -161,6 +174,7 @@ class DevConnectionCloudpebbleProxy(
                     }
                 } finally {
                     relays.forEach { it.cancel() }
+                    reporter?.cancel()
                 }
             }
         }

@@ -15,12 +15,13 @@
 		67555A962E0212D1006BB488 /* JSTimeout.js in Resources */ = {isa = PBXBuildFile; fileRef = 67555A952E0212D1006BB488 /* JSTimeout.js */; };
 		676C54452D8382FC00E26B6F /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 676C54442D8382FC00E26B6F /* AVFoundation.framework */; };
 		677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBD6 /* startup.js */; };
-		677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */ = {isa = PBXBuildFile; fileRef = 677B8EF52DBFE88C0060DBE4 /* bundled-apps */; };
 		67CF82AA2D63C64000DE1C7D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */; };
 		67EA51C02EF988F7003958BE /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67EA51BF2EF988F7003958BE /* UIKit.framework */; };
 		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
 		7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */; };
 		7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */; };
+		7E8F9A102D5E6F780012345A /* AlarmKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */; };
+		7E8F9A122D5E6F780012345C /* ring-clock-alarm.caf in Resources */ = {isa = PBXBuildFile; fileRef = 7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */; };
 		AAA5E51C08BCAFFAF71A7F17 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */; };
 /* End PBXBuildFile section */
 
@@ -35,7 +36,6 @@
 		675E1B9B2E5CB7EE00058C08 /* cactus.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = cactus.xcframework; path = iosApp/cactus.xcframework; sourceTree = "<group>"; };
 		676C54442D8382FC00E26B6F /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		677B8EF52DBFE88C0060DBD6 /* startup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = startup.js; path = ../libpebble3/src/androidMain/assets/startup.js; sourceTree = SOURCE_ROOT; };
-		677B8EF52DBFE88C0060DBE4 /* bundled-apps */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "bundled-apps"; path = "bundled-apps"; sourceTree = SOURCE_ROOT; };
 		67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		67EA51BF2EF988F7003958BE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		67F184432D7F650200F47423 /* HaversineSatelliteLibrary.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = HaversineSatelliteLibrary.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -46,6 +46,8 @@
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleShortcuts.swift; sourceTree = "<group>"; };
 		7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechAnalyzerBridge.swift; sourceTree = "<group>"; };
+		7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmKitBridge.swift; sourceTree = "<group>"; };
+		7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ring-clock-alarm.caf"; sourceTree = "<group>"; };
 		8BD2D13FC437E69544C5D3BD /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		D4856F81B1A7C6FB5B8CEFA0 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
@@ -130,13 +132,14 @@
 			children = (
 				67555A952E0212D1006BB488 /* JSTimeout.js */,
 				677B8EF52DBFE88C0060DBD6 /* startup.js */,
-				677B8EF52DBFE88C0060DBE4 /* bundled-apps */,
 				67CF82A92D63C63B00DE1C7D /* AppDelegate.swift */,
 				058557BA273AAA24004C7B11 /* Assets.xcassets */,
 				7555FF82242A565900829871 /* ContentView.swift */,
 				7555FF8C242A565B00829871 /* Info.plist */,
 				7E8F9A0B2D5E6F7800123456 /* PebbleShortcuts.swift */,
 				7E8F9A0D2D5E6F7800123457 /* SpeechAnalyzerBridge.swift */,
+				7E8F9A0F2D5E6F7800123459 /* AlarmKitBridge.swift */,
+				7E8F9A112D5E6F780012345B /* ring-clock-alarm.caf */,
 				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				6707B38A2DF7BF28003519BB /* GoogleService-Info.plist */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
@@ -220,9 +223,9 @@
 				671C01502FFC4F2E00E76758 /* needle-pebble-ft-cq4.zip in Resources */,
 				67555A962E0212D1006BB488 /* JSTimeout.js in Resources */,
 				677B8EF62DBFE88C0060DBD6 /* startup.js in Resources */,
-				677B8EF52DBFE88C0060DBE3 /* bundled-apps in Resources */,
 				058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */,
 				058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */,
+				7E8F9A122D5E6F780012345C /* ring-clock-alarm.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,6 +340,7 @@
 				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
 				7E8F9A0C2D5E6F7800123456 /* PebbleShortcuts.swift in Sources */,
 				7E8F9A0E2D5E6F7800123458 /* SpeechAnalyzerBridge.swift in Sources */,
+				7E8F9A102D5E6F780012345A /* AlarmKitBridge.swift in Sources */,
 				7555FF83242A565900829871 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

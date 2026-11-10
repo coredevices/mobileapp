@@ -47,6 +47,7 @@ data class LibPebbleNotification(
      * deduplication.
      */
     val messageKey: String? = null,
+    val silent: Boolean = false,
 ) {
     fun displayDataEquals(other: LibPebbleNotification): Boolean {
         return packageName == other.packageName &&
@@ -116,6 +117,9 @@ data class LibPebbleNotification(
         itemID = uuid
 
         layout = TimelineItem.Layout.GenericNotification
+        if (silent) {
+            flags { silent() }
+        }
         attributes {
             title?.let {
                 title { it }
@@ -146,29 +150,13 @@ data class LibPebbleNotification(
                             val combined =
                                 userCannedResponses +
                                         action.remoteInput?.suggestedResponses.orEmpty()
-                            cannedResponse { trimCannedResponses(combined) }
+                            cannedResponse { combined }
                         }
                     }
                 }
             }
         }
     }
-}
-
-private const val MAX_CANNED_RESPONSE_BYTES = 512
-
-/**
- * Trim the list to fit within the firmware's 512-byte serialized limit
- * (strings joined by NUL, encoded as UTF-8). Drops items from the end first.
- */
-private fun trimCannedResponses(responses: List<String>): List<String> {
-    var result = responses
-    while (result.isNotEmpty()) {
-        val serializedSize = result.joinToString("\u0000").encodeToByteArray().size
-        if (serializedSize <= MAX_CANNED_RESPONSE_BYTES) break
-        result = result.dropLast(1)
-    }
-    return result
 }
 
 fun LibPebbleNotification.toEntity(

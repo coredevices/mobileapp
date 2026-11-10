@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,7 +35,6 @@ import kotlinx.io.RawSource
 import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
-import kotlin.concurrent.atomics.AtomicReference
 import kotlin.time.Instant
 
 sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) :
@@ -43,6 +43,21 @@ sealed class FirmwareUpdateException(message: String, cause: Throwable? = null) 
     class TransferFailed(message: String, cause: Throwable?, val bytesTransferred: UInt) :
         FirmwareUpdateException(message, cause)
 }
+
+/** What started a firmware update. */
+enum class FirmwareUpdateTrigger {
+    AutoUpdate,
+    Ui,
+    Sideload,
+    DevConnection,
+}
+
+/** One firmware install: the update, its downloaded or sideloaded bundle, and what started it. */
+data class FirmwareInstall(
+    val update: FirmwareUpdateCheckResult.FoundUpdate,
+    val path: Path,
+    val trigger: FirmwareUpdateTrigger,
+)
 
 enum class FirmwareUpdateErrorStarting {
     ErrorDownloading,
@@ -59,26 +74,44 @@ interface FirmwareUpdater : ConnectedPebble.FirmwareUpdate {
     )
 
     sealed class FirmwareUpdateStatus {
+        /** What started the update; null on an [NotInProgress.Idle] with no update behind it. */
+        abstract val trigger: FirmwareUpdateTrigger?
+
         sealed class NotInProgress : FirmwareUpdateStatus() {
-           data class Idle(val lastFailure: Exception? = null) : NotInProgress()
-            data class ErrorStarting(val error: FirmwareUpdateErrorStarting) : NotInProgress()
+            data class Idle(
+                val lastFailure: Exception? = null,
+                override val trigger: FirmwareUpdateTrigger? = null,
+            ) : NotInProgress()
+            data class ErrorStarting(
+                val error: FirmwareUpdateErrorStarting,
+                override val trigger: FirmwareUpdateTrigger,
+            ) : NotInProgress()
         }
 
         sealed class Active : FirmwareUpdateStatus() {
             abstract val update: FirmwareUpdateCheckResult.FoundUpdate
+            abstract override val trigger: FirmwareUpdateTrigger
         }
 
-        data class WaitingToStart(override val update: FirmwareUpdateCheckResult.FoundUpdate) : Active()
+        data class WaitingToStart(
+            override val update: FirmwareUpdateCheckResult.FoundUpdate,
+            override val trigger: FirmwareUpdateTrigger,
+        ) : Active()
         data class InProgress(
             override val update: FirmwareUpdateCheckResult.FoundUpdate,
             val progress: StateFlow<Float>,
+            override val trigger: FirmwareUpdateTrigger,
         ) : Active()
 
         /**
          * Won't be in this state for long (we'll be disconnected very soon, at which point no-one
-         * is looking at this state).
+         * is looking at this state). [viaPrf]: rebooting into recovery, which installs the update.
          */
-        data class WaitingForReboot(override val update: FirmwareUpdateCheckResult.FoundUpdate) : Active()
+        data class WaitingForReboot(
+            override val update: FirmwareUpdateCheckResult.FoundUpdate,
+            override val trigger: FirmwareUpdateTrigger,
+            val viaPrf: Boolean = false,
+        ) : Active()
     }
 }
 
@@ -90,36 +123,34 @@ private data class FwupProperties(
 )
 
 /**
- * Remembers a firmware update which was interrupted by disconnection, so it can be auto-resumed on
- * the next connection. In-memory only: an app restart loses it, but a manual retry still resumes
- * (the watch owns the transfer state).
+ * A firmware install that continues on the watch's next connection. In-memory only: an app restart
+ * loses it, but a manual retry still resumes (the watch owns the transfer state).
  */
-class InterruptedFirmwareUpdates {
-    data class Interrupted(
-        val identifier: PebbleIdentifier,
-        val update: FirmwareUpdateCheckResult.FoundUpdate,
-        val path: Path,
-    )
+class PendingFirmwareInstalls {
+    enum class Reason {
+        /** A disconnection interrupted it: auto-resumed. */
+        Interrupted,
 
-    private val interrupted = AtomicReference<Interrupted?>(null)
+        /** Waiting for the watch to reboot into PRF, which installs it. */
+        ViaPrf,
 
-    fun record(
-        identifier: PebbleIdentifier,
-        update: FirmwareUpdateCheckResult.FoundUpdate,
-        path: Path,
-    ) {
-        interrupted.store(Interrupted(identifier, update, path))
+        /** Installed directly: the next connection shows whether the watch booted it. */
+        AwaitingBoot,
+
+        /** Installed directly, but the watch kept booting its previous build: not tried directly again. */
+        DidNotBoot,
     }
 
-    fun clear(identifier: PebbleIdentifier) {
-        val current = interrupted.load()
-        if (current?.identifier == identifier) {
-            interrupted.compareAndSet(current, null)
-        }
-    }
+    data class Pending(val install: FirmwareInstall, val reason: Reason)
 
-    fun get(identifier: PebbleIdentifier): Interrupted? =
-        interrupted.load()?.takeIf { it.identifier == identifier }
+    private val pending = MutableStateFlow<Map<PebbleIdentifier, Pending>>(emptyMap())
+
+    fun record(identifier: PebbleIdentifier, install: FirmwareInstall, reason: Reason = Reason.Interrupted) =
+        pending.update { it + (identifier to Pending(install, reason)) }
+
+    fun clear(identifier: PebbleIdentifier) = pending.update { it - identifier }
+
+    fun get(identifier: PebbleIdentifier): Pending? = pending.value[identifier]
 }
 
 private data class ResumeOffsets(
@@ -136,7 +167,8 @@ class RealFirmwareUpdater(
     private val firmwareDownloader: FirmwareDownloader,
     private val connectionCoroutineScope: ConnectionCoroutineScope,
     private val firmwareUpdateManager: FirmwareUpdateManager,
-    private val interruptedUpdates: InterruptedFirmwareUpdates,
+    private val pendingInstalls: PendingFirmwareInstalls,
+    private val lastStates: LastFirmwareUpdateStates,
     private val watchConfig: WatchConfigFlow,
 ) : FirmwareUpdater {
     private val logger = Logger.withTag("FWUpdate-$identifier")
@@ -158,7 +190,69 @@ class RealFirmwareUpdater(
             else -> null
         }
         props = FwupProperties(watchPlatform, updateToSlot, supportsResume, runningFwVersion)
-        maybeAutoResume(runningFwVersion)
+        connectionCoroutineScope.launch {
+            _firmwareUpdateState.collect {
+                if (it != FirmwareUpdateStatus.NotInProgress.Idle()) lastStates.update(identifier, it)
+            }
+        }
+        if (!continuePending(runningFwVersion)) maybeAutoResume(runningFwVersion)
+    }
+
+    /** Picks up an install that was waiting for this connection; false if it leaves room to auto-resume. */
+    private fun continuePending(runningFwVersion: FirmwareVersion): Boolean {
+        val pending = pendingInstalls.get(identifier)
+        when (pending?.reason) {
+            PendingFirmwareInstalls.Reason.ViaPrf -> {
+                pendingInstalls.clear(identifier)
+                if (runningFwVersion.isRecovery) {
+                    continueInPrf(pending.install)
+                } else {
+                    _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(
+                        IllegalStateException("The watch didn't reboot into recovery to install the update"),
+                        pending.install.trigger,
+                    )
+                }
+                return true
+            }
+            PendingFirmwareInstalls.Reason.AwaitingBoot -> {
+                val target = pending.install.update.version
+                if (!runningFwVersion.isRecovery && !runningFwVersion.isSameBuildAs(target)) {
+                    logger.w { "Watch didn't boot ${target.stringVersion}; won't install it directly again" }
+                    pendingInstalls.record(identifier, pending.install, PendingFirmwareInstalls.Reason.DidNotBoot)
+                } else {
+                    pendingInstalls.clear(identifier)
+                }
+            }
+            PendingFirmwareInstalls.Reason.Interrupted, PendingFirmwareInstalls.Reason.DidNotBoot, null -> Unit
+        }
+        return false
+    }
+
+    private fun routeFor(pbz: PbzFirmware, fwupProps: FwupProperties): InstallRoute? = try {
+        installRoute(pbz.manifests, fwupProps.runningFwVersion, fwupProps.updateToSlot) {
+            installsDirectly(fwupProps.runningFwVersion, it, pendingInstalls.get(identifier))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logger.w(e) { "Failed to read firmware bundle: ${e.message}" }
+        null
+    }
+
+    private fun continueInPrf(install: FirmwareInstall) {
+        connectionCoroutineScope.launch {
+            val fwupProps = props ?: return@launch
+            if (!tryStartUpdateMutex(install.update, install.trigger)) return@launch
+            val route = routeFor(PbzFirmware(install.path), fwupProps)
+            if (route !is InstallRoute.Direct) {
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz, install.trigger)
+                return@launch
+            }
+            logger.i { "Installing ${install.update.version.stringVersion} from PRF" }
+            pendingInstalls.record(identifier, install)
+            beginFirmwareUpdate(route.manifest, install, fwupProps)
+        }
     }
 
     /**
@@ -168,11 +262,12 @@ class RealFirmwareUpdater(
      */
     private fun maybeAutoResume(runningFwVersion: FirmwareVersion) {
         val fwupProps = props ?: return
-        val interrupted = interruptedUpdates.get(identifier) ?: return
+        val interrupted = pendingInstalls.get(identifier)
+            ?.takeIf { it.reason == PendingFirmwareInstalls.Reason.Interrupted }?.install ?: return
         if (!watchConfig.value.autoResumeFirmwareUpdate || !fwupProps.supportsResume) return
         if (runningFwVersion >= interrupted.update.version) {
             logger.d { "Not auto-resuming: watch already running ${runningFwVersion.stringVersion}" }
-            interruptedUpdates.clear(identifier)
+            pendingInstalls.clear(identifier)
             return
         }
         connectionCoroutineScope.launch {
@@ -181,11 +276,11 @@ class RealFirmwareUpdater(
                     (status.firmwareBytesWritten.get() > 0u || status.resourcesBytesWritten.get() > 0u)
             if (!watchResumable) {
                 logger.d { "Not auto-resuming: watch has no resumable update state" }
-                interruptedUpdates.clear(identifier)
+                pendingInstalls.clear(identifier)
                 return@launch
             }
             logger.i { "Auto-resuming interrupted firmware update to ${interrupted.update.version.stringVersion}" }
-            startUpdate(interrupted.update, requireResume = true)
+            startUpdate(interrupted.update, interrupted.trigger, requireResume = true)
         }
     }
 
@@ -232,8 +327,9 @@ class RealFirmwareUpdater(
     private suspend fun sendFirmwareParts(
         manifest: PbzManifestWrapper,
         resume: ResumeOffsets,
-        update: FirmwareUpdateCheckResult.FoundUpdate,
+        install: FirmwareInstall,
     ) {
+        val (update, _, trigger) = install
         var totalSent = resume.total
         val firmware = manifest.manifest.firmware
         val resources = manifest.manifest.resources
@@ -245,7 +341,7 @@ class RealFirmwareUpdater(
                     is PutBytesSession.SessionState.Open -> {
                         logger.d { "PutBytes session opened for firmware" }
                         _firmwareUpdateState.value =
-                            FirmwareUpdateStatus.InProgress(update, progessFlow)
+                            FirmwareUpdateStatus.InProgress(update, progessFlow, trigger)
                     }
 
                     is PutBytesSession.SessionState.Sending -> {
@@ -316,120 +412,132 @@ class RealFirmwareUpdater(
         resourcesCookie?.let { putBytesSession.sendInstall(it) }
     }
 
-    private suspend fun tryStartUpdateMutex(update: FirmwareUpdateCheckResult.FoundUpdate): Boolean {
+    private suspend fun tryStartUpdateMutex(
+        update: FirmwareUpdateCheckResult.FoundUpdate,
+        trigger: FirmwareUpdateTrigger,
+    ): Boolean {
         startMutex.withLock {
             if (_firmwareUpdateState.value !is FirmwareUpdateStatus.NotInProgress) {
                 logger.w { "Firmware update already in progress!" }
                 return false
             }
-            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingToStart(update)
+            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingToStart(update, trigger)
             return true
         }
     }
 
-    override fun sideloadFirmware(path: Path) {
+    override fun sideloadFirmware(path: Path, trigger: FirmwareUpdateTrigger) {
         connectionCoroutineScope.launch {
             val fwupProps = props
             if (fwupProps == null) {
                 throw FirmwareUpdateException.SafetyCheckFailed("FirmwareUpdater not initialized")
             }
-            val pbz = PbzFirmware(path)
-            val manifest = try {
-                 pbz.findManifestFor(fwupProps.updateToSlot)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                logger.w(e) { "Failed to find manifest for slot ${fwupProps.updateToSlot}" }
-                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
-                return@launch
-            }
-            val updateToVersion = manifest.manifest.asFirmwareVersion()
+            val route = routeFor(PbzFirmware(path), fwupProps)
+            val updateToVersion = route?.manifest?.manifest?.asFirmwareVersion()
             if (updateToVersion == null) {
-                logger.w { "Failed to parse firmware version to sideload from $manifest" }
+                logger.w { "No firmware this watch can install in $path" }
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                    FirmwareUpdateErrorStarting.ErrorParsingPbz)
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz, trigger)
                 return@launch
             }
             val update = FirmwareUpdateCheckResult.FoundUpdate(
                 version = updateToVersion,
                 url = "",
                 notes = "Sideloaded",
-                canDowngrade = true,
+                installsDirectly = route is InstallRoute.Direct,
             )
             logger.d { "sideloadFirmware path: $path" }
-            if (!tryStartUpdateMutex(update)) {
+            if (!tryStartUpdateMutex(update, trigger)) {
                 return@launch
             }
-            if (needsPrfToDowngrade(update, fwupProps.runningFwVersion)) {
-                rebootIntoPrfForDowngrade(update)
-                return@launch
-            }
-            beginFirmwareUpdate(pbz, update, fwupProps)
+            install(route, FirmwareInstall(update, path, trigger), fwupProps)
         }
     }
 
-    override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate) {
-        startUpdate(update, requireResume = false)
+    override fun updateFirmware(update: FirmwareUpdateCheckResult.FoundUpdate, trigger: FirmwareUpdateTrigger) {
+        startUpdate(update, trigger, requireResume = false)
     }
 
-    private fun startUpdate(update: FirmwareUpdateCheckResult.FoundUpdate, requireResume: Boolean) {
+    private fun startUpdate(
+        update: FirmwareUpdateCheckResult.FoundUpdate,
+        trigger: FirmwareUpdateTrigger,
+        requireResume: Boolean,
+    ) {
         connectionCoroutineScope.launch {
             logger.d { "updateFirmware: $update" }
             val fwupProps = props
             if (fwupProps == null) {
                 throw FirmwareUpdateException.SafetyCheckFailed("FirmwareUpdater not initialized")
             }
-            if (!tryStartUpdateMutex(update)) {
+            if (!tryStartUpdateMutex(update, trigger)) {
                 return@launch
             }
-            if (needsPrfToDowngrade(update, fwupProps.runningFwVersion)) {
-                rebootIntoPrfForDowngrade(update)
-                return@launch
-            }
-            val pbz = reusableDownloadedPbz(update) ?: run {
+            val path = reusableDownloadedPbz(update) ?: run {
                 val path = firmwareDownloader.downloadFirmware(update.url, "pbz")
                 if (path == null) {
                     _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                        FirmwareUpdateErrorStarting.ErrorDownloading)
+                        FirmwareUpdateErrorStarting.ErrorDownloading, trigger)
                     return@launch
                 }
-                val pbz = try {
-                    PbzFirmware(path).apply { manifests }
+                try {
+                    PbzFirmware(path).manifests
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     logger.w(e) { "Failed to parse firmware: ${e.message}" }
                     _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
-                        FirmwareUpdateErrorStarting.ErrorParsingPbz)
+                        FirmwareUpdateErrorStarting.ErrorParsingPbz, trigger)
                     return@launch
                 }
                 // Remember the attempt (only once the file is downloaded and parseable, so a
                 // failed download doesn't trigger a retry on the next connection). Cleared when
                 // the update completes; anything interrupting it can auto-resume on reconnect.
-                interruptedUpdates.record(identifier, update, path)
-                pbz
+                pendingInstalls.record(identifier, FirmwareInstall(update, path, trigger))
+                path
             }
-            beginFirmwareUpdate(pbz, update, fwupProps, requireResume)
+            val route = routeFor(PbzFirmware(path), fwupProps)
+            if (route == null) {
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.ErrorStarting(
+                    FirmwareUpdateErrorStarting.ErrorParsingPbz, trigger)
+                return@launch
+            }
+            if (requireResume && route !is InstallRoute.Direct) {
+                logger.i { "Not auto-resuming: the update now needs PRF" }
+                pendingInstalls.clear(identifier)
+                _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle()
+                return@launch
+            }
+            install(route, FirmwareInstall(update, path, trigger), fwupProps, requireResume)
         }
     }
 
+    private suspend fun install(
+        route: InstallRoute,
+        install: FirmwareInstall,
+        fwupProps: FwupProperties,
+        requireResume: Boolean = false,
+    ) = when (route) {
+        is InstallRoute.Direct -> beginFirmwareUpdate(route.manifest, install, fwupProps, requireResume)
+        is InstallRoute.ViaPrf -> rebootIntoPrfToInstall(install)
+    }
+
     /**
-     * The pbz from an interrupted attempt at the same update, if it's still on disk and really
-     * contains the expected version - so a resume doesn't re-download it.
+     * The pbz from an earlier attempt at the same build, if it's still on disk and really contains
+     * the expected version - so a resume or retry doesn't re-download it.
      */
-    private fun reusableDownloadedPbz(update: FirmwareUpdateCheckResult.FoundUpdate): PbzFirmware? {
-        val recorded = interruptedUpdates.get(identifier)?.takeIf { it.update == update } ?: return null
+    private fun reusableDownloadedPbz(update: FirmwareUpdateCheckResult.FoundUpdate): Path? {
+        // By build: each update check returns a newly signed URL for the same update.
+        val recorded = pendingInstalls.get(identifier)?.install
+            ?.takeIf { it.update.version.isSameBuildAs(update.version) } ?: return null
         return try {
-            val pbz = PbzFirmware(recorded.path)
-            val versions = pbz.manifests.map { it.manifest.asFirmwareVersion() }
+            val versions = PbzFirmware(recorded.path).manifests.map { it.manifest.asFirmwareVersion() }
             // Not equals(): the update-check version has a placeholder timestamp
             if (versions.isEmpty() || versions.any { it == null || !it.sameVersionNumberAs(update.version) }) {
                 logger.w { "Previously-downloaded pbz isn't ${update.version.stringVersion} (contains ${versions.map { it?.stringVersion }}); re-downloading" }
                 return null
             }
             logger.d { "Reusing already-downloaded pbz: ${recorded.path}" }
-            pbz
+            recorded.path
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -438,11 +546,11 @@ class RealFirmwareUpdater(
         }
     }
 
-    /** Nothing is transferred: the update is installed from the normal PRF flow after reconnect. */
-    private fun rebootIntoPrfForDowngrade(update: FirmwareUpdateCheckResult.FoundUpdate) {
-        logger.i { "Downgrade to ${update.version.stringVersion}: rebooting watch into PRF" }
-        interruptedUpdates.clear(identifier)
-        _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
+    /** Nothing is transferred yet: [continueInPrf] installs it once the watch reconnects in PRF. */
+    private fun rebootIntoPrfToInstall(install: FirmwareInstall) {
+        logger.i { "Installing ${install.update.version.stringVersion} from PRF: rebooting watch into PRF" }
+        pendingInstalls.record(identifier, install, PendingFirmwareInstalls.Reason.ViaPrf)
+        _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(install.update, install.trigger, viaPrf = true)
         systemService.resetIntoPrf()
     }
 
@@ -453,14 +561,14 @@ class RealFirmwareUpdater(
     private val startMutex = Mutex()
 
     private suspend fun beginFirmwareUpdate(
-        pbzFw: PbzFirmware,
-        update: FirmwareUpdateCheckResult.FoundUpdate,
+        manifest: PbzManifestWrapper,
+        install: FirmwareInstall,
         fwupProps: FwupProperties,
         requireResume: Boolean = false,
     ) {
         logger.d { "beginFirmwareUpdate" }
+        val (update, _, trigger) = install
         try {
-            val manifest = pbzFw.findManifestFor(fwupProps.updateToSlot)
             val totalBytes = manifest.manifest.firmware.size + (manifest.manifest.resources?.size ?: 0)
             logger.d { "Loading firmware for slot ${fwupProps.updateToSlot}" }
             require(totalBytes > 0) { "Firmware size is 0" }
@@ -472,7 +580,7 @@ class RealFirmwareUpdater(
             }
             if (requireResume && resume.total == 0u) {
                 logger.i { "Not auto-resuming: watch state doesn't match this update" }
-                interruptedUpdates.clear(identifier)
+                pendingInstalls.clear(identifier)
                 _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle()
                 return
             }
@@ -483,31 +591,36 @@ class RealFirmwareUpdater(
             if (result != SystemMessage.FirmwareUpdateStartStatus.Started) {
                 error("Failed to start firmware update: $result")
             }
-            sendFirmwareParts(manifest, resume, update)
+            sendFirmwareParts(manifest, resume, install)
             logger.d { "Firmware update completed, waiting for reboot" }
-            interruptedUpdates.clear(identifier)
-            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update)
+            val running = fwupProps.runningFwVersion
+            if (running.isDualSlot && !running.isRecovery) {
+                pendingInstalls.record(identifier, install, PendingFirmwareInstalls.Reason.AwaitingBoot)
+            } else {
+                pendingInstalls.clear(identifier)
+            }
+            _firmwareUpdateState.value = FirmwareUpdateStatus.WaitingForReboot(update, trigger)
             systemService.sendFirmwareUpdateComplete()
             return
         } catch (e: IllegalArgumentException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
-           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e, trigger)
         } catch (e: PutBytesService.PutBytesException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
-           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e, trigger)
         } catch (e: FirmwareUpdateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
-           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e, trigger)
         } catch (e: CancellationException) {
            _firmwareUpdateState.value =
-              FirmwareUpdateStatus.NotInProgress.ErrorStarting(FirmwareUpdateErrorStarting.ErrorDownloading)
+              FirmwareUpdateStatus.NotInProgress.ErrorStarting(FirmwareUpdateErrorStarting.ErrorDownloading, trigger)
            throw e
         } catch (e: IllegalStateException) {
             logger.e(e) { "Firmware update failed: ${e.message}" }
-           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e, trigger)
         } catch (e: Exception) {
             logger.e(e) { "Firmware update failed (unknown): ${e.message}" }
-           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e)
+           _firmwareUpdateState.value = FirmwareUpdateStatus.NotInProgress.Idle(e, trigger)
         }
     }
 
@@ -615,17 +728,6 @@ internal fun validatedResumeOffset(
 
 private fun FirmwareVersion.sameVersionNumberAs(other: FirmwareVersion): Boolean =
     major == other.major && minor == other.minor && patch == other.patch
-
-/** Ignores the timestamp, which is a placeholder on versions that came from an update check. */
-private fun FirmwareVersion.lowerVersionNumberThan(other: FirmwareVersion): Boolean =
-    compareValuesBy(this, other, { it.major }, { it.minor }, { it.patch }) < 0
-
-/** Dual-slot firmware refuses to install a version lower than the one running; PRF doesn't. */
-internal fun needsPrfToDowngrade(
-    update: FirmwareUpdateCheckResult.FoundUpdate,
-    running: FirmwareVersion,
-): Boolean = update.canDowngrade && running.isDualSlot && !running.isRecovery &&
-        update.version.lowerVersionNumberThan(running)
 
 fun PbzManifest.asFirmwareVersion(): FirmwareVersion? {
     val versionTag = firmware.versionTag

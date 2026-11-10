@@ -4,9 +4,12 @@ import io.ktor.client.HttpClient
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
+import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.permissions.AppPermissions
 import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
+import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
 import kotlin.uuid.Uuid
 
 class JsPluginFactory(
@@ -16,6 +19,11 @@ class JsPluginFactory(
     private val httpInterceptorManager: HttpInterceptorManager,
     private val permissions: AppPermissions,
     private val runningApps: RunningApps,
+    private val fileAccess: PluginFileAccess,
+    private val fileSystem: PluginFileSystem,
+    private val logs: PluginLogs,
+    private val otherSources: PluginSources,
+    private val timeline: RemoteTimelineEmulator,
     private val oauthApi: PluginOAuthApi? = null,
 ) {
     fun create(
@@ -32,8 +40,14 @@ class JsPluginFactory(
         scope = scope,
         httpClient = httpClient,
         httpInterceptorManager = httpInterceptorManager,
-        networkAccess = NetworkGate(permissions, name, pluginUuid),
+        networkAccess = { prompt -> NetworkGate(permissions, name, pluginUuid, prompt) },
+        queryPermission = { key -> permissions.query(pluginUuid, key) },
         runningApps = runningApps,
+        fileAccess = fileAccess,
+        fileSystem = fileSystem,
+        logs = logs,
         oauthApi = oauthApi,
+        otherSources = otherSources,
+        timeline = timeline,
     )
 }

@@ -34,12 +34,16 @@ class BuiltInReminderFeedItems(
         return listOf(ReminderListEntry(id, title))
     }
 
+    /** Fresh feed-item id, generated up front so the reminder's local alarm and its feed item
+     *  share the one global identity. */
+    fun newItemId(): String = itemFactory.simpleUid()
+
     /**
-     * Creates the feed item for a built-in reminder: a note in [listId] when targeted at a list
-     * (ListTool path), else a reminder in the todos list.
+     * Creates the feed item for a built-in reminder under [itemId]: a note in [listId] when
+     * targeted at a list (ListTool path), else a reminder in the todos list.
      */
     suspend fun createFeedItem(
-        localReminderId: Int,
+        itemId: String,
         title: String,
         deadline: Instant?,
         listId: String?,
@@ -64,11 +68,10 @@ class BuiltInReminderFeedItems(
                 title = title,
                 dueAt = deadline,
                 toolCallId = source?.toolCallId,
-                localReminderId = localReminderId,
                 notifyBeforeMillis = notifyBefore?.inWholeMilliseconds,
             )
         }
-        itemRepository.setItem(itemFactory.simpleUid(), item)
+        itemRepository.setItem(itemId, item)
     }
 
     companion object {

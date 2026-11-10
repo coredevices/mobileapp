@@ -32,6 +32,8 @@ abstract class JsRunner(
     abstract suspend fun loadAppJs(jsUrl: String)
     abstract suspend fun signalInterceptResponse(callbackId: String, result: InterceptResponse)
     abstract suspend fun signalNewAppMessageData(data: String?): Boolean
+    /** [json] is an object with a `type` of audiostreamstart / audiostream / audiostreamstop. */
+    abstract suspend fun signalAudioStream(json: String)
     abstract suspend fun signalTimelineToken(callId: String, token: String)
     abstract suspend fun signalTimelineTokenFail(callId: String)
     abstract suspend fun signalReady()

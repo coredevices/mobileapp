@@ -224,6 +224,7 @@ fun FullFeed(coreNav: CoreNav) {
                                 vm.retryRecording(entry.recording.id, retryEntry)
                             },
                             onOpenObject = { id -> coreNav.navigateTo(RingRoutes.ObjectDetails(id)) },
+                            onOpenTimersAlarms = { coreNav.navigateTo(RingRoutes.TimersAndAlarms) },
                         )
                     }
                     is FullFeedViewModel.Entry.PendingTransfer -> item(key = entry.uniqueKey) {
@@ -409,6 +410,7 @@ private fun ImessageRecordingRow(
     onOpenRecording: () -> Unit,
     onRetryRecording: (coredevices.indexai.data.entity.RecordingEntryEntity) -> Unit,
     onOpenObject: (String) -> Unit,
+    onOpenTimersAlarms: () -> Unit,
 ) {
     val colors = IndexTheme.colors
 
@@ -453,6 +455,7 @@ private fun ImessageRecordingRow(
                             action = chip,
                             onOpenObject = onOpenObject,
                             onNothingToOpen = onOpenRecording,
+                            onOpenTimersAlarms = onOpenTimersAlarms,
                         )
                     }
                 }

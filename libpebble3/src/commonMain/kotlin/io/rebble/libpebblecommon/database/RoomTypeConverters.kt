@@ -182,7 +182,10 @@ class RoomTypeConverters {
 
     @TypeConverter
     fun StringToCapabilitySet(value: String): Set<ProtocolCapsFlag> {
-        return json.decodeFromString(value)
+        // Names stored by a newer build are dropped, so going back to an older one doesn't crash.
+        return json.decodeFromString<List<String>>(value)
+            .mapNotNull { name -> ProtocolCapsFlag.entries.firstOrNull { it.name == name } }
+            .toSet()
     }
 
     @TypeConverter

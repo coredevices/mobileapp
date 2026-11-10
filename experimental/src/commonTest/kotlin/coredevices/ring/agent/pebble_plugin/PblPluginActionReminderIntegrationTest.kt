@@ -26,6 +26,9 @@ private fun list(id: String, name: String) = SourceInstance(
     properties = mapOf("name" to mapOf("shortText" to JsonObject(mapOf("text" to JsonPrimitive(name))))),
 )
 
+private fun integrationFor(plugin: FakePlugin) =
+    PblPluginActionReminderIntegration(plugin.metadata, FakePlugins(plugin), losAngeles)
+
 private fun tickTickPlugin(
     result: ActionResult = ActionResult(ok = true, text = "task-1"),
     sources: List<SourceDeclaration> = emptyList(),
@@ -45,7 +48,7 @@ class PblPluginActionReminderIntegrationTest {
     fun dueTimeCarriesTheLocalWallTimeAndRealOffset() = runTest {
         val plugin = tickTickPlugin()
 
-        val id = PblPluginActionReminderIntegration(plugin, losAngeles).createReminder(
+        val id = integrationFor(plugin).createReminder(
             title = "Call dentist",
             deadline = Instant.parse("2026-08-27T21:30:00Z"),
             listId = "list-7",
@@ -73,7 +76,7 @@ class PblPluginActionReminderIntegrationTest {
     fun offsetFollowsDaylightSaving() = runTest {
         val plugin = tickTickPlugin()
 
-        PblPluginActionReminderIntegration(plugin, losAngeles)
+        integrationFor(plugin)
             .createReminder("Winter", Instant.parse("2026-12-01T17:00:00Z"))
 
         assertEquals(JsonPrimitive("2026-12-01T09:00:00-08:00"), plugin.invoked.single().second["due_iso"])
@@ -83,7 +86,7 @@ class PblPluginActionReminderIntegrationTest {
     fun withoutADeadlineOnlyTheTitleIsSent() = runTest {
         val plugin = tickTickPlugin()
 
-        PblPluginActionReminderIntegration(plugin, losAngeles).createReminder("Buy milk", null, notifyBefore = 1.hours)
+        integrationFor(plugin).createReminder("Buy milk", null, notifyBefore = 1.hours)
 
         assertEquals(
             listOf("create_reminder" to JsonObject(mapOf("title" to JsonPrimitive("Buy milk")))),
@@ -96,7 +99,7 @@ class PblPluginActionReminderIntegrationTest {
         val plugin = tickTickPlugin(ActionResult.error(PluginErrors.INVALID_ARGS, "bad due_iso"))
 
         val e = assertFailsWith<IllegalStateException> {
-            PblPluginActionReminderIntegration(plugin, losAngeles).createReminder("Buy milk", null)
+            integrationFor(plugin).createReminder("Buy milk", null)
         }
         assertEquals("bad due_iso", e.message)
     }
@@ -110,7 +113,7 @@ class PblPluginActionReminderIntegrationTest {
 
         assertEquals(
             listOf(ReminderListEntry("inbox", "Inbox"), ReminderListEntry("work", "Work")),
-            PblPluginActionReminderIntegration(plugin, losAngeles).getAllLists(),
+            integrationFor(plugin).getAllLists(),
         )
     }
 
@@ -123,7 +126,7 @@ class PblPluginActionReminderIntegrationTest {
 
         assertEquals(
             listOf(ReminderListEntry("work", "Work projects")),
-            PblPluginActionReminderIntegration(plugin, losAngeles).searchForList("work"),
+            integrationFor(plugin).searchForList("work"),
         )
     }
 
@@ -131,7 +134,7 @@ class PblPluginActionReminderIntegrationTest {
     fun aPluginWithoutTheListSourceHasNoLists() = runTest {
         val plugin = tickTickPlugin(lists = listOf(list("inbox", "Inbox")))
 
-        assertEquals(emptyList(), PblPluginActionReminderIntegration(plugin, losAngeles).getAllLists())
+        assertEquals(emptyList(), integrationFor(plugin).getAllLists())
     }
 
     @Test
@@ -144,7 +147,7 @@ class PblPluginActionReminderIntegrationTest {
 
         assertEquals(
             listOf(ReminderListEntry("p1", "Personal")),
-            PblPluginActionReminderIntegration(plugin, losAngeles).getAllLists(),
+            integrationFor(plugin).getAllLists(),
         )
     }
 }

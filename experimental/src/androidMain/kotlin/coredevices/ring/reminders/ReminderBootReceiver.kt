@@ -47,11 +47,11 @@ class ReminderBootReceiver : BroadcastReceiver(), KoinComponent {
                 for (reminder in reminders) {
                     val time = reminder.time ?: continue
                     if (time > now) {
-                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, time, isPreNotification = false)
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.itemId, time, isPreNotification = false)
                     }
                     val preTime = reminder.notifyBeforeMillis?.let { time - it.milliseconds }
                     if (preTime != null && preTime > now) {
-                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.id, preTime, isPreNotification = true)
+                        AndroidBuiltInReminderIntegration.scheduleAlarm(alarmManager, context, reminder.itemId, preTime, isPreNotification = true)
                     }
                 }
                 logger.d { "Re-scheduled ${reminders.size} reminder(s) after boot" }

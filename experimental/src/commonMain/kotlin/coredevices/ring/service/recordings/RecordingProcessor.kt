@@ -422,6 +422,34 @@ class RecordingProcessor(
         finishTurn(recordingId, firestoreId, createdAt, agent.conversation.first().drop(convEndIdx))
     }
 
+    /**
+     * Records a turn the app completed without an agent: the user's [text] followed by one tool
+     * [result] under [toolCallId], so notifications and the feed show it like an agent action.
+     */
+    suspend fun recordDirectResult(
+        recordingId: Long,
+        recordingEntryId: Long?,
+        text: String,
+        toolCallId: String,
+        result: ToolCallResult,
+    ) {
+        val rec = withContext(Dispatchers.IO) { recordingRepo.getRecording(recordingId) }
+        val createdAt = rec?.localTimestamp ?: Clock.System.now()
+        persistUserMessageIfAbsent(recordingId, recordingEntryId, text, expectedDbSize = 0)
+        val toolMessage = ConversationMessageDocument(
+            role = MessageRole.tool,
+            content = result.resultString,
+            semantic_result = result.semanticResult,
+            tool_call_id = toolCallId,
+            is_forced_tool = true,
+        )
+        withContext(Dispatchers.IO) {
+            conversationMessageDao.insertMessage(ConversationMessageEntity(recordingId = recordingId, document = toolMessage))
+        }
+        finishTurn(recordingId, rec?.firestoreId, createdAt, listOf(toolMessage))
+        linkUserMessageToEntry(recordingId, recordingEntryId)
+    }
+
     private suspend fun finishTurn(
         recordingId: Long,
         firestoreId: String?,

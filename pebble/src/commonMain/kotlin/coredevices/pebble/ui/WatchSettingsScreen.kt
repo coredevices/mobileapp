@@ -6,6 +6,7 @@ import CoreAppVersion
 import NextBugReportContext
 import PlatformUiContext
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,9 +25,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
@@ -34,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -48,6 +54,8 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Schedule
@@ -57,15 +65,20 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -88,6 +101,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
@@ -97,6 +111,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -132,6 +147,7 @@ import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
 import coredevices.pebble.weather.WeatherFetcher
+import coredevices.pebble.weather.WeatherPlugin
 import coredevices.ui.ConfirmDialog
 import coredevices.ui.CoreLinearProgressIndicator
 import coredevices.ui.M3Dialog
@@ -158,15 +174,19 @@ import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.crashlytics.crashlytics
-import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
+import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.services.FirmwareVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -184,6 +204,8 @@ import kotlin.math.roundToLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import theme.coreOrange
 
 enum class TopLevelType(val displayName: String) {
     Phone("Phone"),
@@ -215,7 +237,9 @@ enum class Section(val title: String, val icon: ImageVector) {
     QuickLaunch("Quick Launch", Icons.Default.RocketLaunch), // watch only
     NotificationsWatch("Notifications", Icons.Default.Notifications), // watch only
     General("General", Icons.Default.Settings),
+    Appearance("Appearance", Icons.Default.Palette),
     Apps("Apps", Icons.Default.Apps),
+    Plugins("Plugins", Icons.Default.Power),
     Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
     Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
@@ -239,6 +263,7 @@ fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
 }
 
 object SettingsIds {
+    const val PermissionPolicy = "PermissionPolicy"
     const val OfflineSpeechRecognition = "OfflineSpeechRecognition"
     const val EnableHealthTracking = "EnableHealthTracking"
     const val EnableActivityInsights = "EnableActivityInsights"
@@ -254,11 +279,32 @@ object SettingsIds {
     const val HrmActivityTracking = "HrmActivityTracking"
 }
 
+enum class SettingsGroup(val title: String) {
+    Permissions("Permissions"),
+    AppUpdates("App Updates"),
+    MenuScrolling("Menu Scrolling"),
+    BacklightColor("Backlight Color"),
+    BacklightMotion("Backlight Motion"),
+    BacklightAmbient("Ambient Light Sensor"),
+    Backlight("Backlight"),
+    Vibration("Vibration"),
+    QuickView("Quick View"),
+    HeartRate("Heart Rate"),
+    Insights("Insights"),
+    YourDetails("Your Details"),
+    PhoneEffects("Phone Effects"),
+    CustomVibration("Custom Vibration Patterns"),
+    Advanced("Advanced"),
+    AutomaticFirmwareUpdatess("Automatic Updates"),
+}
+
 data class SettingsItem(
     val id: String? = null,
     val title: String,
     val topLevelType: TopLevelType,
     val section: Section,
+    /** Shown together, in a card under the group's heading. */
+    val group: SettingsGroup? = null,
     val keywords: String = "",
     val show: () -> Boolean = { true },
     val badge: String? = null,
@@ -266,10 +312,74 @@ data class SettingsItem(
     val isDebugSetting: Boolean,
     val onDisplayed: (@Composable () -> Unit)? = null,
 ) {
+    val key: String get() = "${group?.name.orEmpty()}/$title"
+
+    /** Every word of [query] is somewhere in the title, keywords or group, so "activity insights" finds "Activity" in Insights. */
+    fun matches(query: String): Boolean {
+        val text = listOfNotNull(title, keywords, group?.title)
+        return query.split(' ').filter { it.isNotBlank() }.all { word -> text.any { it.contains(word, ignoreCase = true) } }
+    }
+
     @Composable
     fun Item() {
         onDisplayed?.invoke()
         item()
+    }
+}
+
+/** [items] in order, each group gathered where its first item is, in a card under its heading. */
+private fun LazyListScope.settingsItems(items: List<SettingsItem>) {
+    items.groupBy { it.group ?: it.key }.values.forEach { run ->
+        val group = run.first().group
+        if (group == null) {
+            items(items = run, key = { it.key }) { it.Item() }
+            return@forEach
+        }
+        item(key = "group:${group.name}") {
+            CardGroup(group.title, run, Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { it.Item() }
+        }
+    }
+}
+
+/** [items] in a rounded card under [title], as the settings screen groups its items. */
+@Composable
+internal fun <T> CardGroup(
+    title: String?,
+    items: List<T>,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    dividerColor: Color = MaterialTheme.colorScheme.background,
+    item: @Composable (T) -> Unit,
+) {
+    Column(modifier = modifier) {
+        title?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, bottom = if (subtitle == null) 6.dp else 0.dp),
+            )
+        }
+        subtitle?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            )
+        }
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = containerColor)) {
+            // The items' ListItems paint `surface`, which would hide the card's colour.
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(surface = containerColor)) {
+                Column {
+                    items.forEachIndexed { index, value ->
+                        if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = dividerColor)
+                        item(value)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -290,10 +400,7 @@ fun settingsBadgeTotal(): Int {
     }
     val appUpdateTracker: AppUpdateTracker = koinInject()
     val appWasUpdated by appUpdateTracker.appWasUpdated.collectAsState()
-    val appUpdated = when (appWasUpdated) {
-        true -> 1
-        false -> 0
-    }
+    val appUpdated = if (appWasUpdated && coreConfig.showAppUpdatedBadge) 1 else 0
     return permissionBadgeCount + updatesAvailable + appUpdated
 }
 
@@ -324,6 +431,21 @@ data class SettingsItemsState(
     val coreConfig: CoreConfig,
     val healthTrackingEnabled: Boolean,
 )
+
+/** Shows the setting with this [SettingsItem.id], as on the settings screen. */
+@Composable
+fun SettingsItemsState?.Show(id: String) {
+    if (this == null) {
+        return
+    }
+    val setting = remember(this) {
+        rawSettingsItems.find { it.id == id }
+    }
+    if (setting == null || !setting.show()) {
+        return
+    }
+    setting.Item()
+}
 
 @Composable
 fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarDisplay): SettingsItemsState? {
@@ -391,6 +513,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         sttConfig = coreConfig.sttConfig.copy(spokenLanguage = code)
                     )
                 )
+                platformSpeechRecognizer.releaseUnusedModels(code)
                 showSpokenLanguageDialog = false
                 if (coreConfig.sttConfig.mode == CactusSTTMode.PlatformOnly) {
                     scope.launch {
@@ -513,15 +636,34 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             )
         }
     }
+    val anyWatchSupportsFiveMinHrm = remember(watchesCastable) {
+        watchesCastable.any {
+            if (it !is KnownPebbleDevice) return@any false
+            val fw = FirmwareVersion.from(
+                tag = it.runningFwVersion,
+                isRecovery = false,
+                gitHash = "",
+                timestamp = Instant.DISTANT_PAST,
+                isDualSlot = false,
+                isSlot0 = false,
+            ) ?: return@any false
+            HRMonitoringInterval.FiveMin.isSupportedBy(fw)
+        }
+    }
     val watchPrefs = watchPrefs()
     val coreAnalytics: CoreAnalytics = koinInject()
     val platformHealthSync: PlatformHealthSync = koinInject()
     val healthSyncTracker: HealthSyncTracker = koinInject()
     val healthPlatformSyncEnabled by healthSyncTracker.enabled.collectAsState()
     val healthIsSyncing by platformHealthSync.syncing.collectAsState()
+    val healthPlatformAvailable by produceState(false) {
+        value = withContext(Dispatchers.Default) { platformHealthSync.isAvailable() }
+    }
+    val preferredSources by libPebble.preferredSourcePlugins.collectAsState()
 
     val rawSettingsItems = remember(
             libPebbleConfig,
+            preferredSources,
             debugOptionsEnabled,
             missingPermissions,
             updateState,
@@ -534,6 +676,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             watchPrefs,
             rebbleVoiceAvailable,
             platformSttAvailable,
+            anyWatchSupportsFiveMinHrm,
+            healthPlatformAvailable,
         ) {
             listOfNotNull(
                 basicSettingsActionItem(
@@ -593,13 +737,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(CommonRoutes.RoadmapChangelogRoute)
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
-                    badge = if (showChangelogBadge) "1" else null,
+                    badge = if (showChangelogBadge && coreConfig.showAppUpdatedBadge) "1" else null,
                     onDisplayed = {
                         LaunchedEffect(Unit) {
                             appUpdateTracker.acknowledgeCurrentVersion()
                         }
                     },
                 ) },
+                basicSettingsToggleItem(
+                    title = "Show badge when app was updated",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.About,
+                    checked = coreConfig.showAppUpdatedBadge,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(showAppUpdatedBadge = it))
+                    },
+                ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "What’s new in PebbleOS",
                     topLevelType = TopLevelType.Phone,
@@ -640,16 +793,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         nav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
                     },
                 ) },
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "Configure Appstore Sources",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Apps,
-                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute()) },
-                ) },
                 basicSettingsDropdownItem(
                     title = "App Theme",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.General,
+                    section = Section.Appearance,
                     keywords = "dark light system",
                     selectedItem = currentTheme,
                     items = CoreAppTheme.entries,
@@ -660,10 +807,18 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         stringResource(it.resource)
                     },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Bottom Bar",
+                    description = "Choose and reorder the tabs in the bottom bar",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Appearance,
+                    keywords = "tabs navigation health notifications devices apps index",
+                    action = { nav.navigateTo(PebbleNavBarRoutes.NavBarTabsRoute) },
+                ) },
                 basicSettingsToggleItem(
                     id = SettingsIds.HealthImperialUnits,
                     title = "Imperial Units",
-                    description = "Use miles/feet/inches/lb and Fahrenheit instead of metric units",
+                    description = "Use miles/feet/inches/lb instead of metric units, and Fahrenheit unless Temperature is set under Weather",
                     keywords = "weather health degrees celsius temperature miles",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
@@ -671,17 +826,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     onCheckChanged = {
                         GlobalScope.launch {
                             libPebble.updateImperialUnits(it)
-                            weatherFetcher.fetchWeather(this)
                         }
-                    },
-                ),
-                basicSettingsActionItem(
-                    title = "Restore System app positions",
-                    description = "Restore system apps to their usual position at the top of the menu",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Apps,
-                    action = {
-                        libPebble.restoreSystemAppOrder()
                     },
                 ),
                 basicSettingsDropdownItem(
@@ -713,22 +858,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                 ),
                 basicSettingsToggleItem(
-                    title = "Foreground Service",
-                    description = "Show foreground service notification to keep app alive in background",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.General,
-                    checked = coreConfig.androidForegroundServiceForWatchConnectionV2,
-                    onCheckChanged = {
-                        coreConfigHolder.update(
-                            coreConfig.copy(
-                                androidForegroundServiceForWatchConnectionV2 = it,
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsForegroundService() },
-                ),
-                basicSettingsToggleItem(
-                    title = "Watch fully charged",
+                    title = "Notify when watch fully charged",
                     description = "Notify on this phone when a watch finishes charging",
                     topLevelType = TopLevelType.Phone,
                     section = Section.General,
@@ -738,6 +868,58 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             coreConfig.copy(
                                 notifyWatchFullyCharged = it
                             )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Update PebbleOS Automatically",
+                    description = "Install PebbleOS updates automatically when available",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    group = SettingsGroup.AutomaticFirmwareUpdatess,
+                    keywords = "firmware pebbleos update automatic",
+                    checked = coreConfig.autoFirmwareUpdate,
+                    onCheckChanged = {
+                        coreConfigHolder.update(coreConfig.copy(autoFirmwareUpdate = it))
+                    },
+                ),
+                SettingsItem(
+                    title = "Time Window",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    group = SettingsGroup.AutomaticFirmwareUpdatess,
+                    keywords = "firmware pebbleos update automatic time window",
+                    show = { coreConfig.autoFirmwareUpdate },
+                    isDebugSetting = false,
+                    item = {
+                        val window = coreConfig.autoFirmwareUpdateWindow
+                        ListItem(
+                            headlineContent = {
+                                Text("Only update during time window")
+                            },
+                            leadingContent = {
+                                Checkbox(
+                                    checked = window != null,
+                                    onCheckedChange = {
+                                        coreConfigHolder.update(
+                                            coreConfig.copy(
+                                                autoFirmwareUpdateWindow = if (it) QuietTimeSchedule(2, 0, 5, 0) else null
+                                            )
+                                        )
+                                    },
+                                )
+                            },
+                            supportingContent = {
+                                if (window != null) {
+                                    SelectTimeRange(
+                                        schedule = window,
+                                        onChangeSchedule = {
+                                            coreConfigHolder.update(coreConfig.copy(autoFirmwareUpdateWindow = it))
+                                        },
+                                    )
+                                }
+                            },
+                            shadowElevation = ELEVATION,
                         )
                     },
                 ),
@@ -769,8 +951,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { pebbleFeatures.supportsNotificationFiltering() },
                 ),
                 basicSettingsToggleItem(
-                    title = "Respect Phone Do Not Disturb",
-                    description = "Notifications and calls won't be sent to watch if phone is in Do Not Disturb mode (unless allowed by phone settings)",
+                    title = "Respect Phone Do Not Disturb for calls",
+                    description = "Calls won't be sent to the watch during Do Not Disturb unless allowed by phone settings",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
                     checked = libPebbleConfig.notificationConfig.respectDoNotDisturb,
@@ -790,6 +972,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "Mutes the phone's own notification vibration/sound while the watch is connected",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
+                    group = SettingsGroup.PhoneEffects,
                     checked = libPebbleConfig.notificationConfig.mutePhoneNotificationSoundsWhenConnected,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -801,12 +984,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                     show = { pebbleFeatures.supportsNotificationHints() },
+
                 ),
                 basicSettingsToggleItem(
                     title = "Mute phone call effects",
                     description = "Mutes the phone's own call vibration/sound while the watch is connected",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
+                    group = SettingsGroup.PhoneEffects,
                     checked = libPebbleConfig.notificationConfig.mutePhoneCallSoundsWhenConnected,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -823,6 +1008,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Vibration Pattern",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
+                    group = SettingsGroup.CustomVibration,
                     show = { pebbleFeatures.supportsVibePatterns() },
                     item = {
                         SelectVibePatternOrNone(
@@ -846,6 +1032,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "If there is a vibration pattern defined by the app which created a notification, use it on the watch (unless overridden)",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
+                    group = SettingsGroup.CustomVibration,
                     checked = libPebbleConfig.notificationConfig.useAndroidVibePatterns,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -875,40 +1062,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsNotificationImages() },
                 ),
-                basicSettingsToggleItem(
-                    title = "Send local-only notifications to watch",
-                    description = "Android recommends not forwarding notifications marked as local-only to external devices - check to override this",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    checked = libPebbleConfig.notificationConfig.sendLocalOnlyNotifications,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    sendLocalOnlyNotifications = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
-                basicSettingsToggleItem(
-                    title = "Enable showsUserInterface actions",
-                    description = "Include notification actions which are marked as opening a user interface on the phone",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Notifications,
-                    checked = libPebbleConfig.notificationConfig.addShowsUserInterfaceActions,
-                    onCheckChanged = {
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                notificationConfig = libPebbleConfig.notificationConfig.copy(
-                                    addShowsUserInterfaceActions = it
-                                )
-                            )
-                        )
-                    },
-                    show = { pebbleFeatures.supportsNotificationFiltering() },
-                ),
                 basicSettingsNumberItem(
                     title = "Store notifications for",
                     topLevelType = TopLevelType.Phone,
@@ -930,10 +1083,47 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     unit = "Days"
                 ),
                 basicSettingsToggleItem(
+                    title = "Send local-only notifications to watch",
+                    description = "Android recommends not forwarding notifications marked as local-only to external devices - check to override this",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    group = SettingsGroup.Advanced,
+                    checked = libPebbleConfig.notificationConfig.sendLocalOnlyNotifications,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    sendLocalOnlyNotifications = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Enable showsUserInterface actions",
+                    description = "Include notification actions which are marked as opening a user interface on the phone",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    group = SettingsGroup.Advanced,
+                    checked = libPebbleConfig.notificationConfig.addShowsUserInterfaceActions,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    addShowsUserInterfaceActions = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsToggleItem(
                     title = "Store disabled notifications",
                     description = "Store notifications from disabled apps/channels, to allow viewing them in history",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Notifications,
+                    group = SettingsGroup.Advanced,
                     checked = libPebbleConfig.notificationConfig.storeDisabledNotifications,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1046,6 +1236,16 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Calendars",
+                    description = "Configure which calendars to display",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Calendar,
+                    action = {
+                        nav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
+                    },
+                    show = { libPebbleConfig.watchConfig.calendarPins },
+                ) },
                 SettingsItem(
                     title = "Reminder Vibration Pattern",
                     topLevelType = TopLevelType.Phone,
@@ -1090,16 +1290,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.calendarPins },
                 ),
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "Calendars",
-                    description = "Configure which calendars to display",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Calendar,
-                    action = {
-                        nav.navigateTo(PebbleNavBarRoutes.CalendarsRoute)
-                    },
-                    show = { libPebbleConfig.watchConfig.calendarPins },
-                ) },
                 basicSettingsToggleItem(
                     id = EnableHealthTracking,
                     title = "Enable Health Tracking",
@@ -1120,6 +1310,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "Allow the watch to measure heart rate",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.HeartRate,
                     checked = healthSettings.hrmEnabled,
                     show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
@@ -1134,8 +1325,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     description = "How often the watch checks your heart rate when you're not in a workout. This can have an impact on battery life.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.HeartRate,
                     selectedItem = healthSettings.hrmMeasurementInterval,
-                    items = HRMonitoringInterval.entries,
+                    selectorBelow = true,
+                    items = HRMonitoringInterval.entries.filter {
+                        it != HRMonitoringInterval.FiveMin || anyWatchSupportsFiveMinHrm
+                    },
                     onItemSelected = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(hrmMeasurementInterval = it)
@@ -1143,6 +1338,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = {
                         when (it) {
+                            HRMonitoringInterval.FiveMin -> "Every 5 minutes"
                             HRMonitoringInterval.TenMin -> "Every 10 minutes"
                             HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
                             HRMonitoringInterval.OneHour -> "Every hour"
@@ -1153,10 +1349,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     id = SettingsIds.HrmActivityTracking,
-                    title = "HR During Activities",
+                    title = "During Activities",
                     description = "Continuously track heart rate during detected walks and runs. This can have an impact on battery life.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.HeartRate,
                     checked = healthSettings.hrmActivityTrackingEnabled,
                     show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
                     onCheckChanged = {
@@ -1167,10 +1364,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     id = EnableActivityInsights,
-                    title = "Activity Insights",
+                    title = "Activity",
                     description = "Receive notifications with insights about your activity",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.Insights,
                     checked = healthSettings.activityInsightsEnabled,
                     show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
@@ -1183,10 +1381,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     id = EnableSleepInsights,
-                    title = "Sleep Insights",
+                    title = "Sleep",
                     description = "Receive notifications with insights about your sleep",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.Insights,
                     checked = healthSettings.sleepInsightsEnabled,
                     show = { healthSettings.trackingEnabled },
                     onCheckChanged = {
@@ -1202,6 +1401,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Height",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.YourDetails,
                     description = "Used for accurate calorie and distance estimates",
                     value = if (healthSettings.imperialUnits) (healthSettings.heightMm / 25.4).roundToLong()
                             else (healthSettings.heightMm / 10).toLong(),
@@ -1223,6 +1423,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Weight",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.YourDetails,
                     description = "Used for accurate calorie estimates",
                     value = if (healthSettings.imperialUnits) (healthSettings.weightDag / 45.359).roundToLong()
                             else (healthSettings.weightDag / 100).toLong(),
@@ -1241,6 +1442,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Age",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.YourDetails,
                     description = "Used for heart-rate zone calculations",
                     value = healthSettings.ageYears.toLong(),
                     onValueChange = {
@@ -1258,6 +1460,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     title = "Gender",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
+                    group = SettingsGroup.YourDetails,
                     selectedItem = healthSettings.gender,
                     items = HealthGender.entries,
                     onItemSelected = {
@@ -1275,7 +1478,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Health,
                     checked = healthPlatformSyncEnabled,
                     description = "Write steps, heart rate, sleep, and workouts to your phone's health platform",
-                    show = { healthSettings.trackingEnabled && platformHealthSync.isAvailable() },
+                    show = { healthSettings.trackingEnabled && healthPlatformAvailable },
                     onCheckChanged = { enabled ->
                         scope.launch {
                             if (enabled) {
@@ -1316,17 +1519,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         openGoogleFitApp(uiContext)
                     },
                 ),
-                basicSettingsToggleItem(
-                    title = "Show Health Tab",
-                    description = "Show Health instead of Notifications in the bottom bar",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = coreConfig.preferHealthTab,
-                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
-                    },
-                ),
                 basicSettingsActionItem(
                     title = "View debug stats",
                     description = "Health statistics and averages",
@@ -1364,6 +1556,29 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                     },
                 ),
+                run {
+                    // Any plugin but the built-in one, which shows what this fetches.
+                    val providers = libPebble.getAllPlugins().filter {
+                        it.serves(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION) &&
+                            it.pluginUuid != WeatherPlugin.BUILT_IN_WEATHER_UUID
+                    }
+                    val chosen = preferredSources[PluginRegistry.sourceKey(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)]
+                    basicSettingsDropdownItem(
+                        title = "Weather provider",
+                        description = "Where the watch's weather app and timeline get their forecast",
+                        topLevelType = TopLevelType.Phone,
+                        section = Section.Weather,
+                        items = listOf<PluginMetadata?>(null) + providers,
+                        selectedItem = providers.firstOrNull { it.pluginUuid == chosen },
+                        onItemSelected = {
+                            libPebble.setPreferredSourcePlugin(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION, it?.pluginUuid)
+                            GlobalScope.launch { weatherFetcher.fetchWeather(this) }
+                        },
+                        itemText = { it?.let { plugin -> "Plugin: ${plugin.name}" } ?: "Pebble" },
+                        show = { coreConfig.fetchWeather && libPebbleConfig.watchConfig.enablePlugins && providers.isNotEmpty() },
+                        selectorBelow = true,
+                    )
+                },
                 basicSettingsDropdownItem(
                     title = "Weather Refresh Interval",
                     topLevelType = TopLevelType.Phone,
@@ -1471,6 +1686,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     keywords = "cactus stt speech recognition offline rebble",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Speech,
+                    selectorBelow = true,
                     items = CactusSTTMode.entries.filter { mode ->
                         when (mode) {
                             CactusSTTMode.RebbleOnly,
@@ -1912,12 +2128,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
-                    title = "Use experimental plugins / permissions",
-                    description = "Enable the new plugins API, and new permissions system. This is an experimental feature under development - not recommended unless you know what you are doing (API is unstable)",
+                    title = "Plugins / permissions preview",
+                    description = "Enable Plugins (a new system for apps to share data and actions), and the new granular app permissions system. This will be enabled for everyone in a future release",
                     topLevelType = TopLevelType.Phone,
-                    section = Section.Debug,
+                    section = Section.Plugins,
                     checked = libPebbleConfig.watchConfig.enablePlugins,
                     onCheckChanged = {
+                        // So turning them back on shows the permissions introduction again.
+                        if (!it) settings.setHasSeenPermissionsIntro(false)
                         libPebble.updateConfig(
                             libPebbleConfig.copy(
                                 watchConfig = libPebbleConfig.watchConfig.copy(
@@ -1926,18 +2144,30 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
-                    isDebugSetting = true,
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Complications",
+                    description = "Readings watchfaces should show in their complication slots",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Plugins,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.ComplicationsRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Preferred sources",
+                    description = "Which plugin to use when several offer the same thing",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Plugins,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.PreferredSourcesRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins && hasSharedSources(libPebble.getAllPlugins()) },
+                ) },
                 basicSettingsDropdownItem(
+                    id = SettingsIds.PermissionPolicy,
                     title = "Ask before apps use permissions",
-                    description = when (libPebbleConfig.watchConfig.permissionPolicy) {
-                        PermissionPolicy.AskIfExfiltrating ->
-                            "Apps ask before going online or changing anything, and before reading your data if they could send it off your phone."
-                        PermissionPolicy.AlwaysAsk -> "Apps ask before using any permission."
-                        PermissionPolicy.NeverAsk -> "Apps can use any permission you haven't turned off on the app's page."
-                    },
+                    description = libPebbleConfig.watchConfig.permissionPolicy.description(),
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
+                    group = SettingsGroup.Permissions,
                     items = PermissionPolicy.entries,
                     selectedItem = libPebbleConfig.watchConfig.permissionPolicy,
                     onItemSelected = {
@@ -1947,20 +2177,17 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
-                    itemText = {
-                        when (it) {
-                            PermissionPolicy.AskIfExfiltrating -> "With network access"
-                            PermissionPolicy.AlwaysAsk -> "Always"
-                            PermissionPolicy.NeverAsk -> "Never"
-                        }
-                    },
+                    itemText = { it.displayName() },
                     show = { libPebbleConfig.watchConfig.enablePlugins },
+                    selectorBelow = true,
+                    details = { PermissionPolicyDetails() },
                 ),
                 basicSettingsToggleItem(
                     title = "Legacy PebbleKit",
                     description = "Lets watchapps talk to phone apps over the original PebbleKit, which shares messages with every app on your phone.",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
+                    group = SettingsGroup.Permissions,
                     checked = libPebbleConfig.watchConfig.enableLegacyPebbleKit,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1974,9 +2201,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Ask before older apps use permissions",
-                    description = "Otherwise apps built before permissions keep the access they've always had.",
+                    description = "Otherwise apps built before permissions keep the access they've always had. They can never get more access without updating",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
+                    group = SettingsGroup.Permissions,
                     checked = libPebbleConfig.watchConfig.askLegacyAppsForPermissions,
                     onCheckChanged = {
                         libPebble.updateConfig(
@@ -1987,6 +2215,15 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.enablePlugins },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Permissions in use",
+                    description = "Which apps can use each permission",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    group = SettingsGroup.Permissions,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.PermissionUsageRoute) },
+                    show = { libPebbleConfig.watchConfig.enablePlugins },
+                ) },
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",
                     description = "Sign out of your Pebble account ($coreUser)",
@@ -2041,6 +2278,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
+                    isDebugSetting = true,
+                ),
+                basicSettingsToggleItem(
+                    title = "Foreground Service",
+                    description = "Show foreground service notification to keep app alive in background",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.General,
+                    checked = coreConfig.androidForegroundServiceForWatchConnectionV2,
+                    onCheckChanged = {
+                        coreConfigHolder.update(
+                            coreConfig.copy(
+                                androidForegroundServiceForWatchConnectionV2 = it,
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsForegroundService() },
                 ),
                 navBarNav?.let {basicSettingsActionItem(
                     title = "Show Watch Onboarding",
@@ -2060,6 +2313,56 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { debugOptionsEnabled },
                 ) },
+                basicSettingsToggleItem(
+                    title = "Download in Background",
+                    description = "When an app you've used gets an update, download it in the background so it is ready for next launch",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    group = SettingsGroup.AppUpdates,
+                    checked = libPebbleConfig.watchConfig.proactivelyDownloadAppUpdates,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    proactivelyDownloadAppUpdates = it
+                                )
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    title = "Wi-Fi Only",
+                    description = "Only pre-download app updates while on Wi-Fi",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    group = SettingsGroup.AppUpdates,
+                    checked = libPebbleConfig.watchConfig.appUpdateDownloadWifiOnly,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    appUpdateDownloadWifiOnly = it
+                                )
+                            )
+                        )
+                    },
+                    show = { libPebbleConfig.watchConfig.proactivelyDownloadAppUpdates },
+                ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Configure Appstore Sources",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppstoreSettingsRoute()) },
+                ) },
+                basicSettingsActionItem(
+                    title = "Restore System app positions",
+                    description = "Restore system apps to their usual position at the top of the menu",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    action = {
+                        libPebble.restoreSystemAppOrder()
+                    },
+                ),
                 basicSettingsToggleItem(
                     title = "Emulate Timeline Webservice",
                     description = "Intercept calls to Timeline webservice, instead inserting pins locally, immediately",
@@ -2182,13 +2485,7 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 if (searchQuery.isEmpty()) {
                     validSettingsItems.filter { item -> item.show() }
                 } else {
-                    validSettingsItems.filter {
-                        (it.title.contains(searchQuery, ignoreCase = true) ||
-                                it.keywords.contains(
-                                    searchQuery,
-                                    ignoreCase = true
-                                )) && it.show()
-                    }
+                    validSettingsItems.filter { it.matches(searchQuery) && it.show() }
                 }
             }
         }
@@ -2270,53 +2567,15 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                                     )
                                 }
                             }
-                            items(
-                                items = items,
-                                key = { it.title },
-                            ) { item ->
-                                item.Item()
-                            }
+                            settingsItems(items)
                             item {
                                 Spacer(Modifier.height(8.dp))
                             }
                         }
                     }
                 } else {
-                    val notificationsDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
-                    val healthDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
-
                     // When not searching, show category list
                     LazyColumn(state = listState) {
-                        if (notificationsDisplaced) {
-                            item(key = "displaced_notifications") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Notifications") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
-                                    },
-                                )
-                            }
-                        }
-                        if (healthDisplaced) {
-                            item(key = "displaced_health") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Health") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
-                                    },
-                                )
-                            }
-                        }
                         items(
                             items = sectionsToShowInList,
                             key = { it.name },
@@ -2399,12 +2658,7 @@ fun WatchSettingsCategoryScreen(
         }
 
         LazyColumn {
-            items(
-                items = filteredItems,
-                key = { it.title },
-            ) { item ->
-                item.Item()
-            }
+            settingsItems(filteredItems)
         }
     }
 }
@@ -2413,6 +2667,7 @@ fun basicSettingsActionItem(
     title: String,
     topLevelType: TopLevelType,
     section: Section,
+    group: SettingsGroup? = null,
     button: @Composable (() -> Unit)? = null,
     action: (() -> Unit)? = null,
     actionIcon: ImageVector? = null,
@@ -2426,6 +2681,7 @@ fun basicSettingsActionItem(
     title = title,
     topLevelType = topLevelType,
     section = section,
+    group = group,
     keywords = keywords,
     show = show,
     badge = badge,
@@ -2477,6 +2733,7 @@ fun basicSettingsToggleItem(
     title: String,
     topLevelType: TopLevelType,
     section: Section,
+    group: SettingsGroup? = null,
     checked: Boolean,
     onCheckChanged: (Boolean) -> Unit,
     description: String? = null,
@@ -2488,6 +2745,7 @@ fun basicSettingsToggleItem(
     title = title,
     topLevelType = topLevelType,
     section = section,
+    group = group,
     keywords = keywords,
     show = show,
     isDebugSetting = isDebugSetting,
@@ -2517,6 +2775,7 @@ fun basicSettingsNumberItem(
     title: String,
     topLevelType: TopLevelType,
     section: Section,
+    group: SettingsGroup? = null,
     value: Long,
     onValueChange: (Long) -> Unit,
     min: Int,
@@ -2534,6 +2793,7 @@ fun basicSettingsNumberItem(
     title = title,
     topLevelType = topLevelType,
     section = section,
+    group = group,
     keywords = keywords,
     show = show,
     isDebugSetting = isDebugSetting,
@@ -2598,6 +2858,7 @@ fun basicSettingsNumberFieldItem(
     title: String,
     topLevelType: TopLevelType,
     section: Section,
+    group: SettingsGroup? = null,
     value: Long,
     onValueChange: (Long) -> Unit,
     min: Int,
@@ -2614,6 +2875,7 @@ fun basicSettingsNumberFieldItem(
     title = title,
     topLevelType = topLevelType,
     section = section,
+    group = group,
     keywords = keywords,
     show = show,
     isDebugSetting = isDebugSetting,
@@ -2738,6 +3000,7 @@ fun <T> basicSettingsDropdownItem(
     description: String? = null,
     topLevelType: TopLevelType,
     section: Section,
+    group: SettingsGroup? = null,
     items: List<T>,
     selectedItem: T,
     onItemSelected: (T) -> Unit,
@@ -2746,54 +3009,86 @@ fun <T> basicSettingsDropdownItem(
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
     extraSupportingContent: (@Composable () -> Unit)? = null,
+    /** Under the description rather than beside the title, for long values. */
+    selectorBelow: Boolean = false,
+    /** Shown in a popup from an info button beside the title. */
+    details: (@Composable () -> Unit)? = null,
 ) = SettingsItem(
     id = id,
     title = title,
     topLevelType = topLevelType,
     section = section,
+    group = group,
     keywords = keywords,
     show = show,
     isDebugSetting = isDebugSetting,
     item = {
-        ListItem(
-            headlineContent = {
-                Text(title)
-            },
-            trailingContent = {
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    TextButton(onClick = { expanded = true }) {
-                        Text(
-                            text = itemText(selectedItem),
-                            modifier = Modifier.widthIn(max = 150.dp),
-                            maxLines = 2,
+        var expanded by remember { mutableStateOf(false) }
+        val selector: @Composable () -> Unit = {
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    contentPadding = PaddingValues(start = 12.dp, end = 4.dp),
+                    border = BorderStroke(1.dp, coreOrange),
+                ) {
+                    Text(
+                        text = itemText(selectedItem),
+                        modifier = if (selectorBelow) Modifier else Modifier.widthIn(max = 130.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    items.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(itemText(option)) },
+                            onClick = {
+                                onItemSelected(option)
+                                expanded = false
+                            }
                         )
                     }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        items.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(itemText(option)) },
-                                onClick = {
-                                    onItemSelected(option)
-                                    expanded = false
-                                }
-                            )
+                }
+            }
+        }
+        var showingDetails by remember { mutableStateOf(false) }
+        if (showingDetails && details != null) {
+            AlertDialog(
+                onDismissRequest = { showingDetails = false },
+                title = { Text(title) },
+                text = { Column(Modifier.verticalScroll(rememberScrollState())) { details() } },
+                confirmButton = { TextButton(onClick = { showingDetails = false }) { Text("OK") } },
+            )
+        }
+        ListItem(
+            headlineContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, modifier = Modifier.weight(1f, fill = false))
+                    if (details != null) {
+                        IconButton(onClick = { showingDetails = true }) {
+                            Icon(Icons.Outlined.Info, contentDescription = "About $title")
                         }
                     }
                 }
             },
+            trailingContent = if (selectorBelow) null else selector,
             supportingContent = {
-                Row {
-                    if (description != null) {
-                        Text(description, fontSize = 11.sp)
+                Column {
+                    Row {
+                        if (description != null) {
+                            Text(description, fontSize = 11.sp)
+                        }
+                        extraSupportingContent?.invoke()
                     }
-                    extraSupportingContent?.invoke()
+                    if (selectorBelow) selector()
                 }
             },
             shadowElevation = ELEVATION,
+            modifier = Modifier.clickable { expanded = true },
         )
     }
 )

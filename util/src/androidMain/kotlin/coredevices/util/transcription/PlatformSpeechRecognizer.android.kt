@@ -19,6 +19,8 @@ actual class PlatformSpeechRecognizer {
 
     actual fun downloadModel(languageTag: String?): Boolean = false
 
+    actual fun releaseUnusedModels(languageTag: String?) = Unit
+
     actual suspend fun transcribe(pcm: ByteArray, sampleRate: Int, languageTag: String?): String =
         throw TranscriptionException.TranscriptionServiceUnavailable(PLATFORM_STT_MODEL_NAME)
 }

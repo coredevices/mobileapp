@@ -9,6 +9,9 @@ interface BasePreferences {
     fun setRingPairedName(name: String?)
     val ringPairedName: StateFlow<String?>
 
+    fun setRingPairingKeyHash(hash: Int?)
+    val ringPairingKeyHash: StateFlow<Int?>
+
     suspend fun setLastSyncIndex(index: Int?)
     val lastSyncIndex: StateFlow<Int?>
 

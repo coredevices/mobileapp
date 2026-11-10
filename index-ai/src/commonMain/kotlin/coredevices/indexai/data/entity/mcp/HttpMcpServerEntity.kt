@@ -15,4 +15,5 @@ data class HttpMcpServerEntity(
     val includedPrompts: List<String>,
     @ColumnInfo(defaultValue = "1")
     val enabled: Boolean = true,
+    val description: String? = null,
 )

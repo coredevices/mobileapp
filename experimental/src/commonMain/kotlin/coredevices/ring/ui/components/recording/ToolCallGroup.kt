@@ -80,7 +80,7 @@ fun ToolCallGroup(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 steps.forEach { step ->
-                    val label = toolCallLabel(step.toolName)
+                    val label = toolCallLabel(step)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (step.done) {
                             Icon(

@@ -110,6 +110,18 @@ data class McpSessionTool(
     val integrationDescription: String? = null,
 )
 
+/** The name a cloud model calls this tool by: integration and tool joined, then [sanitizeToolName]d. */
+fun McpSessionTool.compositeName(): String = sanitizeToolName("${integrationName}__${tool.definition.name}")
+
+/**
+ * The strictest subset providers accept for a function name: the MCP spec's (a-z, A-Z, 0-9, _, -)
+ * without dots, at most 64 characters. Covers Gemini and Claude.
+ */
+fun sanitizeToolName(name: String): String = name.trim().replace(TOOL_NAME_INVALID_CHARS, "_").take(MAX_TOOL_NAME_LENGTH)
+
+private val TOOL_NAME_INVALID_CHARS = Regex("[^a-zA-Z0-9_-]")
+private const val MAX_TOOL_NAME_LENGTH = 64
+
 /**
  * Integration names must survive round-trip through the model as part of a composite tool name.
  * Validate it won't get changed by the tool-name sanitizer, doesn't use the "__" separator, and

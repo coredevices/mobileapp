@@ -13,6 +13,7 @@ import com.russhwolf.settings.Settings
 import coredevices.coreapp.ui.navigation.AppNavHost
 import coredevices.coreapp.ui.screens.SHOWN_ONBOARDING
 import coredevices.pebble.ui.PebbleRoutes
+import coredevices.ring.ui.screens.settings.DefaultDestinationPromptHost
 import coredevices.ui.dismissKeyboardOnTapOutside
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
@@ -42,6 +43,7 @@ fun App() {
         Box(Modifier.fillMaxSize().dismissKeyboardOnTapOutside()) {
             AppNavHost(navHostController, startDestination)
             SttModelUpdatePrompt()
+            DefaultDestinationPromptHost()
         }
     }
 }

@@ -36,8 +36,13 @@ sealed class AssistantPart {
     data class Confirmation(val callId: String, val request: SemanticResult.RequiresConfirmation) : AssistantPart()
 }
 
-/** One intermediate tool call; [done] once its result message exists. */
-data class ToolCallStep(val callId: String, val toolName: String?, val done: Boolean)
+/** One intermediate tool call; [done] once its result message exists, [summary] from its result if any. */
+data class ToolCallStep(
+    val callId: String,
+    val toolName: String?,
+    val done: Boolean,
+    val summary: String? = null,
+)
 
 /** [active] while the call is in flight, [done] once it has returned. */
 data class ToolCallLabel(val active: String, val done: String)
@@ -54,9 +59,14 @@ fun toolCallLabel(toolName: String?): ToolCallLabel {
     return ToolCallLabel("Calling $tool", "Called $tool")
 }
 
+fun toolCallLabel(step: ToolCallStep): ToolCallLabel {
+    val label = toolCallLabel(step.toolName)
+    return step.summary?.let { label.copy(done = it) } ?: label
+}
+
 /** Header for a group of steps: the single step's label, or a count once there are several. */
 fun toolCallsLabel(steps: List<ToolCallStep>, active: Boolean): String {
-    val single = steps.singleOrNull()?.let { toolCallLabel(it.toolName) }
+    val single = steps.singleOrNull()?.let { toolCallLabel(it) }
     return when {
         single != null -> if (active) single.active else single.done
         active -> "Calling ${steps.size} tools"
@@ -124,7 +134,14 @@ fun conversationTurns(
                     when {
                         confirmation != null -> parts += AssistantPart.Confirmation(call.id, confirmation)
                         action != null && !action.intermediate -> addResult(action)
-                        else -> addStep(ToolCallStep(call.id, call.function?.name, done = call.id in answeredCalls))
+                        else -> addStep(
+                            ToolCallStep(
+                                call.id,
+                                call.function?.name,
+                                done = call.id in answeredCalls,
+                                summary = (action?.result as? SemanticResult.SupportingData)?.summary?.takeIf { it.isNotBlank() },
+                            )
+                        )
                     }
                 }
             }

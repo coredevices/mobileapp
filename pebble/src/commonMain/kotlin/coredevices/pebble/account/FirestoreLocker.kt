@@ -1,7 +1,6 @@
 package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
-import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.REBBLE_FEED_URL
@@ -15,9 +14,13 @@ import dev.gitlive.firebase.firestore.FirestoreExceptionCode
 import dev.gitlive.firebase.firestore.QuerySnapshot
 import dev.gitlive.firebase.firestore.code
 import io.rebble.libpebblecommon.database.entity.APP_VERSION_REGEX
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
+import io.rebble.libpebblecommon.locker.AppType
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.web.LockerEntry
 import io.rebble.libpebblecommon.web.LockerModel
 import io.rebble.libpebblecommon.web.LockerModelWrapper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -47,15 +51,35 @@ class FirestoreLockerDao(private val firestoreProvider: () -> FirebaseFirestore)
         entry: FirestoreLockerEntry
     ) {
         try {
-            firestore.collection("lockers")
-                .document(uid)
-                .collection("entries")
-                .document("${entry.appstoreId}-${entry.uuid}")
-                .set(entry)
+            // Merged, leaving out unset fields: the web store may have written the permissions.
+            entryDoc(uid, entry).set(entry, merge = true) { encodeDefaults = false }
         } catch (e: FirebaseFirestoreException) {
             throw FirestoreDaoException.fromFirebaseException(e)
         }
     }
+
+    /**
+     * Merged key by key, so other devices' decisions for other keys are kept. Fails if the entry is
+     * gone: it mustn't be recreated with only permissions.
+     */
+    suspend fun mergePermissionsForUser(
+        uid: String,
+        entry: FirestoreLockerEntry,
+        permissions: Map<String, PermissionDecisionRecord>,
+    ) {
+        try {
+            entryDoc(uid, entry).updateFields {
+                permissions.forEach { (key, record) -> FieldPath("permissions", key) to record }
+            }
+        } catch (e: FirebaseFirestoreException) {
+            throw FirestoreDaoException.fromFirebaseException(e)
+        }
+    }
+
+    private fun entryDoc(uid: String, entry: FirestoreLockerEntry) = firestore.collection("lockers")
+        .document(uid)
+        .collection("entries")
+        .document(entry.documentId ?: "${entry.appstoreId}-${entry.uuid}")
 
     suspend fun removeLockerEntryForUser(
         uid: String,
@@ -124,9 +148,18 @@ class RealFirestoreLocker(
                             return@collect
                         }
                         logger.d { "observeLockerEntriesForUser: changes=${it.documentChanges.size}" }
-                        val lockerData: List<FirestoreLockerEntry> = it.documents.map { doc -> doc.data() }
-                        handleFirestoreChanges(lockerData)
+                        val lockerData = it.lockerEntries()
+                        val previous = _locker.value
+                        // Before handling: a locker sync it requests reads this snapshot.
                         _locker.value = lockerData
+                        // Keep listening: in GlobalScope, a throw here would crash the app.
+                        try {
+                            handleFirestoreChanges(lockerData, previous)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logger.w(e) { "Error handling firestore locker changes" }
+                        }
                     }
             }
         }
@@ -135,8 +168,19 @@ class RealFirestoreLocker(
     /**
      * Handle individual changes from firebase pushes (only for pebble store)
      */
-    private suspend fun handleFirestoreChanges(locker: List<FirestoreLockerEntry>) {
+    private suspend fun handleFirestoreChanges(locker: List<FirestoreLockerEntry>, previous: List<FirestoreLockerEntry>?) {
         val existingLocker = libPebbleLockerProxy.getAllLockerUuids().first()
+        // A decision made elsewhere for an app already here: a locker sync brings it in. Our own
+        // uploads change entries too, so only one newer than this device's counts.
+        if (previous != null) {
+            val before = previous.syncedPermissions()
+            val changed = locker.syncedPermissions().filter { (uuid, decisions) -> uuid in existingLocker && before[uuid] != decisions }
+            if (changed.isNotEmpty() && hasNewerDecisions(changed, libPebbleLockerProxy.permissionDecisions())) {
+                // It adds any new apps too.
+                libPebbleLockerProxy.requestLockerSync()
+                return
+            }
+        }
         val added = locker.filter {
             it.uuid !in existingLocker && it.appstoreSource != REBBLE_FEED_URL
         }
@@ -157,8 +201,9 @@ class RealFirestoreLocker(
             appstore.fetchAppStoreApps(lockerForSource, useCache = false) ?: emptyList()
         }
         logger.d { "Adding ${appsToAdd.size} apps to locker from firestore update" }
-        libPebbleLockerProxy.addAppsToLocker(appsToAdd)
-        if (appsToAdd.size == 1) {
+        libPebbleLockerProxy.addAppsToLocker(appsToAdd, added.syncedPermissions())
+        // A plugin-only app never reaches the watch.
+        if (appsToAdd.size == 1 && AppType.fromString(appsToAdd.first().type) != AppType.Plugin) {
             logger.d { "...and starting single new app on watch" }
             val app = appsToAdd.first()
             val uuid = Uuid.parse(app.uuid)
@@ -192,7 +237,8 @@ class RealFirestoreLocker(
         val failedSources = mutableSetOf<String>()
         val apps = allSources.flatMap { source ->
             val appstore: AppstoreService = get { parametersOf(source) }
-            val appsForSource = appstore.fetchAppStoreApps(fsLocker, useCache = !forceRefresh)
+            val lockerForSource = fsLocker.filter { it.appstoreSource == source.url }
+            val appsForSource = appstore.fetchAppStoreApps(lockerForSource, useCache = !forceRefresh)
             if (appsForSource == null) {
                 logger.w { "Failed to fetch apps from source ${source.url}" }
                 failedSources.add(source.url)
@@ -210,43 +256,19 @@ class RealFirestoreLocker(
                     dao.addLockerEntryForUser(user.uid, firestoreEntry)
                 }
             }
-            appsForSource.map { SourcedLockerEntry(source, it) }
+            appsForSource.fromDesignatedSource(source.url, designatedSourceByUuid)
         }
-        // Deduplicate by UUID (same app can exist in multiple stores).
-        // Prefer highest version, then the source the app is already associated with, then lowest source ID.
-        val dedupedSourcedApps = apps.groupBy { it.entry.uuid }.values.map { duplicates ->
-            if (duplicates.size == 1) {
-                duplicates.first()
-            } else {
-                val designatedSource = designatedSourceByUuid[duplicates.first().entry.uuid]
-                duplicates.maxWith(
-                    Comparator<SourcedLockerEntry> { a, b -> compareVersionStrings(a.entry.version, b.entry.version) }
-                        .thenBy { it.source.url == designatedSource }
-                        .thenByDescending { it.source.id }
-                )
-            }
-        }
-
-        // Update Firestore source for any entry where the winning source changed.
-        val fsLockerByUuid = fsLocker.associateBy { it.uuid.toString() }
-        dedupedSourcedApps.forEach { sourced ->
-            val existingEntry = fsLockerByUuid[sourced.entry.uuid] ?: return@forEach
-            if (existingEntry.appstoreSource != sourced.source.url) {
-                dao.addLockerEntryForUser(user.uid, existingEntry.copy(appstoreSource = sourced.source.url))
-            }
-        }
-
-        val dedupedApps = dedupedSourcedApps.map { it.entry }
-        val fetchedUuids = dedupedApps.map { Uuid.parse(it.uuid) }.toSet()
+        val fetchedUuids = apps.map { Uuid.parse(it.uuid) }.toSet()
         val uuidsFromFailedSources = fsLocker
             .filter { it.appstoreSource in failedSources }
             .map { it.uuid }
             .toSet()
         return LockerModelWrapper(
             locker = LockerModel(
-                applications = dedupedApps
+                applications = apps
             ),
             failedToFetchUuids = (fsLocker.map { it.uuid }.toSet() - fetchedUuids) + uuidsFromFailedSources,
+            permissions = fsLocker.syncedPermissions(),
         )
         } finally {
             // Re-read locker from Firestore since we skipped listener updates during sync.
@@ -255,7 +277,7 @@ class RealFirestoreLocker(
                     dao.observeLockerEntriesForUser(user.uid).first()
                 }
                 if (snapshot != null) {
-                    _locker.value = snapshot.documents.map { doc -> doc.data() }
+                    _locker.value = snapshot.lockerEntries()
                 } else {
                     logger.w { "Timed out waiting for server-confirmed snapshot after sync" }
                 }
@@ -326,10 +348,35 @@ sealed class FirestoreDaoException(override val cause: Throwable? = null, privat
  */
 interface LibPebbleLockerProxy {
     fun getAllLockerUuids(): Flow<List<Uuid>>
-    suspend fun addAppsToLocker(apps: List<LockerEntry>)
+    suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>)
     suspend fun waitUntilAppSyncedToWatch(id: Uuid, timeout: Duration): Boolean
     suspend fun startAppOnWatch(id: Uuid): Boolean
+    fun requestLockerSync()
+    suspend fun permissionDecisions(): List<LockerAppPermission>
 }
+
+/**
+ * An app only ever updates from the store it was installed from: another store publishing the same
+ * UUID must not take over its permissions and data. Apps not yet in the locker are [sourceUrl]'s.
+ */
+internal fun List<LockerEntry>.fromDesignatedSource(sourceUrl: String, designatedSourceByUuid: Map<String, String>) =
+    filter { (designatedSourceByUuid[it.uuid] ?: sourceUrl) == sourceUrl }
+
+/** Whether [remote] holds a decision this device hasn't got, or has an older one of. */
+internal fun hasNewerDecisions(
+    remote: Map<Uuid, Map<String, PermissionDecisionRecord>>,
+    local: List<LockerAppPermission>,
+): Boolean {
+    val held = local.associateBy { it.appUuid to it.permission }
+    return remote.any { (uuid, decisions) ->
+        decisions.any { (key, record) -> (held[uuid to key]?.decidedAtMs ?: -1) < record.decidedAtMs }
+    }
+}
+
+/** The decisions to bring onto this device, by app. */
+private fun List<FirestoreLockerEntry>.syncedPermissions(): Map<Uuid, Map<String, PermissionDecisionRecord>> =
+    mapNotNull { entry -> entry.permissions?.filterKeys(::isSynced)?.takeIf { it.isNotEmpty() }?.let { entry.uuid to it } }
+        .toMap()
 
 @Serializable
 data class FirestoreLockerEntry(
@@ -337,17 +384,26 @@ data class FirestoreLockerEntry(
     val appstoreId: String,
     val appstoreSource: String,
     val timelineToken: String?,
+    /** The user's decisions, by permission key, from any device or the web store. */
+    val permissions: Map<String, PermissionDecisionRecord>? = null,
+    /** Set when read: another client may have stored the entry under a different ID. */
+    @Transient val documentId: String? = null,
 )
+
+/** One undecodable entry (e.g. written by another client) mustn't take the rest of the locker down with it. */
+private fun QuerySnapshot.lockerEntries(): List<FirestoreLockerEntry> = documents.mapNotNull { doc ->
+    try {
+        doc.data<FirestoreLockerEntry>().copy(documentId = doc.id)
+    } catch (e: Exception) {
+        logger.w(e) { "Skipping invalid locker entry ${doc.id}" }
+        null
+    }
+}
 
 /**
  * Compare two version strings numerically by major.minor segments.
  * null versions sort lower than non-null.
  */
-private data class SourcedLockerEntry(
-    val source: AppstoreSource,
-    val entry: LockerEntry,
-)
-
 internal fun compareVersionStrings(a: String?, b: String?): Int {
     if (a == null && b == null) return 0
     if (a == null) return -1

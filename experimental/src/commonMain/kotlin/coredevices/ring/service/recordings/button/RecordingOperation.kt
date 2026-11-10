@@ -19,9 +19,11 @@ import coredevices.ring.service.recordings.RecordingProcessingStage
 import coredevices.ring.service.recordings.RecordingProcessor
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.WatchNotifier
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.transcription.TranscriptionException
 import coredevices.util.transcription.TranscriptionSessionStatus
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.coroutineScope
@@ -48,24 +50,26 @@ interface TranscribingRecordingOperation : RecordingOperation {
     var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)?
 }
 
-open class DefaultRecordingOperation(
-    private val mcpSessionFactory: McpSessionFactory,
-    private val chatAgent: Agent,
-    private val recordingId: Long,
-    private val transferId: Long?,
-    private val fileId: String,
-    private val trace: RingTraceSession,
-    private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
+/**
+ * Creates the recording entry, transcribes the audio and persists the transcript, then hands the
+ * text to [processTranscription].
+ */
+abstract class TranscribedRecordingOperation(
+    protected val recordingId: Long,
+    protected val transferId: Long?,
+    protected val fileId: String,
+    protected val trace: RingTraceSession,
 ) : TranscribingRecordingOperation, KoinComponent {
     companion object {
-        private val logger = Logger.withTag("DefaultRecordingOperation")
+        private val logger = Logger.withTag("TranscribedRecordingOperation")
     }
 
     override var onTranscriptionPersisted: (suspend (transcription: String) -> Unit)? = null
 
     private val recordingStorage: RecordingStorage by inject()
-    private val recordingEntryDao: RecordingEntryDao by inject()
-    private val recordingProcessor: RecordingProcessor by inject()
+    private val watchNotifier: WatchNotifier by inject()
+    protected val recordingEntryDao: RecordingEntryDao by inject()
+    protected val recordingProcessor: RecordingProcessor by inject()
     private val ringTransferRepository: RingTransferRepository by inject()
     private val recordingBackgroundScope: RecordingBackgroundScope by inject()
     private val prefs: Preferences by inject()
@@ -74,10 +78,13 @@ open class DefaultRecordingOperation(
     fun sendNotEnoughMemoryNotification() {
         val now = Clock.System.now()
         if (lastNotEnoughMemoryNotif == null || now - lastNotEnoughMemoryNotif!! > 5.minutes) {
+            val title = "Low Memory Warning"
+            val body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
             NotifierManager.getLocalNotifier().notify {
-                title = "Low Memory Warning"
-                body = "Offline speech recognition failed due to low memory. Please consider closing other apps or using online speech recognition only."
+                this.title = title
+                this.body = body
             }
+            watchNotifier.send("stt-low-memory", title, body)
             lastNotEnoughMemoryNotif = now
         }
     }
@@ -154,7 +161,6 @@ open class DefaultRecordingOperation(
             }
         }
         coroutineScope {
-            val mcpSession = mcpSessionFactory.create(this, lazyToolLoading = chatAgent.isCloud)
             val transcription = try {
                 trace.markEvent("transcription_start", TraceEventData.TranscriptionStart(
                     recordingId = recordingId,
@@ -252,49 +258,70 @@ open class DefaultRecordingOperation(
                 transcription.localFallback,
             )
             onTranscriptionPersisted?.invoke(transcription.text)
+            processTranscription(this, entryId, transcription.text)
+        }
+    }
 
-            try {
-                trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(
-                    entryId,
-                    recordingId,
-                    transferId ?: -1
-                ))
-                mcpSession.openSession()
-                trace.markEvent("mcp_session_open_end", TraceEventData.RecordingEntryInfo(
-                    entryId,
-                    recordingId,
-                    transferId ?: -1
-                ))
-                logger.d { "Agent running..." }
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.agent_processing
-                )
-                recordingProcessor.processText(
-                    recordingId = recordingId,
-                    recordingEntryId = entryId,
-                    mcpSession = mcpSession,
-                    agent = chatAgent,
-                    forcedTool = forcedTool?.let { { assistantMessage, sessionContext -> it(transcription.text, assistantMessage, sessionContext) } },
-                    text = transcription.text
-                )
-                logger.d { "Processing complete." }
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.completed
-                )
-            } catch (e: Exception) {
-                recordingEntryDao.updateRecordingEntryStatus(
-                    entryId,
-                    status = RecordingEntryStatus.agent_error,
-                    error = e.message,
-                    errorType = RecordingEntryErrorType.agent_failed
-                )
-                throw e
-            } finally {
-                withTimeout(3.seconds) {
-                    mcpSession.closeSession()
-                }
+    /** Runs after the transcript is persisted; [scope] lives for the rest of the operation. */
+    protected abstract suspend fun processTranscription(scope: CoroutineScope, entryId: Long, text: String)
+}
+
+open class DefaultRecordingOperation(
+    private val mcpSessionFactory: McpSessionFactory,
+    private val chatAgent: Agent,
+    recordingId: Long,
+    transferId: Long?,
+    fileId: String,
+    trace: RingTraceSession,
+    private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
+) : TranscribedRecordingOperation(recordingId, transferId, fileId, trace) {
+    companion object {
+        private val logger = Logger.withTag("DefaultRecordingOperation")
+    }
+
+    override suspend fun processTranscription(scope: CoroutineScope, entryId: Long, text: String) {
+        val mcpSession = mcpSessionFactory.create(scope, lazyToolLoading = chatAgent.isCloud)
+        try {
+            trace.markEvent("mcp_session_open_start", TraceEventData.RecordingEntryInfo(
+                entryId,
+                recordingId,
+                transferId ?: -1
+            ))
+            mcpSession.openSession()
+            trace.markEvent("mcp_session_open_end", TraceEventData.RecordingEntryInfo(
+                entryId,
+                recordingId,
+                transferId ?: -1
+            ))
+            logger.d { "Agent running..." }
+            recordingEntryDao.updateRecordingEntryStatus(
+                entryId,
+                status = RecordingEntryStatus.agent_processing
+            )
+            recordingProcessor.processText(
+                recordingId = recordingId,
+                recordingEntryId = entryId,
+                mcpSession = mcpSession,
+                agent = chatAgent,
+                forcedTool = forcedTool?.let { { assistantMessage, sessionContext -> it(text, assistantMessage, sessionContext) } },
+                text = text
+            )
+            logger.d { "Processing complete." }
+            recordingEntryDao.updateRecordingEntryStatus(
+                entryId,
+                status = RecordingEntryStatus.completed
+            )
+        } catch (e: Exception) {
+            recordingEntryDao.updateRecordingEntryStatus(
+                entryId,
+                status = RecordingEntryStatus.agent_error,
+                error = e.message,
+                errorType = RecordingEntryErrorType.agent_failed
+            )
+            throw e
+        } finally {
+            withTimeout(3.seconds) {
+                mcpSession.closeSession()
             }
         }
     }

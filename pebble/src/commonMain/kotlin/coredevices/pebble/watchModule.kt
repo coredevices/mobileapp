@@ -11,6 +11,8 @@ import coredevices.pebble.account.FirestoreLockerDao
 import coredevices.pebble.account.LibPebbleLockerProxy
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.account.PebbleTokenProvider
+import coredevices.pebble.account.PermissionDecisionSync
+import coredevices.pebble.account.PermissionSettingsSync
 import coredevices.pebble.account.RealBootConfigProvider
 import coredevices.pebble.account.RealFirestoreKnownWatchesSync
 import coredevices.pebble.account.RealFirestoreLocker
@@ -22,12 +24,15 @@ import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.RealBatteryChargedNotifier
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
 import coredevices.pebble.firmware.postWatchFullyChargedNotification
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.SpeexAudioFrameDecoder
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
 import coredevices.pebble.services.AppstoreSourceInitializer
+import coredevices.pebble.services.BundledAppMigration
 import coredevices.pebble.services.EngDashOta
 import coredevices.pebble.services.HybridTranscription
 import coredevices.pebble.services.LanguagePackRepository
+import coredevices.pebble.services.PluginSourceLoader
 import coredevices.pebble.services.Memfault
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.AnalyticsIngest
@@ -50,10 +55,12 @@ import coredevices.pebble.ui.LockerAppViewModel
 import coredevices.pebble.ui.LockerViewModel
 import coredevices.pebble.ui.ModelManagementScreenViewModel
 import coredevices.pebble.ui.NativeLockerAddUtil
+import coredevices.pebble.ui.AppReplacements
 import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.SharedLockerViewModel
+import coredevices.pebble.ui.TopChartsViewModel
 import coredevices.pebble.ui.HealthViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
 import coredevices.pebble.ui.WatchOnboardingFinished
@@ -61,8 +68,10 @@ import coredevices.pebble.ui.WatchSettingsScreenViewModel
 import coredevices.pebble.weather.OpenWeather25Interceptor
 import coredevices.pebble.weather.WeatherFetcher
 import coredevices.pebble.config.ConfigPageSessions
+import coredevices.pebble.config.VisibleConfigPage
 import coredevices.pebble.plugin.HostedPluginOAuthApi
 import coredevices.pebble.weather.WeatherPlugin
+import coredevices.pebble.plugin.PreferencesPlugin
 import coredevices.pebble.weather.YahooWeatherInterceptor
 import coredevices.pebble.permissions.PermissionRequestNotifier
 import dev.gitlive.firebase.Firebase
@@ -87,14 +96,18 @@ import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.connection.TokenProvider
 import io.rebble.libpebblecommon.connection.Weather
 import io.rebble.libpebblecommon.connection.WebServices
+import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.util.SystemGeolocation
+import io.rebble.libpebblecommon.connection.endpointmanager.audio.AudioFrameDecoder
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -138,6 +151,9 @@ val watchModule = module {
         }
     } } bind PebbleAccountProvider::class
     singleOf(::PebbleAppDelegate)
+    singleOf(::BundledAppMigration)
+    singleOf(::PermissionSettingsSync)
+    singleOf(::PermissionDecisionSync)
     singleOf(::RealFirmwareUpdateUiTracker) bind FirmwareUpdateUiTracker::class
     single<BatteryChargedNotifier> {
         val appContext: AppContext = get()
@@ -164,7 +180,7 @@ val watchModule = module {
         )
     ) }
     factory { p ->
-        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get())
+        AppstoreService(get(), get(), p.get(), get(), get(), get(), get(), get(), get(), get())
     }
     single {
         object : LibPebbleLockerProxy {
@@ -174,9 +190,16 @@ val watchModule = module {
                 return get<LibPebble>().getAllLockerUuids()
             }
 
-            override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
-                get<LibPebble>().addAppsToLocker(apps)
+            override suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
+                get<LibPebble>().addAppsToLocker(apps, permissions)
             }
+
+            override fun requestLockerSync() {
+                get<LibPebble>().requestLockerSync()
+            }
+
+            override suspend fun permissionDecisions(): List<LockerAppPermission> =
+                get<LibPebble>().permissionDecisions().first()
 
             override suspend fun waitUntilAppSyncedToWatch(
                 id: Uuid,
@@ -213,10 +236,14 @@ val watchModule = module {
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)
     singleOf(::WeatherPlugin)
+    singleOf(::PreferencesPlugin)
     singleOf(::ConfigPageSessions)
     singleOf(::LanguagePackRepository)
+    singleOf(::PluginSourceLoader)
     factoryOf(::NativeLockerAddUtil)
+    factoryOf(::AppReplacements)
     singleOf(::PermissionRequestNotifier)
+    singleOf(::VisibleConfigPage)
     singleOf(::WatchOnboardingFinished)
     factoryOf(::AppstoreSourceInitializer)
     factoryOf(::OpenWeather25Interceptor)
@@ -244,10 +271,12 @@ val watchModule = module {
         }
     }
     singleOf(::RebbleAsrService)
+    singleOf(::SpeexAudioFrameDecoder) bind AudioFrameDecoder::class
     single {
         HybridTranscription(
             get(),
             lazy { get<LibPebble3>() },
+            get(),
             get(),
         )
     }
@@ -258,6 +287,7 @@ val watchModule = module {
             rebble = get(),
             cactusService = get(),
             coreConfigFlow = get(),
+            audioFrameDecoder = get(),
         )
     } bind TranscriptionProvider::class
 
@@ -267,6 +297,7 @@ val watchModule = module {
     viewModelOf(::NotificationAppsScreenViewModel)
     viewModelOf(::LockerViewModel)
     singleOf(::SharedLockerViewModel)
+    singleOf(::TopChartsViewModel)
     viewModelOf(::LockerAppViewModel)
     viewModelOf(::AppstoreSettingsScreenViewModel)
     viewModelOf(::ContactsViewModel)

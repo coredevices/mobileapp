@@ -96,7 +96,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
     ],
-    version = 49,
+    version = 51,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -137,6 +137,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 46, to = 47),
         AutoMigration(from = 47, to = 48, spec = AutoMigration48::class),
         AutoMigration(from = 48, to = 49),
+        AutoMigration(from = 49, to = 50),
+        AutoMigration(from = 50, to = 51, spec = AutoMigration51::class),
     ],
     exportSchema = true,
 )
@@ -170,6 +172,13 @@ class AutoMigration30 : AutoMigrationSpec
 @DeleteTable(tableName = "LockerAppPermission")
 class AutoMigration48 : AutoMigrationSpec
 
+
+/** Rows from before askedAtMs prompted whenever undecided, as if asked when recorded. */
+class AutoMigration51 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) {
+        connection.execSQL("UPDATE AppPermission SET askedAtMs = requestedAtMs")
+    }
+}
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
 expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {

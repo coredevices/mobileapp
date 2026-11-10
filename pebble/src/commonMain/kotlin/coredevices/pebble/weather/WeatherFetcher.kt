@@ -15,13 +15,20 @@ import dev.jordond.compass.geocoder.GeocoderResult
 import io.rebble.libpebblecommon.SystemAppIDs.WEATHER_APP_UUID
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.EnumWatchPref
+import io.rebble.libpebblecommon.database.entity.NumberWatchPref
+import io.rebble.libpebblecommon.database.entity.TemperatureUnits
+import io.rebble.libpebblecommon.database.entity.WatchPref
 import io.rebble.libpebblecommon.database.entity.WindUnits
 import io.rebble.libpebblecommon.database.entity.buildTimelinePin
-import io.rebble.libpebblecommon.health.HealthSettings
 import io.rebble.libpebblecommon.packets.blobdb.TimelineAttribute
 import io.rebble.libpebblecommon.packets.blobdb.TimelineIcon
 import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginMetadata
+import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.SourceUpdate
 import io.rebble.libpebblecommon.util.GeolocationPositionResult
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.weather.WeatherDailyForecast
@@ -29,18 +36,28 @@ import io.rebble.libpebblecommon.weather.WeatherHourlyForecast
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherType
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.offsetAt
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -64,12 +81,26 @@ class WeatherFetcher(
     companion object {
         private const val SETTINGS_KEY_HAS_DONE_ONE_SYNC = "has_done_one_weather_sync"
         private const val SETTINGS_KEY_MIGRATED_UNITS = "migrated_weather_units_to_watch_pref"
+        private const val SETTINGS_KEY_MIGRATED_UK_TEMPERATURE = "migrated_uk_weather_units_to_temperature_pref"
+        private val PLUGIN_READ_TIMEOUT = 45.seconds
     }
 
     private val mutex = Mutex()
 
     suspend fun init() {
         migrateUnitsToWatchPref()
+        migrateUkUnitsToTemperaturePref()
+        GlobalScope.launch {
+            libPebble.weatherInFahrenheit().distinctUntilChanged().drop(1).collect {
+                try {
+                    fetchWeather(this)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Refetching weather after a units change failed" }
+                }
+            }
+        }
         fetchIfNotFetchedYet()
     }
 
@@ -80,13 +111,23 @@ class WeatherFetcher(
      */
     private suspend fun migrateUnitsToWatchPref() {
         if (settings.getBoolean(SETTINGS_KEY_MIGRATED_UNITS, false)) return
-        val previous = coreConfigFlow.value.weatherUnits ?: deviceDefaultWeatherUnit()
-        libPebble.updateImperialUnits(previous == WeatherUnit.Imperial)
+        val previous = previousWeatherUnits()
+        libPebble.updateImperialUnits(previous == WeatherUnit.Imperial || previous == WeatherUnit.UkHybrid)
         if (previous == WeatherUnit.UkHybrid) {
             libPebble.setWatchPref(WatchPreference(EnumWatchPref.WindSpeed, WindUnits.Mph))
         }
         settings.putBoolean(SETTINGS_KEY_MIGRATED_UNITS, true)
     }
+
+    private fun migrateUkUnitsToTemperaturePref() {
+        if (settings.getBoolean(SETTINGS_KEY_MIGRATED_UK_TEMPERATURE, false)) return
+        if (previousWeatherUnits() == WeatherUnit.UkHybrid) {
+            libPebble.setWatchPref(WatchPreference(EnumWatchPref.Temperature, TemperatureUnits.Celsius))
+        }
+        settings.putBoolean(SETTINGS_KEY_MIGRATED_UK_TEMPERATURE, true)
+    }
+
+    private fun previousWeatherUnits(): WeatherUnit = coreConfigFlow.value.weatherUnits ?: deviceDefaultWeatherUnit()
 
     suspend fun fetchIfNotFetchedYet() {
         // One-off sync on first launch after this ships
@@ -101,7 +142,7 @@ class WeatherFetcher(
     suspend fun fetchWeather(scope: CoroutineScope) = mutex.withLock {
         val weatherEnabled = coreConfigFlow.value.fetchWeather
         val pinsEnabled = coreConfigFlow.value.weatherPinsV2
-        val units = libPebble.healthSettings.first().weatherUnit()
+        val units = weatherUnit(libPebble.weatherInFahrenheit().first())
         if (!pinsEnabled || !weatherEnabled) {
             Day.entries.forEach {
                 libPebble.delete(it.dayUuid)
@@ -114,11 +155,12 @@ class WeatherFetcher(
         }
         val locations = getLocationsAndUpdateCurrentLocation()
         val locale = Locale.current.toLanguageTag()
+        val fromPlugin = weatherProvider()?.let { pluginWeather(it, units) }.orEmpty()
         val fetchedData = locations.map { location ->
             scope.async {
                 val lat = location.latitude
                 val lon = location.longitude
-                val response = if (lat == null || lon == null) {
+                val response = fromPlugin[location.key] ?: if (lat == null || lon == null) {
                     null
                 } else {
                     pebbleWebServices.getWeather(lat, lon, units, locale)
@@ -133,10 +175,38 @@ class WeatherFetcher(
         if (pinsEnabled) {
             createTimelinePins(fetchedData)
         }
+        updateBacklightColorSchedule(fetchedData)
         libPebble.updateWeatherData(weatherAppData)
         if (weatherAppData.filterIsInstance<WeatherLocationData.WeatherLocationDataPopulated>().isNotEmpty()) {
             settings.putBoolean(SETTINGS_KEY_HAS_DONE_ONE_SYNC, true)
         }
+    }
+
+    /** The weather plugin the user chose for `weather/location`; not the built-in one, which serves what this fetches. */
+    private fun weatherProvider(): PluginMetadata? {
+        val key = PluginRegistry.sourceKey(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)
+        val chosen = libPebble.preferredSourcePlugins.value[key] ?: return null
+        if (chosen == WeatherPlugin.BUILT_IN_WEATHER_UUID) return null
+        return libPebble.getAllPlugins().firstOrNull {
+            it.pluginUuid == chosen && it.serves(WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION)
+        }
+    }
+
+    /** [plugin]'s weather for each location it has, keyed like the user's locations; the backend fills in the rest. */
+    private suspend fun pluginWeather(plugin: PluginMetadata, units: WeatherUnit): Map<Uuid, WeatherResponse> {
+        val update = libPebble.read(PluginCaller.Host(), plugin, WeatherPlugin.CATEGORY, WeatherPlugin.ITEM_LOCATION, timeout = PLUGIN_READ_TIMEOUT)
+        if (update !is SourceUpdate.Data) {
+            logger.w { "Weather from ${plugin.name} failed (${(update as SourceUpdate.Error).code}); using the backend" }
+            return emptyMap()
+        }
+        val now = clock.now()
+        val phoneOffsetMin = TimeZone.currentSystemDefault().offsetAt(now).totalSeconds / 60
+        return update.envelope.instances.mapNotNull { instance ->
+            val key = Uuid.parseOrNull(instance.instanceId) ?: return@mapNotNull null
+            val response = pluginWeatherResponse(instance, units, now, phoneOffsetMin)
+            if (response == null) logger.w { "${plugin.name} lacks what the watch needs for ${instance.instanceId}" }
+            response?.let { key to it }
+        }.toMap()
     }
 
     private suspend fun getLocationsAndUpdateCurrentLocation(): List<WeatherLocationEntity> {
@@ -183,6 +253,32 @@ class WeatherFetcher(
         createTimelinePins(dayAfterTomorrow, Day.DayAfterTomorrow)
     }
 
+    private suspend fun updateBacklightColorSchedule(fetchedData: List<LocationWithData>) {
+        if (!coreConfigFlow.value.backlightColorAutoSunriseSunset) return
+        val prefs = libPebble.watchPrefs.first()
+        fun bool(pref: BoolWatchPref) =
+            prefs.firstOrNull { it.pref == pref }?.let { pref.castParent(it).valueOrDefault() }
+                ?: pref.defaultValue
+        if (!bool(BoolWatchPref.BacklightColorDayNightEnabled)) return
+        // Sunrise/sunset are the current location's local wall-clock time, which only matches the
+        // watch's clock when it follows the phone's timezone. Leave manual-timezone watches alone.
+        if (bool(BoolWatchPref.TimezoneSourceIsManual)) {
+            logger.i { "Not syncing backlight sunrise/sunset: watch timezone is manual" }
+            return
+        }
+
+        val today = fetchedData.firstOrNull { it.location.currentLocation }
+            ?.data?.fcstdaily7?.data?.forecasts?.firstOrNull() ?: return
+        val timeZone = TimeZone.currentSystemDefault()
+        val (sunrise, sunset) = runCatching {
+            today.sunrise.minuteOfDay(timeZone) to today.sunset.minuteOfDay(timeZone)
+        }.getOrNull() ?: return
+        if (sunrise == sunset) return
+
+        libPebble.setWatchPref(WatchPreference(NumberWatchPref.BacklightColorSunriseMinute, sunrise.toLong()))
+        libPebble.setWatchPref(WatchPreference(NumberWatchPref.BacklightColorSunsetMinute, sunset.toLong()))
+    }
+
     private fun weatherAppData(locationWithData: LocationWithData, units: WeatherUnit): WeatherLocationData? {
         val weather = locationWithData.data ?: return null
         val location = locationWithData.location
@@ -217,6 +313,8 @@ class WeatherFetcher(
                 humidityPct = forecast.humidityPct,
                 visibilityM = forecast.visibilityM,
                 precipSumMm = forecast.precipMm?.roundToInt(),
+                sunriseUtcSecs = runCatching { forecast.sunrise.epochSeconds }.getOrNull(),
+                sunsetUtcSecs = runCatching { forecast.sunset.epochSeconds }.getOrNull(),
             )
         }
         // The series starts at the location's local midnight, so hours 24+ are tomorrow.
@@ -350,11 +448,16 @@ fun GeocoderResult<Place>.usefulName(): String? {
     return place?.usefulName()
 }
 
+private val PLUS_CODE = Regex("^[23456789CFGHJMPQRVWX]{2,8}\\+", RegexOption.IGNORE_CASE)
+
 fun Place.usefulName(): String? {
 //    logger.v { "usefulName: name=$name street=$street isoCountryCode=$isoCountryCode country=$country " +
 //            "postalCode=$postalCode administrativeArea=$administrativeArea subAdministrativeArea=$subAdministrativeArea " +
 //            "locality=$locality subLocality=$subLocality thoroughfare=$thoroughfare subThoroughfare=$subThoroughfare" }
-    return locality ?: street
+    return locality
+        ?: subAdministrativeArea
+        ?: administrativeArea
+        ?: street?.takeUnless { PLUS_CODE.containsMatchIn(it) }
 }
 
 internal enum class WeatherPinKind(val value: UByte) {
@@ -377,7 +480,7 @@ private val TomorrowDayUuid = Uuid.parse("2834d0c8-85bc-45bd-b2b7-d0f026098d28")
 private val TomorrowNightUuid = Uuid.parse("2f363ad4-bc5d-455a-a445-4e00ec07417e")
 private val DayAfterTomorrowDayUuid = Uuid.parse("3233984e-2dc9-4469-8a9a-46f91d81b7fc")
 private val DayAfterTomorrowNightUuid = Uuid.parse("fd97c081-9970-436b-aa87-9c55232bce35")
-private const val TEMP_NO_VALUE = Short.MAX_VALUE
+internal const val TEMP_NO_VALUE = Short.MAX_VALUE
 private const val HOURS_PER_DAY = 24
 
 internal fun HourlyForecast.toHourlyForecast() = WeatherHourlyForecast(
@@ -555,6 +658,10 @@ private fun String.asInstantFromIso8601(): Instant {
     return Instant.parse(sanitized)
 }
 
+/** Wall-clock minute-of-day (0..1439) of this instant in [timeZone]. */
+internal fun Instant.minuteOfDay(timeZone: TimeZone): Int =
+    toLocalDateTime(timeZone).time.let { it.hour * 60 + it.minute }
+
 /** Minutes east of UTC from an ISO-8601 timestamp ending in a colon-less offset (e.g. `-0700`). */
 internal fun String.utcOffsetMinutes(): Int? {
     if (length < 5) return null
@@ -568,8 +675,22 @@ internal fun String.utcOffsetMinutes(): Int? {
     return sign * (hours * 60 + minutes)
 }
 
-internal fun HealthSettings.weatherUnit(): WeatherUnit =
-    if (imperialUnits) WeatherUnit.Imperial else WeatherUnit.Metric
+internal fun List<WatchPreference<*>>.valueOf(pref: WatchPref<*>) = firstOrNull { it.pref == pref }?.valueOrDefault()
+
+internal fun List<WatchPreference<*>>.fahrenheitFor(imperialUnits: Boolean): Boolean =
+    (valueOf(EnumWatchPref.Temperature) as? TemperatureUnits ?: TemperatureUnits.FromDistance).isFahrenheit(imperialUnits)
+
+internal fun List<WatchPreference<*>>.windUnitsFor(imperialUnits: Boolean): WindUnits =
+    (valueOf(EnumWatchPref.WindSpeed) as? WindUnits ?: WindUnits.FromDistance).resolved(imperialUnits)
+
+fun LibPebble.weatherInFahrenheit(): Flow<Boolean> =
+    combine(healthSettings, watchPrefs) { health, prefs -> prefs.fahrenheitFor(health.imperialUnits) }
+
+fun LibPebble.windUnits(): Flow<WindUnits> =
+    combine(healthSettings, watchPrefs) { health, prefs -> prefs.windUnitsFor(health.imperialUnits) }
+
+internal fun weatherUnit(fahrenheit: Boolean): WeatherUnit =
+    if (fahrenheit) WeatherUnit.Imperial else WeatherUnit.Metric
 
 /** The watch is sent wind in mph whatever the units, and converts for display itself. */
 internal fun Int?.toMph(units: WeatherUnit): Int? = when {

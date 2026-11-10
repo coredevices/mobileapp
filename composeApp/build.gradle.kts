@@ -76,7 +76,7 @@ kotlin {
         podfile = project.file("../iosApp/Podfile")
 
         pod("GoogleSignIn", "8.0.0")
-        pod("FirebaseCore", "11.10.0")
+        pod("FirebaseCore", "12.19.3")
         pod("FirebaseAuth") {
             linkOnly = true
             extraOpts += listOf("-compiler-option", "-fmodules")
@@ -84,9 +84,9 @@ kotlin {
         pod("FirebaseFirestore") {
             linkOnly = true
             source = git("https://github.com/invertase/firestore-ios-sdk-frameworks.git") {
-                // 11.10.0 — pinned here by commit because the synthetic Podfile's lock lives
+                // 12.19.3 — pinned here by commit because the synthetic Podfile's lock lives
                 // under build/ and is never committed
-                commit = "e43715cc392c819b522c7a189bed9400e757c788"
+                commit = "cc9a5e005ca9b5a08e0811490a76a189f50642bb"
             }
         }
         // The binary FirebaseFirestoreInternal is static, so its C deps must be linked here

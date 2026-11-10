@@ -40,6 +40,7 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
 import coredevices.util.OAuthRedirectHandler
 import coredevices.util.sync.IosSyncScheduler
+import coredevices.util.clock.NativeAlarmKitBridge
 import coredevices.util.transcription.NativeSpeechAnalyzerBridge
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.crashlytics.crashlytics
@@ -67,6 +68,7 @@ import platform.Foundation.NSData
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSProcessInfoPowerStateDidChangeNotification
+import platform.Foundation.NSDate
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserActivity
 import platform.Foundation.NSUserActivityTypeBrowsingWeb
@@ -97,16 +99,30 @@ object IOSDelegate : KoinComponent {
         transcribeWavFile: (String, String?, (String?, String?) -> Unit) -> Unit,
         assetStatus: (String?, (String) -> Unit) -> Unit,
         downloadAssets: (String?, (Double) -> Unit, (String?) -> Unit) -> Unit,
+        releaseUnusedReservations: (String?) -> Unit,
     ) {
         NativeSpeechAnalyzerBridge.isSupported = isSupported
         NativeSpeechAnalyzerBridge.cancelTranscription = cancelTranscription
         NativeSpeechAnalyzerBridge.transcribeWavFile = transcribeWavFile
         NativeSpeechAnalyzerBridge.assetStatus = assetStatus
         NativeSpeechAnalyzerBridge.downloadAssets = downloadAssets
+        NativeSpeechAnalyzerBridge.releaseUnusedReservations = releaseUnusedReservations
     }
 
     fun setNativeSpeechAnalyzerLanguages(tags: List<String>) {
         NativeSpeechAnalyzerBridge.supportedLanguageTags.value = tags
+    }
+
+    fun registerNativeAlarmKit(
+        authorizationState: () -> String,
+        requestAuthorization: ((Boolean) -> Unit) -> Unit,
+        schedule: (String, String, NSDate, String, (String?) -> Unit) -> Unit,
+        cancel: (String) -> Unit,
+    ) {
+        NativeAlarmKitBridge.authorizationState = authorizationState
+        NativeAlarmKitBridge.requestAuthorization = requestAuthorization
+        NativeAlarmKitBridge.schedule = schedule
+        NativeAlarmKitBridge.cancel = cancel
     }
 
     fun handleOpenUrl(url: NSURL): Boolean {
@@ -291,24 +307,23 @@ object IOSDelegate : KoinComponent {
         }
         if (permissionAnswer) return
 
-        // Reminder notifications carry only the reminder id; the feed item to deep link to
-        // isn't linked when the notification is scheduled, so resolve it now (at tap time).
-        val reminderId = (userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String)?.toIntOrNull()
-        if (reminderId != null) {
+        // Reminder notifications carry the feed item id; resolve the deep link at tap time.
+        val itemId = userInfo[ReminderDeepLinkResolver.USERINFO_REMINDER_ID] as? String
+        if (itemId != null) {
             // "Done" button (MOB-8439): mark the backing item complete in the background without
             // opening the app. Completing it cancels the reminder and dismisses the notification.
             if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
                 val completer: ReminderCompleter = get()
                 bgTaskScope.launch {
-                    runCatching { completer.markDone(reminderId) }
-                        .onFailure { logger.e(it) { "Failed to mark reminder $reminderId done" } }
+                    runCatching { completer.markDone(itemId) }
+                        .onFailure { logger.e(it) { "Failed to mark reminder $itemId done" } }
                     withContext(Dispatchers.Main) { completionHandler() }
                 }
                 return
             }
             val resolver: ReminderDeepLinkResolver = get()
             bgTaskScope.launch {
-                val link = resolver.resolveDeepLink(reminderId)
+                val link = resolver.resolveDeepLink(itemId)
                 logger.d { "Handling reminder deep link from notification: $link" }
                 withContext(Dispatchers.Main) {
                     NSURL.URLWithString(link)?.let { handleOpenUrl(it) }

@@ -1,11 +1,12 @@
 package coredevices.ring.agent.pebble_plugin
 
+import io.rebble.libpebblecommon.connection.Plugins
 import PlatformUiContext
 import coredevices.util.integrations.Integration
-import io.rebble.libpebblecommon.plugin.Plugin
+import io.rebble.libpebblecommon.plugin.PluginCaller
+import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceShapeNames
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.withTimeoutOrNull
+import io.rebble.libpebblecommon.plugin.SourceUpdate
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -16,7 +17,8 @@ import kotlin.time.Duration.Companion.seconds
  * set up for that category through its `<category>/configured` source.
  */
 abstract class PblPluginActionIntegration(
-    protected val plugin: Plugin,
+    protected val plugin: PluginMetadata,
+    protected val plugins: Plugins,
     private val category: String,
 ) : Integration {
     override suspend fun signIn(uiContext: PlatformUiContext): Boolean {
@@ -28,10 +30,15 @@ abstract class PblPluginActionIntegration(
     }
 
     override suspend fun isAuthorized(): Boolean {
-        val envelope = withTimeoutOrNull(CONFIGURED_TIMEOUT) {
-            plugin.observe(category, CONFIGURED_ITEM, properties = listOf(CONFIGURED_PROPERTY), iconPixelSize = null)
-                .firstOrNull()
-        } ?: return false
+        val update = plugins.read(
+            PluginCaller.Host(probe = true),
+            plugin,
+            category,
+            CONFIGURED_ITEM,
+            properties = listOf(CONFIGURED_PROPERTY),
+            timeout = CONFIGURED_TIMEOUT,
+        )
+        val envelope = (update as? SourceUpdate.Data)?.envelope ?: return false
         return envelope.instances.any { instance ->
             instance.properties[CONFIGURED_PROPERTY]
                 ?.get(SourceShapeNames.BOOLEAN)

@@ -6,8 +6,8 @@ use_frameworks!
 target 'iosApp' do
         pod 'composeApp', :path => '../composeApp'
         # Precompiled Firestore: avoids building gRPC/BoringSSL/abseil from source
-        # 11.10.0
-        pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :commit => 'e43715cc392c819b522c7a189bed9400e757c788'
+        # 12.19.3
+        pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :commit => 'cc9a5e005ca9b5a08e0811490a76a189f50642bb'
         pod 'Mixpanel-swift'
 end
 
@@ -22,6 +22,15 @@ post_install do |installer|
             before = File.read(path)
             after = before.gsub(/\s-(weak_)?framework\s+"FirebaseFirestore(Internal)?"/, '')
             File.write(path, after) if after != before
+        end
+    end
+
+    # Xcode 27 rejects pod deployment targets below iOS 15.
+    installer.pods_project.targets.each do |target|
+        target.build_configurations.each do |config|
+            if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.0
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+            end
         end
     end
 end

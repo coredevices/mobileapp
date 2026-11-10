@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,12 +15,17 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Checkbox
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +48,9 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
+import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
+import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.services.PebbleWebServices
 import coredevices.pebble.services.isPebbleFeed
@@ -80,6 +89,7 @@ class AppstoreSettingsScreenViewModel(
         sourceDao.getAllSources().combine(collectionDao.getAllCollectionsFlow()) { sources, collections ->
             sources.associateWith { source ->
                 collections.filter { it.sourceId == source.id }
+                    .sortedWith(compareBy({ it.type }, { it.slug != TOP_CHARTS_COLLECTION_SLUG }))
                     .groupBy { it.type }
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -120,7 +130,13 @@ fun AppstoreSettingsScreen(
     val uriHandler = LocalUriHandler.current
     val viewModel = koinViewModel<AppstoreSettingsScreenViewModel> { parametersOf(uriHandler) }
     val sources by viewModel.sources.collectAsState()
-    val collections by viewModel.collections.collectAsState()
+    val allCollections by viewModel.collections.collectAsState()
+    val pluginsEnabled = rememberLibPebble().config.collectAsState().value.watchConfig.enablePlugins
+    val collections = remember(allCollections, pluginsEnabled) {
+        if (pluginsEnabled) allCollections else allCollections?.mapValues { (_, byType) ->
+            (byType - AppType.Plugin).mapValues { (_, cols) -> cols.filter { it.slug != PLUGIN_DATA_APPS_SLUG } }
+        }
+    }
     val pebbleAccount: PebbleAccount = koinInject()
     val sourceDao: AppstoreSourceDao = koinInject()
     val scope = rememberCoroutineScope()
@@ -230,82 +246,81 @@ fun AppstoreSourceItem(
     onEnableChange: (Int, Boolean) -> Unit,
     onCollectionEnabledChanged: (AppstoreCollection, Boolean) -> Unit,
 ) {
-    Column {
-        ListItem(
-            headlineContent = {
-                Text(text = source.title)
-            },
-            supportingContent = {
-                Text(text = source.url)
-            },
-            trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!source.isPebbleFeed() && !source.isRebbleFeed()) {
-                        IconButton(
-                            onClick = {
-                                onRemove(source.id)
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(bottom = 8.dp)) {
+            ListItem(
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                headlineContent = {
+                    Text(text = source.title)
+                },
+                supportingContent = {
+                    Text(text = source.url)
+                },
+                trailingContent = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!source.isPebbleFeed() && !source.isRebbleFeed()) {
+                            IconButton(
+                                onClick = {
+                                    onRemove(source.id)
+                                }
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Source")
                             }
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Source")
                         }
-                    }
-                    Checkbox(
-                        checked = source.enabled,
-                        onCheckedChange = {
-                            onEnableChange(source.id, it)
-                        }
-                    )
-                }
-            },
-            modifier = Modifier.clickable {
-                onEnableChange(source.id, !source.enabled)
-            }
-        )
-        if (collections != null) {
-            if (collections.values.any { it.isNotEmpty() } && source.enabled) {
-                collections.forEach { (appType, cols) ->
-                    if (cols.isNotEmpty()) {
-                        Text(
-                            text = when (appType) {
-                                AppType.Watchapp -> "Watchapp Collections"
-                                AppType.Watchface -> "Watchface Collections"
-                                AppType.Plugin -> "Plugin Collections"
-                            },
-                            modifier = Modifier.padding(start = 32.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                        Checkbox(
+                            checked = source.enabled,
+                            onCheckedChange = {
+                                onEnableChange(source.id, it)
+                            }
                         )
-                        cols.forEach { col ->
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        text = col.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.padding(start = 16.dp)
-                                    )
+                    }
+                },
+                modifier = Modifier.clickable {
+                    onEnableChange(source.id, !source.enabled)
+                }
+            )
+            if (collections != null) {
+                if (collections.values.any { it.isNotEmpty() } && source.enabled) {
+                    collections.forEach { (appType, cols) ->
+                        if (cols.isNotEmpty()) {
+                            CardGroup(
+                                title = when (appType) {
+                                    AppType.Watchapp -> "Watchapp Collections"
+                                    AppType.Watchface -> "Watchface Collections"
+                                    AppType.Plugin -> "Plugin Collections"
                                 },
-                                trailingContent = {
-                                    Checkbox(
-                                        col.enabled,
-                                        onCheckedChange = {
-                                            onCollectionEnabledChanged(col, it)
-                                        }
-                                    )
-                                },
-                                modifier = Modifier.height(40.dp)
-                            )
+                                items = cols,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) { col ->
+                                ListItem(
+                                    headlineContent = { Text(col.title) },
+                                    trailingContent = {
+                                        Checkbox(
+                                            col.enabled,
+                                            onCheckedChange = {
+                                                onCollectionEnabledChanged(col, it)
+                                            }
+                                        )
+                                    },
+                                    modifier = Modifier.clickable { onCollectionEnabledChanged(col, !col.enabled) },
+                                )
+                            }
                         }
                     }
                 }
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.CenterHorizontally)
+                )
             }
-        } else {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
         }
-
     }
 }
 

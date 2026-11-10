@@ -1,12 +1,17 @@
 package coredevices.pebble.permissions
 
 import coredevices.pebble.RealPebbleDeepLinkHandler
+import coredevices.pebble.config.VisibleConfigPage
 import coredevices.pebble.ui.requestSummary
+import coredevices.util.WatchNotificationAction
+import coredevices.util.WatchNotifier
+import coredevices.util.setWatchNotificationActionHandler
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
 
 /** A running app's runtime requests, answered together by the notification's actions. */
@@ -31,19 +36,52 @@ expect fun removePermissionRequestNotification(appContext: AppContext, key: Int)
 class PermissionRequestNotifier(
     private val libPebble: LibPebble,
     private val appContext: AppContext,
+    private val watchNotifier: WatchNotifier,
+    private val visibleConfigPage: VisibleConfigPage,
 ) {
+    /** Before the watch connects, so it can answer notifications sent before an app restart. */
+    fun registerWatchActions() {
+        listOf(true, false).forEach { granted ->
+            libPebble.setWatchNotificationActionHandler(watchActionType(granted)) { data ->
+                val (appUuid, permissions) = decodeWatchActionData(requireNotNull(data))
+                answerPermissionRequests(libPebble, appUuid, permissions, granted)
+            }
+        }
+    }
+
     fun init() {
         GlobalScope.launch {
             var shown = emptyMap<Uuid, List<String>>()
             libPebble.activePermissionRequests().collect { active ->
                 val current = active.groupBy({ it.appUuid }, { it.permission })
                 // Only something new is worth a notification: answering one of several shouldn't re-alert.
-                current.filter { (appUuid, keys) -> !shown[appUuid].orEmpty().containsAll(keys) }
-                    .forEach { (appUuid, keys) -> notifyPermissionRequest(appContext, notificationFor(appUuid, keys)) }
-                (shown.keys - current.keys).forEach { removePermissionRequestNotification(appContext, keyOf(it)) }
+                // The app's open config page asks instead.
+                current.filter { (appUuid, keys) ->
+                    !shown[appUuid].orEmpty().containsAll(keys) && appUuid != visibleConfigPage.app.value
+                }
+                    .forEach { (appUuid, keys) -> notify(notificationFor(appUuid, keys)) }
+                (shown.keys - current.keys).forEach { appUuid ->
+                    removePermissionRequestNotification(appContext, keyOf(appUuid))
+                    watchNotifier.remove(watchKey(appUuid))
+                }
                 shown = current
             }
         }
+    }
+
+    private fun notify(notification: PermissionRequestNotification) {
+        notifyPermissionRequest(appContext, notification)
+        val suffix = if (notification.permissions.size > 1) " all" else ""
+        val data = Json.encodeToString(listOf(notification.appUuid.toString()) + notification.permissions)
+        watchNotifier.send(
+            key = watchKey(notification.appUuid),
+            title = notification.title,
+            body = notification.body,
+            actions = listOf(
+                WatchNotificationAction("Allow$suffix", watchActionType(true), data),
+                WatchNotificationAction("Deny$suffix", watchActionType(false), data),
+            ),
+        )
     }
 
     private suspend fun notificationFor(appUuid: Uuid, keys: List<String>): PermissionRequestNotification {
@@ -60,6 +98,15 @@ class PermissionRequestNotifier(
 
     companion object {
         fun keyOf(appUuid: Uuid) = "permissions/$appUuid".hashCode()
+
+        private fun watchKey(appUuid: Uuid) = "permission-request/$appUuid"
+
+        private fun watchActionType(granted: Boolean) = if (granted) "permission_allow" else "permission_deny"
+
+        private fun decodeWatchActionData(data: String): Pair<Uuid, List<String>> {
+            val parts = Json.decodeFromString<List<String>>(data)
+            return Uuid.parse(parts.first()) to parts.drop(1)
+        }
     }
 }
 

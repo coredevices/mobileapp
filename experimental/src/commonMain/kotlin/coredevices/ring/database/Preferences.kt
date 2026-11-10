@@ -64,6 +64,8 @@ interface Preferences: BasePreferences {
     fun setLastBackupCount(count: Int?)
     fun setPlatformSttDefaulted()
     fun setUsePendingIntentScan(enabled: Boolean)
+    val defaultDestinationAsked: Set<String>
+    fun markDefaultDestinationAsked(providerId: String)
     val defaultCaptureType: StateFlow<DefaultCaptureType>
     fun setDefaultCaptureType(type: DefaultCaptureType)
     val targetCalendar: StateFlow<Int?>
@@ -91,6 +93,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
     )
     override val ringPairedName = _ringPairedName.asStateFlow()
+    private val _ringPairingKeyHash = MutableStateFlow(settings.getIntOrNull("ring_pairing_key_hash"))
+    override val ringPairingKeyHash = _ringPairingKeyHash.asStateFlow()
     override val ringPairedOld = MutableStateFlow(
         try {
             settings.getBoolean("ring_paired", false)
@@ -188,6 +192,13 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             settings.putString("ring_paired_name", it)
         } ?: settings.remove("ring_paired_name")
         _ringPairedName.value = name
+    }
+
+    override fun setRingPairingKeyHash(hash: Int?) {
+        hash?.let {
+            settings.putInt("ring_pairing_key_hash", it)
+        } ?: settings.remove("ring_pairing_key_hash")
+        _ringPairingKeyHash.value = hash
     }
 
     override fun setMusicControlMode(mode: MusicControlMode) {
@@ -293,6 +304,15 @@ class PreferencesImpl(private val settings: Settings): Preferences {
 
     override fun setPlatformSttDefaulted() {
         settings.putBoolean("platform_stt_defaulted", true)
+    }
+
+    override val defaultDestinationAsked: Set<String>
+        get() = settings.getStringOrNull("default_destination_asked")
+            ?.let { runCatching { Json.decodeFromString<Set<String>>(it) }.getOrNull() }
+            .orEmpty()
+
+    override fun markDefaultDestinationAsked(providerId: String) {
+        settings.putString("default_destination_asked", Json.encodeToString(defaultDestinationAsked + providerId))
     }
 
     override fun setUsePendingIntentScan(enabled: Boolean) {

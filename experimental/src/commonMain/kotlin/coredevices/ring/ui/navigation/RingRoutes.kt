@@ -21,6 +21,7 @@ import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
+import coredevices.ring.ui.screens.clock.TimersAndAlarms
 import coredevices.ring.ui.theme.IndexThemeHost
 
 /** Marker for routes that belong to the Index/Ring feature. The
@@ -57,11 +58,12 @@ object RingRoutes {
     data object RingSyncInspector : RingRoute
     @Serializable
     data object AddIntegration : RingRoute
+    @Serializable
+    data object TimersAndAlarms : RingRoute
 
     /** Deep link that opens the [ObjectDetails] screen for an index item by
      *  its Firestore id. Used by the platform reminder notification so
-     *  tapping it opens the reminder's feed item. Parsed by
-     *  `CoreDeepLinkHandler`. */
+     *  tapping it opens the reminder's feed item. */
     const val OBJECT_DEEP_LINK_HOST = "deep-link"
     const val OBJECT_DEEP_LINK_PATH = "object"
     const val OBJECT_DEEP_LINK_ID_PARAM = "id"
@@ -70,10 +72,19 @@ object RingRoutes {
 
     /** Deep link that opens the [RecordingDetails] screen for a local recording.
      *  Used by the Index notifications so tapping e.g. a completed-answer
-     *  notification opens that recording. Parsed by `CoreDeepLinkHandler`. */
+     *  notification opens that recording. */
     const val RECORDING_DEEP_LINK_PATH = "recording"
     fun recordingDeepLink(recordingId: Long) =
         "pebblecore://$OBJECT_DEEP_LINK_HOST/$RECORDING_DEEP_LINK_PATH?$OBJECT_DEEP_LINK_ID_PARAM=$recordingId"
+
+    /** Deep link that opens [Settings]. */
+    const val SETTINGS_DEEP_LINK_PATH = "index-settings"
+    const val SETTINGS_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$SETTINGS_DEEP_LINK_PATH"
+
+    /** Deep link that opens [TimersAndAlarms]; used when a timer or alarm notification is
+     *  tapped. */
+    const val TIMERS_ALARMS_DEEP_LINK_PATH = "timers-alarms"
+    const val TIMERS_ALARMS_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$TIMERS_ALARMS_DEEP_LINK_PATH"
 }
 
 /** Registers a ring destination inside [IndexThemeHost], so screens read
@@ -126,5 +137,8 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     }
     indexComposable<RingRoutes.AddIntegration> {
         AddIntegration(coreNav)
+    }
+    indexComposable<RingRoutes.TimersAndAlarms> {
+        TimersAndAlarms(coreNav)
     }
 }

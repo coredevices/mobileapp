@@ -120,6 +120,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val ringPairedName: StateFlow<String?>
         get() = TODO("Not yet implemented")
+    override val ringPairingKeyHash: StateFlow<Int?>
+        get() = TODO("Not yet implemented")
     override val ringPairedOld: StateFlow<Boolean>
         get() = TODO("Not yet implemented")
     override val musicControlMode: StateFlow<MusicControlMode>
@@ -157,6 +159,11 @@ private object PreferencesTestImpl: Preferences {
         get() = MutableStateFlow(false)
     override val scanByPairedAddress: StateFlow<Boolean>
         get() = MutableStateFlow(false)
+    override val defaultDestinationAsked: Set<String> = emptySet()
+
+    override fun markDefaultDestinationAsked(providerId: String) {
+        TODO("Not yet implemented")
+    }
 
     override fun setUsePendingIntentScan(enabled: Boolean) {
         TODO("Not yet implemented")
@@ -179,6 +186,10 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override fun setRingPairedName(name: String?) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setRingPairingKeyHash(hash: Int?) {
         TODO("Not yet implemented")
     }
 

@@ -8,6 +8,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -46,7 +47,12 @@ class LazyLoadingMcpSessionTest {
 
     private fun List<McpSessionTool>.names() = map { "${it.integrationName}__${it.tool.definition.name}" }
 
-    private fun List<McpSessionTool>.loader() = single { it.integrationName == LazyLoadingMcpSession.LOADER_INTEGRATION_NAME }
+    private fun List<McpSessionTool>.loader() = single { it.tool.definition.name == LazyLoadingMcpSession.LOAD_TOOLS_NAME }
+
+    private suspend fun LazyLoadingMcpSession.search(vararg keywords: String) = callTool(
+        LazyLoadingMcpSession.LOADER_INTEGRATION_NAME, LazyLoadingMcpSession.SEARCH_TOOLS_NAME,
+        mapOf("keywords" to JsonArray(keywords.map { JsonPrimitive(it) })), sessionContext()
+    )
 
     @Test
     fun smallToolSetsAreListedInFull() = runBlocking {
@@ -65,7 +71,7 @@ class LazyLoadingMcpSessionTest {
             listOf(integration("notes", 2), integration("crm", 5), integration("wiki", 4)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 11
         )
         val tools = session.listTools()
-        assertEquals(listOf("notes__tool_0", "notes__tool_1", "tool_loader__load_tools"), tools.names())
+        assertEquals(listOf("notes__tool_0", "notes__tool_1", "tool_loader__load_tools", "tool_loader__search_tools"), tools.names())
 
         val loader = tools.loader().tool.definition
         assertContains(loader.description!!, "- crm (5 tools): tool_0 (Does thing 0), tool_1 (Does thing 1), tool_2 (Does thing 2) and 2 more")
@@ -90,7 +96,10 @@ class LazyLoadingMcpSessionTest {
 
         val tools = session.listTools()
         assertEquals(
-            listOf("notes__tool_0", "notes__tool_1", "wiki__tool_0", "wiki__tool_1", "wiki__tool_2", "wiki__tool_3", "tool_loader__load_tools"),
+            listOf(
+                "notes__tool_0", "notes__tool_1", "wiki__tool_0", "wiki__tool_1", "wiki__tool_2", "wiki__tool_3",
+                "tool_loader__load_tools", "tool_loader__search_tools"
+            ),
             tools.names()
         )
         assertEquals("called tool_3", session.callTool("wiki", "tool_3", emptyMap(), sessionContext()).resultString)
@@ -154,6 +163,76 @@ class LazyLoadingMcpSessionTest {
         assertContains(loader.description!!, "- todoist (1 tools): Creates Todoist tasks as reminders. Tools: create_reminder\n")
         assertFalse(loader.description!!.contains("Create a Todoist task."))
         assertContains(loader.description!!, "- crm (5 tools): tool_0 (Does thing 0)")
+    }
+
+    @Test
+    fun longGroupDescriptionsAreShortened() = runBlocking {
+        val wordy = object : BuiltInMcpIntegration("wordy", listOf(FakeTool("do_it", "Does it"))) {
+            override val description = "x".repeat(300)
+        }
+        val session = LazyLoadingMcpSession(listOf(wordy, integration("crm", 5)), this, eagerIntegrations = emptySet(), lazyLoadThreshold = 2)
+        val loader = session.listTools().loader().tool.definition
+        assertContains(loader.description!!, "- wordy (1 tools): " + "x".repeat(199) + "…. Tools: do_it")
+    }
+
+    @Test
+    fun searchNamesTheGroupToLoadForMatchingTools() = runBlocking {
+        val home = integration(
+            "mcphub",
+            "announce" to "Play an announcement on the speakers",
+            "kidsnet_status" to "Current KidsNet mode for each child's devices",
+            "kidsnet_set_mode" to "Set KidsNet mode for a child",
+            "run_routine" to "Run a named home routine",
+        )
+        val session = LazyLoadingMcpSession(
+            listOf(integration("notes", 2), home, integration("crm", 5)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 5
+        )
+        session.listTools()
+        assertTrue(session.listTools().names().contains("tool_loader__search_tools"))
+
+        val result = session.search("kidsnet", "status")
+        assertIs<SemanticResult.SupportingData>(result.semanticResult)
+        val lines = result.resultString.lines()
+        assertEquals("Matching tools by group:", lines[0])
+        assertTrue(lines[1].startsWith("- mcphub (load with load_tools group='mcphub'): kidsnet_status (Current KidsNet mode"), lines[1])
+        assertContains(lines[1], "kidsnet_set_mode")
+        assertFalse(result.resultString.contains("crm"))
+
+        session.callTool(
+            LazyLoadingMcpSession.LOADER_INTEGRATION_NAME, LazyLoadingMcpSession.LOAD_TOOLS_NAME,
+            mapOf("group" to JsonPrimitive("mcphub")), sessionContext()
+        )
+        assertContains(session.search("routine").resultString, "- mcphub (already loaded): run_routine")
+    }
+
+    @Test
+    fun searchToleratesTyposAndCommaSeparatedKeywords() = runBlocking {
+        val session = LazyLoadingMcpSession(
+            listOf(integration("lights", "switchDevices" to "Turn devices on or off"), integration("crm", 5)),
+            this, eagerIntegrations = emptySet(), lazyLoadThreshold = 2
+        )
+        session.listTools()
+        assertContains(session.search("swich", "devises").resultString, "- lights (load with load_tools group='lights'): switchDevices")
+
+        val commaSeparated = session.callTool(
+            LazyLoadingMcpSession.LOADER_INTEGRATION_NAME, LazyLoadingMcpSession.SEARCH_TOOLS_NAME,
+            mapOf("keywords" to JsonPrimitive("turn, off")), sessionContext()
+        )
+        assertContains(commaSeparated.resultString, "switchDevices")
+    }
+
+    @Test
+    fun searchWithoutMatchesOrKeywordsIsRecoverable() = runBlocking {
+        val session = LazyLoadingMcpSession(
+            listOf(integration("crm", 5), integration("wiki", 2)), this, eagerIntegrations = emptySet(), lazyLoadThreshold = 2
+        )
+        session.listTools()
+        val none = session.search("zebra")
+        assertIs<SemanticResult.SupportingData>(none.semanticResult)
+        assertEquals("No tools match zebra. Available groups: crm, wiki", none.resultString)
+
+        val empty = session.search()
+        assertTrue(assertIs<SemanticResult.GenericFailure>(empty.semanticResult).llmRecoverable)
     }
 
     @Test

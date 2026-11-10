@@ -34,10 +34,8 @@ internal actual suspend fun signInWithCredential(credential: AuthCredential) {
             is LinkResult.Failure -> {
                 val userInfo = result.error.userInfo
                 val updatedCredential = userInfo[FIRAuthErrorUserInfoUpdatedCredentialKey] as? FIROAuthCredential
-                logger.i { "User is already created, not linking anonymous user: anonUid=$anonUid provider=${credential.providerId} usingUpdatedCredential=${updatedCredential != null}" }
-                throw AccountSwitchRequiredException(
-                    updatedCredential?.let { OAuthCredential(it) } ?: credential
-                )
+                logger.i { "User is already created, not linking anonymous user: anonUid=$anonUid provider=${credential.providerId} usingUpdatedCredential=${updatedCredential != null} error=${result.error.domain}/${result.error.code}" }
+                throw AccountSwitchRequiredException(updatedCredential?.let { OAuthCredential(it) })
             }
             is LinkResult.Success -> {
                 logger.i { "Successfully linked anonymous user to account: anonUid=$anonUid provider=${credential.providerId} finalUid=${Firebase.auth.currentUser?.uid?.take(8)}" }

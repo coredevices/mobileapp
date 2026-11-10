@@ -13,17 +13,22 @@ import coredevices.ring.bugreport.IndexRebootLogEntry
 import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.IndexSettingsSummary
 import coredevices.ring.bugreport.RecentRecordingExport
+import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.service.IndexNotificationManager
 import coredevices.ring.service.RingSync
 import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
 import coredevices.util.Platform
+import coredevices.util.WatchNotifier
 import coredevices.util.isAndroid
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -42,6 +47,7 @@ import kotlinx.serialization.json.Json
 import size
 
 class ExperimentalDevices(
+    private val watchNotifier: WatchNotifier,
     private val ringSync: RingSync,
     private val recordingStorage: RecordingStorage,
     private val ringDelegate: RingDelegate,
@@ -58,14 +64,20 @@ class ExperimentalDevices(
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
+    private val reminderReconciler: coredevices.ring.reminders.ReminderReconciler,
     private val indexSettingsSummary: IndexSettingsSummary,
     private val rebootLogStore: IndexRebootLogStore,
+    private val rssiStatistics: RingRssiStatistics,
     private val platform: Platform,
     private val targetCalendarSeeder: TargetCalendarSeeder,
+    private val indexNotificationManager: IndexNotificationManager,
+    private val libPebble: LibPebble,
+    private val indexWebhookDeliveryQueue: IndexWebhookDeliveryQueue,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
     fun appInit() {
         ringDelegate.appInit()
+        indexWebhookDeliveryQueue.resumePendingTasks()
         libIndex.init(
             permissionRequester.missingPermissions.distinctUntilChanged { old, new ->
                 (Permission.Bluetooth in old && Permission.Bluetooth !in new) || (Permission.Bluetooth !in old && Permission.Bluetooth in new)
@@ -74,6 +86,9 @@ class ExperimentalDevices(
             }
         )
         indexFeedSyncService.hashCode()
+        // Arm alarms for any reminder synced in while this device was away, then keep them in
+        // step as items sync (a new phone, the web app, a second device).
+        reminderReconciler.start()
         // Self-healing: creates the three system seed lists in Firestore
         // (Notes-to-self / Todos / Shopping) if any are missing. Idempotent.
         // Runs after each auth event because [DefaultListsBootstrap] reads
@@ -99,12 +114,26 @@ class ExperimentalDevices(
     suspend fun init() {
         ringDelegate.init()
         scope.launch { targetCalendarSeeder.seedIfNeeded() }
+        scope.launch { indexNotificationManager.notifyLegacyDestinationUse() }
+        scope.launch {
+            preferences.ringPaired.map { it != null }.distinctUntilChanged().collect { paired ->
+                val config = libPebble.config.value
+                if (config.watchConfig.notificationWindowState != paired) {
+                    libPebble.updateConfig(
+                        config.copy(watchConfig = config.watchConfig.copy(notificationWindowState = paired))
+                    )
+                }
+            }
+        }
         if (preferences.ringPairedOld.value && preferences.ringPaired.value == null) {
             // Prompt user to re-pair to migrate
+            val title = "Re-pairing required"
+            val body = "Please re-pair your Index 01 device to continue using it."
             NotifierManager.getLocalNotifier().notify {
-                title = "Re-pairing required"
-                body = "Please re-pair your Index 01 device to continue using it."
+                this.title = title
+                this.body = body
             }
+            watchNotifier.send("ring-repair-required", title, body)
         }
     }
 
@@ -214,6 +243,9 @@ class ExperimentalDevices(
             }
             append(runCatching { indexSettingsSummary.summary() }
                 .getOrElse { "\nIndex Settings unavailable: ${it.message}" })
+            append("\n")
+            append(runCatching { rssiStatistics.summary() }
+                .getOrElse { "Ring Rx RSSI statistics unavailable: ${it.message}\n" })
         }
     }
 }

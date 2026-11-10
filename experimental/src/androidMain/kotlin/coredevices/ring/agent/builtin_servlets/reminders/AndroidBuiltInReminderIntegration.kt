@@ -16,11 +16,9 @@ import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.reminders.ReminderReceiver
-import coredevices.util.AndroidPlatform
 import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -30,6 +28,9 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
     private val db: RingDatabase by inject()
     private val feedItems: BuiltInReminderFeedItems by inject()
     private val listRepository: ListRepository by inject()
+
+    private val alarmManager get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val notificationManager get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     override suspend fun createReminder(
         title: String,
@@ -45,94 +46,83 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
                 "Notification permission not granted, enable notifications for the app in Settings."
             }
         }
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             check(alarmManager.canScheduleExactAlarms()) { "No permissions to schedule reminders, check under 'Special app access > Alarms and reminders' in Settings app." }
         }
 
-        val id = db.localReminderDao().insertReminder(
-            LocalReminderData(
-                0,
-                deadline,
-                title,
-                recordingId = source?.recordingFirestoreId,
-                notifyBeforeMillis = notifyBefore?.inWholeMilliseconds)
-        ).toInt()
-
-        deadline?.let { time ->
-            scheduleAlarm(alarmManager, context, id, time, isPreNotification = false)
-            // The early heads-up alarm is only scheduled when its trigger time hasn't already passed.
-            notifyBefore?.let { lead ->
-                val preTime = time - lead
-                if (preTime > Clock.System.now()) {
-                    scheduleAlarm(alarmManager, context, id, preTime, isPreNotification = true)
-                }
-            }
-            alarmManager.nextAlarmClock?.let {
-                Logger.d { "Next alarm: ${it.triggerTime}" }
-            } ?: Logger.d { "No next alarm" }
-        }
+        val itemId = feedItems.newItemId()
+        scheduleAlarms(itemId, deadline, notifyBefore)
+        db.localReminderDao().upsert(LocalReminderData(itemId, deadline, title, notifyBefore?.inWholeMilliseconds))
         try {
-            feedItems.createFeedItem(id, title, deadline, listId, notifyBefore, source)
+            feedItems.createFeedItem(itemId, title, deadline, listId, notifyBefore, source)
         } catch (e: Exception) {
-            // If the feed item creation fails, cancel the scheduled alarms and delete the reminder.
-            cancelAlarm(alarmManager, context, id, isPreNotification = false)
-            cancelAlarm(alarmManager, context, id, isPreNotification = true)
-            db.localReminderDao().deleteReminder(id)
+            cancelAlarms(itemId)
+            db.localReminderDao().deleteReminder(itemId)
             throw e
         }
-        return id.toString()
+        return itemId
     }
 
     override suspend fun searchForList(listName: String): List<ReminderListEntry> =
         feedItems.searchForList(listName)
 
-    override suspend fun cancelReminder(reminderId: Int) {
-        db.localReminderDao().getReminder(reminderId) ?: return
-
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        cancelAlarm(alarmManager, context, reminderId, isPreNotification = false)
-        cancelAlarm(alarmManager, context, reminderId, isPreNotification = true)
-
-        // Also dismiss the notifications if they already fired (mirrors iOS removeDeliveredNotifications).
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId)
-        notificationManager.cancel(ReminderReceiver.preNotificationId(reminderId))
-
-        db.localReminderDao().deleteReminder(reminderId)
+    override suspend fun cancelReminder(itemId: String) {
+        cancelAlarms(itemId)
+        notificationManager.cancel(itemId, ReminderReceiver.NOTIF_ID_DUE)
+        notificationManager.cancel(itemId, ReminderReceiver.NOTIF_ID_PRE)
+        db.localReminderDao().deleteReminder(itemId)
     }
 
-    override suspend fun rescheduleReminder(reminderId: Int, expectedRecordingId: String?, newTime: Instant?) {
-        val reminder = db.localReminderDao().getReminder(reminderId) ?: return
-        if (reminder.recordingId != expectedRecordingId) return
+    override suspend fun syncReminder(itemId: String, message: String, time: Instant?, notifyBefore: Duration?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Logger.w { "Skipping reminder sync: notification permission not granted" }
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            Logger.w { "Skipping reminder sync: exact alarm permission not granted" }
+            return
+        }
+        cancelAlarms(itemId)
+        notificationManager.cancel(itemId, ReminderReceiver.NOTIF_ID_DUE)
+        notificationManager.cancel(itemId, ReminderReceiver.NOTIF_ID_PRE)
+        // Schedule before recording the row, so a scheduling failure leaves the ledger stale and
+        // the next reconcile retries rather than believing this reminder is armed.
+        scheduleAlarms(itemId, time, notifyBefore)
+        db.localReminderDao().upsert(LocalReminderData(itemId, time, message, notifyBefore?.inWholeMilliseconds))
+    }
 
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        cancelAlarm(alarmManager, context, reminderId, isPreNotification = false)
-        cancelAlarm(alarmManager, context, reminderId, isPreNotification = true)
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(AndroidPlatform.NOTIFICATION_ID_BASE_REMINDER + reminderId)
-        notificationManager.cancel(ReminderReceiver.preNotificationId(reminderId))
+    override suspend fun cancelExtraNotification(itemId: String) {
+        cancelAlarm(itemId, isPreNotification = true)
+        notificationManager.cancel(itemId, ReminderReceiver.NOTIF_ID_PRE)
+        db.localReminderDao().clearNotifyBefore(itemId)
+    }
 
-        db.localReminderDao().setTime(reminderId, newTime)
+    // AlarmManager exposes no way to enumerate old int-keyed PendingIntents; a legacy alarm that
+    // still fires reaches ReminderReceiver with an int (not string) extra, so it no-ops rather than
+    // double-firing. Nothing to purge.
+    override suspend fun purgeLegacySchedules() {}
 
-        if (newTime == null || newTime <= Clock.System.now()) return
-        scheduleAlarm(alarmManager, context, reminderId, newTime, isPreNotification = false)
-        reminder.notifyBeforeMillis?.let { lead ->
-            val preTime = newTime - lead.milliseconds
+    private fun scheduleAlarms(itemId: String, time: Instant?, notifyBefore: Duration?) {
+        val fireTime = time ?: return
+        if (fireTime <= Clock.System.now()) return
+        scheduleAlarm(alarmManager, context, itemId, fireTime, isPreNotification = false)
+        notifyBefore?.let { lead ->
+            val preTime = fireTime - lead
             if (preTime > Clock.System.now()) {
-                scheduleAlarm(alarmManager, context, reminderId, preTime, isPreNotification = true)
+                scheduleAlarm(alarmManager, context, itemId, preTime, isPreNotification = true)
             }
         }
     }
 
-    override suspend fun cancelExtraNotification(reminderId: Int) {
-        db.localReminderDao().getReminder(reminderId) ?: return
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        cancelAlarm(alarmManager, context, reminderId, isPreNotification = true)
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .cancel(ReminderReceiver.preNotificationId(reminderId))
-        db.localReminderDao().clearNotifyBefore(reminderId)
+    private fun cancelAlarms(itemId: String) {
+        cancelAlarm(itemId, isPreNotification = false)
+        cancelAlarm(itemId, isPreNotification = true)
     }
+
+    private fun cancelAlarm(itemId: String, isPreNotification: Boolean) =
+        alarmManager.cancel(alarmPendingIntent(context, itemId, isPreNotification))
 
     override suspend fun getAllLists(): List<ReminderListEntry> {
         val lists = listRepository.getAllFlow().first()
@@ -145,32 +135,25 @@ class AndroidBuiltInReminderIntegration : BuiltInReminderIntegration, KoinCompon
     override suspend fun isAuthorized(): Boolean = true
 
     companion object {
-        /**
-         * Builds the [PendingIntent] for a reminder's alarm. The early heads-up alarm and the due
-         * alarm share a request code but carry different actions, so they resolve to distinct
-         * PendingIntents (extras are not part of PendingIntent identity).
-         */
-        private fun alarmPendingIntent(context: Context, reminderId: Int, isPreNotification: Boolean): PendingIntent {
+        private fun alarmPendingIntent(context: Context, itemId: String, isPreNotification: Boolean): PendingIntent {
             val intent = Intent(context, ReminderReceiver::class.java).apply {
                 if (isPreNotification) action = ReminderReceiver.ACTION_PRE_NOTIFICATION
-                putExtra(ReminderReceiver.EXTRA_REMINDER_ID, reminderId)
+                // Distinct data per (item, kind) so colliding hashCodes never share a PendingIntent.
+                data = ReminderReceiver.reminderUri(itemId, if (isPreNotification) "pre" else "due")
+                putExtra(ReminderReceiver.EXTRA_REMINDER_ID, itemId)
             }
             return PendingIntent.getBroadcast(
                 context,
-                reminderId,
+                itemId.hashCode(),
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
         }
 
-        fun scheduleAlarm(alarmManager: AlarmManager, context: Context, reminderId: Int, triggerTime: Instant, isPreNotification: Boolean) {
-            val pendingIntent = alarmPendingIntent(context, reminderId, isPreNotification)
+        fun scheduleAlarm(alarmManager: AlarmManager, context: Context, itemId: String, triggerTime: Instant, isPreNotification: Boolean) {
+            val pendingIntent = alarmPendingIntent(context, itemId, isPreNotification)
             val info = AlarmManager.AlarmClockInfo(triggerTime.toEpochMilliseconds(), pendingIntent)
             alarmManager.setAlarmClock(info, pendingIntent)
-        }
-
-        private fun cancelAlarm(alarmManager: AlarmManager, context: Context, reminderId: Int, isPreNotification: Boolean) {
-            alarmManager.cancel(alarmPendingIntent(context, reminderId, isPreNotification))
         }
     }
 }

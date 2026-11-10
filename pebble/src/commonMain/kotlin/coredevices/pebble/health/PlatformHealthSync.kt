@@ -35,10 +35,11 @@ class PlatformHealthSync(
     private val libPebble: LibPebble,
     private val tracker: HealthSyncTracker,
     private val appResumed: AppResumed,
-    private val healthManager: HealthManager,
+    healthManager: Lazy<HealthManager>,
     private val healthDataApi: HealthDataApi,
 ) {
     private val logger = Logger.withTag("PlatformHealthSync")
+    private val healthManager by healthManager
 
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing
@@ -65,6 +66,8 @@ class PlatformHealthSync(
             HealthDataType.HeartRate,
             HealthDataType.Sleep,
         ) + exerciseWriteTypes()
+
+        private const val STEPS_SYNC_CHUNK_SIZE = 1000
     }
 
     /** Check if the health platform is available on this device. */
@@ -135,48 +138,49 @@ class PlatformHealthSync(
         val records = healthDataApi.getHealthDataAfter(lastTimestamp)
         if (records.isEmpty()) return
 
-        val healthRecords = mutableListOf<HealthRecord>()
+        // Health Connect rejects any single insert over 5MB.
+        for (chunk in records.chunked(STEPS_SYNC_CHUNK_SIZE)) {
+            val healthRecords = mutableListOf<HealthRecord>()
 
-        for (entity in records) {
-            val startTime = Instant.fromEpochSeconds(entity.timestamp)
-            val endTime = startTime + 1.minutes
+            for (entity in chunk) {
+                val startTime = Instant.fromEpochSeconds(entity.timestamp)
+                val endTime = startTime + 1.minutes
 
-            // Steps
-            if (entity.steps > 0) {
-                healthRecords += StepsRecord(
-                    startTime = startTime,
-                    endTime = endTime,
-                    count = entity.steps,
-                    metadata = createMetadata(entity.timestamp, "steps"),
-                )
+                // Steps
+                if (entity.steps > 0) {
+                    healthRecords += StepsRecord(
+                        startTime = startTime,
+                        endTime = endTime,
+                        count = entity.steps,
+                        metadata = createMetadata(entity.timestamp, "steps"),
+                    )
+                }
+
+                // Heart rate
+                if (entity.heartRate in 1..300) {
+                    healthRecords += HeartRateRecord(
+                        startTime = startTime,
+                        endTime = endTime,
+                        samples = listOf(
+                            HeartRateRecord.Sample(
+                                time = startTime,
+                                beatsPerMinute = entity.heartRate,
+                            )
+                        ),
+                        metadata = createMetadata(entity.timestamp, "hr"),
+                    )
+                }
             }
 
-            // Heart rate
-            if (entity.heartRate in 1..300) {
-                healthRecords += HeartRateRecord(
-                    startTime = startTime,
-                    endTime = endTime,
-                    samples = listOf(
-                        HeartRateRecord.Sample(
-                            time = startTime,
-                            beatsPerMinute = entity.heartRate,
-                        )
-                    ),
-                    metadata = createMetadata(entity.timestamp, "hr"),
-                )
-            }
-        }
-
-        if (healthRecords.isNotEmpty()) {
-            val result = healthManager.writeData(healthRecords)
-            if (result.isSuccess) {
-                tracker.lastSyncedStepsTimestamp = records.last().timestamp
+            if (healthRecords.isNotEmpty()) {
+                val result = healthManager.writeData(healthRecords)
+                if (result.isFailure) {
+                    logger.e { "Failed to write step/HR records: ${result.exceptionOrNull()}" }
+                    return
+                }
                 logger.d { "Synced ${healthRecords.size} step/HR records" }
-            } else {
-                logger.e { "Failed to write step/HR records: ${result.exceptionOrNull()}" }
             }
-        } else {
-            tracker.lastSyncedStepsTimestamp = records.last().timestamp
+            tracker.lastSyncedStepsTimestamp = chunk.last().timestamp
         }
     }
 

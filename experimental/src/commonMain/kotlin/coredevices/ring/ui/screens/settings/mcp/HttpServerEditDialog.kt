@@ -55,6 +55,7 @@ internal fun HttpServerEditDialog(
 ) {
     var name by remember { mutableStateOf(initialServer?.name ?: "") }
     var url by remember { mutableStateOf(initialServer?.url ?: "") }
+    var description by remember { mutableStateOf(initialServer?.description ?: "") }
     var streamable by remember { mutableStateOf(initialServer?.streamable ?: false) }
     var authHeader by remember { mutableStateOf(initialServer?.authHeader ?: "") }
     var showAuthSection by remember { mutableStateOf(initialServer?.authHeader?.isNotBlank() == true) }
@@ -153,6 +154,7 @@ internal fun HttpServerEditDialog(
                             authHeader = authHeader.ifBlank { null },
                             includedPrompts = selectedPrompts.toList(),
                             enabled = initialServer?.enabled ?: true,
+                            description = description.trim().ifBlank { null },
                         )
                     )
                 },
@@ -207,6 +209,17 @@ internal fun HttpServerEditDialog(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = dismissKeyboard,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Description") },
+                placeholder = { Text("e.g. Controls the lights, thermostat and kids' internet at home") },
+                supportingText = { Text("Tells the assistant what this server is for") },
+                minLines = 2,
+                maxLines = 4,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -357,5 +370,6 @@ private val previewServer = HttpMcpServerEntity(
     url = "https://example.com/mcp",
     streamable = false,
     authHeader = "Bearer 123abc",
-    includedPrompts = listOf("default")
+    includedPrompts = listOf("default"),
+    description = "Home automation: lights, thermostat and the kids' internet",
 )

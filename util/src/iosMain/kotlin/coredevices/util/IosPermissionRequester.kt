@@ -1,6 +1,7 @@
 package coredevices.util
 
 import PlatformUiContext
+import coredevices.util.clock.NativeAlarmKitBridge
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -58,6 +59,7 @@ class IosPermissionRequester(
             Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
             Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
             Permission.Reminders -> requestRemindersPermission()
+            Permission.AlarmKit -> requestAlarmKitPermission()
         }
     }
 
@@ -78,6 +80,7 @@ class IosPermissionRequester(
         Permission.BatteryOptimization -> throw IllegalStateException("BatteryOptimization permission not needed on iOS")
         Permission.Beeper -> throw IllegalStateException("Beeper permission not needed on iOS")
         Permission.Reminders -> hasRemindersPermission()
+        Permission.AlarmKit -> hasAlarmKitPermission()
     }
 
     override fun openPermissionsScreen(uiContext: PlatformUiContext) {
@@ -149,6 +152,20 @@ class IosPermissionRequester(
             } else {
                 es.requestAccessToEntityType(EKEntityType.EKEntityTypeEvent, completionHandler)
             }
+        }
+    }
+
+    private fun hasAlarmKitPermission(): Boolean {
+        val state = NativeAlarmKitBridge.authorizationState
+            ?: throw IllegalStateException("AlarmKit requires iOS 26")
+        return state() == NativeAlarmKitBridge.AuthorizationState.AUTHORIZED
+    }
+
+    private suspend fun requestAlarmKitPermission(): PermissionResult {
+        val request = NativeAlarmKitBridge.requestAuthorization
+            ?: throw IllegalStateException("AlarmKit requires iOS 26")
+        return suspendCancellableCoroutine { continuation ->
+            request { granted -> continuation.resumeIfActive(granted.asPermissionResult(), "requestAlarmKitPermission") }
         }
     }
 

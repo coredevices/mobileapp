@@ -37,7 +37,7 @@ class PebbleBackgroundManager(
     }
 
     @Volatile
-    private var shouldBeRunning = false
+    private var shouldBeRunning: Boolean? = null
 
     private fun startBackground() {
         try {
@@ -59,20 +59,7 @@ class PebbleBackgroundManager(
     }
 
     private fun stopBackground() {
-        val serviceIntent = Intent(context, PebbleService::class.java).apply {
-            action = PebbleService.ACTION_STOP
-        }
-        try {
-            ContextCompat.startForegroundService(context, serviceIntent)
-        } catch (e: Exception) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
-                // App may already be backgrounded by the time we try to stop; startService is allowed for an already-running service.
-                logger.w(e) { "Cannot deliver STOP via foreground service from background; falling back to startService" }
-                context.startService(serviceIntent)
-            } else {
-                throw e
-            }
-        }
+        context.stopService(Intent(context, PebbleService::class.java))
     }
 
     fun monitorToStartBackground() {
@@ -112,14 +99,16 @@ class PebbleBackgroundManager(
      * have failed while backgrounded.
      */
     fun retryStartIfNeeded() {
-        if (shouldBeRunning && !isRunning.value) {
+        if (shouldBeRunning == true && !isRunning.value) {
             logger.i { "App foregrounded; retrying background service start (was not running)" }
             startBackground()
         }
     }
 
-    fun onServiceStarted() {
+    /** Returns false if the service should stop: it started after we'd already decided it shouldn't run. */
+    fun onServiceStarted(): Boolean {
         _isRunning.value = true
+        return shouldBeRunning != false
     }
 
     fun onServiceStopped() {

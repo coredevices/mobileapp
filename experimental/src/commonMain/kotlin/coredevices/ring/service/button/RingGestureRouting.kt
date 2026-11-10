@@ -13,6 +13,8 @@ enum class RingGesture(val sequence: List<ButtonPress>, val kind: GestureKind) {
     Hold(listOf(ButtonPress.Long), GestureKind.Recording),
     ClickHold(listOf(ButtonPress.Short, ButtonPress.Long), GestureKind.Recording);
 
+    val isClick: Boolean get() = kind == GestureKind.Music
+
     companion object {
         fun forSequence(sequence: List<ButtonPress>): RingGesture? =
             entries.firstOrNull { it.sequence == sequence }
@@ -27,14 +29,21 @@ sealed interface GestureDestination {
 
     data object PlayPause : Music
     data object NextTrack : Music
-    /** Cloud agent that falls back to the on-device one when the cloud can't be reached. */
+    data object PreviousTrack : Music
+    /** Cloud agent, falling back to the on-device one when the cloud can't be reached and the
+     *  phone supports it. */
     data object IndexAgent : Recording
     /** On-device agent only. */
     data object LocalAgent : Recording
-    /** Cloud agent only; needs a connection and a signed-in user. */
-    data object RemoteAgent : Recording
     data object WebSearch : Recording
     data object WebhookOnly : Recording
+    /** An installed plugin offering `send_to_agent`; [providerId] resolves through
+     *  [coredevices.ring.agent.integrations.providers.IntegrationProviderRepository]. */
+    data class AgentPlugin(val providerId: String) : Recording
+    /** Posts the click count, plus the user's optional payload, to the gesture's webhook. */
+    data object Webhook : Music
+    /** Runs the gesture's typed command through the Index agent, as if it had been spoken. */
+    data object AgentCommand : Music
     data object Nothing : Music, Recording
 }
 
@@ -46,9 +55,7 @@ fun RingGesture.accepts(destination: GestureDestination): Boolean = when (kind) 
 /** True while the local agent is the only Index agent any gesture reaches, so what it can't run
  *  is out of reach too. */
 fun Map<RingGesture, GestureDestination>.routesOnlyToLocalAgent(): Boolean =
-    GestureDestination.LocalAgent in values &&
-        GestureDestination.IndexAgent !in values &&
-        GestureDestination.RemoteAgent !in values
+    GestureDestination.LocalAgent in values && GestureDestination.IndexAgent !in values
 
 fun musicRoutesFor(mode: MusicControlMode): Map<RingGesture, GestureDestination.Music> = when (mode) {
     MusicControlMode.Disabled -> mapOf(

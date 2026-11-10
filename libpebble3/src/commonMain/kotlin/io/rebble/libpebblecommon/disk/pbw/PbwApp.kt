@@ -10,6 +10,7 @@ import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwAppInfo
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwBinaryBlob
 import io.rebble.libpebblecommon.disk.pbw.DiskUtil.requirePbwPKJSFile
 import io.rebble.libpebblecommon.metadata.WatchType
+import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.metadata.pbw.manifest.PbwManifest
 import io.rebble.libpebblecommon.plugin.PluginManifest
 import kotlinx.serialization.json.Json
@@ -95,11 +96,14 @@ fun PbwApp.toLockerEntry(now: Instant, orderIndex: Int): LockerEntry {
         appstoreData = null,
         orderIndex = orderIndex,
         capabilities = info.capabilities,
-        pluginManifest = info.loadablePlugin
-            ?.let { pbwPluginJson.encodeToString(PluginManifest.serializer(), it) },
+        pluginManifest = info.encodedPluginManifest(),
         configPage = info.configPage,
         manifestVersion = info.manifestVersion,
     )
 }
 
 private val pbwPluginJson = Json { encodeDefaults = true }
+
+/** As stored in `LockerEntry.pluginManifest`. */
+internal fun PbwAppInfo.encodedPluginManifest(): String? =
+    loadablePlugin?.let { pbwPluginJson.encodeToString(PluginManifest.serializer(), it) }

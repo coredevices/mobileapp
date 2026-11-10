@@ -40,7 +40,12 @@ import coredevices.ring.database.room.repository.PluginGrantRepository
 import coredevices.ring.database.room.repository.RecordingProcessingTaskRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
+import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
+import coredevices.ring.external.indexwebhook.IndexWebhookRunRepository
+import coredevices.ring.external.indexwebhook.IndexWebhookRunResult
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.recordings.RecordingPreprocessor
@@ -95,6 +100,7 @@ class FakePreferences : Preferences {
     override val cactusMode: CactusSTTMode = CactusSTTMode.fromId(0)
     override val ringPaired: StateFlow<String?> = MutableStateFlow(null)
     override val ringPairedName: StateFlow<String?> = MutableStateFlow(null)
+    override val ringPairingKeyHash: StateFlow<Int?> = MutableStateFlow(null)
     override val ringPairedOld: StateFlow<Boolean> = MutableStateFlow(false)
     override val musicControlMode: StateFlow<MusicControlMode> = MutableStateFlow(MusicControlMode.Disabled)
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
@@ -119,6 +125,7 @@ class FakePreferences : Preferences {
     override fun setCactusMode(mode: CactusSTTMode) {}
     override fun setRingPaired(id: String?) {}
     override fun setRingPairedName(name: String?) {}
+    override fun setRingPairingKeyHash(hash: Int?) {}
     override fun setMusicControlMode(mode: MusicControlMode) {}
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
@@ -271,20 +278,23 @@ class RecordingProcessingQueueTest {
 
         single {
             object : IndexWebhookApi {
-                override fun uploadIfEnabled(
+                override suspend fun upload(
                     samples: ShortArray?,
                     sampleRate: Int,
                     recordingId: String,
                     transcription: String?,
                     recordedAt: Instant,
                     gesture: coredevices.ring.service.button.RingGesture,
-                ) {}
+                ): IndexWebhookRunResult? = null
+                override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+
                 override suspend fun sendTestEvent(
                     gesture: coredevices.ring.service.button.RingGesture,
                     url: String,
                     headers: Map<String, String>,
                     signRequests: Boolean,
                     signingSecret: String?,
+                    clickPayload: String,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
@@ -294,6 +304,10 @@ class RecordingProcessingQueueTest {
 
         single { CoreConfigFlow(MutableStateFlow(CoreConfig())) }
 
+        single { get<RingDatabase>().indexWebhookDeliveryDao() }
+        singleOf(::IndexWebhookDeliveryRepository)
+        singleOf(::IndexWebhookRunRepository)
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
         singleOf(::RecordingPreprocessor)

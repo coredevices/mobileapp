@@ -22,6 +22,7 @@ import platform.AuthenticationServices.ASAuthorizationAppleIDRequest
 import platform.AuthenticationServices.ASAuthorizationController
 import platform.AuthenticationServices.ASAuthorizationControllerDelegateProtocol
 import platform.AuthenticationServices.ASAuthorizationControllerPresentationContextProvidingProtocol
+import platform.AuthenticationServices.ASAuthorizationErrorCanceled
 import platform.AuthenticationServices.ASAuthorizationScopeEmail
 import platform.AuthenticationServices.ASAuthorizationScopeFullName
 import platform.AuthenticationServices.ASPresentationAnchor
@@ -31,6 +32,9 @@ import platform.Foundation.NSError
 import platform.UIKit.UIApplication
 import platform.UIKit.UIWindow
 import platform.darwin.NSObject
+
+private class AppleSignInException(val code: Long, description: String) :
+    Exception("$description (Apple error $code)")
 
 actual class RealAppleAuthUtil : AppleAuthUtil {
     companion object {
@@ -55,7 +59,7 @@ actual class RealAppleAuthUtil : AppleAuthUtil {
                     controller: ASAuthorizationController,
                     didCompleteWithError: NSError
                 ) {
-                    close(Exception(didCompleteWithError.localizedDescription))
+                    close(AppleSignInException(didCompleteWithError.code, didCompleteWithError.localizedDescription))
                 }
 
                 override fun presentationAnchorForAuthorizationController(
@@ -94,14 +98,16 @@ actual class RealAppleAuthUtil : AppleAuthUtil {
             requestedScopes = listOf(ASAuthorizationScopeEmail, ASAuthorizationScopeFullName)
             setNonce(hashString)
         }
-        return try {
-            val nativeCred = performAuthRequest(request, nonce).first()
-            val idToken = nativeCred?.identityToken ?: throw IllegalStateException("Cancelled or failed")
-            val name = nativeCred?.fullName
-            OAuthCredential(FIROAuthProvider.appleCredentialWithIDToken(idToken.toByteString().utf8(), nonce, name))
-        } catch (e: Exception) {
-            logger.e(e) { "Apple sign-in failed: ${e.message}" }
-            null
+        val nativeCred = try {
+            performAuthRequest(request, nonce).first()
+        } catch (e: AppleSignInException) {
+            if (e.code == ASAuthorizationErrorCanceled) {
+                logger.i { "Apple sign-in cancelled" }
+                return null
+            }
+            throw e
         }
+        val idToken = nativeCred?.identityToken ?: throw IllegalStateException("Apple didn't return a sign-in token")
+        return OAuthCredential(FIROAuthProvider.appleCredentialWithIDToken(idToken.toByteString().utf8(), nonce, nativeCred.fullName))
     }
 }

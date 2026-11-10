@@ -16,8 +16,8 @@ class GestureRoutingPreferences(
 ) {
     companion object {
         private const val KEY_PREFIX = "ring_gesture_route_"
+        private const val COMMAND_KEY_PREFIX = "ring_gesture_command_"
         private const val LEGACY_LLM_MODE_KEY = "llm_mode"
-        private const val LEGACY_LLM_MODE_REMOTE_ONLY = 0
         private const val LEGACY_LLM_MODE_LOCAL_ONLY = 1
         private const val LEGACY_LOCAL_LLM_SWITCH_KEY = "use_cactus_agent"
     }
@@ -31,6 +31,19 @@ class GestureRoutingPreferences(
         )
     )
     val routes = _routes.asStateFlow()
+
+    private val _commands = MutableStateFlow(
+        RingGesture.entries.associateWith { settings.getString(COMMAND_KEY_PREFIX + it.name, "") }
+    )
+    /** Text a gesture routed to [GestureDestination.AgentCommand] sends to the agent. */
+    val commands = _commands.asStateFlow()
+
+    fun commandFor(gesture: RingGesture): String = _commands.value[gesture].orEmpty()
+
+    fun setCommand(gesture: RingGesture, command: String) {
+        settings.putString(COMMAND_KEY_PREFIX + gesture.name, command)
+        _commands.value = _commands.value + (gesture to command)
+    }
 
     fun destinationFor(gesture: RingGesture): GestureDestination =
         _routes.value[gesture] ?: GestureDestination.Nothing
@@ -72,7 +85,7 @@ class GestureRoutingPreferences(
     }
 
     /** The removed app-wide LLM mode becomes a route on every gesture that ran the Index agent:
-     *  local-only to the local agent, an explicit cloud-only to the remote agent. One-shot: the
+     *  local-only to the local agent, anything else stays on the Index agent. One-shot: the
      *  legacy keys are cleared afterwards. */
     private fun migrateLegacyLlmMode(
         routes: Map<RingGesture, GestureDestination>,
@@ -81,42 +94,48 @@ class GestureRoutingPreferences(
             ?: LEGACY_LLM_MODE_LOCAL_ONLY.takeIf { settings.getBoolean(LEGACY_LOCAL_LLM_SWITCH_KEY, false) }
         settings.remove(LEGACY_LLM_MODE_KEY)
         settings.remove(LEGACY_LOCAL_LLM_SWITCH_KEY)
-        val replacement = when (legacyMode) {
-            LEGACY_LLM_MODE_LOCAL_ONLY -> GestureDestination.LocalAgent
-            LEGACY_LLM_MODE_REMOTE_ONLY -> GestureDestination.RemoteAgent
-            else -> return routes
-        }
+        if (legacyMode != LEGACY_LLM_MODE_LOCAL_ONLY) return routes
         return routes.mapValues { (gesture, destination) ->
             if (destination != GestureDestination.IndexAgent) return@mapValues destination
-            settings.putString(KEY_PREFIX + gesture.name, replacement.encode())
-            replacement
+            settings.putString(KEY_PREFIX + gesture.name, GestureDestination.LocalAgent.encode())
+            GestureDestination.LocalAgent
         }
     }
 }
 
 /** Routes to the removed MCP sandbox destination; they run the Index agent now. */
 private const val LEGACY_SANDBOX_PREFIX = "mcp_sandbox:"
+/** The removed cloud-only agent; the Index agent is cloud-first anyway. */
+private const val LEGACY_REMOTE_AGENT = "remote_agent"
+private const val AGENT_PLUGIN_PREFIX = "agent_plugin:"
 
 private fun GestureDestination.encode(): String = when (this) {
     GestureDestination.PlayPause -> "play_pause"
     GestureDestination.NextTrack -> "next_track"
+    GestureDestination.PreviousTrack -> "previous_track"
     GestureDestination.IndexAgent -> "index_agent"
     GestureDestination.LocalAgent -> "local_agent"
-    GestureDestination.RemoteAgent -> "remote_agent"
     GestureDestination.WebSearch -> "web_search"
     GestureDestination.WebhookOnly -> "webhook_only"
+    is GestureDestination.AgentPlugin -> AGENT_PLUGIN_PREFIX + providerId
+    GestureDestination.Webhook -> "webhook"
+    GestureDestination.AgentCommand -> "agent_command"
     GestureDestination.Nothing -> "nothing"
 }
 
 private fun decodeDestination(raw: String): GestureDestination? = when {
-    raw.startsWith(LEGACY_SANDBOX_PREFIX) -> GestureDestination.IndexAgent
+    raw.startsWith(LEGACY_SANDBOX_PREFIX) || raw == LEGACY_REMOTE_AGENT -> GestureDestination.IndexAgent
     raw == "play_pause" -> GestureDestination.PlayPause
     raw == "next_track" -> GestureDestination.NextTrack
+    raw == "previous_track" -> GestureDestination.PreviousTrack
     raw == "index_agent" -> GestureDestination.IndexAgent
     raw == "local_agent" -> GestureDestination.LocalAgent
-    raw == "remote_agent" -> GestureDestination.RemoteAgent
     raw == "web_search" -> GestureDestination.WebSearch
     raw == "webhook_only" -> GestureDestination.WebhookOnly
+    raw.startsWith(AGENT_PLUGIN_PREFIX) ->
+        raw.removePrefix(AGENT_PLUGIN_PREFIX).takeIf { it.isNotBlank() }?.let { GestureDestination.AgentPlugin(it) }
+    raw == "webhook" -> GestureDestination.Webhook
+    raw == "agent_command" -> GestureDestination.AgentCommand
     raw == "nothing" -> GestureDestination.Nothing
     else -> null
 }

@@ -46,10 +46,6 @@ data class ItemDocument(
         data class Reminder(
             val repeat: String,
             val notification: String,
-            /** Platform-local reminder id this item was created from, letting the
-             *  local reminder notification deep link back to this item. Defaults to
-             *  null for items decoded from older records. */
-            val localReminderId: Int? = null,
             /** Lead time (ms) before [dueAt] at which an extra early "heads-up"
              *  notification was scheduled, or null if none. */
             val notifyBeforeMillis: Long? = null,

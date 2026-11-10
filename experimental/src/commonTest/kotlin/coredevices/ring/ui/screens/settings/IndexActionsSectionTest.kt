@@ -15,13 +15,21 @@ import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders.Notion
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders.Obsidian
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders.Tasker
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.agent.integrations.providers.visibleDestinations
 import coredevices.ring.agent.pebble_plugin.FakePlugin
+import coredevices.ring.agent.pebble_plugin.FakePlugins
+import coredevices.ring.agent.pebble_plugin.PblPluginActionAgentIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginActionNoteIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginActionReminderIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
 import coredevices.ring.agent.pebble_plugin.PluginGrant
+import coredevices.ring.agent.pebble_plugin.StorePlugin
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.RingGesture
+import coredevices.ring.agent.integrations.providers.IntegrationProvider
+import coredevices.ring.ui.viewmodel.DestinationItem
+import coredevices.ring.ui.viewmodel.isPlugin
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
 import kotlin.test.Test
@@ -58,18 +66,15 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `info card hidden when a recording gesture routes to the local or remote agent`() {
-        listOf(GestureDestination.LocalAgent, GestureDestination.RemoteAgent).forEach { agent ->
-            assertFalse(
-                nothingRoutesToIndexAgent(
-                    mapOf(
-                        RingGesture.Hold to agent,
-                        RingGesture.ClickHold to GestureDestination.WebSearch,
-                    )
-                ),
-                "$agent",
+    fun `info card hidden when a recording gesture routes to the local agent`() {
+        assertFalse(
+            nothingRoutesToIndexAgent(
+                mapOf(
+                    RingGesture.Hold to GestureDestination.LocalAgent,
+                    RingGesture.ClickHold to GestureDestination.WebSearch,
+                )
             )
-        }
+        )
     }
 
     @Test
@@ -110,24 +115,28 @@ class IndexActionsSectionTest {
     }
 
     @Test
-    fun `note destinations list every provider and mark unauthorized ones as unconnected`() {
-        val options = noteDestOptions(
-            providers = listOf(Index, Notion, Obsidian, Tasker),
-            available = listOf(Index),
-        )
-        assertEquals(listOf(Index, Notion, Obsidian, Tasker), options.map { it.provider })
-        assertEquals(listOf(Index), options.filter { it.connected }.map { it.provider })
-        assertEquals("Index Notes", options.first().title)
+    fun `a destination is configurable once connected with a locker page or its own dialog`() {
+        val notion = DestinationItem.Installed(Notion, "Notion", connected = true, hasLockerPage = false)
+        val plugin = DestinationItem.Installed(Tasker, "Tasker", connected = true, hasLockerPage = true)
+        val unconnected = plugin.copy(connected = false)
+        val hasDialog = { provider: IntegrationProvider -> noteConfigureDialog(provider) != null }
+
+        assertTrue(notion.isConfigurable(hasDialog))
+        assertFalse(notion.isConfigurable())
+        assertTrue(plugin.isConfigurable())
+        assertFalse(unconnected.isConfigurable(hasDialog))
+        assertFalse(DestinationItem.InStore(StorePlugin(FakePlugin(name = "Things").metadata, configurable = true)).isConfigurable())
     }
 
     @Test
-    fun `reminder destinations use the reminders label`() {
-        val options = reminderDestOptions(
-            providers = listOf(Index, GoogleTasks),
-            available = listOf(Index, GoogleTasks),
-        )
-        assertEquals(listOf("Index Reminders", "Google Tasks"), options.map { it.title })
-        assertTrue(options.all { it.connected })
+    fun `row subtitles say not connected, then hold to reconfigure`() {
+        val connected = DestinationItem.Installed(Notion, "Notion", connected = true, hasLockerPage = false)
+        val inStore = DestinationItem.InStore(StorePlugin(FakePlugin(name = "Things").metadata, configurable = false))
+
+        assertNull(connected.rowSubtitle(configurable = false))
+        assertEquals("Hold to reconfigure", connected.rowSubtitle(configurable = true))
+        assertEquals("Not connected", connected.copy(connected = false).rowSubtitle(configurable = false))
+        assertEquals("Not connected", inStore.rowSubtitle(configurable = false))
     }
 
     @Test
@@ -164,40 +173,45 @@ class IndexActionsSectionTest {
         assertNull(noteConfigureDialog(Tasker))
     }
 
+    private fun thingsPlugin(vararg kinds: IntegrationSupport) = FakePlugin(
+        actions = kinds.map {
+            ActionDeclaration(
+                name = when (it) {
+                    IntegrationSupport.Note -> PblPluginActionNoteIntegration.ACTION_NAME
+                    IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.ACTION_NAME
+                    IntegrationSupport.Agent -> PblPluginActionAgentIntegration.ACTION_NAME
+                }
+            )
+        },
+        name = "Things",
+        sources = kinds.map {
+            SourceDeclaration(
+                category = when (it) {
+                    IntegrationSupport.Note -> PblPluginActionNoteIntegration.CATEGORY
+                    IntegrationSupport.Reminder -> PblPluginActionReminderIntegration.CATEGORY
+                    IntegrationSupport.Agent -> PblPluginActionAgentIntegration.CATEGORY
+                },
+                items = listOf("configured"),
+            )
+        },
+    )
+
     @Test
-    fun `note destinations are only configurable once connected`() {
-        val options = noteDestOptions(
-            providers = listOf(Index, Notion, Obsidian),
-            available = listOf(Index, Obsidian),
-        )
-        assertEquals(listOf(Obsidian), options.filter { it.configurable }.map { it.provider })
-        assertFalse(
-            noteDestOptions(providers = listOf(Index, Obsidian), available = emptyList()).any { it.configurable }
-        )
+    fun `with plugins on only the built-in feed, iPhone Reminders and plugins are offered`() {
+        val plugin = PblPluginIntegrationProvider.forPlugin(thingsPlugin(IntegrationSupport.Note).metadata, FakePlugins())!!
+        val all = listOf(Index, Notion, Obsidian, GoogleTasks, IosReminders, Tasker, plugin)
+
+        assertEquals(listOf(Index, IosReminders, plugin), all.visibleDestinations(pluginsEnabled = true))
+        assertEquals(all, all.visibleDestinations(pluginsEnabled = false))
     }
 
     @Test
-    fun `plugin destinations are configurable once connected and they have a config page`() {
-        val plugin = PblPluginIntegrationProvider.forPlugin(
-            FakePlugin(
-                actions = listOf(
-                    ActionDeclaration(name = PblPluginActionNoteIntegration.ACTION_NAME),
-                    ActionDeclaration(name = PblPluginActionReminderIntegration.ACTION_NAME),
-                ),
-                name = "Things",
-                sources = listOf(
-                    SourceDeclaration(category = PblPluginActionNoteIntegration.CATEGORY, items = listOf("configured")),
-                    SourceDeclaration(category = PblPluginActionReminderIntegration.CATEGORY, items = listOf("configured")),
-                ),
-            )
-        )!!
-        val withPage = setOf(plugin.pluginUuid)
+    fun `store plugins know the kinds their manifest can take`() {
+        val both = StorePlugin(thingsPlugin(IntegrationSupport.Note, IntegrationSupport.Reminder).metadata, configurable = false)
 
-        assertTrue(noteDestOptions(listOf(plugin), listOf(plugin), withPage).single().configurable)
-        assertTrue(reminderDestOptions(listOf(plugin), listOf(plugin), withPage).single().configurable)
-        assertFalse(noteDestOptions(listOf(plugin), listOf(plugin)).single().configurable)
-        assertFalse(noteDestOptions(listOf(plugin), emptyList(), withPage).single().configurable)
-        assertFalse(reminderDestOptions(listOf(GoogleTasks), listOf(GoogleTasks), withPage).single().configurable)
+        assertEquals("Things", both.title)
+        assertEquals(setOf(IntegrationSupport.Note, IntegrationSupport.Reminder), both.supports)
+        assertTrue(DestinationItem.InStore(both).isPlugin)
     }
 
     @Test

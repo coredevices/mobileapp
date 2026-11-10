@@ -8,7 +8,8 @@ enum class ClientMessageType(val value: Byte) {
     //ProxyAuthenticationRequest(0x09),
     //PhonesimAppConfig(0x0A),
     //RelayQemu(0x0B),
-    TimelinePin(0x0C);
+    TimelinePin(0x0C),
+    InstallFirmware(0x0D);
 
     companion object {
         fun fromValue(value: Byte): ClientMessageType? {

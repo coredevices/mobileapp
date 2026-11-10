@@ -113,11 +113,11 @@ class WatchSettingsPluginTest {
     @Test
     fun aChoiceReadsAsTheNameOfTheChosenOption() = runTest {
         val plugin = WatchSettingsPlugin(FakeWatchPrefs())
-        val textSize = plugin.instance(WatchSettingsPlugin.ITEM_TEXT, EnumWatchPref.TextSize.id)
+        val textSize = plugin.instance(WatchSettingsPlugin.ITEM_TEXT, EnumWatchPref.SystemTextSize.id)
         assertEquals(
             mapOf(
                 SourceShapeNames.SHORT_TEXT to
-                    "{\"text\":\"${EnumWatchPref.TextSize.defaultValue.displayName}\"}"
+                    "{\"text\":\"${EnumWatchPref.SystemTextSize.defaultValue.displayName}\"}"
             ),
             textSize?.shapes(WatchSettingsPlugin.PROPERTY_VALUE),
         )
@@ -214,7 +214,7 @@ class WatchSettingsPluginTest {
         val prefs = FakeWatchPrefs()
         val result = WatchSettingsPlugin(prefs).invoke(
             WatchSettingsPlugin.ACTION_SET_ON,
-            args(PARAM_INSTANCE_ID to EnumWatchPref.TextSize.id, "on" to "true"),
+            args(PARAM_INSTANCE_ID to EnumWatchPref.SystemTextSize.id, "on" to "true"),
         )
         assertFalse(result.ok)
         assertEquals(PluginErrors.INVALID_ARGS, result.code)
@@ -225,10 +225,10 @@ class WatchSettingsPluginTest {
     fun setValueTakesAChoiceByTheNameItIsShownUnder() = runTest {
         val prefs = FakeWatchPrefs()
         val plugin = WatchSettingsPlugin(prefs)
-        val option = EnumWatchPref.TextSize.options.last()
+        val option = EnumWatchPref.SystemTextSize.options.last()
         val result = plugin.invoke(
             WatchSettingsPlugin.ACTION_SET_VALUE,
-            args(PARAM_INSTANCE_ID to EnumWatchPref.TextSize.id, "value" to option.displayName.lowercase()),
+            args(PARAM_INSTANCE_ID to EnumWatchPref.SystemTextSize.id, "value" to option.displayName.lowercase()),
         )
         assertTrue(result.ok)
         assertEquals(option, prefs.written.single().value)

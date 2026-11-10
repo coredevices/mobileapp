@@ -42,6 +42,7 @@ data class AppPlatform(
     val listImageUrl: String? = null,
     val iconImageUrl: String? = null,
     val description: String? = null,
+    val listImageTintable: Boolean = false,
 )
 
 data class AppProperties(
@@ -62,6 +63,8 @@ data class AppProperties(
     val capabilities: List<AppCapability>,
     /** Where the pbw is downloaded from; null when sideloaded. */
     val pbwUrl: String? = null,
+    /** Built before permissions (`manifestVersion` below 2). */
+    val legacy: Boolean = false,
 )
 
 data class AppBasicProperties(

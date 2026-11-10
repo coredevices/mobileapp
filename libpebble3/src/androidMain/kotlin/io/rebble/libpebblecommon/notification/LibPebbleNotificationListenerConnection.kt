@@ -52,6 +52,8 @@ class AndroidPebbleNotificationListenerConnection(
         _shadeChanged.tryEmit(Unit)
     }
 
+    fun hasSensitiveContent(key: String): Boolean = listenerService?.hasSensitiveContent(key) == true
+
     /** Everything currently in the shade, or null when the listener isn't delivering. */
     fun activeNotifications(): List<StatusBarNotification>? = try {
         listenerService?.activeNotifications?.toList()
@@ -63,6 +65,9 @@ class AndroidPebbleNotificationListenerConnection(
     fun getNotificationAction(itemId: Uuid, actionId: UByte): LibPebbleNotificationAction? {
         return notificationHandler.getNotificationAction(itemId, actionId)
     }
+
+    fun getNotification(itemId: Uuid): LibPebbleNotification? =
+        notificationHandler.getNotification(itemId)
 
     fun setService(service: LibPebbleNotificationListener?) {
         logger.d { "setService: $service" }

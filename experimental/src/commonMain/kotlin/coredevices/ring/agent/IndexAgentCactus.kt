@@ -82,7 +82,7 @@ class IndexAgentCactus(
         val tools = tools.filterNot { it.integrationName in unsupported }
         val toolsJson = buildJsonArray {
             tools.forEach { (parentName, tool) ->
-                val definition = tool.definition
+                val definition = tool.localDefinition
                 val required = definition.inputSchema.required ?: emptyList()
                 val shortName = definition.name.substringAfter("__")
                 parentMap[shortName] = parentName

@@ -104,6 +104,8 @@ class SessionSetupCommand : IncomingVoicePacket() {
 enum class SessionType(val value: UByte) {
     Dictation(0x01u),
     Command(0x02u),
+    /** Live audio for an app's companion; no transcription, no result. */
+    AudioStream(0x04u),
 }
 
 enum class Result(val value: UByte) {
@@ -119,6 +121,16 @@ enum class Result(val value: UByte) {
 class SessionSetupResult(sessionType: SessionType, result: Result) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
     val sessionType = SUByte(m, sessionType.value)
     val result = SUByte(m, result.value)
+}
+
+/**
+ * [SessionSetupResult] for [SessionType.AudioStream]. Carries the audio endpoint session it
+ * answers, so the watch can drop a late answer for a stream it already tore down.
+ */
+class AudioStreamSetupResult(result: Result, sessionId: UShort) : OutgoingVoicePacket(VoiceCommand.SessionSetup) {
+    val sessionType = SUByte(m, SessionType.AudioStream.value)
+    val result = SUByte(m, result.value)
+    val sessionId = SUShort(m, sessionId, endianness = Endian.Little)
 }
 
 class DictationResult(sessionId: UShort, result: Result, attributes: List<StructMappable>) : OutgoingVoicePacket(VoiceCommand.DictationResult) {

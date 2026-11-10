@@ -2,8 +2,10 @@ package coredevices.ring.agent
 
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
+import coredevices.ring.agent.builtin_servlets.clock.IOS_26_REQUIRED_REASON
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,11 +18,13 @@ class IndexActionsTest {
         isAndroid: Boolean,
         localAgentOnly: Boolean = false,
         calendarConnected: Boolean = true,
+        watchPaired: Boolean = true,
     ) = builtinServletDefinitions(isAndroid).associate {
         it.name to it.toIndexAction(
             enabled = true,
             localAgentOnly = localAgentOnly,
             calendarConnected = calendarConnected,
+            watchPaired = watchPaired,
         )
     }
 
@@ -30,20 +34,25 @@ class IndexActionsTest {
         val ios = builtinServletDefinitions(isAndroid = false).associateBy { it.name }
 
         assertEquals(android.keys, ios.keys)
-        assertNull(android.getValue(ClockServlet.name).unavailableReason)
         assertNull(android.getValue(MessagingServlet.name).unavailableReason)
-        assertEquals(ANDROID_ONLY_REASON, ios.getValue(ClockServlet.name).unavailableReason)
         assertEquals(ANDROID_ONLY_REASON, ios.getValue(MessagingServlet.name).unavailableReason)
+        assertNull(android.getValue(ClockServlet.name).unavailableReason)
+        assertTrue(ios.getValue(ClockServlet.name).available)
+        val olderIos = builtinServletDefinitions(isAndroid = false, clockUnavailableReason = IOS_26_REQUIRED_REASON)
+            .associateBy { it.name }
+        assertEquals(IOS_26_REQUIRED_REASON, olderIos.getValue(ClockServlet.name).unavailableReason)
+        assertNull(android.getValue(NotificationReplyServlet.NAME).unavailableReason)
+        assertEquals(ANDROID_ONLY_REASON, ios.getValue(NotificationReplyServlet.NAME).unavailableReason)
         assertTrue(ios.getValue(NoteServlet.NAME).available)
     }
 
     @Test
     fun anActionUnavailableOnThisPlatformIsNeverEnabled() {
-        val clock = actions(isAndroid = false)
-            .getValue(ClockServlet.name)
+        val messaging = actions(isAndroid = false)
+            .getValue(MessagingServlet.name)
 
-        assertEquals(ANDROID_ONLY_REASON, clock.disabledReason)
-        assertFalse(clock.enabled)
+        assertEquals(ANDROID_ONLY_REASON, messaging.disabledReason)
+        assertFalse(messaging.enabled)
     }
 
     @Test
@@ -52,6 +61,7 @@ class IndexActionsTest {
 
         assertEquals(LOCAL_MODEL_REASON, local.getValue(CalendarServlet.NAME).disabledReason)
         assertEquals(LOCAL_MODEL_REASON, local.getValue(MessagingServlet.name).disabledReason)
+        assertEquals(LOCAL_MODEL_REASON, local.getValue(NotificationReplyServlet.NAME).disabledReason)
         assertNull(local.getValue(NoteServlet.NAME).disabledReason)
         assertNull(local.getValue(ClockServlet.name).disabledReason)
     }
@@ -73,5 +83,15 @@ class IndexActionsTest {
 
         val connected = actions(isAndroid = true)
         assertNull(connected.getValue(CalendarServlet.NAME).disabledReason)
+    }
+
+    @Test
+    fun replyToNotificationsNeedsAPairedPebble() {
+        val unpaired = actions(isAndroid = true, watchPaired = false)
+        assertEquals(NO_PEBBLE_REASON, unpaired.getValue(NotificationReplyServlet.NAME).disabledReason)
+        assertNull(unpaired.getValue(MessagingServlet.name).disabledReason)
+
+        val paired = actions(isAndroid = true)
+        assertNull(paired.getValue(NotificationReplyServlet.NAME).disabledReason)
     }
 }

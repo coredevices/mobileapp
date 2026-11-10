@@ -167,6 +167,19 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     // Note (see above comments), if onListenerConnected was called twice, then so will this be, for
     // *every* notification. So - the handler must be resilient to this.
+    // A system API: missing from the SDK, but on the list apps are allowed to call.
+    private val hasSensitiveContentMethod by lazy {
+        runCatching { Ranking::class.java.getMethod("hasSensitiveContent") }.getOrNull()
+    }
+
+    /** Whether Android found something like a one-time code in [key]'s notification. */
+    fun hasSensitiveContent(key: String): Boolean {
+        val method = hasSensitiveContentMethod ?: return false
+        val ranking = Ranking()
+        return runCatching { currentRanking?.getRanking(key, ranking) == true && method.invoke(ranking) == true }
+            .getOrDefault(false)
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // Before any filtering: the shade holds everything, not just what we forward to the watch.
         connection.onShadeChanged()
@@ -182,12 +195,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
             return
         }
 
-        if (configHolder.value.respectDoNotDisturb && isNotificationFilteredByDoNotDisturb(sbn)) {
-            logger.v { "Notification from ${sbn.packageName.obfuscate(privateLogger)} filtered - do not disturb" }
-            return
-        }
-
-        notificationHandler.handleNotificationPosted(sbn)
+        notificationHandler.handleNotificationPosted(sbn, silent = isNotificationFilteredByDoNotDisturb(sbn))
     }
 
     override fun onNotificationRemoved(

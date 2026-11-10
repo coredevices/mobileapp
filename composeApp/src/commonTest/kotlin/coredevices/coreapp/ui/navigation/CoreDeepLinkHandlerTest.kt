@@ -5,7 +5,7 @@ import com.eygraber.uri.Uri
 import coredevices.ring.ui.navigation.RingRoutes
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 // handle() itself isn't exercised here because its fallback path constructs a
@@ -13,49 +13,55 @@ import kotlin.test.assertNull
 class CoreDeepLinkHandlerTest {
     private val handler = CoreDeepLinkHandler()
 
+    private fun routeFor(uri: String) = handler.routeFor(Uri.parse(uri))
+
     @Test
     fun recordingDeepLinkParsesToRecordingDetails() {
-        val route = handler.recordingRouteFor(Uri.parse(RingRoutes.recordingDeepLink(123L)))
-        assertNotNull(route)
+        val route = assertIs<RingRoutes.RecordingDetails>(routeFor(RingRoutes.recordingDeepLink(123L)))
         assertEquals(123L, route.recordingId)
     }
 
     @Test
     fun recordingDeepLinkWithNonNumericIdDoesNotParse() {
-        assertNull(handler.recordingRouteFor(Uri.parse("pebblecore://deep-link/recording?id=abc")))
+        assertNull(routeFor("pebblecore://deep-link/recording?id=abc"))
     }
 
     @Test
     fun recordingDeepLinkWithoutIdDoesNotParse() {
-        assertNull(handler.recordingRouteFor(Uri.parse("pebblecore://deep-link/recording")))
-    }
-
-    @Test
-    fun recordingDeepLinkWithWrongSchemeOrPathDoesNotParse() {
-        assertNull(handler.recordingRouteFor(Uri.parse("pebble://deep-link/recording?id=123")))
-        assertNull(handler.recordingRouteFor(Uri.parse("pebblecore://deep-link/object?id=123")))
+        assertNull(routeFor("pebblecore://deep-link/recording"))
     }
 
     @Test
     fun objectDeepLinkParsesToObjectDetails() {
-        val route = handler.objectRouteFor(Uri.parse(RingRoutes.objectDeepLink("firestore-doc-1")))
-        assertNotNull(route)
+        val route = assertIs<RingRoutes.ObjectDetails>(routeFor(RingRoutes.objectDeepLink("firestore-doc-1")))
         assertEquals("firestore-doc-1", route.objectId)
     }
 
     @Test
-    fun speechModelDeepLinkOpensTheDownloadDialog() {
-        assertNotNull(handler.speechModelRouteFor(Uri.parse(CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK)))
-    }
-
-    @Test
-    fun speechModelDeepLinkWithWrongSchemeOrPathDoesNotParse() {
-        assertNull(handler.speechModelRouteFor(Uri.parse("pebble://deep-link/speech-model")))
-        assertNull(handler.speechModelRouteFor(Uri.parse("pebblecore://deep-link/recording?id=1")))
-    }
-
-    @Test
     fun objectDeepLinkWithBlankIdDoesNotParse() {
-        assertNull(handler.objectRouteFor(Uri.parse("pebblecore://deep-link/object?id=")))
+        assertNull(routeFor("pebblecore://deep-link/object?id="))
+    }
+
+    @Test
+    fun speechModelDeepLinkOpensTheDownloadDialog() {
+        assertEquals(CommonRoutes.SpeechModelDownloadDialog, routeFor(CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK))
+    }
+
+    @Test
+    fun settingsDeepLinkOpensIndexSettings() {
+        assertEquals(RingRoutes.Settings, routeFor(RingRoutes.SETTINGS_DEEP_LINK))
+    }
+
+    @Test
+    fun timersAlarmsDeepLinkOpensTimersAndAlarms() {
+        assertEquals(RingRoutes.TimersAndAlarms, routeFor(RingRoutes.TIMERS_ALARMS_DEEP_LINK))
+    }
+
+    @Test
+    fun wrongSchemeHostOrPathDoesNotParse() {
+        assertNull(routeFor("pebble://deep-link/index-settings"))
+        assertNull(routeFor("pebblecore://other/index-settings"))
+        assertNull(routeFor("pebblecore://deep-link/unknown"))
+        assertNull(routeFor("pebblecore://deep-link/view-bug-report?conversationId=1"))
     }
 }

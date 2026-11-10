@@ -15,42 +15,26 @@ class CoreDeepLinkHandler {
 
     fun handle(uri: Uri): Boolean {
         logger.d { "handle: uri = $uri" }
-        objectRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
-        recordingRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
-        speechModelRouteFor(uri)?.let { return _navigateToDeepLink.tryEmit(it) }
-        return _navigateToDeepLink.tryEmit(NavUri(uri.toString()))
+        val target = routeFor(uri) ?: NavUri(uri.toString())
+        return _navigateToDeepLink.tryEmit(target)
     }
 
-    /** `pebblecore://deep-link/object?id=<firestoreId>` opens the index item
-     *  detail. Emitted as a typed route so navigation doesn't depend on a
-     *  per-route deep link registration. */
-    internal fun objectRouteFor(uri: Uri): RingRoutes.ObjectDetails? {
-        if (uri.scheme != SCHEME) return null
-        if (uri.host != RingRoutes.OBJECT_DEEP_LINK_HOST) return null
-        if (uri.pathSegments.firstOrNull() != RingRoutes.OBJECT_DEEP_LINK_PATH) return null
-        val id = uri.getQueryParameter(RingRoutes.OBJECT_DEEP_LINK_ID_PARAM)?.takeIf { it.isNotBlank() }
-            ?: return null
-        return RingRoutes.ObjectDetails(id)
-    }
-
-    /** `pebblecore://deep-link/recording?id=<recordingId>` opens the recording
-     *  detail (used by Index notifications). */
-    internal fun recordingRouteFor(uri: Uri): RingRoutes.RecordingDetails? {
-        if (uri.scheme != SCHEME) return null
-        if (uri.host != RingRoutes.OBJECT_DEEP_LINK_HOST) return null
-        if (uri.pathSegments.firstOrNull() != RingRoutes.RECORDING_DEEP_LINK_PATH) return null
-        val id = uri.getQueryParameter(RingRoutes.OBJECT_DEEP_LINK_ID_PARAM)?.toLongOrNull()
-            ?: return null
-        return RingRoutes.RecordingDetails(id)
-    }
-
-    /** `pebblecore://deep-link/speech-model` opens the speech model download dialog over the
-     *  current screen (used by the download-required notification). */
-    internal fun speechModelRouteFor(uri: Uri): CommonRoutes.SpeechModelDownloadDialog? {
-        if (uri.scheme != SCHEME) return null
-        if (uri.host != HOST) return null
-        if (uri.pathSegments.firstOrNull() != CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH) return null
-        return CommonRoutes.SpeechModelDownloadDialog
+    /**
+     * Maps a `pebblecore://deep-link/<path>` URI to a typed route, so navigation doesn't depend
+     * on a per-route deep link registration. Null for anything else, including a known path
+     * with a missing or malformed id.
+     */
+    internal fun routeFor(uri: Uri): CoreRoute? {
+        if (uri.scheme != SCHEME || uri.host != HOST) return null
+        val id = uri.getQueryParameter(ID_PARAM)?.takeIf { it.isNotBlank() }
+        return when (uri.pathSegments.firstOrNull()) {
+            RingRoutes.OBJECT_DEEP_LINK_PATH -> id?.let { RingRoutes.ObjectDetails(it) }
+            RingRoutes.RECORDING_DEEP_LINK_PATH -> id?.toLongOrNull()?.let { RingRoutes.RecordingDetails(it) }
+            RingRoutes.SETTINGS_DEEP_LINK_PATH -> RingRoutes.Settings
+            RingRoutes.TIMERS_ALARMS_DEEP_LINK_PATH -> RingRoutes.TimersAndAlarms
+            CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH -> CommonRoutes.SpeechModelDownloadDialog
+            else -> null
+        }
     }
 
     fun clearPendingDeepLink() {
@@ -60,7 +44,8 @@ class CoreDeepLinkHandler {
     companion object {
         private val logger = Logger.withTag("CoreDeepLinkHandler")
         private const val SCHEME = "pebblecore"
-        private const val HOST = "deep-link"
+        private const val HOST = RingRoutes.OBJECT_DEEP_LINK_HOST
+        private const val ID_PARAM = RingRoutes.OBJECT_DEEP_LINK_ID_PARAM
         private const val VIEW_BUG_REPORT_PATH = "view-bug-report"
         private const val CONVERSATION_ID_QUERY_PARAM = "conversationId"
 

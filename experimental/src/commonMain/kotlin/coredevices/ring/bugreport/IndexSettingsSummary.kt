@@ -2,6 +2,7 @@ package coredevices.ring.bugreport
 
 import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
+import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.database.Preferences
 import coredevices.ring.database.room.repository.McpServerRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookPreferences
@@ -30,8 +31,9 @@ class IndexSettingsSummary(
         appendLine("Index Settings")
 
         appendLine("Ring button:")
+        val agentTitles = providers.providers(IntegrationSupport.Agent).associate { it.id to it.title }
         RingGesture.entries.forEach { gesture ->
-            appendLine("  ${gesture.gestureLabel}: ${gestureRouting.destinationFor(gesture).tileLabel}")
+            appendLine("  ${gesture.gestureLabel}: ${gestureRouting.destinationFor(gesture).tileLabel(agentTitles)}")
         }
 
         val webhooks = RingGesture.entries.mapNotNull { gesture ->

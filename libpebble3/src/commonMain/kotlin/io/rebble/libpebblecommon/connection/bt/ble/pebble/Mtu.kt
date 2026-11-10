@@ -26,8 +26,9 @@ class Mtu(private val blePlatformConfig: BlePlatformConfig) {
                 logger.w(e) { "error setting mtu: ${e.status}" }
                 return PebbleConnectionResult.Failed(ConnectionFailureReason.MtuGattError)
             }
+        } else {
+            _mtu.value = gattClient.getMtu()
         }
-        _mtu.value = gattClient.getMtu()
         return PebbleConnectionResult.Success(null)
     }
 }

@@ -8,6 +8,7 @@ import coredevices.libindex.device.IndexPlatformBluetoothAssociations
 import coredevices.libindex.device.REQUEST_URI_HOST
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.REBBLE_FEED_URL
 import coredevices.pebble.ui.NavBarRoute
 import coredevices.pebble.ui.PebbleNavBarRoutes
@@ -16,6 +17,8 @@ import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
+import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,12 +57,20 @@ interface PebbleDeepLinkHandler {
     val pendingAppSideload: StateFlow<Path?>
     fun consumePendingAppSideload()
 
+    /** Tab the locker should select when it next shows; consumed by the locker screen. */
+    val pendingLockerTab: StateFlow<AppType?>
+    fun consumePendingLockerTab()
+    fun navigateToLockerTab(type: AppType)
+
     fun consumeRequestIndexCompanion()
     fun confirmPendingFirmwareSideload()
     fun dismissPendingFirmwareSideload()
     fun sideloadFirmware(file: Path)
     fun showMessage(message: String)
     fun handle(uri: Uri?): Boolean
+
+    /** Opens the app's page if [url] links to an app on a store; false if it doesn't. */
+    fun openStoreAppLink(url: String): Boolean
 
     /** Show a navbar tab on the watch home screen (same mechanism as pebble://navbar links). */
     fun navigateToTab(route: NavBarRoute)
@@ -93,6 +104,18 @@ class RealPebbleDeepLinkHandler(
 
     override fun consumePendingAppSideload() {
         _pendingAppSideload.value = null
+    }
+
+    private val _pendingLockerTab = MutableStateFlow<AppType?>(null)
+    override val pendingLockerTab: StateFlow<AppType?> = _pendingLockerTab.asStateFlow()
+
+    override fun consumePendingLockerTab() {
+        _pendingLockerTab.value = null
+    }
+
+    override fun navigateToLockerTab(type: AppType) {
+        _pendingLockerTab.value = type
+        navigateToTab(PebbleNavBarRoutes.WatchfacesRoute)
     }
 
 
@@ -273,7 +296,7 @@ class RealPebbleDeepLinkHandler(
             navigateToTab(PebbleNavBarRoutes.WatchesRoute)
             _snackBarMessages.tryEmit("Sideloading firmware...")
             watches.forEach {
-                it.sideloadFirmware(file)
+                it.sideloadFirmware(file, FirmwareUpdateTrigger.Sideload)
             }
         }
     }
@@ -314,6 +337,11 @@ class RealPebbleDeepLinkHandler(
             analytics.logEvent("rebble.logged-in")
         }
         return true
+    }
+
+    override fun openStoreAppLink(url: String): Boolean {
+        val link = storeAppLink(url) ?: return false
+        return handleAppstore(link.feedUrl, link.appId)
     }
 
     private fun handleAppstore(storeUrl: String, path: String?): Boolean {
@@ -397,6 +425,34 @@ class RealPebbleDeepLinkHandler(
         private const val CUSTOM_BOOT_CONFIG_URL: String = "custom-boot-config-url"
         private const val STORE_URL: String = "appstore"
         private const val STORE_SOURCE_PARAM: String = "source"
+        private val STORE_APP_ID = Regex("[0-9a-f]{24}")
+
+        internal data class StoreAppLink(val feedUrl: String, val appId: String)
+
+        /** `pebble://appstore/<id>`, or an app's page on the Pebble or Rebble web store. */
+        internal fun storeAppLink(url: String): StoreAppLink? {
+            val uri = Uri.parseOrNull(url) ?: return null
+            if (uri.scheme == "pebble") {
+                if (uri.host != STORE_URL) return null
+                val id = uri.pathSegments.singleOrNull() ?: return null
+                return StoreAppLink(uri.getQueryParameter(STORE_SOURCE_PARAM) ?: REBBLE_FEED_URL, id)
+            }
+            if (uri.scheme != "https" && uri.scheme != "http") return null
+            val feed = when (uri.host?.lowercase()) {
+                "apps.repebble.com" -> PEBBLE_FEED_URL
+                "apps.rebble.io" -> REBBLE_FEED_URL
+                else -> return null
+            }
+            // `/<slug>_<id>`, `/<id>`, or the old `/<lang>/application/<id>`.
+            val segments = uri.pathSegments.filter { it.isNotEmpty() }
+            val last = when {
+                segments.size == 1 -> segments[0]
+                segments.size == 3 && segments[1] == "application" -> segments[2]
+                else -> return null
+            }
+            val id = last.substringAfterLast('_').takeIf { STORE_APP_ID.matches(it) } ?: return null
+            return StoreAppLink(feed, id)
+        }
         private const val ADD_STORE_FEED_HOST: String = "add-store-feed"
         private const val NAVBAR_URL: String = "navbar"
         private val SHOW_WATCHES_HOST = "show-watches"

@@ -543,7 +543,8 @@ class RecordingProcessingQueue(
         handle: TaskHandle,
         task: ProcessingTask.TextRecording
     ) {
-        val (transcription) = task
+        val transcription = task.transcription
+        val isGestureCommand = task.buttonSequence != null
         logger.v { "Handling text recording" }
         val recordingId = if (handle.stage is RecordingProcessingStage.RecordingEntityCreated) {
             (handle.stage as RecordingProcessingStage.RecordingEntityCreated).recordingEntityId
@@ -552,6 +553,9 @@ class RecordingProcessingQueue(
             val id = recordingRepository.createRecording(
                 firestoreId = firestoreRecordingsDao.newDocumentId(),
             )
+            if (isGestureCommand) {
+                queueTaskRepository.updateTaskRecordingId(taskId = handle.taskId, recordingId = id)
+            }
             handle.updateStage(
                 RecordingProcessingStage.RecordingEntityCreated(id)
             )
@@ -561,7 +565,8 @@ class RecordingProcessingQueue(
             recordingId = recordingId,
             text = transcription,
             forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) },
-            isQuestion = isTypedQuestion(transcription),
+            isQuestion = !isGestureCommand && isTypedQuestion(transcription),
+            isGestureCommand = isGestureCommand,
         )
         operation.run(handle)
     }
@@ -617,10 +622,12 @@ class RecordingProcessingQueue(
     }
 
     suspend fun queueTextProcessing(
-        transcription: String
+        transcription: String,
+        buttonSequence: String? = null,
     ) {
         val task = ProcessingTask.TextRecording(
-            transcription = transcription
+            transcription = transcription,
+            buttonSequence = buttonSequence,
         )
         trace.markEvent("scheduling_text_task")
         scheduleTask(

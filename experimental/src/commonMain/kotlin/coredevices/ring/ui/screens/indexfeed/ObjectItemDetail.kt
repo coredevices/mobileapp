@@ -3,9 +3,11 @@
 package coredevices.ring.ui.screens.indexfeed
 
 import CoreNav
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +31,9 @@ import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material.icons.automirrored.outlined.StickyNote2
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,9 +42,12 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,11 +57,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,9 +83,6 @@ import coredevices.ring.ui.theme.indexTextEntryStyle
 import coredevices.ring.ui.theme.toggleButtonColors
 import coredevices.ring.ui.viewmodel.ObjectDetailViewModel
 import coredevices.ring.ui.viewmodel.kindLabel
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Duration.Companion.hours
@@ -97,17 +104,10 @@ internal fun ItemView(
     var menuOpen by remember { mutableStateOf(false) }
     val title = s.parentList?.title?.takeIf { it.isNotBlank() } ?: kindLabel(it.kind)
 
-    // Early heads-up notification metadata (built-in reminders only carry a
-    // localReminderId, which is what lets us actually cancel the extra alarm).
     val reminderMeta = it.metadata as? coredevices.indexai.data.entity.ItemDocument.ItemMetadata.Reminder
     val notifyBeforeMillis = reminderMeta?.notifyBeforeMillis
-    val canRemoveExtraNotification = reminderMeta?.localReminderId != null
+    val canRemoveExtraNotification = notifyBeforeMillis != null
 
-    // Always-edit, Apple Notes style. No "Save" button — the draft is
-    // persisted automatically when the user navigates away (DisposableEffect
-    // onDispose) or backgrounds the app (ON_STOP). Drafts are keyed on
-    // firestoreId only, NOT on the field values, so flow re-emits from
-    // our own auto-save don't reset the BasicTextField cursor.
     var draftTitle by remember(it.firestoreId) { mutableStateOf(it.title) }
     var draftBody by remember(it.firestoreId) { mutableStateOf(it.body) }
     var draftKind by remember(it.firestoreId) { mutableStateOf(it.kind) }
@@ -119,6 +119,8 @@ internal fun ItemView(
     var draftParentListIds by remember(it.firestoreId) { mutableStateOf(it.parentListIds()) }
     var listsTouched by remember(it.firestoreId) { mutableStateOf(false) }
     var deleting by remember(it.firestoreId) { mutableStateOf(false) }
+    var reminderDialogOpen by remember(it.firestoreId) { mutableStateOf(false) }
+    var flushRequested by remember(it.firestoreId) { mutableStateOf(0) }
     val allLists by vm.allLists.collectAsStateWithLifecycle()
 
     // rememberUpdatedState wrappers so the auto-save lambda captured by
@@ -176,6 +178,26 @@ internal fun ItemView(
                 parentListIds = if (latestListsTouched.value) latestLists.value else null,
             )
         }
+    }
+
+    // Type changes save at once rather than on leave; the effect runs after
+    // recomposition so the latest* wrappers have caught up with the drafts.
+    LaunchedEffect(flushRequested) {
+        if (flushRequested > 0) flushDraft()
+    }
+
+    if (reminderDialogOpen) {
+        DueAtPickerFlow(
+            initial = null,
+            onPicked = { dueAt ->
+                reminderDialogOpen = false
+                changeKind("reminder")
+                draftDueAt = dueAt
+                dueAtTouched = true
+                flushRequested++
+            },
+            onDismiss = { reminderDialogOpen = false },
+        )
     }
 
     // Save on dispose (back nav, navigating to another item, etc.).
@@ -239,7 +261,16 @@ internal fun ItemView(
                     onRemoveExtraNotification = { vm.removeExtraNotification() },
                     allLists = allLists,
                     selectedListIds = draftParentListIds,
-                    onKind = changeKind,
+                    onKind = { newKind ->
+                        when {
+                            newKind == draftKind -> Unit
+                            newKind == "reminder" -> reminderDialogOpen = true
+                            else -> {
+                                changeKind(newKind)
+                                flushRequested++
+                            }
+                        }
+                    },
                     onTitle = { draftTitle = it },
                     onBody = { draftBody = it },
                     onCreatedAt = { newCreatedAt ->
@@ -496,7 +527,7 @@ private fun ItemHeroEdit(
         } else {
             TimestampRow(timestamp = createdAt, onChange = onCreatedAt)
         }
-        if (!showsDue && listOptions.isNotEmpty()) {
+        if (kind in setOf("note", "checklist", "reminder")) {
             Spacer(Modifier.height(14.dp))
             Text(
                 "TYPE",
@@ -505,48 +536,9 @@ private fun ItemHeroEdit(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.8.sp,
             )
-            if (kind in setOf("note", "checklist")) {
-                FlowRow(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-                    maxLines = 1,
-                ) {
-                    ToggleButton(
-                        kind == "note",
-                        onCheckedChange = { onKind("note") },
-                        shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                        colors = IndexTheme.toggleButtonColors()
-                    ) {
-                        Icon(
-                            if (kind == "note") {
-                                Icons.AutoMirrored.Filled.StickyNote2
-                            } else {
-                                Icons.AutoMirrored.Outlined.StickyNote2
-                            },
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
-                        Text("Note")
-                    }
-                    ToggleButton(
-                        kind == "checklist",
-                        onCheckedChange = { onKind("checklist") },
-                        shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                        colors = IndexTheme.toggleButtonColors()
-                    ) {
-                        Icon(
-                            if (kind == "checklist") {
-                                Icons.Filled.CheckCircle
-                            } else {
-                                Icons.Outlined.CheckCircle
-                            },
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
-                        Text("Checkbox")
-                    }
-                }
-            }
+            TypeButtonRow(kind = kind, onKind = onKind)
+        }
+        if (!showsDue && listOptions.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Text(
                 "LISTS",
@@ -556,7 +548,7 @@ private fun ItemHeroEdit(
                 letterSpacing = 0.8.sp,
                 modifier = Modifier.padding(bottom = 6.dp),
             )
-            androidx.compose.foundation.layout.FlowRow(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -618,9 +610,7 @@ private fun ItemHeroEdit(
 @Composable
 private fun TimestampRow(timestamp: Instant, onChange: (Instant) -> Unit) {
     val colors = IndexTheme.colors
-    var showDate by remember { mutableStateOf(false) }
-    var showTime by remember { mutableStateOf(false) }
-    val tz = TimeZone.currentSystemDefault()
+    var showPicker by remember { mutableStateOf(false) }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -628,7 +618,7 @@ private fun TimestampRow(timestamp: Instant, onChange: (Instant) -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp))
-            .clickable { showDate = true }
+            .clickable { showPicker = true }
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text("Timestamp", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
@@ -640,171 +630,88 @@ private fun TimestampRow(timestamp: Instant, onChange: (Instant) -> Unit) {
         )
     }
 
-    if (showDate) {
-        val initialDate = timestamp.toLocalDateTime(tz).date
-        val initialMs = kotlin.time.Instant
-            .fromEpochSeconds(initialDate.toEpochDays() * 86_400L)
-            .toEpochMilliseconds()
-        val datePickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = initialMs,
-        )
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { showDate = false },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    showDate = false
-                    val ms = datePickerState.selectedDateMillis ?: return@TextButton
-                    val existing = timestamp.toLocalDateTime(tz)
-                    val pickedDate = kotlin.time.Instant.fromEpochMilliseconds(ms).toLocalDateTime(TimeZone.UTC).date
-                    val combined = kotlinx.datetime.LocalDateTime(
-                        pickedDate, kotlinx.datetime.LocalTime(existing.hour, existing.minute),
-                    ).toInstant(tz)
-                    onChange(combined)
-                    showTime = true
-                }) { Text("Next: time") }
+    if (showPicker) {
+        DueAtPickerFlow(
+            initial = timestamp,
+            onPicked = {
+                showPicker = false
+                onChange(it)
             },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showDate = false }) { Text("Cancel") }
-            },
-        ) {
-            androidx.compose.material3.DatePicker(state = datePickerState)
-        }
-    }
-
-    if (showTime) {
-        val ldt = timestamp.toLocalDateTime(tz)
-        val timeState = androidx.compose.material3.rememberTimePickerState(
-            initialHour = ldt.hour,
-            initialMinute = ldt.minute,
-            is24Hour = false,
+            onDismiss = { showPicker = false },
         )
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showTime = false }) {
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.surfaceContainer)
-                    .padding(20.dp),
-            ) {
-                androidx.compose.material3.TimePicker(state = timeState)
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    androidx.compose.material3.TextButton(onClick = { showTime = false }) { Text("Cancel") }
-                    androidx.compose.material3.TextButton(onClick = {
-                        showTime = false
-                        val base = timestamp.toLocalDateTime(tz).date
-                        val combined = kotlinx.datetime.LocalDateTime(
-                            base, kotlinx.datetime.LocalTime(timeState.hour, timeState.minute),
-                        ).toInstant(tz)
-                        onChange(combined)
-                    }) { Text("Save") }
-                }
-            }
-        }
     }
 }
 
+/** Shows every type label when they fit; otherwise only the selected type keeps its label. */
 @Composable
-private fun DueAtRow(label: String, dueAt: Instant?, onChange: (Instant?) -> Unit) {
-    val colors = IndexTheme.colors
-    var showDate by remember { mutableStateOf(false) }
-    var showTime by remember { mutableStateOf(false) }
+private fun TypeButtonRow(kind: String, onKind: (String) -> Unit) {
+    SubcomposeLayout(Modifier.fillMaxWidth()) { constraints ->
+        // The probe is measured but never placed; the visible row keeps one
+        // composition across the fit/compact switch so the buttons' size
+        // change animates instead of swapping.
+        val unbounded = constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity)
+        val probe = subcompose("probe") { TypeButtons(kind, onKind, labelAll = true) }
+            .first().measure(unbounded)
+        val fits = probe.width <= constraints.maxWidth
+        val row = subcompose("row") { TypeButtons(kind, onKind, labelAll = fits) }
+            .first().measure(constraints)
+        layout(constraints.maxWidth, row.height) { row.place(0, 0) }
+    }
+}
 
-    val tz = TimeZone.currentSystemDefault()
-    val pretty = dueAt?.let { formatLongDateTime(it) } ?: "Set due date…"
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun TypeButtons(kind: String, onKind: (String) -> Unit, labelAll: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+        TypeButton(
+            selected = kind == "note",
+            label = "Note",
+            icon = if (kind == "note") Icons.AutoMirrored.Filled.StickyNote2 else Icons.AutoMirrored.Outlined.StickyNote2,
+            showLabel = labelAll,
+            shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+            onClick = { onKind("note") },
+        )
+        TypeButton(
+            selected = kind == "checklist",
+            label = "Checkbox",
+            icon = if (kind == "checklist") Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
+            showLabel = labelAll,
+            shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
+            onClick = { onKind("checklist") },
+        )
+        TypeButton(
+            selected = kind == "reminder",
+            label = "Reminder",
+            icon = if (kind == "reminder") Icons.Filled.Notifications else Icons.Outlined.Notifications,
+            showLabel = labelAll,
+            shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+            onClick = { onKind("reminder") },
+        )
+    }
+}
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp))
-            .clickable { showDate = true }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun TypeButton(
+    selected: Boolean,
+    label: String,
+    icon: ImageVector,
+    showLabel: Boolean,
+    shapes: ToggleButtonShapes,
+    onClick: () -> Unit,
+) {
+    val labelVisible = showLabel || selected
+    ToggleButton(
+        checked = selected,
+        onCheckedChange = { onClick() },
+        shapes = shapes,
+        colors = IndexTheme.toggleButtonColors(),
     ) {
-        Text(label, color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.width(86.dp))
-        Text(
-            pretty,
-            color = if (dueAt != null) colors.onSurface else colors.onSurfaceVariant,
-            fontSize = 14.sp,
-            modifier = Modifier.weight(1f),
-        )
-        if (dueAt != null) {
-            Text(
-                "Clear",
-                color = colors.primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clickable { onChange(null) }
-                    .padding(start = 12.dp),
-            )
-        }
-    }
-
-    if (showDate) {
-        val initialDate = (dueAt ?: kotlin.time.Clock.System.now())
-            .toLocalDateTime(tz).date
-        val initialMs = kotlin.time.Instant
-            .fromEpochSeconds(initialDate.toEpochDays() * 86_400L)
-            .toEpochMilliseconds()
-        val datePickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = initialMs,
-        )
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { showDate = false },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    showDate = false
-                    val ms = datePickerState.selectedDateMillis ?: return@TextButton
-                    // Combine selected date with existing time-of-day (or 9am default).
-                    val existing = (dueAt ?: kotlin.time.Clock.System.now()).toLocalDateTime(tz)
-                    val pickedDate = kotlin.time.Instant.fromEpochMilliseconds(ms).toLocalDateTime(TimeZone.UTC).date
-                    val combined = kotlinx.datetime.LocalDateTime(
-                        pickedDate, kotlinx.datetime.LocalTime(existing.hour, existing.minute),
-                    ).toInstant(tz)
-                    onChange(combined)
-                    showTime = true // chain straight into time picker
-                }) { Text("Next: time") }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showDate = false }) { Text("Cancel") }
-            },
-        ) {
-            androidx.compose.material3.DatePicker(state = datePickerState)
-        }
-    }
-
-    if (showTime) {
-        val ldt = (dueAt ?: kotlin.time.Clock.System.now()).toLocalDateTime(tz)
-        val timeState = androidx.compose.material3.rememberTimePickerState(
-            initialHour = ldt.hour,
-            initialMinute = ldt.minute,
-            is24Hour = false,
-        )
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showTime = false }) {
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.surfaceContainer)
-                    .padding(20.dp),
-            ) {
-                androidx.compose.material3.TimePicker(state = timeState)
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    androidx.compose.material3.TextButton(onClick = { showTime = false }) { Text("Cancel") }
-                    androidx.compose.material3.TextButton(onClick = {
-                        showTime = false
-                        val base = (dueAt ?: kotlin.time.Clock.System.now()).toLocalDateTime(tz).date
-                        val combined = kotlinx.datetime.LocalDateTime(
-                            base, kotlinx.datetime.LocalTime(timeState.hour, timeState.minute),
-                        ).toInstant(tz)
-                        onChange(combined)
-                    }) { Text("Save") }
-                }
+        Icon(icon, contentDescription = if (labelVisible) null else label)
+        AnimatedVisibility(labelVisible) {
+            Row {
+                Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                Text(label, maxLines = 1)
             }
         }
     }

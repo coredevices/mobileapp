@@ -4,6 +4,8 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
+import com.algolia.client.configuration.ClientOptions
+import com.algolia.client.configuration.Host
 import com.algolia.client.exception.AlgoliaApiException
 import com.algolia.client.model.search.SearchParamsObject
 import com.algolia.client.model.search.TagFilters
@@ -11,6 +13,8 @@ import coredevices.database.AppstoreCollection
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.HEARTED_COLLECTION_SLUG
+import coredevices.database.PLUGIN_DATA_APPS_SLUG
+import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.database.HeartEntity
 import coredevices.database.HeartsDao
 import coredevices.pebble.Platform
@@ -36,6 +40,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
 import io.ktor.http.parseUrl
+import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.web.LockerEntry
@@ -61,6 +66,7 @@ class AppstoreService(
     private val pebbleWebServices: PebbleWebServices,
     private val pebbleHttpClient: PebbleHttpClient,
     private val heartsDao: HeartsDao,
+    private val libPebble: LibPebble,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -76,7 +82,8 @@ class AppstoreService(
     }
     private val searchClient = source.algoliaAppId?.let { appId ->
         source.algoliaApiKey?.let { apiKey ->
-            SearchClient(appId, apiKey)
+            val hosts = if (source.isPebbleFeed()) listOf(Host(APPSEARCH_HOST)) else null
+            SearchClient(appId, apiKey, ClientOptions(hosts = hosts))
         }
     }
     private val json = Json {
@@ -100,6 +107,7 @@ class AppstoreService(
     private companion object {
         // How many hearted apps to surface in the home-screen Hearted carousel.
         const val HEARTED_HOME_PREVIEW_LIMIT = 20
+        const val PLUGIN_DATA_APPS_TITLE = "Works with Plugins"
     }
 
     /**
@@ -360,7 +368,7 @@ class AppstoreService(
 //            set("firmware_version", "")
             set("filter_hardware", "true")
         }
-        val cachedHome = if (useCache) cache.readHome(type, source, parameters) else null
+        val cachedHome = if (useCache) cache.readHome(type, source, parameters)?.withoutHiddenCollections() else null
         val rawHome: AppStoreHome? = cachedHome ?: try {
             logger.v { "fetchAppStoreHome fetching ${source.url}/v1/home/$typeString" }
             val fetched = httpClient.get(
@@ -378,7 +386,7 @@ class AppstoreService(
                     } else {
                         true
                     }
-                }?.body<AppStoreHome>()
+                }?.body<AppStoreHome>()?.withoutHiddenCollections()
             fetched?.let {
                 cache.writeCategories(fetched.categories, type, source)
                 appstoreCollectionDao.updateListOfCollections(type, fetched.collections.map {
@@ -402,6 +410,18 @@ class AppstoreService(
                         synthetic = true,
                     )
                 )
+                if (source.isPebbleFeed()) {
+                    appstoreCollectionDao.insertCollectionIfMissing(
+                        AppstoreCollection(
+                            sourceId = source.id,
+                            title = "Top Charts",
+                            slug = TOP_CHARTS_COLLECTION_SLUG,
+                            type = type,
+                            enabled = true,
+                            synthetic = true,
+                        )
+                    )
+                }
                 cache.writeHome(fetched, type, source, parameters)
             }
             fetched
@@ -411,7 +431,8 @@ class AppstoreService(
             logger.w(e) { "Error loading app store home" }
             return null
         }
-        val cleaned = rawHome?.copy(applications = rawHome.applications.filter { app ->
+        val home = rawHome?.withPluginDataApps(type, hardwarePlatform)
+        val cleaned = home?.copy(applications = home.applications.filter { app ->
             if (app.uuid == null) return@filter false
             try {
                 if (Uuid.parse(app.uuid) == Uuid.NIL) {
@@ -428,10 +449,51 @@ class AppstoreService(
         return cleaned?.let { augmentHomeWithHearted(it, type) }
     }
 
+    private suspend fun AppStoreHome.withPluginDataApps(type: AppType, hardwarePlatform: WatchType?): AppStoreHome {
+        if (!source.isPebbleFeed() || type == AppType.Plugin || !libPebble.config.value.watchConfig.enablePlugins) return this
+        appstoreCollectionDao.insertCollectionIfMissing(
+            AppstoreCollection(
+                sourceId = source.id,
+                title = PLUGIN_DATA_APPS_TITLE,
+                slug = PLUGIN_DATA_APPS_SLUG,
+                type = type,
+                enabled = true,
+                synthetic = true,
+            )
+        )
+        val apps = try {
+            httpClient.get(url = Url("${source.url}/v1/apps/collection/$PLUGIN_DATA_APPS_SLUG/${type.storeString()}")) {
+                parameter("platform", platform.storeString())
+                hardwarePlatform?.let { parameter("hardware", it.codename) }
+                parameter("limit", HEARTED_HOME_PREVIEW_LIMIT)
+            }.takeIf { it.status.isSuccess() }?.body<StoreAppResponse>()?.data
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(e) { "Error loading $PLUGIN_DATA_APPS_SLUG" }
+            null
+        }
+        if (apps.isNullOrEmpty()) return this
+        return copy(
+            applications = (applications + apps).distinctBy { it.id },
+            collections = collections + StoreCollection(
+                applicationIds = apps.map { it.id },
+                links = emptyMap(),
+                name = PLUGIN_DATA_APPS_TITLE,
+                slug = PLUGIN_DATA_APPS_SLUG,
+            ),
+        )
+    }
+
+    /** Top Charts replaces Most Loved on our store. */
+    private fun AppStoreHome.withoutHiddenCollections(): AppStoreHome =
+        if (source.isPebbleFeed()) copy(collections = collections.filter { it.slug != "most-loved" }) else this
+
     private suspend fun augmentHomeWithHearted(home: AppStoreHome, type: AppType): AppStoreHome {
         val dbRows = appstoreCollectionDao.getAllCollections()
             .filter { it.sourceId == source.id && it.type == type }
             .sortedBy { it.id }
+            .sortedByDescending { it.slug == PLUGIN_DATA_APPS_SLUG }
         val heartedRow = dbRows.firstOrNull { it.synthetic && it.slug == HEARTED_COLLECTION_SLUG }
         val showHearted = heartedRow?.enabled == true
 
@@ -475,6 +537,7 @@ class AppstoreService(
         path: String,
         appType: AppType?,
         hardwarePlatform: WatchType,
+        extraParameters: Map<String, String> = emptyMap(),
     ): PagingSource<Int, CommonApp> {
         // Synthetic "Hearted" collection: served entirely from local hearts + per-app
         // metadata fetch, transparent to callers.
@@ -489,6 +552,7 @@ class AppstoreService(
                     put("hardware", hardwarePlatform.codename)
                     put("offset", offset.toString())
                     put("limit", params.loadSize)
+                    putAll(extraParameters)
                 }
                 val url = buildString {
                     append("${source.url}/v1/apps/$path")
@@ -541,6 +605,18 @@ class AppstoreService(
                 return ((state.anchorPosition ?: 0) - state.config.initialLoadSize / 2).coerceAtLeast(0)
             }
         }
+    }
+
+    suspend fun fetchCollectionApps(
+        path: String,
+        appType: AppType?,
+        hardwarePlatform: WatchType,
+        limit: Int,
+        extraParameters: Map<String, String> = emptyMap(),
+    ): List<CommonApp>? {
+        val result = fetchAppStoreCollection(path, appType, hardwarePlatform, extraParameters)
+            .load(PagingSource.LoadParams.Refresh(key = null, loadSize = limit, placeholdersEnabled = false))
+        return (result as? PagingSource.LoadResult.Page)?.data
     }
 
     private fun fetchHeartedCollection(

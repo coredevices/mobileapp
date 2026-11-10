@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.web
 
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -16,6 +17,8 @@ import kotlin.uuid.Uuid
 data class LockerModelWrapper(
     val locker: LockerModel,
     val failedToFetchUuids: Set<Uuid>,
+    /** The user's decisions from other devices and the web store, by app; newest wins. */
+    val permissions: Map<Uuid, Map<String, PermissionDecisionRecord>> = emptyMap(),
 )
 
 @Serializable
@@ -49,10 +52,11 @@ data class LockerEntry(
     val companions: LockerEntryCompanions,
     val pbw: LockerEntryPBW? = null,
     val source: String? = null,
-    // Might not be present from all stores.
-    @SerialName("manifest_version") val manifestVersion: Int = 1,
+    // Might not be present from all stores. Absent means none of the appinfo fields below were sent.
+    @SerialName("manifest_version") val manifestVersion: Int? = null,
     @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
     @SerialName("config_page") val configPage: String? = null,
+    @SerialName("icon_tintable") val iconTintable: Boolean = false,
 )
 
 @Serializable

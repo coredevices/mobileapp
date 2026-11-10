@@ -21,8 +21,8 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
         description = SendBeeperMessageToolConstants.TOOL_DESCRIPTION,
         inputSchema = SendBeeperMessageToolConstants.INPUT_SCHEMA
     ),
-    extraContext = "If the user explicitly requests sending a message, use the messaging " +
-            "tools."
+    extraContext = "If the user explicitly requests sending a message, use the " +
+            "send_instant_message tool. For example, any request starting with 'send a message to'."
 ), KoinComponent {
     private val androidContext: Context by inject()
     private val prefs: Preferences by inject()

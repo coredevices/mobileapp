@@ -7,11 +7,14 @@ import android.app.Dialog
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import android.view.Gravity
 import android.view.KeyEvent
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.webkit.ProfileStore
@@ -79,17 +82,49 @@ private class WebSignInView(
             if (!finished && !check()) handler.postDelayed(this, POLL_INTERVAL_MS)
         }
     }
-    private val webView = createWebView()
+    private val pages = mutableListOf<WebView>()
+    private val pageContainer = FrameLayout(activity)
+    private val webView: WebView = createWebView().also {
+        pages.add(it)
+        pageContainer.addView(it, FrameLayout.LayoutParams(-1, -1))
+    }
     val rootView = createRootView()
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView() = WebView(activity).apply {
+    private fun createWebView(): WebView = WebView(activity).apply {
         WebViewCompat.setProfile(this, PROFILE)
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(this, true)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
+        settings.setSupportMultipleWindows(true)
+        webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(
+                view: WebView?,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: Message?,
+            ): Boolean {
+                if (finished) return false
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                val popup = createWebView()
+                pages.add(popup)
+                pageContainer.addView(popup, FrameLayout.LayoutParams(-1, -1))
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
+            }
+
+            override fun onCloseWindow(window: WebView?) {
+                handler.post {
+                    if (window != null && window != webView && pages.remove(window)) {
+                        pageContainer.removeView(window)
+                        window.destroy()
+                    }
+                }
+            }
+        }
         webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
@@ -119,10 +154,19 @@ private class WebSignInView(
             setBackgroundColor(Color.WHITE)
             isFocusableInTouchMode = true
             addView(top, LinearLayout.LayoutParams(-1, -2))
-            addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(pageContainer, LinearLayout.LayoutParams(-1, 0, 1f))
             setOnKeyListener { _, keyCode, event ->
                 if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                    if (webView.canGoBack()) webView.goBack() else cancel()
+                    val current = pages.lastOrNull() ?: webView
+                    when {
+                        current.canGoBack() -> current.goBack()
+                        current != webView -> {
+                            pages.remove(current)
+                            pageContainer.removeView(current)
+                            current.destroy()
+                        }
+                        else -> cancel()
+                    }
                     true
                 } else false
             }
@@ -165,9 +209,13 @@ private class WebSignInView(
         cookies.removeAllCookies(null)
         cookies.flush()
         profile.webStorage.deleteAllData()
-        webView.stopLoading()
-        webView.loadUrl("about:blank")
-        webView.destroy()
+        pages.forEach { page ->
+            page.stopLoading()
+            page.loadUrl("about:blank")
+            pageContainer.removeView(page)
+            page.destroy()
+        }
+        pages.clear()
     }
 
     private fun parseCookies(header: String?): Map<String, String> =

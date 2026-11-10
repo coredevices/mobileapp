@@ -283,6 +283,8 @@ class RealRecordingStorage(
             val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
             val (path, info) = getOrDownloadCachedRecording(id)
             return@withContext Pair(SystemFileSystem.source(path).buffered(), info)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (useOriginalAudio) {
                 logger.w(e) { "Failed to open original recording source for $idNoSuffix, falling back to processed version" }

@@ -24,9 +24,8 @@ Kotlin Multiplatform / Compose Multiplatform app targeting Android and iOS.
 - `:mcp`, `:index-ai`, `:libindex` — AI/MCP-related modules.
 - `:cactus`, `:resampler`, `:krisp-stubs` — audio/ML support modules. `:cactus-native` is a plain Android library holding cactus' CMake build and prebuilt `.so` (the KMP Android library plugin has no NDK support).
 - `:blobannotations`, `:blobdbgen` — KSP annotations + code generator for Pebble blobdb.
-- `test-apps/` — demo watchapps for the plugin API (`plugin-test`, `weather-face`). Built by
-  `./gradlew buildTestAppPbws` when the Pebble SDK is on `PATH`, and bundled into the host apps'
-  resources; without the SDK the build carries on and the apps simply aren't bundled.
+- The plugin API guide is on the developer site (`coredevices/sdk-docs`, `source/_guides/plugins/preview.md`). The demo apps and plugins live in
+  `coredevices/pebble-plugins`, which builds them and publishes them to the store.
 
 iOS app project: `iosApp/iosApp.xcworkspace` (always open the `.xcworkspace`, not `.xcodeproj`).
 
@@ -116,6 +115,10 @@ Comments should be concise. Specifically:
 
 Always use imports where possible, rather than fully-qualified references in the code. Don't ever use wildcard imports.
 
+### 13. Firmware compatibility
+
+Never write checks like "firmwareVersion > 1.2.3". Either use a capability bit, or don't do the check. New preferences do not warrant capability bits (they are ignored by firmware if unknown)
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.
@@ -142,16 +145,18 @@ Always use imports where possible, rather than fully-qualified references in the
     4. `xcrun simctl uninstall` + `install` + `launch` — no xcodebuild needed
        Only run a full `xcodebuild` again when you change Swift code, Info.plist, resources, or pod dependencies.
 
+### Android device interaction
+
+Use the Android CLI (`android`) for installing, running, screenshots, UI inspection/input, and emulators (`android install`, `android run`, `android screen`, `android layout`, `android input`, `android emulator`); see `android -h`. Fall back to `adb` only for things it doesn't cover, e.g. `adb logcat`.
+
 ### Android local release install
 
 When asked to make a release build and install it on a local device, follow the GitHub Actions release build shape instead of inventing a shortcut:
 
 1. Add or confirm `LOCAL_RELEASE_BUILD=true` in the root `local.properties`. This makes the release variant use the debug signing config, so it can install over an existing local/debug app without uninstalling.
 2. Build from the repo root with `./gradlew :androidApp:assembleRelease --stacktrace --no-daemon`. Do not skip release lint unless the user explicitly asks.
-3. Install over the existing app with `adb -s <device-id> install -r androidApp/build/outputs/apk/release/androidApp-release.apk`. Do not uninstall first unless explicitly requested.
-4. Launch and verify with logcat:
-    - `adb -s <device-id> logcat -c`
-    - `adb -s <device-id> shell monkey -p coredevices.coreapp -c android.intent.category.LAUNCHER 1`
+3. Clear logcat with `adb -s <device-id> logcat -c`, then install over the existing app and launch it with `android run --device=<device-id> --apks=androidApp/build/outputs/apk/release/androidApp-release.apk`. Do not uninstall first unless explicitly requested.
+4. Verify with logcat:
     - wait long enough for `PebbleService` / Ring BLE scanning to start, then check for `FATAL EXCEPTION`, `ClassNotFoundException`, `Room cannot verify`, and `Process: coredevices.coreapp`.
 
 Release builds are minified. If a release-only crash appears in Haversine/native BLE code, check R8 keep rules before changing app logic. In particular, the Haversine native library resolves `com.wtlp.haversinesatellitelibrary.logging.HaversineLog` by exact JVM class name, so the app proguard rules must keep that class.

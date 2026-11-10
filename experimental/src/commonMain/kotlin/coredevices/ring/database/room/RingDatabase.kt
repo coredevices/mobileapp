@@ -37,27 +37,35 @@ import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.indexai.database.dao.RecordingFeedItem
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.data.entity.room.CachedRecordingMetadata
 import coredevices.ring.data.entity.room.PluginGrantDenial
+import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.data.entity.room.RecordingProcessingTaskEntity
 import coredevices.ring.data.entity.room.RingDebugTransfer
+import coredevices.ring.data.entity.room.RingRssiReading
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
+import coredevices.ring.data.entity.room.clock.LocalClockEntry
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
+import coredevices.ring.database.room.dao.LocalClockDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.PluginGrantDao
+import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
 import coredevices.ring.database.room.dao.RecordingProcessingTaskDao
 import coredevices.ring.database.room.dao.RingDebugTransferDao
+import coredevices.ring.database.room.dao.RingRssiReadingDao
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.dao.RingTransferFeedItem
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
+import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
@@ -79,18 +87,21 @@ import kotlin.uuid.Uuid
         HttpMcpServerEntity::class,
         DisabledBuiltinMcp::class,
         RecordingProcessingTaskEntity::class,
+        IndexWebhookDeliveryEntity::class,
         TraceSessionEntity::class,
         TraceEntryEntity::class,
         CachedItem::class,
         CachedList::class,
         PluginGrantDenial::class,
         AgentIterationEntity::class,
+        RingRssiReading::class,
+        LocalClockEntry::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 39,
+    version = 46,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -137,6 +148,19 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 37, to = 38),
         // 38→39: adds RecordingEntryEntity.transcribedViaLocalFallback.
         AutoMigration(from = 38, to = 39),
+        // 39→40: RecordingProcessingTaskEntity.transferId FK SET NULL → CASCADE.
+        AutoMigration(from = 39, to = 40, Migrate39To40::class),
+        // 40→41: adds RingRssiReading.
+        AutoMigration(from = 40, to = 41),
+        // 41→42: adds HttpMcpServerEntity.description.
+        AutoMigration(from = 41, to = 42),
+        // 42→43: denies the Watch Settings plugin to the Index agent until the user allows it.
+        AutoMigration(from = 42, to = 43, Migrate42To43::class),
+        // 43→44 is Migrate43To44, added to the builder in experimentalModule.
+        // 44→45: adds LocalClockEntry (in-app timers/alarms on iOS).
+        AutoMigration(from = 44, to = 45),
+        // 45→46: adds IndexWebhookDeliveryEntity.
+        AutoMigration(from = 45, to = 46),
     ]
 )
 @TypeConverters(Converters::class)
@@ -152,12 +176,15 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun httpMcpServerDao(): HttpMcpServerDao
     abstract fun disabledBuiltinMcpDao(): DisabledBuiltinMcpDao
     abstract fun recordingProcessingTaskDao(): RecordingProcessingTaskDao
+    abstract fun indexWebhookDeliveryDao(): IndexWebhookDeliveryDao
     abstract fun traceSessionDao(): TraceSessionDao
     abstract fun traceEntryDao(): TraceEntryDao
     abstract fun cachedItemDao(): CachedItemDao
     abstract fun cachedListDao(): CachedListDao
     abstract fun pluginGrantDao(): PluginGrantDao
     abstract fun agentIterationDao(): AgentIterationDao
+    abstract fun ringRssiReadingDao(): RingRssiReadingDao
+    abstract fun localClockDao(): LocalClockDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -265,6 +292,66 @@ class Migrate36To37(isAndroid: Boolean) : Migration(36, 37) {
         connection.execSQL("DROP TABLE `HttpMcpGroupAssociation`")
         connection.execSQL("DROP TABLE `McpSandboxGroupEntity`")
     }
+}
+
+/**
+ * Drops audio tasks whose transfer was already deleted under the old SET NULL FK; they can't be
+ * processed and fail to load.
+ */
+class Migrate39To40 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "DELETE FROM RecordingProcessingTaskEntity WHERE type = 'AudioRecording' AND transferId IS NULL"
+        )
+    }
+}
+
+/**
+ * Re-keys LocalReminderData from a device-local autoincrement id to the reminder feed item's global
+ * Firestore id. The old rows recorded device-local alarms only; [coredevices.ring.reminders.ReminderReconciler]
+ * re-arms every still-pending reminder from its (durable, synced) feed item on next launch, so
+ * dropping them loses no user-visible reminder.
+ */
+class Migrate43To44 : Migration(43, 44) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("DROP TABLE IF EXISTS `LocalReminderData`")
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `LocalReminderData` " +
+                "(`itemId` TEXT NOT NULL, `time` INTEGER, `message` TEXT NOT NULL, " +
+                "`notifyBeforeMillis` INTEGER, PRIMARY KEY(`itemId`))"
+        )
+    }
+}
+
+/** Plugins the Index agent may not use until the user turns them on. */
+private val PLUGINS_DENIED_BY_DEFAULT = listOf(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID)
+
+private fun SQLiteConnection.denyDefaultPluginGrants() {
+    val statement = prepare(
+        "INSERT OR IGNORE INTO PluginGrantDenial (pluginUuid, `grant`, name) VALUES (?, ?, '')"
+    )
+    try {
+        PLUGINS_DENIED_BY_DEFAULT.forEach { pluginUuid ->
+            PluginGrant.entries.forEach { grant ->
+                statement.bindText(1, pluginUuid.toString())
+                statement.bindText(2, grant.name)
+                statement.step()
+                statement.reset()
+            }
+        }
+    } finally {
+        statement.close()
+    }
+}
+
+class Migrate42To43 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+}
+
+/** Fresh databases skip migrations, so the default denials are seeded here instead. */
+object SeedDefaultPluginGrants : RoomDatabase.Callback() {
+    override fun onCreate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

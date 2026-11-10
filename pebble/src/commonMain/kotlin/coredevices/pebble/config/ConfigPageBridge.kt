@@ -1,6 +1,10 @@
 package coredevices.pebble.config
 
 import co.touchlab.kermit.Logger
+import coredevices.pebble.RealPebbleDeepLinkHandler
+import io.ktor.http.Url
+import io.rebble.libpebblecommon.plugin.PluginNativeException
+import io.rebble.libpebblecommon.plugin.files.FileHandleInfo
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -34,6 +39,14 @@ class ConfigPageBridge(
     // Written on the main thread, read on the WebView's JS-interface thread in onCall.
     @Volatile
     var webSignIn: (suspend (WebSignInRequest) -> Map<String, String>?)? = null
+
+    /** File pickers and grants for the plugin behind this page; null when there is no plugin. */
+    @Volatile
+    var fileAccess: ConfigPageFileAccess? = null
+
+    /** Asks the user before opening a url in the browser; resolves whether it was opened. */
+    @Volatile
+    var openUrl: (suspend (String) -> Boolean)? = null
 
     private val readyTargets = mutableSetOf<String>()
 
@@ -121,8 +134,84 @@ class ConfigPageBridge(
                     }))
                 }
             }
+            "showFilePicker" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                val request = try {
+                    LENIENT.decodeFromJsonElement(FilePickRequest.serializer(), call.message)
+                } catch (e: Exception) {
+                    reply(call.id, error("showFilePicker needs { kind, mode, accept }"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("file picker") {
+                        // Cancel resolves the page's promise to null.
+                        access.pick(request)?.let { Json.encodeToString(FileHandleInfo.serializer(), it) } ?: "null"
+                    })
+                }
+            }
+            "fileGrants" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("listing file access") {
+                        Json.encodeToString(FILE_HANDLES, access.handles())
+                    })
+                }
+            }
+            "revokeFileGrant" -> {
+                val access = fileAccess
+                if (access == null) {
+                    reply(call.id, error("file access is not available for this app"))
+                    return
+                }
+                val id = (call.message as? JsonObject)?.get("id")?.let { it as? JsonPrimitive }?.content
+                if (id.isNullOrBlank()) {
+                    reply(call.id, error("revokeFileGrant needs { id }"))
+                    return
+                }
+                scope.launch {
+                    reply(call.id, fileAccessResult("revoking file access") {
+                        access.revoke(id)
+                        "null"
+                    })
+                }
+            }
+            "openUrl" -> {
+                val handler = openUrl
+                if (handler == null) {
+                    reply(call.id, error("opening links is not available here"))
+                    return
+                }
+                val url = (call.message as? JsonPrimitive)?.takeIf { it.isString }?.content
+                if (url == null || (!isWebUrl(url) && RealPebbleDeepLinkHandler.storeAppLink(url) == null)) {
+                    reply(call.id, error("openUrl needs an http(s) url"))
+                    return
+                }
+                scope.launch { reply(call.id, handler(url).toString()) }
+            }
             else -> reply(call.id, error("unknown method '${call.method}'"))
         }
+    }
+
+    private suspend fun fileAccessResult(what: String, block: suspend () -> String): String = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: PluginNativeException) {
+        Json.encodeToString(JsonObject.serializer(), buildJsonObject {
+            put("error", e.message ?: "$what failed")
+            put("code", e.code)
+        })
+    } catch (e: Exception) {
+        logger.w(e) { "$what failed" }
+        error("$what failed")
     }
 
     /** A script pushed something at the page. */
@@ -154,6 +243,17 @@ class ConfigPageBridge(
         eval("if (window.__pebbleConfig) { $js; }")
     }
 
+    // The user judges the url by reading it, so nothing that can disguise its host gets through:
+    // userinfo (https://trusted.com@evil.com), whitespace, control or bidi characters, or a
+    // non-ASCII host (lookalike letters such as Cyrillic 'а').
+    private fun isWebUrl(url: String): Boolean {
+        if (!url.startsWith("https://", ignoreCase = true) && !url.startsWith("http://", ignoreCase = true)) return false
+        if (url.any { it.isWhitespace() || it.isISOControl() || it in '\u200E'..'\u200F' || it in '\u202A'..'\u202E' || it in '\u2066'..'\u2069' }) return false
+        val parsed = runCatching { Url(url) }.getOrNull() ?: return false
+        return parsed.host.isNotEmpty() && parsed.user == null &&
+            parsed.host.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '.' || it == '-' }
+    }
+
     private fun error(message: String) =
         Json.encodeToString(JsonObject.serializer(), buildJsonObject { put("error", message) })
 
@@ -177,6 +277,7 @@ class ConfigPageBridge(
         val TARGETS = ListSerializer(Target.serializer())
         val HELLO = Hello.serializer()
         val STRING = String.serializer()
+        val FILE_HANDLES = ListSerializer(FileHandleInfo.serializer())
         // A config page may pass extra options; tolerate them rather than reject the call.
         val LENIENT = Json { ignoreUnknownKeys = true }
     }
@@ -250,6 +351,67 @@ val CONFIG_PAGE_SHIM_JS = """
     return call('webSignIn', '', options).then(function (result) {
       if (result && result.error) throw new Error(result.error);
       return result ? result.cookies : null;
+    });
+  };
+
+  /**
+   * Ask the user for a file or directory the plugin may use from then on, as
+   * window.showOpenFilePicker / showDirectoryPicker: { mode: 'read' | 'readwrite', types: [{ accept:
+   * { 'text/markdown': ['.md'] } }] }. Resolves with { id, kind, name, mode }; hand the id to the
+   * plugin, which opens it with Pebble.fileSystem.getHandle(id). Rejects with AbortError on cancel,
+   * and NotAllowedError if the user hasn't allowed the plugin ReadFiles / WriteFiles.
+   */
+  function showPicker(kind, options) {
+    options = options || {};
+    var accept = [];
+    (options.types || []).forEach(function (type) {
+      Object.keys((type && type.accept) || {}).forEach(function (mime) { accept.push(mime); });
+    });
+    var request = { kind: kind, mode: options.mode === 'readwrite' ? 'readwrite' : 'read', accept: accept };
+    return call('showFilePicker', '', request).then(function (result) {
+      if (result && result.error) {
+        var refused = new Error(result.error);
+        if (result.code === 'PERMISSION_DENIED') refused.name = 'NotAllowedError';
+        throw refused;
+      }
+      if (!result) {
+        var aborted = new Error('The user aborted a request.');
+        aborted.name = 'AbortError';
+        throw aborted;
+      }
+      return result;
+    });
+  }
+
+  global.Pebble.showOpenFilePicker = function (options) {
+    return showPicker('file', options).then(function (handle) { return [handle]; });
+  };
+
+  global.Pebble.showDirectoryPicker = function (options) { return showPicker('directory', options); };
+
+  global.Pebble.fileSystem = Object.freeze({
+    /** [{ id, kind, name, mode }] the plugin currently holds. */
+    grants: function () {
+      return call('fileGrants').then(function (result) {
+        if (result && result.error) throw new Error(result.error);
+        return result;
+      });
+    },
+    revoke: function (id) {
+      return call('revokeFileGrant', '', { id: String(id) }).then(function (result) {
+        if (result && result.error) throw new Error(result.error);
+      });
+    }
+  });
+
+  /**
+   * Offer to open an http(s) url in the browser. The user sees the full url first; resolves
+   * true if they opened it.
+   */
+  global.Pebble.openUrl = function (url) {
+    return call('openUrl', '', String(url)).then(function (result) {
+      if (result && result.error) throw new Error(result.error);
+      return result === true;
     });
   };
 

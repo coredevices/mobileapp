@@ -2,14 +2,22 @@ package io.rebble.libpebblecommon.js
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.basicAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.http.authority
+import io.ktor.http.isSecure
+import io.ktor.http.takeFrom
 import io.ktor.util.encodeBase64
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
@@ -50,6 +58,8 @@ class XMLHTTPRequestManager(
     private var lastInstance = 0
     private val instances = mutableMapOf<Int, XHRInstance>()
     private val logger = Logger.withTag("XMLHTTPRequestManager")
+    private val noRedirectClientLazy = lazy { client.config { followRedirects = false } }
+    private val noRedirectClient by noRedirectClientLazy
 
     override val methods = listOf(
         "getXHRInstanceID",
@@ -160,19 +170,36 @@ class XMLHTTPRequestManager(
             headers[header] = value
         }
 
-        private fun dispatchError() {
+        /**
+         * Checks network access against both the host in the URL and the host in the headers
+         */
+        private suspend fun checkAccess(url: String, headers: Map<String, Any>): PluginNetworkVerdict {
+            val verdict = networkAccess.check(url, wait = false)
+            if (verdict is PluginNetworkVerdict.Denied) return verdict
+            val hostUrl = hostHeaderUrl(url, headers) ?: return verdict
+            return networkAccess.check(hostUrl, wait = false)
+        }
+
+        private fun dispatchError(notAllowed: Boolean = false) {
+            if (notAllowed) eval("$jsInstance && ($jsInstance._notAllowed = true)")
             changeReadyState(DONE)
             dispatchEvent(XHREvent.Error)
         }
 
         fun send(data: ByteArray?, responseType: String?) {
+            // What was checked is what's sent, whatever open()/setRequestHeader() do meanwhile.
+            val url = url!!
+            val method = method!!
+            val user = user
+            val password = password
+            val headers = headers.toMap()
             suspend fun execute() {
                 if (async) {
                     dispatchEvent(XHREvent.LoadStart)
                 }
                 // Served on the phone, so no network check; interceptors check their own permissions.
-                if (httpInterceptorManager.shouldIntercept(url!!)) {
-                    val response = httpInterceptorManager.onIntercepted(url!!, method!!.value, data?.decodeToString(), appUuid)
+                if (httpInterceptorManager.shouldIntercept(url)) {
+                    val response = httpInterceptorManager.onIntercepted(url, method.value, data?.decodeToString(), appUuid)
                     scope.launch {
                         val responseHeaders = Json.encodeToString<Map<String, String>>(emptyMap())
                         val status = Json.encodeToString(response.status)
@@ -185,26 +212,29 @@ class XMLHTTPRequestManager(
                     }
                     return
                 }
-                val verdict = networkAccess.check(url!!, wait = false)
+                val verdict = checkAccess(url, headers)
                 if (verdict is PluginNetworkVerdict.Denied) {
                     logger.w { "$appUuid blocked: ${verdict.reason}" }
-                    dispatchError()
+                    dispatchError(notAllowed = true)
                     return
                 }
                 val response = try {
-                    client.request {
-                        this.method = this@XHRInstance.method!!
-                        this.url(this@XHRInstance.url!!)
+                    noRedirectClient.requestCheckingRedirects(url, method, headers, ::checkAccess) {
+                        this.method = method
                         if (user != null && password != null) {
-                            basicAuth(user!!, password!!)
+                            basicAuth(user, password)
                         }
                         if (data != null) {
                             setBody(data)
                         }
-                        this@XHRInstance.headers.entries.forEach {
+                        headers.entries.forEach {
                             header(it.key, it.value)
                         }
                     }
+                } catch (e: RedirectDeniedException) {
+                    logger.w { "$appUuid blocked redirect: ${e.message}" }
+                    scope.launch { dispatchError(notAllowed = true) }
+                    return
                 } catch (e: TimeoutCancellationException) {
                     logger.e { "Request timed out: ${e.message}" }
                     scope.launch {
@@ -282,7 +312,60 @@ class XMLHTTPRequestManager(
     override fun close() {
         instances.values.forEach { it.requestJob?.cancel("Closing") }
         instances.clear()
+        if (noRedirectClientLazy.isInitialized()) noRedirectClient.close()
     }
+}
+
+private val REDIRECT_STATUSES = setOf(301, 302, 303, 307, 308)
+private const val MAX_REDIRECTS = 20
+
+internal class RedirectDeniedException(reason: String) : Exception(reason)
+
+/**
+ * Follows redirects the way Ktor's own redirect handling does (GET/HEAD only, no https->http,
+ * Authorization dropped on a host change), but checks each hop as if it were the first request.
+ * The client must not follow redirects itself.
+ */
+internal suspend fun HttpClient.requestCheckingRedirects(
+    url: String,
+    method: HttpMethod,
+    headers: Map<String, Any>,
+    checkAccess: suspend (url: String, headers: Map<String, Any>) -> PluginNetworkVerdict,
+    block: HttpRequestBuilder.() -> Unit,
+): HttpResponse {
+    val origin = Url(url)
+    var target = origin
+    var redirects = 0
+    while (true) {
+        val response = request {
+            block()
+            url(target.toString())
+            if (target.authority != origin.authority) this.headers.remove(HttpHeaders.Authorization)
+        }
+        val location = response.headers[HttpHeaders.Location]
+        if (response.status.value !in REDIRECT_STATUSES || location == null ||
+            (method != HttpMethod.Get && method != HttpMethod.Head) || redirects++ >= MAX_REDIRECTS
+        ) return response
+        val next = URLBuilder(target).apply {
+            parameters.clear()
+            fragment = ""
+            takeFrom(location)
+        }.build()
+        if (target.protocol.isSecure() && !next.protocol.isSecure()) return response
+        val verdict = checkAccess(next.toString(), headers)
+        if (verdict is PluginNetworkVerdict.Denied) throw RedirectDeniedException(verdict.reason)
+        target = next
+    }
+}
+
+/** Internally  */
+internal fun hostHeaderUrl(url: String, headers: Map<String, Any>): String? {
+    val host = headers.entries
+        .firstOrNull { it.key.equals(HttpHeaders.Host, ignoreCase = true) }
+        ?.value?.toString()?.trim()
+        ?.ifEmpty { null }
+        ?: return null
+    return "${url.substringBefore("://")}://$host/"
 }
 
 enum class XHREvent {

@@ -29,6 +29,7 @@ class IndexWebhookSettingsViewModel(
     private val webhookApi: IndexWebhookApi,
     private val runRepository: IndexWebhookRunRepository,
     private val signingSecretStorage: IndexWebhookSigningSecretStorage,
+    private val deliveryQueue: IndexWebhookDeliveryQueue,
 ) : ViewModel() {
 
     private val _gesture = MutableStateFlow<RingGesture?>(null)
@@ -57,6 +58,9 @@ class IndexWebhookSettingsViewModel(
     private val _payloadModeInput = MutableStateFlow(IndexWebhookPayloadMode.RecordingOnly)
     val payloadModeInput = _payloadModeInput.asStateFlow()
 
+    private val _clickPayloadInput = MutableStateFlow("")
+    val clickPayloadInput = _clickPayloadInput.asStateFlow()
+
     private val _signRequestsInput = MutableStateFlow(false)
     val signRequestsInput = _signRequestsInput.asStateFlow()
 
@@ -78,9 +82,11 @@ class IndexWebhookSettingsViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<IndexWebhookRun>())
 
-    /** The other recording gesture, when it has a saved webhook worth copying. */
+    /** Another gesture of the same kind with a saved webhook worth copying. */
     val copyableGesture = combine(_gesture, webhookPreferences.configs) { gesture, configs ->
-        otherGesture(gesture)?.takeIf { configs[it]?.isActive == true }
+        gesture?.let { open ->
+            configs.entries.firstOrNull { it.key != open && it.key.kind == open.kind && it.value.isActive }?.key
+        }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Whether the open gesture has a stored webhook to delete, disabled ones included. */
@@ -145,6 +151,10 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateClickPayload(payload: String) {
+        _clickPayloadInput.value = payload
+    }
+
     fun updateSignRequests(signRequests: Boolean) {
         _signRequestsInput.value = signRequests
     }
@@ -173,11 +183,21 @@ class IndexWebhookSettingsViewModel(
                 headers = draftHeaders(),
                 signRequests = signRequests,
                 signingSecret = signingSecret,
+                clickPayload = _clickPayloadInput.value,
             )
             _testState.value = WebhookTestState.Done(
                 ok = result.ok,
                 label = "${result.status} · ${result.durationMs} ms",
             )
+        }
+    }
+
+    fun retry(run: IndexWebhookRun) {
+        val gesture = _gesture.value ?: return
+        val deliveryId = run.retryDeliveryId ?: return
+        viewModelScope.launch {
+            runRepository.clearRetry(gesture, deliveryId)
+            deliveryQueue.retry(deliveryId)
         }
     }
 
@@ -189,6 +209,7 @@ class IndexWebhookSettingsViewModel(
         val signingSecret = _signingSecretInput.value
         if (signRequests && signingSecret.isBlank()) return
         val payloadMode = _payloadModeInput.value
+        val clickPayload = _clickPayloadInput.value.trim()
         val headers = draftHeaders()
         _saving.value = true
         viewModelScope.launch {
@@ -210,6 +231,7 @@ class IndexWebhookSettingsViewModel(
                             headers = headers,
                             signRequests = signRequests,
                             saved = true,
+                            clickPayload = clickPayload,
                         ),
                     )
                 }
@@ -228,6 +250,7 @@ class IndexWebhookSettingsViewModel(
             .map { WebhookHeaderInput(it.key, it.value) }
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = config.payloadMode
+        _clickPayloadInput.value = config.clickPayload
         _signRequestsInput.value = config.signRequests
         _signingSecretInput.value = ""
         val loadId = ++secretLoadId
@@ -250,7 +273,4 @@ class IndexWebhookSettingsViewModel(
         .map { it.name.trim() to it.value.trim() }
         .filter { it.first.isNotEmpty() }
         .toMap()
-
-    private fun otherGesture(gesture: RingGesture?): RingGesture? =
-        gesture?.let { IndexWebhookPreferences.gestures.firstOrNull { other -> other != it } }
 }

@@ -56,7 +56,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coredevices.ring.service.button.RingGesture
+import coredevices.ring.ui.screens.settings.gestureLabel
 import coredevices.util.relativeTime
 import coredevices.ring.ui.theme.IndexTheme
 import org.koin.compose.viewmodel.koinViewModel
@@ -71,6 +71,7 @@ fun IndexWebhookSheet(
     val urlInput by viewModel.urlInput.collectAsState()
     val headerInputs by viewModel.headerInputs.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
+    val clickPayload by viewModel.clickPayloadInput.collectAsState()
     val signRequests by viewModel.signRequestsInput.collectAsState()
     val signingSecret by viewModel.signingSecretInput.collectAsState()
     val signingSecretLoading by viewModel.signingSecretLoading.collectAsState()
@@ -84,6 +85,7 @@ fun IndexWebhookSheet(
     val colors = IndexTheme.colors
     var revealSigningSecret by remember(openFor) { mutableStateOf(false) }
     val signingReady = !signRequests || signingSecret.isNotBlank()
+    val isClick = openFor.isClick
 
     ModalBottomSheet(
         onDismissRequest = viewModel::closeDialog,
@@ -105,7 +107,7 @@ fun IndexWebhookSheet(
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                "Webhook · ${openFor.gestureLabel()}",
+                "Webhook · ${openFor.gestureLabel}",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -115,7 +117,7 @@ fun IndexWebhookSheet(
                     shape = CircleShape,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 ) {
-                    Text("Copy from ${other.gestureLabel()}", style = MaterialTheme.typography.labelMedium)
+                    Text("Copy from ${other.gestureLabel}", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -140,7 +142,23 @@ fun IndexWebhookSheet(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (isClick) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SectionLabel("Payload (optional)")
+                OutlinedTextField(
+                    value = clickPayload,
+                    onValueChange = viewModel::updateClickPayload,
+                    shape = RoundedCornerShape(8.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    placeholder = { Text("""{"entity_id": "light.desk"}""") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Sent as JSON with the click count. Valid JSON is embedded as-is, anything else as text",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                )
+            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("What to send")
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     IndexWebhookPayloadMode.entries.forEachIndexed { index, mode ->
@@ -342,14 +360,15 @@ fun IndexWebhookSheet(
                 SectionLabel("Recent runs", Modifier.padding(bottom = 4.dp))
                 if (runs.isEmpty()) {
                     Text(
-                        "No runs yet. They'll show up here after your first recording.",
+                        if (isClick) "No runs yet. They'll show up here after your first click."
+                        else "No runs yet. They'll show up here after your first recording.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.outline,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
                 runs.forEach { run ->
-                    RunRow(run)
+                    RunRow(run, onRetry = { viewModel.retry(run) })
                     HorizontalDivider(color = colors.outlineVariant)
                 }
             }
@@ -358,7 +377,7 @@ fun IndexWebhookSheet(
 }
 
 @Composable
-private fun RunRow(run: IndexWebhookRun) {
+private fun RunRow(run: IndexWebhookRun, onRetry: () -> Unit) {
     val colors = IndexTheme.colors
     val color =
         if (run.ok) colors.onSurfaceVariant else colors.error
@@ -395,6 +414,11 @@ private fun RunRow(run: IndexWebhookRun) {
             color = colors.outline,
             maxLines = 1,
         )
+        if (run.retryDeliveryId != null) {
+            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("Retry")
+            }
+        }
     }
 }
 
@@ -421,9 +445,4 @@ private fun IndexWebhookPayloadMode.segmentLabel(): String = when (this) {
     IndexWebhookPayloadMode.RecordingOnly -> "Recording"
     IndexWebhookPayloadMode.TranscriptionOnly -> "Transcription"
     IndexWebhookPayloadMode.Both -> "Both"
-}
-
-private fun RingGesture.gestureLabel(): String = when (this) {
-    RingGesture.ClickHold -> "Double click & hold"
-    else -> "Hold & Talk"
 }

@@ -25,6 +25,8 @@ import coredevices.database.HeartEntity
 import coredevices.database.HeartsDao
 import coredevices.firestore.PebbleUser
 import coredevices.firestore.UsersDao
+import coredevices.libindex.IndexDevices
+import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
@@ -60,8 +62,8 @@ import coredevices.util.PermissionResult
 import coredevices.util.RequiredPermissions
 import coredevices.util.WeatherUnit
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import io.rebble.libpebblecommon.connection.FakeLibPebble
-import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.NotificationApps
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
@@ -75,6 +77,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.files.Path
@@ -135,14 +138,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
     val firmwareUpdateUiTracker = object : FirmwareUpdateUiTracker {
         override fun didFirmwareUpdateCheckFromUi() {}
         override fun shouldUiUpdateCheck(): Boolean = false
-        override fun maybeNotifyFirmwareUpdate(
-            update: FirmwareUpdateCheckResult,
-            identifier: PebbleIdentifier,
-            watchName: String
-        ) {
-        }
-
-        override fun firmwareUpdateIsInProgress(identifier: PebbleIdentifier) {}
+        override fun onConnectedWatch(watch: CommonConnectedDevice) {}
         override fun updateWatchNow(
             libPebble: LibPebble,
             identifier: String
@@ -231,12 +227,12 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 
         override suspend fun addToLegacyLocker(uuid: String): Boolean = true
 
-        override suspend fun fetchAppStoreHome(
+        override fun appStoreHomes(
             type: AppType,
             hardwarePlatform: WatchType?,
             enabledOnly: Boolean,
             useCache: Boolean
-        ): List<AppStoreHomeResult> = emptyList()
+        ): Flow<List<AppStoreHomeResult>> = emptyFlow()
 
         override suspend fun fetchPebbleAppStoreHomes(
             hardwarePlatform: WatchType?,
@@ -271,7 +267,18 @@ private fun fakePebbleModule(appContext: AppContext) = module {
 
     }
     single { LockerViewModel(webServices, storeSourceDao) }
+    single<LibIndex> {
+        object : LibIndex {
+            override val isScanning = MutableStateFlow(false)
+            override fun startScan() {}
+            override fun stopScan() {}
+            override val rings: IndexDevices = MutableStateFlow(emptyList())
+            override fun warnIfNoCompanionAssociations() {}
+            override fun init(bluetoothPermissionChanged: Flow<Boolean>) {}
+        }
+    }
     single { SharedLockerViewModel() }
+    single { TopChartsViewModel(storeSourceDao) }
     single { storeSourceDao } bind AppstoreSourceDao::class
     single { configProvider } bind BootConfigProvider::class
     single { FakeLibPebble() } binds arrayOf(LibPebble::class, NotificationApps::class)
@@ -350,10 +357,14 @@ private fun fakePebbleModule(appContext: AppContext) = module {
             MutableStateFlow(null)
         override val pendingAppSideload: StateFlow<Path?> = MutableStateFlow(null)
         override fun consumePendingAppSideload() {}
+        override val pendingLockerTab: StateFlow<AppType?> = MutableStateFlow(null)
+        override fun consumePendingLockerTab() {}
+        override fun navigateToLockerTab(type: AppType) {}
         override fun consumeRequestIndexCompanion() {}
         override fun confirmPendingFirmwareSideload() {}
         override fun dismissPendingFirmwareSideload() {}
         override fun sideloadFirmware(file: Path) {}
+        override fun openStoreAppLink(url: String): Boolean = false
         override fun showMessage(message: String) {}
         override fun handle(uri: Uri?): Boolean = true
         override fun navigateToTab(route: NavBarRoute) {}

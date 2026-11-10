@@ -97,6 +97,9 @@ import org.koin.compose.koinInject
 import theme.coreOrange
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlin.uuid.Uuid
 
 private val logger = Logger.withTag("LockerUtil")
@@ -419,6 +422,7 @@ data class CommonApp(
     val category: String?,
     val version: String?,
     val listImageUrl: String?,
+    val listImageTintable: Boolean = false,
     val screenshotImageUrl: String?,
     val isCompatible: Boolean,
     val isNativelyCompatible: Boolean,
@@ -493,6 +497,7 @@ fun LockerWrapper.asCommonApp(
         category = properties.category,
         version = properties.version,
         listImageUrl = compatiblePlatform?.listImageUrl ?: anyPlatform?.listImageUrl,
+        listImageTintable = (compatiblePlatform ?: anyPlatform)?.listImageTintable == true,
         screenshotImageUrl = compatiblePlatform?.screenshotImageUrl
             ?: anyPlatform?.screenshotImageUrl,
         // Plugins run on the phone, so they're compatible with any (or no) connected watch.
@@ -574,11 +579,13 @@ fun StoreApplication.asCommonApp(
         category = category,
         version = latestRelease.version,
         listImageUrl = listImage.values.firstOrNull(),
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotImages.firstOrNull()?.values?.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 when {
                     // If store doesn't report binary info, mark as compatible
@@ -635,12 +642,14 @@ fun StoreSearchResult.asCommonApp(
         category = category,
         version = null,
         listImageUrl = listImage,
+        listImageTintable = iconTintable,
         screenshotImageUrl = screenshotPlatform?.screenshots?.firstOrNull()
             ?: screenshotImages.firstOrNull(),
-        isCompatible = compatibility.isCompatible(watchType, platform),
+        isCompatible = appType == AppType.Plugin || compatibility.isCompatible(watchType, platform),
         hearts = hearts,
         description = description,
         isNativelyCompatible = when {
+            appType == AppType.Plugin -> true
             watchType.performsScaling() -> {
                 val platformCompatibility = compatibility.findPlatform(watchType)
                 // Mark as compatible if API doesn't set the field
@@ -672,7 +681,7 @@ fun CommonAppType.canStartApp(): Boolean = when (this) {
 
 /** The listing doesn't say whether the app has PKJS, so assume it does. */
 internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
-    declared = declaredPermissions(usesPermissions, manifestVersion),
+    declared = declaredPermissions(usesPermissions, manifestVersion ?: 1),
     hasPkjs = true,
     hasCompanionApp = companions.android != null || companions.ios != null,
     hasAndroidCompanion = companions.android != null,
@@ -683,6 +692,7 @@ class NativeLockerAddUtil(
     private val libPebble: LibPebble,
     private val pebbleAccountProvider: PebbleAccountProvider,
     private val webServices: PebbleWebServices,
+    private val firestoreLocker: FirestoreLocker,
 ) {
     /** Null if there's nothing to ask. */
     suspend fun review(app: CommonAppType.Store): InstallReview? {
@@ -699,6 +709,11 @@ class NativeLockerAddUtil(
         val storeApp = app.storeApp
         if (storeApp == null || storeApp.uuid == null) {
             logger.w { "storeApp is null or has no uuid" }
+            return false
+        }
+        // Replacing an app from elsewhere is only for AppReplacements, which erases its data first.
+        if (installedElsewhere(libPebble, firestoreLocker, Uuid.parse(storeApp.uuid), source.url) != null) {
+            logger.w { "Not adding ${storeApp.uuid}: it's installed from somewhere else" }
             return false
         }
         val useLegacyLockerApiToAdd = pebbleAccountProvider.isLoggedIn() && source.isRebbleFeed()
@@ -736,6 +751,85 @@ class NativeLockerAddUtil(
         return removed
     }
 }
+
+/** An installed app that a same-UUID app from somewhere else would replace, erasing its data. */
+data class ReplacedApp(
+    val uuid: Uuid,
+    val title: String,
+    val installedSource: AppstoreSource?,
+    val installedFrom: String,
+    val newFrom: String,
+)
+
+class AppReplacements(
+    private val libPebble: LibPebble,
+    private val firestoreLocker: FirestoreLocker,
+    private val appstoreSourceDao: AppstoreSourceDao,
+    private val nativeLockerAddUtil: NativeLockerAddUtil,
+) {
+    /** Whether [check] can tell where an installed [uuid] came from: its store is only known once the locker has loaded. */
+    fun canCheck(uuid: Uuid): Flow<Boolean> =
+        combine(libPebble.getLockerApp(uuid), firestoreLocker.locker) { installed, locker ->
+            installed !is LockerWrapper.NormalApp || installed.sideloaded || locker != null
+        }
+
+    /** [newSource] is null for a sideload. Null if nothing is installed, or it came from the same place. */
+    suspend fun check(uuid: Uuid, newSource: AppstoreSource?): ReplacedApp? {
+        val (installed, installedSourceUrl) = installedElsewhere(libPebble, firestoreLocker, uuid, newSource?.url) ?: return null
+        val installedSource = appstoreSourceDao.getAllSources().first().firstOrNull { it.url == installedSourceUrl }
+        val installedFrom = when (installedSourceUrl) {
+            null -> SIDELOADED
+            UNKNOWN_SOURCE -> "an app store"
+            else -> installedSource?.title ?: installedSourceUrl
+        }
+        return ReplacedApp(uuid, installed.properties.title, installedSource, installedFrom, newSource?.title ?: SIDELOADED)
+    }
+
+    /**
+     * Removes [replaced] with its data, then runs [then]. Removing a sideload can bring back the user's
+     * store copy of it, which goes to [onStillInstalled] instead. Outlives the calling screen: removing
+     * waits for the watch.
+     */
+    fun replace(
+        replaced: ReplacedApp,
+        newSource: AppstoreSource?,
+        snackbars: SnackbarDisplay,
+        onStillInstalled: (ReplacedApp) -> Unit,
+        onFailed: () -> Unit = {},
+        then: suspend () -> Unit,
+    ) {
+        GlobalScope.launch {
+            snackbars.showSnackbar("Removing ${replaced.title}")
+            if (!nativeLockerAddUtil.removeFromLocker(replaced.installedSource, replaced.uuid)) {
+                snackbars.showSnackbar("Couldn't remove ${replaced.title}")
+                onFailed()
+                return@launch
+            }
+            val stillInstalled = check(replaced.uuid, newSource)
+            if (stillInstalled == null) then() else onStillInstalled(stillInstalled)
+        }
+    }
+
+}
+
+private const val UNKNOWN_SOURCE = ""
+private const val SIDELOADED = "a sideloaded file"
+
+/** The installed [uuid] and the URL of its store, if it came from somewhere other than [newSourceUrl] (null: a sideload). */
+private suspend fun installedElsewhere(
+    libPebble: LibPebble,
+    firestoreLocker: FirestoreLocker,
+    uuid: Uuid,
+    newSourceUrl: String?,
+): Pair<LockerWrapper.NormalApp, String?>? {
+    val installed = libPebble.getLockerApp(uuid).first() as? LockerWrapper.NormalApp ?: return null
+    val installedSourceUrl = installedSourceUrl(uuid, installed.sideloaded, firestoreLocker.locker.value)
+    return (installed to installedSourceUrl).takeIf { installedSourceUrl != newSourceUrl }
+}
+
+/** Null for a sideloaded app; a store the locker doesn't name matches no store. */
+internal fun installedSourceUrl(uuid: Uuid, sideloaded: Boolean, locker: List<FirestoreLockerEntry>?): String? =
+    if (sideloaded) null else locker?.firstOrNull { it.uuid == uuid }?.appstoreSource ?: UNKNOWN_SOURCE
 
 fun CommonApp.showOnMainLockerScreen(): Boolean = when (commonAppType) {
     is CommonAppType.Locker, is CommonAppType.Store -> true

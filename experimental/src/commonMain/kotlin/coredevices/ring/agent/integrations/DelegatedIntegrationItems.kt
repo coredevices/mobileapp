@@ -48,6 +48,19 @@ class DelegatingNoteIntegration(
     }
 }
 
+/** Wraps an external agent integration so each delivered message also records a delegated item. */
+class DelegatingAgentIntegration(
+    private val delegate: AgentIntegration,
+    private val integrationTitle: String,
+    private val items: DelegatedIntegrationItems,
+) : AgentIntegration by delegate {
+    override suspend fun sendToAgent(message: String, chatId: String?, source: ItemSource?): String {
+        val ack = delegate.sendToAgent(message, chatId, source)
+        items.record(integrationTitle, message, source)
+        return ack
+    }
+}
+
 /** Wraps an external reminder integration so each successful create also records a delegated item. */
 class DelegatingReminderIntegration(
     private val delegate: ReminderIntegration,

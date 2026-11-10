@@ -5,13 +5,16 @@ import coredevices.indexai.data.McpServerDefinition
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
+import coredevices.ring.agent.builtin_servlets.clock.IOS_26_REQUIRED_REASON
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
 import coredevices.ring.agent.pebble_plugin.FakePlugin
 import coredevices.ring.agent.pebble_plugin.PluginGrant
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.Plugin
 import io.rebble.libpebblecommon.plugin.SourceDeclaration
+import io.rebble.libpebblecommon.plugin.WatchStatePlugin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -37,7 +40,9 @@ class IndexActionsRepositoryTest {
         calendarConnected: Boolean = true,
         beeperUnavailable: String? = null,
         plugins: List<Plugin> = emptyList(),
+        watchPaired: Boolean = true,
     ) {
+        val watch = MutableStateFlow(watchPaired)
         val calendar = MutableStateFlow(calendarConnected)
         val beeper = MutableStateFlow(beeperUnavailable)
         val installed = plugins.toMutableList()
@@ -53,14 +58,21 @@ class IndexActionsRepositoryTest {
             localAgentOnly = MutableStateFlow(localAgentOnly),
             calendarConnected = calendar,
             beeperUnavailable = beeper,
-            installedPlugins = { installed.toList() },
+            installedPlugins = { installed.map { it.metadata } },
             disabledPlugins = { disabledPlugins.getValue(it) },
             persistPluginGrantEnabled = { uuid, grant, enabled ->
                 val flow = disabledPlugins.getValue(grant)
                 flow.value = if (enabled) flow.value - uuid else flow.value + uuid
             },
+            watchPaired = watch,
         )
     }
+
+    private val watchState = FakePlugin(
+        actions = listOf(ActionDeclaration(name = "launch_app")),
+        name = "Watch State",
+        pluginUuid = WatchStatePlugin.BUILT_IN_WATCH_STATE_UUID,
+    )
 
     private val thingsUuid = Uuid.parse("00000000-0000-0000-0002-000000000001")
     private val things = FakePlugin(
@@ -88,22 +100,25 @@ class IndexActionsRepositoryTest {
         val ios = builtinServletDefinitions(isAndroid = false).associateBy { it.name }
 
         assertEquals(android.keys, ios.keys)
-        assertTrue(ClockServlet.name in ios)
         assertTrue(MessagingServlet.name in ios)
 
-        assertNull(android.getValue(ClockServlet.name).unavailableReason)
         assertNull(android.getValue(MessagingServlet.name).unavailableReason)
-        assertEquals(ANDROID_ONLY_REASON, ios.getValue(ClockServlet.name).unavailableReason)
         assertEquals(ANDROID_ONLY_REASON, ios.getValue(MessagingServlet.name).unavailableReason)
+        assertNull(android.getValue(ClockServlet.name).unavailableReason)
+        assertTrue(ios.getValue(ClockServlet.name).available)
         assertTrue(ios.getValue(NoteServlet.NAME).available)
+
+        val olderIos = builtinServletDefinitions(isAndroid = false, clockUnavailableReason = IOS_26_REQUIRED_REASON)
+            .associateBy { it.name }
+        assertEquals(IOS_26_REQUIRED_REASON, olderIos.getValue(ClockServlet.name).unavailableReason)
     }
 
     @Test
     fun androidOnlyActionsSurfaceTheirReasonOnIos() = runTest {
         val actions = Fixture(isAndroid = false).repo.actions.first()
-        val clock = actions.single { it.name == ClockServlet.name }
-        assertEquals(ANDROID_ONLY_REASON, clock.disabledReason)
-        assertEquals(false, clock.enabled)
+        val messaging = actions.single { it.name == MessagingServlet.name }
+        assertEquals(ANDROID_ONLY_REASON, messaging.disabledReason)
+        assertEquals(false, messaging.enabled)
     }
 
     @Test
@@ -153,6 +168,19 @@ class IndexActionsRepositoryTest {
 
         fixture.calendar.value = true
         assertNull(fixture.repo.actions.first().single { it.name == CalendarServlet.NAME }.disabledReason)
+    }
+
+    @Test
+    fun replyToNotificationsFollowsWhetherAPebbleIsPaired() = runTest {
+        val fixture = Fixture(isAndroid = true, watchPaired = false)
+        suspend fun reason() =
+            fixture.repo.actions.first().single { it.name == NotificationReplyServlet.NAME }.disabledReason
+
+        assertEquals(NO_PEBBLE_REASON, reason())
+        fixture.watch.value = true
+        assertNull(reason())
+        fixture.watch.value = false
+        assertEquals(NO_PEBBLE_REASON, reason())
     }
 
     @Test
@@ -276,5 +304,37 @@ class IndexActionsRepositoryTest {
         fixture.installed += things
         fixture.repo.refreshPlugins()
         assertEquals(listOf("Things"), fixture.repo.plugins.first().map { it.title })
+    }
+
+    @Test
+    fun watchPluginsAreHiddenUntilAWatchIsPaired() = runTest {
+        val fixture = Fixture(isAndroid = true, plugins = listOf(things, watchState), watchPaired = false)
+        assertEquals(listOf("Things"), fixture.repo.plugins.first().map { it.title })
+
+        fixture.watch.value = true
+        assertEquals(listOf("Things", "Watch State"), fixture.repo.plugins.first().map { it.title })
+    }
+
+    @Test
+    fun grantedPluginsFollowTheGrantOfferedTheDisabledSetAndTheWatch() = runTest {
+        val fixture = Fixture(
+            isAndroid = true,
+            plugins = listOf(things, weather, both, empty, watchState),
+            watchPaired = false,
+        )
+        val repo = fixture.repo
+
+        assertEquals(listOf("Things", "Home"), repo.grantedPlugins(PluginGrant.Actions).first().map { it.name })
+        assertEquals(listOf("Weather", "Home"), repo.grantedPlugins(PluginGrant.Sources).first().map { it.name })
+
+        repo.setPluginGrantEnabled(both.pluginUuid, PluginGrant.Actions, false)
+        assertEquals(listOf("Things"), repo.grantedPlugins(PluginGrant.Actions).first().map { it.name })
+        assertEquals(listOf("Weather", "Home"), repo.grantedPlugins(PluginGrant.Sources).first().map { it.name })
+
+        fixture.watch.value = true
+        assertEquals(
+            listOf("Things", "Watch State"),
+            repo.grantedPlugins(PluginGrant.Actions).first().map { it.name },
+        )
     }
 }

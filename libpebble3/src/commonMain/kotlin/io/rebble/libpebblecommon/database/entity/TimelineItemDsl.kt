@@ -13,6 +13,8 @@ import kotlin.uuid.Uuid
 class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     private var attributes = listOf<BaseAttribute>()
     var internalType: String? = null
+    var pluginAction: PluginActionRef? = null
+    var internalData: String? = null
 
     fun attributes(block: AttributesListBuilder.() -> Unit) {
         val builder = AttributesListBuilder()
@@ -21,7 +23,7 @@ class ActionBuilder(val actionId: UByte, val type: TimelineItem.Action.Type) {
     }
 
     fun build(): BaseAction {
-        return BaseAction(actionId, type, attributes, internalType)
+        return BaseAction(actionId, type, attributes, internalType, pluginAction, internalData)
     }
 }
 
@@ -109,7 +111,7 @@ class AttributesListBuilder internal constructor() {
     }
 
     fun cannedResponse(block: () -> List<String>) {
-        stringList(TimelineAttribute.CannedResponse, block)
+        stringList(TimelineAttribute.CannedResponse) { trimCannedResponses(block()) }
     }
 
     fun sender(block: () -> String) {
@@ -194,6 +196,10 @@ class FlagsBuilder internal constructor() {
 
     fun persistQuickView() {
         flags.add(TimelineItem.Flag.PERSIST_QUICK_VIEW)
+    }
+
+    fun silent() {
+        flags.add(TimelineItem.Flag.SILENT)
     }
 
     internal fun build(): List<TimelineItem.Flag> {
@@ -310,4 +316,20 @@ sealed class TimelineItemContainerBuilder {
             actions = actions,
         )
     }
+}
+
+private const val MAX_CANNED_RESPONSE_BYTES = 512
+
+/**
+ * Trim the list to fit within the firmware's 512-byte serialized limit
+ * (strings joined by NUL, encoded as UTF-8). Drops items from the end first.
+ */
+private fun trimCannedResponses(responses: List<String>): List<String> {
+    var result = responses
+    while (result.isNotEmpty()) {
+        val serializedSize = result.joinToString("\u0000").encodeToByteArray().size
+        if (serializedSize <= MAX_CANNED_RESPONSE_BYTES) break
+        result = result.dropLast(1)
+    }
+    return result
 }

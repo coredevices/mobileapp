@@ -35,6 +35,9 @@ object PebbleRoutes {
     ) : CoreRoute
 }
 
+fun CommonRoutes.LockerAppRoute.toNavBarRoute(): PebbleNavBarRoutes.LockerAppRoute =
+    PebbleNavBarRoutes.LockerAppRoute(uuid = uuid, storedId = null, storeSource = null)
+
 @Stable
 interface NavBarNav {
     fun navigateTo(route: CoreRoute)
@@ -96,7 +99,22 @@ object PebbleNavBarRoutes {
     data object WeatherRoute : NavBarRoute
 
     @Serializable
+    data object ComplicationsRoute : NavBarRoute
+
+    @Serializable
+    data object PreferredSourcesRoute : NavBarRoute
+
+    @Serializable
+    data object PermissionUsageRoute : NavBarRoute
+
+    @Serializable
+    data class PermissionHoldersRoute(val permission: String) : NavBarRoute
+
+    @Serializable
     data object CannedRepliesRoute : NavBarRoute
+
+    @Serializable
+    data object NavBarTabsRoute : NavBarRoute
 
     @Serializable
     data class AppNotificationViewerRoute(val packageName: String, val channelId: String?) :
@@ -112,10 +130,20 @@ object PebbleNavBarRoutes {
     data class MyCollectionRoute(val appType: String) : NavBarRoute
 
     @Serializable
+    data class TopChartsRoute(val sourceId: Int, val appType: String) : NavBarRoute
+
+    @Serializable
     data object OfflineModelsRoute : NavBarRoute
 
     @Serializable
     data class WatchSettingsCategoryRoute(val section: String, val topLevelType: String) : NavBarRoute
+
+    /** [uuid] reads the installed pbw; [pbwUrl] fetches a store app's. */
+    @Serializable
+    data class NativePluginRoute(val uuid: String) : NavBarRoute
+
+    @Serializable
+    data class PluginSourceRoute(val uuid: String?, val pbwUrl: String?, val script: String, val title: String) : NavBarRoute
 }
 
 inline fun <reified T : Any> NavGraphBuilder.composableWithAnimations(
@@ -234,6 +262,15 @@ fun NavGraphBuilder.addNavBarRoutes(
             appType = route.appType?.let { AppType.fromString(it) },
         )
     }
+    composableWithAnimations<PebbleNavBarRoutes.TopChartsRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TopChartsRoute = it.toRoute()
+        TopChartsScreen(
+            navBarNav = nav,
+            topBarParams = topBarParams,
+            sourceId = route.sourceId,
+            type = AppType.fromString(route.appType) ?: AppType.Watchface,
+        )
+    }
     composableWithAnimations<PebbleNavBarRoutes.MyCollectionRoute>(viewModel) {
         val route: PebbleNavBarRoutes.MyCollectionRoute = it.toRoute()
         MyCollectionScreen(
@@ -248,8 +285,24 @@ fun NavGraphBuilder.addNavBarRoutes(
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
     }
+    composable<PebbleNavBarRoutes.ComplicationsRoute> {
+        ComplicationsScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PreferredSourcesRoute> {
+        PreferredSourcesScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PermissionUsageRoute> {
+        PermissionUsageScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
+        val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()
+        PermissionHoldersScreen(nav, topBarParams, route.permission)
+    }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
         CannedRepliesScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.NavBarTabsRoute> {
+        NavBarTabsScreen(topBarParams)
     }
     composable<PebbleNavBarRoutes.AppstoreSettingsRoute> {
         val route: PebbleNavBarRoutes.AppstoreSettingsRoute = it.toRoute()
@@ -265,6 +318,20 @@ fun NavGraphBuilder.addNavBarRoutes(
             topBarParams,
             Section.valueOf(route.section),
             TopLevelType.valueOf(route.topLevelType),
+        )
+    }
+    composableWithAnimations<PebbleNavBarRoutes.NativePluginRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.NativePluginRoute = it.toRoute()
+        NativePluginScreen(nav, topBarParams, Uuid.parse(route.uuid))
+    }
+    composableWithAnimations<PebbleNavBarRoutes.PluginSourceRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.PluginSourceRoute = it.toRoute()
+        PluginSourceScreen(
+            topBarParams = topBarParams,
+            uuid = route.uuid?.let { id -> Uuid.parse(id) },
+            pbwUrl = route.pbwUrl,
+            script = route.script,
+            title = route.title,
         )
     }
 }

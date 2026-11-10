@@ -2,6 +2,8 @@ package io.rebble.libpebblecommon.js
 
 import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import io.rebble.libpebblecommon.connection.AppContext
@@ -55,8 +57,18 @@ actual class JsEngine actual constructor(
             override fun onPageFinished(v: WebView?, url: String?) {
                 if (cont.isActive) cont.resume(Unit)
             }
+
+            // A plugin reaches the network only through its bridged XMLHttpRequest/WebSocket.
+            override fun shouldInterceptRequest(v: WebView?, request: WebResourceRequest?): WebResourceResponse =
+                if (request?.isForMainFrame == true && request.url.toString() == BASE_URL) {
+                    WebResourceResponse("text/html", "utf-8", 200, "OK", mapOf("Content-Security-Policy" to CSP), PAGE_HTML.byteInputStream())
+                } else {
+                    WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", emptyMap(), null)
+                }
+
+            override fun shouldOverrideUrlLoading(v: WebView?, request: WebResourceRequest?) = true
         }
-        view.loadDataWithBaseURL(BASE_URL, "<html><body></body></html>", "text/html", "utf-8", null)
+        view.loadUrl(BASE_URL)
     }
 
     private suspend fun WebView.evalSuspend(js: String) = suspendCancellableCoroutine { cont ->
@@ -67,7 +79,7 @@ actual class JsEngine actual constructor(
      * Arguments cross as JSON and come back out shaped like JavaScriptCore's — every number a
      * Double — so [JsEngineInterface] implementations don't have to know which engine they're on.
      */
-    private class Dispatcher(interfaces: List<JsEngineInterface>) {
+    internal class Dispatcher(interfaces: List<JsEngineInterface>) {
         private val byName = interfaces.associateBy { it.name }
 
         @JavascriptInterface
@@ -94,11 +106,16 @@ actual class JsEngine actual constructor(
         }
     }
 
-    private companion object {
+    internal companion object {
         const val DISPATCH_NAMESPACE = "__jsEngineDispatch"
 
         // Scripts never load remote content; the origin only has to be stable and non-null.
-        const val BASE_URL = "https://plugin.localhost/"
+        private const val BASE_URL = "https://plugin.localhost/"
+
+        // Inherited by any iframe the script makes, so a fresh realm's fetch/WebSocket is blocked too.
+        // evaluateJavascript isn't subject to script-src.
+        private const val CSP = "default-src 'none'; script-src 'unsafe-eval'; form-action 'none'; base-uri 'none'; sandbox allow-scripts"
+        private const val PAGE_HTML = """<html><head><meta http-equiv="x-dns-prefetch-control" content="off"></head><body></body></html>"""
 
         fun JsEngineInterface.proxyJs(): String {
             val methodList = methods.joinToString(",") { "'$it'" }
@@ -123,12 +140,12 @@ actual class JsEngine actual constructor(
          * on both platforms rather than only on iOS. `document` goes too — an iframe would
          * otherwise hand back pristine copies of all of it.
          */
-        val LOCKDOWN_JS = """
+        private val LOCKDOWN_JS = """
             (function (global) {
               var blocked = [
                 'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'Worker', 'SharedWorker',
                 'ServiceWorker', 'importScripts', 'postMessage', 'BroadcastChannel',
-                'RTCPeerConnection', 'Audio', 'AudioContext', 'webkitAudioContext', 'Image',
+                'RTCPeerConnection', 'webkitRTCPeerConnection', 'Audio', 'AudioContext', 'webkitAudioContext', 'Image',
                 'Notification', 'navigator', 'document', 'indexedDB', 'openDatabase', 'caches',
                 'sessionStorage', 'localStorage', 'alert', 'confirm', 'prompt', 'open', 'print',
                 'requestAnimationFrame', 'MutationObserver', 'FileReader', 'Bluetooth',
