@@ -119,6 +119,10 @@ Always use imports where possible, rather than fully-qualified references in the
 
 Never write checks like "firmwareVersion > 1.2.3". Either use a capability bit, or don't do the check. New preferences do not warrant capability bits (they are ignored by firmware if unknown)
 
+### 14. Duration
+
+Use kotlin.time.Duration whenever possible (i.e. not milliseconds express as a long)
+
 ## Useful references
 
 - Public-facing setup steps (iOS prerequisites, Firebase, signing): `README.md`.

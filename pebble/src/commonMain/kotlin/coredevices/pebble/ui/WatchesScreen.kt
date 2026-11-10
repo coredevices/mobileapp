@@ -1774,10 +1774,15 @@ data class TestNotificationContent(
     val color: TimelineColor? = TimelineColor.Orange,
 )
 
+@Composable
 fun ConnectedPebbleDevice.languagePackInstalled(repository: LanguagePackRepository): String? {
+    val manifest by repository.manifest.collectAsState()
     val languagePackInstalledAtConnectionTime = installedLanguagePack
+    val installedName = remember(languagePackInstalledAtConnectionTime, manifest) {
+        languagePackInstalledAtConnectionTime?.let { repository.displayNameForInstalled(it) }
+    }
     val languagePackRecentlyInstalledSinceConnection = (languagePackInstallState as? LanguagePackInstallState.Idle)?.activeLanguage
-    return languagePackRecentlyInstalledSinceConnection ?: languagePackInstalledAtConnectionTime?.let { repository.displayNameForInstalled(it) }
+    return languagePackRecentlyInstalledSinceConnection ?: installedName
 }
 
 private const val CUSTOM_NOTIFICATION_CONTENT_KEY = "custom_notification_content"

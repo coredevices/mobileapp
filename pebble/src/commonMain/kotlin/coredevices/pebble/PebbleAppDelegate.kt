@@ -13,6 +13,7 @@ import coredevices.pebble.firmware.FIRMWARE_UPDATE_NOW_WATCH_ACTION
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.BundledAppMigration
+import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
 import coredevices.pebble.services.PebbleWebServices
@@ -75,6 +76,7 @@ class PebbleAppDelegate(
     private val preferencesPlugin: PreferencesPlugin,
     private val permissionRequestNotifier: PermissionRequestNotifier,
     private val bundledAppMigration: BundledAppMigration,
+    private val languagePackRepository: LanguagePackRepository,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
 
@@ -94,6 +96,9 @@ class PebbleAppDelegate(
             // notification listener is created.
             // iOS waits until onboarding is done (see below)
             libPebble.init()
+        }
+        GlobalScope.launch {
+            languagePackRepository.init()
         }
         GlobalScope.launch {
             appstoreSourceInitializer.initAppstoreSourcesDB()
@@ -281,6 +286,9 @@ class PebbleAppDelegate(
             },
             scope.launch {
                 analyticsHeartbeatQueue.uploadPendingFromDb()
+            },
+            scope.launch {
+                languagePackRepository.syncManifest()
             },
         )
         jobs.joinAll()
