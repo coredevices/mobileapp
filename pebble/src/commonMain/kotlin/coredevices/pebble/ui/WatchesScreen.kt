@@ -168,6 +168,7 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDeviceInRecovery
 import io.rebble.libpebblecommon.connection.ConnectingPebbleDevice
 import io.rebble.libpebblecommon.connection.ConnectionFailureReason
+import io.rebble.libpebblecommon.connection.PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS
 import io.rebble.libpebblecommon.connection.DisconnectingPebbleDevice
 import io.rebble.libpebblecommon.connection.DiscoveredPebbleDevice
 import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
@@ -2169,6 +2170,16 @@ fun WatchDetails(
                     "If it still won't connect, open Bluetooth settings, " +
                     "remove (\"Forget\") this watch, and also unpair the phone " +
                     "in watch settings (Settings > Bluetooth), then accept the new pairing request.",
+        )
+    }
+    if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.PeripheralNotFound && failureInfo.times >= PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS) {
+        ConnectionFailureGuidanceButton(
+            appContext = appContext,
+            pebbleFeatures = pebbleFeatures,
+            buttonText = "Can't find watch",
+            dialogTitle = "Can't find watch",
+            dialogText = "Your phone can't find this watch. Forget it in this app, remove (\"Forget\") it " +
+                    "in your phone's Bluetooth settings, then pair it again.",
         )
     }
     if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.MalformedConnectivityStatus) {
