@@ -76,7 +76,7 @@ class PutBytesService(
      * Initializes a PutBytes session on the device for transferring 3.x+ app data
      */
     suspend fun initAppSession(appId: UInt, size: UInt, type: ObjectType): PutBytesResponse =
-        sendAndAwaitAck(PutBytesAppInit(size, type, appId))
+        sendAndAwaitAck(PutBytesAppInit(size, type, appId), timeout = 45.seconds)
 
     /**
      * Sends a chunk of data to the watch
