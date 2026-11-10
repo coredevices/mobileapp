@@ -125,6 +125,7 @@ fun SettingsBeeperContactsDialog(
         onDismissRequest = {
             if (isAddMode) isAddMode = false else onDismissRequest()
         },
+        scrollableContent = true,
         icon = { Icon(Icons.Outlined.Contacts, null) },
         title = { Text(if (isAddMode) "Add Contact" else "Allowed Contacts") },
         buttons = {
