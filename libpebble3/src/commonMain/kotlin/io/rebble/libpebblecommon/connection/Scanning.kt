@@ -61,7 +61,7 @@ class RealScanning(
         bleScanJob?.cancel()
         // Adapter is on but the BLE scan stack isn't ready — on Android <12 this means
         // location services are off, which is required for BLE scanning by the OS.
-        if (bluetoothStateProvider.state.value.enabled() && !bluetoothStateProvider.scanningAvailable.value) {
+        if (bluetoothStateProvider.state.value.enabled() && !bluetoothStateProvider.scanningAvailable()) {
             Logger.w("Ble scan blocked: adapter enabled but scanning unavailable (likely location services)")
             errorTracker.reportError(UserFacingError.FailedToScan("Enable location services to scan for new watches"))
             return

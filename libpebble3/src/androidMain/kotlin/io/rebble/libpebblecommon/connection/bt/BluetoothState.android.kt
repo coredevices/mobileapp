@@ -6,6 +6,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.AppContext
 import kotlinx.coroutines.channels.awaitClose
@@ -15,7 +19,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val logger = Logger.withTag("nativeBluetoothStateFlow")
 
-actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState>? = callbackFlow {
+actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState> = callbackFlow {
     val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
 
     fun currentState(): BluetoothState =
@@ -36,3 +40,9 @@ actual fun nativeBluetoothStateFlow(appContext: AppContext): Flow<BluetoothState
         appContext.context.unregisterReceiver(receiver)
     }
 }.distinctUntilChanged()
+
+actual fun locationServicesBlockScanning(appContext: AppContext): Boolean {
+    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) return false
+    val locationManager = ContextCompat.getSystemService(appContext.context, LocationManager::class.java) ?: return false
+    return !LocationManagerCompat.isLocationEnabled(locationManager)
+}

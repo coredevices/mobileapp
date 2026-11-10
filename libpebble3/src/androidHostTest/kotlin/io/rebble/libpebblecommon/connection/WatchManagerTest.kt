@@ -186,8 +186,7 @@ class WatchManagerTest {
         override val state: StateFlow<BluetoothState> =
             MutableStateFlow(BluetoothState.Enabled).asStateFlow()
 
-        override val scanningAvailable: StateFlow<Boolean> =
-            MutableStateFlow(true).asStateFlow()
+        override fun scanningAvailable(): Boolean = true
     }
     private val scanning = object : Scanning {
         override val bluetoothEnabled: StateFlow<BluetoothState>
