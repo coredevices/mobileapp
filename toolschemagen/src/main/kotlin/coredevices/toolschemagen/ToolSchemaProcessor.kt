@@ -72,9 +72,9 @@ class ToolSchemaProcessor(private val environment: SymbolProcessorEnvironment) :
 
     private fun KSClassDeclaration.toToolModel(): ToolModel? {
         val definition = annotation(TOOL_DEFINITION) ?: return null
-        // The default, Nothing, has no annotated properties either.
-        val output = (definition.arguments.first { it.name?.asString() == "output" }.value as KSType)
-            .declaration as? KSClassDeclaration
+        // Absent when defaulted on some targets (iosArm64). The default, Nothing, has no annotated properties either.
+        val output = (definition.arguments.firstOrNull { it.name?.asString() == "output" }?.value as? KSType)
+            ?.declaration as? KSClassDeclaration
         return ToolModel(
             servlet = definition.string("servlet"),
             name = definition.string("name"),
