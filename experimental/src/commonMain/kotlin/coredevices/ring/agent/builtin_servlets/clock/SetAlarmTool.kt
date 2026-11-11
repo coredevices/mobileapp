@@ -6,44 +6,15 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import kotlinx.datetime.LocalTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 
 class SetAlarmTool : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "time_hours" to JsonObject(
-                        mapOf(
-                            "type" to "number",
-                            "description" to "The hour component of the alarm time (24 hour time)"
-                        ).toJson()
-                    ),
-                    "time_minutes" to JsonObject(
-                        mapOf(
-                            "type" to "number",
-                            "description" to "The minute component of the alarm time (0-59)"
-                        ).toJson()
-                    ),
-                    "label" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "An optional label or title for the alarm"
-                        ).toJson()
-                    ),
-                )
-            ),
-            required = listOf("time_hours", "time_minutes")
-        )
-    ),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
         Only call 'set_alarm' with a time the user actually said. If the alarm time is missing from the request, do not call this tool and do not guess a time.
     """.trimIndent()
@@ -55,13 +26,17 @@ class SetAlarmTool : BuiltInMcpTool(
         const val TOOL_DESCRIPTION = "Set an alarm for a specific clock time like 8am or 16:30."
     }
 
+    @ToolDefinition(servlet = CLOCK_SERVLET_NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     private data class SetAlarmArgs(
         @SerialName("time_hours")
+        @ToolParam("The hour component of the alarm time (24 hour time)")
         val timeHours: Int,
         @SerialName("time_minutes")
+        @ToolParam("The minute component of the alarm time (0-59)")
         val timeMinutes: Int,
-        val label: String? = null
+        @ToolParam("An optional label or title for the alarm")
+        val label: String? = null,
     )
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {

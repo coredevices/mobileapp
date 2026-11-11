@@ -1,6 +1,7 @@
 package coredevices.ring.agent
 
 import coredevices.indexai.agent.ServletRepository
+import coredevices.ring.agent.toolschema.localModelSchemaCheckpoint
 import coredevices.indexai.data.McpServerDefinition
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
@@ -159,7 +160,7 @@ internal fun McpServerDefinition.toIndexAction(
     title = title,
     enabled = enabled && unavailableReason == null,
     disabledReason = unavailableReason
-        ?: LOCAL_MODEL_REASON.takeIf { localAgentOnly && name in LOCAL_MODEL_UNSUPPORTED_SERVLETS }
+        ?: LOCAL_MODEL_REASON.takeIf { localAgentOnly && name in localModelSchemaCheckpoint.excludedServlets }
         ?: NOT_CONNECTED_REASON.takeIf { name == CalendarServlet.NAME && !calendarConnected }
         ?: beeperUnavailable?.takeIf { name == MessagingServlet.name }
         ?: NO_PEBBLE_REASON.takeIf { name == NotificationReplyServlet.NAME && !watchPaired },

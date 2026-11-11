@@ -68,6 +68,10 @@ abstract class ToolCallingAgent(
         assistantMessage: ConversationMessageDocument
     ): List<AgentToolCall>
 
+    /** What this agent declares to its model out of the session's [tools], for [AgentIteration]. */
+    protected open fun declaredTools(tools: List<McpSessionTool>): List<ToolDeclarationRecord> =
+        tools.map { ToolDeclarationRecord(it.integrationName, it.tool.definition) }
+
     /** Lifecycle prep before a run. */
     protected open suspend fun prepare() {}
 
@@ -110,7 +114,7 @@ abstract class ToolCallingAgent(
         _iterations.emit(
             AgentIteration(
                 agent = label,
-                toolDeclarations = tools.map { ToolDeclarationRecord(it.integrationName, it.tool.definition) },
+                toolDeclarations = declaredTools(tools),
                 conversation = history,
             )
         )

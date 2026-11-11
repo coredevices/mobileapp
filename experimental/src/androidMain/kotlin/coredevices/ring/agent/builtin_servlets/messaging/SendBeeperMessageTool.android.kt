@@ -4,28 +4,24 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
 import coredevices.ring.database.Preferences
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import androidx.core.net.toUri
 
 actual class SendBeeperMessageTool : BuiltInMcpTool(
-    definition = Tool(
-        name = SendBeeperMessageToolConstants.TOOL_NAME,
-        description = SendBeeperMessageToolConstants.TOOL_DESCRIPTION,
-        inputSchema = SendBeeperMessageToolConstants.INPUT_SCHEMA
-    ),
+    definition = builtinToolDefinitions.getValue(SendBeeperMessageToolConstants.TOOL_NAME),
     extraContext = "If the user explicitly requests sending a message, use the " +
             "send_instant_message tool. For example, any request starting with 'send a message to'."
 ), KoinComponent {

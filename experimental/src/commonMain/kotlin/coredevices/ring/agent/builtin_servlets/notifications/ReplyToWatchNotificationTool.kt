@@ -6,35 +6,18 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import io.rebble.libpebblecommon.connection.DisplayedNotificationReplyResult
 import io.rebble.libpebblecommon.connection.NotificationReplies
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import kotlin.time.Clock
+import kotlinx.serialization.Serializable
 
 class ReplyToWatchNotificationTool(
     private val notificationReplies: NotificationReplies,
 ) : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "text" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The reply to send, quoted from what the user said after 'reply'"
-                        ).toJson()
-                    )
-                )
-            ),
-            required = listOf("text")
-        )
-    ),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = "When the user's request starts with 'reply' (e.g. 'reply on my way'), call " +
         "'$TOOL_NAME' with the rest of the request as the text, rather than any other messaging tool."
 ) {
@@ -45,8 +28,12 @@ class ReplyToWatchNotificationTool(
             "Reply to the notification currently shown on the user's Pebble watch. Use when the user says 'reply ...'."
     }
 
+    @ToolDefinition(servlet = NotificationReplyServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
-    private data class ReplyArgs(val text: String)
+    private data class ReplyArgs(
+        @ToolParam("The reply to send, quoted from what the user said after 'reply'")
+        val text: String,
+    )
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         val text = JsonSnake.decodeFromString<ReplyArgs>(jsonInput).text.trim()

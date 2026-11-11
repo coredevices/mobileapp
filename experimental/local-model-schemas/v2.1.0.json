@@ -1,0 +1,131 @@
+{
+  "modelVersion": "v2.1.0",
+  "excludedServlets": [
+    "builtin_calendar",
+    "builtin_messaging",
+    "builtin_plugins",
+    "builtin_notification_reply"
+  ],
+  "tools": [
+    {
+      "servlet": "builtin_note",
+      "name": "create_note",
+      "description": "Save a note, idea, or thought for later. Use when the user wants to jot down or note something, or remember a fact or piece of information. Not for 'remember to do something' requests - those are reminders.",
+      "parameters": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "The text of the note, usually a direct quote from the user",
+          "required": true
+        }
+      ]
+    },
+    {
+      "servlet": "builtin_reminder",
+      "name": "create_reminder",
+      "description": "Set a reminder optionally for a future time. Use when the user requests a reminder, asks to remember to do something ('remind me to...', 'remember to...'), or wants to be reminded at a specific time or date.",
+      "parameters": [
+        {
+          "name": "date_time_human",
+          "type": "string",
+          "description": "If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'",
+          "required": false
+        },
+        {
+          "name": "duration_human",
+          "type": "string",
+          "description": "If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'",
+          "required": false
+        },
+        {
+          "name": "notification_hours_before",
+          "type": "number",
+          "description": "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice.",
+          "required": false
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "The message to remind the user e.g. 'Buy more milk'",
+          "required": true
+        }
+      ]
+    },
+    {
+      "servlet": "builtin_reminder",
+      "name": "create_list_item",
+      "description": "Add an item to a shopping list, grocery list, or to-do list. Use when the user names a list or wants to buy groceries, food, or household supplies.",
+      "parameters": [
+        {
+          "name": "list_name",
+          "type": "string",
+          "description": "The name of the list to add the item to e.g. 'shopping', 'todo'. Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists.",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "The text of the list item to add",
+          "required": true
+        },
+        {
+          "name": "reminder_date_time_human",
+          "type": "string",
+          "description": "If provided by the user, the date and/or time to remind the user of the list item in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00'",
+          "required": false
+        }
+      ]
+    },
+    {
+      "servlet": "builtin_reminder",
+      "name": "create_list",
+      "description": "Create a new, empty list. ONLY use this when the user's message contains the exact phrase 'Create a new list', e.g. 'Create a new list travel' or 'Create a new list called travel'. Never use it for any other phrasing, and never use it to add items to a list.",
+      "parameters": [
+        {
+          "name": "list_name",
+          "type": "string",
+          "description": "The name of the new list, e.g. 'travel' for 'Create a new list called travel'",
+          "required": true
+        }
+      ]
+    },
+    {
+      "servlet": "builtin_clock",
+      "name": "set_alarm",
+      "description": "Set an alarm for a specific clock time like 8am or 16:30.",
+      "parameters": [
+        {
+          "name": "time_hours",
+          "type": "number",
+          "description": "The hour component of the alarm time (24 hour time)",
+          "required": true
+        },
+        {
+          "name": "time_minutes",
+          "type": "number",
+          "description": "The minute component of the alarm time (0-59)",
+          "required": true
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "description": "An optional label or title for the alarm",
+          "required": false
+        }
+      ]
+    },
+    {
+      "servlet": "builtin_clock",
+      "name": "set_timer",
+      "description": "Set a timer for the specified duration or end time",
+      "parameters": [
+        {
+          "name": "time_human",
+          "type": "string",
+          "description": "The duration or target end time to set the timer for in human readable format e.g. '1 hour and 30 minutes', '45 minutes', 'for 1:50pm', 'at 13:30'",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

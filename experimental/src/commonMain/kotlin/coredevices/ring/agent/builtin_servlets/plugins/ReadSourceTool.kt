@@ -1,63 +1,39 @@
 package coredevices.ring.agent.builtin_servlets.plugins
 
-import io.rebble.libpebblecommon.connection.Plugins
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
+import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceInstance
 import io.rebble.libpebblecommon.plugin.SourceUpdate
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 class ReadSourceTool(
     private val sourcePlugins: suspend () -> List<PluginMetadata>,
     private val plugins: Plugins,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ): BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(mapOf(
-                "category" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("Namespace of the data source, e.g. " +
-                            "'weather', 'home'"
-                    )
-                )),
-                "item" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("The kind of item or 'path' to read data " +
-                            "for, e.g. 'location', 'light'"
-                    )
-                )),
-                "instance" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("The specific instance identifier of the " +
-                            "item to read, if known & supported, e.g. a uuid of a specific location, " +
-                            "'outdoor_floodlight_1', etc."
-                    )
-                ))
-            )),
-            required = listOf("category", "item")
-        )
-    )
+    definition = builtinToolDefinitions.getValue(TOOL_NAME)
 ) {
 
+    @ToolDefinition(servlet = PluginsServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     data class ReadSourceArgs(
+        @ToolParam("Namespace of the data source, e.g. " + "'weather', 'home'")
         val category: String,
+        @ToolParam("The kind of item or 'path' to read data " + "for, e.g. 'location', 'light'")
         val item: String,
-        val instance: String? = null
+        @ToolParam("The specific instance identifier of the " + "item to read, if known & supported, e.g. a uuid of a specific location, " + "'outdoor_floodlight_1', etc.")
+        val instance: String? = null,
     )
 
     @Serializable

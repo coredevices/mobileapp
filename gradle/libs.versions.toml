@@ -63,6 +63,9 @@ compass = "4.0.1"
 health-kmp = "1.7.0"
 documentfile = "1.1.0"
 
+# Cactus model checkpoints
+cactus-lm-weights = "v2.1.0"
+
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

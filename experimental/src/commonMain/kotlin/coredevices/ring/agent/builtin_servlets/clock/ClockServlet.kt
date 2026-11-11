@@ -7,8 +7,10 @@ import kotlin.uuid.Uuid
 /** Index prefix 00000000-0000-0000-0002- */
 val CLOCK_PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000001")
 
+const val CLOCK_SERVLET_NAME = "builtin_clock"
+
 object ClockServlet : BuiltInServletPlugin(
-    name = "builtin_clock",
+    name = CLOCK_SERVLET_NAME,
     tools = listOf(
         SetAlarmTool(),
         SetTimerTool(),

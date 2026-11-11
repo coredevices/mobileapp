@@ -15,8 +15,10 @@ import kotlin.uuid.Uuid
 
 val MESSAGING_PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000002")
 
+const val MESSAGING_SERVLET_NAME = "builtin_messaging"
+
 object MessagingServlet : BuiltInServletPlugin(
-    name = "builtin_messaging",
+    name = MESSAGING_SERVLET_NAME,
     tools = listOf(
         SendBeeperMessageTool(),
     ),
