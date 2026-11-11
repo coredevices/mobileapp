@@ -93,11 +93,6 @@ actual class GattServer(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
     private val logger = Logger.withTag("GattServer")
-    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
-        delegate = this,
-        queue = null,
-        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
-    )
     private val registeredDevices: MutableMap<PebbleBleIdentifier, RegisteredDevice> =
         mutableMapOf()
     private val registeredServices = mutableMapOf<Uuid, CBMutableService>()
@@ -424,6 +419,13 @@ actual class GattServer(
     }
 
     private val peripheralManagerReady = MutableStateFlow(true)
+
+    // Declared after all other state: CoreBluetooth can call delegate methods (e.g. willRestoreState) from this constructor.
+    private val peripheralManager: CBPeripheralManager = CBPeripheralManager(
+        delegate = this,
+        queue = null,
+        options = mapOf(CBPeripheralManagerOptionRestoreIdentifierKey to "ppog-server"),
+    )
 
     override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         verboseLog { "peripheralManagerIsReadyToUpdateSubscribers" }
