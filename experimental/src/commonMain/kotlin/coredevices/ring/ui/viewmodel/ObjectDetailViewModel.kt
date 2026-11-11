@@ -183,14 +183,17 @@ class ObjectDetailViewModel(
 
     fun toggleDone() {
         val s = state.value as? UiState.ItemView ?: return
-        val it = s.item
+        val id = s.item.firestoreId
         // appScope: back-navigation right after the tap must not cancel the write.
         appScope.launch {
-            val updated = it.toDocument().copy(
-                done = !it.done,
-                updatedAt = Clock.System.now(),
-            )
-            itemRepo.setItem(it.firestoreId, updated)
+            childWriteMutex.withLock {
+                val it = itemRepo.getById(id) ?: return@launch
+                val updated = it.toDocument().copy(
+                    done = !it.done,
+                    updatedAt = Clock.System.now(),
+                )
+                itemRepo.setItem(id, updated)
+            }
         }
     }
 
@@ -368,7 +371,7 @@ class ObjectDetailViewModel(
         parentListIds: List<String>? = null,
     ) {
         val s = state.value as? UiState.ItemView ?: return
-        val it = s.item
+        val id = s.item.firestoreId
         // appScope, not viewModelScope: patchItem is the always-edit auto-save,
         // flushed from the screen's onDispose when the user navigates back. That
         // dispose coincides with this per-screen ViewModel being cleared and
@@ -376,26 +379,29 @@ class ObjectDetailViewModel(
         // before it commits and the edit would be silently lost. appScope is the
         // app-lifetime LibIndex scope, so the write always completes.
         appScope.launch {
-            val nextKind = kind ?: it.kind
-            val nextDueAt = when (dueAt) {
-                DueAtChange.NoChange -> it.dueAt
-                is DueAtChange.Set -> dueAt.value
+            childWriteMutex.withLock {
+                val it = itemRepo.getById(id) ?: return@launch
+                val nextKind = kind ?: it.kind
+                val nextDueAt = when (dueAt) {
+                    DueAtChange.NoChange -> it.dueAt
+                    is DueAtChange.Set -> dueAt.value
+                }
+                val nextParents = normalizeParentLists(
+                    kind = nextKind,
+                    requestedParents = parentListIds,
+                    currentParents = it.parentListIds(),
+                )
+                val updated = it.toDocument().copy(
+                    createdAt = createdAt ?: it.createdAt,
+                    title = (title ?: it.title).trim().ifBlank { it.title },
+                    body = body ?: it.body,
+                    metadata = metadataForKind(nextKind, existing = it.metadata),
+                    dueAt = nextDueAt,
+                    parentListIds = nextParents,
+                    updatedAt = Clock.System.now(),
+                )
+                itemRepo.setItem(id, updated)
             }
-            val nextParents = normalizeParentLists(
-                kind = nextKind,
-                requestedParents = parentListIds,
-                currentParents = it.parentListIds(),
-            )
-            val updated = it.toDocument().copy(
-                createdAt = createdAt ?: it.createdAt,
-                title = (title ?: it.title).trim().ifBlank { it.title },
-                body = body ?: it.body,
-                metadata = metadataForKind(nextKind, existing = it.metadata),
-                dueAt = nextDueAt,
-                parentListIds = nextParents,
-                updatedAt = Clock.System.now(),
-            )
-            itemRepo.setItem(it.firestoreId, updated)
         }
     }
 

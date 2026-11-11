@@ -75,6 +75,7 @@ import coredevices.ring.data.entity.room.indexfeed.fieldsJson
 import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
+import coredevices.ring.ui.components.feed.Size
 import coredevices.ring.ui.components.feed.TodoCheckCircle
 import coredevices.ring.ui.navigation.RingRoutes
 import coredevices.util.relativeTime
@@ -252,6 +253,8 @@ internal fun ItemView(
                 // Auto-saved on dispose / app stop via flushDraft().
                 ItemHeroEdit(
                     kind = draftKind,
+                    done = it.done,
+                    onToggleDone = { vm.toggleDone() },
                     title = draftTitle,
                     body = draftBody,
                     createdAt = draftCreatedAt,
@@ -459,6 +462,8 @@ private fun ItemHeroCard(
 @Composable
 private fun ItemHeroEdit(
     kind: String,
+    done: Boolean,
+    onToggleDone: () -> Unit,
     title: String,
     body: String,
     createdAt: Instant,
@@ -492,26 +497,37 @@ private fun ItemHeroEdit(
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(18.dp))
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
-        BasicTextField(
-            value = title,
-            onValueChange = onTitle,
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(
-                color = colors.onSurface,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.4).sp,
-                lineHeight = 28.sp,
-            ).indexTextEntryStyle(),
-            cursorBrush = SolidColor(colors.primary),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-            decorationBox = { inner ->
-                if (title.isEmpty()) {
-                    Text("Title", color = colors.onSurfaceVariant, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
-                inner()
-            },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showsDue) {
+                TodoCheckCircle(
+                    done = done,
+                    onToggle = onToggleDone,
+                    size = Size.Large,
+                )
+                Spacer(Modifier.width(14.dp))
+            }
+            BasicTextField(
+                value = title,
+                onValueChange = onTitle,
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(
+                    color = colors.onSurface,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.4).sp,
+                    lineHeight = 28.sp,
+                    textDecoration = if (done && showsDue) TextDecoration.LineThrough else TextDecoration.None,
+                ).indexTextEntryStyle(),
+                cursorBrush = SolidColor(colors.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                decorationBox = { inner ->
+                    if (title.isEmpty()) {
+                        Text("Title", color = colors.onSurfaceVariant, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    }
+                    inner()
+                },
+            )
+        }
         Spacer(Modifier.height(10.dp))
         if (showsDue) {
             DueAtRow(label = "Due", dueAt = dueAt, onChange = onDueAt)
