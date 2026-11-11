@@ -46,15 +46,16 @@ class IndexAgentCactus(
     companion object {
         /** Prefix of `language_model_used` on assistant messages this agent produced. */
         const val LANGUAGE_MODEL_PREFIX = "cactus-"
+
+        // Shared across instances: agents are created per recording and the native model is never freed.
+        private val agentMutex = Mutex()
+        private var modelHandle: Long = 0L
     }
 
     override val logger = Logger.withTag("AgentCactus")
 
     /** Cactus tools JSON plus the short-name -> integration-name map for mapping calls back. */
     data class CactusTools(val toolsJson: String, val parentMap: Map<String, String>)
-
-    private val agentMutex = Mutex()
-    private var modelHandle: Long = 0L
 
     override suspend fun prepare() {
         agentMutex.withLock {
