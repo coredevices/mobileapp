@@ -25,7 +25,6 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.gif.GifDecoder
-import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.google.firebase.Firebase
@@ -218,11 +217,8 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .crossfade(true)
-            .memoryCache {
-                MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
-                    .build()
-            }
+            // Cached hardware bitmaps keep their GPU buffers after backgrounding (the foreground service blocks trimming).
+            .memoryCache(null)
             .components {
                 add(SvgDecoder.Factory())
                 // Trying to see if not using AnimatedImageDecoder fixes memory leaks

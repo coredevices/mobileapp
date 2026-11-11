@@ -9,7 +9,6 @@ import cocoapods.FirebaseMessaging.FIRMessagingAPNSTokenType
 import cocoapods.GoogleSignIn.GIDSignIn
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.eygraber.uri.toUri
@@ -195,11 +194,7 @@ object IOSDelegate : KoinComponent {
         SingletonImageLoader.setSafe { context ->
             ImageLoader.Builder(context)
                 .crossfade(true)
-                .memoryCache {
-                    MemoryCache.Builder()
-                        .maxSizePercent(context, 0.25)
-                        .build()
-                }
+                .memoryCache(null)
                 .components {
                     add(AnimatedSkiaImageDecoder.Factory())
                     add(SvgDecoder.Factory())
