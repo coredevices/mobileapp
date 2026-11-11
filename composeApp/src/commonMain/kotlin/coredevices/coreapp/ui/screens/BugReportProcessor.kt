@@ -24,6 +24,7 @@ import coredevices.util.PermissionRequester
 import coredevices.util.WatchNotifier
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.storage.appStorageBreakdown
+import coredevices.util.storage.formatDataUsage
 import coredevices.util.storage.formatStorageSummary
 import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
@@ -31,6 +32,7 @@ import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.permissions.byApp
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -749,10 +751,24 @@ class BugReportProcessor(
             }")
             appendLine("missingPermissions: ${permissionRequester.missingPermissions.value}")
             appendLine("watchesWithoutCompanionDevicePermission: $watchesWithoutCompanionDevicePermission")
+            append(appDataUsageSummary())
             appendLine(libPebble.watchesDebugState())
             appendLine("Watches (most recently connected first):")
             watches.forEachIndexed { index, watch ->
                 appendLine("watch_$index $watch")
+            }
+        }
+    }
+
+    private suspend fun appDataUsageSummary(): String = buildString {
+        val apps = libPebble.appDataUsage(BUG_REPORT_USAGE_DAYS).first().byApp()
+        val titles = libPebble.getAllLockerBasicInfo().first().associate { it.id to it.title }
+        appendLine("App data usage (last $BUG_REPORT_USAGE_DAYS days, heaviest first):")
+        if (apps.isEmpty()) appendLine("  none")
+        apps.forEach { app ->
+            appendLine("  ${titles[app.appUuid] ?: "Removed app"} (${app.appUuid}): ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests, split = true)}")
+            app.byPermission.forEach {
+                appendLine("    ${it.reportableKey}: ${formatDataUsage(it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, split = true)}")
             }
         }
     }
@@ -787,3 +803,4 @@ fun Path?.readMostRecent(bytes: Int): String? {
     }
 }
 
+private const val BUG_REPORT_USAGE_DAYS = 7

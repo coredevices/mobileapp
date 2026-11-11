@@ -8,6 +8,7 @@ import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.database.entity.PermissionDeclaration
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.plugin.PluginNetworkPolicy
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -159,6 +160,23 @@ class AppPermissions(
         if (subject.legacy) return if (granted(PluginPermissions.GLOBAL_INTERNET)) null else emptyList()
         if (granted(PluginPermissions.INTERNET)) return null
         return rows.mapNotNull { domainOf(it.permission) }.filter { isHostname(it) && granted(internetKey(it)) }
+    }
+
+    /**
+     * The key traffic to each of [urls] counts under: the declared or granted domain covering its
+     * host, whether or not permissions are enforced. Missing for a URL that can't be requested.
+     */
+    suspend fun usageKeys(appUuid: Uuid, urls: Collection<String>): Map<String, UsageKey> {
+        val scoped = urls.mapNotNull { url -> PluginNetworkPolicy.permissionFor(url)?.let { url to it } }.toMap()
+        if (scoped.isEmpty()) return emptyMap()
+        val subject = subjectOf(appUuid)
+        if (subject?.legacy == true) return scoped.mapValues { UsageKey(PluginPermissions.GLOBAL_INTERNET, declared = true) }
+        val rows = if (subject == null) emptyList() else dao.getByAppUuid(appUuid)
+        return scoped.mapValues { (_, key) ->
+            if (domainOf(key) == null) return@mapValues UsageKey(key, declared = true)
+            val row = rows.coveringRow(key)?.takeIf { domainOf(it.permission) != null }
+            UsageKey(row?.permission ?: key, declared = row?.declared == true)
+        }
     }
 
     /** As [check], but records the use. [wait] waits for the user's answer: never from a blocking callback. */

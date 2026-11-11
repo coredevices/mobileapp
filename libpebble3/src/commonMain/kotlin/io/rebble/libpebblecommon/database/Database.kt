@@ -12,6 +12,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.database.dao.AppDataUsageDao
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.HealthDao
@@ -31,6 +32,7 @@ import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryEntity
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntrySyncEntity
+import io.rebble.libpebblecommon.database.entity.AppDataUsageEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ContactEntity
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
@@ -95,8 +97,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
+        AppDataUsageEntity::class,
     ],
-    version = 51,
+    version = 52,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -139,6 +142,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 48, to = 49),
         AutoMigration(from = 49, to = 50),
         AutoMigration(from = 50, to = 51, spec = AutoMigration51::class),
+        AutoMigration(from = 51, to = 52),
     ],
     exportSchema = true,
 )
@@ -163,6 +167,7 @@ abstract class Database : RoomDatabase() {
     abstract fun weatherAppDao(): WeatherAppRealDao
     abstract fun appPrefsDao(): AppPrefsEntryDao
     abstract fun notificationRuleDao(): NotificationRuleDao
+    abstract fun appDataUsageDao(): AppDataUsageDao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")

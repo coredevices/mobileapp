@@ -135,7 +135,7 @@ class Locker(
     companion object {
         private val logger = Logger.withTag("Locker")
         private val PREF_KEY_HAVE_INSERTED_SYSTEM_APPS_AT_CORRECT_POSITION = "have_inserted_system_apps_at_correct_position_v4"
-        private const val PREF_KEY_HAVE_BACKFILLED_APP_INFO = "have_backfilled_app_info_2"
+        private const val PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS = "have_backfilled_declared_permissions"
         private val WATCH_REMOVAL_TIMEOUT = 20.seconds
         private val LOCKER_SYNC_TIMEOUT = 15.seconds
     }
@@ -566,11 +566,11 @@ class Locker(
             insertSystemApps(force = needToInsertAllSystemApps)
             appPermissionDao.deleteForRemovedApps()
         }
-        if (!settings.getBoolean(PREF_KEY_HAVE_BACKFILLED_APP_INFO, false)) {
+        // Permissions recorded before `declared` existed don't say which were declared.
+        if (!settings.getBoolean(PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS, false)) {
             coroutineScope.launch {
-                config.flow.first { it.watchConfig.enablePlugins }
                 backfillAppInfo()
-                settings[PREF_KEY_HAVE_BACKFILLED_APP_INFO] = true
+                settings[PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS] = true
             }
         }
         coroutineScope.launch {

@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.AppDataUsageEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -216,6 +217,8 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
+
+    override fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>> = flowOf(emptyList())
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }

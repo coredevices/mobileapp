@@ -16,6 +16,7 @@ import io.rebble.libpebblecommon.js.FETCH_JS
 import io.rebble.libpebblecommon.js.FETCH_REGISTRY
 import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.PermissionDecision
 import io.rebble.libpebblecommon.permissions.RunningApps
@@ -72,6 +73,7 @@ class JsPlugin(
     private val fileAccess: PluginFileAccess,
     private val fileSystem: PluginFileSystem,
     private val logs: PluginLogs,
+    private val dataUsage: DataUsageRecorder,
     /** Host-side hosted OAuth, when available. Only reachable by plugins that declare a connector. */
     private val oauthApi: PluginOAuthApi? = null,
     private val otherSources: PluginSources,
@@ -265,6 +267,7 @@ class JsPlugin(
             appUuid = pluginUuid,
             client = httpClient,
             networkAccess = networkAccess(prompt),
+            dataUsage = dataUsage,
             jsTarget = FETCH_REGISTRY,
         )
         val webSockets = WebSocketManager(
@@ -273,6 +276,7 @@ class JsPlugin(
             client = httpClient,
             appUuid = pluginUuid,
             networkAccess = networkAccess(prompt),
+            dataUsage = dataUsage,
         )
         // Same settings scope PKJS uses for this uuid, so a pbw's plugin and its watchapp JS
         // share one set of stored values.

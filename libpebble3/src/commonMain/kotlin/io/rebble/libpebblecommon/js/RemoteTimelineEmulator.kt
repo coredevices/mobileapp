@@ -53,6 +53,8 @@ class RemoteTimelineEmulator(
     private val timelineNotificationRealDao: TimelineNotificationRealDao,
     private val permissions: AppPermissions,
 ) : HttpInterceptor {
+    override val servedLocally = true
+
     override fun shouldIntercept(url: String): Boolean {
         if (!watchConfigFlow.value.emulateRemoteTimeline) {
             return false

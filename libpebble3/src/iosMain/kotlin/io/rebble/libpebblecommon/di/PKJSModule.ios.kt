@@ -27,6 +27,7 @@ actual val pkjsPlatformModule: Module = module {
             httpClient = get(),
             permissions = get(),
             pluginClient = get(),
+            dataUsage = get(),
         )
     } bind JsRunner::class
 }

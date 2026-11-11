@@ -36,6 +36,7 @@ import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginRegistry
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CompletableDeferred
@@ -80,6 +81,7 @@ class WebViewJsRunner(
     permissions: AppPermissions,
     pluginClient: PluginClient,
     httpClient: HttpClient,
+    private val dataUsage: DataUsageRecorder,
 ): JsRunner(appInfo, lockerEntry, jsPath, device, urlOpenRequests), LibPebbleKoinComponent {
     private val context = appContext.context
     companion object {
@@ -109,16 +111,17 @@ class WebViewJsRunner(
         }
     }
     private val geolocationInterface = WebViewGeolocationInterface(scope, this)
+    private val nativeEvals = Channel<String>(Channel.UNLIMITED)
     // The startup page's CSP blocks the WebView's own WebSocket in every frame: this one is gated natively.
-    private val webSocketEvals = Channel<String>(Channel.UNLIMITED)
-    private val webSockets = WebSocketManager(scope, { webSocketEvals.trySend(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess)
-    private var webSocketEvalJob: Job? = null
+    private val webSockets = WebSocketManager(scope, { nativeEvals.trySend(it) }, httpClient, Uuid.parse(appInfo.uuid), networkAccess, dataUsage)
+    private val xhr = XMLHTTPRequestManager(scope, { nativeEvals.trySend(it) }, httpInterceptorManager, Uuid.parse(appInfo.uuid), httpClient, networkAccess, dataUsage)
+    private var nativeEvalJob: Job? = null
     private val interfaces = setOf(
             Pair(API_NAMESPACE, publicJsInterface),
             Pair(PRIVATE_API_NAMESPACE, privateJsInterface),
             Pair("_localStorage", localStorageInterface),
             Pair("_PebbleGeo", geolocationInterface),
-            Pair(JsEngine.DISPATCH_NAMESPACE, JsEngine.Dispatcher(listOf(webSockets))),
+            Pair(JsEngine.DISPATCH_NAMESPACE, JsEngine.Dispatcher(listOf(webSockets, xhr))),
     )
 
     private val webViewClient = object : WebViewClient() {
@@ -186,6 +189,8 @@ class WebViewJsRunner(
         if (scheme != "http" && scheme != "https") return true
         val verdict = runBlocking { networkAccess.check(url.toString(), wait = false) }
         if (verdict is PluginNetworkVerdict.Denied) logger.w { "Blocked ${url.host}: ${verdict.reason}" }
+        // Bytes unknown: the WebView makes this request itself.
+        if (verdict is PluginNetworkVerdict.Allowed) dataUsage.record(Uuid.parse(appInfo.uuid), url.toString(), 0, 0, requests = 1)
         return verdict is PluginNetworkVerdict.Allowed
     }
 
@@ -330,8 +335,8 @@ class WebViewJsRunner(
         }
         check(webView != null) { "WebView not initialized" }
         logger.d { "WebView initialized (provider=${webViewProvider()})" }
-        webSocketEvalJob = scope.launch(Dispatchers.Main) {
-            for (js in webSocketEvals) webView?.evaluateJavascript(js, null)
+        nativeEvalJob = scope.launch(Dispatchers.Main) {
+            for (js in nativeEvals) webView?.evaluateJavascript(js, null)
         }
         loadApp(jsPath.toString())
         // Caller must see this fail, otherwise the session is kept as the current PKJS session
@@ -371,8 +376,9 @@ class WebViewJsRunner(
     override suspend fun stop() {
         //TODO: Close config screens
         _readyState.value = false
-        webSocketEvalJob?.cancel()
+        nativeEvalJob?.cancel()
         webSockets.close()
+        xhr.close()
         // Run teardown as NonCancellable. stop() is frequently invoked from an already-cancelled
         // connection scope — e.g. on watch disconnect.
         withContext(NonCancellable + Dispatchers.Main) {
@@ -437,6 +443,10 @@ class WebViewJsRunner(
             withContext(Dispatchers.Main) {
                 // The WebView's own defaults to 'blob', which apps written against it expect.
                 webView.evaluateJavascript(webSockets.proxyJs() + WEBSOCKET_JS + "WebSocket._defaultBinaryType = 'blob';", null)
+                if (libPebble.config.value.watchConfig.pkjsRequestsThroughApp) {
+                    // In a block, so evaluating it again can't redeclare the class.
+                    webView.evaluateJavascript(xhr.proxyJs() + "{" + XML_HTTP_REQUEST_JS + "}", null)
+                }
                 webView.evaluateJavascript(
                         """
                             (() => {

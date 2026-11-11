@@ -8,14 +8,17 @@ import io.rebble.libpebblecommon.connection.PebbleConnectionEvent
 import io.rebble.libpebblecommon.connection.PebbleDevice
 import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.dao.LockerAppPermissionDao
+import io.rebble.libpebblecommon.database.entity.AppDataUsageEntity
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.metadata.pbw.appinfo.PbwAppInfo
 import io.rebble.libpebblecommon.permissions.PermissionDecision.Denied
 import io.rebble.libpebblecommon.permissions.PermissionDecision.Granted
 import io.rebble.libpebblecommon.permissions.PermissionDecision.NeedsApproval
+import io.rebble.libpebblecommon.plugin.Connections
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginPermission
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import io.rebble.libpebblecommon.plugin.PluginPermissions.CALENDAR
 import io.rebble.libpebblecommon.plugin.PluginPermissions.GLOBAL_INTERNET
 import io.rebble.libpebblecommon.plugin.PluginPermissions.INTERNET
@@ -489,11 +492,11 @@ internal class FakePermissionDao : LockerAppPermissionDao {
     }
 
     override suspend fun clearDeclarations(appUuid: Uuid) {
-        rows.value = rows.value.mapValues { (key, row) -> if (key.first == appUuid) row.copy(reason = null, required = null) else row }
+        rows.value = rows.value.mapValues { (key, row) -> if (key.first == appUuid) row.copy(reason = null, required = null, declared = false) else row }
     }
 
     override suspend fun setDeclaration(appUuid: Uuid, permission: String, reason: String?, required: Boolean?) {
-        rows.value[appUuid to permission]?.let { insertOrReplace(it.copy(reason = reason, required = required)) }
+        rows.value[appUuid to permission]?.let { insertOrReplace(it.copy(reason = reason, required = required, declared = true)) }
     }
 
     override suspend fun deleteByAppUuid(appUuid: Uuid) {
@@ -1297,5 +1300,94 @@ class AllAppsStatusesTest {
         val all = permissions.statuses(null).first()
         assertEquals(listOf(APP to CALENDAR), all.map { it.appUuid to it.permission })
         assertEquals(PermissionStatus.AllowedAutomatically, all.single().status)
+    }
+}
+
+class UsageKeyTest {
+    private val dao = FakePermissionDao()
+
+    @Test
+    fun aLegacyAppsTrafficIsAllUnderGlobalInternet() = runTest {
+        val legacy = permissions(dao, installed = installedAs(subject(legacy = true)))
+        assertEquals(UsageKey(GLOBAL_INTERNET, declared = true), legacy.usageKeys(APP, listOf("https://api.example.com/x"))["https://api.example.com/x"])
+        assertEquals(UsageKey(GLOBAL_INTERNET, declared = true), legacy.usageKeys(APP, listOf("http://192.168.1.2/"))["http://192.168.1.2/"])
+    }
+
+    @Test
+    fun aDeclaredDomainCoversItsSubdomains() = runTest {
+        val permissions = permissions(dao)
+        val declared = PluginPermission(INTERNET, mapOf(PluginPermissions.PARAM_DOMAINS to listOf("example.com")))
+        permissions.recordRequested(APP, RequestedPermissions(declared = listOf(declared), hasPkjs = true))
+
+        assertEquals(UsageKey(internetKey("example.com"), declared = true), permissions.usageKeys(APP, listOf("https://api.example.com/x"))["https://api.example.com/x"])
+    }
+
+    @Test
+    fun aHostOnlyGrantedWhileRunningIsNotDeclared() = runTest {
+        val permissions = permissions(dao)
+        permissions.recordRequested(APP, RequestedPermissions(declared = emptyList(), hasPkjs = true))
+        permissions.setDecisions(APP, mapOf(internetKey("home.example.net") to true))
+
+        assertEquals(UsageKey(internetKey("home.example.net"), declared = false), permissions.usageKeys(APP, listOf("https://home.example.net/api"))["https://home.example.net/api"])
+    }
+
+    @Test
+    fun theLocalNetworkNamesNoHost() = runTest {
+        assertEquals(UsageKey(LOCAL_NETWORK, declared = true), permissions(dao).usageKeys(APP, listOf("http://192.168.1.2:8123/"))["http://192.168.1.2:8123/"])
+    }
+
+    @Test
+    fun oneLookupAnswersEveryUrl() = runTest {
+        val urls = listOf("https://api.example.com/", "http://192.168.1.2/", "file:///etc/passwd")
+        assertEquals(
+            mapOf(
+                urls[0] to UsageKey(internetKey("api.example.com"), declared = false),
+                urls[1] to UsageKey(LOCAL_NETWORK, declared = true),
+            ),
+            permissions(dao).usageKeys(APP, urls),
+        )
+    }
+
+    @Test
+    fun countsEvenWithPermissionsOff() = runTest {
+        val off = permissions(dao, config = WatchConfig(enablePlugins = false))
+        assertEquals(UsageKey(internetKey("api.example.com"), declared = false), off.usageKeys(APP, listOf("https://api.example.com/"))["https://api.example.com/"])
+        assertNull(off.usageKeys(APP, listOf("file:///data/libpebble3.db"))["file:///data/libpebble3.db"])
+    }
+}
+
+class AppDataUsageSummaryTest {
+    private val other = Uuid.parse("00000000-0000-0000-0000-00000000a002")
+
+    private fun row(
+        appUuid: Uuid = APP,
+        permission: String = internetKey("example.com"),
+        day: Int = 100,
+        connection: String = Connections.WIFI,
+        declared: Boolean = true,
+        received: Long = 0,
+    ) = AppDataUsageEntity(appUuid, permission, day, connection, declared, requests = 1, sentBytes = 0, receivedBytes = received)
+
+    @Test
+    fun eachAppAddsUpItsDaysAndConnectionsHeaviestFirst() {
+        val summaries = listOf(
+            row(received = 100),
+            row(day = 101, connection = Connections.CELLULAR, received = 50),
+            row(appUuid = other, received = 1_000),
+        ).byApp()
+
+        assertEquals(listOf(other, APP), summaries.map { it.appUuid })
+        val app = summaries.last()
+        assertEquals(150, app.totalBytes)
+        assertEquals(50, app.mobileBytes)
+        assertEquals(2, app.requests)
+    }
+
+    @Test
+    fun anUndeclaredDomainIsHashedForReports() {
+        val usage = listOf(row(permission = internetKey("home.example.net"), declared = false)).byApp().single().byPermission.single()
+        assertEquals("$INTERNET/#${"home.example.net".hashCode()}", usage.reportableKey)
+        assertEquals(GLOBAL_INTERNET, listOf(row(permission = GLOBAL_INTERNET)).byApp().single().byPermission.single().reportableKey)
+        assertEquals(LOCAL_NETWORK, listOf(row(permission = LOCAL_NETWORK, declared = false)).byApp().single().byPermission.single().reportableKey)
     }
 }

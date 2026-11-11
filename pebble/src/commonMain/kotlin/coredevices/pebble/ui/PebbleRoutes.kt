@@ -108,6 +108,9 @@ object PebbleNavBarRoutes {
     data object PermissionUsageRoute : NavBarRoute
 
     @Serializable
+    data object AppDataUsageRoute : NavBarRoute
+
+    @Serializable
     data class PermissionHoldersRoute(val permission: String) : NavBarRoute
 
     @Serializable
@@ -293,6 +296,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.PermissionUsageRoute> {
         PermissionUsageScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.AppDataUsageRoute> {
+        AppDataUsageScreen(topBarParams)
     }
     composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
         val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()

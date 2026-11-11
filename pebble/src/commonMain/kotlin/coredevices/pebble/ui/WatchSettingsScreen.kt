@@ -1647,6 +1647,24 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     isDebugSetting = true,
                 ),
                 basicSettingsToggleItem(
+                    title = "PKJS requests through app instead of Webview",
+                    description = "Watchapps' XMLHttpRequests go through the app, as on iOS, so their data usage is counted. Otherwise the WebView makes them itself. Restart watchapp after changing.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Debug,
+                    checked = libPebbleConfig.watchConfig.pkjsRequestsThroughApp,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                watchConfig = libPebbleConfig.watchConfig.copy(
+                                    pkjsRequestsThroughApp = it
+                                )
+                            )
+                        )
+                    },
+                    isDebugSetting = true,
+                    show = { platform == Platform.Android },
+                ),
+                basicSettingsToggleItem(
                     title = "Watch settings sync",
                     description = "Only for debugging - disables syncing settings with watch when disabled",
                     topLevelType = TopLevelType.Phone,
@@ -2331,6 +2349,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { libPebbleConfig.watchConfig.proactivelyDownloadAppUpdates },
                 ),
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "Data usage",
+                    description = "How much your watchapps and plugins have sent and received",
+                    keywords = "network mobile cellular data bandwidth",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppDataUsageRoute) },
+                ) },
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,

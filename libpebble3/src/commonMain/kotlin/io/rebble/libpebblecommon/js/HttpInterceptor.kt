@@ -1,9 +1,13 @@
 package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import kotlin.uuid.Uuid
 
 interface HttpInterceptor {
+    /** Answered from the phone's own data, without using the network. */
+    val servedLocally: Boolean get() = false
+
     fun shouldIntercept(url: String): Boolean
     suspend fun onIntercepted(url: String, method: String, body: String?, appUuid: Uuid): InterceptResponse
 }
@@ -24,12 +28,14 @@ class InjectedPKJSHttpInterceptors(
 )
 
 class HttpInterceptorManager(
-    timeline: RemoteTimelineEmulator,
-    injectedHttpInterceptors: InjectedPKJSHttpInterceptors,
+    private val interceptors: List<HttpInterceptor>,
+    private val dataUsage: DataUsageRecorder,
 ) {
-    private val interceptors: List<HttpInterceptor> = listOf(
-        timeline,
-    ) + injectedHttpInterceptors.interceptors
+    constructor(
+        timeline: RemoteTimelineEmulator,
+        injectedHttpInterceptors: InjectedPKJSHttpInterceptors,
+        dataUsage: DataUsageRecorder,
+    ) : this(listOf(timeline) + injectedHttpInterceptors.interceptors, dataUsage)
 
     fun shouldIntercept(url: String): Boolean {
         return interceptors.any { it.shouldIntercept(url) }
@@ -40,6 +46,12 @@ class HttpInterceptorManager(
         if (interceptor == null) {
             return ERROR
         }
-        return interceptor.onIntercepted(url, method, body, appUuid)
+        val response = interceptor.onIntercepted(url, method, body, appUuid)
+        if (!interceptor.servedLocally) {
+            // Counted as the size of what the app is given: the interceptor's own requests aren't seen.
+            val sent = body?.encodeToByteArray()?.size?.toLong() ?: 0
+            dataUsage.record(appUuid, url, sent, response.result.encodeToByteArray().size.toLong(), requests = 1)
+        }
+        return response
     }
 }

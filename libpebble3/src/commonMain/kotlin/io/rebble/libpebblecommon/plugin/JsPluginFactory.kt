@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
 import io.rebble.libpebblecommon.js.RemoteTimelineEmulator
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkGate
 import io.rebble.libpebblecommon.permissions.RunningApps
 import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
@@ -22,6 +23,7 @@ class JsPluginFactory(
     private val fileAccess: PluginFileAccess,
     private val fileSystem: PluginFileSystem,
     private val logs: PluginLogs,
+    private val dataUsage: DataUsageRecorder,
     private val otherSources: PluginSources,
     private val timeline: RemoteTimelineEmulator,
     private val oauthApi: PluginOAuthApi? = null,
@@ -46,6 +48,7 @@ class JsPluginFactory(
         fileAccess = fileAccess,
         fileSystem = fileSystem,
         logs = logs,
+        dataUsage = dataUsage,
         oauthApi = oauthApi,
         otherSources = otherSources,
         timeline = timeline,
