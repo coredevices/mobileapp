@@ -5,6 +5,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class M4aRoundTripTest {
@@ -33,5 +34,12 @@ class M4aRoundTripTest {
             decoded.samples.size > sampleRate / 2,
             "decoded ${decoded.samples.size} samples, expected ~$sampleRate"
         )
+    }
+
+    @Test
+    fun encodeRejectsEmptySamples() = runTest {
+        assertFailsWith<IllegalArgumentException> {
+            M4aEncoder().encode(ShortArray(0), 16000)
+        }
     }
 }

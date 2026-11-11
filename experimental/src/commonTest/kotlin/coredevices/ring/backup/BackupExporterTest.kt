@@ -52,6 +52,7 @@ class BackupExporterTest {
         override suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink = TODO()
         override suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String): Sink = TODO()
         override suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Pair<Source, RecordingStorage.RecordingSourceInfo>? = TODO()
+        override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = TODO()
         override suspend fun persistRecording(id: String) = TODO()
         override suspend fun uploadRecordingPcm(id: String, sampleRate: Int, pcmBytes: ByteArray, encryptionKey: String?) = TODO()
         override fun deleteRecording(id: String) = TODO()

@@ -85,6 +85,9 @@ interface RecordingStorage {
      */
     suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Pair<Source, RecordingSourceInfo>?
 
+    /** Size in bytes of a recording in the cache, or null if it isn't cached. */
+    suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean = false): Long?
+
     /**
      * Stages a completed recording for upload and queues it with the offline-tolerant syncer,
      * should be used once recording is complete & validated
@@ -310,6 +313,11 @@ class RealRecordingStorage(
         return@withContext Pair(SystemFileSystem.source(cachedPath).buffered(), RecordingStorage.RecordingSourceInfo(id, cachedMetadata, size))
     }
 
+    override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = withContext(Dispatchers.IO) {
+        val id = if (useOriginalAudio) "$idNoSuffix-original" else idNoSuffix
+        SystemFileSystem.metadataOrNull(Path(getRecordingsCacheDirectory(), id))?.size
+    }
+
     override suspend fun persistRecording(id: String) = withContext(Dispatchers.IO) {
         if (!preferences.backupEnabled.value) {
             logger.d { "Backups disabled, not staging recording $id for upload" }
@@ -337,10 +345,15 @@ class RealRecordingStorage(
                 "Recording $idToMove does not exist in cache"
             }
 
+            val samples = readPcmFile(source)
+            if (samples.isEmpty()) {
+                logger.w { "Recording $idToMove is empty, not staging for upload" }
+                continue
+            }
             val staged = stageUpload(
                 id = idToMove,
                 sampleRate = cachedMetadata.sampleRate,
-                samples = readPcmFile(source),
+                samples = samples,
                 encryptionKey = encryptionKey,
             )
             logger.d { "Queueing staged upload ${staged.id}" }

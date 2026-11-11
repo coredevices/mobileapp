@@ -609,6 +609,10 @@ class RecordingProcessingQueue(
         fileId: String,
         buttonSequence: String? = null,
     ) {
+        if ((recordingStorage.statCachedRecordingSource(fileId) ?: 0L) == 0L) {
+            logger.w { "Local recording $fileId is missing/empty, ignoring" }
+            return
+        }
         val task = ProcessingTask.LocalAudioRecording(
             fileId = fileId,
             buttonSequence = buttonSequence,

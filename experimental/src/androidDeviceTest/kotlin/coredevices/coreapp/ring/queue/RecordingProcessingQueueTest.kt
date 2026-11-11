@@ -75,6 +75,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -319,11 +320,11 @@ class RecordingProcessingQueueTest {
         single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
-    private fun createFakeAudioFile(fileId: String) {
+    private fun createFakeAudioFile(fileId: String, sizeBytes: Int = 1024) {
         val cacheDir = File(context.cacheDir, "recordings")
         cacheDir.mkdirs()
         val file = File(cacheDir, fileId)
-        file.writeBytes(ByteArray(1024)) // Dummy PCM data
+        file.writeBytes(ByteArray(sizeBytes)) // Dummy PCM data
         runBlocking {
             db.cachedRecordingMetadataDao().insert(
                 CachedRecordingMetadata(id = fileId, sampleRate = 16000, mimeType = "audio/pcm")
@@ -439,6 +440,17 @@ class RecordingProcessingQueueTest {
         // Verify conversation messages
         val messages = messageDao.getMessagesForRecording(1).first()
         assertTrue("Expected conversation messages", messages.isNotEmpty())
+    }
+
+    @Test
+    fun localAudioProcessing_emptyRecording_isIgnored() = runBlocking {
+        val fileId = "test-audio-empty"
+        createFakeAudioFile(fileId, sizeBytes = 0)
+
+        queue.queueLocalAudioProcessing(fileId)
+
+        assertNull(taskDao.getTaskById(1))
+        assertNull(db.localRecordingDao().getRecording(1))
     }
 
     @Test
