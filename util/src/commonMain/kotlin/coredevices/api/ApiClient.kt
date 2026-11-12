@@ -33,7 +33,7 @@ abstract class ApiClient(
     followAllRedirects: Boolean = false,
 ): KoinComponent {
     private val engine by inject<HttpClientEngine> { parametersOf(timeout) }
-    protected val client = HttpClient(engine) {
+    protected val client by lazy { HttpClient(engine) {
         if (followAllRedirects) {
             install(HttpRedirect) {
                 checkHttpMethod = false
@@ -71,7 +71,7 @@ abstract class ApiClient(
                 accept(ContentType.Application.Json)
             }
         }
-    }
+    } }
 
     protected suspend fun requireUserToken(): String {
         return try {
