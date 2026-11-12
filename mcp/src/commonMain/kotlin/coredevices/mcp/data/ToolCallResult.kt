@@ -141,6 +141,7 @@ sealed class SemanticResult {
     data class RequiresConfirmation(
         val integrationName: String,
         val toolName: String,
+        @Serializable(with = FirestoreSafeJsonObjectSerializer::class)
         val arguments: JsonObject,
         val destructive: Boolean,
         val description: String? = null,
