@@ -6,10 +6,12 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import io.rebble.libpebblecommon.database.MillisecondInstant
 import io.rebble.libpebblecommon.notification.NotificationDecision
+import kotlin.uuid.Uuid
 
 
 @Entity(indices = [
     Index(value = ["pkg", "channelId"], unique = false),
+    Index(value = ["key"], unique = false),
 ])
 data class NotificationEntity(
     @PrimaryKey(autoGenerate = true)
@@ -24,4 +26,11 @@ data class NotificationEntity(
     val decision: NotificationDecision,
     @ColumnInfo(defaultValue = "NULL")
     val people: List<String>? = emptyList(),
+    /** Timeline item id on the watch; only set when sent. */
+    @ColumnInfo(defaultValue = "NULL")
+    val itemId: Uuid? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val messageKey: String? = null,
+    @ColumnInfo(defaultValue = "NULL")
+    val imageAspect: Int? = null,
 )

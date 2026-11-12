@@ -33,4 +33,7 @@ interface NotificationDao {
 
     @Query("SELECT DISTINCT people FROM NotificationEntity WHERE people IS NOT NULL ORDER BY timestamp DESC LIMIT :limit")
     fun mostRecentParticipants(limit: Int): Flow<List<PeopleList>>
+
+    @Query("SELECT * FROM NotificationEntity WHERE pkg = :pkg AND title IS :title AND body IS :body AND itemId IS NOT NULL AND timestamp > :sinceMs")
+    suspend fun sentWithText(pkg: String, title: String?, body: String?, sinceMs: Long): List<NotificationEntity>
 }
