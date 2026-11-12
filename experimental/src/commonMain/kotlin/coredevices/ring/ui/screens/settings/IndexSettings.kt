@@ -543,6 +543,7 @@ fun IndexSettings(coreNav: CoreNav) {
                     trailing = {
                         Switch(
                             checked = pendingIntentScanEnabled,
+                            enabled = platform.isAndroid,
                             onCheckedChange = { togglePendingIntentScanEnabled() }
                         )
                     }
@@ -565,6 +566,7 @@ fun IndexSettings(coreNav: CoreNav) {
                     trailing = {
                         Switch(
                             checked = scanByPairedAddress,
+                            enabled = platform.isAndroid,
                             onCheckedChange = { toggleScanByPairedAddress() }
                         )
                     }
