@@ -50,6 +50,9 @@ class AndroidBtClassicConnector(
         } catch (e: IOException) {
             logger.w(e) { "Failed to connect BT classic socket" }
             return ClassicConnectionResult.Failure
+        } catch (e: SecurityException) {
+            logger.w(e) { "Failed to connect BT classic socket" }
+            return ClassicConnectionResult.Failure
         }
 
         connectionCoroutineScope.launch(Dispatchers.IO) {
