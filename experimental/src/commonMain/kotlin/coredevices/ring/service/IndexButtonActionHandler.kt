@@ -73,7 +73,7 @@ internal fun GestureRoutingPreferences.buttonActionFor(buttonPresses: List<Butto
             }
             ButtonAction.AgentCommand(
                 command = command,
-                buttonSequence = buttonPresses.joinToString(" ") { it.name.lowercase() },
+                buttonSequence = buttonPresses.toButtonSequenceString(),
             )
         }
         else -> null

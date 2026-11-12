@@ -99,35 +99,34 @@ class RecordingOperationFactory(
         recordingId: Long,
         text: String,
         forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
-        isQuestion: Boolean = false,
-        isGestureCommand: Boolean = false,
+        gesture: RingGesture? = null,
     ): RecordingOperation {
-        // A typed question routes to the search/answer agent and forces no note. A click's agent
-        // command always runs the Index agent. Anything else follows wherever Hold & Talk points,
-        // so typing stands in for the gesture.
+        // A click's agent command always runs the Index agent. Typed text follows the recording
+        // gesture it was sent as, defaulting to Hold & Talk.
+        val isGestureCommand = gesture?.isClick == true
+        val recordingGesture = gesture?.takeUnless { it.isClick } ?: RingGesture.Hold
         val destination = if (isGestureCommand) {
             GestureDestination.IndexAgent
         } else {
-            gestureRouting.recordingDestinationFor(RingGesture.Hold)
+            gestureRouting.recordingDestinationFor(recordingGesture)
         }
-        val delivery = if (isQuestion) null else (destination as? GestureDestination.AgentPlugin)?.let { agentDelivery(it) }
+        val delivery = (destination as? GestureDestination.AgentPlugin)?.let { agentDelivery(it) }
         val inner = if (delivery != null) {
             SendToAgentTextOperation(delivery = delivery, recordingId = recordingId, text = text)
         } else {
-            val mode = if (isQuestion) ChatMode.Search else textChatModeFor(destination)
             TextOnlyRecordingOperation(
                 mcpSessionFactory = mcpSessionFactory,
                 recordingId = recordingId,
-                chatAgent = agentFactory.createForChatMode(mode),
+                chatAgent = agentFactory.createForChatMode(textChatModeFor(destination)),
                 text = text,
-                forcedTool = if (isQuestion) null else forcedTool,
+                forcedTool = forcedTool.takeUnless { destination == GestureDestination.WebSearch },
             )
         }
         if (isGestureCommand) return inner
         return maybeWrapWithWebhook(
             recordingId = recordingId,
             fileId = null,
-            gesture = RingGesture.Hold,
+            gesture = recordingGesture,
             destination = destination,
             inner = inner,
         )
@@ -145,14 +144,17 @@ class RecordingOperationFactory(
     ): RecordingOperation {
         val transfer = ringTransferRepository.getTransfersByRecordingId(recordingId).firstOrNull()
         val gesture = if (transfer == null) {
-            RingGesture.Hold
+            queueTaskRepository.getTextButtonSequence(recordingId)
+                ?.parseAsButtonSequence()
+                ?.let { RingGesture.forSequence(it) }
+                ?: RingGesture.Hold
         } else {
             queueTaskRepository.getLatestButtonSequenceForTransfer(transfer.id)
                 ?.parseAsButtonSequence()
                 ?.let { RingGesture.forRecordingSequence(it) }
                 ?: RingGesture.Hold
         }
-        val destination = if (transfer == null && queueTaskRepository.isGestureCommandRecording(recordingId)) {
+        val destination = if (gesture?.isClick == true) {
             GestureDestination.IndexAgent
         } else {
             gestureRouting.recordingDestinationFor(gesture)

@@ -8,7 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -50,6 +50,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.PreviewWrapper
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.indexTextEntryStyle
@@ -60,6 +61,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  * circle on the right. Mirrors the JSX prototype's `ComposeBar`. Holding
  * the mic kicks the existing audio-record path; in `isRecording` mode the
  * pill gets replaced by an animated waveform with Stop / Cancel buttons.
+ * Tapping send routes typed text like Hold & Talk; long-pressing it routes like Click & Hold.
  */
 @Composable
 fun ChatInput(
@@ -68,7 +70,7 @@ fun ChatInput(
     onMicClick: () -> Unit = {},
     onStopClick: () -> Unit = {},
     onCancelClick: () -> Unit = {},
-    onTextSubmit: ((String) -> Unit)? = null
+    onTextSubmit: ((String, RingGesture) -> Unit)? = null
 ) {
     val colors = IndexTheme.colors
     var inputText by remember { mutableStateOf("") }
@@ -83,10 +85,10 @@ fun ChatInput(
         focusManager.clearFocus()
     }
 
-    fun submitText() {
+    fun submitText(gesture: RingGesture = RingGesture.Hold) {
         val text = inputText.trim()
         if (text.isEmpty()) return
-        onTextSubmit?.invoke(text)
+        onTextSubmit?.invoke(text, gesture)
         inputText = ""
     }
 
@@ -115,7 +117,7 @@ fun ChatInput(
                         value = inputText,
                         enabled = onTextSubmit != null,
                         onValueChange = { inputText = it },
-                        onSubmit = ::submitText,
+                        onSubmit = { submitText() },
                         onFocusChanged = { isFocused = it },
                     )
                 }
@@ -127,7 +129,14 @@ fun ChatInput(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(colors.primary)
-                    .clickable {
+                    .combinedClickable(
+                        onLongClick = if (hasText) {
+                            { submitText(RingGesture.ClickHold) }
+                        } else {
+                            null
+                        },
+                        onLongClickLabel = if (hasText) "Send as Click & Hold" else null,
+                    ) {
                         when {
                             hasText -> submitText()
                             showDismissKeyboard -> dismissKeyboard()

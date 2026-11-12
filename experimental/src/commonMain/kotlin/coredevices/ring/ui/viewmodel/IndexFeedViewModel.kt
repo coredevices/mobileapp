@@ -22,7 +22,9 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_TODOS
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.service.toButtonSequenceString
 import coredevices.ring.ui.viewmodel.IndexFeedViewModel.Companion.STRIKE_THROUGH_MS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -122,10 +124,10 @@ class IndexFeedViewModel(
     /** Submit a typed prompt the same way the legacy chat input did —
      *  enqueues into the existing recording processing pipeline so the
      *  agent runs against it. */
-    fun submitText(text: String) {
+    fun submitText(text: String, gesture: RingGesture) {
         val msg = text.trim().ifBlank { return }
         viewModelScope.launch {
-            recordingQueue.queueTextProcessing(msg)
+            recordingQueue.queueTextProcessing(msg, gesture.sequence.toButtonSequenceString())
         }
     }
 

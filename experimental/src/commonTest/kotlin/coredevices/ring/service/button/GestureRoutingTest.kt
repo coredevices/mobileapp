@@ -5,6 +5,8 @@ import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.service.ButtonPress
+import coredevices.ring.service.parseAsButtonSequence
+import coredevices.ring.service.toButtonSequenceString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -23,6 +25,14 @@ class GestureRoutingTest {
         musicControlMode?.let { legacy.putInt("music_control_mode", it.id) }
         secondaryMode?.let { legacy.putInt("ring_secondary_mode", it.id) }
         return GestureRoutingPreferences(stored, PreferencesImpl(legacy))
+    }
+
+    @Test
+    fun storedSequenceRoundTripsToGesture() {
+        RingGesture.entries.forEach { gesture ->
+            val stored = gesture.sequence.toButtonSequenceString()
+            assertEquals(gesture, RingGesture.forSequence(stored.parseAsButtonSequence()))
+        }
     }
 
     @Test
