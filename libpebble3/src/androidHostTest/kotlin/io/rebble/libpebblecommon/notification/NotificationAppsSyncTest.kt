@@ -7,8 +7,10 @@ import io.rebble.libpebblecommon.database.entity.ChannelItem
 import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.AndroidNotificationAppsSync.Companion.defaultMuteStateForPackage
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.LabelState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.carriedOverMuteState
 import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.mergedWithOsApp
+import io.rebble.libpebblecommon.io.rebble.libpebblecommon.notification.needsLabelReload
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -234,6 +236,48 @@ class NotificationAppsSyncTest {
         val merged = existing.mergedWithOsApp("Example", channels = emptyList(), isSystemApp = false)
 
         assertEquals(existing.channelGroups, merged.channelGroups)
+    }
+
+    private val synced = LabelState(locales = "en-US", lastFullSyncMs = 1_000L, localesChanged = false)
+
+    @Test
+    fun labelReused_whenAppUnchangedSinceLastFullSync() {
+        assertFalse(needsLabelReload(appItem("com.example", autoAdded = false), lastUpdateTime = 999L, synced))
+    }
+
+    @Test
+    fun labelReloaded_whenAppUpdatedSinceLastFullSync() {
+        assertTrue(needsLabelReload(appItem("com.example", autoAdded = false), lastUpdateTime = 1_000L, synced))
+    }
+
+    @Test
+    fun labelReloaded_whenLocalesChanged() {
+        assertTrue(
+            needsLabelReload(
+                appItem("com.example", autoAdded = false),
+                lastUpdateTime = 0L,
+                synced.copy(localesChanged = true),
+            )
+        )
+    }
+
+    @Test
+    fun labelReloaded_whenNeverFullySynced() {
+        assertTrue(
+            needsLabelReload(appItem("com.example", autoAdded = false), lastUpdateTime = 0L, synced.copy(lastFullSyncMs = null))
+        )
+    }
+
+    @Test
+    fun labelReloaded_whenRowWasAutoAdded() {
+        assertTrue(needsLabelReload(appItem("com.example", autoAdded = true), lastUpdateTime = 0L, synced))
+    }
+
+    @Test
+    fun labelReloaded_whenStoredNameBlank() {
+        assertTrue(
+            needsLabelReload(appItem("com.example", autoAdded = false).copy(name = ""), lastUpdateTime = 0L, synced)
+        )
     }
 
     private fun appItem(pkg: String, autoAdded: Boolean): NotificationAppItem =

@@ -101,7 +101,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         channel: NotificationChannel,
         modificationType: Int,
     ) {
-        notificationHandler.onChannelChanged()
+        notificationHandler.onChannelChanged(pkg)
     }
 
     override fun onNotificationChannelGroupModified(
@@ -110,7 +110,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         group: NotificationChannelGroup,
         modificationType: Int,
     ) {
-        notificationHandler.onChannelChanged()
+        notificationHandler.onChannelChanged(pkg)
     }
 
     private data class MutableGroup(

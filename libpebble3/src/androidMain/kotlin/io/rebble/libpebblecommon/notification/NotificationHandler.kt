@@ -109,12 +109,12 @@ class NotificationHandler(
         }
     }
 
-    private val _channelChanged = MutableSharedFlow<Unit>()
+    private val _channelChanged = MutableSharedFlow<String>()
     val channelChanged = _channelChanged.asSharedFlow()
 
-    fun onChannelChanged() {
+    fun onChannelChanged(packageName: String) {
         libPebbleCoroutineScope.launch {
-            _channelChanged.emit(Unit)
+            _channelChanged.emit(packageName)
         }
     }
 
