@@ -22,6 +22,11 @@ fun interface DataUsageRecorder {
     fun record(appUuid: Uuid, url: String, sentBytes: Long, receivedBytes: Long, requests: Int)
 }
 
+/** What the app put in a request: the URL and its headers carry data as much as the body does. */
+fun requestBytes(method: String, url: String, headers: Map<String, Any>, bodyBytes: Long): Long =
+    method.length + url.encodeToByteArray().size + bodyBytes +
+        headers.entries.sumOf { (name, value) -> name.length + value.toString().encodeToByteArray().size }
+
 interface AppDataUsageApi {
     /** Every app's traffic over the last [days] days, today included. */
     fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>>

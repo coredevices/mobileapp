@@ -13,6 +13,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.requestBytes
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -131,7 +132,7 @@ class WebSocketManager(
                     if (protocols.isNotEmpty()) header(HttpHeaders.SecWebSocketProtocol, protocols)
                 }
                 session.value = ws
-                dataUsage.record(appUuid, url, 0, 0, requests = 1)
+                dataUsage.record(appUuid, url, requestBytes("GET", url, extraHeaders, 0), 0, requests = 1)
                 val negotiated = ws.call.response.headers[HttpHeaders.SecWebSocketProtocol].orEmpty()
                 eval("$js._onOpen(${Json.encodeToString(negotiated)})")
                 coroutineScope {

@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.js
 
 import io.rebble.libpebblecommon.js.InterceptResponse.Companion.ERROR
 import io.rebble.libpebblecommon.permissions.DataUsageRecorder
+import io.rebble.libpebblecommon.permissions.requestBytes
 import kotlin.uuid.Uuid
 
 interface HttpInterceptor {
@@ -49,7 +50,7 @@ class HttpInterceptorManager(
         val response = interceptor.onIntercepted(url, method, body, appUuid)
         if (!interceptor.servedLocally) {
             // Counted as the size of what the app is given: the interceptor's own requests aren't seen.
-            val sent = body?.encodeToByteArray()?.size?.toLong() ?: 0
+            val sent = requestBytes(method, url, emptyMap(), body?.encodeToByteArray()?.size?.toLong() ?: 0)
             dataUsage.record(appUuid, url, sent, response.result.encodeToByteArray().size.toLong(), requests = 1)
         }
         return response

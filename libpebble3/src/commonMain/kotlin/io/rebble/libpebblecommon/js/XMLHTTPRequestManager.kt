@@ -24,6 +24,7 @@ import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.MalformedInputException
 import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.requestBytes
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -210,6 +211,7 @@ class XMLHTTPRequestManager(
             val user = user
             val password = password
             val headers = headers.toMap()
+            val sentBytes = requestBytes(method.value, url, headers, data?.size?.toLong() ?: 0)
             suspend fun execute(): Outcome {
                 // Served on the phone, so no network check; interceptors check their own permissions.
                 if (httpInterceptorManager.shouldIntercept(url)) {
@@ -244,13 +246,13 @@ class XMLHTTPRequestManager(
                     return Outcome.Error(notAllowed = true)
                 } catch (e: TimeoutCancellationException) {
                     logger.e { "Request timed out: ${e.message}" }
-                    dataUsage.record(appUuid, url, data?.size?.toLong() ?: 0, 0, requests = 1)
+                    dataUsage.record(appUuid, url, sentBytes, 0, requests = 1)
                     return Outcome.Timeout
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     logger.e(e) { "Request (size ${data?.size}) failed: ${e.message}" }
-                    dataUsage.record(appUuid, url, data?.size?.toLong() ?: 0, 0, requests = 1)
+                    dataUsage.record(appUuid, url, sentBytes, 0, requests = 1)
                     return Outcome.Error(notAllowed = false)
                 }
                 val responseHeaders = try {
@@ -288,7 +290,7 @@ class XMLHTTPRequestManager(
                     logger.e(e) { "Failed to read response body (type $responseType): ${e.message}" }
                     return Outcome.Error(notAllowed = false)
                 } finally {
-                    dataUsage.record(appUuid, url, data?.size?.toLong() ?: 0, receivedBytes, requests = 1)
+                    dataUsage.record(appUuid, url, sentBytes, receivedBytes, requests = 1)
                 }
                 logger.v { "XHR Response: ${response.status.value} ${response.status.description}" }
                 return Outcome.Response(responseHeaders, response.status.value, response.status.description, body)

@@ -71,7 +71,7 @@ class XMLHTTPRequestManagerTest {
         assertNull(manager(evals).request(async = true, body = "city=Oslo"))
         awaitRequests()
 
-        assertEquals(listOf(Recorded(URL, 9, 11, 1)), recorded)
+        assertEquals(listOf(Recorded(URL, "POST".length + URL.length + 9L, 11, 1)), recorded)
         assertTrue(evals.any { it.contains("_onResponseComplete") })
     }
 
@@ -84,7 +84,7 @@ class XMLHTTPRequestManagerTest {
         assertEquals(200, result["status"]!!.jsonPrimitive.int)
         assertEquals("{\"temp\":12}", result["body"]!!.jsonPrimitive.content)
         assertTrue(evals.none { it.contains("_onResponseComplete") })
-        assertEquals(listOf(Recorded(URL, 0, 11, 1)), recorded)
+        assertEquals(listOf(Recorded(URL, "GET".length + URL.length.toLong(), 11, 1)), recorded)
     }
 
     @Test
@@ -100,7 +100,7 @@ class XMLHTTPRequestManagerTest {
         manager(mutableListOf()).request(async = false, body = "AAEC/w==", binary = true)
 
         assertContentEquals(byteArrayOf(0, 1, 2, -1), sentBodies.single())
-        assertEquals(4, recorded.single().sent)
+        assertEquals("POST".length + URL.length + 4L, recorded.single().sent)
     }
 
     @Test
@@ -131,7 +131,7 @@ class XMLHTTPRequestManagerTest {
     fun anInterceptedRequestCountsForTheApp() = runTest {
         manager(mutableListOf(), interceptor = interceptor(servedLocally = false)).request(async = false)
 
-        assertEquals(listOf(Recorded(URL, 0, 10, 1)), recorded)
+        assertEquals(listOf(Recorded(URL, "GET".length + URL.length.toLong(), 10, 1)), recorded)
         assertEquals(emptyList(), sentBodies)
     }
 
