@@ -17,6 +17,7 @@ import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
 import coredevices.ExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
+import coredevices.analytics.CoreAnalytics
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.iosDefaultModule
 import coredevices.coreapp.di.utilModule
@@ -90,6 +91,7 @@ object IOSDelegate : KoinComponent {
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
     private val oAuthRedirectHandler: OAuthRedirectHandler by inject()
+    private var exitReporter: MetricKitExitReporter? = null
     private val bgTaskScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun registerNativeSpeechAnalyzer(
@@ -257,6 +259,7 @@ object IOSDelegate : KoinComponent {
                     "launchState=${application.applicationState.stateName()}"
         }
         reportPreviousRunOutcome()
+        exitReporter = MetricKitExitReporter(get<CoreAnalytics>()).also { it.start() }
         // Can only use Koin after this point
 
         // Initialize NotifierManager early to prevent crashes when PushMessaging tries to use it

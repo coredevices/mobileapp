@@ -31,7 +31,10 @@ import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.ExperimentalDevices
+import coredevices.analytics.CoreAnalytics
 import coredevices.coreapp.di.androidDefaultModule
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
@@ -54,6 +57,7 @@ import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 
 private val logger = Logger.withTag("MainApplication")
+private const val KEY_LAST_REPORTED_EXIT_TIMESTAMP = "last_reported_exit_timestamp"
 
 class MainApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
@@ -62,6 +66,8 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+    private val coreAnalytics: CoreAnalytics by inject()
+    private val settings: Settings by inject()
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
@@ -135,6 +141,10 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                 getSystemService(ActivityManager::class.java)
             // The newest record is often an isolated child (WebView), so log them all.
             val reasons = am.getHistoricalProcessExitReasons(packageName, 0, 0)
+            // First run: only report the most recent exit, not the whole history.
+            val lastReported = settings.getLongOrNull(KEY_LAST_REPORTED_EXIT_TIMESTAMP)
+                ?: reasons.filter { it.processName == packageName }.maxOfOrNull { it.timestamp - 1 }
+                ?: 0L
             reasons.forEach { info ->
                 val time = Instant.fromEpochMilliseconds(info.timestamp)
                 logger.i {
@@ -143,7 +153,21 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                             "description=${info.description} importance=${info.importance} " +
                             "pss=${info.pss} rss=${info.rss} status=${info.status}"
                 }
+                if (info.timestamp > lastReported && info.processName == packageName) {
+                    coreAnalytics.logEvent(
+                        "app.previous_exit",
+                        mapOf(
+                            "reason" to reasonName(info.reason),
+                            "description" to (info.description ?: ""),
+                            "importance" to info.importance,
+                            "pss_kb" to info.pss,
+                            "rss_kb" to info.rss,
+                            "status" to info.status,
+                        )
+                    )
+                }
             }
+            reasons.maxOfOrNull { it.timestamp }?.let { settings[KEY_LAST_REPORTED_EXIT_TIMESTAMP] = it }
         }
     }
 
