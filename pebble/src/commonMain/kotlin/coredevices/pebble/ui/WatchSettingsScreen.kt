@@ -180,6 +180,7 @@ import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
+import io.rebble.libpebblecommon.database.entity.currentYear
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -626,6 +627,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     }
     val healthSettingsNullable by libPebble.healthSettings.collectAsState(null)
     val healthSettings = healthSettingsNullable ?: return null
+    val thisYear = remember { currentYear() }
     val weatherFetcher: WeatherFetcher = koinInject()
     val watches by libPebble.watches.collectAsState(null)
     val watchesCastable = watches ?: return null
@@ -1422,21 +1424,22 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsNumberFieldItem(
                     id = SettingsIds.HealthAge,
-                    title = "Age",
+                    title = "Year of birth",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     group = SettingsGroup.YourDetails,
                     description = "Used for heart-rate zone calculations",
-                    value = healthSettings.ageYears.toLong(),
+                    keywords = "age",
+                    value = (healthSettings.birthYear ?: (thisYear - healthSettings.ageYears)).toLong(),
                     onValueChange = {
                         libPebble.updateHealthSettings(
-                            healthSettings.copy(ageYears = it.toInt())
+                            healthSettings.copy(birthYear = it.toInt())
                         )
                     },
                     show = { healthSettings.trackingEnabled },
-                    min = 1,
-                    max = 120,
-                    unit = "years",
+                    min = thisYear - 120,
+                    max = thisYear - 1,
+                    unit = "",
                 ),
                 basicSettingsDropdownItem(
                     id = SettingsIds.HealthGenderId,
