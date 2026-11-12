@@ -36,7 +36,7 @@ class Housekeeping(
 
         appDataUsage.deleteOlderThan(DATA_USAGE_KEPT_DAYS)
 
-        val deleteHealthDataOlderThan = clock.now() - 90.days
+        val deleteHealthDataOlderThan = clock.now() - 180.days
         val deletedHealthRecords = healthDao.deleteExpiredHealthData(deleteHealthDataOlderThan.epochSeconds)
         val deletedOverlayRecords = healthDao.deleteExpiredOverlayData(deleteHealthDataOlderThan.epochSeconds)
         if (deletedHealthRecords > 0 || deletedOverlayRecords > 0) {
