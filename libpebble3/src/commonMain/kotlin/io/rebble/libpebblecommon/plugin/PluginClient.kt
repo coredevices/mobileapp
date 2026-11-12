@@ -61,6 +61,7 @@ class PluginClient(
     private val runningApps: RunningApps,
     private val analytics: LibPebbleAnalytics,
     private val pluginLogs: PluginLogs,
+    private val actionLog: PluginActionRecorder,
 ) : Plugins {
     private val logger = Logger.withTag("PluginClient")
 
@@ -206,7 +207,9 @@ class PluginClient(
             } ?: ActionResult.error(PluginErrors.TIMEOUT, "no response in $timeout")
         }
         // A probe can't ask for anything, so it doesn't bring the plugin's requests to the user.
-        return if (caller.probe) run() else runningApps.whileRunning(plugin.pluginUuid) { run() }
+        val result = if (caller.probe) run() else runningApps.whileRunning(plugin.pluginUuid) { run() }
+        if (caller is PluginCaller.App) actionLog.record(caller.subject.appUuid, target.pluginUuid, action, args, result)
+        return result
     }
 
     private fun serve(

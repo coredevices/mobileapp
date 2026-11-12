@@ -37,6 +37,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
@@ -219,6 +220,8 @@ class FakeLibPebble : LibPebble {
     override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
 
     override fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>> = flowOf(emptyList())
+
+    override fun pluginActionLog(targetUuid: Uuid?, callerUuid: Uuid?): Flow<List<PluginActionLogEntity>> = flowOf(emptyList())
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }

@@ -23,6 +23,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.dao.PluginActionLogDao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -50,6 +51,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -98,8 +100,9 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
         AppDataUsageEntity::class,
+        PluginActionLogEntity::class,
     ],
-    version = 52,
+    version = 53,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -143,6 +146,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 49, to = 50),
         AutoMigration(from = 50, to = 51, spec = AutoMigration51::class),
         AutoMigration(from = 51, to = 52),
+        AutoMigration(from = 52, to = 53),
     ],
     exportSchema = true,
 )
@@ -168,6 +172,7 @@ abstract class Database : RoomDatabase() {
     abstract fun appPrefsDao(): AppPrefsEntryDao
     abstract fun notificationRuleDao(): NotificationRuleDao
     abstract fun appDataUsageDao(): AppDataUsageDao
+    abstract fun pluginActionLogDao(): PluginActionLogDao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")

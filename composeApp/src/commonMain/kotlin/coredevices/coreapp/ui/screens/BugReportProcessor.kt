@@ -33,6 +33,7 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.permissions.byApp
+import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -66,6 +67,7 @@ import size
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 data class BugReportGenerationParams(
     val userMessage: String,
@@ -752,6 +754,7 @@ class BugReportProcessor(
             appendLine("missingPermissions: ${permissionRequester.missingPermissions.value}")
             appendLine("watchesWithoutCompanionDevicePermission: $watchesWithoutCompanionDevicePermission")
             append(appDataUsageSummary())
+            append(watchSettingsChangesByApps())
             appendLine(libPebble.watchesDebugState())
             appendLine("Watches (most recently connected first):")
             watches.forEachIndexed { index, watch ->
@@ -771,6 +774,18 @@ class BugReportProcessor(
                 appendLine("    ${it.reportableKey}: ${formatDataUsage(it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, split = true)}")
             }
         }
+    }
+
+    private suspend fun watchSettingsChangesByApps(): String = buildString {
+        val changes = libPebble.pluginActionLog(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID).first()
+        val titles = libPebble.getAllLockerBasicInfo().first().associate { it.id to it.title }
+        appendLine("Watch settings changed by apps (newest first):")
+        if (changes.isEmpty()) appendLine("  none")
+        changes.take(BUG_REPORT_WATCH_SETTINGS_CHANGES).forEach {
+            val outcome = it.error?.let { error -> " failed: $error" }.orEmpty()
+            appendLine("  ${Instant.fromEpochMilliseconds(it.atMs)} ${titles[it.appUuid] ?: "Removed app"} (${it.appUuid}): ${it.action} ${it.args}$outcome")
+        }
+        if (changes.size > BUG_REPORT_WATCH_SETTINGS_CHANGES) appendLine("  …and ${changes.size - BUG_REPORT_WATCH_SETTINGS_CHANGES} more")
     }
 
     private suspend fun <T> withStrikes(strikes: Int = 3, block: suspend () -> Result<T>): Result<T> {
@@ -804,3 +819,4 @@ fun Path?.readMostRecent(bytes: Int): String? {
 }
 
 private const val BUG_REPORT_USAGE_DAYS = 7
+private const val BUG_REPORT_WATCH_SETTINGS_CHANGES = 100

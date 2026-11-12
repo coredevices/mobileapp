@@ -73,9 +73,9 @@ fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         item {
             Text(
                 if (apps.isEmpty()) {
-                    "No watchapp or plugin has used the network in the last $DATA_USAGE_KEPT_DAYS days."
+                    "None of your apps have sent or received anything in the last $DATA_USAGE_KEPT_DAYS days."
                 } else {
-                    "What your watchapps and plugins sent and received over the last $DATA_USAGE_KEPT_DAYS days."
+                    "How much your apps have sent and received over the last $DATA_USAGE_KEPT_DAYS days."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

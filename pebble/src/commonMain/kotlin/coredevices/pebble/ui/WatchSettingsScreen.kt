@@ -297,6 +297,7 @@ enum class SettingsGroup(val title: String) {
     CustomVibration("Custom Vibration Patterns"),
     Advanced("Advanced"),
     AutomaticFirmwareUpdatess("Automatic Updates"),
+    AppUsage("App Usage"),
 }
 
 data class SettingsItem(
@@ -2354,11 +2355,21 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Data usage",
-                    description = "How much your watchapps and plugins have sent and received",
+                    description = "How much your apps have sent and received",
                     keywords = "network mobile cellular data bandwidth",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
+                    group = SettingsGroup.AppUsage,
                     action = { nav.navigateTo(PebbleNavBarRoutes.AppDataUsageRoute) },
+                ) },
+                navBarNav?.let { nav -> basicSettingsActionItem(
+                    title = "App activity",
+                    description = "What actions your apps took using plugins",
+                    keywords = "audit log actions history",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Apps,
+                    group = SettingsGroup.AppUsage,
+                    action = { nav.navigateTo(PebbleNavBarRoutes.AppActivityRoute) },
                 ) },
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Configure Appstore Sources",

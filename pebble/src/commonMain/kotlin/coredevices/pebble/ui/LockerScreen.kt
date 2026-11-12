@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1385,6 +1386,8 @@ private fun SectionHeader(text: String) {
 fun CommonApp.listImageColorFilter(): ColorFilter? =
     if (listImageTintable) ColorFilter.tint(LocalContentColor.current) else null
 
+private const val SCREENSHOT_ASPECT_RATIO = 144f / 168f
+
 @Composable
 fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
     val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -1398,8 +1401,10 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 val url = when (entry.type) {
                     AppType.Watchapp -> entry.screenshotImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
-                    AppType.Plugin -> entry.listImageUrl ?: entry.screenshotImageUrl
+                    AppType.Plugin -> entry.listImageUrl?.ifBlank { null } ?: entry.screenshotImageUrl
                 }
+                // A sideloaded app often has none.
+                if (url.isNullOrBlank()) return@remember null
                 ImageRequest.Builder(context)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .data(url)
@@ -1423,6 +1428,17 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 Res.getUri(resUri)
             }
         }
+    }
+    if (model == null) {
+        Box(
+            modifier = modifier.height(size)
+                .aspectRatio(if (entry.type == AppType.Plugin) 1f else SCREENSHOT_ASPECT_RATIO)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(entry.type.icon(), contentDescription = null, modifier = Modifier.size(size * 0.4f))
+        }
+        return
     }
 
     AsyncImage(

@@ -70,6 +70,8 @@ import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.ActionResult
 import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.plugin.NativePlugin
+import io.rebble.libpebblecommon.plugin.PluginActionLog
+import io.rebble.libpebblecommon.plugin.PluginActionLogApi
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginErrors
@@ -118,7 +120,7 @@ sealed class PebbleConnectionEvent {
 interface LibPebble : Scanning, RequestSync, LockerApi, NotificationApps, CallManagement, Calendar,
     OtherPebbleApps, PKJSToken, Watches, Errors, Contacts, AnalyticsEvents, HealthApi, WatchPrefs,
     SystemGeolocation, Timeline, Vibrations, Weather, HealthDataApi, Plugins, AppPermissionsApi,
-    PluginFileAccessApi, NotificationReplies, AppDataUsageApi {
+    PluginFileAccessApi, NotificationReplies, AppDataUsageApi, PluginActionLogApi {
     fun init()
 
     val config: StateFlow<LibPebbleConfig>
@@ -558,6 +560,7 @@ class LibPebble3(
     private val weatherManager: WeatherManager,
     private val appPermissions: AppPermissions,
     private val appDataUsage: AppDataUsage,
+    pluginActionLog: PluginActionLog,
     pluginClient: PluginClient,
     pluginFileAccess: PluginFileAccess,
     private val notificationReplies: NotificationReplies,
@@ -570,7 +573,8 @@ class LibPebble3(
     Vibrations by notificationApi, WatchPrefs by watchPreferences, Weather by weatherManager,
     HealthDataApi by health, Plugins by pluginClient,
     AppPermissionsApi by appPermissions, PluginFileAccessApi by pluginFileAccess,
-    NotificationReplies by notificationReplies, AppDataUsageApi by appDataUsage {
+    NotificationReplies by notificationReplies, AppDataUsageApi by appDataUsage,
+    PluginActionLogApi by pluginActionLog {
     private val logger = Logger.withTag("LibPebble3")
     private val initialized = AtomicBoolean(false)
 

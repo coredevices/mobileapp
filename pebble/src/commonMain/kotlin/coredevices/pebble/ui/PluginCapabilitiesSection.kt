@@ -19,7 +19,10 @@ import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,11 +48,11 @@ fun PluginCapabilitiesSection(metadata: PluginMetadata) {
     if (capabilities.isEmpty) return
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (capabilities.sources.isNotEmpty()) {
-            SectionTitle("Sources")
+            SectionTitle("Sources", SOURCES_INFO)
             capabilities.sources.forEach { SourceGroupRow(it) }
         }
         if (capabilities.actions.isNotEmpty()) {
-            SectionTitle("Actions")
+            SectionTitle("Actions", ACTIONS_INFO)
             var showAll by remember(metadata) { mutableStateOf(false) }
             val actions = capabilities.actions
             val shown = if (showAll) actions else actions.take(PluginCapabilities.ACTIONS_PREVIEW)
@@ -63,9 +66,30 @@ fun PluginCapabilitiesSection(metadata: PluginMetadata) {
     }
 }
 
+private const val SOURCES_INFO = "The information this plugin provides, like the weather or your next calendar event. " +
+    "Watchfaces, apps and other plugins can show it, if you allow them to."
+
+private const val ACTIONS_INFO = "The things this plugin can do, like turning on a light. Watchfaces, apps, other " +
+    "plugins and Index can ask it to do them; apps need your permission first. What apps have done is listed in " +
+    "Settings › Apps › App activity."
+
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+private fun SectionTitle(text: String, info: String) {
+    var showInfo by remember { mutableStateOf(false) }
+    if (showInfo) {
+        AlertDialog(
+            onDismissRequest = { showInfo = false },
+            title = { Text(text) },
+            text = { Text(info) },
+            confirmButton = { TextButton(onClick = { showInfo = false }) { Text("OK") } },
+        )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+        Text(text, style = MaterialTheme.typography.titleMedium)
+        IconButton(onClick = { showInfo = true }, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Outlined.Info, contentDescription = "About $text", modifier = Modifier.size(18.dp))
+        }
+    }
 }
 
 @Composable

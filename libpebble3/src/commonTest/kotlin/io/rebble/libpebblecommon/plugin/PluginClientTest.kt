@@ -93,7 +93,10 @@ class PluginClientTest {
     private val analytics = CountingAnalytics()
     private val logs = PluginLogs()
     private val registry = PluginRegistry(emptySet(), WatchConfig(enablePlugins = true).asFlow(), MapSettings())
-    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs)
+    private val actionLog = mutableListOf<Pair<String, ActionResult>>()
+    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs) { _, _, action, _, result ->
+        actionLog += action to result
+    }
 
     private fun ClientFakePlugin.registered(): PluginMetadata = also { registry.registerPlugin(it) }.metadata
 
@@ -137,6 +140,30 @@ class PluginClientTest {
         client.invoke(APP_CALLER, ClientFakePlugin().registered(), "do_it", ARGS)
 
         assertEquals(listOf(PluginHeartbeatCounters.PKJS_INVOCATIONS, PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.INVOCATIONS)), analytics.counters)
+    }
+
+    @Test
+    fun anAppsActionsAreLoggedWhetherTheySucceedOrFail() = runTest {
+        val failed = ActionResult.error(PluginErrors.UNKNOWN, "broke")
+        var result = ActionResult(ok = true)
+        val plugin = ClientFakePlugin(onInvoke = { result }).registered()
+
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+        result = failed
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+
+        assertEquals(listOf("do_it" to ActionResult(ok = true), "do_it" to failed), actionLog)
+    }
+
+    @Test
+    fun refusedAndHostActionsAreNotLogged() = runTest {
+        val plugin = ClientFakePlugin(callerPermissions = listOf(PluginPermission(PluginPermissions.CALENDAR))).registered()
+        dao.insertOrReplace(deniedRow(PluginPermissions.CALENDAR))
+
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+        client.invoke(PluginCaller.Host(), plugin, "do_it", ARGS)
+
+        assertEquals(emptyList(), actionLog)
     }
 
     @Test

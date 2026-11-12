@@ -146,6 +146,9 @@ import io.rebble.libpebblecommon.plugin.PlatformPlugins
 import io.rebble.libpebblecommon.plugin.NativePlugin
 import io.rebble.libpebblecommon.plugin.LockerPluginLoader
 import io.rebble.libpebblecommon.plugin.PluginOAuthApi
+import io.rebble.libpebblecommon.plugin.PluginActionLog
+import io.rebble.libpebblecommon.plugin.PluginActionLogApi
+import io.rebble.libpebblecommon.plugin.PluginActionRecorder
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginLogs
 import io.rebble.libpebblecommon.plugin.PluginRegistry
@@ -387,6 +390,7 @@ fun initKoin(
                 single { get<Database>().healthSettingsDao() } binds arrayOf(HealthSettingsEntryDao::class, HealthSettingsEntryRealDao::class)
                 single { get<Database>().lockerAppPermissionDao() }
                 single { get<Database>().appDataUsageDao() }
+                single { get<Database>().pluginActionLogDao() }
                 single { get<Database>().notificationsDao() }
                 single { get<Database>().contactDao() }
                 single { get<Database>().vibePatternDao() }
@@ -421,6 +425,7 @@ fun initKoin(
                         get(),
                         get(),
                         get(), // lockerPluginLoader
+                        get(),
                         get(),
                         get(),
                         get(),
@@ -501,6 +506,7 @@ fun initKoin(
                 singleOf(::LockerInstalledApps) bind InstalledApps::class
                 singleOf(::AppPermissions)
                 singleOf(::AppDataUsage) binds arrayOf(DataUsageRecorder::class, AppDataUsageApi::class)
+                singleOf(::PluginActionLog) binds arrayOf(PluginActionRecorder::class, PluginActionLogApi::class)
                 singleOf(::PluginClient)
                 single<PluginFileSystem> { platformPluginFileSystem(get(), get()) }
                 singleOf(::PluginFileAccess)
