@@ -148,6 +148,7 @@ object ConnectedPebble {
         suspend fun startDevConnection(forceLan: Boolean = false)
         suspend fun stopDevConnection()
         val devConnectionActive: StateFlow<Boolean>
+        val devConnectionError: StateFlow<String?>
     }
 
     interface Screenshot {

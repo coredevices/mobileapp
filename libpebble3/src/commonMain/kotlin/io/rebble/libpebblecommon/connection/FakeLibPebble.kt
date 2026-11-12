@@ -843,6 +843,7 @@ class FakeConnectedDevice(
     override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val devConnectionError: StateFlow<String?> = MutableStateFlow(null)
     override val batteryLevel: Int? = 50
     override suspend fun takeScreenshot(): ImageBitmap {
         // Return an orange square as a placeholder
@@ -945,6 +946,7 @@ class FakeConnectedDeviceInRecovery(
     override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val devConnectionError: StateFlow<String?> = MutableStateFlow(null)
     override val batteryLevel: Int? = 50
 
     override suspend fun gatherLogs(): Path? {

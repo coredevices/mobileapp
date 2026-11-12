@@ -1501,6 +1501,16 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
                     }
                 )
 
+                val error by watch.devConnectionError.collectAsState()
+                if (!active && error != null) {
+                    Text(
+                        text = "Dev connection failed: $error",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    )
+                }
+
                 if (active) {
                     if (config.watchConfig.lanDevConnection) {
                         val (v4, v6) = remember { getIPAddress() }
