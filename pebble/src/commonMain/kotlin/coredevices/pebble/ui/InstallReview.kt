@@ -645,7 +645,7 @@ fun AppPermissionsSection(appUuid: Uuid) {
 
 /** A section's title, which collapses and expands it. */
 @Composable
-private fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
+internal fun SectionHeader(title: String, open: Boolean, onToggle: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),

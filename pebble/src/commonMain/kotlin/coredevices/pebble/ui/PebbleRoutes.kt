@@ -298,7 +298,7 @@ fun NavGraphBuilder.addNavBarRoutes(
         PermissionUsageScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.AppDataUsageRoute> {
-        AppDataUsageScreen(topBarParams)
+        AppDataUsageScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
         val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()

@@ -44,6 +44,7 @@ import io.rebble.libpebblecommon.permissions.byApp
 import io.rebble.libpebblecommon.permissions.domainOf
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlinx.coroutines.flow.map
+import kotlin.uuid.Uuid
 import org.koin.compose.koinInject
 
 private const val USAGE_DAYS = 30
@@ -57,7 +58,7 @@ private fun PermissionDataUsage.label(): String = domainOf(permission) ?: when (
 }
 
 @Composable
-fun AppDataUsageScreen(topBarParams: TopBarParams) {
+fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
     LaunchedEffect(Unit) {
         topBarParams.searchAvailable(null)
         topBarParams.actions {}
@@ -83,19 +84,29 @@ fun AppDataUsageScreen(topBarParams: TopBarParams) {
             )
         }
         items(apps, key = { it.appUuid.toString() }) { app ->
-            AppUsageRow(app, sharedViewModel, removed = installed != null && app.appUuid !in installed)
+            AppUsageRow(app, sharedViewModel, removed = installed != null && app.appUuid !in installed) {
+                nav.navigateTo(PebbleNavBarRoutes.LockerAppRoute(uuid = app.appUuid.toString(), storedId = null, storeSource = null))
+            }
         }
     }
 }
 
 @Composable
-private fun AppUsageRow(app: AppDataUsageSummary, sharedViewModel: SharedLockerViewModel, removed: Boolean) {
+private fun AppUsageRow(
+    app: AppDataUsageSummary,
+    sharedViewModel: SharedLockerViewModel,
+    removed: Boolean,
+    openApp: () -> Unit,
+) {
     val entry = loadLockerEntry(app.appUuid, sharedViewModel.watchType.value)
     var expanded by rememberSaveable(app.appUuid.toString()) { mutableStateOf(false) }
     Column(modifier = Modifier.clickable { expanded = !expanded }) {
         ListItem(
             leadingContent = {
-                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.size(56.dp).clickable(enabled = entry != null && !removed, onClick = openApp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     entry?.let { AppImage(it, Modifier.clip(RoundedCornerShape(8.dp)), 56.dp) }
                 }
             },
@@ -110,15 +121,44 @@ private fun AppUsageRow(app: AppDataUsageSummary, sharedViewModel: SharedLockerV
         )
         if (expanded) {
             Card(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    UsageDetailRow("Total", app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)
-                    app.byPermission.forEach {
-                        val info = LEGACY_INFO.takeIf { _ -> it.permission == PluginPermissions.GLOBAL_INTERNET }
-                        UsageDetailRow(it.label(), it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, info)
-                    }
-                }
+                AppUsageDetails(app, Modifier.padding(vertical = 8.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun AppUsageDetails(app: AppDataUsageSummary, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        UsageDetailRow("Total", app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)
+        app.byPermission.forEach {
+            val info = LEGACY_INFO.takeIf { _ -> it.permission == PluginPermissions.GLOBAL_INTERNET }
+            UsageDetailRow(it.label(), it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, info)
+        }
+    }
+}
+
+/** Shown on an app's page; nothing if it hasn't used the network. */
+@Composable
+fun AppDataUsageSection(appUuid: Uuid) {
+    val libPebble = rememberLibPebble()
+    val usage by remember(appUuid) {
+        libPebble.appDataUsage(USAGE_DAYS).map { rows -> rows.filter { it.appUuid == appUuid }.byApp().firstOrNull() }
+    }.collectAsState(null)
+    val app = usage ?: return
+    var open by rememberSaveable(appUuid.toString()) { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            SectionHeader("Data usage", open) { open = !open }
+            if (!open) {
+                Text(
+                    "Last $USAGE_DAYS days: ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (open) AppUsageDetails(app)
     }
 }
 

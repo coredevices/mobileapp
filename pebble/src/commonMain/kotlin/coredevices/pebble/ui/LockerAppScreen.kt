@@ -704,6 +704,7 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                     val storeApp = (entry.commonAppType as? CommonAppType.Store)?.storeApp
                     if (entry.commonAppType is CommonAppType.Locker) {
                         AppPermissionsSection(entry.uuid)
+                        AppDataUsageSection(entry.uuid)
                     } else if (pluginsEnabled && storeApp != null) {
                         StorePermissionsSection(storeApp.requestedPermissions())
                     } else if (storeEntry?.capabilities?.isNotEmpty() == true) {
