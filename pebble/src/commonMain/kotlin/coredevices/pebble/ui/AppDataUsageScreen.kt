@@ -38,16 +38,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.rememberLibPebble
 import coredevices.util.storage.formatDataUsage
+import io.rebble.libpebblecommon.DATA_USAGE_KEPT_DAYS
 import io.rebble.libpebblecommon.permissions.AppDataUsageSummary
 import io.rebble.libpebblecommon.permissions.PermissionDataUsage
 import io.rebble.libpebblecommon.permissions.byApp
 import io.rebble.libpebblecommon.permissions.domainOf
 import io.rebble.libpebblecommon.plugin.PluginPermissions
-import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.flow.map
 import org.koin.compose.koinInject
-
-private const val USAGE_DAYS = 30
 
 private const val LEGACY_INFO = "This app was made before apps had to declare which websites they use, so it can " +
     "reach any website and its data usage can't be split up by website."
@@ -65,7 +64,7 @@ fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         topBarParams.title("Data usage")
     }
     val libPebble = rememberLibPebble()
-    val usage by remember { libPebble.appDataUsage(USAGE_DAYS).map { it.byApp() } }.collectAsState(null)
+    val usage by remember { libPebble.appDataUsage(DATA_USAGE_KEPT_DAYS).map { it.byApp() } }.collectAsState(null)
     val sharedViewModel: SharedLockerViewModel = koinInject()
     sharedViewModel.Init()
     val installed = allCollectionUuids()
@@ -74,9 +73,9 @@ fun AppDataUsageScreen(nav: NavBarNav, topBarParams: TopBarParams) {
         item {
             Text(
                 if (apps.isEmpty()) {
-                    "No watchapp or plugin has used the network in the last $USAGE_DAYS days."
+                    "No watchapp or plugin has used the network in the last $DATA_USAGE_KEPT_DAYS days."
                 } else {
-                    "What your watchapps and plugins sent and received over the last $USAGE_DAYS days."
+                    "What your watchapps and plugins sent and received over the last $DATA_USAGE_KEPT_DAYS days."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -143,7 +142,7 @@ private fun AppUsageDetails(app: AppDataUsageSummary, modifier: Modifier = Modif
 fun AppDataUsageSection(appUuid: Uuid) {
     val libPebble = rememberLibPebble()
     val usage by remember(appUuid) {
-        libPebble.appDataUsage(USAGE_DAYS).map { rows -> rows.filter { it.appUuid == appUuid }.byApp().firstOrNull() }
+        libPebble.appDataUsage(DATA_USAGE_KEPT_DAYS).map { rows -> rows.filter { it.appUuid == appUuid }.byApp().firstOrNull() }
     }.collectAsState(null)
     val app = usage ?: return
     var open by rememberSaveable(appUuid.toString()) { mutableStateOf(false) }
@@ -152,7 +151,7 @@ fun AppDataUsageSection(appUuid: Uuid) {
             SectionHeader("Data usage", open) { open = !open }
             if (!open) {
                 Text(
-                    "Last $USAGE_DAYS days: ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)}",
+                    "Last $DATA_USAGE_KEPT_DAYS days: ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

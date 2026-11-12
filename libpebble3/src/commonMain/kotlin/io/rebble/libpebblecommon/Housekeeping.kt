@@ -45,4 +45,4 @@ class Housekeeping(
     }
 }
 
-const val DATA_USAGE_KEPT_DAYS = 90
+const val DATA_USAGE_KEPT_DAYS = 30
