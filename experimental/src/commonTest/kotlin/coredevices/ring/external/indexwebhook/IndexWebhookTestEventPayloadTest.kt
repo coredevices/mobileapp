@@ -56,6 +56,39 @@ class IndexWebhookTestEventPayloadTest {
     }
 
     @Test
+    fun jsonPayloadMirrorsMultipartFieldsWithBase64Audio() {
+        val body = buildWebhookJsonBody(
+            audioData = byteArrayOf(1, 2, 3),
+            filename = "abc.m4a",
+            recordedAt = 1L,
+            transcription = "hello \"world\"",
+            isTest = false,
+        ).decodeToString()
+
+        assertEquals(
+            """{"audio":"AQID","filename":"abc.m4a","audioContentType":"audio/mp4",""" +
+                """"transcription":"hello \"world\"","recordedAt":1,"client":"ring"}""",
+            body,
+        )
+    }
+
+    @Test
+    fun jsonTestEventCarriesTranscriptionOnly() {
+        val body = buildWebhookJsonBody(
+            audioData = null,
+            filename = "recording.m4a",
+            recordedAt = 1L,
+            transcription = WEBHOOK_TEST_TRANSCRIPTION,
+            isTest = true,
+        ).decodeToString()
+
+        assertEquals(
+            """{"transcription":"Index webhook test event","test":true,"recordedAt":1,"client":"ring"}""",
+            body,
+        )
+    }
+
+    @Test
     fun testEventTriggerValueIsDistinctFromEveryGestureValue() {
         assertEquals("test-event", WEBHOOK_TEST_TRIGGER)
         assertTrue(

@@ -189,6 +189,7 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
         signRequests: Boolean,
         signingSecret: String?,
         clickPayload: String,
+        sendJson: Boolean,
     ) = throw NotImplementedError("unused")
 }
 

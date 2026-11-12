@@ -298,6 +298,7 @@ class RecordingProcessingQueueTest {
                     signRequests: Boolean,
                     signingSecret: String?,
                     clickPayload: String,
+                    sendJson: Boolean,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )

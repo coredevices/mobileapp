@@ -35,6 +35,7 @@ data class IndexWebhookConfig(
     val signRequests: Boolean = false,
     val saved: Boolean = false,
     val clickPayload: String = "",
+    val sendJson: Boolean = false,
 ) {
     val isActive: Boolean get() = saved && !url.isNullOrBlank()
 }

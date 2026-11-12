@@ -73,6 +73,7 @@ fun IndexWebhookSheet(
     val headerInputs by viewModel.headerInputs.collectAsState()
     val payloadMode by viewModel.payloadModeInput.collectAsState()
     val clickPayload by viewModel.clickPayloadInput.collectAsState()
+    val sendJson by viewModel.sendJsonInput.collectAsState()
     val signRequests by viewModel.signRequestsInput.collectAsState()
     val signingSecret by viewModel.signingSecretInput.collectAsState()
     val signingSecretLoading by viewModel.signingSecretLoading.collectAsState()
@@ -174,6 +175,21 @@ fun IndexWebhookSheet(
                             Text(mode.segmentLabel())
                         }
                     }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Send as JSON", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "application/json instead of multipart/form-data. Audio is base64",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = sendJson, onCheckedChange = viewModel::updateSendJson)
                 }
             }
 
