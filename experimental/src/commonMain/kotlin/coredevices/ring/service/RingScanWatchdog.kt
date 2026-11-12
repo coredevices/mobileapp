@@ -20,7 +20,7 @@ import kotlin.time.TimeSource
 class RingScanWatchdog(
     private val advertisements: Flow<*>,
     private val hadRecentConnection: () -> Boolean,
-    private val restartScan: () -> Unit,
+    private val restartScan: suspend () -> Unit,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
     private val logger = Logger.withTag("RingScanWatchdog")

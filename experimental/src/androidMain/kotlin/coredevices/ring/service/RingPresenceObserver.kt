@@ -13,6 +13,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
 import coredevices.util.CoreConfigHolder
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +41,7 @@ class RingPresenceObserver(
     private val preferences: Preferences,
     private val coreConfigHolder: CoreConfigHolder,
     private val scanWatchdog: RingScanWatchdog,
-    private val ringSync: RingSync,
+    private val satelliteManager: KMPHaversineSatelliteManager,
 ) {
     private val logger = Logger.withTag("RingPresence")
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -97,7 +98,7 @@ class RingPresenceObserver(
                 idleRestart = scope.launch {
                     delay(IDLE_RESTART_DELAY)
                     logger.i { "Device idle; restarting scan" }
-                    ringSync.restartScan()
+                    satelliteManager.forceRestartScan()
                 }.also { holdWakeLockDuring(it) }
             }
         }

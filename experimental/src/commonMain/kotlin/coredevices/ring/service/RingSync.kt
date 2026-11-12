@@ -28,7 +28,6 @@ import coredevices.ring.util.trace.RingTraceSession
 import coredevices.util.CoreConfigFlow
 import coredevices.util.Platform
 import coredevices.util.SecondaryProfileWarning
-import coredevices.util.flow.takeUntil
 import coredevices.util.isIOS
 import coredevices.util.transcription.TranscriptionService
 import kotlinx.coroutines.Dispatchers
@@ -168,8 +167,6 @@ class RingSync(
         }
     }
     private var syncJob: Job? = null
-    private val scanRestartRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    private var scanRestartRequested = false
     private var lastConnectionActivity: TimeMark? = null
     private val saveSemaphore = Semaphore(permits = 8)
     private val pairingKeyMonitor = RingPairingKeyMonitor(prefs)
@@ -339,7 +336,6 @@ class RingSync(
                                 .catch {
                                     logger.e(it) { "Error during satellite scanning: ${it.message}" }
                                 }
-                                .takeUntil(scanRestartRequests)
                                 .collect { satelliteStatus ->
                                     val t = Clock.System.now()
                                     if (satelliteStatus !is SatelliteStatus.BluetoothFailure) {
@@ -958,11 +954,7 @@ class RingSync(
                                     }
                                     //logger.d { "Handled satellite status ${satelliteStatus::class.simpleName} in $dur" }
                                 }
-                            if (scanRestartRequested) {
-                                scanRestartRequested = false
-                            } else {
-                                delay(SCAN_INTERVAL)
-                            }
+                            delay(SCAN_INTERVAL)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -999,13 +991,6 @@ class RingSync(
     /** Whether a connection (transfer, firmware update or programming) started, progressed or ended recently. */
     fun hadRecentConnection(): Boolean =
         lastConnectionActivity?.let { it.elapsedNow() < RECENT_CONNECTION_WINDOW } == true
-
-    /** Tears the scan down; the sync loop brings it straight back up. */
-    fun restartScan() {
-        logger.w { "Restarting ring scan" }
-        scanRestartRequested = true
-        scanRestartRequests.tryEmit(Unit)
-    }
 
     suspend fun lastRingSummary(): String? = lastRing.value?.let {
         val state = it.state.value

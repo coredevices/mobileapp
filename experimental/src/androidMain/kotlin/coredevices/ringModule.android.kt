@@ -41,11 +41,11 @@ actual val platformRingModule = module {
     singleOf(::RingDelegate)
     singleOf(::RingPresenceObserver)
     single {
-        val ringSync = get<RingSync>()
+        val satelliteManager = get<KMPHaversineSatelliteManager>()
         RingScanWatchdog(
-            advertisements = get<KMPHaversineSatelliteManager>().advertisements,
-            hadRecentConnection = ringSync::hadRecentConnection,
-            restartScan = ringSync::restartScan,
+            advertisements = satelliteManager.advertisements,
+            hadRecentConnection = get<RingSync>()::hadRecentConnection,
+            restartScan = satelliteManager::forceRestartScan,
         )
     }
     single {
