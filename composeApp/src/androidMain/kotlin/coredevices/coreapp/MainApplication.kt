@@ -24,7 +24,7 @@ import co.touchlab.kermit.Severity
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
-import coil3.gif.GifDecoder
+import coil3.gif.AnimatedImageDecoder
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.google.firebase.Firebase
@@ -245,12 +245,10 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
             .memoryCache(null)
             .components {
                 add(SvgDecoder.Factory())
-                // Trying to see if not using AnimatedImageDecoder fixes memory leaks
-//                if (SDK_INT >= 28) {
-//                    add(AnimatedImageDecoder.Factory())
-//                } else {
-                    add(GifDecoder.Factory())
-//                }
+                // Below P, GIFs show their first frame.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(AnimatedImageDecoder.Factory())
+                }
             }
             .build()
     }
