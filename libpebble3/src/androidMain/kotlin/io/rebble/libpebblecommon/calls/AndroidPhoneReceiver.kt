@@ -19,6 +19,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
 import kotlin.random.nextUInt
 import kotlin.time.Duration.Companion.milliseconds
@@ -46,6 +48,7 @@ class AndroidPhoneReceiver(
     private var nullCallJob: Job? = null
     private var ringingDelayJob: Job? = null
     private var receiverCookie: UInt? = null
+    private val stateLock = Mutex()
 
     private fun inCallServiceAvailable(): Boolean {
         val service = context.getSystemService(CompanionDeviceManager::class.java)
@@ -69,7 +72,7 @@ class AndroidPhoneReceiver(
 
     override fun init(currentCall: MutableStateFlow<Call?>) {
         libPebbleCoroutineScope.launch {
-            IntentFilter(ACTION_PHONE_STATE_CHANGED).asFlow(context, exported = true).collect { intent ->
+            IntentFilter(ACTION_PHONE_STATE_CHANGED).asFlow(context, exported = true).collect { intent -> stateLock.withLock {
                 val callState = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
                 logger.v { "Phone state: $callState" }
                 when (callState) {
@@ -92,12 +95,14 @@ class AndroidPhoneReceiver(
                             // if we don't quickly receive a non-null one.
                             nullCallJob = libPebbleCoroutineScope.launch {
                                 delay(0.5.seconds)
-                                logger.v { "No second RINGING with number received, handling with null number" }
-                                if (currentCall.value != null) {
-                                    logger.v { "InCallService already handling this call, skipping" }
-                                    return@launch
+                                stateLock.withLock {
+                                    logger.v { "No second RINGING with number received, handling with null number" }
+                                    if (currentCall.value != null) {
+                                        logger.v { "InCallService already handling this call, skipping" }
+                                        return@launch
+                                    }
+                                    handleRinging(currentCall, null)
                                 }
-                                handleRinging(currentCall, null)
                             }
                             return@collect
                         }
@@ -135,7 +140,7 @@ class AndroidPhoneReceiver(
                         )
                     }
                 }
-            }
+            } }
         }
     }
 
@@ -147,11 +152,13 @@ class AndroidPhoneReceiver(
             ringingDelayJob = libPebbleCoroutineScope.launch {
                 logger.v { "scheduling ringingDelayJob" }
                 delay(500.milliseconds)
-                if (currentCall.value != null) {
-                    logger.v { "InCallService already handling this call, skipping" }
-                    return@launch
+                stateLock.withLock {
+                    if (currentCall.value != null) {
+                        logger.v { "InCallService already handling this call, skipping" }
+                        return@launch
+                    }
+                    handleRinging(currentCall, number)
                 }
-                handleRinging(currentCall, number)
             }
         } else {
             // No InCallService — handle immediately
