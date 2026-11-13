@@ -473,10 +473,14 @@ internal fun rememberPluginPermissions(): Map<String, PluginDefinedPermission> {
     return remember { libPebble.pluginPermissions() }.collectAsState(emptyMap()).value
 }
 
-fun requestSummary(keys: List<String>, defined: Map<String, PluginDefinedPermission>): String {
-    val labels = keys.map { permissionLabel(it, defined).replaceFirstChar { c -> c.lowercase() } }
-    return if (labels.size <= 1) labels.joinToString() else labels.dropLast(1).joinToString() + " and " + labels.last()
-}
+fun requestLabels(keys: List<String>, defined: Map<String, PluginDefinedPermission>): List<String> =
+    keys.map { permissionLabel(it, defined).replaceFirstChar { c -> c.lowercase() } }
+
+fun requestSummary(labels: List<String>): String =
+    if (labels.size <= 1) labels.joinToString() else labels.dropLast(1).joinToString() + " and " + labels.last()
+
+fun requestSummary(keys: List<String>, defined: Map<String, PluginDefinedPermission>): String =
+    requestSummary(requestLabels(keys, defined))
 
 @Composable
 fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {

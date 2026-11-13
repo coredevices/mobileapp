@@ -18,6 +18,8 @@ import kotlin.uuid.Uuid
 
 private const val CATEGORY_ID = "app-permission-request"
 private const val CATEGORY_ID_ALL = "app-permission-request-all"
+private const val CATEGORY_ID_DENY = "app-permission-request-deny"
+private const val CATEGORY_ID_DENY_ALL = "app-permission-request-deny-all"
 private const val ACTION_ALLOW = "app-permission-allow"
 private const val ACTION_DENY = "app-permission-deny"
 private const val USERINFO_APP_UUID = "app-permission-uuid"
@@ -34,7 +36,14 @@ actual fun notifyPermissionRequest(appContext: AppContext, notification: Permiss
         val content = UNMutableNotificationContent()
         content.setTitle(notification.title)
         content.setBody(notification.body)
-        content.setCategoryIdentifier(if (notification.permissions.size > 1) CATEGORY_ID_ALL else CATEGORY_ID)
+        val several = notification.permissions.size > 1
+        content.setCategoryIdentifier(
+            if (notification.canAllow) {
+                if (several) CATEGORY_ID_ALL else CATEGORY_ID
+            } else {
+                if (several) CATEGORY_ID_DENY_ALL else CATEGORY_ID_DENY
+            }
+        )
         content.setUserInfo(
             mapOf(
                 USERINFO_APP_UUID to notification.appUuid.toString(),
@@ -90,18 +99,25 @@ private suspend fun ensureCategoryRegistered() = categoryLock.withLock {
             continuation.resume(categories as Set<*>? ?: emptySet<Any>())
         }
     }
-    val ours = setOf(CATEGORY_ID, CATEGORY_ID_ALL)
+    val ours = setOf(CATEGORY_ID, CATEGORY_ID_ALL, CATEGORY_ID_DENY, CATEGORY_ID_DENY_ALL)
     val others = existing.filterNot { (it as? UNNotificationCategory)?.identifier in ours }.toSet()
     // Background actions: answering doesn't bring the app to the foreground.
-    fun category(id: String, suffix: String) = UNNotificationCategory.categoryWithIdentifier(
+    fun category(id: String, suffix: String, canAllow: Boolean = true) = UNNotificationCategory.categoryWithIdentifier(
         id,
-        listOf(
+        listOfNotNull(
             UNNotificationAction.actionWithIdentifier(ACTION_DENY, "Deny$suffix", 0u),
-            UNNotificationAction.actionWithIdentifier(ACTION_ALLOW, "Allow$suffix", 0u),
+            UNNotificationAction.actionWithIdentifier(ACTION_ALLOW, "Allow$suffix", 0u).takeIf { canAllow },
         ),
         emptyList<String>(),
         0u,
     )
-    center.setNotificationCategories(others + setOf(category(CATEGORY_ID, ""), category(CATEGORY_ID_ALL, " all")))
+    center.setNotificationCategories(
+        others + setOf(
+            category(CATEGORY_ID, ""),
+            category(CATEGORY_ID_ALL, " all"),
+            category(CATEGORY_ID_DENY, "", canAllow = false),
+            category(CATEGORY_ID_DENY_ALL, " all", canAllow = false),
+        )
+    )
     categoryRegistered = true
 }
