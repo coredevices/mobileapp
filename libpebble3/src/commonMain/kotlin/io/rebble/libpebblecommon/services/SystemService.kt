@@ -15,6 +15,7 @@ import io.rebble.libpebblecommon.metadata.WatchColor.TimeRoundBlackSilverPolish2
 import io.rebble.libpebblecommon.metadata.WatchHardwarePlatform
 import io.rebble.libpebblecommon.metadata.WatchType.CHALK
 import io.rebble.libpebblecommon.packets.FirmwareProperty
+import io.rebble.libpebblecommon.packets.MetaMessage
 import io.rebble.libpebblecommon.packets.PhoneAppVersion
 import io.rebble.libpebblecommon.packets.PingPong
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -22,6 +23,7 @@ import io.rebble.libpebblecommon.packets.ResetMessage
 import io.rebble.libpebblecommon.packets.SystemMessage
 import io.rebble.libpebblecommon.packets.TimeMessage
 import io.rebble.libpebblecommon.packets.WatchFactoryData
+import io.rebble.libpebblecommon.protocolhelpers.ProtocolEndpoint
 import io.rebble.libpebblecommon.packets.WatchFirmwareVersion
 import io.rebble.libpebblecommon.packets.WatchVersion
 import io.rebble.libpebblecommon.packets.WatchVersion.WatchVersionResponse
@@ -218,6 +220,15 @@ class SystemService(
                     is PingPong.Pong -> {
                         pongCallback?.complete(packet)
                         pongCallback = null
+                    }
+
+                    is MetaMessage -> {
+                        if (packet.rejectedEndpoint.get() == ProtocolEndpoint.PING.value) {
+                            pongCallback?.completeExceptionally(
+                                Exception("Watch will not answer a ping: $packet")
+                            )
+                            pongCallback = null
+                        }
                     }
 
                     is TimeMessage.GetTimeUtcRequest-> {
