@@ -12,6 +12,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
+import io.ktor.http.URLParserException
 import io.ktor.http.Url
 import io.ktor.http.contentType
 import io.ktor.http.encodedPath
@@ -19,6 +20,7 @@ import io.ktor.http.isSuccess
 import io.ktor.http.parameters
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
@@ -26,6 +28,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -84,7 +87,7 @@ internal class ServerMetadata(
     @SerialName("registration_endpoint") val registrationEndpoint: String? = null,
     @SerialName("code_challenge_methods_supported") val challengeMethods: List<String> = emptyList(),
     @SerialName("authorization_response_iss_parameter_supported") val responseIssuer: Boolean = false,
-    @SerialName("grant_types_supported") val grants: List<String> = listOf("authorization_code"),
+    @SerialName("grant_types_supported") val grants: List<String> = listOf("authorization_code", "implicit"),
 )
 
 @Serializable
@@ -102,6 +105,7 @@ private class RegisteredClient(
     @SerialName("token_endpoint_auth_method") val authMethod: String,
     @SerialName("redirect_uris") val redirects: List<String>,
     @SerialName("client_secret") val secret: String? = null,
+    @SerialName("grant_types") val grants: List<String> = listOf("authorization_code"),
 )
 
 @Serializable
@@ -141,14 +145,14 @@ class McpOAuth(
 
     suspend fun authorize(id: String, resource: String, clientId: String? = null) = authorizationLock.withLock {
         secureUrl(resource)
-        val challenge = client.get(resource) { accept(ContentType("application", "json")) }
+        val challenge = networkRequest { client.get(resource) { accept(ContentType("application", "json")) } }
         val auth = bearerChallenge(challenge.headers.getAll(HttpHeaders.WWWAuthenticate).orEmpty())
         val metadataUrls = auth["resource_metadata"]?.let { listOf(it) }.orEmpty() + resourceMetadataUrls(resource)
-        val resourceInfo = discover(metadataUrls) { json.decodeFromString<ResourceMetadata>(it) }
-        if (Url(resourceInfo.resource) != Url(resource)) fail("MCP resource metadata does not match this server.")
+        val resourceInfo = networkRequest { discover(metadataUrls) { json.decodeFromString<ResourceMetadata>(it) } }
+        if (parseOAuthUrl(resourceInfo.resource) != parseOAuthUrl(resource)) fail("MCP resource metadata does not match this server.")
         val issuer = resourceInfo.authorizationServers.firstOrNull() ?: fail("No authorization server was advertised.")
         secureUrl(issuer, issuer = true)
-        val server = discover(issuerMetadataUrls(issuer)) { json.decodeFromString<ServerMetadata>(it) }
+        val server = networkRequest { discover(issuerMetadataUrls(issuer)) { json.decodeFromString<ServerMetadata>(it) } }
         if (server.issuer != issuer) fail("Authorization server issuer mismatch.")
         secureUrl(server.authorizationEndpoint)
         secureUrl(server.tokenEndpoint)
@@ -158,7 +162,10 @@ class McpOAuth(
         try {
             val redirectUri = session.redirectUri
             validateMcpRedirectUri(redirectUri)
-            val registeredId = clientId?.takeIf { it.isNotBlank() } ?: register(server, redirectUri)
+            val registered = clientId?.takeIf { it.isNotBlank() }?.let {
+                RegisteredClient(it, "none", listOf(redirectUri), grants = listOf("authorization_code", "refresh_token"))
+            } ?: networkRequest { register(server, redirectUri) }
+            val registeredId = registered.id
             val state = crypto.randomString()
             val verifier = crypto.randomString()
             val scope = auth["scope"] ?: resourceInfo.scopes?.joinToString(" ")
@@ -178,17 +185,19 @@ class McpOAuth(
                 fail("Sign-in timed out. Try connecting again.")
             }
             val code = validateCallback(callback, redirectUri, state, server)
-            val tokens = exchange(server.tokenEndpoint, parameters {
-                append("grant_type", "authorization_code")
-                append("client_id", registeredId)
-                append("redirect_uri", redirectUri)
-                append("resource", resourceInfo.resource)
-                append("code", code)
-                append("code_verifier", verifier)
-            })
+            val tokens = networkRequest {
+                exchange(server.tokenEndpoint, parameters {
+                    append("grant_type", "authorization_code")
+                    append("client_id", registeredId)
+                    append("redirect_uri", redirectUri)
+                    append("resource", resourceInfo.resource)
+                    append("code", code)
+                    append("code_verifier", verifier)
+                })
+            }
             withContext(NonCancellable) {
                 credentialsLock.withLock {
-                    store.write(id, json.encodeToString(credential(resource, server, registeredId, tokens)))
+                    store.write(id, json.encodeToString(credential(resource, server, registeredId, tokens, allowRefresh = "refresh_token" in registered.grants)))
                 }
             }
         } finally {
@@ -211,7 +220,7 @@ class McpOAuth(
 
     suspend fun accessToken(id: String, resource: String): String = credentialsLock.withLock {
         val credential = readCredential(id) ?: throw McpSignInRequired()
-        if (Url(credential.resource) != Url(resource)) throw McpSignInRequired()
+        if (parseOAuthUrl(credential.resource) != parseOAuthUrl(resource)) throw McpSignInRequired()
         if (credential.expiresAt == null || credential.expiresAt > clock.now().epochSeconds + credential.refreshSkewSeconds) {
             return@withLock credential.accessToken
         }
@@ -219,12 +228,14 @@ class McpOAuth(
         // A refresh may consume a rotating token even if its response is lost.
         store.remove(id)
         val tokens = try {
-            exchange(credential.server.tokenEndpoint, parameters {
-                append("grant_type", "refresh_token")
-                append("client_id", credential.clientId)
-                append("resource", credential.resource)
-                append("refresh_token", refresh)
-            })
+            networkRequest {
+                exchange(credential.server.tokenEndpoint, parameters {
+                    append("grant_type", "refresh_token")
+                    append("client_id", credential.clientId)
+                    append("resource", credential.resource)
+                    append("refresh_token", refresh)
+                })
+            }
         } catch (e: McpSignInRequired) {
             store.remove(id)
             throw e
@@ -245,6 +256,9 @@ class McpOAuth(
         }
     }
 
+    private suspend fun <T : Any> networkRequest(block: suspend () -> T): T =
+        withTimeoutOrNull(30.seconds) { block() } ?: fail("OAuth request timed out.")
+
     private suspend fun <T> discover(urls: List<String>, decode: (String) -> T): T {
         for (url in urls.distinct()) {
             secureUrl(url)
@@ -261,7 +275,7 @@ class McpOAuth(
         fail("Could not discover OAuth metadata for this server.")
     }
 
-    private suspend fun register(server: ServerMetadata, redirectUri: String): String {
+    private suspend fun register(server: ServerMetadata, redirectUri: String): RegisteredClient {
         val endpoint = server.registrationEndpoint ?: fail("Enter a client ID registered with this authorization server.")
         secureUrl(endpoint)
         val response = client.post(endpoint) {
@@ -278,8 +292,8 @@ class McpOAuth(
             fail("Invalid public-client registration response.")
         }
         if (registered.id.isBlank() || registered.authMethod != "none" || registered.secret != null ||
-            redirectUri !in registered.redirects) fail("This server did not register a public client with the expected redirect.")
-        return registered.id
+            redirectUri !in registered.redirects || "authorization_code" !in registered.grants) fail("This server did not register a public client with the expected redirect.")
+        return registered
     }
 
     private suspend fun exchange(endpoint: String, form: io.ktor.http.Parameters): TokenResponse {
@@ -317,14 +331,20 @@ class McpOAuth(
         }
     }
 
-    private fun credential(resource: String, server: ServerMetadata, id: String, tokens: TokenResponse, refresh: String? = null) =
-        Credential(resource, server, id, tokens.accessToken, tokens.refreshToken ?: refresh,
+    private fun credential(resource: String, server: ServerMetadata, id: String, tokens: TokenResponse, refresh: String? = null, allowRefresh: Boolean = true) =
+        Credential(resource, server, id, tokens.accessToken, (tokens.refreshToken ?: refresh).takeIf { allowRefresh },
             tokens.expiresIn?.let { clock.now().epochSeconds + it },
             tokens.expiresIn?.let { minOf(30, it / 2) } ?: 0)
 }
 
+internal fun parseOAuthUrl(value: String): Url = try {
+    Url(value)
+} catch (_: URLParserException) {
+    fail("Invalid OAuth URL.")
+}
+
 internal fun validateMcpRedirectUri(value: String) {
-    val url = Url(value)
+    val url = parseOAuthUrl(value)
     val loopback = url.protocol == URLProtocol.HTTP && url.host in setOf("localhost", "127.0.0.1", "::1", "[::1]")
     if ((!loopback && url.protocol != URLProtocol.HTTPS) || url.host.isBlank() ||
         !url.user.isNullOrEmpty() || !url.password.isNullOrEmpty() || url.fragment.isNotEmpty() ||
@@ -334,7 +354,7 @@ internal fun validateMcpRedirectUri(value: String) {
 }
 
 internal fun secureUrl(value: String, issuer: Boolean = false): Url {
-    val url = Url(value)
+    val url = parseOAuthUrl(value)
     if (url.protocol != URLProtocol.HTTPS || url.host.isBlank() || !url.user.isNullOrEmpty() ||
         !url.password.isNullOrEmpty() || url.fragment.isNotEmpty() ||
         (issuer && url.parameters.names().isNotEmpty())) fail("OAuth requires an HTTPS URL without user credentials or a fragment.")
@@ -357,8 +377,8 @@ internal fun issuerMetadataUrls(issuer: String): List<String> {
 }
 
 internal fun validateCallback(callback: String, redirectUri: String, state: String, server: ServerMetadata): String {
-    val url = Url(callback)
-    val expected = Url(redirectUri)
+    val url = parseOAuthUrl(callback)
+    val expected = parseOAuthUrl(redirectUri)
     if (url.protocol != expected.protocol || url.host != expected.host || url.port != expected.port ||
         url.encodedPath != expected.encodedPath || url.fragment.isNotEmpty() || !url.user.isNullOrEmpty() ||
         !url.password.isNullOrEmpty()) fail("OAuth callback does not match the redirect URI.")

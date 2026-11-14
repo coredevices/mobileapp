@@ -2,6 +2,7 @@ package coredevices.mcp.client.auth
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.get
 import io.ktor.http.HttpHeaders
@@ -21,6 +22,9 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
@@ -48,9 +52,17 @@ class McpOAuthTest {
     private class Fixture {
         val store = Store()
         var now = 1000L
+        var randomValues = 0
+        var challengeIncludesMetadata = true
         var refreshes = 0
         var registrations = 0
+        var registrationBody: String? = null
+        var registrationStatus = HttpStatusCode.Created
+        var registeredGrants: List<String>? = null
+        var expectedGrants = listOf("authorization_code", "refresh_token")
         var tokenRequests = 0
+        var tokenDelayMillis = 0L
+        var tokenStarted: CompletableDeferred<Unit>? = null
         var expiresIn = 60
         var includeRefresh = true
         var tokenBody: String? = null
@@ -60,53 +72,59 @@ class McpOAuthTest {
         var browserDelayMillis = 0L
         var refreshStatus = HttpStatusCode.OK
         var resourceMetadata = """{"resource":"$RESOURCE","authorization_servers":["$ISSUER"],"scopes_supported":["read","operate"]}"""
-        var metadata = """{"issuer":"$ISSUER","authorization_endpoint":"$ISSUER/authorize","token_endpoint":"$ISSUER/token","registration_endpoint":"$ISSUER/register","code_challenge_methods_supported":["S256"],"authorization_response_iss_parameter_supported":true}"""
+        var metadata = """{"issuer":"$ISSUER","authorization_endpoint":"$ISSUER/authorize","token_endpoint":"$ISSUER/token","registration_endpoint":"$ISSUER/register","code_challenge_methods_supported":["S256"],"authorization_response_iss_parameter_supported":true,"grant_types_supported":["authorization_code","refresh_token"]}"""
         var callback: (Url) -> String = { url -> "$redirectUri?code=one-use&state=${url.parameters["state"]}&iss=https%3A%2F%2Flogin.example%2Ftenant" }
         var redirectUri = REDIRECT
         var sessionOpens = 0
         var sessionCloses = 0
         var launched: Url? = null
         val forms = mutableListOf<String>()
-        val engine = MockEngine { request ->
-            val url = request.url.toString()
-            when (url) {
-                RESOURCE -> respond("", HttpStatusCode.Unauthorized, headersOf(HttpHeaders.WWWAuthenticate,
-                    "Bearer resource_metadata=\"https://mcp.example/metadata\", scope=\"operate\""))
-                "https://mcp.example/metadata" -> respond(resourceMetadata)
-                "https://login.example/.well-known/oauth-authorization-server/tenant" -> respond(firstMetadataBody ?: metadata)
-                "https://login.example/.well-known/openid-configuration/tenant" -> respond(metadata)
-                "$ISSUER/register" -> {
-                    registrations++
-                    val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
-                    val grants = Json.parseToJsonElement(body).jsonObject["grant_types"]!!.jsonArray
-                    assertEquals(1, grants.size)
-                    assertFalse(request.headers.contains(HttpHeaders.Authorization))
-                    respond("""{"client_id":"public-client","token_endpoint_auth_method":"none","redirect_uris":["$redirectUri"]}""")
-                }
-                "$ISSUER/token" -> {
-                    tokenRequests++
-                    if (tokenBody != null) return@MockEngine respond(tokenBody!!, tokenStatus)
-                    val form = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
-                    forms += form
-                    val fields = parseQueryString(form)
-                    assertEquals(RESOURCE, fields["resource"])
-                    assertEquals("public-client", fields["client_id"])
-                    assertFalse(request.headers.contains(HttpHeaders.Authorization))
-                    if (fields["grant_type"] == "refresh_token") {
-                        refreshes++
-                        assertEquals("refresh-1", fields["refresh_token"])
-                        respond("""{"access_token":"access-2","token_type":"Bearer","refresh_token":"refresh-2","expires_in":3600}""", refreshStatus)
-                    } else {
-                        assertEquals("one-use", fields["code"])
-                        assertEquals(redirectUri, fields["redirect_uri"])
-                        assertEquals("x".repeat(64), fields["code_verifier"])
-                        val refresh = if (includeRefresh) ",\"refresh_token\":\"refresh-1\"" else ""
-                        respond("""{"access_token":"access-1","token_type":"Bearer","expires_in":$expiresIn$refresh}""")
+        val engine = MockEngine(MockEngineConfig().apply {
+            dispatcher = Dispatchers.Unconfined
+            addHandler { request ->
+                val url = request.url.toString()
+                when (url) {
+                    RESOURCE -> respond("", HttpStatusCode.Unauthorized, headersOf(HttpHeaders.WWWAuthenticate,
+                        if (challengeIncludesMetadata) "Bearer resource_metadata=\"https://mcp.example/metadata\", scope=\"operate\"" else "Bearer scope=\"operate\""))
+                    "https://mcp.example/metadata", "https://mcp.example/.well-known/oauth-protected-resource/mcp" -> respond(resourceMetadata)
+                    "https://login.example/.well-known/oauth-authorization-server/tenant" -> respond(firstMetadataBody ?: metadata)
+                    "https://login.example/.well-known/openid-configuration/tenant" -> respond(metadata)
+                    "$ISSUER/register" -> {
+                        registrations++
+                        val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                        val grants = Json.parseToJsonElement(body).jsonObject["grant_types"]!!.jsonArray
+                        assertEquals(expectedGrants, grants.map { it.toString().trim('"') })
+                        assertFalse(request.headers.contains(HttpHeaders.Authorization))
+                        val allowedGrants = Json.encodeToString(registeredGrants ?: expectedGrants)
+                        respond(registrationBody ?: """{"client_id":"public-client","token_endpoint_auth_method":"none","redirect_uris":["$redirectUri"],"grant_types":$allowedGrants}""", registrationStatus)
                     }
+                    "$ISSUER/token" -> {
+                        tokenRequests++
+                        tokenStarted?.complete(Unit)
+                        delay(tokenDelayMillis)
+                        if (tokenBody != null) return@addHandler respond(tokenBody!!, tokenStatus)
+                        val form = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                        forms += form
+                        val fields = parseQueryString(form)
+                        assertEquals(RESOURCE, fields["resource"])
+                        assertEquals("public-client", fields["client_id"])
+                        assertFalse(request.headers.contains(HttpHeaders.Authorization))
+                        if (fields["grant_type"] == "refresh_token") {
+                            refreshes++
+                            assertEquals("refresh-1", fields["refresh_token"])
+                            respond("""{"access_token":"access-2","token_type":"Bearer","refresh_token":"refresh-2","expires_in":3600}""", refreshStatus)
+                        } else {
+                            assertEquals("one-use", fields["code"])
+                            assertEquals(redirectUri, fields["redirect_uri"])
+                            assertEquals("x".repeat(64), fields["code_verifier"])
+                            val refresh = if (includeRefresh) ",\"refresh_token\":\"refresh-1\"" else ""
+                            respond("""{"access_token":"access-1","token_type":"Bearer","expires_in":$expiresIn$refresh}""")
+                        }
+                    }
+                    else -> error("Unexpected request: $url")
                 }
-                else -> error("Unexpected request: $url")
             }
-        }
+        })
         val client = HttpClient(engine)
         val oauth = McpOAuth(client, store, McpOAuthBrowser {
             sessionOpens++
@@ -119,7 +137,7 @@ class McpOAuthTest {
                 callback(parsed)
             }, release = { sessionCloses++ })
         }, object : McpOAuthCrypto {
-            override fun randomString(): String = "x".repeat(64)
+            override fun randomString(): String = if (randomValues++ % 2 == 0) "s".repeat(64) else "x".repeat(64)
             override fun challenge(verifier: String): String = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()))
         }, object : Clock { override fun now(): Instant = Instant.fromEpochSeconds(now) })
@@ -158,12 +176,13 @@ class McpOAuthTest {
         assertEquals(RESOURCE, url.parameters["resource"])
         assertEquals(REDIRECT, url.parameters["redirect_uri"])
         assertFalse(url.parameters["code_challenge"]!!.contains('='))
+        assertFalse(url.parameters["state"] == parseQueryString(f.forms.single())["code_verifier"])
         assertEquals("access-1", f.oauth.accessToken("a", RESOURCE))
         assertEquals(1, f.registrations)
         assertTrue(f.oauth.isConnected("a"))
     }
 
-    @Test fun htmlMetadataCandidateFallsBackButIdentityMismatchStillFailsClosed() = runTest {
+    @Test fun htmlAuthorizationMetadataCandidateFallsBack() = runTest {
         val f = Fixture()
         f.firstMetadataBody = "<html>application fallback</html>"
         f.oauth.authorize("a", RESOURCE)
@@ -230,7 +249,7 @@ class McpOAuthTest {
         }
     }
 
-    @Test fun sharedRedirectRejectsTwoIssuerMixupBeforeSendingCodeOrVerifier() = runTest {
+    @Test fun mixedAuthorizationEndpointsWithoutIssuerSupportAreRejectedBeforeBrowser() = runTest {
         val f = Fixture()
         f.metadata = f.metadata
             .replace("$ISSUER/authorize", "https://honest.example/authorize")
@@ -327,7 +346,7 @@ class McpOAuthTest {
         assertEquals("access-1", f.oauth.accessToken("b", RESOURCE))
     }
 
-    @Test fun pluginNeverFollowsRedirectsOrReplaysUnauthorizedRequests() = runTest {
+    @Test fun pluginRejectsUnauthorizedWithoutReplayAndChecksInitialDestination() = runTest {
         val f = Fixture()
         f.oauth.authorize("a", RESOURCE)
         var calls = 0
@@ -383,7 +402,7 @@ class McpOAuthTest {
         assertFalse(f.oauth.isConnected("a"))
     }
 
-    @Test fun redirectsCannotForwardBearerTokens() = runTest {
+    @Test fun disabledRedirectsReturnWithoutFollowing() = runTest {
         val f = Fixture()
         f.oauth.authorize("a", RESOURCE)
         var calls = 0
@@ -398,6 +417,137 @@ class McpOAuthTest {
         assertEquals(HttpStatusCode.Found, client.get(RESOURCE).status)
         assertEquals(1, calls)
         client.close()
+    }
+
+    @Test fun malformedCallbackUrlsDoNotExposeAuthorizationValues() {
+        val server = ServerMetadata(ISSUER, "$ISSUER/authorize", "$ISSUER/token")
+        val callback = "https://app.example:invalid/oauth/mcp?code=callback-secret&state=state-secret"
+        val error = assertFailsWith<McpOAuthException> { validateCallback(callback, REDIRECT, "state-secret", server) }
+        assertFalse(error.stackTraceToString().contains("callback-secret"))
+        assertFalse(error.stackTraceToString().contains("state-secret"))
+        val resource = assertFailsWith<McpOAuthException> { secureUrl("https://mcp.example:invalid/?secret=resource-secret") }
+        assertFalse(resource.stackTraceToString().contains("resource-secret"))
+    }
+
+    @Test fun stalledRefreshTimesOutAndReleasesOtherCredentialOperations() = runTest {
+        val f = Fixture()
+        f.oauth.authorize("a", RESOURCE)
+        f.oauth.authorize("b", RESOURCE)
+        f.now += 50
+        f.tokenDelayMillis = 30_001
+        val error = assertFailsWith<McpOAuthException> { f.oauth.accessToken("a", RESOURCE) }
+        assertEquals("OAuth request timed out.", error.message)
+        assertTrue(f.oauth.isConnected("b"))
+        assertFailsWith<McpSignInRequired> { f.oauth.accessToken("a", RESOURCE) }
+        assertEquals(3, f.tokenRequests)
+    }
+
+    @Test fun callerCancellationDuringRefreshDoesNotReuseItsCredential() = runTest {
+        val f = Fixture()
+        f.oauth.authorize("a", RESOURCE)
+        f.now += 50
+        val failure = CancellationException("caller cancelled")
+        f.tokenDelayMillis = 30_001
+        f.tokenStarted = CompletableDeferred()
+        val request = launch { f.oauth.accessToken("a", RESOURCE) }
+        f.tokenStarted!!.await()
+        request.cancel(failure)
+        request.join()
+        assertTrue(request.isCancelled)
+        assertFailsWith<McpSignInRequired> { f.oauth.accessToken("a", RESOURCE) }
+        assertEquals(2, f.tokenRequests)
+    }
+
+    @Test fun refreshTokensAreNotUsedUnlessDynamicRegistrationAllowsRefresh() = runTest {
+        for (advertisesRefresh in listOf(false, true)) {
+            val f = Fixture()
+            if (!advertisesRefresh) {
+                f.metadata = f.metadata.replace(",\"grant_types_supported\":[\"authorization_code\",\"refresh_token\"]", "")
+                f.expectedGrants = listOf("authorization_code")
+            } else {
+                f.registeredGrants = listOf("authorization_code")
+            }
+            f.oauth.authorize("a", RESOURCE)
+            f.now += 50
+            assertFailsWith<McpSignInRequired> { f.oauth.accessToken("a", RESOURCE) }
+            assertEquals(1, f.tokenRequests)
+        }
+    }
+
+    @Test fun rejectedCurrentTokenRefreshesOnlyOnTheNextExplicitRequest() = runTest {
+        val f = Fixture()
+        f.oauth.authorize("a", RESOURCE)
+        var calls = 0
+        val client = HttpClient(MockEngine { calls++; respond("", HttpStatusCode.Unauthorized) }) {
+            followRedirects = false
+            install(McpOAuthAccess("a", RESOURCE, f.oauth).plugin())
+        }
+        try {
+            assertFailsWith<McpAuthorizationRejected> { client.get(RESOURCE) }
+            assertEquals(1, calls)
+            assertEquals(0, f.refreshes)
+            assertEquals("access-2", f.oauth.accessToken("a", RESOURCE))
+            assertEquals(1, f.refreshes)
+        } finally { client.close() }
+    }
+
+    @Test fun forbiddenDoesNotRefreshOrReplay() = runTest {
+        val f = Fixture()
+        f.oauth.authorize("a", RESOURCE)
+        var calls = 0
+        val client = HttpClient(MockEngine { calls++; respond("", HttpStatusCode.Forbidden) }) {
+            install(McpOAuthAccess("a", RESOURCE, f.oauth).plugin())
+        }
+        try {
+            val error = assertFailsWith<McpOAuthException> { client.get(RESOURCE) }
+            assertTrue(error.message!!.contains("Reconnect"))
+            assertEquals(1, calls)
+            assertEquals("access-1", f.oauth.accessToken("a", RESOURCE))
+            assertEquals(0, f.refreshes)
+        } finally { client.close() }
+    }
+
+    @Test fun invalidTokenShapeTypeAndLifetimeAreRejectedBeforePersistence() = runTest {
+        for (body in listOf(
+            """{"access_token":"header\r\ninjection","token_type":"Bearer"}""",
+            """{"access_token":"token","token_type":"Other"}""",
+            """{"access_token":"token","token_type":"Bearer","expires_in":0}""",
+            """{"access_token":"token","token_type":"Bearer","expires_in":315360001}""",
+        )) {
+            val f = Fixture()
+            f.tokenBody = body
+            assertFailsWith<McpOAuthException> { f.oauth.authorize("a", RESOURCE) }
+            assertFalse(f.oauth.isConnected("a"))
+        }
+    }
+
+    @Test fun invalidPublicRegistrationFailsBeforeBrowserOrCodeExchange() = runTest {
+        for ((status, body) in listOf(
+            HttpStatusCode.BadRequest to "{}",
+            HttpStatusCode.Created to """{"client_id":"c","token_endpoint_auth_method":"none","redirect_uris":["$REDIRECT"],"client_secret":"secret"}""",
+            HttpStatusCode.Created to """{"client_id":"c","token_endpoint_auth_method":"none","redirect_uris":["https://other.example/callback"]}""",
+            HttpStatusCode.Created to """{"client_id":"c","token_endpoint_auth_method":"none","redirect_uris":["$REDIRECT"],"grant_types":["refresh_token"]}""",
+        )) {
+            val f = Fixture()
+            f.registrationStatus = status
+            f.registrationBody = body
+            assertFailsWith<McpOAuthException> { f.oauth.authorize("a", RESOURCE) }
+            assertEquals(null, f.launched)
+            assertEquals(0, f.tokenRequests)
+            assertEquals(1, f.sessionCloses)
+        }
+        val f = Fixture()
+        f.metadata = f.metadata.replace(",\"registration_endpoint\":\"$ISSUER/register\"", "")
+        assertFailsWith<McpOAuthException> { f.oauth.authorize("a", RESOURCE) }
+        assertEquals(0, f.registrations)
+        assertEquals(0, f.tokenRequests)
+    }
+
+    @Test fun protectedResourceWellKnownDiscoveryWorksWithoutAChallengeMetadataUrl() = runTest {
+        val f = Fixture()
+        f.challengeIncludesMetadata = false
+        f.oauth.authorize("a", RESOURCE)
+        assertEquals("access-1", f.oauth.accessToken("a", RESOURCE))
     }
 
     @Test fun discoveryPreservesIssuerPathsAndChallengeQuotedCommas() {
