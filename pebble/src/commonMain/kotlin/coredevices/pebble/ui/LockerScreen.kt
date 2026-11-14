@@ -783,7 +783,7 @@ fun LockerScreen(
                                                     home.categories
                                                 )
                                             }.filter { app ->
-                                                app.type == viewModel.type.value &&
+                                                (app.type == viewModel.type.value || viewModel.type.value == AppType.Plugin && app.hasPlugin) &&
                                                         (sharedViewModel.showIncompatible.value || app.isCompatible) &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
                                                 app.storeId !in excludedStoreIds &&

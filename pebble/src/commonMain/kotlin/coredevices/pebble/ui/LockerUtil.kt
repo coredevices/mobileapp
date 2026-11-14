@@ -434,6 +434,7 @@ data class CommonApp(
     val sourceLink: String?,
     val appstoreSource: AppstoreSource?,
     val capabilities: List<AppCapability>,
+    val hasPlugin: Boolean = false,
 )
 
 interface CommonAppTypeLocal {
@@ -603,6 +604,7 @@ fun StoreApplication.asCommonApp(
         categorySlug = categories.firstOrNull { it.id == categoryId }?.slug,
         appstoreSource = source,
         capabilities = AppCapability.fromString(capabilities),
+        hasPlugin = plugin != null,
     )
 }
 
