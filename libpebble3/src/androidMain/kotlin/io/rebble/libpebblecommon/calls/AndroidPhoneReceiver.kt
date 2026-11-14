@@ -1,5 +1,7 @@
 package io.rebble.libpebblecommon.io.rebble.libpebblecommon.calls
 
+import android.app.ActivityOptions
+import android.app.PendingIntent
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.IntentFilter
@@ -11,6 +13,7 @@ import io.rebble.libpebblecommon.calls.Call
 import io.rebble.libpebblecommon.calls.LegacyPhoneReceiver
 import io.rebble.libpebblecommon.calls.LibPebbleInCallService.Companion.resolveNameFromContacts
 import io.rebble.libpebblecommon.calls.NotificationCallDetector
+import io.rebble.libpebblecommon.calls.NotificationCallTracker
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.util.PrivateLogger
 import io.rebble.libpebblecommon.util.asFlow
@@ -34,7 +37,7 @@ import kotlin.time.Duration.Companion.seconds
  * When InCallService is not available, this receiver handles all calls.
  *
  * Uses [NotificationCallDetector] for contact info and answer/decline actions from
- * CATEGORY_CALL notifications.
+ * CATEGORY_CALL notifications, and [NotificationCallTracker] for calls only those notifications report.
  */
 class AndroidPhoneReceiver(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
@@ -68,6 +71,10 @@ class AndroidPhoneReceiver(
     }
 
     override fun init(currentCall: MutableStateFlow<Call?>) {
+        libPebbleCoroutineScope.launch {
+            NotificationCallTracker(currentCall, ::answerViaNotification, ::endViaNotification)
+                .track(callDetector.notificationCalls)
+        }
         libPebbleCoroutineScope.launch {
             IntentFilter(ACTION_PHONE_STATE_CHANGED).asFlow(context, exported = true).collect { intent ->
                 val callState = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
@@ -119,19 +126,7 @@ class AndroidPhoneReceiver(
                             contactName = existingCall.contactName,
                             contactNumber = existingCall.contactNumber,
                             cookie = existingCall.cookie,
-                            onCallEnd = {
-                                val declineAction = callDetector.declineAction
-                                if (declineAction != null) {
-                                    logger.v { "Ending call via notification action" }
-                                    try {
-                                        declineAction.actionIntent.send()
-                                    } catch (e: Exception) {
-                                        logger.e(e) { "Failed to trigger hangup action" }
-                                    }
-                                } else {
-                                    logger.d { "No hangup action available" }
-                                }
-                            },
+                            onCallEnd = { endViaNotification() },
                         )
                     }
                 }
@@ -175,32 +170,52 @@ class AndroidPhoneReceiver(
             contactName = contactName,
             contactNumber = contactNumber,
             cookie = cookie,
-            onCallAnswer = {
-                val answerAction = callDetector.answerAction
-                if (answerAction != null) {
-                    logger.v { "Answering call via notification action" }
-                    try {
-                        answerAction.actionIntent.send()
-                    } catch (e: Exception) {
-                        logger.e(e) { "Failed to trigger answer action" }
-                    }
-                } else {
-                    logger.d { "No answer action available" }
-                }
-            },
-            onCallEnd = {
-                val declineAction = callDetector.declineAction
-                if (declineAction != null) {
-                    logger.v { "Declining call via notification action" }
-                    try {
-                        declineAction.actionIntent.send()
-                    } catch (e: Exception) {
-                        logger.e(e) { "Failed to trigger decline action" }
-                    }
-                } else {
-                    logger.d { "No decline action available" }
-                }
-            },
+            onCallAnswer = { answerViaNotification() },
+            onCallEnd = { endViaNotification() },
         )
+    }
+
+    private fun answerViaNotification() {
+        val answerAction = callDetector.answerAction
+        if (answerAction == null) {
+            logger.d { "No answer action available" }
+            return
+        }
+        logger.v { "Answering call via notification action" }
+        try {
+            answerAction.actionIntent.sendFromBackground()
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to trigger answer action" }
+        }
+    }
+
+    private fun endViaNotification() {
+        val declineAction = callDetector.declineAction
+        if (declineAction == null) {
+            logger.d { "No decline/hangup action available" }
+            return
+        }
+        logger.v { "Ending call via notification action" }
+        try {
+            declineAction.actionIntent.sendFromBackground()
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to trigger decline/hangup action" }
+        }
+    }
+
+    // Answer actions usually open the calling app's in-call activity.
+    private fun PendingIntent.sendFromBackground() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            send()
+            return
+        }
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS
+        } else {
+            @Suppress("DEPRECATION")
+            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+        }
+        val options = ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(mode)
+        send(context, 0, null, null, null, null, options.toBundle())
     }
 }
