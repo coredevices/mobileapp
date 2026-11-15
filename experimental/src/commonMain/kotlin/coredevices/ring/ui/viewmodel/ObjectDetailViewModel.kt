@@ -15,6 +15,7 @@ import coredevices.ring.data.entity.room.indexfeed.metadataForKind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.reminders.todoComparator
 import coredevices.libindex.di.LibIndexCoroutineScope
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
@@ -541,29 +542,4 @@ internal fun normalizeParentLists(
         .filter { it != LIST_TODOS_ID }
         .distinct()
         .ifEmpty { listOf(LIST_NOTES_SELF_ID) }
-}
-
-private fun todoComparator(): Comparator<CachedItem> {
-    val nowMs = Clock.System.now().toEpochMilliseconds()
-    val urgentCutoffMs = nowMs + 24L * 60L * 60L * 1000L
-    return compareBy<CachedItem> { task ->
-        val dueMs = task.dueAt?.toEpochMilliseconds()
-        when {
-            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
-            dueMs != null && dueMs <= nowMs -> 1
-            dueMs == null -> 2
-            else -> 3
-        }
-    }
-        .thenBy { task ->
-            val dueMs = task.dueAt?.toEpochMilliseconds()
-            when {
-                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
-                dueMs != null && dueMs <= nowMs -> -dueMs
-                dueMs == null -> Long.MAX_VALUE
-                else -> dueMs
-            }
-        }
-        .thenBy { it.createdAt.toEpochMilliseconds() }
-        .thenBy { it.title.lowercase() }
 }

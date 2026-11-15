@@ -19,6 +19,7 @@ import coredevices.ring.data.entity.room.indexfeed.kind
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.reminders.todoComparator
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_TODOS_ID
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.SEED_TODOS
@@ -339,36 +340,13 @@ class IndexFeedViewModel(
             // sees when they tap into the Todos list detail page.
             // Skip done unless the id is in animatingDoneIds (mid-
             // strike-through linger).
-            val nowMs = Clock.System.now().toEpochMilliseconds()
-            val urgentCutoffMs = nowMs + 24L * 60L * 60L * 1000L
             val rawTodos = items
                 .asSequence()
                 .filter { !it.deleted }
                 .filter { it.parentListIds().contains(LIST_TODOS_ID) }
                 .filter { !it.done || it.firestoreId in animatingDoneIds }
                 .filter { match(it.title) }
-                .sortedWith(
-                    compareBy<CachedItem> { task ->
-                        val dueMs = task.dueAt?.toEpochMilliseconds()
-                        when {
-                            dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> 0
-                            dueMs != null && dueMs <= nowMs -> 1
-                            dueMs == null -> 2
-                            else -> 3
-                        }
-                    }
-                        .thenBy { task ->
-                            val dueMs = task.dueAt?.toEpochMilliseconds()
-                            when {
-                                dueMs != null && dueMs > nowMs && dueMs <= urgentCutoffMs -> dueMs
-                                dueMs != null && dueMs <= nowMs -> -dueMs
-                                dueMs == null -> Long.MAX_VALUE
-                                else -> dueMs
-                            }
-                        }
-                        .thenBy { it.createdAt.toEpochMilliseconds() }
-                        .thenBy { it.title.lowercase() },
-                )
+                .sortedWith(todoComparator())
                 .toList()
             val todosPreview = rawTodos
 
