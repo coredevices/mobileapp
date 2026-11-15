@@ -87,6 +87,14 @@ class CreateCalendarEventToolTest {
     }
 
     @Test
+    fun triggerGuardAcceptsJapaneseCalendarOrEventWord() {
+        assertTrue(CreateCalendarEventTool.mentionsCalendarOrEvent("金曜の15時にカレンダーに歯医者を入れて"))
+        assertTrue(CreateCalendarEventTool.mentionsCalendarOrEvent("明日の午後3時にイベントを作成して"))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("明日の15時に会議をスケジュールして"))
+        assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent("明日の朝に銀行に電話するのをリマインドして"))
+    }
+
+    @Test
     fun triggerGuardFailsClosedWhenTranscriptUnavailable() {
         // A request we can't verify must not write to the calendar (agent falls back to a note).
         assertFalse(CreateCalendarEventTool.mentionsCalendarOrEvent(null))
