@@ -2,6 +2,7 @@ package coredevices.ring
 
 import coredevices.ring.database.firestore.FirestoreKnownRingsSync
 import coredevices.ring.database.firestore.FirestoreKnownRingsSyncImpl
+import coredevices.ring.database.firestore.dao.FirestoreGeofenceLocationsDao
 import coredevices.ring.database.firestore.dao.FirestoreKnownRingsDao
 import coredevices.ring.database.firestore.dao.FirestoreItemsDao
 import coredevices.ring.database.firestore.dao.FirestoreListsDao
@@ -18,4 +19,5 @@ internal val firestoreModule = module {
     singleOf(::FirestoreKnownRingsSyncImpl) binds arrayOf(FirestoreKnownRingsSync::class)
     single { FirestoreItemsDao { get() } }
     single { FirestoreListsDao { get() } }
+    single { FirestoreGeofenceLocationsDao { get() } }
 }

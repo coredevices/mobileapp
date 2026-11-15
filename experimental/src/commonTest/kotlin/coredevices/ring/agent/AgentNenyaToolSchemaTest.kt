@@ -35,7 +35,7 @@ class AgentNenyaToolSchemaTest {
     private class TestAgent : AgentNenya(UnusedNenyaClient, "", NenyaModel.Default, emptyList())
 
     private class StaticTool(override val definition: Tool) : McpTool {
-        override val extraContext: String? = null
+        override suspend fun getExtraContext(): String? = null
         override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult = error("not called")
     }
 

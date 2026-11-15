@@ -63,6 +63,8 @@ import coredevices.ring.database.room.dao.RingDebugTransferDao
 import coredevices.ring.database.room.dao.RingRssiReadingDao
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.dao.RingTransferFeedItem
+import coredevices.ring.data.entity.room.SavedGeofenceLocation
+import coredevices.ring.database.room.dao.SavedGeofenceLocationDao
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
@@ -96,12 +98,13 @@ import kotlin.uuid.Uuid
         AgentIterationEntity::class,
         RingRssiReading::class,
         LocalClockEntry::class,
+        SavedGeofenceLocation::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 46,
+    version = 47,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -161,6 +164,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 44, to = 45),
         // 45→46: adds IndexWebhookDeliveryEntity.
         AutoMigration(from = 45, to = 46),
+        // 46→47: adds SavedGeofenceLocation and LocalReminderData.geofenceLocationId.
+        AutoMigration(from = 46, to = 47),
     ]
 )
 @TypeConverters(Converters::class)
@@ -185,6 +190,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun agentIterationDao(): AgentIterationDao
     abstract fun ringRssiReadingDao(): RingRssiReadingDao
     abstract fun localClockDao(): LocalClockDao
+    abstract fun savedGeofenceLocationDao(): SavedGeofenceLocationDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")

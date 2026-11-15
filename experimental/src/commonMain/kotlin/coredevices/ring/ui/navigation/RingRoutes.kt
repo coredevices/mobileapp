@@ -21,8 +21,10 @@ import coredevices.ring.ui.screens.settings.IndexSettings
 import kotlinx.serialization.Serializable
 import coredevices.ring.ui.screens.RingSyncInspectorScreen
 import coredevices.ring.ui.screens.settings.AddIntegration
+import coredevices.ring.ui.screens.settings.geofence.GeofenceLocationEditScreen
 import coredevices.ring.ui.screens.clock.TimersAndAlarms
 import coredevices.ring.ui.theme.IndexThemeHost
+import kotlin.uuid.Uuid
 
 /** Marker for routes that belong to the Index/Ring feature. The
  *  WatchHomeScreen registers these in its inner NavHost too so they
@@ -60,6 +62,8 @@ object RingRoutes {
     data object AddIntegration : RingRoute
     @Serializable
     data object TimersAndAlarms : RingRoute
+    @Serializable
+    class GeofenceLocationEdit(val locationId: String? = null) : RingRoute
 
     /** Deep link that opens the [ObjectDetails] screen for an index item by
      *  its Firestore id. Used by the platform reminder notification so
@@ -140,5 +144,9 @@ fun NavGraphBuilder.addRingRoutes(coreNav: CoreNav) {
     }
     indexComposable<RingRoutes.TimersAndAlarms> {
         TimersAndAlarms(coreNav)
+    }
+    indexComposable<RingRoutes.GeofenceLocationEdit> {
+        val route: RingRoutes.GeofenceLocationEdit = it.toRoute()
+        GeofenceLocationEditScreen(coreNav, route.locationId?.let(Uuid::parse))
     }
 }

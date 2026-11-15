@@ -8,6 +8,7 @@ import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.userMessageIfReady
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.database.room.repository.GeofenceLocationRepository
 import coredevices.ring.database.room.repository.ListRepository
 import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlinx.coroutines.Dispatchers
@@ -21,10 +22,12 @@ import kotlin.uuid.Uuid
 class ReminderServlet(
     private val listsRepository: ListRepository,
     private val providers: IntegrationProviderRepository,
+    private val geofenceLocationRepository: GeofenceLocationRepository,
 ) : BuiltInServletPlugin(
     name = NAME,
     tools = listOf(
         ReminderTool(),
+        LocationReminderTool(geofenceLocationRepository),
         ListTool(),
         CreateListTool(),
     ),
@@ -39,11 +42,15 @@ class ReminderServlet(
         private val logger = Logger.withTag("ReminderServlet")
     }
 
-    // create_list only writes the app's own lists, so hide it when an external reminder
-    // provider is selected — create_list_item wouldn't find the list there.
-    override suspend fun getDisabledTools(): List<String> =
-        if (providers.selectedReminderProvider.value.storesItemsLocally) emptyList()
-        else listOf(CreateListTool.TOOL_NAME)
+    // create_list and location reminders only work with the app's own reminders, so hide them
+    // when an external reminder provider is selected.
+    override suspend fun getDisabledTools(): List<String> = buildList {
+        val builtIn = providers.selectedReminderProvider.value.storesItemsLocally
+        if (!builtIn) add(CreateListTool.TOOL_NAME)
+        if (!builtIn || geofenceLocationRepository.getAllFlow().first().isEmpty()) {
+            add(LocationReminderTool.TOOL_NAME)
+        }
+    }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         val reminderIntegration = providers.reminderIntegration()

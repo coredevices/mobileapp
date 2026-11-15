@@ -32,9 +32,9 @@ import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import coredevices.pebble.permissions.handlePermissionNotificationResponse
 import coredevices.pebble.watchModule
-import coredevices.ring.agent.builtin_servlets.reminders.IOSBuiltInReminderIntegration
 import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import coredevices.ring.reminders.ReminderScheduler
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
@@ -310,7 +310,7 @@ object IOSDelegate : KoinComponent {
         if (itemId != null) {
             // "Done" button (MOB-8439): mark the backing item complete in the background without
             // opening the app. Completing it cancels the reminder and dismisses the notification.
-            if (response.actionIdentifier == IOSBuiltInReminderIntegration.REMINDER_ACTION_DONE) {
+            if (response.actionIdentifier == ReminderScheduler.REMINDER_ACTION_DONE) {
                 val completer: ReminderCompleter = get()
                 bgTaskScope.launch {
                     runCatching { completer.markDone(itemId) }

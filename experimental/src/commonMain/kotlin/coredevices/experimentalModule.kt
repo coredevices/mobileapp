@@ -60,6 +60,7 @@ import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.reminders.ReminderReconciler
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
+import coredevices.ring.service.indexfeed.GeofenceLocationSyncService
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -104,6 +105,7 @@ import coredevices.ring.bugreport.IndexRebootLogStore
 import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.ring.bugreport.IndexSettingsSummary
+import coredevices.ring.database.room.repository.GeofenceLocationRepository
 import coredevices.util.PermissionRequester
 import coredevices.util.sync.SyncHandler
 import coredevices.util.Platform
@@ -203,6 +205,9 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().localClockDao()
     }
+    single {
+        get<RingDatabase>().savedGeofenceLocationDao()
+    }
     singleOf(::PluginGrantRepository)
     singleOf(::RecordingRepository)
     single {
@@ -210,6 +215,7 @@ val experimentalModule = module {
     }
     singleOf(::RecordingProcessingTaskRepository)
     singleOf(::IndexWebhookDeliveryRepository)
+    singleOf(::GeofenceLocationRepository)
     single {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
@@ -223,6 +229,7 @@ val experimentalModule = module {
     singleOf(::ListRepository)
     singleOf(::DefaultListsBootstrap)
     singleOf(::IndexFeedSyncService)
+    singleOf(::GeofenceLocationSyncService)
     singleOf(::ItemFactory)
     singleOf(::ReminderDeepLinkResolver)
     singleOf(::ReminderCompleter)
@@ -294,6 +301,7 @@ val experimentalModule = module {
             libIndex = get(),
             permissionRequester = get(),
             indexFeedSyncService = get(),
+            geofenceLocationSyncService = get(),
             defaultListsBootstrap = get(),
             reminderReconciler = get(),
             indexSettingsSummary = get(),

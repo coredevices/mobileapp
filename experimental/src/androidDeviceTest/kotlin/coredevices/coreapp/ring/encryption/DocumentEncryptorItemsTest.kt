@@ -3,6 +3,7 @@
 package coredevices.coreapp.ring.encryption
 
 import androidx.test.platform.app.InstrumentationRegistry
+import coredevices.indexai.data.entity.GeofenceLocationDocument
 import coredevices.indexai.data.entity.ItemDocument
 import coredevices.indexai.data.entity.ItemDocument.ItemMetadata
 import coredevices.indexai.data.entity.ListDocument
@@ -86,6 +87,30 @@ class DocumentEncryptorItemsTest {
         val restored = encryptor.decryptList(enc, key)
         assertNull(restored.encrypted)
         assertEquals("Therapy notes", restored.title)
+    }
+
+    @Test
+    fun geofenceLocation_roundTrip_hidesAndRestoresPlace() {
+        val key = newKey()
+        val place = GeofenceLocationDocument(
+            updatedAt = Instant.fromEpochMilliseconds(1_700_000_000_000),
+            name = "Home",
+            lat = 52.8,
+            long = -2.1,
+            radiusMeters = 150.0,
+            address = "1 High Street",
+        )
+
+        val enc = encryptor.encryptGeofenceLocation(place, key)
+
+        assertEquals("", enc.name)
+        assertEquals(0.0, enc.lat)
+        assertEquals(0.0, enc.long)
+        assertEquals(0.0, enc.radiusMeters)
+        assertNull(enc.address)
+        assertNotNull(enc.encrypted)
+        assertEquals(place.updatedAt, enc.updatedAt)
+        assertEquals(place, encryptor.decryptGeofenceLocation(enc, key))
     }
 
     @Test

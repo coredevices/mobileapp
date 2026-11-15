@@ -42,6 +42,7 @@ internal val viewmodelModule = module {
         IndexActionsViewModel(
             indexActionsRepository = get(),
             mcpServerRepository = get(),
+            geofenceLocationRepository = get(),
             destinations = get(),
             providers = get(),
             destinationPrompter = get(),

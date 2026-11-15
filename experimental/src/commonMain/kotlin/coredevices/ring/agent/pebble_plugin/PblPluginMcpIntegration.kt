@@ -59,7 +59,7 @@ class PblPluginMcpIntegration(
 
     inner class PebblePluginActionMcpTool(private val declaration: ActionDeclaration): McpTool {
         override val definition: Tool = declaration.toToolDefinition()
-        override val extraContext: String? = null
+        override suspend fun getExtraContext(): String? = null
 
         override suspend fun call(
             jsonInput: String,

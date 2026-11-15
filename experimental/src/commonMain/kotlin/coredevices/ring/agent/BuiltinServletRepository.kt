@@ -77,7 +77,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             )
             ClockServlet.name -> ClockServlet.takeIf { clockUnavailableReason() == null }
             JsServlet.name -> JsServlet
-            ReminderServlet.NAME -> ReminderServlet(get(), get())
+            ReminderServlet.NAME -> ReminderServlet(get(), get(), get())
             CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> MessagingServlet.takeIf { platform.isAndroid }
             NotificationReplyServlet.NAME -> NotificationReplyServlet(

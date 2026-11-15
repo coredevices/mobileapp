@@ -5,6 +5,6 @@ import io.modelcontextprotocol.kotlin.sdk.types.Tool
 
 interface McpTool {
     val definition: Tool
-    val extraContext: String?
+    suspend fun getExtraContext(): String?
     suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult
 }

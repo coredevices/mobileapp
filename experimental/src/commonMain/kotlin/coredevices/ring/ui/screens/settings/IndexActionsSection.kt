@@ -98,6 +98,7 @@ import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.components.SectionHeader
+import coredevices.ring.ui.screens.settings.geofence.GeofenceLocationsListDialog
 import coredevices.ring.ui.screens.settings.mcp.HttpServerEditDialog
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.toggleButtonColors
@@ -236,7 +237,7 @@ internal fun pluginToggleChanges(plugin: IndexPlugin): List<Pair<PluginGrant, Bo
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
 internal enum class ActionsDialog {
     AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar,
-    TargetCalendar,
+    TargetCalendar, SavedPlaces,
 }
 
 @Composable
@@ -270,6 +271,8 @@ internal fun IndexActionsSection(
     onConfigurePlugin: (uuid: Uuid, title: String) -> Unit,
     onOpenPluginPage: (uuid: Uuid) -> Unit,
     onOpenBeeperContacts: () -> Unit,
+    /** A null id creates a new place. */
+    onEditGeofenceLocation: (uuid: Uuid?) -> Unit,
     onGetMoreActions: () -> Unit,
     /** Null where the user can't browse plugins yet, e.g. onboarding; a hint is shown instead. */
     onGetMorePlugins: (() -> Unit)?,
@@ -341,6 +344,9 @@ internal fun IndexActionsSection(
                     action.name == MessagingServlet.name -> onOpenBeeperContacts
                     action.name == CalendarServlet.NAME -> {
                         { dialog = ActionsDialog.TargetCalendar }
+                    }
+                    action.name == ReminderServlet.NAME && reminderProvider.storesItemsLocally -> {
+                        { dialog = ActionsDialog.SavedPlaces }
                     }
                     else -> null
                 },
@@ -513,6 +519,17 @@ internal fun IndexActionsSection(
             onConnected = { dialog = ActionsDialog.TargetCalendar },
         )
         ActionsDialog.TargetCalendar -> TargetCalendarDialog(onDismiss = { dialog = null })
+        ActionsDialog.SavedPlaces -> GeofenceLocationsListDialog(
+            onAdd = {
+                dialog = null
+                onEditGeofenceLocation(null)
+            },
+            onEdit = { uuid ->
+                dialog = null
+                onEditGeofenceLocation(uuid)
+            },
+            onDismissRequest = { dialog = null },
+        )
         null -> {}
     }
 }

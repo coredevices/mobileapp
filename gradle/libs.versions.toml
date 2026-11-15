@@ -32,6 +32,7 @@ androidx-activityCompose = "1.13.0"
 androidx-credentials = "1.6.0"
 # 22.x removed GoogleSignIn, which health-kmp's Google Fit fallback still uses (R8 fails / runtime crash)
 gms-auth = "21.6.0"
+gms-location = "21.3.0"
 googleId = "1.2.1"
 androidxWork = "2.12.0"
 play-update = "2.1.0"
@@ -62,6 +63,7 @@ zxing = "3.5.4"
 compass = "4.0.1"
 health-kmp = "1.7.0"
 documentfile = "1.1.0"
+kmpMaps = "0.9.1"
 
 # Cactus model checkpoints
 cactus-lm-weights = "v2.1.0"
@@ -138,6 +140,7 @@ androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "androidx-credentials" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
 gms-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "gms-auth" }
+gms-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "gms-location" }
 identity-google = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleId" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "androidxWork" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
@@ -179,3 +182,4 @@ compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", vers
 compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.ref = "compass" }
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
 health-kmp = { module = "com.viktormykhailiv:health-kmp", version.ref = "health-kmp" }
+swmansion-kmpMaps-core = { module = "com.swmansion.kmpmaps:core", version.ref = "kmpMaps" }

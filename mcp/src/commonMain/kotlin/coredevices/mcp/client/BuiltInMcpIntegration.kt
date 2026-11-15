@@ -35,7 +35,7 @@ open class BuiltInMcpIntegration(override val name: String, val tools: List<McpT
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         val disabled = getDisabledTools().toSet()
-        return tools.filterNot { it.definition.name in disabled }.joinToString("\n") { it.extraContext ?: "" }.takeIf { it.isNotEmpty() }
+        return tools.filterNot { it.definition.name in disabled }.map { it.getExtraContext() ?: "" }.joinToString("\n").takeIf { it.isNotEmpty() }
     }
 
     protected open suspend fun getDisabledTools() = emptyList<String>()

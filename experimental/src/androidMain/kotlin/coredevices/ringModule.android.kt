@@ -27,6 +27,7 @@ import coredevices.ring.util.AudioRecorder
 import coredevices.util.integrations.IntegrationTokenStorage
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.util.transcription.InferenceBoost
+import coredevices.ring.reminders.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.dsl.factoryOf
@@ -39,6 +40,7 @@ actual val platformRingModule = module {
     single<InferenceBoostProvider> { AndroidInferenceBoostProvider(get()) } bind InferenceBoost::class
     single<CactusModelPathProvider> { CactusModelProvider() }
     singleOf(::RingDelegate)
+    singleOf(::ReminderScheduler)
     singleOf(::RingPresenceObserver)
     single {
         val satelliteManager = get<KMPHaversineSatelliteManager>()

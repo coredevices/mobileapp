@@ -132,6 +132,9 @@ fun IndexAgentActionsSection(
         },
         onOpenPluginPage = { uuid -> coreNav.navigateTo(CommonRoutes.LockerAppRoute(uuid = uuid.toString())) },
         onOpenBeeperContacts = viewModel::showContactsDialog,
+        onEditGeofenceLocation = { uuid ->
+            coreNav.navigateTo(RingRoutes.GeofenceLocationEdit(locationId = uuid?.toString()))
+        },
         onGetMoreActions = {},
         onGetMorePlugins = { coreNav.navigateTo(CommonRoutes.LockerTabRoute(AppType.Plugin)) }
             .takeIf { canBrowsePlugins },

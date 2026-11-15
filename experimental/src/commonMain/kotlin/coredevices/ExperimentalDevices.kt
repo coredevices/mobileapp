@@ -20,6 +20,7 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.service.IndexNotificationManager
 import coredevices.ring.service.RingSync
+import coredevices.ring.service.indexfeed.GeofenceLocationSyncService
 import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -64,6 +65,7 @@ class ExperimentalDevices(
      *  runs for the rest of the process lifetime (mirrors how
      *  RecordingProcessingQueue's recording observer kicks off). */
     private val indexFeedSyncService: coredevices.ring.service.indexfeed.IndexFeedSyncService,
+    private val geofenceLocationSyncService: GeofenceLocationSyncService,
     private val defaultListsBootstrap: coredevices.ring.service.indexfeed.DefaultListsBootstrap,
     private val reminderReconciler: coredevices.ring.reminders.ReminderReconciler,
     private val indexSettingsSummary: IndexSettingsSummary,
@@ -89,6 +91,7 @@ class ExperimentalDevices(
             }
         )
         indexFeedSyncService.hashCode()
+        geofenceLocationSyncService.start()
         // Arm alarms for any reminder synced in while this device was away, then keep them in
         // step as items sync (a new phone, the web app, a second device).
         reminderReconciler.start()

@@ -202,6 +202,8 @@ kotlin {
                 implementation(libs.room.runtime)
                 implementation(libs.room.paging)
                 implementation(libs.sqlite.bundled)
+                implementation(libs.swmansion.kmpMaps.core)
+                implementation(libs.compass.geocoder)
 
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
@@ -244,6 +246,7 @@ kotlin {
                 implementation(libs.androidx.credentials)
                 implementation(libs.zxing.core)
                 implementation(libs.androidx.documentfile)
+                implementation(libs.gms.location)
             }
         }
 
