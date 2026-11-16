@@ -100,6 +100,7 @@ sealed interface NotificationProgress {
 // Fixed id so repeated prompts replace the visible notification rather than stack.
 internal const val SPEECH_MODEL_PROMPT_NOTIFICATION_ID = 5
 internal const val LEGACY_DESTINATION_NOTIFICATION_ID = 6
+internal val COLLECTIONS_EVICTED_NOTIFICATION_ID = "index_collections_evicted".hashCode()
 
 expect class PlatformIndexNotificationManager{
     fun notify(notification: GenericNotification)
@@ -577,6 +578,7 @@ class IndexNotificationManager(
 
     suspend fun processRingSyncTransferNotifications(events: Flow<RingEvent>) = coroutineScope {
         launch { processFirmwareUpdateNotifications(events) }
+        launch { processCollectionsEvictedNotifications(events) }
         // Skip pairing issue notifications on iOS - we seem to get false positives from the OS
         // causing confusion/spam
         if (platform.isAndroid) {
@@ -632,6 +634,21 @@ class IndexNotificationManager(
                         inProgress = null,
                         localOnly = false,
                         deepLink = RESET_URL
+                    )
+                )
+            }
+    }
+
+    private suspend fun processCollectionsEvictedNotifications(events: Flow<RingEvent>) {
+        events.filterIsInstance<RingEvent.CollectionsEvicted>()
+            .collect {
+                platformIndexNotificationManager.notify(
+                    GenericNotification(
+                        id = COLLECTIONS_EVICTED_NOTIFICATION_ID,
+                        title = "Some Index 01 recordings were lost",
+                        contentText = "Your Index 01's storage filled up before it could sync with your phone, " +
+                            "so the oldest recordings were overwritten.",
+                        deepLink = FAQ_URL
                     )
                 )
             }

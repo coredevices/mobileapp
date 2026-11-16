@@ -88,6 +88,12 @@ sealed class TraceEventData {
         val satellite: String,
         val transferId: Long,
     ) : TraceEventData()
+    @Serializable @SerialName("collections_evicted")
+    data class CollectionsEvicted(
+        val satellite: String,
+        val firstIndex: Int,
+        val lastIndex: Int,
+    ) : TraceEventData()
     @Serializable @SerialName("transfer_dropped_recoverable")
     data class TransferDroppedRecoverable(
         val satellite: String,

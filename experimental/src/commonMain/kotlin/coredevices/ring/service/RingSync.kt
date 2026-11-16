@@ -144,6 +144,11 @@ sealed interface RingEvent {
     data class BluetoothPeerPairingIssue(
         override val ringId: String,
     ) : RingEvent
+
+    data class CollectionsEvicted(
+        override val ringId: String,
+        val count: Int,
+    ) : RingEvent
 }
 
 class RingSync(
@@ -508,6 +513,24 @@ class RingSync(
                                                                 }
                                                             }
                                                         }
+                                                    }
+
+                                                    is TransferStatus.CollectionsEvicted -> {
+                                                        val evicted = transferStatus.evictedRange
+                                                        logger.w { "Ring storage was full, collections $evicted were lost before transfer" }
+                                                        trace.markEvent("collections_evicted",
+                                                            TraceEventData.CollectionsEvicted(
+                                                                satellite = satelliteSerial,
+                                                                firstIndex = evicted.first,
+                                                                lastIndex = evicted.last,
+                                                            )
+                                                        )
+                                                        _ringEvents.emit(
+                                                            RingEvent.CollectionsEvicted(
+                                                                ringId = transferStatus.satellite.id,
+                                                                count = evicted.count(),
+                                                            )
+                                                        )
                                                     }
 
                                                     is TransferStatus.TransferFailed -> {
