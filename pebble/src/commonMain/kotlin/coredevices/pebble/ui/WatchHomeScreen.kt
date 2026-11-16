@@ -403,8 +403,7 @@ fun WatchHomeScreen(
                 missingPermissions.value.filter {
                     it in listOf(
                         Permission.SetAlarms,
-                        Permission.Reminders,
-                        Permission.AlarmKit,
+                        Permission.Reminders
                     )
                 }
             }
