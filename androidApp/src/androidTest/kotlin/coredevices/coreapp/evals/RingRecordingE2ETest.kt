@@ -650,7 +650,7 @@ class RingRecordingE2ETest {
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRepository)
         singleOf(::IndexWebhookRunRepository)
-        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
 
         // Preferences
@@ -700,7 +700,7 @@ class RingRecordingE2ETest {
 
         // Queue
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 }
 

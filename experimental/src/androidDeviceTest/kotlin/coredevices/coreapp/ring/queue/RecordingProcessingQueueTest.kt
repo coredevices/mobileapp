@@ -174,6 +174,7 @@ class RecordingProcessingQueueTest {
     private lateinit var fakeNenya: FakeNenyaClient
     private lateinit var fakeTranscription: FakeTranscriptionService
     private lateinit var bgScopeJob: CompletableJob
+    private var previousRunCrashed = false
 
     @Before
     fun setUp() {
@@ -254,6 +255,7 @@ class RecordingProcessingQueueTest {
                     get() = "${Build.MANUFACTURER} ${Build.MODEL}"
                 override suspend fun openUrl(url: String) {}
                 override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) { task() }
+                override val previousRunCrashed get() = this@RecordingProcessingQueueTest.previousRunCrashed
             }
         }
         // Real BuiltinServletRepository needed by McpSessionFactory (never actually resolves tools
@@ -311,14 +313,14 @@ class RecordingProcessingQueueTest {
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRepository)
         singleOf(::IndexWebhookRunRepository)
-        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
         singleOf(::RecordingProcessor)
         singleOf(::RecordingPreprocessor)
 
         // Background scope with short reschedule delay
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 
     private fun createFakeAudioFile(fileId: String, sizeBytes: Int = 1024) {
@@ -363,6 +365,7 @@ class RecordingProcessingQueueTest {
             recordingPreprocessor = koin.get(),
             trace = koin.get(),
             settings = koin.get(),
+            platform = koin.get(),
             rescheduleDelay = rescheduleDelay
         )
     }
@@ -725,8 +728,9 @@ class RecordingProcessingQueueTest {
                 transcription = "Crashed last time",
             )
         )
-        // As left behind by a previous run that died mid-attempt
+        // As left behind by a previous run that crashed mid-attempt
         GlobalContext.get().get<Settings>().putString("queue_RecordingProcessing_in_progress", "1")
+        previousRunCrashed = true
 
         queue.resumePendingTasks()
         awaitTaskDone(taskId = 1)

@@ -104,6 +104,7 @@ kotlin {
                 implementation(libs.koin.compose)
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
+                implementation(libs.firebase.crashlytics)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.contentNegotiation)
                 implementation(libs.ktor.client.encoding)

@@ -34,6 +34,7 @@ import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -74,12 +75,14 @@ class RecordingProcessingQueue(
     private val recordingPreprocessor: RecordingPreprocessor,
     private val trace: RingTraceSession,
     settings: Settings,
+    platform: Platform,
     rescheduleDelay: Duration = 1.minutes,
     maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
     repository = queueTaskRepository,
     scope = scope,
     settings = settings,
+    platform = platform,
     label = "RecordingProcessing",
     rescheduleDelay = rescheduleDelay,
     maxConcurrency = maxConcurrency,

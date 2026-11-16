@@ -11,6 +11,7 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.storage.StagedRecordingUpload
+import coredevices.util.Platform
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.queue.TaskStatus
 import io.ktor.http.HttpStatusCode
@@ -155,6 +156,7 @@ internal fun testDeliveryQueue(
     localRecordingDao = FakeLocalRecordingDao,
     scope = RecordingBackgroundScope(scope),
     settings = MapSettings(),
+    platform = FakePlatform,
 )
 
 private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : IndexWebhookApi {
@@ -256,4 +258,11 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
     override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
     override fun deleteStagedRecording(id: String) = TODO()
+}
+
+private object FakePlatform : Platform {
+    override val name = "Test"
+    override val deviceModelName = "Test"
+    override suspend fun openUrl(url: String) {}
+    override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) = task()
 }

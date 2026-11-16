@@ -6,6 +6,7 @@ import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.storage.RecordingStorage
+import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
 import coredevices.util.queue.RecoverableTaskException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,11 +29,13 @@ class IndexWebhookDeliveryQueue(
     private val localRecordingDao: LocalRecordingDao,
     scope: RecordingBackgroundScope,
     settings: Settings,
+    platform: Platform,
     rescheduleDelay: Duration = 1.minutes,
 ) : PersistentQueueScheduler<IndexWebhookDeliveryEntity>(
     repository = repository,
     scope = scope,
     settings = settings,
+    platform = platform,
     label = "IndexWebhookDelivery",
     rescheduleDelay = rescheduleDelay,
     maxAttempts = MAX_ATTEMPTS,
