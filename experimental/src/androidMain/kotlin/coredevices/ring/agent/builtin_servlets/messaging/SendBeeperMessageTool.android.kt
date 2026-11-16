@@ -65,7 +65,7 @@ actual class SendBeeperMessageTool : BuiltInMcpTool(
         // ponytail: chats outside the most recent RECENT_CHATS_LIMIT are only found via contact search; Beeper has no chat title search
         val chatCandidates = BeeperAPI.chats(resolver, limit = RECENT_CHATS_LIMIT).mapNotNull { chat ->
             val title = chat.title ?: return@mapNotNull null
-            BeeperChatCandidate(roomId = chat.roomId, name = title, match = nameMatch(name, title))
+            BeeperChatCandidate(roomId = chat.roomId, name = title, match = nameMatch(name, title), group = !chat.isOneToOne)
         }
         return contactCandidates + chatCandidates
     }

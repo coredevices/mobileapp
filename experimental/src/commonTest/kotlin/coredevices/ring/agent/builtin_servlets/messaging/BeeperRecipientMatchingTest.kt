@@ -12,6 +12,9 @@ class BeeperRecipientMatchingTest {
         val cases = listOf(
             Triple("taz family", "🌴 Taz Family!", NameMatch.Exact),
             Triple("Liz", "Liz", NameMatch.Exact),
+            Triple("alvin and bob", "Alvin & Bob", NameMatch.Exact),
+            Triple("alvin and bob", "Alvin Lacson, Bob Smith", NameMatch.WholeWords),
+            Triple("alvin and bob", "Alvin Lacson", NameMatch.None),
             Triple("liz", "Elizabeth 'Liz' Migicovsky", NameMatch.WholeWords),
             Triple("liz", "~Liz (work)", NameMatch.WholeWords),
             Triple("family taz", "Taz Family", NameMatch.WholeWords),
@@ -50,6 +53,21 @@ class BeeperRecipientMatchingTest {
         val whatsapp = BeeperChatCandidate("!wa", "Liz", NameMatch.Exact, lastActivity = 100)
         val signal = BeeperChatCandidate("!sig", "Liz", NameMatch.Exact, lastActivity = 200)
         assertEquals(signal, listOf(whatsapp, signal).bestMatches().pick())
+    }
+
+    @Test
+    fun directChatBeatsMoreRecentGroupChat() {
+        val dm = BeeperChatCandidate("!dm", "Alvin Lacson", NameMatch.WholeWords, lastActivity = 100)
+        val group = BeeperChatCandidate("!grp", "Alvin Lacson, +14153200891", NameMatch.WholeWords, lastActivity = 900, group = true)
+        assertEquals(dm, listOf(group, dm).bestMatches().pick())
+    }
+
+    @Test
+    fun groupChatWinsWhenNamedMoreClosely() {
+        val dm = BeeperChatCandidate("!dm", "Alvin Lacson", nameMatch("alvin and bob", "Alvin Lacson"))
+        val group = BeeperChatCandidate("!grp", "Alvin & Bob", nameMatch("alvin and bob", "Alvin & Bob"), group = true)
+        assertEquals(group, listOf(dm, group).bestMatches().pick())
+        assertEquals(group, listOf(group).bestMatches().pick())
     }
 
     @Test

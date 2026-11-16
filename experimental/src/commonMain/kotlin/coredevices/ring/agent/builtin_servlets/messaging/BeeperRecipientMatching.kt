@@ -9,11 +9,12 @@ internal data class BeeperChatCandidate(
     val match: NameMatch,
     val approved: Boolean = false,
     val lastActivity: Long = 0,
+    val group: Boolean = false,
 )
 
 private fun nameWords(s: String): List<String> =
     s.lowercase().map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("")
-        .split(' ').filter { it.isNotEmpty() }
+        .split(' ').filter { it.isNotEmpty() && it != "and" }
 
 internal fun nameMatch(query: String, name: String): NameMatch {
     val q = nameWords(query)
@@ -40,10 +41,11 @@ private fun prefixesMatchDistinctWords(prefixes: List<String>, words: List<Strin
 internal fun nameMatch(query: String, names: List<String?>): NameMatch =
     names.filterNotNull().maxOfOrNull { nameMatch(query, it) } ?: NameMatch.None
 
-/** Candidates at the strongest match level found. */
+/** Candidates at the strongest match level found; direct chats only, unless just group chats match that well. */
 internal fun List<BeeperChatCandidate>.bestMatches(): List<BeeperChatCandidate> {
     val best = maxOfOrNull { it.match }?.takeIf { it != NameMatch.None } ?: return emptyList()
-    return filter { it.match == best }
+    val atBest = filter { it.match == best }
+    return atBest.filterNot { it.group }.ifEmpty { atBest }
 }
 
 /**
