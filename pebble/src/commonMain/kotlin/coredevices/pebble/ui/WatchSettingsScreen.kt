@@ -3116,10 +3116,6 @@ fun <T> basicSettingsDropdownItem(
     }
 )
 
-private const val SHOW_DEBUG_OPTIONS_SETTINGS_KEY = "showDebugOptions"
-
-fun Settings.showDebugOptions() = getBoolean(SHOW_DEBUG_OPTIONS_SETTINGS_KEY, false)
-
 @Composable
 fun PKJSCopyTokenDialog(onDismissRequest: () -> Unit) {
     val libPebble = rememberLibPebble()

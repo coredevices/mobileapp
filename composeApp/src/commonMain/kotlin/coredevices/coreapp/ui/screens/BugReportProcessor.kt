@@ -22,6 +22,7 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
 import coredevices.util.WatchNotifier
+import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.storage.appStorageBreakdown
 import coredevices.util.storage.formatDataUsage
@@ -454,6 +455,32 @@ class BugReportProcessor(
                     file = bugReportFile,
                 ))
             }
+        }
+    }
+
+    /** Sends a report with what [BugReportScreen] attaches by default; returns once the report exists. */
+    suspend fun newVoiceBugReport(description: String, watch: Boolean): Result<Unit> {
+        if (isThirdPartyTest()) return Result.failure(Exception("Bug reports are disabled in this build"))
+        val user = Firebase.auth.currentUser?.takeIf { it.emailOrNull != null }
+            ?: return Result.failure(Exception("Please sign in before submitting a bug report"))
+        val params = BugReportGenerationParams(
+            userMessage = description,
+            userName = user.displayName ?: "",
+            userEmail = user.email,
+            screenContext = """{"source": "voice"}""",
+            attachments = emptyList(),
+            sendRecording = false,
+            sendRecentRecordings = !watch,
+            expOutputPath = null,
+            imageAttachments = emptyList(),
+            fetchPebbleLogs = watch,
+            fetchPebbleCoreDump = watch,
+            includeExperimentalDebugInfo = !watch,
+            shareLocally = false,
+        )
+        return when (val state = newBugReport(params).first { it != BugReportState.Creating }) {
+            is BugReportState.BugReportResult.Failed -> Result.failure(Exception(state.error))
+            else -> Result.success(Unit)
         }
     }
 

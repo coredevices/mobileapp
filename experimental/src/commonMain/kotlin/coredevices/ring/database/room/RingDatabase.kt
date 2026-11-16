@@ -107,7 +107,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 48,
+    version = 49,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -171,6 +171,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 46, to = 47),
         // 47→48: adds RingBatteryHistory (Index 01 battery-life estimate).
         AutoMigration(from = 47, to = 48),
+        // 48→49: turns the voice bug report action off until the user enables it.
+        AutoMigration(from = 48, to = 49, Migrate48To49::class),
     ]
 )
 @TypeConverters(Converters::class)
@@ -356,14 +358,42 @@ private fun SQLiteConnection.denyDefaultPluginGrants() {
     }
 }
 
+/**
+ * Built-in actions that start off; the user turns them on in Index settings. The bug report action
+ * sends logs and recordings, so the agent calling it by accident must not count as consent.
+ */
+private val BUILTINS_DISABLED_BY_DEFAULT = listOf("builtin_bug_report")
+
+private fun SQLiteConnection.disableDefaultBuiltins() {
+    val statement = prepare("INSERT OR IGNORE INTO DisabledBuiltinMcp (builtinMcpName) VALUES (?)")
+    try {
+        BUILTINS_DISABLED_BY_DEFAULT.forEach { name ->
+            statement.bindText(1, name)
+            statement.step()
+            statement.reset()
+        }
+    } finally {
+        statement.close()
+    }
+}
+
+class Migrate48To49 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) = connection.disableDefaultBuiltins()
+}
+
 class Migrate42To43 : AutoMigrationSpec {
     override fun onPostMigrate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
 }
 
 /** Fresh databases skip migrations, so the default denials are seeded here instead. */
 object SeedDefaultPluginGrants : RoomDatabase.Callback() {
-    override fun onCreate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
-    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+    override fun onCreate(connection: SQLiteConnection) = connection.seedDefaults()
+    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.seedDefaults()
+
+    private fun SQLiteConnection.seedDefaults() {
+        denyDefaultPluginGrants()
+        disableDefaultBuiltins()
+    }
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
@@ -84,6 +85,7 @@ import coredevices.ring.agent.IndexAction
 import coredevices.ring.agent.IndexPlugin
 import coredevices.ring.agent.NOT_CONNECTED_REASON
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
+import coredevices.ring.agent.builtin_servlets.bugreport.BugReportServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
@@ -186,6 +188,11 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
         Icons.AutoMirrored.Filled.Reply,
         "Reply to Notifications",
         "“Reply on my way” → reply to the notification on your Pebble watch",
+    )
+    BugReportServlet.NAME -> ActionPresentation(
+        Icons.Default.BugReport,
+        "Bug Reports",
+        "“Create a bug report for Index, the light didn’t turn on” → sends a bug report",
     )
     else -> ActionPresentation(Icons.Default.Power, action.title, "")
 }

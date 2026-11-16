@@ -1,8 +1,12 @@
 package coredevices.ring.agent
 
+import com.russhwolf.settings.Settings
 import coredevices.indexai.agent.ServletRepository
 import coredevices.indexai.data.McpServerDefinition
 import coredevices.mcp.client.McpIntegration
+import coredevices.pebble.ui.showDebugOptions
+import coredevices.ring.agent.builtin_servlets.bugreport.BugReportServlet
+import coredevices.ring.agent.builtin_servlets.bugreport.CreateBugReportTool
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.clock.clockUnavailableReason
@@ -54,12 +58,17 @@ internal fun builtinServletDefinitions(
             name = NotificationReplyServlet.NAME,
             title = "Reply to Notifications",
             unavailableReason = androidOnly
+        ),
+        McpServerDefinition(
+            name = BugReportServlet.NAME,
+            title = "Bug Reports"
         )
     )
 }
 
 class BuiltinServletRepository: KoinComponent, ServletRepository {
     private val platform: Platform by inject()
+    private val settings: Settings by inject()
 
     /**
      * Includes servlets unavailable on this platform so settings can show them greyed out.
@@ -68,6 +77,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
      */
     override fun getAllServlets(): List<McpServerDefinition> =
         builtinServletDefinitions(platform.isAndroid, clockUnavailableReason())
+            .filter { it.name != BugReportServlet.NAME || settings.showDebugOptions() }
 
     override fun resolveName(name: String): McpIntegration? {
         return when (name) {
@@ -83,6 +93,7 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             NotificationReplyServlet.NAME -> NotificationReplyServlet(
                 replyTool = ReplyToWatchNotificationTool(get<LibPebble>())
             ).takeIf { platform.isAndroid }
+            BugReportServlet.NAME -> BugReportServlet(CreateBugReportTool(get())).takeIf { settings.showDebugOptions() }
             else -> null
         }
     }

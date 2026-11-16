@@ -304,6 +304,7 @@ ksp {
             "builtin_messaging",
             "builtin_plugins",
             "builtin_notification_reply",
+            "builtin_bug_report",
         ).joinToString(",")
     )
 }
