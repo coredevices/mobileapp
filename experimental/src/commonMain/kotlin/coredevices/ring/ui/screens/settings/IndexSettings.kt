@@ -186,6 +186,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val currentRingFirmware by viewModel.currentRingFirmware.collectAsStateWithLifecycle()
     val currentRing by viewModel.currentRingName.collectAsStateWithLifecycle()
     val currentRingPaired = viewModel.ringPaired.collectAsStateWithLifecycle()
+    val batteryLife by viewModel.batteryLife.collectAsStateWithLifecycle()
     val ringPaired by remember { derivedStateOf { currentRingPaired.value != null } }
     val accountUsername by viewModel.username.collectAsStateWithLifecycle()
     val noteShortcut by viewModel.noteShortcut.collectAsState()
@@ -420,6 +421,9 @@ fun IndexSettings(coreNav: CoreNav) {
                     onRequireSignIn = { showSignInDialog = true },
                     onShowModelDownload = { coreNav.navigateTo(CommonRoutes.SpeechModelDownloadDialog) },
                 )
+            }
+            if (ringPaired && coreConfig.showIndexBatteryLife) {
+                item { BatteryLifeSection(batteryLife) }
             }
             item {
                 SectionHeader(

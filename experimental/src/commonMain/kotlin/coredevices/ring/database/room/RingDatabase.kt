@@ -50,11 +50,13 @@ import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.clock.LocalClockEntry
+import coredevices.ring.data.entity.room.battery.RingBatteryHistory
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalClockDao
+import coredevices.ring.database.room.dao.RingBatteryHistoryDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.PluginGrantDao
 import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
@@ -98,13 +100,14 @@ import kotlin.uuid.Uuid
         AgentIterationEntity::class,
         RingRssiReading::class,
         LocalClockEntry::class,
+        RingBatteryHistory::class,
         SavedGeofenceLocation::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 47,
+    version = 48,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -166,6 +169,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 45, to = 46),
         // 46→47: adds SavedGeofenceLocation and LocalReminderData.geofenceLocationId.
         AutoMigration(from = 46, to = 47),
+        // 47→48: adds RingBatteryHistory (Index 01 battery-life estimate).
+        AutoMigration(from = 47, to = 48),
     ]
 )
 @TypeConverters(Converters::class)
@@ -190,6 +195,7 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun agentIterationDao(): AgentIterationDao
     abstract fun ringRssiReadingDao(): RingRssiReadingDao
     abstract fun localClockDao(): LocalClockDao
+    abstract fun ringBatteryHistoryDao(): RingBatteryHistoryDao
     abstract fun savedGeofenceLocationDao(): SavedGeofenceLocationDao
 }
 

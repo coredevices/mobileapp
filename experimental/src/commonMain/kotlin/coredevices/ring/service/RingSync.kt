@@ -15,6 +15,7 @@ import coredevices.haversine.fingerprintMatchesPTF
 import coredevices.haversine.removeDCBias
 import coredevices.resampler.Resampler
 import coredevices.libindex.database.entity.RingTransferStatus
+import coredevices.ring.battery.RingBatteryLifeStore
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.ring.database.Preferences
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -41,6 +42,10 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -153,7 +158,8 @@ class RingSync(
     private val usersDao: UsersDao,
     private val scope: RecordingBackgroundScope,
     private val trace: RingTraceSession,
-    private val deviceManager: IndexDeviceManager
+    private val deviceManager: IndexDeviceManager,
+    private val batteryLifeStore: RingBatteryLifeStore,
 ): KoinComponent {
     companion object {
         private val logger = Logger.withTag("RingSync")
@@ -259,7 +265,7 @@ class RingSync(
         }
     }
 
-    @OptIn(FlowPreview::class)
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun startSyncJob(satelliteManager: KMPHaversineSatelliteManager) {
         logger.d { "startSyncJob()" }
         syncJob?.cancel()
@@ -298,6 +304,14 @@ class RingSync(
             }
             satelliteManager.lastRing.onEach {
                 _lastRing.value = it
+            }.launchIn(this)
+            // Lets the battery estimate find the paired ring's serial without waiting for a recording.
+            satelliteManager.lastRing.flatMapLatest { satellite ->
+                satellite?.state?.filterNotNull()?.map { satellite to it } ?: emptyFlow()
+            }.onEach { (satellite, state) ->
+                val serial = (state.programmedSerialNumber ?: state.serialNumber).takeIf { it.isNotBlank() }
+                val pairedId = prefs.ringPaired.value?.takeIf { isPairedRing(satellite.id) }
+                if (serial != null && pairedId != null) batteryLifeStore.rememberPairedRing(serial, pairedId)
             }.launchIn(this)
             val secondaryProfileWarning = get<SecondaryProfileWarning>()
             if (secondaryProfileWarning.pending) {
@@ -416,6 +430,10 @@ class RingSync(
                                                                 transferStatus.satellite.state.value?.programmedSerialNumber
                                                                     ?: transferStatus.satellite.state.value?.serialNumber
                                                         )?.let { serial ->
+                                                            // Before the cloud writes, so offline transfers still feed the on-phone estimate.
+                                                            val pairedId = prefs.ringPaired.value?.takeIf { isPairedRing(transferStatus.satellite.id) }
+                                                            transferStatus.lifetimeCollectionCount?.let { batteryLifeStore.recordCollections(serial, it.toInt(), pairedId) }
+                                                            batteryLifeStore.recordVoltage(serial, transferStatus.batteryVoltageMilliV?.toInt())
                                                             transferStatus.lifetimeCollectionCount?.let { count ->
                                                                 lifetimeCollectionCount.emit(serial to count.toInt())
                                                             } ?: logger.w {

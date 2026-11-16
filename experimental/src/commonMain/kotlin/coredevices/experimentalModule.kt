@@ -102,6 +102,8 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.ring.bugreport.IndexRebootLogStore
+import coredevices.ring.battery.RingBatteryLifeRepository
+import coredevices.ring.battery.RingBatteryLifeStore
 import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.ring.bugreport.IndexSettingsSummary
@@ -286,6 +288,8 @@ val experimentalModule = module {
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
     singleOf(::IndexRebootLogStore)
+    single { RingBatteryLifeStore(get<RingDatabase>().ringBatteryHistoryDao(), get()) }
+    singleOf(::RingBatteryLifeRepository)
     single { RingRssiStatistics(get()) } bind HeartbeatMetricsSource::class
     single {
         ExperimentalDevices(
