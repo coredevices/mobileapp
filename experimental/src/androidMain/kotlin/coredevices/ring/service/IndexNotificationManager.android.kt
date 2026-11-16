@@ -52,11 +52,15 @@ actual class PlatformIndexNotificationManager(
             .setAutoCancel(true)
     actual fun notify(notification: GenericNotification) {
         ensureChannels()
-        val uriIntent = notification.deepLink?.let {
-            Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
-                data = it.toUri()
-                action = Intent.ACTION_VIEW
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val uriIntent = notification.deepLink?.toUri()?.let { uri ->
+            if (uri.scheme == "https" || uri.scheme == "http") {
+                Intent(Intent.ACTION_VIEW, uri)
+            } else {
+                Intent(context, Class.forName("coredevices.coreapp.MainActivity")).apply {
+                    data = uri
+                    action = Intent.ACTION_VIEW
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
             }
         }
         val notif = buildDebugNotification(notification.channel.channelId())

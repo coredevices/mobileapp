@@ -337,7 +337,12 @@ object IOSDelegate : KoinComponent {
         val deepLinkToHandle = actionDeepLink ?: deepLink
         if (deepLinkToHandle != null) {
             logger.d { "Handling deep link from notification: $deepLinkToHandle" }
-            handleOpenUrl(NSURL.URLWithString(deepLinkToHandle)!!)
+            val url = NSURL.URLWithString(deepLinkToHandle)!!
+            if (url.scheme == "https" || url.scheme == "http") {
+                UIApplication.sharedApplication.openURL(url, emptyMap<Any?, Any>(), null)
+            } else {
+                handleOpenUrl(url)
+            }
         }
         completionHandler()
     }

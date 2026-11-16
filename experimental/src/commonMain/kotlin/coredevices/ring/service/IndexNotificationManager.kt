@@ -121,6 +121,8 @@ class IndexNotificationManager(
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
         private const val DEEP_LINK_URI = "pebble://navbar/index"
+        private const val FAQ_URL = "https://help.repebble.com/en/articles/15900461-index-01-faq-and-tips"
+        private const val RESET_URL = "https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01"
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
         private val SPEECH_MODEL_PROMPT_DEBOUNCE = 5.minutes
@@ -626,10 +628,10 @@ class IndexNotificationManager(
                     GenericNotification(
                         id = nextNotificationId(),
                         title = "Index 01 Pairing Issue",
-                        contentText = "Your Index 01 requires re-pairing to function correctly.",
+                        contentText = "Your Index 01 requires re-pairing to function correctly. Tap for info.",
                         inProgress = null,
                         localOnly = false,
-                        deepLink = DEEP_LINK_URI
+                        deepLink = RESET_URL
                     )
                 )
             }
