@@ -183,6 +183,10 @@ class RecordingDetailsViewModel(
                 withContext(NonCancellable) {
                     linked.forEach { itemRepo.softDelete(it.firestoreId) }
                     recordingRepo.deleteRecording(recordingId)
+                    state?.entries?.mapNotNull { it.fileName }?.forEach {
+                        recordingStorage.deleteRecording(it)
+                        recordingStorage.deleteRecording("$it-original")
+                    }
                 }
                 snackbarHostState.showSnackbar(
                     "Deleted recording" + if (linked.isNotEmpty()) " + ${linked.size} item(s)" else "",
