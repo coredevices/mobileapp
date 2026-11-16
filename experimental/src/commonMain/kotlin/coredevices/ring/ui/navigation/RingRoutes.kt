@@ -85,6 +85,11 @@ object RingRoutes {
      *  tapped. */
     const val TIMERS_ALARMS_DEEP_LINK_PATH = "timers-alarms"
     const val TIMERS_ALARMS_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$TIMERS_ALARMS_DEEP_LINK_PATH"
+
+    /** Deep link that opens [ListenDialog], which starts recording from the phone's
+     *  microphone; used by the iOS "Record to Index" shortcut. */
+    const val LISTEN_DEEP_LINK_PATH = "listen"
+    const val LISTEN_DEEP_LINK = "pebblecore://$OBJECT_DEEP_LINK_HOST/$LISTEN_DEEP_LINK_PATH"
 }
 
 /** Registers a ring destination inside [IndexThemeHost], so screens read
