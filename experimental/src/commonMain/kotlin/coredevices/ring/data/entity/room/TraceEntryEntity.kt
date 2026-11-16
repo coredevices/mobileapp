@@ -12,8 +12,9 @@ import kotlin.time.Instant
 
 @Entity(
     indices = [
-        Index("sessionId"),
-        Index("recordingId")
+        Index("sessionId", "type", "timeMark"),
+        Index("recordingId"),
+        Index("transferId"),
     ],
     foreignKeys = [
         ForeignKey(

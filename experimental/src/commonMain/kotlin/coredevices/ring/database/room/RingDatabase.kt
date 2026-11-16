@@ -107,7 +107,7 @@ import kotlin.uuid.Uuid
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 49,
+    version = 50,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -173,6 +173,8 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 47, to = 48),
         // 48→49: turns the voice bug report action off until the user enables it.
         AutoMigration(from = 48, to = 49, Migrate48To49::class),
+        // 49→50: adds indices on TraceEntryEntity, RecordingProcessingTaskEntity and RingTransfer.
+        AutoMigration(from = 49, to = 50),
     ]
 )
 @TypeConverters(Converters::class)
