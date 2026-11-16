@@ -174,7 +174,9 @@ class RealCoreAnalytics(
     }
 
     private fun heartbeatCounterNames(): Set<String> = HEARTBEAT_COUNTERS.toSet() +
-        cache.keys.filter { it.startsWith(KEY_HEARTBEAT_COUNTER_PREFIX) }.map { it.removePrefix(KEY_HEARTBEAT_COUNTER_PREFIX) }
+        cache.keys
+            .filter { it.startsWith(KEY_HEARTBEAT_COUNTER_PREFIX) && it != KEY_HEARTBEAT_COUNTER_START_TIMESTAMP }
+            .map { it.removePrefix(KEY_HEARTBEAT_COUNTER_PREFIX) }
 
     private suspend fun heartbeatDuration(): Duration {
         val cachedTimestamps = withContext(Dispatchers.IO) {
