@@ -3,11 +3,21 @@ package coredevices.ring.agent.builtin_servlets.messaging
 import android.content.ContentResolver
 import androidx.core.database.getStringOrNull
 import androidx.core.net.toUri
+import co.touchlab.kermit.Logger
+import kotlin.time.measureTimedValue
 
 object BeeperAPI {
     const val CONTACTS_URI = "content://com.beeper.api/contacts"
     const val CHATS_URI = "content://com.beeper.api/chats"
     const val MESSAGES_URI = "content://com.beeper.api/messages"
+
+    private val logger = Logger.withTag("BeeperAPI")
+
+    private inline fun <T> timed(query: String, block: () -> T): T {
+        val (value, duration) = measureTimedValue(block)
+        logger.d { "$query took $duration" }
+        return value
+    }
 
     data class Contact(
         val id: String,
@@ -24,7 +34,7 @@ object BeeperAPI {
         val isOneToOne: Boolean,
     )
 
-    fun searchContacts(contentResolver: ContentResolver, query: String?, limit: Int, offset: Int = 0): List<Contact> {
+    fun searchContacts(contentResolver: ContentResolver, query: String?, limit: Int, offset: Int = 0): List<Contact> = timed("searchContacts") {
         val uri = CONTACTS_URI.toUri().buildUpon()
             .appendQueryParameter("limit", limit.toString())
             .appendQueryParameter("offset", offset.toString())
@@ -49,11 +59,11 @@ object BeeperAPI {
                 )
             }
         }
-        return contacts
+        contacts
     }
 
     /** Chats newest first, either the given [roomIds] or the [limit] most recent. */
-    fun chats(contentResolver: ContentResolver, roomIds: Collection<String>? = null, limit: Int? = null): List<Chat> {
+    fun chats(contentResolver: ContentResolver, roomIds: Collection<String>? = null, limit: Int? = null): List<Chat> = timed(if (roomIds != null) "chats(${roomIds.size} rooms)" else "chats(limit=$limit)") {
         val uri = CHATS_URI.toUri().buildUpon()
             .apply {
                 roomIds?.let { appendQueryParameter("roomIds", it.joinToString(",")) }
@@ -81,7 +91,7 @@ object BeeperAPI {
                 )
             }
         }
-        return chats
+        chats
     }
 
     /** The most recent one-to-one chat among [roomIds] (comma-separated), else the most recent group chat. */
@@ -91,12 +101,12 @@ object BeeperAPI {
     }
 
     /** Timestamp of the newest message in [roomId], from anyone including the user. */
-    fun latestMessageTime(contentResolver: ContentResolver, roomId: String): Long? {
+    fun latestMessageTime(contentResolver: ContentResolver, roomId: String): Long? = timed("latestMessageTime") {
         val uri = MESSAGES_URI.toUri().buildUpon()
             .appendQueryParameter("limit", "1")
             .appendQueryParameter("roomIds", roomId)
             .build()
-        return contentResolver.query(uri, arrayOf("timestamp"), null, null, "timestamp DESC")?.use { c ->
+        contentResolver.query(uri, arrayOf("timestamp"), null, null, "timestamp DESC")?.use { c ->
             if (c.moveToFirst()) c.getLong(c.getColumnIndexOrThrow("timestamp")) else null
         }
     }
