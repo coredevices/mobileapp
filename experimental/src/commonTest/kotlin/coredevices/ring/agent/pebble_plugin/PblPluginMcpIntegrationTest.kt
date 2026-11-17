@@ -87,6 +87,19 @@ class PblPluginMcpIntegrationTest {
     }
 
     @Test
+    fun toolRequiresConfirmationWhenItsActionDoes() = runTest {
+        val tools = integrationFor(FakePlugin(listOf(next, clearQueue))).listTools()
+
+        assertEquals(listOf(false, true), tools.map { it.requiresConfirmation })
+    }
+
+    @Test
+    fun onlyADestructiveActionIsAnnotatedAsDestructive() {
+        assertEquals(true, clearQueue.toToolDefinition().annotations?.destructiveHint)
+        assertEquals(null, next.toToolDefinition().annotations)
+    }
+
+    @Test
     fun callingAToolInvokesTheActionWithItsArguments() = runTest {
         val plugin = FakePlugin(listOf(setPlaying))
         val tool = integrationFor(plugin).listTools().single()
@@ -193,6 +206,7 @@ class PblPluginMcpIntegrationTest {
             """{"type":"UserDenied"}""",
             """{"type":"USER_DENIED"}""",
             """{"type":"RequiresConfirmation","integrationName":"Music","toolName":"next","arguments":{},"destructive":false}""",
+            """{"type":"ValidationFailure","integrationName":"Music","toolName":"next","arguments":{},"probability":0.1}""",
         )
 
         disallowed.forEach {

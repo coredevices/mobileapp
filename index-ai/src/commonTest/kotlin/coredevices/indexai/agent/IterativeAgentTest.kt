@@ -27,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -68,6 +69,7 @@ class IterativeAgentTest {
         private val finalContent: String? = null,
         private val roundContent: String? = null,
         initialConversation: List<ConversationMessageDocument> = emptyList(),
+        override val toolCallValidator: ToolCallValidator? = null,
     ) : IterativeAgent(initialConversation) {
         override val label = "test"
         override val isCloud = true
@@ -236,7 +238,7 @@ class IterativeAgentTest {
         assertEquals(listOf(emptyList(), listOf("unlocked")), agent.toolsSeen)
     }
 
-    private class FakeTool(name: String) : BuiltInMcpTool(
+    private class FakeTool(name: String, override val requiresConfirmation: Boolean = false) : BuiltInMcpTool(
         definition = Tool(name = name, inputSchema = ToolSchema())
     ) {
         override suspend fun call(jsonInput: String, context: SessionContext) = ToolCallResult("ok", null)
@@ -362,6 +364,75 @@ class IterativeAgentTest {
         assertTrue(placeholder.awaitsConfirmation)
         assertEquals(listOf(placeholder), conversation.pendingConfirmations())
         assertNoDanglingToolCalls(agent)
+    }
+
+    @Test
+    fun callFailingValidationWaitsOnConfirmationWithoutRunning() = runTest {
+        val integration = FakeIntegration().apply { tools = listOf(FakeTool("delete_note"), FakeTool("create_note")) }
+        val failure = SemanticResult.ValidationFailure("fake", "delete_note", JsonObject(emptyMap()), probabilityValid = 0.1)
+        val validated = mutableListOf<Triple<AgentToolCall, McpSessionTool?, List<ConversationMessageDocument>>>()
+        val agent = ScriptedAgent(
+            mutableListOf(
+                listOf(
+                    toolCall("c1", name = "fake__delete_note", args = """{"id":"n1"}"""),
+                    toolCall("c2", name = "fake__create_note", args = """{"text":"note"}"""),
+                ),
+                listOf(toolCall("c3", name = "fake__create_note", args = """{"text":"never"}""")),
+            ),
+            toolCallValidator = { call, tool, conversation ->
+                validated += Triple(call, tool, conversation)
+                failure.takeIf { call.toolName == "delete_note" }
+            },
+        )
+        agent.send("input", McpSession(listOf(integration), this), sessionContext())
+
+        assertEquals(listOf("create_note"), integration.calls.map { it.first })
+        assertEquals(1, agent.inferences)
+        val conversation = agent.conversation.first()
+        val placeholder = conversation.single { it.tool_call_id == "c1" }
+        assertEquals(failure, placeholder.semantic_result)
+        assertEquals(listOf(placeholder), conversation.pendingConfirmations())
+        assertNoDanglingToolCalls(agent)
+        assertEquals(listOf("c1", "c2"), validated.map { it.first.id })
+        assertEquals(listOf<String?>("delete_note", "create_note"), validated.map { it.second?.tool?.definition?.name })
+        validated.forEach { assertEquals(conversation.take(2), it.third) }
+    }
+
+    @Test
+    fun toolThatConfirmsItsOwnCallsIsNotValidated() = runTest {
+        val integration = FakeIntegration(confirmationTools = setOf("delete_note")).apply {
+            tools = listOf(FakeTool("delete_note", requiresConfirmation = true), FakeTool("create_note"))
+        }
+        val validated = mutableListOf<String>()
+        val agent = ScriptedAgent(
+            mutableListOf(
+                listOf(
+                    toolCall("c1", name = "fake__delete_note", args = """{"id":"n1"}"""),
+                    toolCall("c2", name = "fake__create_note", args = """{"text":"note"}"""),
+                ),
+            ),
+            toolCallValidator = { call, _, _ ->
+                validated += call.toolName
+                null
+            },
+        )
+        agent.send("input", McpSession(listOf(integration), this), sessionContext())
+
+        assertEquals(listOf("create_note"), validated)
+        val placeholder = agent.conversation.first().single { it.tool_call_id == "c1" }
+        assertIs<SemanticResult.RequiresConfirmation>(placeholder.semantic_result)
+    }
+
+    @Test
+    fun toolsOwnConfirmationSupersedesAnAllowedValidationFailure() {
+        fun result(semantic: SemanticResult?) =
+            ConversationMessageDocument(role = MessageRole.tool, tool_call_id = "c1", semantic_result = semantic)
+        val failure = result(SemanticResult.ValidationFailure("fake", "delete_note", JsonObject(emptyMap()), probabilityValid = 0.1))
+        val request = result(SemanticResult.RequiresConfirmation("fake", "delete_note", JsonObject(emptyMap()), destructive = true))
+
+        assertEquals(listOf(failure), listOf(failure).pendingConfirmations())
+        assertEquals(listOf(request), listOf(failure, request).pendingConfirmations())
+        assertTrue(listOf(failure, request, result(null)).pendingConfirmations().isEmpty())
     }
 
     @Test

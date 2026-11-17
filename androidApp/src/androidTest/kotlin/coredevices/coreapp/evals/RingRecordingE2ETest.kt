@@ -731,6 +731,7 @@ private class E2EPreferences : Preferences {
     override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
+    override val actionValidationEnabled: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val phoneCalendarEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
@@ -756,6 +757,7 @@ private class E2EPreferences : Preferences {
     override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
+    override fun setActionValidationEnabled(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}

@@ -1,6 +1,7 @@
 package coredevices.ring.agent
 
 import co.touchlab.kermit.Logger
+import coredevices.indexai.agent.ToolCallValidator
 import coredevices.indexai.data.entity.ConversationMessageDocument
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
@@ -12,6 +13,7 @@ class IndexAgentNenya(
     nenyaClient: NenyaClient,
     conversation: List<ConversationMessageDocument>,
     captureType: DefaultCaptureType = DefaultCaptureType.Note,
+    override val toolCallValidator: ToolCallValidator? = null,
 ): AgentNenya(nenyaClient, agentContext(captureType), NenyaModel.Default, conversation) {
     override val label = "Nenya"
 

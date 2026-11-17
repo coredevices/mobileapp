@@ -12,6 +12,7 @@ import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.mcp.data.SemanticResult
+import coredevices.mcp.data.isConfirmationRequest
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
@@ -202,7 +203,7 @@ class IndexNotificationManager(
         val actions = messages
             .filter { it.document.role == MessageRole.tool }
             .mapNotNull { it.document.semantic_result }
-            .filter { it !is SemanticResult.RequiresConfirmation }
+            .filterNot { it.isConfirmationRequest }
         val answer = messages.lastOrNull { it.document.isAnswer }?.document?.content?.takeIf { it.isNotBlank() }
 
         return when {

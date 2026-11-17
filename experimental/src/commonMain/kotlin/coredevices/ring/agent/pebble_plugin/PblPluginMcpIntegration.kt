@@ -10,6 +10,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
@@ -59,6 +60,7 @@ class PblPluginMcpIntegration(
 
     inner class PebblePluginActionMcpTool(private val declaration: ActionDeclaration): McpTool {
         override val definition: Tool = declaration.toToolDefinition()
+        override val requiresConfirmation: Boolean get() = declaration.requiresConfirmation
         override suspend fun getExtraContext(): String? = null
 
         override suspend fun call(
@@ -153,5 +155,6 @@ internal fun ActionDeclaration.toToolDefinition(): Tool {
         name = name,
         inputSchema = McpJson.decodeFromJsonElement(schema),
         description = description,
+        annotations = if (destructive) ToolAnnotations(destructiveHint = true) else null,
     )
 }

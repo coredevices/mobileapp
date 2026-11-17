@@ -292,6 +292,23 @@ class RecordingActionsTest {
     }
 
     @Test
+    fun validationFailureNeedsConfirmationUntilTheToolsOwnRequestReplacesIt() {
+        val failure = SemanticResult.ValidationFailure("Music", "clear_queue", JsonObject(emptyMap()), probabilityValid = 0.1)
+        val request = SemanticResult.RequiresConfirmation("Music", "clear_queue", JsonObject(emptyMap()), destructive = true)
+        val call = assistantMessage("call-1" to "music__clear_queue")
+
+        val pending = recordingActions(listOf(call, toolMessage(failure, id = 2)), lists = emptyList()).getValue(1L).single()
+        assertEquals("Needs confirmation", pending.label)
+        assertTrue(pending.needsConfirmation)
+
+        val asked = recordingActions(
+            listOf(call, toolMessage(failure, id = 2), toolMessage(request, id = 3)),
+            lists = emptyList(),
+        ).getValue(1L).single()
+        assertEquals(request, asked.result)
+    }
+
+    @Test
     fun deniedCallIsNotAFailure() {
         val request = SemanticResult.RequiresConfirmation("Music", "clear_queue", JsonObject(emptyMap()), destructive = false)
         val denied = recordingActions(

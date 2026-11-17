@@ -21,7 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Lets the user allow or deny a tool call the agent paused on ([SemanticResult.RequiresConfirmation]),
+ * Lets the user allow or deny a tool call the agent paused on ([SemanticResult.confirmationRequest]),
  * from the conversation screen or a notification. Answering runs the call (or records the denial)
  * and resumes the agent.
  */
@@ -45,7 +45,7 @@ class RealAgentUserConfirmation(
     private val inFlight = mutableSetOf<String>()
 
     override suspend fun requestConfirmation(recordingId: Long, request: ConversationMessageDocument) {
-        val result = request.semantic_result as? SemanticResult.RequiresConfirmation ?: return
+        val result = request.semantic_result?.confirmationRequest ?: return
         val callId = request.tool_call_id ?: return
         notifications.notify(confirmationNotification(recordingId, callId, result))
     }
@@ -87,6 +87,22 @@ internal const val CONFIRM_TOOL_PATH = "confirm-tool"
 private const val RECORDING_ID_PARAM = "recordingId"
 private const val CALL_ID_PARAM = "callId"
 private const val APPROVED_PARAM = "approved"
+
+private const val VALIDATION_FAILURE_DESCRIPTION = "This might not be what you asked for."
+
+/** The allow / deny prompt this result puts to the user, or null when it asks for nothing. */
+val SemanticResult.confirmationRequest: SemanticResult.RequiresConfirmation?
+    get() = when (this) {
+        is SemanticResult.RequiresConfirmation -> this
+        is SemanticResult.ValidationFailure -> SemanticResult.RequiresConfirmation(
+            integrationName = integrationName,
+            toolName = toolName,
+            arguments = arguments,
+            destructive = false,
+            description = VALIDATION_FAILURE_DESCRIPTION,
+        )
+        else -> null
+    }
 
 internal fun confirmationNotificationId(toolCallId: String): Int =
     NOTIFICATION_ID_BASE + (toolCallId.hashCode() and 0xFFFF)

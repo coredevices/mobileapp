@@ -6,6 +6,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.mcp.client.LazyLoadingMcpSession
 import coredevices.mcp.data.SemanticResult
 import coredevices.ring.agent.IndexAgentCactus
+import coredevices.ring.agent.confirmation.confirmationRequest
 import coredevices.ring.agent.builtin_servlets.plugins.ReadSourceTool
 
 /** A conversation as the recording details screen lays it out: one entry per user or assistant turn. */
@@ -130,7 +131,7 @@ fun conversationTurns(
                 doc.content?.trim()?.takeIf { it.isNotBlank() }?.let { parts += AssistantPart.Reply(it) }
                 for (call in doc.tool_calls.orEmpty()) {
                     val action = actionsByCall[call.id]
-                    val confirmation = action?.result as? SemanticResult.RequiresConfirmation
+                    val confirmation = action?.result?.confirmationRequest
                     when {
                         confirmation != null -> parts += AssistantPart.Confirmation(call.id, confirmation)
                         action != null && !action.intermediate -> addResult(action)

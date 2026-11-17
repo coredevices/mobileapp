@@ -6,6 +6,7 @@ import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineHacksDelegate
 import coredevices.indexai.agent.ServletRepository
+import coredevices.indexai.agent.ToolCallValidator
 import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.di.libIndexModule
@@ -25,6 +26,7 @@ import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.NenyaSystemOneAgent
 import coredevices.ring.agent.RecordingIntentClassifier
 import coredevices.ring.agent.SearchAgentNenya
+import coredevices.ring.agent.SystemOneToolCallValidator
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
@@ -262,6 +264,7 @@ val experimentalModule = module {
     singleOf(::NenyaClientImpl) bind NenyaClient::class
     single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
     singleOf(::RecordingIntentClassifier)
+    singleOf(::SystemOneToolCallValidator) bind ToolCallValidator::class
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
@@ -334,7 +337,14 @@ val experimentalModule = module {
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
     singleOf(::LLMLocationProvider)
     factory { p -> AgentNenya(get(), p.getOrNull() ?: "", p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
-    factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: DefaultCaptureType.Note) }
+    factory { p ->
+        IndexAgentNenya(
+            nenyaClient = get(),
+            conversation = p.getOrNull() ?: emptyList(),
+            captureType = p.getOrNull() ?: DefaultCaptureType.Note,
+            toolCallValidator = get<ToolCallValidator>().takeIf { get<Preferences>().actionValidationEnabled.value },
+        )
+    }
     factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }

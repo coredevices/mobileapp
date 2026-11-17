@@ -65,6 +65,7 @@ class SettingsViewModel(
     val showNoteShortcutDialog = _showNoteShortcutDialog.asStateFlow()
     val noteShortcut = preferences.noteShortcut
     val autoDismissActionNotifications = preferences.autoDismissActionNotifications
+    val actionValidationEnabled = preferences.actionValidationEnabled
     private val currentRing = indexDeviceManager.rings.map {
         it.firstOrNull { ring -> ring is KnownIndexDevice }
     }
@@ -171,6 +172,10 @@ class SettingsViewModel(
 
     fun toggleAutoDismissActionNotifications() {
         preferences.setAutoDismissActionNotifications(!autoDismissActionNotifications.value)
+    }
+
+    fun toggleActionValidation() {
+        preferences.setActionValidationEnabled(!actionValidationEnabled.value)
     }
 
     fun showNoteShortcutDialog() {

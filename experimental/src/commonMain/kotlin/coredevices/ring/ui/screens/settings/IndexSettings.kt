@@ -159,6 +159,7 @@ fun IndexSettings(coreNav: CoreNav) {
     val debugDetailsEnabled by viewModel.debugDetailsEnabled.collectAsState()
     val showNoteShortcutDialog by viewModel.showNoteShortcutDialog.collectAsState()
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
+    val actionValidationEnabled by viewModel.actionValidationEnabled.collectAsState()
     val pendingIntentScanEnabled by viewModel.pendingIntentScanEnabled.collectAsState()
     val scanByPairedAddress by viewModel.scanByPairedAddress.collectAsState()
     val diagnosticsState by viewModel.diagnosticsState.collectAsState()
@@ -485,6 +486,18 @@ fun IndexSettings(coreNav: CoreNav) {
                     Switch(
                         checked = autoDismissActionNotifications,
                         onCheckedChange = { viewModel.toggleAutoDismissActionNotifications() }
+                    )
+                }
+            }
+            item {
+                SettingsRow(
+                    title = "Validate agent choices",
+                    subtitle = "When online, asks for your confirmation before taking actions you may not have intended",
+                    onClick = viewModel::toggleActionValidation,
+                ) {
+                    Switch(
+                        checked = actionValidationEnabled,
+                        onCheckedChange = { viewModel.toggleActionValidation() }
                     )
                 }
             }

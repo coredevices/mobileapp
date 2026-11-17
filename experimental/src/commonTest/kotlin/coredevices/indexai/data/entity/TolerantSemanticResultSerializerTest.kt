@@ -169,6 +169,25 @@ class TolerantSemanticResultSerializerTest {
     }
 
     @Test
+    fun validationFailureRoundTripsOnTheFirestorePath() {
+        val doc = RecordingDocument(
+            assistantSession = AssistantSessionDocument(
+                messages = listOf(
+                    ConversationMessageDocument(
+                        role = MessageRole.tool,
+                        tool_call_id = "call-1",
+                        semantic_result = SemanticResult.ValidationFailure(
+                            "Music", "clear_queue", confirmation.arguments, probabilityValid = 0.125,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val encoded = encode(RecordingDocument.serializer(), doc) {}
+        assertEquals(doc, decode(RecordingDocument.serializer(), encoded))
+    }
+
+    @Test
     fun requiresConfirmationArgumentsStayAnObjectInJson() {
         val json = JsonSnake.encodeToString(TolerantSemanticResultSerializer, confirmation)
         assertTrue(""""arguments":{"count":3}""" in json, json)

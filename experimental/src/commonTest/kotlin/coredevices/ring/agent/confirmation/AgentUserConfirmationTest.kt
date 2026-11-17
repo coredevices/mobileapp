@@ -22,6 +22,18 @@ class AgentUserConfirmationTest {
     )
 
     @Test
+    fun validationFailureAsksLikeAConfirmationRequest() {
+        val failure = SemanticResult.ValidationFailure("Music", "clear_queue", request.arguments, probabilityValid = 0.1)
+
+        val asked = failure.confirmationRequest!!
+
+        assertEquals(request.copy(destructive = false, description = asked.description), asked)
+        assertContains(asked.description.orEmpty(), "asked for")
+        assertEquals(request, request.confirmationRequest)
+        assertNull(SemanticResult.UserDenied.confirmationRequest)
+    }
+
+    @Test
     fun deepLinkRoundTrips() {
         val link = confirmationDeepLink(recordingId = 42, toolCallId = "call_1/abc=", approved = false)
 

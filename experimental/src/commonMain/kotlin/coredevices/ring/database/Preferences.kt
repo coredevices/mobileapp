@@ -32,6 +32,8 @@ interface Preferences: BasePreferences {
     val noteProviderId: StateFlow<String>
     val noteShortcut: StateFlow<NoteShortcutType>
     val autoDismissActionNotifications: StateFlow<Boolean>
+    /** Whether the online agent has the user confirm tool calls that don't look like what they asked for. */
+    val actionValidationEnabled: StateFlow<Boolean>
     val backupEnabled: StateFlow<Boolean>
     /** Whether the user has connected the Phone Calendar integration (Accounts → Add integration).
      *  The calendar tool stays unavailable until this is enabled AND calendar permission is granted. */
@@ -59,6 +61,7 @@ interface Preferences: BasePreferences {
     fun setNoteProviderId(id: String)
     fun setNoteShortcut(shortcut: NoteShortcutType)
     fun setAutoDismissActionNotifications(enabled: Boolean)
+    fun setActionValidationEnabled(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
     fun setPhoneCalendarEnabled(enabled: Boolean)
     fun setUseEncryption(enabled: Boolean)
@@ -151,6 +154,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
     private val _autoDismissActionNotifications = MutableStateFlow(settings.getBoolean("auto_dismiss_action_notifications", true))
     override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
+    private val _actionValidationEnabled = MutableStateFlow(settings.getBoolean("action_validation_enabled", true))
+    override val actionValidationEnabled = _actionValidationEnabled.asStateFlow()
     private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
     override val backupEnabled = _backupEnabled.asStateFlow()
     private val _phoneCalendarEnabled = MutableStateFlow(settings.getBoolean("phone_calendar_enabled", false))
@@ -268,6 +273,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setAutoDismissActionNotifications(enabled: Boolean) {
         settings.putBoolean("auto_dismiss_action_notifications", enabled)
         _autoDismissActionNotifications.value = enabled
+    }
+
+    override fun setActionValidationEnabled(enabled: Boolean) {
+        settings.putBoolean("action_validation_enabled", enabled)
+        _actionValidationEnabled.value = enabled
     }
 
     override fun setBackupEnabled(enabled: Boolean) {
