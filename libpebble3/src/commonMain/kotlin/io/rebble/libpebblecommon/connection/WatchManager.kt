@@ -799,5 +799,5 @@ private fun StateFlow<Map<PebbleIdentifier, Watch>>.flowOfAllDevices(): Flow<Map
 }
 
 private fun Watch.color(): WatchColor = knownWatchProps?.color
-    ?: scanResult?.leScanRecord?.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }
+    ?: scanResult?.leScanRecord?.watchColor()
     ?: WatchColor.Unknown
