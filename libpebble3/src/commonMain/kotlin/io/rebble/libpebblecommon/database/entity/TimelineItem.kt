@@ -41,6 +41,13 @@ data class TimelineNotification(
 
     ) : DbTimelineItem {
     override fun type() = TimelineItem.Type.Notification
+
+    override fun skipForWatch(params: ValueParams): Boolean {
+        val config = params.libPebbleConfigFlow.value
+        return TimelineItem.Flag.SILENT in content.flags &&
+            config.notificationConfig.respectDoNotDisturb &&
+            !watchReceivesWatchPrefs(params.capabilities, config)
+    }
 }
 
 @GenerateRoomEntity(

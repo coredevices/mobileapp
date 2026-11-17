@@ -334,9 +334,18 @@ class BlobDB(
         params: ValueParams,
         blobDbVersion: Int,
     ) {
-        val value = item.record.value(params)
         val key = item.record.key()
         val keyString = key.keyAsString(db.databaseId())
+        if (item.record.skipForWatch(params)) {
+            logger.d { "handleInsert: skipping for this watch: ${db.databaseId()} $keyString" }
+            db.markSyncedToWatch(
+                transport = identifier.asString,
+                item = item,
+                hashcode = item.recordHashcode,
+            )
+            return
+        }
+        val value = item.record.value(params)
         if (value == null) {
             logger.d { "handleInsert: value is null: ${db.databaseId()} $keyString" }
             return

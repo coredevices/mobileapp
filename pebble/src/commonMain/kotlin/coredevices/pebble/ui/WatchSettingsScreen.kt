@@ -181,6 +181,7 @@ import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.database.entity.currentYear
+import io.rebble.libpebblecommon.database.entity.watchReceivesWatchPrefs
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -639,6 +640,11 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             )
         }
     }
+    val anyWatchNeedsPhoneSideDnd = remember(watchesCastable, libPebbleConfig) {
+        watchesCastable.any {
+            it is KnownPebbleDevice && !watchReceivesWatchPrefs(it.capabilities, libPebbleConfig)
+        }
+    }
     val anyWatchSupportsFiveMinHrm = remember(watchesCastable) {
         watchesCastable.any {
             if (it !is KnownPebbleDevice) return@any false
@@ -680,6 +686,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             rebbleVoiceAvailable,
             platformSttAvailable,
             anyWatchSupportsFiveMinHrm,
+            anyWatchNeedsPhoneSideDnd,
             healthPlatformAvailable,
         ) {
             listOfNotNull(
@@ -952,6 +959,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                     show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsToggleItem(
+                    title = "Respect Phone Do Not Disturb (legacy watches)",
+                    description = "Older watches: notifications won't be sent if phone is in Do Not Disturb mode (unless configured for that app/person in phone settings). Does not apply on newer watches (see Watch / Notifications / Respect Phone Do Not Disturb)",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.respectDoNotDisturb,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    respectDoNotDisturb = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() && anyWatchNeedsPhoneSideDnd },
                 ),
                 basicSettingsToggleItem(
                     title = "Mute phone notification effects",
