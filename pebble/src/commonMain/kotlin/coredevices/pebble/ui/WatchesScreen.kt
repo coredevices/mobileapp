@@ -12,6 +12,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -189,6 +192,8 @@ import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
 import io.rebble.libpebblecommon.util.getTempFilePath
+import io.rebble.libpebblecommon.metadata.WatchColor
+import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -1995,6 +2000,23 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
 
 
 @Composable
+private fun WatchColorIndicator(color: WatchColor?) {
+    val round = color?.platform == WatchType.CHALK || color?.platform == WatchType.GABBRO
+    val shape = if (round) CircleShape else RoundedCornerShape(6.dp)
+    val modifier = if (round) Modifier.size(16.dp) else Modifier.size(width = 13.dp, height = 17.dp)
+    val accent = color?.accentColor
+    Box(
+        modifier
+            .background(color?.color ?: MaterialTheme.colorScheme.surfaceVariant, shape)
+            .border(
+                if (accent != null) 2.5.dp else 1.dp,
+                accent ?: MaterialTheme.colorScheme.outline,
+                shape,
+            )
+    )
+}
+
+@Composable
 fun WatchHeader(watch: PebbleDevice) {
     Row {
         Text(
@@ -2029,7 +2051,9 @@ fun WatchDetails(
     val firmwareUpdateInProgress =
         firmwareUpdateState !is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress
     val languagePackInstallState = (watch as? ConnectedPebble.LanguageState)?.languagePackInstallState ?: LanguagePackInstallState.Idle()
-    Row {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        WatchColorIndicator(watch.color())
+        Spacer(Modifier.width(8.dp))
         Text(
             text = watch.stateText(firmwareUpdateState, languagePackInstallState, coreConfig),
             fontWeight = when {
