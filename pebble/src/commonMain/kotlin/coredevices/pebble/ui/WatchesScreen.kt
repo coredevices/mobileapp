@@ -2156,7 +2156,7 @@ fun WatchDetails(
             )
         }
         PebbleElevatedButton(
-            text = "Update PebbleOS to ${firmwareUpdateAvailable.version.stringVersion}",
+            text = "Update PebbleOS",
             onClick = {
                 logger.d { "Starting firmware update from watches screen" }
                 showFirmwareUpdateConfirmDialog = true
