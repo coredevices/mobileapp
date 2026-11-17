@@ -11,6 +11,11 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.RecordingIntentClassifier
+import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.IntentAgentRouter
+import coredevices.ring.agent.ChatMode
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.SearchAgentNenya
@@ -647,6 +652,11 @@ class RingRecordingE2ETest {
         factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
         factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
+        single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+        singleOf(::RecordingIntentClassifier)
+        single {
+            IntentAgentRouter(get(), { emptyList() }) { get<AgentFactory>().createForChatMode(ChatMode.Search) }
+        }
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRepository)
         singleOf(::IndexWebhookRunRepository)
@@ -755,6 +765,8 @@ private class E2EPreferences : Preferences {
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
     override fun setScanByPairedAddress(enabled: Boolean) {}
+    override val defaultDestinationAsked: Set<String> = emptySet()
+    override fun markDefaultDestinationAsked(providerId: String) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)

@@ -16,6 +16,11 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.client.McpIntegration
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.RecordingIntentClassifier
+import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.IntentAgentRouter
+import coredevices.ring.agent.ChatMode
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
@@ -279,6 +284,11 @@ class RecordingProcessingQueueTest {
         factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
         factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
+        single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+        singleOf(::RecordingIntentClassifier)
+        single {
+            IntentAgentRouter(get(), { emptyList() }) { get<AgentFactory>().createForChatMode(ChatMode.Search) }
+        }
         singleOf(::McpSessionFactory)
 
         single {

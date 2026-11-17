@@ -112,6 +112,7 @@ dependencies {
     androidTestImplementation(project(":cactus"))
     androidTestImplementation(project(":experimental"))
     androidTestImplementation(project(":libindex"))
+    androidTestImplementation(project(":libpebble3"))
     androidTestImplementation(project(":index-ai"))
     androidTestImplementation(project(":mcp"))
 }

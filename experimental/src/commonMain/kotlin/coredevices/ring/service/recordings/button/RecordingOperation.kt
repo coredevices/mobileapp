@@ -9,6 +9,7 @@ import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -280,6 +281,7 @@ open class DefaultRecordingOperation(
     fileId: String,
     trace: RingTraceSession,
     private val forcedTool: (suspend (messageText: String, assistantMessage: String?, sessionContext: SessionContext) -> ToolCallResult)?,
+    private val agentRouter: IntentAgentRouter? = null,
 ) : TranscribedRecordingOperation(recordingId, transferId, fileId, trace) {
     companion object {
         private val logger = Logger.withTag("DefaultRecordingOperation")
@@ -308,7 +310,7 @@ open class DefaultRecordingOperation(
                 recordingId = recordingId,
                 recordingEntryId = entryId,
                 mcpSession = mcpSession,
-                agent = chatAgent,
+                agent = agentRouter?.route(chatAgent, text, mcpSession, canCapture = forcedTool != null) ?: chatAgent,
                 forcedTool = forcedTool?.let { { assistantMessage, sessionContext -> it(text, assistantMessage, sessionContext) } },
                 text = text
             )

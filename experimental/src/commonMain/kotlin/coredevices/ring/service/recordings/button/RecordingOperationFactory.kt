@@ -5,6 +5,7 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.ChatMode
+import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -35,6 +36,7 @@ class RecordingOperationFactory(
     private val ringTransferRepository: RingTransferRepository,
     private val queueTaskRepository: RecordingProcessingTaskRepository,
     private val providers: IntegrationProviderRepository,
+    private val agentRouter: IntentAgentRouter,
 ) {
     companion object {
         private val logger = Logger.withTag("RecordingOperationFactory")
@@ -114,12 +116,14 @@ class RecordingOperationFactory(
         val inner = if (delivery != null) {
             SendToAgentTextOperation(delivery = delivery, recordingId = recordingId, text = text)
         } else {
+            val chatMode = textChatModeFor(destination)
             TextOnlyRecordingOperation(
                 mcpSessionFactory = mcpSessionFactory,
                 recordingId = recordingId,
-                chatAgent = agentFactory.createForChatMode(textChatModeFor(destination)),
+                chatAgent = agentFactory.createForChatMode(chatMode),
                 text = text,
                 forcedTool = forcedTool.takeUnless { destination == GestureDestination.WebSearch },
+                agentRouter = agentRouter.takeIf { chatMode == ChatMode.Normal },
             )
         }
         if (isGestureCommand) return inner
@@ -187,7 +191,8 @@ class RecordingOperationFactory(
                     transferId = transferId,
                     fileId = fileId,
                     trace = trace,
-                    forcedTool = { text, _, sessionContext -> forcedTool(text, sessionContext) }
+                    forcedTool = { text, _, sessionContext -> forcedTool(text, sessionContext) },
+                    agentRouter = agentRouter.takeIf { destination == GestureDestination.IndexAgent },
                 )
             }
             GestureDestination.WebSearch -> {

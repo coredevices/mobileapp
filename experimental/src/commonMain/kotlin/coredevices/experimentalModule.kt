@@ -16,15 +16,20 @@ import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LLMLocationProvider
+import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.RecordingIntentClassifier
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
 import coredevices.ring.agent.confirmation.AgentUserConfirmation
+import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.agent.confirmation.RealAgentUserConfirmation
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
@@ -118,6 +123,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -255,6 +261,7 @@ val experimentalModule = module {
 
     singleOf(::NenyaClientImpl) bind NenyaClient::class
     single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+    singleOf(::RecordingIntentClassifier)
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
@@ -333,6 +340,13 @@ val experimentalModule = module {
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
     factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
     singleOf(::AgentFactory)
+    single {
+        IntentAgentRouter(
+            classifier = get(),
+            sourcePlugins = { get<IndexActionsRepository>().grantedPlugins(PluginGrant.Sources).first() },
+            searchAgent = { get<AgentFactory>().createForChatMode(ChatMode.Search) },
+        )
+    }
     singleOf(::RecordingProcessor)
     singleOf(::IndexButtonActionHandler)
     singleOf(::IndexButtonSequenceRecorder)

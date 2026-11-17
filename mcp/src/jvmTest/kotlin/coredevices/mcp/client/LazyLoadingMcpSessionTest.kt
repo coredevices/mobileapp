@@ -4,6 +4,7 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CompletableDeferred
@@ -233,6 +234,35 @@ class LazyLoadingMcpSessionTest {
 
         val empty = session.search()
         assertTrue(assertIs<SemanticResult.GenericFailure>(empty.semanticResult).llmRecoverable)
+    }
+
+    @Test
+    fun summaryCoversToolsThatAreNotLoaded() = runBlocking {
+        val session = LazyLoadingMcpSession(
+            listOf(integration("notes", 1), integration("crm", 7)), this, eagerIntegrations = setOf("notes"), lazyLoadThreshold = 8
+        )
+        assertEquals(listOf("notes__tool_0", "tool_loader__load_tools", "tool_loader__search_tools"), session.listTools().names())
+        assertEquals(
+            McpJson.parseToJsonElement(
+                """[
+                    {"name": "notes", "tool_count": 1, "sample_tools": [{"name": "tool_0", "description": "Does thing 0"}]},
+                    {"name": "crm", "tool_count": 7, "sample_tools": [
+                        {"name": "tool_0", "description": "Does thing 0"},
+                        {"name": "tool_1", "description": "Does thing 1"},
+                        {"name": "tool_2", "description": "Does thing 2"},
+                        {"name": "tool_3", "description": "Does thing 3"},
+                        {"name": "tool_4", "description": "Does thing 4"},
+                        {"name": "tool_5", "description": "Does thing 5"}
+                    ]}
+                ]"""
+            ),
+            session.summarizeTools()
+        )
+    }
+
+    @Test
+    fun summaryOfASessionWithoutToolsIsEmpty() = runBlocking {
+        assertEquals(JsonArray(emptyList()), McpSession(emptyList(), this).summarizeTools())
     }
 
     @Test

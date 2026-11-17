@@ -8,6 +8,7 @@ import coredevices.mcp.data.ToolCallResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 
 open class McpSession(
@@ -16,6 +17,7 @@ open class McpSession(
 ) {
     companion object {
         private val logger = Logger.withTag("McpSession")
+        private const val SUMMARY_SAMPLES_PER_GROUP = 6
     }
     private val integrationLookup: Map<String, McpIntegration> = integrations.associateBy { it.name }
 
@@ -36,7 +38,15 @@ open class McpSession(
         }
     }
 
-    open suspend fun listTools(): List<McpSessionTool> {
+    open suspend fun listTools(): List<McpSessionTool> = listAllTools()
+
+    /**
+     * One object per integration with its tool count and a sample of its tools; empty when there are none.
+     * Covers every tool, including those a lazy session has not loaded.
+     */
+    suspend fun summarizeTools(): JsonArray = ToolCatalog(listAllTools(), SUMMARY_SAMPLES_PER_GROUP).toJson()
+
+    private suspend fun listAllTools(): List<McpSessionTool> {
         return integrations.map {
             scope.async {
                 try {
