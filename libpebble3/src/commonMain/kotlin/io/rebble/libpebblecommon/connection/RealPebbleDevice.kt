@@ -127,14 +127,14 @@ class PebbleDeviceFactory {
             else -> {
                 val leScanRecord = scanResult?.leScanRecord
                 when {
+                    knownDevice != null -> knownDevice
+
                     leScanRecord != null && identifier is PebbleBleIdentifier ->
                         RealBleDiscoveredPebbleDevice(
                             pebbleDevice = pebbleDevice,
                             pebbleScanRecord = leScanRecord,
                             rssi = scanResult.rssi,
                         )
-
-                    knownDevice != null -> knownDevice
 
                     else -> {
                         pebbleDevice

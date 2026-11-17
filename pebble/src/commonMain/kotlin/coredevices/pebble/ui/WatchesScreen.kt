@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -196,10 +197,10 @@ import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.metadata.WatchType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -261,6 +262,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     var showIndexAlreadyPairedDialog by remember { mutableStateOf(false) }
     var fabInfoDialog by remember { mutableStateOf<FabInfo?>(null) }
     var showRingWakeHint by remember { mutableStateOf(false) }
+    var discoveryScan by remember { mutableStateOf<DiscoveryScan?>(null) }
     LaunchedEffect(scanningStatus) {
         showRingWakeHint = false
         if (scanningStatus == ScanningStatus.ScanningRing) {
@@ -300,6 +302,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     fun scan(uiContext: PlatformUiContext) {
         scope.launch {
             if (!ensureScanPermission(uiContext)) return@launch
+            discoveryScan = DiscoveryScan.Ble
             libPebble.startBleScan()
         }
     }
@@ -307,6 +310,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
     fun scanClassic(uiContext: PlatformUiContext) {
         scope.launch {
             if (!ensureScanPermission(uiContext)) return@launch
+            discoveryScan = DiscoveryScan.Classic
             libPebble.startClassicScan()
         }
     }
@@ -456,7 +460,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             val entriesFlow = remember {
                 combine(watchesFlow, libIndex.rings) { sortedWatches, rings ->
                     rings.map { DeviceListEntry.Ring(it) } +
-                    sortedWatches.map { DeviceListEntry.Watch(it) }
+                    sortedWatches.filter { it !is DiscoveredPebbleDevice }.map { DeviceListEntry.Watch(it) }
                 }
             }
             val entries by entriesFlow.collectAsState(initial = emptyList())
@@ -516,42 +520,21 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         )
                     }
                 }
-                if (scanningStatus != ScanningStatus.NotScanning && !ringPairing) {
+                if (scanningStatus == ScanningStatus.ScanningRing && !ringPairing) {
                     Text(
                         text = "Scanning for devices...",
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
-                    if (scanningStatus == ScanningStatus.ScanningRing) {
-                        Text(
-                            text = "Press the button on your Index 01 to wake it.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 16.dp)
-                        )
-                    }
+                    Text(
+                        text = "Press the button on your Index 01 to wake it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 16.dp)
+                    )
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(5.dp)
                     )
-                    if (scanningStatus != ScanningStatus.ScanningRing) {
-                        ElevatedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = 6.dp
-                            ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Text(
-                                text = "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
-                                modifier = Modifier.padding(15.dp).align(Alignment.CenterHorizontally),
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                    }
-                    if (scanningStatus == ScanningStatus.ScanningRing && showRingWakeHint && rings.isEmpty()) {
+                    if (showRingWakeHint && rings.isEmpty()) {
                         ElevatedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -626,6 +609,38 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                     }
                 }
             }
+            discoveryScan?.let { scanType ->
+                val uiContext = rememberUiContext()
+                fun close() {
+                    discoveryScan = null
+                    libPebble.stopBleScan()
+                    libPebble.stopClassicScan()
+                }
+                DiscoveredWatchesDialog(
+                    watches = watches.filterIsInstance<DiscoveredPebbleDevice>(),
+                    scanning = scanningStatus == ScanningStatus.ScanningWatchBle ||
+                            scanningStatus == ScanningStatus.ScanningWatchClassic,
+                    connectEnabled = bluetoothEnabled.enabled() && !showOtherPebbleAppsWarningAndPreventConnection,
+                    onConnect = { watch ->
+                        close()
+                        if (uiContext != null) {
+                            scope.launch {
+                                companionDevice.registerDevice(watch.identifier, uiContext)
+                                watch.connect()
+                            }
+                        }
+                    },
+                    onScanAgain = {
+                        if (uiContext != null) {
+                            when (scanType) {
+                                DiscoveryScan.Ble -> scan(uiContext)
+                                DiscoveryScan.Classic -> scanClassic(uiContext)
+                            }
+                        }
+                    },
+                    onDismiss = ::close,
+                )
+            }
         }
     }
 
@@ -683,6 +698,69 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
             Text(info.body)
         }
     }
+}
+
+private enum class DiscoveryScan { Ble, Classic }
+
+@Composable
+private fun DiscoveredWatchesDialog(
+    watches: List<DiscoveredPebbleDevice>,
+    scanning: Boolean,
+    connectEnabled: Boolean,
+    onConnect: (DiscoveredPebbleDevice) -> Unit,
+    onScanAgain: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Watch") },
+        text = {
+            Column {
+                Text(
+                    "Remember to unpair any other phones from your watch before connecting (Settings/Bluetooth)",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(16.dp))
+                if (scanning) {
+                    CoreLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else if (watches.isEmpty()) {
+                    Text("No watches found", modifier = Modifier.padding(vertical = 16.dp))
+                }
+                LazyColumn {
+                    items(watches, key = { it.identifier.asString }) { watch ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = connectEnabled) { onConnect(watch) }
+                                .padding(vertical = 12.dp),
+                        ) {
+                            WatchColorIndicator(watch.color())
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(watch.displayName(), style = MaterialTheme.typography.bodyLarge)
+                                watch.color()?.let {
+                                    Text(
+                                        it.uiDescription,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!scanning) {
+                TextButton(onClick = onScanAgain) { Text("Scan again") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 private enum class FabInfo(val title: String, val body: String) {
