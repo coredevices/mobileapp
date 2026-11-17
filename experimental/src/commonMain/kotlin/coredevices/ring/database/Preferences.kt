@@ -170,7 +170,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
-    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", true))
+    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", scanByPairedAddressDefault))
     override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
 
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {
@@ -364,6 +364,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
 }
 
 internal expect val pendingIntentScanSupported: Boolean
+
+internal expect val scanByPairedAddressDefault: Boolean
 
 enum class MusicControlMode(val id: Int) {
     Disabled(0),
