@@ -82,7 +82,7 @@ class SystemOneToolCallValidator(private val systemOne: SystemOneAgent) : ToolCa
     companion object {
         private val logger = Logger.withTag("SystemOneToolCallValidator")
         internal const val QUESTION = "tool_call_valid"
-        internal const val MIN_VALID_PROBABILITY = 1.2
+        internal const val MIN_VALID_PROBABILITY = 0.3
         internal const val MIN_VALID_PROBABILITY_DESTRUCTIVE = 0.6
         internal val VALIDATE_TIMEOUT = 5.seconds
         private val UNCHECKED_TOOLS = setOf(
