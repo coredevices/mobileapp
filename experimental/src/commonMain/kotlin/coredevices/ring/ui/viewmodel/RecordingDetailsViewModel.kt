@@ -22,6 +22,7 @@ import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioPlayer
 import coredevices.ring.util.PlaybackState
 import coredevices.util.AudioEncoding
+import coredevices.util.writeToDownloads
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -37,7 +38,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.io.files.Path
 
 class RecordingDetailsViewModel(
     private val recordingId: Long,
@@ -241,8 +241,15 @@ class RecordingDetailsViewModel(
         viewModelScope.launch {
             val item = itemState.value as? ItemState.Loaded ?: return@launch
             item.entries.firstOrNull()?.fileName?.let {
-                val path = recordingStorage.exportRecording(it)
-                writeToDownloads(uiContext, path)
+                try {
+                    val path = recordingStorage.exportRecording(it)
+                    writeToDownloads(uiContext, path, "audio/wav")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Failed to export recording" }
+                    snackbarHostState.showSnackbar(message = "Couldn't export recording")
+                }
             } ?: run {
                 logger.e { "Can't export, no recording file to export" }
                 snackbarHostState.showSnackbar(
@@ -302,8 +309,6 @@ class RecordingDetailsViewModel(
 
     }
 }
-
-expect suspend fun writeToDownloads(uiContext: PlatformUiContext, path: Path, mimeType: String = "audio/wav")
 
 sealed class MessagePlaybackState {
     data class Playing(val id: Long, val percentageComplete: Double): MessagePlaybackState()

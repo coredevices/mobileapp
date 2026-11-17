@@ -62,6 +62,7 @@ reorderable = "3.1.0"
 zxing = "3.5.4"
 compass = "4.0.1"
 health-kmp = "1.7.0"
+highlights = "1.0.0"
 documentfile = "1.1.0"
 kmpMaps = "0.9.1"
 
@@ -183,3 +184,4 @@ compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.re
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
 health-kmp = { module = "com.viktormykhailiv:health-kmp", version.ref = "health-kmp" }
 swmansion-kmpMaps-core = { module = "com.swmansion.kmpmaps:core", version.ref = "kmpMaps" }
+highlights = { module = "dev.snipme:highlights", version.ref = "highlights" }
