@@ -356,6 +356,30 @@ fun WatchHomeScreen(
                 },
             )
         }
+        val pendingBootConfig by deepLinkHandler.pendingBootConfig.collectAsState()
+        pendingBootConfig?.let { pending ->
+            AlertDialog(
+                onDismissRequest = deepLinkHandler::dismissPendingBootConfig,
+                title = { Text("Change Pebble services?") },
+                text = {
+                    Text(
+                        "A link wants to sign you in to Pebble web services at ${pending.host}. " +
+                                "This server will receive your app store, locker and watchapp " +
+                                "account data. Only continue if you trust it."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = deepLinkHandler::confirmPendingBootConfig) {
+                        Text("Continue")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = deepLinkHandler::dismissPendingBootConfig) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
         LaunchedEffect(Unit) {
             scope.launch {
                 deepLinkHandler.snackBarMessages.collect { message ->
