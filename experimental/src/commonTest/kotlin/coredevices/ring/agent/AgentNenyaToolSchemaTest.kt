@@ -5,6 +5,8 @@ import coredevices.mcp.McpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.api.DecisionQuestion
+import coredevices.ring.api.DecisionResult
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
 import coredevices.ring.api.RunResult
@@ -12,6 +14,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -30,6 +33,12 @@ class AgentNenyaToolSchemaTest {
             timezone: TimeZone,
             model: NenyaModel,
         ): RunResult = error("not called")
+
+        override suspend fun decide(
+            state: JsonElement,
+            questions: Map<String, DecisionQuestion>,
+            model: String?,
+        ): DecisionResult = error("not called")
     }
 
     private class TestAgent : AgentNenya(UnusedNenyaClient, "", NenyaModel.Default, emptyList())

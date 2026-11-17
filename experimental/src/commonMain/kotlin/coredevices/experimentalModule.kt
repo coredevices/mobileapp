@@ -6,6 +6,7 @@ import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineHacksDelegate
 import coredevices.indexai.agent.ServletRepository
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.di.libIndexModule
 import coredevices.ring.BuildKonfig
@@ -18,6 +19,7 @@ import coredevices.ring.agent.AgentFactory
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LLMLocationProvider
 import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.NenyaSystemOneAgent
 import coredevices.ring.agent.SearchAgentNenya
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ShareActionHandler
@@ -252,6 +254,7 @@ val experimentalModule = module {
     }
 
     singleOf(::NenyaClientImpl) bind NenyaClient::class
+    single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)

@@ -8,6 +8,8 @@ import coredevices.mcp.client.McpSessionTool
 import coredevices.ring.agent.pebble_plugin.FakePlugin
 import coredevices.ring.agent.pebble_plugin.FakePlugins
 import coredevices.ring.agent.pebble_plugin.PblPluginMcpIntegration
+import coredevices.ring.api.DecisionQuestion
+import coredevices.ring.api.DecisionResult
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
 import coredevices.ring.api.RunResult
@@ -17,6 +19,7 @@ import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlinx.serialization.json.JsonElement
 
 class AgentNenyaToolNamesTest {
 
@@ -28,6 +31,12 @@ class AgentNenyaToolNamesTest {
             timezone: TimeZone,
             model: NenyaModel,
         ): RunResult = error("not called")
+
+        override suspend fun decide(
+            state: JsonElement,
+            questions: Map<String, DecisionQuestion>,
+            model: String?,
+        ): DecisionResult = error("not called")
     }
 
     private class TestAgent : AgentNenya(UnusedNenyaClient, "", NenyaModel.Default, emptyList()) {

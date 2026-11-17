@@ -7,6 +7,8 @@ import coredevices.indexai.data.entity.MessageContentPart
 import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.data.entity.ToolCall
 import coredevices.ring.agent.ToolDeclaration
+import coredevices.ring.api.DecisionQuestion
+import coredevices.ring.api.DecisionResult
 import coredevices.ring.api.NenyaClient
 import coredevices.ring.api.NenyaModel
 import coredevices.ring.api.OpenAIConversationMessage
@@ -15,6 +17,7 @@ import coredevices.ring.api.RunResult
 import io.ktor.http.HttpStatusCode
 import kotlinx.datetime.TimeZone
 import kotlinx.io.IOException
+import kotlinx.serialization.json.JsonElement
 
 class FakeNenyaClient : NenyaClient {
     private val responseQueue = ArrayDeque<NenyaResponse>()
@@ -95,4 +98,10 @@ class FakeNenyaClient : NenyaClient {
             )
         }
     }
+
+    override suspend fun decide(
+        state: JsonElement,
+        questions: Map<String, DecisionQuestion>,
+        model: String?,
+    ): DecisionResult = error("No fake decision configured")
 }
