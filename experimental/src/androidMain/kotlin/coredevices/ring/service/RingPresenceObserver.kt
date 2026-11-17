@@ -15,6 +15,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import coredevices.haversine.KMPHaversineSatelliteManager
 import coredevices.ring.database.Preferences
+import coredevices.ring.util.IndexVendorHacks
 import coredevices.util.CoreConfigHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +59,7 @@ class RingPresenceObserver(
     private class Observation(val address: String, val request: Any?)
 
     fun start() {
-        if (SCAN_STOPPED_IN_DOZE_MANUFACTURERS.any { it.equals(Build.MANUFACTURER, ignoreCase = true) }) {
+        if (IndexVendorHacks.getScanStoppedInDoze()) {
             logger.i { "Manufacturer '${Build.MANUFACTURER}' stops scan in doze - enabling idle-restart workaround" }
             observeDeviceIdle()
         }
@@ -185,7 +186,6 @@ class RingPresenceObserver(
     private companion object {
         val LOG_THROTTLE = 30.seconds
         val IDLE_RESTART_DELAY = 2.seconds
-        val SCAN_STOPPED_IN_DOZE_MANUFACTURERS = listOf("OnePlus", "OPPO", "realme")
         val WAKE_LOCK_TIMEOUT = 10.seconds
     }
 }

@@ -7,6 +7,7 @@ import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.LegacyProviderIds
 import coredevices.ring.data.NoteShortcutType
+import coredevices.ring.util.IndexVendorHacks
 import coredevices.util.models.CactusSTTMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -170,7 +171,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
-    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", scanByPairedAddressDefault))
+    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", IndexVendorHacks.getScanByPairedAddressDefault()))
     override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
 
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {
@@ -364,8 +365,6 @@ class PreferencesImpl(private val settings: Settings): Preferences {
 }
 
 internal expect val pendingIntentScanSupported: Boolean
-
-internal expect val scanByPairedAddressDefault: Boolean
 
 enum class MusicControlMode(val id: Int) {
     Disabled(0),
