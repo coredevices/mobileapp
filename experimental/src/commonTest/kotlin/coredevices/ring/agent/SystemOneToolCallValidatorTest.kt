@@ -151,7 +151,7 @@ class SystemOneToolCallValidatorTest {
         )
         val unsure = (SystemOneToolCallValidator.MIN_VALID_PROBABILITY + SystemOneToolCallValidator.MIN_VALID_PROBABILITY_DESTRUCTIVE) / 2
 
-        assertEquals(unsure, validate(FakeSystemOneAgent { unsure }, tool = sendMessage(destructive = true))?.probability)
+        assertEquals(unsure, validate(FakeSystemOneAgent { unsure }, tool = sendMessage(destructive = true))?.probabilityValid)
         assertNull(validate(FakeSystemOneAgent { unsure }, tool = sendMessage(destructive = false)))
         assertNull(validate(FakeSystemOneAgent { unsure }, tool = sendMessage(destructive = null)))
         assertNull(validate(FakeSystemOneAgent { unsure }, tool = null))
@@ -171,7 +171,7 @@ class SystemOneToolCallValidatorTest {
 
         assertNull(validate(systemOne, tool = find(readOnly = true)))
         assertNull(systemOne.state)
-        assertEquals(0.0, validate(systemOne, tool = find(readOnly = false))?.probability)
+        assertEquals(0.0, validate(systemOne, tool = find(readOnly = false))?.probabilityValid)
     }
 
     @Test

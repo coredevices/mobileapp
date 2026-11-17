@@ -206,7 +206,7 @@ class PblPluginMcpIntegrationTest {
             """{"type":"UserDenied"}""",
             """{"type":"USER_DENIED"}""",
             """{"type":"RequiresConfirmation","integrationName":"Music","toolName":"next","arguments":{},"destructive":false}""",
-            """{"type":"ValidationFailure","integrationName":"Music","toolName":"next","arguments":{},"probability":0.1}""",
+            """{"type":"ValidationFailure","integrationName":"Music","toolName":"next","arguments":{},"probabilityValid":0.1}""",
         )
 
         disallowed.forEach {
