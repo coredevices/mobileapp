@@ -2262,6 +2262,30 @@ fun WatchDetails(
             )
         }
     }
+    var companionApproved by remember(watch) { mutableStateOf(companionDevice.hasApprovedDevice(watch.identifier)) }
+    if (watch is KnownPebbleDevice && !companionApproved && !coreConfig.disableCompanionDeviceManager) {
+        val uiContext = rememberUiContext()
+        PebbleElevatedButton(
+            text = "Enable background access",
+            onClick = {
+                if (uiContext == null) return@PebbleElevatedButton
+                scope.launch {
+                    // CDM can only find the watch while it's advertising, i.e. not connected
+                    val wasActive = watch is ActiveDevice
+                    if (watch is ActiveDevice) watch.disconnect()
+                    try {
+                        companionDevice.registerDevice(watch.identifier, uiContext)
+                    } finally {
+                        if (wasActive) watch.connect()
+                    }
+                    companionApproved = companionDevice.hasApprovedDevice(watch.identifier)
+                }
+            },
+            enabled = bluetoothState.enabled(),
+            primaryColor = true,
+            modifier = Modifier.padding(vertical = 5.dp),
+        )
+    }
     val failureInfo = watch.connectionFailureInfo
     if (watch !is CommonConnectedDevice && failureInfo?.reason == ConnectionFailureReason.CreateBondFailed) {
         ConnectionFailureGuidanceButton(
