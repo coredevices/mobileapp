@@ -3,6 +3,7 @@ package io.rebble.libpebblecommon.database
 import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.DeleteTable
+import androidx.room.RenameColumn
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
@@ -102,7 +103,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppDataUsageEntity::class,
         PluginActionLogEntity::class,
     ],
-    version = 53,
+    version = 54,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -147,6 +148,7 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 50, to = 51, spec = AutoMigration51::class),
         AutoMigration(from = 51, to = 52),
         AutoMigration(from = 52, to = 53),
+        AutoMigration(from = 53, to = 54, spec = AutoMigration54::class),
     ],
     exportSchema = true,
 )
@@ -189,6 +191,10 @@ class AutoMigration51 : AutoMigrationSpec {
         connection.execSQL("UPDATE AppPermission SET askedAtMs = requestedAtMs")
     }
 }
+
+/** Microphone is bit 0, so its old 0/1 values carry over. */
+@RenameColumn(tableName = "LockerEntryEntity", fromColumnName = "microphoneGranted", toColumnName = "watchPermissions")
+class AutoMigration54 : AutoMigrationSpec
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
 expect object DatabaseConstructor : RoomDatabaseConstructor<Database> {

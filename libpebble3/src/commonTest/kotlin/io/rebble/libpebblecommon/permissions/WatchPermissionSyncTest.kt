@@ -20,22 +20,22 @@ import kotlin.test.assertNotEquals
 
 class WatchPermissionSyncTest {
     @Test
-    fun microphoneGrantTravelsInTheExistingAppMetadata() {
+    fun permissionsTravelInTheExistingAppMetadata() {
         val legacy = AppMetadata().toBytes()
-        val denied = AppMetadata(microphoneGranted = false).toBytes()
-        val granted = AppMetadata(microphoneGranted = true).toBytes()
+        val denied = AppMetadata(watchPermissions = 0u).toBytes()
+        val granted = AppMetadata(watchPermissions = 5u).toBytes()
         assertEquals(126, legacy.size)
         assertEquals(130, granted.size)
         assertContentEquals(legacy, granted.copyOfRange(0, 126))
         assertContentEquals(ubyteArrayOf(0u, 0u, 0u, 0u), denied.copyOfRange(126, 130))
-        assertContentEquals(ubyteArrayOf(1u, 0u, 0u, 0u), granted.copyOfRange(126, 130))
+        assertContentEquals(ubyteArrayOf(5u, 0u, 0u, 0u), granted.copyOfRange(126, 130))
     }
     @Test
     fun lockerSyncGatesTheExtensionAndHashesPermissionChanges() {
         val id = Uuid.random()
         val platform = LockerEntryPlatform(id, "5.109", 0, "emery", "", "", "", 0)
         val entry = LockerEntry(id, "1.0", "Test", "watchapp", "Core", false, "0",
-            platforms = listOf(platform), microphoneGranted = true)
+            platforms = listOf(platform), watchPermissions = 1)
         fun params(capabilities: Set<ProtocolCapsFlag>, enabled: Boolean = true) = ValueParams(
             platform = WatchType.EMERY,
             capabilities = capabilities,
@@ -47,7 +47,7 @@ class WatchPermissionSyncTest {
         val capable = setOf(ProtocolCapsFlag.SupportsAppPermissions)
         assertEquals(1u.toUByte(), entry.value(params(capable))!![126])
         assertEquals(1u.toUByte(), entry.value(params(capable, enabled = false))!![126])
-        assertNotEquals(entry.recordHashCode(), entry.copy(microphoneGranted = false).recordHashCode())
+        assertNotEquals(entry.recordHashCode(), entry.copy(watchPermissions = 0).recordHashCode())
     }
 
 }

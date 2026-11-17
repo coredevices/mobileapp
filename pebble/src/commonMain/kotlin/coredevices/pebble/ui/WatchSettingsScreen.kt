@@ -2230,7 +2230,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                 ),
                 basicSettingsToggleItem(
                     title = "Ask before older apps use permissions",
-                    description = "Otherwise apps built before permissions keep the access they've always had. They can never get more access without updating",
+                    description = "Otherwise apps built before permissions keep the access they've always had. They can never get more access without updating. Some older apps may break, particularly ones that use health data",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Apps,
                     group = SettingsGroup.Permissions,

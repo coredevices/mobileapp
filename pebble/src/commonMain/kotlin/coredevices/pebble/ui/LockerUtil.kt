@@ -85,6 +85,7 @@ import io.rebble.libpebblecommon.locker.findCompatiblePlatform
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
+import io.rebble.libpebblecommon.permissions.isLegacyForHealth
 import io.rebble.libpebblecommon.permissions.declaredPermissions
 import io.rebble.libpebblecommon.web.LockerEntryCompanionApp
 import io.rebble.libpebblecommon.web.LockerEntryCompatibility
@@ -688,6 +689,8 @@ internal fun StoreApplication.requestedPermissions() = RequestedPermissions(
     hasCompanionApp = companions.android != null || companions.ios != null,
     hasAndroidCompanion = companions.android != null,
     pebbleKit2Packages = pebbleKit2Packages,
+    hasHealth = AppCapability.Health.code in capabilities.orEmpty(),
+    legacyForHealth = isLegacyForHealth(hardwarePlatforms.orEmpty().mapNotNull { it.sdkVersion }),
 )
 
 class NativeLockerAddUtil(

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PhonelinkRing
 import androidx.compose.material.icons.filled.Notifications
@@ -205,7 +206,7 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
                                 null,
                                 review.automatic.requiredFirst(defined, { it }, review::isRequired),
                                 automatic = true,
-                                subtitle = automaticExplanation(review.appName, policy),
+                                subtitle = automaticExplanation(review.appName, policy, review.automatic),
                             )
                         }
                     }
@@ -225,8 +226,9 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
     )
 }
 
-private fun automaticExplanation(appName: String, policy: PermissionPolicy) = when (policy) {
-    PermissionPolicy.NeverAsk ->
+// Health can also be allowed because the app was built before the SDK checked it.
+private fun automaticExplanation(appName: String, policy: PermissionPolicy, keys: List<String>) = when {
+    policy == PermissionPolicy.NeverAsk || PluginPermissions.HEALTH in keys ->
         "You don't need to do anything here: your settings allow these. Deny any you'd rather $appName didn't use."
     else ->
         "You don't need to do anything here. $appName can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use."
@@ -270,6 +272,15 @@ internal fun PermissionRow(
                     PermissionKind.Dangerous ->
                         KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
                     else -> {}
+                }
+                if (permissionOf(key) == PluginPermissions.HEALTH) {
+                    lastConnectedWatch()?.takeUnless { enforcesHealth(it.runningFwVersion) }?.let { watch ->
+                        KindInfo(
+                            Icons.Filled.Warning,
+                            "Not enforced on ${watch.displayName()}",
+                            "${watch.displayName()} can't restrict health data, so apps can read it whatever you choose here.",
+                        )
+                    }
                 }
             }
             control()
@@ -362,6 +373,14 @@ private fun ReasonDialog(title: String, reason: String, onDismiss: () -> Unit) {
     )
 }
 
+private val FIRMWARE_MAJOR_MINOR = Regex("v?(\\d+)\\.(\\d+)")
+
+/** Broadly, the watches that can run newer firmware. */
+private fun enforcesHealth(firmware: String): Boolean {
+    val (major, minor) = FIRMWARE_MAJOR_MINOR.find(firmware)?.destructured ?: return true
+    return major.toInt() > 4 || (major.toInt() == 4 && minor.toInt() >= 40)
+}
+
 @Composable
 private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
     var explaining by remember { mutableStateOf(false) }
@@ -411,6 +430,7 @@ private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermis
     PluginPermissions.LOCAL_NETWORK -> Icons.Filled.Router
     PluginPermissions.LOCATION -> Icons.Filled.LocationOn
     PluginPermissions.WATCH_MICROPHONE -> Icons.Filled.Mic
+    PluginPermissions.HEALTH -> Icons.Filled.MonitorHeart
     PluginPermissions.NOTIFICATIONS -> Icons.Filled.Notifications
     PluginPermissions.CALENDAR -> Icons.Filled.CalendarMonth
     PluginPermissions.CONTACTS -> Icons.Filled.Contacts
@@ -437,6 +457,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.GLOBAL_INTERNET -> "Connect to any website or local device"
     PluginPermissions.LOCATION -> "Use your location"
     PluginPermissions.WATCH_MICROPHONE -> "Use your watch microphone"
+    PluginPermissions.HEALTH -> "Read your health data"
     PluginPermissions.NOTIFICATIONS -> packageOf(key)?.let { "Read your notifications from $it" } ?: "Read all your notifications"
     PluginPermissions.CALENDAR -> "Read your calendar"
     PluginPermissions.CONTACTS -> "Read your contacts"
@@ -751,6 +772,7 @@ private fun legacyAccessName(key: String) = when (permissionOf(key)) {
     PluginPermissions.LOCATION -> "location"
     PluginPermissions.TIMELINE -> "timeline pins"
     PluginPermissions.SHOW_NOTIFICATIONS -> "watch notifications"
+    PluginPermissions.HEALTH -> "health data"
     else -> "phone apps"
 }
 

@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.web
 
 import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import kotlinx.serialization.KSerializer
+import io.rebble.libpebblecommon.plugin.PluginPermission
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -57,6 +58,8 @@ data class LockerEntry(
     @SerialName("plugin_manifest") val pluginManifest: JsonObject? = null,
     @SerialName("config_page") val configPage: String? = null,
     @SerialName("icon_tintable") val iconTintable: Boolean = false,
+    @SerialName("uses_permissions") val usesPermissions: List<PluginPermission>? = null,
+    @SerialName("pebblekit2_packages") val pebbleKit2Packages: List<String>? = null,
 )
 
 @Serializable

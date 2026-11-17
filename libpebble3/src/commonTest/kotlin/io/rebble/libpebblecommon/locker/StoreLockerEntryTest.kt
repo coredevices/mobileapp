@@ -1,6 +1,10 @@
 package io.rebble.libpebblecommon.locker
 
+import io.rebble.libpebblecommon.permissions.pebbleKit2Key
+import io.rebble.libpebblecommon.permissions.requestedPermissions
 import io.rebble.libpebblecommon.plugin.PluginManifest
+import io.rebble.libpebblecommon.plugin.PluginPermissions.HEALTH
+import io.rebble.libpebblecommon.plugin.PluginPermissions.LOCATION
 import io.rebble.libpebblecommon.web.LockerEntry
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -13,12 +17,12 @@ class StoreLockerEntryTest {
     private val watch = """{"supported":true,"firmware":{"major":3}}"""
     private val phone = """{"supported":true}"""
 
-    private fun entry(extra: String) = json.decodeFromString(
+    private fun entry(extra: String, platforms: String = "") = json.decodeFromString(
         LockerEntry.serializer(),
         """{"id":"abc","uuid":"0d520cba-326c-4a22-a269-d1ab1ae38977","title":"Todoist","type":"plugin",
            "category":"Productivity","hearts":0,"is_configurable":false,"is_timeline_enabled":false,
            "links":{"remove":"","href":"","share":""},"developer":{"id":"d","name":"Dev","contact_email":""},
-           "hardware_platforms":[],"companions":{"android":null,"ios":null},
+           "hardware_platforms":[$platforms],"companions":{"android":null,"ios":null},
            "compatibility":{"ios":$phone,"android":$phone,"aplite":$watch,"basalt":$watch,"chalk":$watch,
              "diorite":$watch,"emery":$watch}$extra}""",
     )
@@ -53,6 +57,33 @@ class StoreLockerEntryTest {
         assertEquals(fromPbw.pluginManifest, kept.pluginManifest)
         assertEquals("config.html", kept.configPage)
         assertTrue(kept.configurable)
+    }
+
+    @Test
+    fun ourStoreSaysWhatAnAppAsksFor() {
+        val requested = entry(
+            ""","manifest_version":2,"uses_permissions":[{"name":"Health"},"Location"],
+               "pebblekit2_packages":["com.example.companion"]""",
+        ).requestedPermissions()!!
+        assertEquals(listOf(HEALTH, LOCATION, pebbleKit2Key("com.example.companion")), requested.all)
+    }
+
+    @Test
+    fun anOldSdkAppWithTheHealthCapabilityAsksForHealth() {
+        fun platform(sdk: String) = """{"sdk_version":"$sdk","pebble_process_info_flags":0,"name":"diorite",
+            "description":"","images":{"icon":"","list":"","screenshot":""}}"""
+        val health = ""","capabilities":["health"]"""
+        assertEquals(listOf(HEALTH), entry("""$health,"manifest_version":1""", platform("5.86")).requestedPermissions()!!.all)
+        assertEquals(
+            listOf(HEALTH),
+            entry("""$health,"manifest_version":2,"uses_permissions":[]""", platform("5.86")).requestedPermissions()!!.all,
+        )
+        assertEquals(emptyList(), entry("""$health,"manifest_version":2""", platform("5.113")).requestedPermissions()!!.all)
+    }
+
+    @Test
+    fun otherStoresLeaveItToThePbw() {
+        assertNull(entry("").requestedPermissions())
     }
 
     @Test

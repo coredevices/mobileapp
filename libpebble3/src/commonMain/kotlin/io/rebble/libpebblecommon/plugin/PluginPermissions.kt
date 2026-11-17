@@ -73,6 +73,7 @@ object PluginPermissions {
     const val GLOBAL_INTERNET = "GlobalInternet"
     const val LOCATION = "Location"
     const val WATCH_MICROPHONE = "WatchMicrophone"
+    const val HEALTH = "Health"
     const val NOTIFICATIONS = "Notifications"
     const val CALENDAR = "Calendar"
     const val CONTACTS = "Contacts"

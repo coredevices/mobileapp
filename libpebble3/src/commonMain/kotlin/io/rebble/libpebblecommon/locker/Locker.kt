@@ -342,7 +342,7 @@ class Locker(
         val pbw = PbwApp(pbwPath)
         val entry = lockerEntryDao.getEntry(appId)
             ?.let { if (it.version == version) takeAppInfoFromPbw(it, pbw) else it }
-        permissions.recordRequested(appId, pbw.info.requestedPermissions(pbw.hasPKJS, companionsOf = entry))
+        permissions.recordRequested(appId, pbw.requestedPermissions(companionsOf = entry))
     }
 
     /** The pbw is the authority on its appinfo; not every store sends it. */
@@ -376,6 +376,7 @@ class Locker(
     override suspend fun addAppToLocker(app: io.rebble.libpebblecommon.web.LockerEntry, granted: Map<String, Boolean?>) {
         val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
         lockerEntryDao.insertOrReplaceAndOrder(app.asEntity(orderIndex), config.value.lockerSyncLimitV2)
+        recordRequestedPermissions(listOf(app), changed = setOf(Uuid.parse(app.uuid)))
         permissions.setDecisions(Uuid.parse(app.uuid), granted)
     }
 
@@ -389,6 +390,20 @@ class Locker(
             val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
             app.asEntity(orderIndex)
         }, config.value.lockerSyncLimitV2)
+        recordRequestedPermissions(apps, changed = apps.map { Uuid.parse(it.uuid) }.toSet())
+    }
+
+    /** After the insert: requests are only shown for installed apps. */
+    private suspend fun recordRequestedPermissions(apps: List<io.rebble.libpebblecommon.web.LockerEntry>, changed: Set<Uuid>) {
+        val recorded = appPermissionDao.allFlow().first().groupBy({ it.appUuid }, { it.permission })
+        apps.forEach { app ->
+            val id = Uuid.parse(app.uuid)
+            val requested = app.requestedPermissions() ?: return@forEach
+            // Unchanged apps only for what they're missing, such as a permission added since they were recorded.
+            if (id in changed || !recorded[id].orEmpty().containsAll(requested.all)) {
+                permissions.recordRequested(id, requested)
+            }
+        }
     }
 
     override suspend fun clearSideloaded(id: Uuid) {
@@ -409,6 +424,8 @@ class Locker(
         logger.d("update: ${locker.locker.applications.size}")
         mergeDecisions(locker.permissions)
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
+        val sideloaded = existingApps.values.filter { it.sideloaded }.map { it.id }.toSet()
+        val previousVersions = existingApps.mapValues { it.value.version }
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
             // Preferred source for this UUID failed this sync; don't downgrade existing entry
@@ -422,7 +439,7 @@ class Locker(
                     orderIndex = existing.orderIndex,
                     active = existing.active,
                     grantedPermissions = existing.grantedPermissions,
-                    microphoneGranted = existing.microphoneGranted,
+                    watchPermissions = existing.watchPermissions,
                 ).let { if (new.manifestVersion == null) it.withAppInfoOf(existing) else it }
                 if (newWithExistingLocalProps != existing && !existing.sideloaded) {
                     newWithExistingLocalProps
@@ -433,6 +450,11 @@ class Locker(
         }
         logger.d { "inserting: ${toInsert.map { "${it.id} / ${it.title}" }}" }
         lockerEntryDao.insertOrReplaceAndOrder(toInsert, config.value.lockerSyncLimitV2)
+        recordRequestedPermissions(
+            locker.locker.applications.filter { Uuid.parse(it.uuid).let { id -> id !in sideloaded && id !in locker.failedToFetchUuids } },
+            // A new release is what changes what an app asks for.
+            changed = toInsert.filter { previousVersions[it.id] != it.version }.map { it.id }.toSet(),
+        )
         logger.v { "Failed to fetch: ${locker.failedToFetchUuids}" }
         val toDelete = existingApps.mapNotNull {
             when {
@@ -478,7 +500,7 @@ class Locker(
         }
         val lockerEntry = pbwApp.toLockerEntry(clock.now(), orderIndexForInsert(type)).let { new ->
             // A permissions-only change doesn't make the watch reload the binary
-            new.copy(microphoneGranted = lockerEntryDao.getEntry(new.id)?.microphoneGranted ?: false)
+            new.copy(watchPermissions = lockerEntryDao.getEntry(new.id)?.watchPermissions ?: 0)
         }
         lockerPBWCache.deleteApp(lockerEntry.id)  // Clear old version(s) if re-sideloading
         pbwApp.source().buffered().use {
