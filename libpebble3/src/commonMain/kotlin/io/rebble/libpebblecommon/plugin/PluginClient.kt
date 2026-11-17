@@ -110,6 +110,7 @@ class PluginClient(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceUpdate> = flow {
         val target = registry.findPlugin(plugin.pluginUuid.toString())
         val declaration = target?.sources?.firstOrNull { it.serves(category, item) }
@@ -120,9 +121,10 @@ class PluginClient(
         // Whatever the caller chooses reaches the plugin, which may send it off the phone.
         val declared = properties?.filter { it in declaration.properties }
         val pixels = iconPixelSize?.clamped()
+        val cap = limit.clampedLimit()
         count(caller, target.pluginUuid, PluginHeartbeatCounters.SUBSCRIPTIONS, PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS)
         if (caller !is PluginCaller.App) {
-            emitAll(serve(caller, target, declaration, category, item, declared, pixels))
+            emitAll(serve(caller, target, declaration, category, item, declared, pixels, cap))
             return@flow
         }
         val required = requiredOfCaller(declaration)
@@ -139,7 +141,7 @@ class PluginClient(
                     if (scope != null) {
                         // The scoping properties are needed to filter by, whether asked for or not.
                         val wanted = declared?.plus(scope.keys)?.distinct()
-                        serve(caller, target, declaration, category, item, wanted, pixels).map { it.scopedTo(scope) }
+                        serve(caller, target, declaration, category, item, wanted, pixels, cap).map { it.scopedTo(scope) }
                     } else {
                         val refused = asked.associateWith { permissions.check(caller.subject, it) }
                             .filterValues { it != PermissionDecision.Granted }
@@ -152,7 +154,13 @@ class PluginClient(
                     }
                 }
         )
-    }
+    }.map { it.takeInstances(limit.clampedLimit() ?: Plugin.MAX_LIMIT) }
+
+    private fun Int?.clampedLimit() = this?.coerceIn(1, Plugin.MAX_LIMIT)
+
+    private fun SourceUpdate.takeInstances(limit: Int): SourceUpdate =
+        if (this !is SourceUpdate.Data) this
+        else SourceUpdate.Data(envelope.copy(instances = envelope.instances.take(limit)))
 
     override suspend fun invoke(
         caller: PluginCaller,
@@ -220,7 +228,8 @@ class PluginClient(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
-    ): Flow<SourceUpdate> = plugin.observe(category, item, properties, iconPixelSize, prompt = !caller.probe)
+        limit: Int?,
+    ): Flow<SourceUpdate> = plugin.observe(category, item, properties, iconPixelSize, limit, prompt = !caller.probe)
         .map { update ->
             if (update !is SourceUpdate.Data) return@map update
             SourceUpdate.Data(

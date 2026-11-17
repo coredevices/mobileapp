@@ -23,6 +23,7 @@ data class SourceRequest(
     val plugin: String? = null,
     val properties: List<String>? = null,
     val iconPixelSize: IconPixelSize? = null,
+    val limit: Int? = null,
 ) {
     val key: String get() = "$category/$item"
 }

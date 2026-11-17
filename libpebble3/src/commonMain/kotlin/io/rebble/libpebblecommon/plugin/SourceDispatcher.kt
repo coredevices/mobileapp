@@ -76,6 +76,7 @@ class SourceDispatcher(
                 request.item,
                 request.properties,
                 request.iconPixelSize,
+                request.limit,
             ).collect { update ->
                 when (update) {
                     is SourceUpdate.Data -> {
@@ -112,6 +113,7 @@ class SourceDispatcher(
         val plugin: String? = null,
         val maxStalenessMs: Long? = null,
         val iconPixelSize: IconPixelSize? = null,
+        val limit: Int? = null,
     )
 
     @Serializable

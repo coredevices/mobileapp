@@ -103,6 +103,7 @@ class JsPlugin(
         val item: String,
         val properties: List<String>?,
         val iconPixelSize: IconPixelSize?,
+        val limit: Int?,
         val prompt: Boolean,
         val send: (SourceUpdate) -> Unit,
     )
@@ -117,6 +118,7 @@ class JsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = callbackFlow {
         val declaration = sources.firstOrNull { it.serves(category, item) }
@@ -126,14 +128,14 @@ class JsPlugin(
         }
         val key = "$category/$item"
         val id = nextObserverId.getAndIncrement()
-        observers.update { it + (id to Observer(category, item, properties, iconPixelSize, prompt) { update -> trySend(update) }) }
+        observers.update { it + (id to Observer(category, item, properties, iconPixelSize, limit, prompt) { update -> trySend(update) }) }
         val job = launch {
             while (true) {
                 if (retired) {
                     close(IllegalStateException("$name was updated or removed; subscribe again"))
                     break
                 }
-                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, null), prompt, setOf(id))
+                val raw = request(sourceRequestJson(category, item, properties, iconPixelSize, limit, null), prompt, setOf(id))
                 send(answerOf(raw))
                 withTimeoutOrNull(declaration.suggestedRefreshIntervalSec.coerceAtLeast(1).seconds) {
                     refreshRequests.first { it == key }
@@ -152,14 +154,16 @@ class JsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         trigger: SourceRequest?,
     ): String {
         val size = iconPixelSize?.let { ""","iconPixelSize":{"w":${it.w},"h":${it.h}}""" }.orEmpty()
         val wanted = properties?.joinToString(",") { quote(it) }?.let { ""","properties":[$it]""" }.orEmpty()
+        val max = limit?.let { ""","limit":$it""" }.orEmpty()
         val triggered = trigger
             ?.let { ""","trigger":{"category":${quote(it.category)},"item":${quote(it.item)}}""" }
             .orEmpty()
-        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$triggered}"""
+        return """{"kind":"source","category":${quote(category)},"item":${quote(item)}$wanted$size$max$triggered}"""
     }
 
     private fun answerOf(raw: String?): SourceUpdate =
@@ -168,11 +172,11 @@ class JsPlugin(
     /** Something [owners] subscribed to changed: one run per distinct request among them, each answer to all who asked. */
     private suspend fun rerun(owners: Set<Int>, trigger: SourceRequest) {
         val groups = observers.value.filterKeys { it in owners }.entries
-            .groupBy { (_, o) -> listOf(o.category, o.item, o.properties, o.iconPixelSize) }
+            .groupBy { (_, o) -> listOf(o.category, o.item, o.properties, o.iconPixelSize, o.limit) }
         for (group in groups.values) {
             val first = group.first().value
             val raw = request(
-                sourceRequestJson(first.category, first.item, first.properties, first.iconPixelSize, trigger),
+                sourceRequestJson(first.category, first.item, first.properties, first.iconPixelSize, first.limit, trigger),
                 first.prompt,
                 group.map { it.key }.toSet(),
             )

@@ -43,6 +43,7 @@ private class FakePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         observed += category to item
         return envelopes

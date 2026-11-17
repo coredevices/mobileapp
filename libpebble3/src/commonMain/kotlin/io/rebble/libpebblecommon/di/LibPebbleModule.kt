@@ -517,7 +517,7 @@ fun initKoin(
                         { get<AppPermissions>().subjectOf(it) },
                         { app, permission -> get<AppPermissions>().callerKeys(app, permission) },
                         { caller, plugin, request ->
-                            get<PluginClient>().observe(caller, plugin, request.category, request.item, request.properties, request.iconPixelSize)
+                            get<PluginClient>().observe(caller, plugin, request.category, request.item, request.properties, request.iconPixelSize, request.limit)
                         },
                     )
                 }

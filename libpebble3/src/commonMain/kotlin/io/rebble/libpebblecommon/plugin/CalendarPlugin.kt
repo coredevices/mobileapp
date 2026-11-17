@@ -66,6 +66,7 @@ class CalendarPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         val withDescription = properties == null || PROPERTY_DESCRIPTION in properties
@@ -74,11 +75,11 @@ class CalendarPlugin(
         // Events fall out of the window with the passage of time alone, so a change signal isn't
         // enough on its own to keep "the next event" true.
         return combine(calendarDao.getFlow(), merge(tick(REFRESH_INTERVAL), changes)) { cals, _ ->
-            toEnvelope(load(cals), withDescription)
+            toEnvelope(load(cals, limit ?: MAX_EVENTS), withDescription)
         }.distinctUntilChanged()
     }
 
-    private suspend fun load(calendars: List<CalendarEntity>): List<EventInCalendar> {
+    private suspend fun load(calendars: List<CalendarEntity>, limit: Int): List<EventInCalendar> {
         if (!systemCalendar.hasPermission()) return emptyList()
         val now = timeProvider.now()
         return calendars
@@ -87,7 +88,7 @@ class CalendarPlugin(
                 systemCalendar.getCalendarEvents(calendar, now, now + WINDOW)
                     .map { EventInCalendar(it, calendar.name) }
             }
-            .upcoming(now, MAX_EVENTS)
+            .upcoming(now, limit)
     }
 
     private fun toEnvelope(events: List<EventInCalendar>, withDescription: Boolean) =

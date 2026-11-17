@@ -276,6 +276,7 @@ interface Plugins {
         item: String,
         properties: List<String>? = null,
         iconPixelSize: IconPixelSize? = null,
+        limit: Int? = null,
     ): Flow<SourceUpdate>
 
     /** The first update, or a [PluginErrors.TIMEOUT] error. */

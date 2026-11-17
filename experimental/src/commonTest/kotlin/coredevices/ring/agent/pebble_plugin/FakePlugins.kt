@@ -62,11 +62,12 @@ internal class FakePlugins(vararg plugins: Plugin) : Plugins {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceUpdate> {
         callers += caller
         val target = plugins[plugin.pluginUuid]
             ?: return flowOf(SourceUpdate.Error(PluginErrors.PLUGIN_UNAVAILABLE, "not installed"))
-        return target.observe(category, item, properties, iconPixelSize, !caller.probe)
+        return target.observe(category, item, properties, iconPixelSize, limit, !caller.probe)
     }
 
     override suspend fun read(

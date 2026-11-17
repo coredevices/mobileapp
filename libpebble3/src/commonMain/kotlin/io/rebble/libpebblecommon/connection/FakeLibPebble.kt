@@ -594,6 +594,7 @@ class FakeLibPebble : LibPebble {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceUpdate> = emptyFlow()
 
     override suspend fun read(

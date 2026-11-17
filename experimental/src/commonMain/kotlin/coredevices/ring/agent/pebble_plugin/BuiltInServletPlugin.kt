@@ -60,6 +60,7 @@ abstract class BuiltInServletPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> = emptyFlow()
 
     override suspend fun invoke(action: String, args: JsonObject): ActionResult {

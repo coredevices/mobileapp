@@ -66,6 +66,7 @@ class FindMyPhonePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         return channelFlow {
@@ -79,9 +80,10 @@ class FindMyPhonePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = when {
-        prompt -> super.observe(category, item, properties, iconPixelSize, prompt)
+        prompt -> super.observe(category, item, properties, iconPixelSize, limit, prompt)
         // A probe (settings UI) only looks, so it mustn't start the phone ringing.
         !serves(category, item) -> emptyFlow()
         else -> soundPlayer.isRinging.map { SourceUpdate.Data(toEnvelope(it)) }

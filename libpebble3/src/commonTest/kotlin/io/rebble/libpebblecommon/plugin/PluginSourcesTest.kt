@@ -34,7 +34,7 @@ private class BuiltIn(override val sources: List<SourceDeclaration>) : NativePlu
     override val pluginUuid = BUILT_IN
     override val name = "Preferences"
     override val description = ""
-    override fun observe(category: String, item: String, properties: List<String>?, iconPixelSize: IconPixelSize?) =
+    override fun observe(category: String, item: String, properties: List<String>?, iconPixelSize: IconPixelSize?, limit: Int?) =
         emptyFlow<SourceEnvelope>()
 }
 
@@ -45,6 +45,7 @@ private class Js(override val pluginUuid: Uuid, override val name: String, overr
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = emptyFlow()
 

@@ -14,6 +14,7 @@ interface NativePlugin : Plugin {
         item: String,
         properties: List<String>? = null,
         iconPixelSize: IconPixelSize? = null,
+        limit: Int? = null,
     ): Flow<SourceEnvelope>
 
     suspend fun invoke(action: String, args: JsonObject): ActionResult =
@@ -24,8 +25,9 @@ interface NativePlugin : Plugin {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
-    ): Flow<SourceUpdate> = observe(category, item, properties, iconPixelSize).map { SourceUpdate.Data(it) }
+    ): Flow<SourceUpdate> = observe(category, item, properties, iconPixelSize, limit).map { SourceUpdate.Data(it) }
 
     override suspend fun invoke(action: String, args: JsonObject, prompt: Boolean): ActionResult =
         invoke(action, args)

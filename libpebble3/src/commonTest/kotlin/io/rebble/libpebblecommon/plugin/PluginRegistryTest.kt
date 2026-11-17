@@ -38,6 +38,7 @@ private class FakePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> =
         flowOf(SourceEnvelope(pluginUuid.toString(), null, emptyList()))
 }
@@ -53,6 +54,7 @@ private class FakeJsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = emptyFlow()
 

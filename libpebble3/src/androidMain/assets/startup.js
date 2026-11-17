@@ -490,6 +490,7 @@ navigator.geolocation.clearWatch = (id) => {
                 plugin: config.plugin,
                 maxStalenessMs: config.maxStalenessMs,
                 iconPixelSize: config.iconPixelSize,
+                limit: config.limit,
             };
             try {
                 _Pebble.subscribeToSource(subscriptionId, JSON.stringify(request));
