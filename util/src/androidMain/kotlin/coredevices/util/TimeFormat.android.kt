@@ -1,4 +1,4 @@
-package coredevices.ring.ui
+package coredevices.util
 
 import android.content.Context
 import android.text.format.DateFormat

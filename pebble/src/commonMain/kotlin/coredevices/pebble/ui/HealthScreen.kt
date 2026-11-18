@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +41,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.util.formatTimeOfDay
+import coredevices.util.isLocale24HourFormat
 import io.rebble.libpebblecommon.health.HealthTimeRange
 import kotlinx.datetime.LocalDate
 import org.koin.compose.viewmodel.koinViewModel
@@ -287,7 +290,8 @@ private fun HeartRateCard(st: HeartRateUiState, range: HealthTimeRange) {
         }
         found?.roundToInt()
     } else null
-    val tStr = if (idx != null) { val m = idx * minPerBucket; "${m / 60}:${(m % 60).toString().padStart(2, '0')}" } else ""
+    val is24Hour = remember { isLocale24HourFormat() }
+    val tStr = if (idx != null) { val m = idx * minPerBucket; formatTimeOfDay(m / 60, m % 60, is24Hour) } else ""
 
     val hv = when { sv != null -> "$sv"; st.latestHR != null -> "${st.latestHR}"; st.averageHR != null -> "${st.averageHR}"; else -> "--" }
     val hs = when {

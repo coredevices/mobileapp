@@ -1,6 +1,7 @@
 package coredevices.ring.ui
 
 import androidx.compose.runtime.Composable
+import coredevices.util.isLocale24HourFormat
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -123,8 +124,6 @@ fun monthNamesShort() = MonthNames(
     november = stringResource(Res.string.november_short),
     december = stringResource(Res.string.december_short)
 )
-
-expect fun isLocale24HourFormat(): Boolean
 
 object UITimeUtil {
     private suspend fun amPm() = Pair(getString(Res.string.am), getString(Res.string.pm))

@@ -16,7 +16,7 @@ import coredevices.ring.agent.integrations.providers.IntegrationProviderReposito
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.externalDestination
 import coredevices.ring.agent.toolschema.builtinToolDefinitions
-import coredevices.ring.ui.isLocale24HourFormat
+import coredevices.util.isLocale24HourFormat
 import coredevices.toolschema.ToolDefinition
 import coredevices.toolschema.ToolParam
 import coredevices.util.capitalizeFirstWord

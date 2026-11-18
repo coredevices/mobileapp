@@ -1,4 +1,4 @@
-package coredevices.ring.ui
+package coredevices.util
 
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
