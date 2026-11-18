@@ -4,9 +4,7 @@ import co.touchlab.kermit.Logger
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val logger = Logger.withTag("AppstoreSources")
@@ -55,23 +53,13 @@ class AppstoreSourceInitializer(
                 appstoreSourceDao.deleteSourceById(source.id)
             }
             INITIAL_APPSTORE_SOURCES.forEach { source ->
-                appstoreSourceDao.insertSource(source)
+                appstoreSourceDao.insertSource(
+                    if (source.isRebbleFeed()) source.copy(enabled = pebbleAccount.isLoggedIn()) else source
+                )
             }
             appstoreCache.clearCache()
         } else {
             logger.d { "Appstore sources database already initialized" }
-        }
-
-        GlobalScope.launch {
-            val rebbleSource = appstoreSourceDao.getAllSources().first()
-                .firstOrNull { it.isRebbleFeed() }
-            if (rebbleSource == null) {
-                return@launch
-            }
-            pebbleAccount.get().loggedIn.collect {
-                val loggedIn = it != null
-                appstoreSourceDao.setSourceEnabled(rebbleSource.id, loggedIn)
-            }
         }
     }
 }
