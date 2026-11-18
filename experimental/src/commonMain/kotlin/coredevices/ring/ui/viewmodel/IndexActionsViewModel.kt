@@ -37,7 +37,7 @@ import kotlin.uuid.Uuid
 
 /**
  * State for the Index Agent actions section: built-in actions, plugins, MCP servers and where
- * notes and reminders are saved.
+ * notes, reminders and list items are saved.
  */
 class IndexActionsViewModel(
     private val indexActionsRepository: IndexActionsRepository,
@@ -87,6 +87,7 @@ class IndexActionsViewModel(
     val captureType = preferences.defaultCaptureType
     val noteProvider = providers.selectedNoteProvider
     val reminderProvider = providers.selectedReminderProvider
+    val listProvider = providers.selectedListProvider
     val approvedContactCount: StateFlow<Int> = preferences.approvedBeeperContacts.mapState { it.size }
 
     // Connecting from a destination sheet is a pick as well as a connect, but the connect flows
@@ -94,6 +95,7 @@ class IndexActionsViewModel(
     // Held by id: a store plugin has no provider until it is installed.
     private val pendingNoteConnect = MutableStateFlow<String?>(null)
     private val pendingReminderConnect = MutableStateFlow<String?>(null)
+    private val pendingListConnect = MutableStateFlow<String?>(null)
 
     val noteDestinations: StateFlow<List<DestinationItem>> = destinations
         .items(IntegrationSupport.Note)
@@ -102,6 +104,10 @@ class IndexActionsViewModel(
     val reminderDestinations: StateFlow<List<DestinationItem>> = destinations
         .items(IntegrationSupport.Reminder)
         .applyingPendingConnect(pendingReminderConnect, providers::selectReminderProvider)
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val listDestinations: StateFlow<List<DestinationItem>> = destinations
+        .items(IntegrationSupport.List)
+        .applyingPendingConnect(pendingListConnect, providers::selectListProvider)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val lockerPlugins: StateFlow<Set<Uuid>> = destinations.lockerPlugins
@@ -143,6 +149,11 @@ class IndexActionsViewModel(
         providers.selectReminderProvider(provider)
     }
 
+    fun selectListProvider(provider: IntegrationProvider) {
+        pendingListConnect.value = null
+        providers.selectListProvider(provider)
+    }
+
     fun noteConnectStarted(providerId: String) {
         pendingNoteConnect.value = providerId
         destinationPrompter.pickedFromSheet(providerId)
@@ -150,6 +161,11 @@ class IndexActionsViewModel(
 
     fun reminderConnectStarted(providerId: String) {
         pendingReminderConnect.value = providerId
+        destinationPrompter.pickedFromSheet(providerId)
+    }
+
+    fun listConnectStarted(providerId: String) {
+        pendingListConnect.value = providerId
         destinationPrompter.pickedFromSheet(providerId)
     }
 

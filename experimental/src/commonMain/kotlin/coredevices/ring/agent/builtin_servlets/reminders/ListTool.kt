@@ -83,7 +83,12 @@ class ListTool: BuiltInMcpTool(
         }
     }
 
-    @ToolDefinition(servlet = ReminderServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
+    @ToolDefinition(
+        servlet = ListServlet.NAME,
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        localModelServlet = ReminderServlet.NAME,
+    )
     @Serializable
     private data class ListItemArgs(
         @ToolParam("The name of the list to add the item to e.g. 'shopping', 'todo'. " + "Use a short search term keyword, e.g. 'shopping' instead of 'my shopping list' to improve matching with existing lists.")
@@ -183,7 +188,7 @@ class ListTool: BuiltInMcpTool(
             }.toInstant(tz)
         }
 
-        val provider = providers.destinationProvider(listItemArgs.destination, IntegrationSupport.Reminder)
+        val provider = providers.destinationProvider(listItemArgs.destination, IntegrationSupport.List)
             ?: return ToolCallResult(
                 JsonSnake.encodeToString(
                     ListAddResult(
@@ -196,9 +201,9 @@ class ListTool: BuiltInMcpTool(
             )
 
         return try {
-            val integration = providers.reminderIntegration(provider)
+            val integration = providers.listIntegration(provider)
             val list = integration.searchForList(listItemArgs.list_name).firstOrNull()
-            val reminderId = integration.createReminder(
+            val itemId = integration.createListItem(
                 listItemArgs.message,
                 instant,
                 listId = list?.id,
@@ -206,7 +211,7 @@ class ListTool: BuiltInMcpTool(
             )
             val resolvedListId = runCatching { resolveListIdByHint(listItemArgs.list_name) }.getOrNull()
             ToolCallResult(
-                JsonSnake.encodeToString(ListAddResult(success = true, id = reminderId)),
+                JsonSnake.encodeToString(ListAddResult(success = true, id = itemId)),
                 SemanticResult.ListItemCreation(
                     content = listItemArgs.message,
                     listUsed = list?.title,
@@ -216,7 +221,7 @@ class ListTool: BuiltInMcpTool(
                 )
             )
         } catch (e: Exception) {
-            logger.e(e) { "Failed to create reminder" }
+            logger.e(e) { "Failed to create list item" }
             ToolCallResult(
                 JsonSnake.encodeToString(
                     ListAddResult(

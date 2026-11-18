@@ -34,7 +34,12 @@ class CreateListTool : BuiltInMcpTool(
             text != null && triggerRegex.containsMatchIn(text)
     }
 
-    @ToolDefinition(servlet = ReminderServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
+    @ToolDefinition(
+        servlet = ListServlet.NAME,
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        localModelServlet = ReminderServlet.NAME,
+    )
     @Serializable
     private data class CreateListArgs(
         @ToolParam("The name of the new list, e.g. 'travel' for " + "'Create a new list called travel'")

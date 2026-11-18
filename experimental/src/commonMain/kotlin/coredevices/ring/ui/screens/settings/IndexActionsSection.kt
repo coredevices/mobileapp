@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Alarm
@@ -90,6 +91,7 @@ import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ListServlet
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
@@ -169,6 +171,11 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
         "Reminders",
         "“Remind me to call Mom at 5pm”",
     )
+    ListServlet.NAME -> ActionPresentation(
+        Icons.AutoMirrored.Filled.FormatListBulleted,
+        "Lists",
+        "“Add milk to my shopping list”",
+    )
     CalendarServlet.NAME -> ActionPresentation(
         Icons.Default.CalendarMonth,
         "Calendar",
@@ -241,7 +248,7 @@ internal fun pluginToggleChanges(plugin: IndexPlugin): List<Pair<PluginGrant, Bo
         .map { it to target }
 }
 
-private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
+private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination, ListDestination }
 internal enum class ActionsDialog {
     AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar,
     TargetCalendar, SavedPlaces,
@@ -257,9 +264,11 @@ internal fun IndexActionsSection(
     captureType: DefaultCaptureType,
     noteProvider: IntegrationProvider,
     reminderProvider: IntegrationProvider,
+    listProvider: IntegrationProvider,
     approvedContactCount: Int,
     noteDestinations: List<DestinationItem>,
     reminderDestinations: List<DestinationItem>,
+    listDestinations: List<DestinationItem>,
     lockerPlugins: Set<Uuid>,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
     onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
@@ -269,8 +278,10 @@ internal fun IndexActionsSection(
     onSetCaptureType: (DefaultCaptureType) -> Unit,
     onSelectNoteProvider: (IntegrationProvider) -> Unit,
     onSelectReminderProvider: (IntegrationProvider) -> Unit,
+    onSelectListProvider: (IntegrationProvider) -> Unit,
     onNoteConnectStarted: (providerId: String) -> Unit,
     onReminderConnectStarted: (providerId: String) -> Unit,
+    onListConnectStarted: (providerId: String) -> Unit,
     onReviewInstall: suspend (StorePlugin) -> InstallReview?,
     onInstallStorePlugin: suspend (StorePlugin, granted: Map<String, Boolean?>) -> Boolean,
     onAddIntegration: () -> Unit,
@@ -336,13 +347,14 @@ internal fun IndexActionsSection(
                 destinationLabel = when (action.name) {
                     NoteServlet.NAME -> noteProvider.notesTitle
                     ReminderServlet.NAME -> reminderProvider.remindersTitle
+                    ListServlet.NAME -> listProvider.listsTitle
                     else -> null
                 },
                 onDestinationClick = {
-                    sheet = if (action.name == NoteServlet.NAME) {
-                        ActionsSheet.NoteDestination
-                    } else {
-                        ActionsSheet.ReminderDestination
+                    sheet = when (action.name) {
+                        NoteServlet.NAME -> ActionsSheet.NoteDestination
+                        ListServlet.NAME -> ActionsSheet.ListDestination
+                        else -> ActionsSheet.ReminderDestination
                     }
                 },
                 onSettings = when {
@@ -459,29 +471,34 @@ internal fun IndexActionsSection(
             },
             onDismiss = { sheet = null },
         )
-        ActionsSheet.ReminderDestination -> DestinationSheet(
-            icon = Icons.Default.Checklist,
-            title = "Where reminders save",
-            items = reminderDestinations,
-            onGetMore = onGetMorePlugins,
-            selected = reminderProvider,
-            onSelect = onSelectReminderProvider,
-            onConnect = { provider ->
-                onReminderConnectStarted(provider.id)
-                when (provider) {
-                    is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
-                    else -> reminderConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
-                }
-            },
-            onInstall = { plugin ->
-                onReminderConnectStarted(PblPluginIntegrationProvider.idFor(plugin.pluginUuid))
-                installer.install(plugin)
-            },
-            onConfigure = { provider ->
-                if (provider is PblPluginIntegrationProvider) onOpenPluginPage(provider.pluginUuid)
-            },
-            onDismiss = { sheet = null },
-        )
+        // Lists are kept by the reminder providers, so both pick from and connect the same ones.
+        ActionsSheet.ReminderDestination, ActionsSheet.ListDestination -> {
+            val lists = sheet == ActionsSheet.ListDestination
+            val onConnectStarted = if (lists) onListConnectStarted else onReminderConnectStarted
+            DestinationSheet(
+                icon = if (lists) Icons.AutoMirrored.Filled.FormatListBulleted else Icons.Default.Checklist,
+                title = if (lists) "Where list items save" else "Where reminders save",
+                items = if (lists) listDestinations else reminderDestinations,
+                onGetMore = onGetMorePlugins,
+                selected = if (lists) listProvider else reminderProvider,
+                onSelect = if (lists) onSelectListProvider else onSelectReminderProvider,
+                onConnect = { provider ->
+                    onConnectStarted(provider.id)
+                    when (provider) {
+                        is PblPluginIntegrationProvider -> onConfigurePlugin(provider.pluginUuid, provider.title)
+                        else -> reminderConnectDialog(provider)?.let { dialog = it } ?: onAddIntegration()
+                    }
+                },
+                onInstall = { plugin ->
+                    onConnectStarted(PblPluginIntegrationProvider.idFor(plugin.pluginUuid))
+                    installer.install(plugin)
+                },
+                onConfigure = { provider ->
+                    if (provider is PblPluginIntegrationProvider) onOpenPluginPage(provider.pluginUuid)
+                },
+                onDismiss = { sheet = null },
+            )
+        }
         null -> {}
     }
 

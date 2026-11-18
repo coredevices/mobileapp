@@ -192,7 +192,7 @@ class DestinationCatalogTest {
         val (action, category) = when (support) {
             IntegrationSupport.Agent -> PblPluginActionAgentIntegration.ACTION_NAME to PblPluginActionAgentIntegration.CATEGORY
             IntegrationSupport.Note -> PblPluginActionNoteIntegration.ACTION_NAME to PblPluginActionNoteIntegration.CATEGORY
-            IntegrationSupport.Reminder -> error("unused")
+            IntegrationSupport.Reminder, IntegrationSupport.List -> error("unused")
         }
         return StorePlugin(
             metadata = PluginMetadata(

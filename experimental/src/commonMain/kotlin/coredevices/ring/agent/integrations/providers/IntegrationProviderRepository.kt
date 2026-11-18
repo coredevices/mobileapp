@@ -4,8 +4,10 @@ import co.touchlab.kermit.Logger
 import coredevices.ring.agent.integrations.AgentIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.DelegatingAgentIntegration
+import coredevices.ring.agent.integrations.DelegatingListIntegration
 import coredevices.ring.agent.integrations.DelegatingNoteIntegration
 import coredevices.ring.agent.integrations.DelegatingReminderIntegration
+import coredevices.ring.agent.integrations.ListIntegration
 import coredevices.ring.agent.integrations.NoteIntegration
 import coredevices.ring.agent.integrations.ReminderIntegration
 import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
@@ -26,9 +28,9 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /**
- * The single place to find note/reminder/agent providers: the built-in ones plus any installed
- * plugin that declares the matching actions. Owns which provider is selected for notes and for
- * reminders, and hands tools the integration to write through.
+ * The single place to find note/reminder/list/agent providers: the built-in ones plus any installed
+ * plugin that declares the matching actions. Owns which provider is selected for notes, for
+ * reminders and for lists, and hands tools the integration to write through.
  */
 class IntegrationProviderRepository(
     private val preferences: Preferences,
@@ -48,6 +50,9 @@ class IntegrationProviderRepository(
 
     val selectedReminderProvider: StateFlow<IntegrationProvider> =
         preferences.reminderProviderId.mapState { resolve(it, IntegrationSupport.Reminder) }
+
+    val selectedListProvider: StateFlow<IntegrationProvider> =
+        preferences.listProviderId.mapState { resolve(it, IntegrationSupport.List) }
 
     private val _integrationUsed = MutableSharedFlow<IntegrationProvider>(extraBufferCapacity = 16)
     /** The provider each time an integration is handed out to write through. */
@@ -104,6 +109,11 @@ class IntegrationProviderRepository(
         preferences.setReminderProviderId(provider.id)
     }
 
+    fun selectListProvider(provider: IntegrationProvider) {
+        require(provider.supportsLists) { "${provider.id} does not support lists" }
+        preferences.setListProviderId(provider.id)
+    }
+
     /** The integration tools write notes through, for [provider] or the selected one. */
     fun noteIntegration(provider: IntegrationProvider = selectedNoteProvider.value): NoteIntegration {
         logger.i { "Creating note integration for provider: ${provider.id}" }
@@ -126,6 +136,17 @@ class IntegrationProviderRepository(
             integration
         } else {
             DelegatingReminderIntegration(integration, provider.title, delegatedItems)
+        }
+    }
+
+    fun listIntegration(provider: IntegrationProvider = selectedListProvider.value): ListIntegration {
+        logger.i { "Creating list integration for provider: ${provider.id}" }
+        _integrationUsed.tryEmit(provider)
+        val integration = provider.lists()
+        return if (provider.storesItemsLocally) {
+            integration
+        } else {
+            DelegatingListIntegration(integration, provider.title, delegatedItems)
         }
     }
 
@@ -159,6 +180,7 @@ class IntegrationProviderRepository(
     private fun selected(support: IntegrationSupport): IntegrationProvider? = when (support) {
         IntegrationSupport.Note -> selectedNoteProvider.value
         IntegrationSupport.Reminder -> selectedReminderProvider.value
+        IntegrationSupport.List -> selectedListProvider.value
         IntegrationSupport.Agent -> providers(support).firstOrNull()
     }
 

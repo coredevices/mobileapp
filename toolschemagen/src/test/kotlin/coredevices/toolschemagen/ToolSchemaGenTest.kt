@@ -86,6 +86,26 @@ class ToolSchemaGenTest {
     }
 
     @Test
+    fun aMovedToolIsServedFromItsNewServlet() {
+        val checkpoint = Checkpoint("v1", emptyList(), listOf(tool("old", "a"), tool("old", "b")))
+        val live = listOf(tool("new", "a").copy(localModelServlet = "old"), tool("old", "b"), tool("new", "c"))
+
+        assertEquals(
+            listOf("new" to "a", "old" to "b"),
+            checkpoint.servedBy(live).tools.map { it.servlet to it.name },
+        )
+    }
+
+    @Test
+    fun aMoveTheCheckpointAlreadyHasFails() {
+        val moved = tool("new", "a").copy(localModelServlet = "old")
+        val checkpoint = loadOrCreateCheckpoint(tempDir(), "v1", emptyList(), listOf(moved))
+
+        assertEquals(listOf(tool("new", "a")), checkpoint.tools)
+        assertFailsWith<IllegalArgumentException> { checkpoint.servedBy(listOf(moved)) }
+    }
+
+    @Test
     fun checkpointRendersVersionAndNullDescriptions() {
         val rendered = renderCheckpoint(
             "pkg",

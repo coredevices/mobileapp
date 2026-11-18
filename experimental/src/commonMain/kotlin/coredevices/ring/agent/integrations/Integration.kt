@@ -35,6 +35,31 @@ data class ReminderListEntry(
     val title: String
 )
 
+/** Adds items to one provider's lists. Like [ReminderIntegration], a singleton for the service. */
+interface ListIntegration : Integration {
+    /** Adds an item, to the list [listId] found via [searchForList] if given, and returns its id (throws on failure). */
+    suspend fun createListItem(
+        title: String,
+        deadline: Instant?,
+        listId: String? = null,
+        source: ItemSource? = null,
+    ): String
+
+    suspend fun searchForList(listName: String): List<ReminderListEntry>
+
+    suspend fun getAllLists(): List<ReminderListEntry> = emptyList()
+}
+
+/** Lists as a reminder provider keeps them: an item is a reminder in one of its lists. */
+class ReminderListIntegration(private val reminders: ReminderIntegration) : ListIntegration, Integration by reminders {
+    override suspend fun createListItem(title: String, deadline: Instant?, listId: String?, source: ItemSource?): String =
+        reminders.createReminder(title, deadline, listId = listId, source = source)
+
+    override suspend fun searchForList(listName: String): List<ReminderListEntry> = reminders.searchForList(listName)
+
+    override suspend fun getAllLists(): List<ReminderListEntry> = reminders.getAllLists()
+}
+
 private fun cleanUpTitle(title: String): String {
     //Remove 'list' from start or end of title, and trim whitespace
     return title.replace(Regex("(?i)^list\\s+|\\s+list$"), "").trim()

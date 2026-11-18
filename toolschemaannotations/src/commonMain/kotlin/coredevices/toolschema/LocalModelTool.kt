@@ -7,6 +7,7 @@ data class LocalModelSchemaCheckpoint(
     val tools: List<LocalModelTool>,
 )
 
+/** [servlet] is the one serving the tool now, which can differ from the one it was trained under. */
 data class LocalModelTool(
     val servlet: String,
     val name: String,

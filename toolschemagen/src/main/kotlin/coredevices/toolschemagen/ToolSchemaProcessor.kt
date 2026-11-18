@@ -52,7 +52,7 @@ class ToolSchemaProcessor(private val environment: SymbolProcessorEnvironment) :
             tools = tools,
         )
         write(files, packageName, DEFINITIONS_FILE, renderDefinitions(packageName, tools))
-        write(files, packageName, CHECKPOINT_FILE, renderCheckpoint(packageName, checkpoint))
+        write(files, packageName, CHECKPOINT_FILE, renderCheckpoint(packageName, checkpoint.servedBy(tools)))
         return emptyList()
     }
 
@@ -81,6 +81,7 @@ class ToolSchemaProcessor(private val environment: SymbolProcessorEnvironment) :
             description = definition.string("description"),
             parameters = toolParameters(),
             outputParameters = output?.toolParameters()?.takeIf { it.isNotEmpty() },
+            localModelServlet = definition.optionalString("localModelServlet")?.ifEmpty { null },
         )
     }
 
@@ -113,4 +114,7 @@ class ToolSchemaProcessor(private val environment: SymbolProcessorEnvironment) :
 
     private fun KSAnnotation.string(argument: String): String =
         arguments.first { it.name?.asString() == argument }.value as String
+
+    private fun KSAnnotation.optionalString(argument: String): String? =
+        arguments.firstOrNull { it.name?.asString() == argument }?.value as? String
 }

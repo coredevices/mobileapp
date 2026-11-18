@@ -7,6 +7,9 @@ import coredevices.mcp.McpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.builtin_servlets.reminders.CreateListTool
+import coredevices.ring.agent.builtin_servlets.reminders.ListServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ListTool
 import coredevices.ring.agent.cactusTools
 import coredevices.ring.agent.toToolDefinition
 import coredevices.util.CommonBuildKonfig
@@ -46,6 +49,16 @@ class LocalModelSchemaCheckpointTest {
             CommonBuildKonfig.CACTUS_LM_WEIGHTS_VERSION,
             localModelSchemaCheckpoint.modelVersion,
             "No checkpoint was generated for the current model version",
+        )
+    }
+
+    @Test
+    fun listToolsAreServedByTheListServlet() {
+        val listTools = setOf(ListTool.TOOL_NAME, CreateListTool.TOOL_NAME)
+
+        assertEquals(
+            listTools.associateWith { ListServlet.NAME },
+            localModelSchemaCheckpoint.tools.filter { it.name in listTools }.associate { it.name to it.servlet },
         )
     }
 

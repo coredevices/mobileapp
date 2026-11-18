@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.map
 
 /** A native provider hidden by plugins that a setting still points at. */
 data class LegacyDestination(val provider: IntegrationProvider, val setting: Setting) {
-    enum class Setting { Notes, Reminders, Shortcut }
+    enum class Setting { Notes, Reminders, Lists, Shortcut }
 }
 
 /**
@@ -24,11 +24,13 @@ class LegacyDestinations(
     val pending: Flow<List<LegacyDestination>> = combine(
         providers.selectedNoteProvider,
         providers.selectedReminderProvider,
+        providers.selectedListProvider,
         preferences.noteShortcut,
-    ) { note, reminder, shortcut ->
+    ) { note, reminder, list, shortcut ->
         listOfNotNull(
             LegacyDestination(note, LegacyDestination.Setting.Notes),
             LegacyDestination(reminder, LegacyDestination.Setting.Reminders),
+            LegacyDestination(list, LegacyDestination.Setting.Lists),
             shortcutProvider(shortcut)?.let { LegacyDestination(it, LegacyDestination.Setting.Shortcut) },
         ).filter { it.provider.isHiddenByPlugins }
     }

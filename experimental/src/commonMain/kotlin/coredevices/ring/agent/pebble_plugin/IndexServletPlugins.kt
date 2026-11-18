@@ -7,6 +7,7 @@ import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MESSAGING_PLUGIN_UUID
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ListServlet
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.plugin.NativePlugin
@@ -47,6 +48,7 @@ class IndexServletPlugins(
             MessagingServlet.name,
             NoteServlet.NAME,
             ReminderServlet.NAME,
+            ListServlet.NAME,
         )
 
         val UUIDS: Set<Uuid> = setOf(
@@ -54,6 +56,7 @@ class IndexServletPlugins(
             MESSAGING_PLUGIN_UUID,
             NoteServlet.PLUGIN_UUID,
             ReminderServlet.PLUGIN_UUID,
+            ListServlet.PLUGIN_UUID,
         )
     }
 }

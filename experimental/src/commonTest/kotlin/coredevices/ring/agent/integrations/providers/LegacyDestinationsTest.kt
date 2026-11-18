@@ -35,7 +35,10 @@ class LegacyDestinationsTest {
         storesItemsLocally = true,
     )
     private val notion = FakeProvider(id = "notion", supports = setOf(IntegrationSupport.Note), title = "Notion")
-    private val googleTasks = FakeProvider(id = "google_tasks", supports = setOf(IntegrationSupport.Reminder))
+    private val googleTasks = FakeProvider(
+        id = "google_tasks",
+        supports = setOf(IntegrationSupport.Reminder, IntegrationSupport.List),
+    )
     private val tasker = FakeProvider(id = "tasker", supports = setOf(IntegrationSupport.Note, IntegrationSupport.Reminder))
     private val plugin = FakeProvider(
         id = "plugin:1",
@@ -90,6 +93,16 @@ class LegacyDestinationsTest {
             legacy.pending.first(),
         )
         assertEquals(3, legacy.count.first())
+    }
+
+    @Test
+    fun aHiddenNativeListDestinationIsPendingOnItsOwn() = runTest {
+        repository.selectListProvider(googleTasks)
+
+        assertEquals(
+            listOf(LegacyDestination(googleTasks, LegacyDestination.Setting.Lists)),
+            legacy.pending.first(),
+        )
     }
 
     @Test

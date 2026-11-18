@@ -16,6 +16,7 @@ import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
 import coredevices.ring.agent.builtin_servlets.notifications.ReplyToWatchNotificationTool
 import coredevices.ring.agent.builtin_servlets.notes.NoteServlet
+import coredevices.ring.agent.builtin_servlets.reminders.ListServlet
 import coredevices.ring.agent.builtin_servlets.reminders.ReminderServlet
 import coredevices.util.Platform
 import coredevices.util.isAndroid
@@ -39,6 +40,10 @@ internal fun builtinServletDefinitions(
         McpServerDefinition(
             name = ReminderServlet.NAME,
             title = "Reminders"
+        ),
+        McpServerDefinition(
+            name = ListServlet.NAME,
+            title = "Lists"
         ),
         McpServerDefinition(
             name = CalendarServlet.NAME,
@@ -87,7 +92,8 @@ class BuiltinServletRepository: KoinComponent, ServletRepository {
             )
             ClockServlet.name -> ClockServlet.takeIf { clockUnavailableReason() == null }
             JsServlet.name -> JsServlet
-            ReminderServlet.NAME -> ReminderServlet(get(), get(), get())
+            ReminderServlet.NAME -> ReminderServlet(get(), get())
+            ListServlet.NAME -> ListServlet(get())
             CalendarServlet.NAME -> CalendarServlet
             MessagingServlet.name -> MessagingServlet.takeIf { platform.isAndroid }
             NotificationReplyServlet.NAME -> NotificationReplyServlet(

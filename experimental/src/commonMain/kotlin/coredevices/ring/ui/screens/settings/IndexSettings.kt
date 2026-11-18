@@ -139,6 +139,7 @@ private fun RelinkDestinationsCard(destinations: List<LegacyDestination>) {
 private fun legacyDestinationLabel(setting: LegacyDestination.Setting): String = when (setting) {
     LegacyDestination.Setting.Notes -> "Notes"
     LegacyDestination.Setting.Reminders -> "Reminders"
+    LegacyDestination.Setting.Lists -> "Lists"
     LegacyDestination.Setting.Shortcut -> "Notification shortcut"
 }
 

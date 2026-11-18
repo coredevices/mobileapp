@@ -115,6 +115,7 @@ class FakePreferences : Preferences {
     override val beeperMessageAnyone: StateFlow<Boolean> = MutableStateFlow(false)
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
+    override val listProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
@@ -141,6 +142,7 @@ class FakePreferences : Preferences {
     override fun setBeeperMessageAnyone(enabled: Boolean) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProviderId(id: String) {}
+    override fun setListProviderId(id: String) {}
     override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}

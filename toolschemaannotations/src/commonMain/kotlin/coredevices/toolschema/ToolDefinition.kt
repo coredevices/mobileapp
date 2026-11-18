@@ -6,6 +6,8 @@ import kotlin.reflect.KClass
  * Declares a built-in tool on its arguments class. `:toolschemagen` builds the tool's schema from
  * the [ToolParam] properties: one is required when it is non-null with no default. [output] is the
  * result class to build an output schema from the same way, if the tool declares one.
+ * [localModelServlet] is the servlet the on-device model's schema checkpoint has the tool under,
+ * for a tool that has moved since; the model then gets it from [servlet].
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
@@ -14,6 +16,7 @@ annotation class ToolDefinition(
     val name: String,
     val description: String,
     val output: KClass<*> = Nothing::class,
+    val localModelServlet: String = "",
 )
 
 @Target(AnnotationTarget.PROPERTY)

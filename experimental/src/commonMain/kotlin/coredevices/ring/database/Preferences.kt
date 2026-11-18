@@ -29,6 +29,8 @@ interface Preferences: BasePreferences {
     /** Ids of [coredevices.ring.agent.integrations.providers.IntegrationProvider]s; resolve them
      *  through `IntegrationProviderRepository`, which also handles a selection that no longer exists. */
     val reminderProviderId: StateFlow<String>
+    /** Follows [reminderProviderId] until lists are given a provider of their own. */
+    val listProviderId: StateFlow<String>
     val noteProviderId: StateFlow<String>
     val noteShortcut: StateFlow<NoteShortcutType>
     val autoDismissActionNotifications: StateFlow<Boolean>
@@ -58,6 +60,7 @@ interface Preferences: BasePreferences {
     fun setBeeperMessageAnyone(enabled: Boolean)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setReminderProviderId(id: String)
+    fun setListProviderId(id: String)
     fun setNoteProviderId(id: String)
     fun setNoteShortcut(shortcut: NoteShortcutType)
     fun setAutoDismissActionNotifications(enabled: Boolean)
@@ -77,6 +80,8 @@ interface Preferences: BasePreferences {
     val targetCalendar: StateFlow<Int?>
     fun setTargetCalendar(calendarId: Int?)
 }
+
+private const val LIST_PROVIDER_ID_KEY = "list_provider_id"
 
 class PreferencesImpl(private val settings: Settings): Preferences {
 
@@ -143,6 +148,10 @@ class PreferencesImpl(private val settings: Settings): Preferences {
             ?: BuiltInIntegrationProviders.Index.id
     )
     override val reminderProviderId = _reminderProviderId.asStateFlow()
+    private val _listProviderId = MutableStateFlow(
+        settings.getStringOrNull(LIST_PROVIDER_ID_KEY) ?: _reminderProviderId.value
+    )
+    override val listProviderId = _listProviderId.asStateFlow()
     private val _noteProviderId = MutableStateFlow(
         settings.getStringOrNull("note_provider_id")
             ?: settings.getIntOrNull("note_provider")?.let(LegacyProviderIds::noteProviderId)
@@ -257,6 +266,12 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setReminderProviderId(id: String) {
         settings.putString("reminder_provider_id", id)
         _reminderProviderId.value = id
+        if (!settings.hasKey(LIST_PROVIDER_ID_KEY)) _listProviderId.value = id
+    }
+
+    override fun setListProviderId(id: String) {
+        settings.putString(LIST_PROVIDER_ID_KEY, id)
+        _listProviderId.value = id
     }
 
     override fun setNoteProviderId(id: String) {

@@ -53,6 +53,7 @@ class IndexSettingsSummary(
 
         appendLine("Notes save to: ${providers.selectedNoteProvider.value.notesTitle}")
         appendLine("Reminders save to: ${providers.selectedReminderProvider.value.remindersTitle}")
+        appendLine("List items save to: ${providers.selectedListProvider.value.listsTitle}")
         appendLine("Unclear requests become: ${preferences.defaultCaptureType.value}")
         appendLine("Phone calendar connected: ${preferences.phoneCalendarEnabled.value}")
 

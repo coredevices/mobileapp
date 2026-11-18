@@ -138,6 +138,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val reminderProviderId: StateFlow<String>
         get() = TODO("Not yet implemented")
+    override val listProviderId: StateFlow<String>
+        get() = TODO("Not yet implemented")
     override val noteProviderId: StateFlow<String>
         get() = TODO("Not yet implemented")
     override val noteShortcut: StateFlow<NoteShortcutType>
@@ -222,6 +224,10 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override fun setReminderProviderId(id: String) {
+        TODO("Not yet implemented")
+    }
+
+    override fun setListProviderId(id: String) {
         TODO("Not yet implemented")
     }
 
