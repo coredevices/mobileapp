@@ -547,7 +547,7 @@ fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
 }
 
 @Composable
-fun AppPermissionsSection(appUuid: Uuid) {
+fun AppPermissionsSection(appUuid: Uuid, collapsible: Boolean = true) {
     val libPebble = rememberLibPebble()
     val config by libPebble.config.collectAsState()
     if (!config.watchConfig.enablePlugins) return
@@ -587,9 +587,14 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         // A legacy app's are collapsed, and never hidden while a request waits for an answer.
-        val open = (legacy && statuses.any { it.status == PermissionStatus.Waiting }) || (expandedByUser ?: !legacy)
-        SectionHeader(if (legacy) "Permissions (Legacy App)" else "Permissions", open) { expandedByUser = !open }
-        if (!open) return@Column
+        val title = if (legacy) "Permissions (Legacy App)" else "Permissions"
+        if (collapsible) {
+            val open = (legacy && statuses.any { it.status == PermissionStatus.Waiting }) || (expandedByUser ?: !legacy)
+            SectionHeader(title, open) { expandedByUser = !open }
+            if (!open) return@Column
+        } else {
+            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+        }
         if (legacy) {
             Text(
                 "Apps built before permissions existed can use these by default. To be asked first, turn on " +

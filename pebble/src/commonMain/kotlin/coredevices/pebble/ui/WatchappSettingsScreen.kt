@@ -33,7 +33,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -386,7 +386,7 @@ fun WatchappSettingsScreen(
                                     expanded = showPermissions,
                                     onDismissRequest = { showPermissions = false },
                                 ) {
-                                    AppPermissionsSection(webViewUuid)
+                                    AppPermissionsSection(webViewUuid, collapsible = false)
                                 }
                             }
                         }
@@ -425,8 +425,8 @@ private fun MenuBelowAnchor(
     if (!expanded) return
     val density = LocalDensity.current
     val margin = with(density) { 8.dp.roundToPx() }
-    var maxHeight by remember { mutableIntStateOf(Int.MAX_VALUE) }
-    val positionProvider = remember(margin) {
+    var maxHeight by remember { mutableStateOf(Dp.Unspecified) }
+    val positionProvider = remember(density, margin) {
         object : PopupPositionProvider {
             override fun calculatePosition(
                 anchorBounds: IntRect,
@@ -434,7 +434,7 @@ private fun MenuBelowAnchor(
                 layoutDirection: LayoutDirection,
                 popupContentSize: IntSize,
             ): IntOffset {
-                maxHeight = windowSize.height - anchorBounds.bottom - margin
+                maxHeight = with(density) { (windowSize.height - anchorBounds.bottom - margin).coerceAtLeast(0).toDp() }
                 val x = if (layoutDirection == LayoutDirection.Ltr) {
                     anchorBounds.right - popupContentSize.width
                 } else {
@@ -457,7 +457,7 @@ private fun MenuBelowAnchor(
         ) {
             Column(
                 modifier = Modifier.widthIn(max = 400.dp)
-                    .heightIn(max = with(density) { maxHeight.coerceAtLeast(0).toDp() })
+                    .heightIn(max = maxHeight)
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 8.dp),
                 content = content,
