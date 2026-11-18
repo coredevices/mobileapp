@@ -209,7 +209,10 @@ class IndexActionsSectionTest {
         val both = StorePlugin(thingsPlugin(IntegrationSupport.Note, IntegrationSupport.Reminder).metadata, configurable = false)
 
         assertEquals("Things", both.title)
-        assertEquals(setOf(IntegrationSupport.Note, IntegrationSupport.Reminder), both.supports)
+        assertEquals(
+            setOf(IntegrationSupport.Note, IntegrationSupport.Reminder, IntegrationSupport.List),
+            both.supports,
+        )
         assertTrue(DestinationItem.InStore(both).isPlugin)
     }
 
