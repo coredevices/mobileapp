@@ -54,6 +54,10 @@ kotlin {
         withDeviceTestBuilder {}.configure {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
+
+        optimization {
+            consumerKeepRules.file("consumer-rules.pro")
+        }
     }
 
 // Target declarations - add or remove as needed below. These define
