@@ -49,6 +49,9 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.R
 import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -98,7 +101,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         koinStarted = true
         initLogging()
         logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (AppContext(this).isDebugBuild()) "debug" else "release"}" }
-        dumpPreviousExitInfo()
+        GlobalScope.launch(Dispatchers.IO) { dumpPreviousExitInfo() }
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -135,11 +138,9 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         } else {
             PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         }
-        packageManager.setComponentEnabledSetting(
-            ComponentName(this, className),
-            state,
-            PackageManager.DONT_KILL_APP,
-        )
+        val component = ComponentName(this, className)
+        if (packageManager.getComponentEnabledSetting(component) == state) return
+        packageManager.setComponentEnabledSetting(component, state, PackageManager.DONT_KILL_APP)
     }
 
     private fun dumpPreviousExitInfo() {
@@ -273,14 +274,17 @@ fun scheduleBackgroundJob(appContext: AppContext, coreConfig: CoreConfig) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
     ).build()
-    try {
-        WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
-            uniqueWorkName = "core_refresh",
-            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
-            request = workRequest,
-        )
-    } catch (e: Throwable) {
-        // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
-        logger.e(e) { "Failed to schedule background job" }
+    // WorkManager.getInstance opens its database on first use
+    GlobalScope.launch(Dispatchers.IO) {
+        try {
+            WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
+                uniqueWorkName = "core_refresh",
+                existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+                request = workRequest,
+            )
+        } catch (e: Throwable) {
+            // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
+            logger.e(e) { "Failed to schedule background job" }
+        }
     }
 }
