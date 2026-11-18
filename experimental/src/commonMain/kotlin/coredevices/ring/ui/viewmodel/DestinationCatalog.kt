@@ -9,14 +9,10 @@ import coredevices.ring.agent.pebble_plugin.PblPluginIntegrationProvider
 import coredevices.ring.agent.pebble_plugin.PluginStore
 import coredevices.ring.agent.pebble_plugin.StorePlugin
 import io.rebble.libpebblecommon.permissions.InstallReview
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -58,11 +54,9 @@ val DestinationItem.isPlugin: Boolean
  * Index plugins that are not installed yet. Shared by the screens so the store is fetched once and
  * a [refresh] from one screen is seen by the others.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class DestinationCatalog(
     private val providers: IntegrationProviderRepository,
     private val pluginStore: PluginStore,
-    private val pluginsEnabled: StateFlow<Boolean>,
     private val lockerUuids: Flow<List<Uuid>>,
 ) {
     private val refresh = MutableStateFlow(0)
@@ -80,15 +74,10 @@ class DestinationCatalog(
         emit(listed.orEmpty())
     }
 
-    private val storePlugins: Flow<List<StorePlugin>> = pluginsEnabled.flatMapLatest { pluginsOn ->
-        if (!pluginsOn) {
-            flowOf(emptyList())
-        } else {
-            combine(listedStorePlugins, lockerUuids) { listed, installed ->
-                listed.filter { it.pluginUuid !in installed }
-            }
+    private val storePlugins: Flow<List<StorePlugin>> =
+        combine(listedStorePlugins, lockerUuids) { listed, installed ->
+            listed.filter { it.pluginUuid !in installed }
         }
-    }
 
     fun items(support: IntegrationSupport): Flow<List<DestinationItem>> =
         combine(installed(support), storePlugins) { installed, store ->
@@ -96,9 +85,9 @@ class DestinationCatalog(
         }
 
     private fun installed(support: IntegrationSupport): Flow<List<DestinationItem.Installed>> =
-        combine(refresh, pluginsEnabled, lockerPlugins) { _, pluginsOn, locker ->
+        combine(refresh, lockerPlugins) { _, locker ->
             val connected = providers.availableProviders(support)
-            providers.providers(support).visibleDestinations(pluginsOn).map {
+            providers.providers(support).visibleDestinations().map {
                 DestinationItem.Installed(
                     provider = it,
                     title = it.titleFor(support),

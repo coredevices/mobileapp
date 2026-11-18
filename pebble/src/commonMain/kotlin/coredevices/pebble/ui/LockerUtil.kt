@@ -895,8 +895,7 @@ fun AppsFilterRow(
     sharedLockerViewModel: SharedLockerViewModel,
     showWatchfaceOrderSetting: Boolean,
 ) {
-    val config by rememberLibPebble().config.collectAsState()
-    val tabTypes = AppType.entries.filter { it != AppType.Plugin || config.watchConfig.enablePlugins }
+    val tabTypes = AppType.entries
     LaunchedEffect(tabTypes) {
         if (selectedType != null && selectedType.value !in tabTypes) {
             selectedType.value = AppType.Watchface

@@ -450,7 +450,7 @@ class AppstoreService(
     }
 
     private suspend fun AppStoreHome.withPluginDataApps(type: AppType, hardwarePlatform: WatchType?): AppStoreHome {
-        if (!source.isPebbleFeed() || type == AppType.Plugin || !libPebble.config.value.watchConfig.enablePlugins) return this
+        if (!source.isPebbleFeed() || type == AppType.Plugin) return this
         appstoreCollectionDao.insertCollectionIfMissing(
             AppstoreCollection(
                 sourceId = source.id,

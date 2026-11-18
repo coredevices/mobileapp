@@ -26,17 +26,6 @@ class PermissionSettingsSyncTest {
     }
 
     @Test
-    fun withPluginsOffTheAccountsSettingsAreClearedAndNotAdopted() {
-        assertEquals(SyncStep.Clear, syncStep(remote = strict, local = null, synced = strict))
-        assertNull(syncStep(remote = null, local = null, synced = null))
-    }
-
-    @Test
-    fun turningPluginsBackOnUploadsThisDevicesSettings() {
-        assertEquals(SyncStep.Upload(default), syncStep(remote = null, local = default, synced = null))
-    }
-
-    @Test
     fun aChangeFromAnotherDeviceIsAdopted() {
         assertEquals(SyncStep.Adopt(strict), syncStep(remote = strict, local = default, synced = default))
     }

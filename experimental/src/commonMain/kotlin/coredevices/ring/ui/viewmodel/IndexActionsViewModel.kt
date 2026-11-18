@@ -49,7 +49,6 @@ class IndexActionsViewModel(
     private val preferences: Preferences,
     gestureRouting: GestureRoutingPreferences,
     platform: Platform,
-    val pluginsEnabled: StateFlow<Boolean>,
 ) : ViewModel() {
     val agentReachable: StateFlow<Boolean> = gestureRouting.routes.mapState { !nothingRoutesToIndexAgent(it) }
     val contactsDialogSupported: Boolean = platform.isAndroid

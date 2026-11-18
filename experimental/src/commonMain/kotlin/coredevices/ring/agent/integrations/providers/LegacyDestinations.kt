@@ -4,7 +4,6 @@ import coredevices.pebble.ui.IndexTabBadge
 import coredevices.ring.data.NoteShortcutType
 import coredevices.ring.database.Preferences
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -15,21 +14,18 @@ data class LegacyDestination(val provider: IntegrationProvider, val setting: Set
 }
 
 /**
- * Native destinations are hidden once plugins are on, but the app may still be configured for
+ * Native destinations are hidden in favour of plugins, but the app may still be configured for
  * one. Tracks those so the user can be steered to the plugin version.
  */
 class LegacyDestinations(
     private val providers: IntegrationProviderRepository,
     preferences: Preferences,
-    private val pluginsEnabled: StateFlow<Boolean>,
 ) : IndexTabBadge {
     val pending: Flow<List<LegacyDestination>> = combine(
-        pluginsEnabled,
         providers.selectedNoteProvider,
         providers.selectedReminderProvider,
         preferences.noteShortcut,
-    ) { pluginsOn, note, reminder, shortcut ->
-        if (!pluginsOn) return@combine emptyList()
+    ) { note, reminder, shortcut ->
         listOfNotNull(
             LegacyDestination(note, LegacyDestination.Setting.Notes),
             LegacyDestination(reminder, LegacyDestination.Setting.Reminders),
@@ -42,7 +38,7 @@ class LegacyDestinations(
     /** Writes through a provider the user should have relinked by now. */
     val legacyUse: Flow<IntegrationProvider> = providers.integrationUsed.filter { isLegacy(it) }
 
-    fun isLegacy(provider: IntegrationProvider): Boolean = pluginsEnabled.value && provider.isHiddenByPlugins
+    fun isLegacy(provider: IntegrationProvider): Boolean = provider.isHiddenByPlugins
 
     private fun shortcutProvider(shortcut: NoteShortcutType): IntegrationProvider? = when (shortcut) {
         NoteShortcutType.SendToMe -> null

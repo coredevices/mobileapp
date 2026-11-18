@@ -45,8 +45,8 @@ class DestinationCatalogTest {
     @Test
     fun installedProvidersAreTitledForTheKindAndMarkedConnected() = runTest {
         val index = FakeProvider("index", "Index", storesItemsLocally = true, notesTitle = "Index Notes")
-        val notion = FakeProvider("notion", "Notion", supports = setOf(IntegrationSupport.Note), authorized = false)
-        val fixture = Fixture(builtIn = listOf(index, notion), pluginsEnabled = false)
+        val notion = FakeProvider("notion", "Notion", supports = setOf(IntegrationSupport.Note), authorized = false, isExternalPlugin = true)
+        val fixture = Fixture(builtIn = listOf(index, notion))
 
         val items = fixture.catalog.items(IntegrationSupport.Note).first()
 
@@ -61,8 +61,8 @@ class DestinationCatalogTest {
 
     @Test
     fun refreshPicksUpAProviderThatHasConnected() = runTest {
-        val notion = FakeProvider("notion", "Notion", supports = setOf(IntegrationSupport.Note), authorized = false)
-        val fixture = Fixture(builtIn = listOf(notion), pluginsEnabled = false)
+        val notion = FakeProvider("notion", "Notion", supports = setOf(IntegrationSupport.Note), authorized = false, isExternalPlugin = true)
+        val fixture = Fixture(builtIn = listOf(notion))
         assertFalse(fixture.catalog.items(IntegrationSupport.Note).first().single().isConnected)
 
         notion.authorized = true
@@ -107,15 +107,12 @@ class DestinationCatalogTest {
     }
 
     @Test
-    fun withPluginsOffTheStoreIsNotOfferedAndNativeProvidersAre() = runTest {
+    fun nativeProvidersAreHiddenInFavourOfTheStore() = runTest {
         val notion = FakeProvider("notion", "Notion", supports = setOf(IntegrationSupport.Note))
         val things = storePlugin("Things", "00000000-0000-0000-0002-000000000003", IntegrationSupport.Note)
         val fixture = Fixture(builtIn = listOf(notion), storePlugins = listOf(things))
 
         assertEquals(listOf(DestinationItem.InStore(things).id), fixture.catalog.items(IntegrationSupport.Note).first().map { it.id })
-
-        fixture.pluginsEnabled.value = false
-        assertEquals(listOf(notion.id), fixture.catalog.items(IntegrationSupport.Note).first().map { it.id })
     }
 
     @Test
@@ -148,10 +145,8 @@ class DestinationCatalogTest {
         builtIn: List<IntegrationProvider> = emptyList(),
         plugins: List<FakePlugin> = emptyList(),
         storePlugins: List<StorePlugin> = emptyList(),
-        pluginsEnabled: Boolean = true,
     ) {
         val store = FakePluginStore(storePlugins)
-        val pluginsEnabled = MutableStateFlow(pluginsEnabled)
         val lockerUuids = MutableStateFlow<List<Uuid>>(emptyList())
         val catalog = DestinationCatalog(
             providers = IntegrationProviderRepository(
@@ -163,7 +158,6 @@ class DestinationCatalogTest {
                 builtIn = listOf(FakeProvider("feed", "Feed", storesItemsLocally = true, supports = emptySet())) + builtIn,
             ),
             pluginStore = store,
-            pluginsEnabled = this.pluginsEnabled,
             lockerUuids = lockerUuids,
         )
     }

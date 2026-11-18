@@ -16,7 +16,6 @@ import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.util.Platform
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -56,17 +55,7 @@ class LegacyDestinationsTest {
         delegatedItems = DelegatedIntegrationItems(ItemFactory(), ItemRepository(FakeCachedItemDao(), cancelReminder = {})),
         builtIn = listOf(index, notion, googleTasks, tasker, plugin, iosReminders),
     )
-    private val pluginsEnabled = MutableStateFlow(true)
-    private val legacy = LegacyDestinations(repository, preferences, pluginsEnabled)
-
-    @Test
-    fun nothingIsPendingWhilePluginsAreOff() = runTest {
-        pluginsEnabled.value = false
-        repository.selectNoteProvider(notion)
-
-        assertEquals(emptyList<LegacyDestination>(), legacy.pending.first())
-        assertFalse(legacy.isLegacy(notion))
-    }
+    private val legacy = LegacyDestinations(repository, preferences)
 
     @Test
     fun localAndPluginDestinationsAreNotPending() = runTest {

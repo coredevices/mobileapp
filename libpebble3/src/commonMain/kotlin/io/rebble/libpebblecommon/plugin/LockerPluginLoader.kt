@@ -1,16 +1,12 @@
 package io.rebble.libpebblecommon.plugin
 
 import co.touchlab.kermit.Logger
-import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.locker.AppFileReader
 import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.resolvePermissions
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlin.uuid.Uuid
@@ -22,7 +18,6 @@ import kotlin.uuid.Uuid
  */
 class LockerPluginLoader(
     private val registry: PluginRegistry,
-    private val watchConfig: WatchConfigFlow,
     private val scope: LibPebbleCoroutineScope,
     private val lockerEntryDao: LockerEntryRealDao,
     private val appFileReader: AppFileReader,
@@ -36,11 +31,7 @@ class LockerPluginLoader(
 
     fun init() {
         scope.launch {
-            combine(
-                watchConfig.flow.map { it.watchConfig.enablePlugins }.distinctUntilChanged(),
-                lockerEntryDao.getPluginEntriesFlow(),
-            ) { enabled, rows -> if (enabled) rows else emptyList() }
-                .collect { rows -> reconcile(rows) }
+            lockerEntryDao.getPluginEntriesFlow().collect { rows -> reconcile(rows) }
         }
     }
 

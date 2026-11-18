@@ -36,17 +36,16 @@ class WatchPermissionSyncTest {
         val platform = LockerEntryPlatform(id, "5.109", 0, "emery", "", "", "", 0)
         val entry = LockerEntry(id, "1.0", "Test", "watchapp", "Core", false, "0",
             platforms = listOf(platform), watchPermissions = 1)
-        fun params(capabilities: Set<ProtocolCapsFlag>, enabled: Boolean = true) = ValueParams(
+        fun params(capabilities: Set<ProtocolCapsFlag>) = ValueParams(
             platform = WatchType.EMERY,
             capabilities = capabilities,
             firmwareVersion = FirmwareVersion("v0.0.0", Instant.DISTANT_PAST, 0, 0, 0, null, "", false, false, false),
             libPebbleConfigFlow = LibPebbleConfigFlow(MutableStateFlow(
-                LibPebbleConfig(watchConfig = WatchConfig(enablePlugins = enabled)))),
+                LibPebbleConfig(watchConfig = WatchConfig()))),
         )
         assertEquals(126, entry.value(params(emptySet()))!!.size)
         val capable = setOf(ProtocolCapsFlag.SupportsAppPermissions)
         assertEquals(1u.toUByte(), entry.value(params(capable))!![126])
-        assertEquals(1u.toUByte(), entry.value(params(capable, enabled = false))!![126])
         assertNotEquals(entry.recordHashCode(), entry.copy(watchPermissions = 0).recordHashCode())
     }
 

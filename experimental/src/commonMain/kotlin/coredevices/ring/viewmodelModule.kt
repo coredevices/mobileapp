@@ -1,6 +1,5 @@
 package coredevices.ring
 
-import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.external.indexwebhook.IndexWebhookSettingsViewModel
 import coredevices.ring.ui.components.recording.RecordingTraceTimelineViewModel
 import coredevices.ring.ui.viewmodel.AllAnswersViewModel
@@ -34,7 +33,6 @@ internal val viewmodelModule = module {
         DestinationCatalog(
             providers = get(),
             pluginStore = get(),
-            pluginsEnabled = libPebble.pluginsEnabled(),
             lockerUuids = libPebble.getAllLockerUuids(),
         )
     }
@@ -49,7 +47,6 @@ internal val viewmodelModule = module {
             preferences = get(),
             gestureRouting = get(),
             platform = get(),
-            pluginsEnabled = get<LibPebble>().pluginsEnabled(),
         )
     }
     viewModel {

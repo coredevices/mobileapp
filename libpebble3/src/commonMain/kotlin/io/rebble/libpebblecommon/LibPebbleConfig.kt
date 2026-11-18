@@ -104,7 +104,6 @@ data class WatchConfig(
      */
     val enableWatchSettingsSync: Boolean = true,
     val musicSeekWhenAvailable: Boolean = true,
-    val enablePlugins: Boolean = false,
     val permissionPolicy: PermissionPolicy = PermissionPolicy.AskIfExfiltrating,
     /** When false, legacy apps keep what they had before permissions (see `isLegacyImplicit`). */
     val askLegacyAppsForPermissions: Boolean = false,

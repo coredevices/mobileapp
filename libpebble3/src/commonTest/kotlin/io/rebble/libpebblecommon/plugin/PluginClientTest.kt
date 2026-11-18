@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.plugin
 
 import com.russhwolf.settings.MapSettings
 import io.rebble.libpebblecommon.LibPebbleAnalytics
-import io.rebble.libpebblecommon.WatchConfig
-import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.permissions.APP
 import io.rebble.libpebblecommon.permissions.FakePermissionDao
@@ -96,7 +94,7 @@ class PluginClientTest {
     private val running = RunningApps(NoWatches)
     private val analytics = CountingAnalytics()
     private val logs = PluginLogs()
-    private val registry = PluginRegistry(emptySet(), WatchConfig(enablePlugins = true).asFlow(), MapSettings())
+    private val registry = PluginRegistry(emptySet(), MapSettings())
     private val actionLog = mutableListOf<Pair<String, ActionResult>>()
     private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs) { _, _, action, _, result ->
         actionLog += action to result

@@ -212,8 +212,6 @@ class Locker(
     }
 
     override suspend fun appConfigPageUrl(uuid: Uuid): String? {
-        // V2 config pages won't work with plugins disabled (no messaging channel)
-        if (!config.value.enablePlugins) return null
         val entry = lockerEntryDao.getEntryFlow(uuid).first() ?: return null
         val page = entry.configPage ?: return null
         if (page.startsWith("http://") || page.startsWith("https://")) {
@@ -332,7 +330,6 @@ class Locker(
     }
 
     override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? {
-        if (!config.value.enablePlugins) return null
         val toReview = permissions.toReview(appUuid, requested)
         val automatic = permissions.automaticallyGranted(appUuid, requested)
         return if (toReview.isEmpty() && automatic.isEmpty()) null else InstallReview(appUuid, appName, toReview, automatic, requested.declared)

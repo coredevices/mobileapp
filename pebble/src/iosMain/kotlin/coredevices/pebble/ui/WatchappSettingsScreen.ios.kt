@@ -36,7 +36,7 @@ import kotlin.uuid.Uuid
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid,
-    bridge: ConfigPageBridge?,
+    bridge: ConfigPageBridge,
     mayLoad: (String) -> Boolean,
     network: ConfigPageNetwork,
 ): NativeWebView =
@@ -50,22 +50,20 @@ internal actual fun webViewFactory(
                 forMainFrameOnly = false,
             )
         )
-        if (bridge != null) {
-            // Installed before the page parses, so a page's own <script> can call Pebble.* at the
-            // top level rather than waiting for something to be injected after load.
-            configuration.userContentController.addUserScript(
-                WKUserScript(
-                    source = CONFIG_PAGE_SHIM_JS,
-                    injectionTime = WKUserScriptInjectionTime.WKUserScriptInjectionTimeAtDocumentStart,
-                    forMainFrameOnly = true,
-                )
+        // Installed before the page parses, so a page's own <script> can call Pebble.* at the
+        // top level rather than waiting for something to be injected after load.
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source = CONFIG_PAGE_SHIM_JS,
+                injectionTime = WKUserScriptInjectionTime.WKUserScriptInjectionTimeAtDocumentStart,
+                forMainFrameOnly = true,
             )
-            configuration.userContentController.addScriptMessageHandler(
-                NativeConfigBridge(bridge),
-                CONFIG_NATIVE_NAMESPACE,
-            )
-            bridge.attach { js -> evaluateJavaScript(js, null) }
-        }
+        )
+        configuration.userContentController.addScriptMessageHandler(
+            NativeConfigBridge(bridge),
+            CONFIG_NATIVE_NAMESPACE,
+        )
+        bridge.attach { js -> evaluateJavaScript(js, null) }
         if (available(OS.Ios to OSVersion(17))) {
             configuration.websiteDataStore =
                 WKWebsiteDataStore.dataStoreForIdentifier(NSUUID("$uuid"))

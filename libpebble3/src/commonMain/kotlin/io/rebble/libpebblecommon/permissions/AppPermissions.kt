@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
@@ -137,16 +136,13 @@ class AppPermissions(
         localWatchPermissions().onEach { installed.syncWatchPermissions(it) }.launchIn(scope)
     }
 
-    /** Controls the permission system. */
-    val enforcing: Boolean get() = watchConfig.value.enablePlugins
-
     suspend fun subjectOf(appUuid: Uuid): PermissionSubject? = installed.subjectsOf(setOf(appUuid)).first()[appUuid]
 
     suspend fun check(subject: PermissionSubject, permission: String): PermissionDecision {
         val config = watchConfig.value
         val rows = dao.getByAppUuid(subject.appUuid)
         val decision = decidePermission(permission, subject, rows, config, pluginDefinitionsFor(rows, permission))
-        if (config.enablePlugins && decision == PermissionDecision.Granted) {
+        if (decision == PermissionDecision.Granted) {
             rows.coveringRow(permission)?.let { markUsed(it) }
         }
         return decision
@@ -155,7 +151,6 @@ class AppPermissions(
     /** The domains (each covering its subdomains) [appUuid] may reach; null if it may reach any host. */
     suspend fun grantedDomains(appUuid: Uuid): List<String>? {
         val config = watchConfig.value
-        if (!config.enablePlugins) return null
         val subject = subjectOf(appUuid) ?: return emptyList()
         val rows = dao.getByAppUuid(appUuid)
         fun granted(permission: String) =
@@ -188,7 +183,7 @@ class AppPermissions(
         val rows = dao.getByAppUuid(subject.appUuid)
         val pluginDefined = pluginDefinitionsFor(rows, permission)
         val decision = decidePermission(permission, subject, rows, config, pluginDefined)
-        if (config.enablePlugins) recordUse(subject.appUuid, rows, permission, decision)
+        recordUse(subject.appUuid, rows, permission, decision)
         return if (wait && decision == PermissionDecision.NeedsApproval) {
             awaitAnswer(subject, permission, pluginDefined)
         } else {
@@ -282,7 +277,6 @@ class AppPermissions(
         combine(dao.allFlow(), watchConfig.flow, installed.pluginPermissions()) { rows, config, defined ->
             Triple(rows, config.watchConfig, defined)
         }.flatMapLatest { (rows, config, defined) ->
-            if (!config.enablePlugins) return@flatMapLatest flowOf(emptyMap())
             val appRows = rows.groupBy { it.appUuid }
                 .filterValues { permissions -> permissions.any { it.permission in WATCH_ENFORCED } }
             installed.subjectsOf(appRows.keys).map { subjects ->
@@ -566,7 +560,6 @@ internal fun decidePermission(
     pluginDefined: Map<String, PluginDefinedPermission>,
 ): PermissionDecision {
     if (config.disables(permission)) return PermissionDecision.Denied
-    if (!config.enablePlugins) return PermissionDecision.Granted
     val rows = rows.filterNot { config.disables(it.permission) }
     val decision = decideAsking(permission, subject, rows, config, pluginDefined)
     return if (

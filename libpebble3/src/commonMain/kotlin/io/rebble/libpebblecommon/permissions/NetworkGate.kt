@@ -18,13 +18,6 @@ class NetworkGate(
     private val prompt: Boolean = true,
 ) : NetworkAccess {
     override suspend fun check(url: String, wait: Boolean): PluginNetworkVerdict {
-        if (!permissions.enforcing) {
-            return if (PluginNetworkPolicy.isRequestable(url)) {
-                PluginNetworkVerdict.Allowed
-            } else {
-                PluginNetworkVerdict.Denied("'$url' can't be requested")
-            }
-        }
         val scoped = PluginNetworkPolicy.permissionFor(url)
             ?: return PluginNetworkVerdict.Denied("'$url' can't be requested")
         val subject = permissions.subjectOf(appUuid)

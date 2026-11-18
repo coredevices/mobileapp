@@ -40,7 +40,6 @@ import coredevices.pebble.ui.IndexTabBadge
 import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
-import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -371,7 +370,7 @@ val experimentalModule = module {
     singleOf(::DelegatedIntegrationItems)
     single { IntegrationProviderRepository(get(), get(), get(), get()) }
     single { DefaultDestinationPrompter(get(), get()) }
-    single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
+    single { LegacyDestinations(get(), get()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)
     singleOf(::RealAgentUserConfirmation) bind AgentUserConfirmation::class

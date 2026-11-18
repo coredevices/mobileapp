@@ -1586,7 +1586,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             GlobalScope.launch { weatherFetcher.fetchWeather(this) }
                         },
                         itemText = { it?.let { plugin -> "Plugin: ${plugin.name}" } ?: "Pebble" },
-                        show = { coreConfig.fetchWeather && libPebbleConfig.watchConfig.enablePlugins && providers.isNotEmpty() },
+                        show = { coreConfig.fetchWeather && providers.isNotEmpty() },
                         selectorBelow = true,
                     )
                 },
@@ -2156,31 +2156,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { loggedIn != null },
                     isDebugSetting = true,
                 ),
-                basicSettingsToggleItem(
-                    title = "Plugins / permissions preview",
-                    description = "Enable Plugins (a new system for apps to share data and actions), and the new granular app permissions system. This will be enabled for everyone in a future release",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Plugins,
-                    checked = libPebbleConfig.watchConfig.enablePlugins,
-                    onCheckChanged = {
-                        // So turning them back on shows the permissions introduction again.
-                        if (!it) settings.setHasSeenPermissionsIntro(false)
-                        libPebble.updateConfig(
-                            libPebbleConfig.copy(
-                                watchConfig = libPebbleConfig.watchConfig.copy(
-                                    enablePlugins = it
-                                )
-                            )
-                        )
-                    },
-                ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Complications",
                     description = "Readings watchfaces should show in their complication slots",
                     topLevelType = TopLevelType.Phone,
                     section = Section.Plugins,
                     action = { nav.navigateTo(PebbleNavBarRoutes.ComplicationsRoute) },
-                    show = { libPebbleConfig.watchConfig.enablePlugins },
                 ) },
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Preferred sources",
@@ -2188,7 +2169,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Plugins,
                     action = { nav.navigateTo(PebbleNavBarRoutes.PreferredSourcesRoute) },
-                    show = { libPebbleConfig.watchConfig.enablePlugins && hasSharedSources(libPebble.getAllPlugins()) },
+                    show = { hasSharedSources(libPebble.getAllPlugins()) },
                 ) },
                 basicSettingsDropdownItem(
                     id = SettingsIds.PermissionPolicy,
@@ -2207,7 +2188,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                         )
                     },
                     itemText = { it.displayName() },
-                    show = { libPebbleConfig.watchConfig.enablePlugins },
                     selectorBelow = true,
                     details = { PermissionPolicyDetails() },
                 ),
@@ -2242,7 +2222,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             )
                         )
                     },
-                    show = { libPebbleConfig.watchConfig.enablePlugins },
                 ),
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Permissions in use",
@@ -2251,7 +2230,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     section = Section.Apps,
                     group = SettingsGroup.Permissions,
                     action = { nav.navigateTo(PebbleNavBarRoutes.PermissionUsageRoute) },
-                    show = { libPebbleConfig.watchConfig.enablePlugins },
                 ) },
                 basicSettingsActionItem(
                     title = "Sign Out - Pebble Account",

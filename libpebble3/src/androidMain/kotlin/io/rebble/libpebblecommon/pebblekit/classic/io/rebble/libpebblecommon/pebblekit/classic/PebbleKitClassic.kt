@@ -54,13 +54,11 @@ class PebbleKitClassic(
     private var subject: PermissionSubject? = null
 
     private suspend fun requestPebbleKit(): PermissionDecision {
-        if (!permissions.enforcing) return PermissionDecision.Granted
         val subject = subject ?: return PermissionDecision.Denied
         return permissions.request(subject, PluginPermissions.LEGACY_PEBBLEKIT)
     }
 
     private suspend fun checkPebbleKit(): PermissionDecision {
-        if (!permissions.enforcing) return PermissionDecision.Granted
         val subject = subject ?: return PermissionDecision.Denied
         return permissions.check(subject, PluginPermissions.LEGACY_PEBBLEKIT)
     }

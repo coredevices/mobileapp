@@ -137,7 +137,7 @@ class PluginFileAccessTest {
         assertEquals(PermissionDecision.Granted, access.checkFilePermission(APP, FileAccessMode.ReadWrite))
         assertEquals(PermissionDecision.Granted, access.checkFilePermission(APP, FileAccessMode.Read))
 
-        val neverAsk = PluginFileAccess(permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)), dao, fileSystem)
+        val neverAsk = PluginFileAccess(permissions(dao, config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk)), dao, fileSystem)
         permissions.setDecisions(APP, mapOf(PluginPermissions.WRITE_FILES to false))
         assertEquals(PermissionDecision.Denied, neverAsk.checkFilePermission(APP, FileAccessMode.ReadWrite))
         assertEquals(PermissionDecision.Denied, neverAsk.checkFilePermission(APP, FileAccessMode.Read))

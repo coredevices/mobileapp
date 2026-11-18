@@ -32,7 +32,7 @@ interface IntegrationProvider {
      */
     val storesItemsLocally: Boolean get() = false
 
-    /** With plugins on, store plugins stand in for the native options. */
+    /** Store plugins stand in for the native options. */
     val isHiddenByPlugins: Boolean get() = !storesItemsLocally && !isExternalPlugin
 
     suspend fun isAuthorized(): Boolean = when {
@@ -67,5 +67,4 @@ fun IntegrationProvider.titleFor(support: IntegrationSupport): String = when (su
 /** Where an action's result was sent, for display; null when the item is stored locally. */
 val IntegrationProvider.externalDestination: String? get() = title.takeUnless { storesItemsLocally }
 
-fun List<IntegrationProvider>.visibleDestinations(pluginsEnabled: Boolean): List<IntegrationProvider> =
-    if (pluginsEnabled) filterNot { it.isHiddenByPlugins } else this
+fun List<IntegrationProvider>.visibleDestinations(): List<IntegrationProvider> = filterNot { it.isHiddenByPlugins }

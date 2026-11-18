@@ -261,7 +261,6 @@ internal fun IndexActionsSection(
     noteDestinations: List<DestinationItem>,
     reminderDestinations: List<DestinationItem>,
     lockerPlugins: Set<Uuid>,
-    pluginsEnabled: Boolean,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
     onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
     onSetHttpServerEnabled: (server: HttpMcpServerEntity, enabled: Boolean) -> Unit,
@@ -390,7 +389,7 @@ internal fun IndexActionsSection(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         // The Actions store is future expansion and ships disabled.
         // GetMoreActionsRow(onClick = onGetMoreActions)
-        if (pluginsEnabled && onGetMorePlugins != null) {
+        if (onGetMorePlugins != null) {
             SectionActionRow(
                 icon = Icons.Default.Power,
                 title = "Add plugin integration",
@@ -398,7 +397,7 @@ internal fun IndexActionsSection(
                 enabled = true,
                 onClick = onGetMorePlugins,
             )
-        } else if (pluginsEnabled) {
+        } else {
             SectionActionRow(
                 icon = Icons.Default.Power,
                 title = "Add plugin integration",
@@ -438,7 +437,6 @@ internal fun IndexActionsSection(
             title = "Where notes save",
             items = noteDestinations,
             hasDialog = { noteConfigureDialog(it) != null },
-            pluginsEnabled = pluginsEnabled,
             onGetMore = onGetMorePlugins,
             selected = noteProvider,
             onSelect = onSelectNoteProvider,
@@ -465,7 +463,6 @@ internal fun IndexActionsSection(
             icon = Icons.Default.Checklist,
             title = "Where reminders save",
             items = reminderDestinations,
-            pluginsEnabled = pluginsEnabled,
             onGetMore = onGetMorePlugins,
             selected = reminderProvider,
             onSelect = onSelectReminderProvider,
@@ -1080,7 +1077,6 @@ private fun DestinationSheet(
     icon: ImageVector,
     title: String,
     items: List<DestinationItem>,
-    pluginsEnabled: Boolean,
     onGetMore: (() -> Unit)?,
     selected: IntegrationProvider,
     onSelect: (IntegrationProvider) -> Unit,
@@ -1146,7 +1142,7 @@ private fun DestinationSheet(
                     },
                 )
             }
-            if (pluginsEnabled && onGetMore != null) {
+            if (onGetMore != null) {
                 TextButton(
                     onClick = {
                         onDismiss()
@@ -1156,7 +1152,7 @@ private fun DestinationSheet(
                 ) {
                     Text("Get more")
                 }
-            } else if (pluginsEnabled) {
+            } else {
                 AddMoreLaterHint(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)

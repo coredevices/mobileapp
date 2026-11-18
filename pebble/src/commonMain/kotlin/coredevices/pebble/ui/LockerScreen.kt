@@ -90,7 +90,6 @@ import coreapp.pebble.generated.resources.apps
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.database.PLUGIN_DATA_APPS_SLUG
 import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.KnownIndexDevice
@@ -333,11 +332,10 @@ fun LockerScreen(
                 sideload(it)
             }
         }
-        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
         val rings by koinInject<LibIndex>().rings.collectAsState()
         val watches by libPebble.watches.collectAsState()
         val defaultType = if (
-            pluginsEnabled && rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
+            rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
         ) AppType.Plugin else AppType.Watchface
         LaunchedEffect(defaultType) {
             if (viewModel.defaultType != defaultType) {
@@ -376,14 +374,13 @@ fun LockerScreen(
             return
         }
         val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type.value]
-        val storeHome = remember(storeHomeForType, collections, viewModel.type.value, pluginsEnabled) {
+        val storeHome = remember(storeHomeForType, collections, viewModel.type.value) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
                 val sourceRules = collectionRules[source.id].orEmpty().filter { it.type == viewModel.type.value }
                 val homeFiltered = home.let {
                     it.copy(collections = it.collections.filter { col ->
-                        (pluginsEnabled || col.slug != PLUGIN_DATA_APPS_SLUG) &&
-                            sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
+                        sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
                     })
                 }
                 val categories = homeFiltered.categories.filter{

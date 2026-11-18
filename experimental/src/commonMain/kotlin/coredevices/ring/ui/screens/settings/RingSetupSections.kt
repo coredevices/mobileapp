@@ -92,7 +92,6 @@ fun IndexAgentActionsSection(
     val noteDestinations by viewModel.noteDestinations.collectAsState()
     val reminderDestinations by viewModel.reminderDestinations.collectAsState()
     val lockerPlugins by viewModel.lockerPlugins.collectAsState()
-    val pluginsEnabled by viewModel.pluginsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
@@ -113,7 +112,6 @@ fun IndexAgentActionsSection(
         noteDestinations = noteDestinations,
         reminderDestinations = reminderDestinations,
         lockerPlugins = lockerPlugins,
-        pluginsEnabled = pluginsEnabled,
         onSetActionEnabled = viewModel::setActionEnabled,
         onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,
         onSetHttpServerEnabled = viewModel::setHttpServerEnabled,

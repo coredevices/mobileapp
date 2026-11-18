@@ -549,8 +549,6 @@ fun PendingPermissionRequests(onReview: (Uuid) -> Unit) {
 @Composable
 fun AppPermissionsSection(appUuid: Uuid, collapsible: Boolean = true) {
     val libPebble = rememberLibPebble()
-    val config by libPebble.config.collectAsState()
-    if (!config.watchConfig.enablePlugins) return
     val defined = rememberPluginPermissions()
     // Null while loading.
     val loaded by remember(appUuid) {

@@ -85,7 +85,7 @@ private fun decide(
     permission: String,
     subject: PermissionSubject = subject(),
     rows: List<LockerAppPermission> = emptyList(),
-    config: WatchConfig = WatchConfig(enablePlugins = true),
+    config: WatchConfig = WatchConfig(),
     pluginDefined: Map<String, PermissionKind> = emptyMap(),
 ) = decidePermission(
     permission,
@@ -101,13 +101,13 @@ class DecidePermissionTest {
         assertEquals(Granted, decide(WATCH_MICROPHONE))
         assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET))))
         assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, subject(hasCompanionApp = true)))
-        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+        assertEquals(NeedsApproval, decide(WATCH_MICROPHONE, config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)))
     }
 
     @Test
     fun dangerousPermissionsAlwaysNeedApproval() {
         for (policy in PermissionPolicy.entries) {
-            val config = WatchConfig(enablePlugins = true, permissionPolicy = policy)
+            val config = WatchConfig(permissionPolicy = policy)
             assertEquals(NeedsApproval, decide(NOTIFICATIONS, config = config))
             assertEquals(NeedsApproval, decide(notificationsKey("com.example"), config = config))
             assertEquals(NeedsApproval, decide("Messages", config = config, pluginDefined = mapOf("Messages" to PermissionKind.Dangerous)))
@@ -124,7 +124,7 @@ class DecidePermissionTest {
     fun microphoneRespectsExplicitAnswersEvenUnderNeverAsk() {
         assertEquals(Granted, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET), row(WATCH_MICROPHONE, true))))
         assertEquals(Denied, decide(WATCH_MICROPHONE, rows = listOf(row(WATCH_MICROPHONE, false))))
-        val config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)
+        val config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk)
         assertEquals(Granted, decide(WATCH_MICROPHONE, rows = listOf(row(INTERNET)), config = config))
         assertEquals(Denied, decide(WATCH_MICROPHONE, rows = listOf(row(WATCH_MICROPHONE, false)), config = config))
     }
@@ -144,7 +144,7 @@ class DecidePermissionTest {
     fun aFileIsOnlyGrantedByBeingPicked() {
         val key = readFilesKey("content://docs/tree/notes")
         assertEquals(Denied, decide(key))
-        assertEquals(Denied, decide(key, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)))
+        assertEquals(Denied, decide(key, config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk)))
         assertEquals(Denied, decide(key, rows = listOf(row(READ_FILES, true))))
         assertEquals(Granted, decide(key, rows = listOf(row(key, true))))
         assertEquals(Denied, decide(writeFilesKey("content://docs/tree/notes"), rows = listOf(row(key, true))))
@@ -167,7 +167,7 @@ class DecidePermissionTest {
         val scope = "content://docs/tree/notes"
         val declaredBoth = listOf(row(READ_FILES), row(WRITE_FILES, false))
         assertEquals(Granted, decide(READ_FILES, rows = declaredBoth))
-        val alwaysAsk = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        val alwaysAsk = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)
         assertEquals(NeedsApproval, decide(READ_FILES, rows = declaredBoth, config = alwaysAsk))
         // So its picks stay, and a read-write pick drops to read-only rather than off.
         assertEquals(Granted, decide(readFilesKey(scope), rows = declaredBoth + row(readFilesKey(scope), true)))
@@ -200,12 +200,12 @@ class DecidePermissionTest {
 
     @Test
     fun alwaysAskPolicyAsksEvenWithoutExfiltration() {
-        assertEquals(NeedsApproval, decide(CALENDAR, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+        assertEquals(NeedsApproval, decide(CALENDAR, config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)))
     }
 
     @Test
     fun neverAskPolicyGrantsWhatWouldBeAskedButKeepsDenials() {
-        val config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk)
+        val config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk)
         assertEquals(Granted, decide(CALENDAR, subject(hasCompanionApp = true), config = config))
         assertEquals(Granted, decide(INTERNET, rows = listOf(row(INTERNET)), config = config))
         assertEquals(Denied, decide(CALENDAR, rows = listOf(row(CALENDAR, false)), config = config))
@@ -245,7 +245,7 @@ class DecidePermissionTest {
     fun globalInternetIsImplicitForLegacyAppsUnlessTheUserWantsToBeAsked() {
         val legacy = subject(legacy = true)
         assertEquals(Granted, decide(GLOBAL_INTERNET, legacy))
-        assertEquals(NeedsApproval, decide(GLOBAL_INTERNET, legacy, config = WatchConfig(enablePlugins = true, askLegacyAppsForPermissions = true)))
+        assertEquals(NeedsApproval, decide(GLOBAL_INTERNET, legacy, config = WatchConfig(askLegacyAppsForPermissions = true)))
     }
 
     @Test
@@ -253,7 +253,7 @@ class DecidePermissionTest {
         val legacy = subject(legacy = true)
         val rows = listOf(row(GLOBAL_INTERNET), row(LOCATION))
         assertEquals(Granted, decide(LOCATION, legacy, rows))
-        assertEquals(NeedsApproval, decide(LOCATION, legacy, rows, WatchConfig(enablePlugins = true, askLegacyAppsForPermissions = true)))
+        assertEquals(NeedsApproval, decide(LOCATION, legacy, rows, WatchConfig(askLegacyAppsForPermissions = true)))
     }
 
     @Test
@@ -264,14 +264,6 @@ class DecidePermissionTest {
     @Test
     fun globalInternetIsNeverForAppsThatDeclarePermissions() {
         assertEquals(Denied, decide(GLOBAL_INTERNET))
-    }
-
-    @Test
-    fun withPluginsDisabledEverythingIsAllowedEvenWhatTheUserDenied() {
-        val config = WatchConfig(enablePlugins = false)
-        assertEquals(Granted, decide(CALENDAR, subject(legacy = true), listOf(row(GLOBAL_INTERNET)), config))
-        assertEquals(Granted, decide(INTERNET, config = config))
-        assertEquals(Granted, decide(LOCATION, rows = listOf(row(LOCATION, false)), config = config))
     }
 
     @Test
@@ -310,7 +302,7 @@ class PebbleKitTest {
 
     @Test
     fun legacyPebbleKitSwitchedOffIsDeniedHiddenAndNoWayOut() {
-        val off = WatchConfig(enablePlugins = true, enableLegacyPebbleKit = false)
+        val off = WatchConfig(enableLegacyPebbleKit = false)
         val rows = listOf(row(LEGACY_PEBBLEKIT, true))
         assertEquals(Denied, decide(LEGACY_PEBBLEKIT, rows = rows, config = off))
         assertEquals(Granted, decide(CALENDAR, rows = rows, config = off))
@@ -329,7 +321,7 @@ class LegacyTimelineTest {
     @Test
     fun everyLegacyAppKeepsTheTimelineButADeclaringAppIsAsked() {
         assertEquals(Granted, decide(TIMELINE, subject(legacy = true)))
-        assertEquals(NeedsApproval, decide(TIMELINE, subject(legacy = true), config = WatchConfig(enablePlugins = true, askLegacyAppsForPermissions = true)))
+        assertEquals(NeedsApproval, decide(TIMELINE, subject(legacy = true), config = WatchConfig(askLegacyAppsForPermissions = true)))
         assertEquals(NeedsApproval, decide(TIMELINE))
     }
 }
@@ -352,7 +344,7 @@ class PluginDefinedPermissionDecisionTest {
         assertEquals(Denied, decide(homeControl, rows = listOf(row(homeControl, false)), pluginDefined = defined))
         assertEquals(
             Granted,
-            decide(homeControl, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk), pluginDefined = defined),
+            decide(homeControl, config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk), pluginDefined = defined),
         )
     }
 }
@@ -383,7 +375,7 @@ class PermissionKindTest {
 }
 
 class PermissionStatusesTest {
-    private fun statuses(subject: PermissionSubject?, vararg rows: LockerAppPermission, config: WatchConfig = WatchConfig(enablePlugins = true)) =
+    private fun statuses(subject: PermissionSubject?, vararg rows: LockerAppPermission, config: WatchConfig = WatchConfig()) =
         permissionStatuses(subject, rows.toList(), config, emptyMap()).associate { it.permission to it.status }
 
     @Test
@@ -405,7 +397,7 @@ class PermissionStatusesTest {
         assertEquals(mapOf(CALENDAR to PermissionStatus.AllowedAutomatically), statuses(subject(), row(CALENDAR)))
         assertEquals(
             mapOf(CALENDAR to PermissionStatus.Waiting),
-            statuses(subject(), row(CALENDAR), config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)),
+            statuses(subject(), row(CALENDAR), config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)),
         )
     }
 
@@ -436,7 +428,7 @@ class PermissionStatusesTest {
         )
         assertEquals(
             mapOf(READ_FILES to PermissionStatus.Waiting, WRITE_FILES to PermissionStatus.Denied),
-            statuses(subject(), row(READ_FILES), row(WRITE_FILES, false), config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)),
+            statuses(subject(), row(READ_FILES), row(WRITE_FILES, false), config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)),
         )
         assertEquals(
             mapOf(READ_FILES to PermissionStatus.AllowedAutomatically, WRITE_FILES to PermissionStatus.Granted),
@@ -536,7 +528,7 @@ internal object NoWatches : Watches {
 
 internal fun permissions(
     dao: LockerAppPermissionDao,
-    config: WatchConfig = WatchConfig(enablePlugins = true),
+    config: WatchConfig = WatchConfig(),
     clock: Clock = FixedClock(1_000),
     running: RunningApps = RunningApps(NoWatches),
     installed: InstalledApps = installedAs(subject()),
@@ -582,15 +574,6 @@ class AppPermissionsTest {
         clock.ms = 5_000
         permissions.setDecisions(APP, mapOf(CALENDAR to false))
         assertEquals(1_000, dao.row(CALENDAR)!!.lastUsedAtMs)
-    }
-
-    @Test
-    fun withPluginsOffNothingIsRecorded() = runTest {
-        val off = permissions(dao, config = WatchConfig(enablePlugins = false), clock = clock)
-        dao.insertOrReplace(row(CALENDAR))
-        off.request(subject(), CALENDAR)
-        off.check(subject(), CALENDAR)
-        assertEquals(null, dao.row(CALENDAR)!!.lastUsedAtMs)
     }
 
     @Test
@@ -641,11 +624,11 @@ class WaitingRequestsTest {
 
     @Test
     fun waitingIsUndecidedAndNeedingApprovalNow() = runTest {
-        var config = WatchConfig(enablePlugins = true)
+        var config = WatchConfig()
         fun permissions() = permissions(dao, config = config, running = running)
         permissions().recordRequested(APP, listOf(CALENDAR))
         assertEquals(emptyList(), permissions().pendingPermissionRequests().first())
-        config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)
         assertEquals(listOf(CALENDAR), permissions().pendingPermissionRequests().first().map { it.permission })
         permissions().setDecisions(APP, mapOf(CALENDAR to false))
         assertEquals(emptyList(), permissions().pendingPermissionRequests().first())
@@ -653,7 +636,7 @@ class WaitingRequestsTest {
 
     @Test
     fun aSeenRequestKeepsWaitingAndStaysUndecided() = runTest {
-        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk))
+        val permissions = permissions(dao, config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk))
         permissions.recordRequested(APP, listOf(CALENDAR))
         permissions.markPermissionRequestsSeen(APP, listOf(CALENDAR))
         assertEquals(listOf(CALENDAR), permissions.pendingPermissionRequests().first().map { it.permission })
@@ -682,7 +665,6 @@ class WaitingRequestsTest {
         assertEquals(listOf("a.example.com"), permissions.grantedDomains(APP))
         permissions.setDecisions(APP, mapOf(INTERNET to true))
         assertNull(permissions.grantedDomains(APP))
-        assertNull(permissions(dao, config = WatchConfig(enablePlugins = false)).grantedDomains(APP))
         assertNull(permissions(FakePermissionDao(), installed = installedAs(subject(legacy = true))).grantedDomains(APP))
     }
 
@@ -730,7 +712,7 @@ class WaitingRequestsTest {
     fun anOptionalPermissionIsOnlyAskedAboutOnceTheAppUsesIt() = runTest {
         val permissions = permissions(
             dao,
-            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk),
             running = running,
         )
         permissions.recordRequested(
@@ -750,7 +732,7 @@ class WaitingRequestsTest {
         // A fresh instance: the first one's waiting list is shared, with its last value replayed.
         val after = permissions(
             dao,
-            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk),
             running = running,
         )
         running.whileRunning(APP) {
@@ -762,7 +744,7 @@ class WaitingRequestsTest {
     fun withoutSayingWhichAreRequiredEveryDeclaredPermissionIsAskedAbout() = runTest {
         val permissions = permissions(
             dao,
-            config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk),
+            config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk),
             running = running,
         )
         permissions.recordRequested(
@@ -880,16 +862,6 @@ class NetworkGateTest {
     }
 
     @Test
-    fun withPluginsOffAnyRequestableUrlIsAllowedWithoutLookingAtTheHost() = runTest {
-        val off = permissions(dao, config = WatchConfig(enablePlugins = false))
-        val gate = NetworkGate(off, "App", APP)
-        assertIs<PluginNetworkVerdict.Allowed>(gate.check("http://0x7f000001/", wait = false))
-        assertIs<PluginNetworkVerdict.Allowed>(gate.check("wss://example.com/socket", wait = false))
-        assertIs<PluginNetworkVerdict.Denied>(gate.check("file:///data/libpebble3.db", wait = false))
-        assertEquals(emptyMap(), dao.rows.value)
-    }
-
-    @Test
     fun evenALegacyAppCanOnlyRequestHttpAndWebSocketUrls() = runTest {
         assertIs<PluginNetworkVerdict.Denied>(gate(legacy = true).check("file:///data/libpebble3.db", wait = false))
         assertIs<PluginNetworkVerdict.Denied>(gate(legacy = true).check("relative/path", wait = false))
@@ -929,7 +901,7 @@ class NetworkGateTest {
 
 class InstallReviewTest {
     private val dao = FakePermissionDao()
-    private var config = WatchConfig(enablePlugins = true)
+    private var config = WatchConfig()
     private val permissions get() = permissions(dao, config = config)
 
     private fun internet(vararg domains: String) =
@@ -983,7 +955,7 @@ class InstallReviewTest {
     fun readAndWriteFilesAreBothReviewed() = runTest {
         val both = declares(PluginPermission(READ_FILES), PluginPermission(WRITE_FILES))
         assertEquals(listOf(READ_FILES, WRITE_FILES), both.all)
-        config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)
         assertEquals(setOf(READ_FILES, WRITE_FILES), reviewed(both))
     }
 
@@ -1079,7 +1051,7 @@ class InstallReviewTest {
     fun aLegacyAppIsOnlyReviewedWhenTheUserAsksForThat() = runTest {
         val legacy = RequestedPermissions(declared = null, hasPkjs = true)
         assertEquals(emptySet(), reviewed(legacy))
-        config = WatchConfig(enablePlugins = true, askLegacyAppsForPermissions = true)
+        config = WatchConfig(askLegacyAppsForPermissions = true)
         assertEquals(setOf(GLOBAL_INTERNET, LOCATION, TIMELINE, SHOW_NOTIFICATIONS), reviewed(legacy))
     }
 }
@@ -1153,7 +1125,7 @@ class LocalWatchPermissionsTest {
 
     @Test
     fun localAndStreamingCaptureFollowTheSamePermissionPolicy() = runTest {
-        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk))
+        val permissions = permissions(dao, config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk))
         assertEquals(NeedsApproval, permissions.request(APP, WATCH_MICROPHONE))
         assertEquals(emptyMap(), permissions.localWatchPermissions().first())
         permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
@@ -1165,7 +1137,7 @@ class LocalWatchPermissionsTest {
 
     @Test
     fun neverAskGrantsLocalAndStreamingCaptureWithoutOverridingADenial() = runTest {
-        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.NeverAsk))
+        val permissions = permissions(dao, config = WatchConfig(permissionPolicy = PermissionPolicy.NeverAsk))
         permissions.recordRequested(APP, listOf(WATCH_MICROPHONE, INTERNET))
         assertEquals(Granted, permissions.request(APP, WATCH_MICROPHONE))
         assertEquals(MIC, permissions.localWatchPermissions().first())
@@ -1177,7 +1149,7 @@ class LocalWatchPermissionsTest {
     @Test
     fun localGrantsFollowPolicyChanges() = runTest {
         val config = MutableStateFlow(LibPebbleConfig(
-            watchConfig = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)))
+            watchConfig = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)))
         val permissions = AppPermissions(dao, installedAs(subject()),
             WatchConfigFlow(config),
             FixedClock(1_000), RunningApps(NoWatches), testScope)
@@ -1200,14 +1172,8 @@ class LocalWatchPermissionsTest {
     }
 
     @Test
-    fun disablingEnforcementSyncsNoGrantsToTheWatchAndRemovedAppsHaveNoGrant() = runTest {
+    fun removedAppsHaveNoWatchGrant() = runTest {
         permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to true))
-        val disabled = permissions(dao, config = WatchConfig(enablePlugins = false))
-        assertEquals(emptyMap(), disabled.localWatchPermissions().first())
-        assertEquals(Granted, disabled.request(APP, WATCH_MICROPHONE))
-        permissions.setPermissionDecisions(APP, mapOf(WATCH_MICROPHONE to false))
-        assertEquals(emptyMap(), disabled.localWatchPermissions().first())
-        assertEquals(Granted, disabled.request(APP, WATCH_MICROPHONE))
         val removed = permissions(dao, installed = installedAs(null))
         assertEquals(emptyMap(), removed.localWatchPermissions().first())
     }
@@ -1244,7 +1210,7 @@ class LocalWatchPermissionsTest {
 
     @Test
     fun healthIsEnforcedOnlyForAppsThatAskedForIt() = runTest {
-        val permissions = permissions(dao, config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk))
+        val permissions = permissions(dao, config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk))
         permissions.recordRequested(APP, listOf(LOCATION))
         assertEquals(emptyMap(), permissions.localWatchPermissions().first())
         permissions.recordRequested(APP, listOf(HEALTH))
@@ -1258,7 +1224,7 @@ class LocalWatchPermissionsTest {
     @Test
     fun legacyAppsKeepHealthUnlessAskedFirst() = runTest {
         val legacy = RequestedPermissions(declared = null, hasPkjs = false, hasHealth = true)
-        val config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        val config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)
         val allowed = permissions(dao, config = config, installed = installedAs(subject(legacy = true)))
         allowed.recordRequested(APP, legacy)
         assertEquals(mapOf(APP to GRANTED), allowed.localWatchPermissions().first())
@@ -1269,7 +1235,7 @@ class LocalWatchPermissionsTest {
 
     @Test
     fun appsFromBeforeTheHealthSdkAreTreatedAsLegacyForHealth() = runTest {
-        val config = WatchConfig(enablePlugins = true, permissionPolicy = PermissionPolicy.AlwaysAsk)
+        val config = WatchConfig(permissionPolicy = PermissionPolicy.AlwaysAsk)
         val oldSdk = installedAs(subject(legacyForHealth = true))
         val allowed = permissions(dao, config = config, installed = oldSdk)
         allowed.recordRequested(APP, RequestedPermissions(declared = listOf(PluginPermission(HEALTH)), hasPkjs = false))
@@ -1415,10 +1381,10 @@ class UsageKeyTest {
     }
 
     @Test
-    fun countsEvenWithPermissionsOff() = runTest {
-        val off = permissions(dao, config = WatchConfig(enablePlugins = false))
-        assertEquals(UsageKey(internetKey("api.example.com"), declared = false), off.usageKeys(APP, listOf("https://api.example.com/"))["https://api.example.com/"])
-        assertNull(off.usageKeys(APP, listOf("file:///data/libpebble3.db"))["file:///data/libpebble3.db"])
+    fun countsAnUndeclaredDomainButNotAnUnrequestableUrl() = runTest {
+        val permissions = permissions(dao)
+        assertEquals(UsageKey(internetKey("api.example.com"), declared = false), permissions.usageKeys(APP, listOf("https://api.example.com/"))["https://api.example.com/"])
+        assertNull(permissions.usageKeys(APP, listOf("file:///data/libpebble3.db"))["file:///data/libpebble3.db"])
     }
 }
 
