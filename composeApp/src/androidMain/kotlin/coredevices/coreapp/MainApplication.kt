@@ -227,14 +227,17 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private fun setupExceptionHandler() {
         val existingHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            fileLogWriter.logBlockingAndFlush(
-                Severity.Error,
-                "Unhandled exception in thread ${thread.name}: ${throwable.message}",
-                "MainApplication",
-                throwable
-            )
-            // Allow Firebase to also handle the exception
-            existingHandler?.uncaughtException(thread, throwable)
+            try {
+                fileLogWriter.logBlockingAndFlush(
+                    Severity.Error,
+                    "Unhandled exception in thread ${thread.name}: ${throwable.message}",
+                    "MainApplication",
+                    throwable
+                )
+            } finally {
+                // Must always run: it's what kills the process
+                existingHandler?.uncaughtException(thread, throwable)
+            }
         }
     }
 
