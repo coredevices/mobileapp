@@ -15,6 +15,7 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.NotificationConfigFlow
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -75,6 +76,11 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         // running because it has a notification listener...). Don't do anything here that shouldn't
         // be done twice.
         logger.d { "onListenerConnected() ($this)" }
+        // e.g. process started in backup restricted mode, where MainApplication.onCreate doesn't run
+        if (!LibPebble3.isCreated) {
+            logger.w { "onListenerConnected: LibPebble not created; ignoring" }
+            return
+        }
         notificationHandler.onServiceBound()
         connection.setService(this)
 
@@ -90,6 +96,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
 
     override fun onListenerDisconnected() {
         logger.d { "onListenerDisconnected() ($this)" }
+        if (!LibPebble3.isCreated) return
         connection.setService(null)
         notificationListenerScope.cancel()
         connection.onListenerDisconnected()
@@ -101,6 +108,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         channel: NotificationChannel,
         modificationType: Int,
     ) {
+        if (!LibPebble3.isCreated) return
         notificationHandler.onChannelChanged(pkg)
     }
 
@@ -110,6 +118,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         group: NotificationChannelGroup,
         modificationType: Int,
     ) {
+        if (!LibPebble3.isCreated) return
         notificationHandler.onChannelChanged(pkg)
     }
 
@@ -179,6 +188,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!LibPebble3.isCreated) return
         // Before any filtering: the shade holds everything, not just what we forward to the watch.
         connection.onShadeChanged()
 
@@ -200,6 +210,7 @@ class LibPebbleNotificationListener : NotificationListenerService(), LibPebbleKo
         rankingMap: RankingMap,
         reason: Int
     ) {
+        if (!LibPebble3.isCreated) return
         connection.onShadeChanged()
 
         // Dialers re-post the incoming call notification under the same key without CATEGORY_CALL once answered.

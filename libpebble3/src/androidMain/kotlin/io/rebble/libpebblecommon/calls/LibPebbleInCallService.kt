@@ -12,6 +12,7 @@ import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import org.koin.core.component.inject
 import kotlin.random.Random
@@ -51,12 +52,13 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     override fun onCreate() {
         super.onCreate()
         logger.d { "onCreate()" }
+        if (!LibPebble3.isCreated) return
         libPebble.currentCall.value = null
     }
 
     override fun onDestroy() {
         logger.d { "onDestroy()" }
-        libPebble.currentCall.value = null
+        if (LibPebble3.isCreated) libPebble.currentCall.value = null
         super.onDestroy()
     }
 
@@ -77,6 +79,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onCallAdded(call: Call?) {
         call ?: return
+        if (!LibPebble3.isCreated) return
         if (calls.size > 1) {
             logger.w { "Multiple calls detected" }
         }
@@ -92,6 +95,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onCallRemoved(call: Call?) {
         call ?: return
+        if (!LibPebble3.isCreated) return
         libPebble.currentCall.value = null
     }
 

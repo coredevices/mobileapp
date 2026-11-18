@@ -674,6 +674,8 @@ class LibPebble3(
     companion object {
         private lateinit var koin: Koin
 
+        internal val isCreated: Boolean get() = ::koin.isInitialized
+
         fun create(
             /**
              * Default config, before any changes are made.
