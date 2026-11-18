@@ -69,6 +69,12 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private val coreAnalytics: CoreAnalytics by inject()
     private val settings: Settings by inject()
 
+    companion object {
+        // False if the process started without onCreate, e.g. backup restricted mode
+        var koinStarted = false
+            private set
+    }
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
 
@@ -89,6 +95,7 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                 watchModule,
             )
         }
+        koinStarted = true
         initLogging()
         logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (AppContext(this).isDebugBuild()) "debug" else "release"}" }
         dumpPreviousExitInfo()
