@@ -49,6 +49,7 @@ actual class M4aEncoder {
     @OptIn(ExperimentalForeignApi::class)
     actual suspend fun encode(samples: ShortArray, sampleRate: Int): ByteArray =
             withContext(Dispatchers.IO) {
+                require(samples.isNotEmpty()) { "No samples to encode" }
                 val tempDir = NSTemporaryDirectory()
                 val tempFilePath = "$tempDir/temporary_audio_${NSUUID().UUIDString}.m4a"
 

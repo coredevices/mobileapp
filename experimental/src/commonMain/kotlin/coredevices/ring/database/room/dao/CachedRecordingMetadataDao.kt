@@ -17,6 +17,9 @@ interface CachedRecordingMetadataDao {
     @Query("SELECT * FROM CachedRecordingMetadata WHERE id = :id")
     suspend fun get(id: String): CachedRecordingMetadata?
 
+    @Query("SELECT id FROM CachedRecordingMetadata")
+    suspend fun getAllIds(): List<String>
+
     @Query("DELETE FROM CachedRecordingMetadata")
     suspend fun deleteAll()
 }

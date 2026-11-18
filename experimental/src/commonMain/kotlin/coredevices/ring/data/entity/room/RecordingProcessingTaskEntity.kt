@@ -28,6 +28,8 @@ import kotlin.time.Instant
     indices = [
         Index("lastAttempt"),
         Index("status"),
+        Index("transferId"),
+        Index("recordingId"),
     ]
 )
 data class RecordingProcessingTaskEntity(

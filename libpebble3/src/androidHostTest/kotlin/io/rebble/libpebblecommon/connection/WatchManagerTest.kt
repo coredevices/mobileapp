@@ -50,12 +50,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class WatchManagerTest {
     // Watches present in the DB at WatchManager construction. Set before create().
     private var seededKnownWatches: List<KnownWatchItem> = emptyList()
+    private val removedKnownWatches = mutableListOf<String>()
+    private var platformIdentifierFailuresRemaining = 0
 
     private val knownWatchDao = object : KnownWatchDao {
         override suspend fun insertOrUpdate(watch: KnownWatchItem) {
@@ -66,6 +69,7 @@ class WatchManagerTest {
         }
 
         override suspend fun remove(transportIdentifier: String) {
+            removedKnownWatches += transportIdentifier
         }
 
         override suspend fun setNickname(identifier: String, nickname: String?) {
@@ -77,7 +81,11 @@ class WatchManagerTest {
             identifier: PebbleIdentifier,
             name: String,
             lastAttemptFailed: Boolean,
-        ): PlatformIdentifier {
+        ): PlatformIdentifier? {
+            if (platformIdentifierFailuresRemaining > 0) {
+                platformIdentifierFailuresRemaining--
+                return null
+            }
             return PlatformIdentifier.SocketPlatformIdentifier("addr")
         }
     }
@@ -186,8 +194,7 @@ class WatchManagerTest {
         override val state: StateFlow<BluetoothState> =
             MutableStateFlow(BluetoothState.Enabled).asStateFlow()
 
-        override val scanningAvailable: StateFlow<Boolean> =
-            MutableStateFlow(true).asStateFlow()
+        override fun scanningAvailable(): Boolean = true
     }
     private val scanning = object : Scanning {
         override val bluetoothEnabled: StateFlow<BluetoothState>
@@ -372,5 +379,21 @@ class WatchManagerTest {
         watchManager.init()
         watchManager.watches.first { totalConnections >= 1 && it.any { it is ConnectingPebbleDevice } }
         assertEquals(true, lastPreviouslyConnected)
+    }
+
+    @Test
+    fun watchNotFoundStopsAutoConnectingInsteadOfForgetting() = runTest(timeout = 5.seconds) {
+        seededKnownWatches = listOf(seededWatch(lastConnected = MillisecondInstant(Instant.fromEpochMilliseconds(1_000))))
+        platformIdentifierFailuresRemaining = PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS
+        val watchManager = create(backgroundScope)
+        watchManager.init()
+        val gaveUp = ConnectionFailureInfo(ConnectionFailureReason.PeripheralNotFound, PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS)
+        watchManager.watches.first { watches -> watches.any { it.connectionFailureInfo == gaveUp } }
+        delay(1.minutes)
+        assertEquals(0, totalConnections)
+        assertEquals(emptyList<String>(), removedKnownWatches)
+
+        watchManager.requestConnection(identifier)
+        watchManager.watches.first { totalConnections >= 1 && it.any { it is ConnectingPebbleDevice } }
     }
 }

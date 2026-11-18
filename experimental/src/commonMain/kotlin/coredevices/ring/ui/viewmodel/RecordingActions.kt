@@ -17,6 +17,7 @@ import coredevices.indexai.data.entity.MessageRole
 import coredevices.indexai.database.dao.RecordingToolMessage
 import coredevices.indexai.database.dao.answerTag
 import coredevices.mcp.data.SemanticResult
+import coredevices.mcp.data.isConfirmationRequest
 import coredevices.ring.data.entity.room.indexfeed.CachedItem
 import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap.Companion.LIST_NOTES_SELF_ID
@@ -46,7 +47,7 @@ data class RecordingAction(
     val intermediate: Boolean get() = assistive || result is SemanticResult.GenericSuccess
 
     /** Waiting on the user to allow or deny the call. */
-    val needsConfirmation: Boolean get() = result is SemanticResult.RequiresConfirmation
+    val needsConfirmation: Boolean get() = result?.isConfirmationRequest == true
 
     val errorMessage: String? get() =
         (result as? SemanticResult.GenericFailure)?.userErrorMessage?.takeIf { it.isNotBlank() }
@@ -71,14 +72,15 @@ fun recordingActions(
     val legacyItemsByCall = items.asSequence()
         .filter { !it.deleted && !it.sourceToolCallId.isNullOrBlank() }
         .associate { it.sourceToolCallId!! to it.firestoreId }
-    // A confirmation the user has answered is superseded by the call's real result.
-    val answeredCalls = messages.asSequence()
-        .filter { it.role == MessageRole.tool && it.semanticResult !is SemanticResult.RequiresConfirmation }
-        .mapNotNull { it.toolCallId }
+    // A confirmation is superseded by the next result for its call.
+    val lastResultIds = messages
+        .filter { it.role == MessageRole.tool }
+        .associate { it.toolCallId to it.id }
+        .values
         .toSet()
     return messages
         .filter { (it.role == MessageRole.tool && it.semanticResult != null) || (it.answerTag != null && !it.content.isNullOrBlank()) }
-        .filterNot { it.semanticResult is SemanticResult.RequiresConfirmation && it.toolCallId in answeredCalls }
+        .filterNot { it.semanticResult?.isConfirmationRequest == true && it.id !in lastResultIds }
         .groupBy({ it.recordingId }) { msg ->
             val result = msg.semanticResult
             if (result == null) {
@@ -116,7 +118,8 @@ internal fun SemanticResult.actionLabel(toolName: String?, lists: List<CachedLis
         summary?.takeIf { it.isNotBlank() } ?: humanizeToolName(toolName) ?: "Gathered info"
     is SemanticResult.GenericSuccess -> humanizeToolName(toolName) ?: "Action completed"
     is SemanticResult.GenericFailure -> humanizeToolName(toolName)?.let { "$it failed" } ?: "Action failed"
-    is SemanticResult.RequiresConfirmation -> "Needs confirmation"
+    is SemanticResult.RequiresConfirmation,
+    is SemanticResult.ValidationFailure -> "Needs confirmation"
     is SemanticResult.UserDenied -> "Denied by user"
 }
 
@@ -128,7 +131,7 @@ internal fun SemanticResult.actionGlyph(): ImageVector = when (this) {
     is SemanticResult.MessageSent -> Icons.Outlined.Mail
     is SemanticResult.SupportingData -> Icons.Outlined.Info
     is SemanticResult.GenericFailure -> Icons.Outlined.Error
-    is SemanticResult.RequiresConfirmation -> Icons.Outlined.Lock
+    is SemanticResult.RequiresConfirmation, is SemanticResult.ValidationFailure -> Icons.Outlined.Lock
     is SemanticResult.UserDenied -> Icons.Outlined.Block
     is SemanticResult.ActionLogged, is SemanticResult.GenericSuccess -> Icons.Filled.CheckCircle
 }
@@ -144,6 +147,7 @@ val SemanticResult.contentText: String? get() = when (this) {
     is SemanticResult.AlarmCreation,
     is SemanticResult.TimerCreation,
     is SemanticResult.RequiresConfirmation,
+    is SemanticResult.ValidationFailure,
     is SemanticResult.UserDenied,
     is SemanticResult.GenericSuccess,
     is SemanticResult.GenericFailure -> null

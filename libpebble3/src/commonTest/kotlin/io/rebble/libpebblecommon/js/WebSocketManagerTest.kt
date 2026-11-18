@@ -35,7 +35,7 @@ class WebSocketManagerTest {
         var dialled = false
         val client = HttpClient(MockEngine { dialled = true; respond("") }) { install(WebSockets) }
         val evals = mutableListOf<String>()
-        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), nothing)
+        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), nothing, { _, _, _, _, _ -> })
 
         assertEquals(1, manager.dispatch("createInstance", listOf("wss://stream.example.com/", "", """{"Authorization":"Bearer t"}""")))
         awaitSockets()
@@ -49,7 +49,7 @@ class WebSocketManagerTest {
         // The mock engine answers 200 to the upgrade, which is not a websocket.
         val client = HttpClient(MockEngine { respond("") }) { install(WebSockets) }
         val evals = mutableListOf<String>()
-        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch("createInstance", listOf("wss://stream.example.com/", ""))
         awaitSockets()
@@ -61,7 +61,7 @@ class WebSocketManagerTest {
     fun handshakeCarriesTheRequestedHeadersButNotUpgradeOnes() = runTest {
         var sent: Headers? = null
         val client = HttpClient(MockEngine { sent = it.headers; respond("") }) { install(WebSockets) }
-        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch(
             "createInstance",
@@ -87,7 +87,7 @@ class WebSocketManagerTest {
     fun malformedHeadersAreIgnored() = runTest {
         var sent: Headers? = null
         val client = HttpClient(MockEngine { sent = it.headers; respond("") }) { install(WebSockets) }
-        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, {}, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch("createInstance", listOf("wss://stream.example.com/", "", "not json"))
         awaitSockets()
@@ -99,7 +99,7 @@ class WebSocketManagerTest {
     fun closingWhileConnectingGivesUpOnTheConnect() = runTest {
         val client = HttpClient(MockEngine { awaitCancellation() }) { install(WebSockets) }
         val evals = mutableListOf<String>()
-        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch("createInstance", listOf("wss://stream.example.com/", ""))
         runCurrent()
@@ -114,7 +114,7 @@ class WebSocketManagerTest {
     fun tearingDownWithSeveralSocketsOpenClosesThemAll() = runTest(UnconfinedTestDispatcher()) {
         val client = HttpClient(MockEngine { awaitCancellation() }) { install(WebSockets) }
         val evals = mutableListOf<String>()
-        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch("createInstance", listOf("wss://a.example.com/", ""))
         manager.dispatch("createInstance", listOf("wss://b.example.com/", ""))
@@ -129,7 +129,7 @@ class WebSocketManagerTest {
     fun tearingDownTheSessionClosesEverySocket() = runTest {
         val client = HttpClient(MockEngine { awaitCancellation() }) { install(WebSockets) }
         val evals = mutableListOf<String>()
-        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet)
+        val manager = WebSocketManager(this, { evals.add(it) }, client, Uuid.random(), internet, { _, _, _, _, _ -> })
 
         manager.dispatch("createInstance", listOf("wss://stream.example.com/", ""))
         runCurrent()

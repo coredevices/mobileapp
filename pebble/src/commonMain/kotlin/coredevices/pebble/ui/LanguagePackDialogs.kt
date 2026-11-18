@@ -28,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -136,22 +135,24 @@ private fun LanguagePacksDialog(watch: ConnectedPebbleDevice, onDismissRequest: 
         title = { Text("Watch Language") },
         text = {
             LazyColumn {
-                item {
-                    LanguageOption(
-                        title = "English",
-                        subtitle = "Built-in",
-                        selected = installedPacks != null && packs.none { it.isActive },
-                        enabled = enabled,
-                        onSelect = { select(null) },
-                    )
-                }
-                items(packs, key = { it.slot }) { pack ->
-                    InstalledPackRow(
-                        pack = pack,
-                        enabled = enabled,
-                        onSelect = { select(pack) },
-                        onRemove = { packToRemove = pack },
-                    )
+                if (installedPacks != null) {
+                    item {
+                        LanguageOption(
+                            title = "English",
+                            subtitle = "Built-in",
+                            selected = packs.none { it.isActive },
+                            enabled = enabled,
+                            onSelect = { select(null) },
+                        )
+                    }
+                    items(packs, key = { it.slot }) { pack ->
+                        InstalledPackRow(
+                            pack = pack,
+                            enabled = enabled,
+                            onSelect = { select(pack) },
+                            onRemove = { packToRemove = pack },
+                        )
+                    }
                 }
                 item {
                     Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -304,11 +305,16 @@ private fun LanguagePackPickerDialog(
     onDismissRequest: () -> Unit,
 ) {
     val languagePackRepository: LanguagePackRepository = koinInject()
-    val languagePacks by produceState(languagePackRepository.cachedLanguagePacksForWatch(watch), watch.identifier) {
-        value = languagePackRepository.languagePacksForWatch(watch)
+    val manifest by languagePackRepository.manifest.collectAsState()
+    val languagePacks = remember(manifest, watch.identifier) {
+        manifest?.let { languagePackRepository.languagePacksForWatch(it, watch) }
+    }
+    var manifestFetchFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (languagePacks == null) manifestFetchFailed = !languagePackRepository.syncManifest()
     }
     val groups = remember(languagePacks, installedLocales) {
-        groupLanguagePacks(languagePacks.filter { canonicalLocale(it.isoLocal) !in installedLocales })
+        groupLanguagePacks(languagePacks.orEmpty().filter { canonicalLocale(it.isoLocal) !in installedLocales })
     }
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -327,6 +333,13 @@ private fun LanguagePackPickerDialog(
         text = {
             Column {
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (languagePacks == null) {
+                    if (manifestFetchFailed) {
+                        Text("Could not load language packs. Please try again.", color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text("Loading language packs…")
+                    }
+                }
                 LazyColumn(
                     modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -380,12 +393,8 @@ private fun LanguagePackPickerDialog(
                     preparing = true
                     scope.launch {
                         try {
-                            if (lp.published != null) {
-                                val path = languagePackRepository.prepareDownload(lp)
-                                watch.installLanguagePack(path, lp.displayName(), activate)
-                            } else {
-                                watch.installLanguagePack(lp.file, lp.displayName(), activate)
-                            }
+                            val path = languagePackRepository.prepareDownload(lp)
+                            watch.installLanguagePack(path, lp.displayName(), activate)
                             onInstallStarted()
                         } catch (e: TimeoutCancellationException) {
                             error = "Download timed out. Please try again."

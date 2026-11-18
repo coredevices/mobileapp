@@ -6,8 +6,12 @@ import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.storage.RecordingStorage
+import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
 import coredevices.util.queue.RecoverableTaskException
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import kotlin.time.Duration
@@ -25,11 +29,13 @@ class IndexWebhookDeliveryQueue(
     private val localRecordingDao: LocalRecordingDao,
     scope: RecordingBackgroundScope,
     settings: Settings,
+    platform: Platform,
     rescheduleDelay: Duration = 1.minutes,
 ) : PersistentQueueScheduler<IndexWebhookDeliveryEntity>(
     repository = repository,
     scope = scope,
     settings = settings,
+    platform = platform,
     label = "IndexWebhookDelivery",
     rescheduleDelay = rescheduleDelay,
     maxAttempts = MAX_ATTEMPTS,
@@ -37,6 +43,11 @@ class IndexWebhookDeliveryQueue(
     companion object {
         const val MAX_ATTEMPTS = 10
     }
+
+    private val _outcomes = MutableSharedFlow<IndexWebhookDeliveryOutcome>(extraBufferCapacity = 64)
+
+    /** One per attempt, for whoever is waiting on a delivery. */
+    val outcomes: SharedFlow<IndexWebhookDeliveryOutcome> = _outcomes.asSharedFlow()
 
     /** Does nothing if a delivery with the same deliveryId was already queued. */
     suspend fun enqueue(delivery: IndexWebhookDeliveryEntity) {
@@ -59,9 +70,14 @@ class IndexWebhookDeliveryQueue(
             transcription = task.transcription,
             recordedAt = recordedAt,
             gesture = task.gesture,
-        ) ?: return
+        )
+        if (result == null) {
+            _outcomes.emit(IndexWebhookDeliveryOutcome(task.deliveryId, result = null, willRetry = false))
+            return
+        }
         // The scheduler counts this attempt before running it.
         val failedForGood = !result.ok && (!result.retryable || task.attempts + 1 >= MAX_ATTEMPTS)
+        _outcomes.emit(IndexWebhookDeliveryOutcome(task.deliveryId, result, willRetry = !result.ok && !failedForGood))
         runRepository.record(
             gesture = task.gesture,
             ok = result.ok,
@@ -89,3 +105,10 @@ class IndexWebhookDeliveryQueue(
         return samples to meta.cachedMetadata.sampleRate
     }
 }
+
+/** [result] is null when the webhook was off by the time the delivery ran. */
+data class IndexWebhookDeliveryOutcome(
+    val deliveryId: String,
+    val result: IndexWebhookRunResult?,
+    val willRetry: Boolean,
+)

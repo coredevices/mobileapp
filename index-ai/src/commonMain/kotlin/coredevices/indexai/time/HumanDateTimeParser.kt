@@ -8,6 +8,7 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -15,6 +16,11 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+
+// Time assigned to a bare date (no explicit time), and the fallback when that slot has passed.
+private val DEFAULT_BARE_DATE_TIME = LocalTime(9, 0)
+private val PAST_BARE_DATE_FALLBACK = 1.minutes
 
 class HumanDateTimeParser(
     private val clock: Clock = Clock.System,
@@ -368,20 +374,6 @@ class HumanDateTimeParser(
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
 
-        dayOfWeekTimePattern.find(input)?.let { match ->
-            val date = parseNextDayOfWeek(match.groupValues[1]) ?: return null
-            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
-                ?: return null
-            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
-        }
-
-        timeDayOfWeekPattern.find(input)?.let { match ->
-            val date = parseNextDayOfWeek(match.groupValues[3]) ?: return null
-            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
-                ?: return null
-            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
-        }
-
         monthDayTimePattern.find(input)?.let { match ->
             val day = parseDayOfMonth(match.groupValues[2]) ?: return null
             val year = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull()
@@ -422,6 +414,20 @@ class HumanDateTimeParser(
             val day = match.groupValues[2].toIntOrNull() ?: return null
             val date = parseNumericDate(month, day) ?: return null
             val time = parseTimeString(match.groupValues[4], allowBareHour = match.groupValues[3].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        dayOfWeekTimePattern.find(input)?.let { match ->
+            val date = parseNextDayOfWeek(match.groupValues[1]) ?: return null
+            val time = parseTimeString(match.groupValues[3], allowBareHour = match.groupValues[2].isNotEmpty())
+                ?: return null
+            return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
+        }
+
+        timeDayOfWeekPattern.find(input)?.let { match ->
+            val date = parseNextDayOfWeek(match.groupValues[3]) ?: return null
+            val time = parseTimeString(match.groupValues[2], allowBareHour = match.groupValues[1].isNotEmpty())
                 ?: return null
             return InterpretedDateTime.AbsoluteDateTime(LocalDateTime(date, time))
         }
@@ -744,10 +750,6 @@ class HumanDateTimeParser(
     }
 
     companion object {
-        // Time the reminder tools assign to a bare date (no explicit time). Kept in sync with the
-        // 9am default in ReminderTool/ListTool so weekend resolution doesn't land on a past slot.
-        private val DEFAULT_BARE_DATE_TIME = LocalTime(9, 0)
-
         // Word-number patterns used by normalizeTimeExpressions
         private const val HOUR_WORD_PATTERN = """(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"""
         private const val MINUTE_ONES_BODY = """one|two|three|four|five|six|seven|eight|nine"""
@@ -932,7 +934,17 @@ sealed class InterpretedDateTime {
     data class Relative(val duration: Duration = Duration.ZERO, val period: DatePeriod? = null) : InterpretedDateTime()
     data class AbsoluteDateTime(val dateTime: LocalDateTime) : InterpretedDateTime()
     data class AbsoluteTime(val time: LocalTime, val amPmExplicit: Boolean = false) : InterpretedDateTime()
-    data class AbsoluteDate(val date: LocalDate) : InterpretedDateTime()
+    data class AbsoluteDate(val date: LocalDate) : InterpretedDateTime() {
+        /**
+         * Bare dates default to 9am. If that slot has already passed (spoken after 9am, or the
+         * recording synced late), remind shortly after [now] instead so the scheduler accepts it.
+         */
+        fun resolveDefaultTime(now: Instant, timeZone: TimeZone): LocalDateTime {
+            val assumed = LocalDateTime(date, DEFAULT_BARE_DATE_TIME)
+            return if (assumed.toInstant(timeZone) > now) assumed
+            else (now + PAST_BARE_DATE_FALLBACK).toLocalDateTime(timeZone)
+        }
+    }
 }
 
 data class ParsedDateTimeResult(

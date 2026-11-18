@@ -10,10 +10,12 @@ import io.modelcontextprotocol.kotlin.sdk.types.Tool
 class RemoteMcpTool internal constructor(
     private val integration: McpIntegration,
     private val toolDef: Tool,
-    override val extraContext: String? = null,
+    private val extraContext: String? = null,
 ): McpTool {
     override val definition: Tool
         get() = toolDef
+
+    override suspend fun getExtraContext(): String? = extraContext
 
     override suspend fun call(jsonInput: String, context: SessionContext): ToolCallResult {
         return integration.callTool(

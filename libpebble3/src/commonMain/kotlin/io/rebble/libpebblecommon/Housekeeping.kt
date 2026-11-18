@@ -4,6 +4,8 @@ import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.permissions.AppDataUsage
+import io.rebble.libpebblecommon.plugin.PluginActionLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -17,6 +19,8 @@ class Housekeeping(
     private val notificationConfigFlow: NotificationConfigFlow,
     private val clock: Clock,
     private val blodDbDatabaseManager: BlobDbDatabaseManager,
+    private val appDataUsage: AppDataUsage,
+    private val pluginActionLog: PluginActionLog,
 ) {
     fun init() {
         libPebbleCoroutineScope.launch {
@@ -32,7 +36,10 @@ class Housekeeping(
         val deleteNotificationsOlderThan = clock.now() - notificationConfigFlow.value.storeNotifiationsForDays.days
         notificationsDao.deleteOldNotifications(deleteNotificationsOlderThan.toEpochMilliseconds())
 
-        val deleteHealthDataOlderThan = clock.now() - 90.days
+        appDataUsage.deleteOlderThan(DATA_USAGE_KEPT_DAYS)
+        pluginActionLog.deleteOlderThan(PLUGIN_ACTION_LOG_KEPT_DAYS)
+
+        val deleteHealthDataOlderThan = clock.now() - 180.days
         val deletedHealthRecords = healthDao.deleteExpiredHealthData(deleteHealthDataOlderThan.epochSeconds)
         val deletedOverlayRecords = healthDao.deleteExpiredOverlayData(deleteHealthDataOlderThan.epochSeconds)
         if (deletedHealthRecords > 0 || deletedOverlayRecords > 0) {
@@ -40,3 +47,6 @@ class Housekeeping(
         }
     }
 }
+
+const val DATA_USAGE_KEPT_DAYS = 30
+const val PLUGIN_ACTION_LOG_KEPT_DAYS = 30

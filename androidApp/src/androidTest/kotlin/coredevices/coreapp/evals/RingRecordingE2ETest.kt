@@ -11,6 +11,11 @@ import coredevices.indexai.database.dao.ConversationMessageDao
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.util.CommonBuildKonfig as CBK
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.RecordingIntentClassifier
+import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.IntentAgentRouter
+import coredevices.ring.agent.ChatMode
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.ring.agent.IndexAgentNenya
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.SearchAgentNenya
@@ -647,10 +652,15 @@ class RingRecordingE2ETest {
         factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList()) }
         factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
         singleOf(::AgentFactory)
+        single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+        singleOf(::RecordingIntentClassifier)
+        single {
+            IntentAgentRouter(get(), { emptyList() }) { get<AgentFactory>().createForChatMode(ChatMode.Search) }
+        }
         single { get<RingDatabase>().indexWebhookDeliveryDao() }
         singleOf(::IndexWebhookDeliveryRepository)
         singleOf(::IndexWebhookRunRepository)
-        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
+        single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
         singleOf(::RecordingOperationFactory)
 
         // Preferences
@@ -687,6 +697,7 @@ class RingRecordingE2ETest {
                     signRequests: Boolean,
                     signingSecret: String?,
                     clickPayload: String,
+                    sendJson: Boolean,
                 ) = coredevices.ring.external.indexwebhook.IndexWebhookRunResult(
                     ok = true, status = "200 OK", detail = "test event", byteSize = 0, durationMs = 0,
                 )
@@ -699,7 +710,7 @@ class RingRecordingE2ETest {
 
         // Queue
         single { RecordingBackgroundScope(CoroutineScope(Dispatchers.Default + bgScopeJob)) }
-        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
+        single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), rescheduleDelay = 100.milliseconds) }
     }
 }
 
@@ -714,11 +725,13 @@ private class E2EPreferences : Preferences {
     override val lastSyncIndex: StateFlow<Int?> = MutableStateFlow(null)
     override val debugDetailsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>> = MutableStateFlow(emptyList())
+    override val beeperMessageAnyone: StateFlow<Boolean> = MutableStateFlow(false)
     override val secondaryMode: StateFlow<SecondaryMode> = MutableStateFlow(SecondaryMode.Disabled)
     override val reminderProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteProviderId: StateFlow<String> = MutableStateFlow(BuiltInIntegrationProviders.Index.id)
     override val noteShortcut: StateFlow<NoteShortcutType> = MutableStateFlow(NoteShortcutType.SendToMe)
     override val autoDismissActionNotifications: StateFlow<Boolean> = MutableStateFlow(true)
+    override val actionValidationEnabled: StateFlow<Boolean> = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val phoneCalendarEnabled: StateFlow<Boolean> = MutableStateFlow(false)
     override val useEncryption: StateFlow<Boolean> = MutableStateFlow(false)
@@ -738,11 +751,13 @@ private class E2EPreferences : Preferences {
     override suspend fun setLastSyncIndex(index: Int?) {}
     override fun setDebugDetailsEnabled(enabled: Boolean) {}
     override suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?) {}
+    override fun setBeeperMessageAnyone(enabled: Boolean) {}
     override fun setSecondaryMode(mode: SecondaryMode) {}
     override fun setReminderProviderId(id: String) {}
     override fun setNoteProviderId(id: String) {}
     override fun setNoteShortcut(shortcut: NoteShortcutType) {}
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
+    override fun setActionValidationEnabled(enabled: Boolean) {}
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}
     override fun setUseEncryption(enabled: Boolean) {}
@@ -752,6 +767,8 @@ private class E2EPreferences : Preferences {
     override fun setPlatformSttDefaulted() {}
     override fun setUsePendingIntentScan(enabled: Boolean) {}
     override fun setScanByPairedAddress(enabled: Boolean) {}
+    override val defaultDestinationAsked: Set<String> = emptySet()
+    override fun markDefaultDestinationAsked(providerId: String) {}
 
     override val defaultCaptureType: StateFlow<DefaultCaptureType> =
         MutableStateFlow(DefaultCaptureType.Note)

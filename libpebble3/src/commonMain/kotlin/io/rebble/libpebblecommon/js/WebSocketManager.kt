@@ -11,7 +11,9 @@ import io.ktor.util.encodeBase64
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.rebble.libpebblecommon.permissions.DataUsageRecorder
 import io.rebble.libpebblecommon.permissions.NetworkAccess
+import io.rebble.libpebblecommon.permissions.requestBytes
 import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -19,17 +21,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.atomicfu.atomic
 import kotlinx.atomicfu.locks.SynchronizedObject
 import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
 
 // RFC 6455 close codes reported to JS; Ktor keeps the abnormal one internal.
 private const val NORMAL_CLOSURE = 1000
 private const val NO_STATUS_RECEIVED = 1005
 private const val ABNORMAL_CLOSURE = 1006
+private val USAGE_REPORT_INTERVAL = 1.minutes
 
 private val UPGRADE_HEADERS = setOf("host", "connection", "upgrade")
 
@@ -39,6 +44,7 @@ class WebSocketManager(
     private val client: HttpClient,
     private val appUuid: Uuid,
     private val networkAccess: NetworkAccess,
+    private val dataUsage: DataUsageRecorder,
 ) : JsEngineInterface, AutoCloseable {
     // Calls arrive on the engine's bridge thread while sockets finish on the scope's.
     private val lock = SynchronizedObject()
@@ -106,6 +112,8 @@ class WebSocketManager(
         private val job = atomic<Job?>(null)
 
         private val session = atomic<DefaultClientWebSocketSession?>(null)
+        private val sentBytes = atomic(0L)
+        private val receivedBytes = atomic(0L)
 
         fun connect() {
             job.value = scope.launch { run() }
@@ -124,11 +132,25 @@ class WebSocketManager(
                     if (protocols.isNotEmpty()) header(HttpHeaders.SecWebSocketProtocol, protocols)
                 }
                 session.value = ws
+                dataUsage.record(appUuid, url, requestBytes("GET", url, extraHeaders, 0), 0, requests = 1)
                 val negotiated = ws.call.response.headers[HttpHeaders.SecWebSocketProtocol].orEmpty()
                 eval("$js._onOpen(${Json.encodeToString(negotiated)})")
                 coroutineScope {
-                    val sender = launch { for (frame in outgoing) ws.send(frame) }
+                    val sender = launch {
+                        for (frame in outgoing) {
+                            ws.send(frame)
+                            sentBytes.addAndGet(frame.data.size.toLong())
+                        }
+                    }
+                    // A socket can stay open for hours, so its traffic is reported as it goes.
+                    val reporter = launch {
+                        while (true) {
+                            delay(USAGE_REPORT_INTERVAL)
+                            reportUsage()
+                        }
+                    }
                     for (frame in ws.incoming) {
+                        receivedBytes.addAndGet(frame.data.size.toLong())
                         when (frame) {
                             is Frame.Text -> eval("$js._onMessage(${Json.encodeToString(frame.readText())}, false)")
                             is Frame.Binary -> eval("$js._onMessage(${Json.encodeToString(frame.data.encodeBase64())}, true)")
@@ -136,6 +158,7 @@ class WebSocketManager(
                         }
                     }
                     sender.cancel()
+                    reporter.cancel()
                 }
                 val reason = ws.closeReason.await()
                 val code = reason?.code?.toInt() ?: NO_STATUS_RECEIVED
@@ -147,9 +170,16 @@ class WebSocketManager(
                 logger.w(e) { "$appUuid websocket to $url failed: ${e.message}" }
                 fail()
             } finally {
+                reportUsage()
                 session.value?.cancel()
                 synchronized(lock) { instances.remove(id) }
             }
+        }
+
+        private fun reportUsage() {
+            val sent = sentBytes.getAndSet(0)
+            val received = receivedBytes.getAndSet(0)
+            if (sent > 0 || received > 0) dataUsage.record(appUuid, url, sent, received, requests = 0)
         }
 
         private fun fail() {

@@ -7,6 +7,7 @@ import coredevices.CoreBackgroundSync
 import coredevices.ExperimentalDevices
 import coredevices.analytics.AnalyticsBackend
 import coredevices.analytics.CoreAnalytics
+import coredevices.analytics.PROP_FIREBASE_UID
 import coredevices.analytics.setUser
 import coredevices.coreapp.api.BugReports
 import coredevices.coreapp.push.PushMessaging
@@ -165,6 +166,11 @@ class CommonAppDelegate(
         GlobalScope.launch(Dispatchers.Default) {
             Firebase.auth.currentUser?.emailOrNull?.let {
                 analyticsBackend.setUser(email = it)
+            }
+        }
+        GlobalScope.launch(Dispatchers.Default) {
+            Firebase.auth.authStateChanged.collect { user ->
+                analyticsBackend.addGlobalProperty(PROP_FIREBASE_UID, user?.uid)
             }
         }
         initCactus()

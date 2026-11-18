@@ -2,6 +2,7 @@ package coredevices.ring.service.recordings
 
 import co.touchlab.kermit.Logger
 import coredevices.indexai.agent.Agent
+import coredevices.indexai.agent.awaitsConfirmation
 import coredevices.indexai.agent.pendingConfirmations
 import coredevices.indexai.data.entity.isAnswer
 import coredevices.util.AudioEncoding
@@ -23,6 +24,7 @@ import coredevices.mcp.data.withItemId
 import coredevices.util.transcription.STTLanguage
 import coredevices.ring.agent.AgentNetworkException
 import coredevices.ring.agent.confirmation.AgentUserConfirmation
+import coredevices.ring.agent.confirmation.confirmationRequest
 import coredevices.ring.data.entity.room.TraceEventData
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.database.room.dao.LocalReminderDao
@@ -366,7 +368,9 @@ class RecordingProcessor(
 
     /**
      * Runs the tool call the user answered ([approved], else the denial is the result), as a
-     * second result for [toolCallId], then lets the agent carry on from there.
+     * further result for [toolCallId], then lets the agent carry on from there. A call that had
+     * only failed validation may answer with the tool's own confirmation request, which leaves
+     * the agent paused.
      */
     suspend fun resumeAfterConfirmation(
         recordingId: Long,
@@ -380,35 +384,46 @@ class RecordingProcessor(
         val firestoreId = rec?.firestoreId
         val createdAt = rec?.localTimestamp ?: Clock.System.now()
         val conversation = agent.conversation.first()
-        val request = conversation.pendingConfirmations()
+        val pending = conversation.pendingConfirmations()
             .firstOrNull { it.tool_call_id == toolCallId }
-            ?.semantic_result as? SemanticResult.RequiresConfirmation
+            ?.semantic_result
+        val request = pending?.confirmationRequest
         val userText = conversation.lastOrNull { it.role == MessageRole.user }?.content
         val sessionContext = sessionContextFor(recordingId, firestoreId, createdAt, userText)
-            .copy(toolCallId = toolCallId, userConfirmed = true)
+            .copy(toolCallId = toolCallId)
         val convEndIdx = conversation.size
         val scope = CoroutineScope(currentCoroutineContext())
         val convUpdJob = watchConversationUpdates(scope, agent, recordingId, recordingEntryId)
         val iterationJob = watchAgentIterations(scope, agent, recordingId)
         try {
+            var stillPaused = false
             if (request != null) {
                 val result = if (approved) {
-                    mcpSession.callTool(request.integrationName, request.toolName, request.arguments, sessionContext)
+                    mcpSession.callTool(
+                        request.integrationName,
+                        request.toolName,
+                        request.arguments,
+                        sessionContext.copy(userConfirmed = pending is SemanticResult.RequiresConfirmation),
+                    )
                 } else {
                     ToolCallResult(DENIED_RESULT, SemanticResult.UserDenied)
                 }
-                agent.addMessage(
-                    ConversationMessageDocument(
-                        role = MessageRole.tool,
-                        content = result.resultString,
-                        tool_call_id = toolCallId,
-                        semantic_result = result.semanticResult,
-                    )
+                val answer = ConversationMessageDocument(
+                    role = MessageRole.tool,
+                    content = result.resultString,
+                    tool_call_id = toolCallId,
+                    semantic_result = result.semanticResult,
                 )
+                agent.addMessage(answer)
+                stillPaused = answer.awaitsConfirmation
             } else {
                 logger.w { "Tool call $toolCallId is not awaiting confirmation, resuming agent only" }
             }
-            agent.resume(mcpSession, sessionContext)
+            if (stillPaused) {
+                logger.i { "Tool call $toolCallId now needs the tool's own confirmation" }
+            } else {
+                agent.resume(mcpSession, sessionContext)
+            }
         } catch (e: AgentNetworkException) {
             logger.e(e) { "Network error while resuming agent" }
             throw e

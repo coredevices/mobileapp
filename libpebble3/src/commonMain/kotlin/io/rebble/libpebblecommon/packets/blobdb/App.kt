@@ -22,7 +22,7 @@ class AppMetadata(
     appFaceBgColor: UByte = 0u,
     appFaceTemplateId: UByte = 0u,
     appName: String = "Untitled",
-    microphoneGranted: Boolean? = null,
+    watchPermissions: UInt? = null,
 ) : StructMappable() {
     /**
      * UUID of the app
@@ -74,9 +74,14 @@ class AppMetadata(
      */
     val appName: SFixedString = SFixedString(m, 96, appName)
 
-    // Optional AppDB extension, sent only to firmware advertising local microphone support.
-    val watchPermissions: SUInt? = microphoneGranted?.let {
-        SUInt(m, if (it) 1u else 0u, endianness = Endian.Little)
-    }
+    /** Optional AppDB extension of [WatchPermission] bits, sent only to firmware advertising app permissions. */
+    val watchPermissions: SUInt? = watchPermissions?.let { SUInt(m, it, endianness = Endian.Little) }
+}
+
+object WatchPermission {
+    const val MICROPHONE = 1 shl 0
+    /** Without it the watch allows health whatever [HEALTH_GRANTED] says, as it does for a phone that never sends it. */
+    const val HEALTH_ENFORCED = 1 shl 1
+    const val HEALTH_GRANTED = 1 shl 2
 }
 

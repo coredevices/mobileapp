@@ -102,6 +102,8 @@ data class ActionResult(
     val ok: Boolean,
     /** Shown as a toast on the watch; returned verbatim to an LLM caller. Ignored if ok = false */
     val text: String? = null,
+    /** Used by Index harness to show a result to the user */
+    val semanticResult: String? = null,
     /** `"<category>/<item>"` entries whose cached envelopes this action invalidated. */
     val refreshed: List<String> = emptyList(),
     /**

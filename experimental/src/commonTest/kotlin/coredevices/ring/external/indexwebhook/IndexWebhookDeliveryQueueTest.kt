@@ -11,10 +11,13 @@ import coredevices.ring.service.RecordingBackgroundScope
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.storage.StagedRecordingUpload
+import coredevices.util.Platform
 import coredevices.util.queue.RecoverableTaskException
 import coredevices.util.queue.TaskStatus
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -102,6 +105,25 @@ class IndexWebhookDeliveryQueueTest {
     }
 
     @Test
+    fun reportsEachAttemptsOutcome() = runTest {
+        val failure = result(ok = false, retryable = true)
+        val queue = queue(FakeWebhookApi(failure))
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<RecoverableTaskException> { queue.processTask(delivery()) }
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", failure, willRetry = true), outcome.await())
+
+        val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
+        val finalOutcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
+        assertFailsWith<RecoverableTaskException> { queue.processTask(lastAttempt) }
+        assertEquals(false, finalOutcome.await().willRetry)
+
+        val off = queue(FakeWebhookApi(result = null))
+        val offOutcome = async(start = CoroutineStart.UNDISPATCHED) { off.outcomes.first() }
+        off.processTask(delivery())
+        assertEquals(IndexWebhookDeliveryOutcome("text-7", result = null, willRetry = false), offOutcome.await())
+    }
+
+    @Test
     fun onlyTransientStatusesAreRetryable() {
         listOf(408, 429, 500, 502, 503, 504).forEach {
             assertTrue(HttpStatusCode.fromValue(it).isRetryableWebhookStatus(), "$it")
@@ -134,6 +156,7 @@ internal fun testDeliveryQueue(
     localRecordingDao = FakeLocalRecordingDao,
     scope = RecordingBackgroundScope(scope),
     settings = MapSettings(),
+    platform = FakePlatform,
 )
 
 private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : IndexWebhookApi {
@@ -168,6 +191,7 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
         signRequests: Boolean,
         signingSecret: String?,
         clickPayload: String,
+        sendJson: Boolean,
     ) = throw NotImplementedError("unused")
 }
 
@@ -223,6 +247,7 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun openRecordingSink(id: String, sampleRate: Int, mimeType: String) = TODO()
     override suspend fun openOriginalRecordingSink(id: String, sampleRate: Int, mimeType: String) = TODO()
     override suspend fun openCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean) = TODO()
+    override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = TODO()
     override suspend fun persistRecording(id: String) = TODO()
     override suspend fun uploadRecordingPcm(id: String, sampleRate: Int, pcmBytes: ByteArray, encryptionKey: String?) = TODO()
     override fun deleteRecording(id: String) = TODO()
@@ -233,4 +258,11 @@ private object FakeRecordingStorage : RecordingStorage {
     override suspend fun deleteFromFirebaseStorage(id: String) = TODO()
     override suspend fun uploadStagedRecording(upload: StagedRecordingUpload) = TODO()
     override fun deleteStagedRecording(id: String) = TODO()
+}
+
+private object FakePlatform : Platform {
+    override val name = "Test"
+    override val deviceModelName = "Test"
+    override suspend fun openUrl(url: String) {}
+    override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) = task()
 }

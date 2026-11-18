@@ -2,41 +2,55 @@ package coredevices.ring.agent.builtin_servlets.reminders
 
 import co.touchlab.kermit.Logger
 import coredevices.mcp.SessionContext
-import coredevices.mcp.client.BuiltInMcpIntegration
+import coredevices.ring.agent.pebble_plugin.BuiltInServletPlugin
 import coredevices.ring.agent.builtin_servlets.destinationHints
 import coredevices.ring.agent.builtin_servlets.notes.CreateNoteTool
 import coredevices.ring.agent.builtin_servlets.userMessageIfReady
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
+import coredevices.ring.database.room.repository.GeofenceLocationRepository
 import coredevices.ring.database.room.repository.ListRepository
+import io.rebble.libpebblecommon.plugin.PluginPermissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 class ReminderServlet(
     private val listsRepository: ListRepository,
     private val providers: IntegrationProviderRepository,
-): BuiltInMcpIntegration(
+    private val geofenceLocationRepository: GeofenceLocationRepository,
+) : BuiltInServletPlugin(
     name = NAME,
     tools = listOf(
         ReminderTool(),
+        LocationReminderTool(geofenceLocationRepository),
         ListTool(),
         CreateListTool(),
-    )
+    ),
+    pluginUuid = PLUGIN_UUID,
+    pluginName = "Reminders (Index)",
+    description = "Create reminders and add items to the user's lists.",
+    callerPermission = PluginPermissions.WRITE_INDEX_REMINDERS,
 ) {
     companion object {
         const val NAME = "builtin_reminder"
+        val PLUGIN_UUID: Uuid = Uuid.parse("00000000-0000-0000-0002-000000000004")
         private val logger = Logger.withTag("ReminderServlet")
     }
 
-    // create_list only writes the app's own lists, so hide it when an external reminder
-    // provider is selected — create_list_item wouldn't find the list there.
-    override suspend fun getDisabledTools(): List<String> =
-        if (providers.selectedReminderProvider.value.storesItemsLocally) emptyList()
-        else listOf(CreateListTool.TOOL_NAME)
+    // create_list and location reminders only work with the app's own reminders, so hide them
+    // when an external reminder provider is selected.
+    override suspend fun getDisabledTools(): List<String> = buildList {
+        val builtIn = providers.selectedReminderProvider.value.storesItemsLocally
+        if (!builtIn) add(CreateListTool.TOOL_NAME)
+        if (!builtIn || geofenceLocationRepository.getAllFlow().first().isEmpty()) {
+            add(LocationReminderTool.TOOL_NAME)
+        }
+    }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         val reminderIntegration = providers.reminderIntegration()

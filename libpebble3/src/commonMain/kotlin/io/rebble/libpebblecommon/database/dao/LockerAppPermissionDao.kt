@@ -31,10 +31,10 @@ interface LockerAppPermissionDao {
     @Query("UPDATE AppPermission SET askedAtMs = :atMs WHERE appUuid = :appUuid AND permission IN (:permissions) AND askedAtMs IS NULL")
     suspend fun markAsked(appUuid: Uuid, permissions: List<String>, atMs: Long)
 
-    @Query("UPDATE AppPermission SET reason = NULL, required = NULL WHERE appUuid = :appUuid")
+    @Query("UPDATE AppPermission SET reason = NULL, required = NULL, declared = 0 WHERE appUuid = :appUuid")
     suspend fun clearDeclarations(appUuid: Uuid)
 
-    @Query("UPDATE AppPermission SET reason = :reason, required = :required WHERE appUuid = :appUuid AND permission = :permission")
+    @Query("UPDATE AppPermission SET reason = :reason, required = :required, declared = 1 WHERE appUuid = :appUuid AND permission = :permission")
     suspend fun setDeclaration(appUuid: Uuid, permission: String, reason: String?, required: Boolean?)
 
     @Transaction

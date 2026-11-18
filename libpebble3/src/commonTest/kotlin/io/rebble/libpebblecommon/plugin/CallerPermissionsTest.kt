@@ -31,6 +31,7 @@ private class PermissionsFakePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> = emptyFlow()
 }
 

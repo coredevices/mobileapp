@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
@@ -84,6 +85,7 @@ import coredevices.ring.agent.IndexAction
 import coredevices.ring.agent.IndexPlugin
 import coredevices.ring.agent.NOT_CONNECTED_REASON
 import coredevices.ring.agent.builtin_servlets.calendar.CalendarServlet
+import coredevices.ring.agent.builtin_servlets.bugreport.BugReportServlet
 import coredevices.ring.agent.builtin_servlets.clock.ClockServlet
 import coredevices.ring.agent.builtin_servlets.messaging.MessagingServlet
 import coredevices.ring.agent.builtin_servlets.notifications.NotificationReplyServlet
@@ -98,6 +100,7 @@ import coredevices.indexai.data.entity.mcp.HttpMcpServerEntity
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.ui.components.SectionHeader
+import coredevices.ring.ui.screens.settings.geofence.GeofenceLocationsListDialog
 import coredevices.ring.ui.screens.settings.mcp.HttpServerEditDialog
 import coredevices.ring.ui.theme.IndexTheme
 import coredevices.ring.ui.theme.toggleButtonColors
@@ -186,6 +189,11 @@ private fun presentationFor(action: IndexAction): ActionPresentation = when (act
         "Reply to Notifications",
         "“Reply on my way” → reply to the notification on your Pebble watch",
     )
+    BugReportServlet.NAME -> ActionPresentation(
+        Icons.Default.BugReport,
+        "Bug Reports",
+        "“Create a bug report for Index, the light didn’t turn on” → sends a bug report",
+    )
     else -> ActionPresentation(Icons.Default.Power, action.title, "")
 }
 
@@ -236,7 +244,7 @@ internal fun pluginToggleChanges(plugin: IndexPlugin): List<Pair<PluginGrant, Bo
 private enum class ActionsSheet { CaptureType, NoteDestination, ReminderDestination }
 internal enum class ActionsDialog {
     AddServer, Sideload, Notion, NotionPage, GoogleTasks, Obsidian, Tasker, PhoneCalendar,
-    TargetCalendar,
+    TargetCalendar, SavedPlaces,
 }
 
 @Composable
@@ -253,7 +261,6 @@ internal fun IndexActionsSection(
     noteDestinations: List<DestinationItem>,
     reminderDestinations: List<DestinationItem>,
     lockerPlugins: Set<Uuid>,
-    pluginsEnabled: Boolean,
     onSetActionEnabled: (name: String, enabled: Boolean) -> Unit,
     onSetPluginGrantEnabled: (uuid: Uuid, grant: PluginGrant, enabled: Boolean) -> Unit,
     onSetHttpServerEnabled: (server: HttpMcpServerEntity, enabled: Boolean) -> Unit,
@@ -270,6 +277,8 @@ internal fun IndexActionsSection(
     onConfigurePlugin: (uuid: Uuid, title: String) -> Unit,
     onOpenPluginPage: (uuid: Uuid) -> Unit,
     onOpenBeeperContacts: () -> Unit,
+    /** A null id creates a new place. */
+    onEditGeofenceLocation: (uuid: Uuid?) -> Unit,
     onGetMoreActions: () -> Unit,
     /** Null where the user can't browse plugins yet, e.g. onboarding; a hint is shown instead. */
     onGetMorePlugins: (() -> Unit)?,
@@ -342,6 +351,9 @@ internal fun IndexActionsSection(
                     action.name == CalendarServlet.NAME -> {
                         { dialog = ActionsDialog.TargetCalendar }
                     }
+                    action.name == ReminderServlet.NAME && reminderProvider.storesItemsLocally -> {
+                        { dialog = ActionsDialog.SavedPlaces }
+                    }
                     else -> null
                 },
                 onConnect = actionConnectDialog(action)?.let { target -> { dialog = target } },
@@ -377,7 +389,7 @@ internal fun IndexActionsSection(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         // The Actions store is future expansion and ships disabled.
         // GetMoreActionsRow(onClick = onGetMoreActions)
-        if (pluginsEnabled && onGetMorePlugins != null) {
+        if (onGetMorePlugins != null) {
             SectionActionRow(
                 icon = Icons.Default.Power,
                 title = "Add plugin integration",
@@ -385,7 +397,7 @@ internal fun IndexActionsSection(
                 enabled = true,
                 onClick = onGetMorePlugins,
             )
-        } else if (pluginsEnabled) {
+        } else {
             SectionActionRow(
                 icon = Icons.Default.Power,
                 title = "Add plugin integration",
@@ -425,7 +437,6 @@ internal fun IndexActionsSection(
             title = "Where notes save",
             items = noteDestinations,
             hasDialog = { noteConfigureDialog(it) != null },
-            pluginsEnabled = pluginsEnabled,
             onGetMore = onGetMorePlugins,
             selected = noteProvider,
             onSelect = onSelectNoteProvider,
@@ -452,7 +463,6 @@ internal fun IndexActionsSection(
             icon = Icons.Default.Checklist,
             title = "Where reminders save",
             items = reminderDestinations,
-            pluginsEnabled = pluginsEnabled,
             onGetMore = onGetMorePlugins,
             selected = reminderProvider,
             onSelect = onSelectReminderProvider,
@@ -513,6 +523,17 @@ internal fun IndexActionsSection(
             onConnected = { dialog = ActionsDialog.TargetCalendar },
         )
         ActionsDialog.TargetCalendar -> TargetCalendarDialog(onDismiss = { dialog = null })
+        ActionsDialog.SavedPlaces -> GeofenceLocationsListDialog(
+            onAdd = {
+                dialog = null
+                onEditGeofenceLocation(null)
+            },
+            onEdit = { uuid ->
+                dialog = null
+                onEditGeofenceLocation(uuid)
+            },
+            onDismissRequest = { dialog = null },
+        )
         null -> {}
     }
 }
@@ -1056,7 +1077,6 @@ private fun DestinationSheet(
     icon: ImageVector,
     title: String,
     items: List<DestinationItem>,
-    pluginsEnabled: Boolean,
     onGetMore: (() -> Unit)?,
     selected: IntegrationProvider,
     onSelect: (IntegrationProvider) -> Unit,
@@ -1122,7 +1142,7 @@ private fun DestinationSheet(
                     },
                 )
             }
-            if (pluginsEnabled && onGetMore != null) {
+            if (onGetMore != null) {
                 TextButton(
                     onClick = {
                         onDismiss()
@@ -1132,7 +1152,7 @@ private fun DestinationSheet(
                 ) {
                     Text("Get more")
                 }
-            } else if (pluginsEnabled) {
+            } else {
                 AddMoreLaterHint(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)

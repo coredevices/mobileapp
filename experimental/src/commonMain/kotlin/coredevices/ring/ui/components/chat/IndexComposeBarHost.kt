@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import co.touchlab.kermit.Logger
 import coredevices.libindex.di.LibIndexCoroutineScope
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.AudioRecorder
@@ -36,7 +37,7 @@ import kotlin.uuid.Uuid
 @Composable
 fun IndexComposeBarHost(
     modifier: Modifier = Modifier,
-    onTextSubmit: ((String) -> Unit)? = null,
+    onTextSubmit: ((String, RingGesture) -> Unit)? = null,
     onPermissionDenied: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()

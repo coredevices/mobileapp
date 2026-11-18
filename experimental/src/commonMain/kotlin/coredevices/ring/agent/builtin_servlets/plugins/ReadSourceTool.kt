@@ -1,61 +1,39 @@
 package coredevices.ring.agent.builtin_servlets.plugins
 
-import io.rebble.libpebblecommon.connection.Plugins
 import co.touchlab.kermit.Logger
 import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
+import io.rebble.libpebblecommon.connection.Plugins
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
 import io.rebble.libpebblecommon.plugin.SourceInstance
 import io.rebble.libpebblecommon.plugin.SourceUpdate
+import kotlinx.datetime.TimeZone
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 class ReadSourceTool(
     private val sourcePlugins: suspend () -> List<PluginMetadata>,
     private val plugins: Plugins,
+    private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ): BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(mapOf(
-                "category" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("Namespace of the data source, e.g. " +
-                            "'weather', 'home'"
-                    )
-                )),
-                "item" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("The kind of item or 'path' to read data " +
-                            "for, e.g. 'location', 'light'"
-                    )
-                )),
-                "instance" to JsonObject(mapOf(
-                    "type" to JsonPrimitive("string"),
-                    "description" to JsonPrimitive("The specific instance identifier of the " +
-                            "item to read, if known & supported, e.g. a uuid of a specific location, " +
-                            "'outdoor_floodlight_1', etc."
-                    )
-                ))
-            )),
-            required = listOf("category", "item")
-        )
-    )
+    definition = builtinToolDefinitions.getValue(TOOL_NAME)
 ) {
 
+    @ToolDefinition(servlet = PluginsServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     data class ReadSourceArgs(
+        @ToolParam("Namespace of the data source, e.g. " + "'weather', 'home'")
         val category: String,
+        @ToolParam("The kind of item or 'path' to read data " + "for, e.g. 'location', 'light'")
         val item: String,
-        val instance: String? = null
+        @ToolParam("The specific instance identifier of the " + "item to read, if known & supported, e.g. a uuid of a specific location, " + "'outdoor_floodlight_1', etc.")
+        val instance: String? = null,
     )
 
     @Serializable
@@ -102,9 +80,9 @@ class ReadSourceTool(
             resultString = JsonSnake.encodeToString(
                 ReadSourceResult(
                     pluginUuid = envelope.pluginUuid,
-                    instances = args.instance?.let { instanceId ->
+                    instances = (args.instance?.let { instanceId ->
                         envelope.instances.filter { it.instanceId == instanceId }
-                    } ?: envelope.instances
+                    } ?: envelope.instances).map { it.renderTimesForModel(zone) }
                 )
             ),
             semanticResult = SemanticResult.SupportingData(
@@ -116,7 +94,8 @@ class ReadSourceTool(
     companion object {
         const val TOOL_NAME = "read_source"
         const val TOOL_DESCRIPTION = "Read data from a data source path: <category>/<item>/[instance]." +
-                " Returns data for all instances if unspecified"
+                " Returns data for all instances if unspecified. Time series and timestamps are given" +
+                " in local wall-clock time; quote those times rather than computing your own"
         private val logger = Logger.withTag("ReadSourceTool")
     }
 }

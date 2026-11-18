@@ -22,7 +22,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -37,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -49,6 +52,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingSource
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import coredevices.ring.database.Preferences
 import coredevices.ui.M3Dialog
 import coredevices.util.Permission
 import coredevices.util.PermissionRequester
@@ -121,6 +125,7 @@ fun SettingsBeeperContactsDialog(
         onDismissRequest = {
             if (isAddMode) isAddMode = false else onDismissRequest()
         },
+        scrollableContent = true,
         icon = { Icon(Icons.Outlined.Contacts, null) },
         title = { Text(if (isAddMode) "Add Contact" else "Allowed Contacts") },
         buttons = {
@@ -179,6 +184,18 @@ private fun ApprovedContactsView(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 12.dp)
+    )
+
+    val prefs: Preferences = koinInject()
+    val messageAnyone by prefs.beeperMessageAnyone.collectAsState()
+    ListItem(
+        modifier = Modifier.clickable { prefs.setBeeperMessageAnyone(!messageAnyone) },
+        headlineContent = { Text("Message anyone") },
+        supportingContent = { Text("Index asks you before messaging someone not on this list") },
+        trailingContent = {
+            Switch(checked = messageAnyone, onCheckedChange = prefs::setBeeperMessageAnyone)
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 
     if (approvedContacts.isEmpty()) {

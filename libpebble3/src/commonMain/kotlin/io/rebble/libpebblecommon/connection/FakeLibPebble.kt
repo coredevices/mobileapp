@@ -25,6 +25,7 @@ import io.rebble.libpebblecommon.database.dao.ContactWithCount
 import io.rebble.libpebblecommon.database.dao.DailyMovementAggregate
 import io.rebble.libpebblecommon.database.dao.HealthAggregates
 import io.rebble.libpebblecommon.database.dao.WatchPreference
+import io.rebble.libpebblecommon.database.entity.AppDataUsageEntity
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
 import io.rebble.libpebblecommon.database.entity.ChannelGroup
 import io.rebble.libpebblecommon.database.entity.ChannelItem
@@ -36,6 +37,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItem
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.PluginActionLogEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.database.entity.TimelineReminder
@@ -216,6 +218,10 @@ class FakeLibPebble : LibPebble {
     }
 
     override fun appPermissionStatuses(id: Uuid?): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
+
+    override fun appDataUsage(days: Int): Flow<List<AppDataUsageEntity>> = flowOf(emptyList())
+
+    override fun pluginActionLog(targetUuid: Uuid?, callerUuid: Uuid?): Flow<List<PluginActionLogEntity>> = flowOf(emptyList())
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }
@@ -538,6 +544,9 @@ class FakeLibPebble : LibPebble {
     override fun registerPlugin(plugin: NativePlugin) {
     }
 
+    override fun unregisterPlugin(pluginUuid: Uuid) {
+    }
+
     override val disabledBuiltInPlugins: StateFlow<Set<Uuid>> = MutableStateFlow(emptySet())
 
     override fun setBuiltInPluginEnabled(pluginUuid: Uuid, enabled: Boolean) {
@@ -585,6 +594,7 @@ class FakeLibPebble : LibPebble {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceUpdate> = emptyFlow()
 
     override suspend fun read(
@@ -837,6 +847,7 @@ class FakeConnectedDevice(
     override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val devConnectionError: StateFlow<String?> = MutableStateFlow(null)
     override val batteryLevel: Int? = 50
     override suspend fun takeScreenshot(): ImageBitmap {
         // Return an orange square as a placeholder
@@ -939,6 +950,7 @@ class FakeConnectedDeviceInRecovery(
     override suspend fun startDevConnection(forceLan: Boolean) {}
     override suspend fun stopDevConnection() {}
     override val devConnectionActive: StateFlow<Boolean> = MutableStateFlow(false)
+    override val devConnectionError: StateFlow<String?> = MutableStateFlow(null)
     override val batteryLevel: Int? = 50
 
     override suspend fun gatherLogs(): Path? {

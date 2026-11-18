@@ -7,5 +7,6 @@ interface AnalyticsBackend {
 }
 
 const val PROP_EMAIL = "email"
+const val PROP_FIREBASE_UID = "firebase_uid"
 
 fun AnalyticsBackend.setUser(email: String?) = addGlobalProperty(PROP_EMAIL, email)

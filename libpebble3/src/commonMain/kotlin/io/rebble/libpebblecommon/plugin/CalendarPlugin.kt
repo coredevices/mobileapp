@@ -2,6 +2,7 @@ package io.rebble.libpebblecommon.plugin
 
 import io.rebble.libpebblecommon.calendar.CalendarEvent
 import io.rebble.libpebblecommon.calendar.SystemCalendar
+import io.rebble.libpebblecommon.calendar.transformDescription
 import io.rebble.libpebblecommon.connection.endpointmanager.blobdb.TimeProvider
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.entity.CalendarEntity
@@ -45,6 +46,7 @@ class CalendarPlugin(
             properties = mapOf(
                 SourceInstance.PROPERTY_NAME to TEXT_SHAPES,
                 PROPERTY_LOCATION to TEXT_SHAPES,
+                PROPERTY_DESCRIPTION to listOf(SourceShapeNames.LONG_TEXT),
                 PROPERTY_STARTS_AT to TEXT_SHAPES + SourceShapeNames.TIMESTAMP,
                 PROPERTY_ENDS_AT to
                     listOf(SourceShapeNames.SHORT_TEXT, SourceShapeNames.TIMESTAMP),
@@ -64,18 +66,20 @@ class CalendarPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
+        val withDescription = properties == null || PROPERTY_DESCRIPTION in properties
         val changes = systemCalendar.registerForCalendarChanges()?.sample(CHANGE_DEBOUNCE)
             ?: emptyFlow()
         // Events fall out of the window with the passage of time alone, so a change signal isn't
         // enough on its own to keep "the next event" true.
         return combine(calendarDao.getFlow(), merge(tick(REFRESH_INTERVAL), changes)) { cals, _ ->
-            toEnvelope(load(cals))
+            toEnvelope(load(cals, limit ?: MAX_EVENTS), withDescription)
         }.distinctUntilChanged()
     }
 
-    private suspend fun load(calendars: List<CalendarEntity>): List<EventInCalendar> {
+    private suspend fun load(calendars: List<CalendarEntity>, limit: Int): List<EventInCalendar> {
         if (!systemCalendar.hasPermission()) return emptyList()
         val now = timeProvider.now()
         return calendars
@@ -84,16 +88,23 @@ class CalendarPlugin(
                 systemCalendar.getCalendarEvents(calendar, now, now + WINDOW)
                     .map { EventInCalendar(it, calendar.name) }
             }
-            .upcoming(now, MAX_EVENTS)
+            .upcoming(now, limit)
     }
 
-    private fun toEnvelope(events: List<EventInCalendar>) = SourceEnvelope(
-        pluginUuid = pluginUuid.toString(),
-        validUntilMs = null,
-        instances = events.mapIndexed { index, event -> toInstance(index, event) },
-    )
+    private fun toEnvelope(events: List<EventInCalendar>, withDescription: Boolean) =
+        SourceEnvelope(
+            pluginUuid = pluginUuid.toString(),
+            validUntilMs = null,
+            instances = events.mapIndexed { index, event ->
+                toInstance(index, event, withDescription)
+            },
+        )
 
-    private fun toInstance(index: Int, entry: EventInCalendar): SourceInstance {
+    private fun toInstance(
+        index: Int,
+        entry: EventInCalendar,
+        withDescription: Boolean,
+    ): SourceInstance {
         val event = entry.event
         val startsAt = if (event.allDay) ALL_DAY_LABEL else event.startTime.localTime()
         return SourceInstance(
@@ -102,6 +113,14 @@ class CalendarPlugin(
                 put(SourceInstance.PROPERTY_NAME, textShapes(event.title))
                 event.location?.takeIf { it.isNotBlank() }?.let {
                     put(PROPERTY_LOCATION, textShapes(it))
+                }
+                if (withDescription) {
+                    transformDescription(event.description).takeIf { it.isNotBlank() }?.let {
+                        put(
+                            PROPERTY_DESCRIPTION,
+                            mapOf(SourceShapeNames.LONG_TEXT to encode(LongTextShape(it))),
+                        )
+                    }
                 }
                 // The rendered time reads on any tile; the timestamp lets a watchface count
                 // down to it, which it can only do with the raw moment.
@@ -157,6 +176,7 @@ class CalendarPlugin(
         const val CATEGORY = "calendar"
         const val ITEM_EVENT = "event"
         const val PROPERTY_LOCATION = "location"
+        const val PROPERTY_DESCRIPTION = "description"
         const val PROPERTY_STARTS_AT = "starts_at"
         const val PROPERTY_ENDS_AT = "ends_at"
         const val PROPERTY_ALL_DAY = "all_day"

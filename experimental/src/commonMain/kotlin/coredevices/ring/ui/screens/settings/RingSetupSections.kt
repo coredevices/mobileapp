@@ -92,7 +92,6 @@ fun IndexAgentActionsSection(
     val noteDestinations by viewModel.noteDestinations.collectAsState()
     val reminderDestinations by viewModel.reminderDestinations.collectAsState()
     val lockerPlugins by viewModel.lockerPlugins.collectAsState()
-    val pluginsEnabled by viewModel.pluginsEnabled.collectAsState()
     val showContactsDialog by viewModel.showContactsDialog.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refreshAvailableProviders() }
@@ -113,7 +112,6 @@ fun IndexAgentActionsSection(
         noteDestinations = noteDestinations,
         reminderDestinations = reminderDestinations,
         lockerPlugins = lockerPlugins,
-        pluginsEnabled = pluginsEnabled,
         onSetActionEnabled = viewModel::setActionEnabled,
         onSetPluginGrantEnabled = viewModel::setPluginGrantEnabled,
         onSetHttpServerEnabled = viewModel::setHttpServerEnabled,
@@ -132,6 +130,9 @@ fun IndexAgentActionsSection(
         },
         onOpenPluginPage = { uuid -> coreNav.navigateTo(CommonRoutes.LockerAppRoute(uuid = uuid.toString())) },
         onOpenBeeperContacts = viewModel::showContactsDialog,
+        onEditGeofenceLocation = { uuid ->
+            coreNav.navigateTo(RingRoutes.GeofenceLocationEdit(locationId = uuid?.toString()))
+        },
         onGetMoreActions = {},
         onGetMorePlugins = { coreNav.navigateTo(CommonRoutes.LockerTabRoute(AppType.Plugin)) }
             .takeIf { canBrowsePlugins },

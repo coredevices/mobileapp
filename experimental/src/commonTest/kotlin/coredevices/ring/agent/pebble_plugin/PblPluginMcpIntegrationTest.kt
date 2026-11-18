@@ -87,6 +87,19 @@ class PblPluginMcpIntegrationTest {
     }
 
     @Test
+    fun toolRequiresConfirmationWhenItsActionDoes() = runTest {
+        val tools = integrationFor(FakePlugin(listOf(next, clearQueue))).listTools()
+
+        assertEquals(listOf(false, true), tools.map { it.requiresConfirmation })
+    }
+
+    @Test
+    fun onlyADestructiveActionIsAnnotatedAsDestructive() {
+        assertEquals(true, clearQueue.toToolDefinition().annotations?.destructiveHint)
+        assertEquals(null, next.toToolDefinition().annotations)
+    }
+
+    @Test
     fun callingAToolInvokesTheActionWithItsArguments() = runTest {
         val plugin = FakePlugin(listOf(setPlaying))
         val tool = integrationFor(plugin).listTools().single()
@@ -121,6 +134,119 @@ class PblPluginMcpIntegrationTest {
         val result = integrationFor(plugin).callTool("next", emptyMap(), context)
 
         assertEquals("OK", result.resultString)
+    }
+
+    @Test
+    fun failureWithoutCodeOrMessageFallsBackToItsTextThenError() = runTest {
+        val withText = FakePlugin(listOf(next), result = ActionResult(ok = false, text = "Nothing is playing"))
+        val bare = FakePlugin(listOf(next), result = ActionResult(ok = false))
+
+        assertEquals("Nothing is playing", integrationFor(withText).callTool("next", emptyMap(), context).resultString)
+        assertEquals("Error", integrationFor(bare).callTool("next", emptyMap(), context).resultString)
+    }
+
+    private suspend fun semanticResultFor(result: ActionResult): SemanticResult? =
+        integrationFor(FakePlugin(listOf(next), result = result))
+            .callTool("next", emptyMap(), context)
+            .semanticResult
+
+    @Test
+    fun successWithoutASemanticResultIsAGenericSuccess() = runTest {
+        assertIs<SemanticResult.GenericSuccess>(semanticResultFor(ActionResult(ok = true)))
+    }
+
+    @Test
+    fun pluginSemanticResultIsPassedThrough() = runTest {
+        val result = integrationFor(
+            FakePlugin(
+                actions = listOf(next),
+                result = ActionResult(
+                    ok = true,
+                    text = "Sent",
+                    semanticResult = """{"type":"MessageSent","recipientName":"Sam","text":"On my way"}""",
+                ),
+            )
+        ).callTool("next", emptyMap(), context)
+
+        assertEquals("Sent", result.resultString)
+        assertEquals(
+            SemanticResult.MessageSent(recipientName = "Sam", text = "On my way"),
+            result.semanticResult,
+        )
+    }
+
+    @Test
+    fun pluginSemanticResultTypeMayBeCapsSnakeCase() = runTest {
+        val messageSent = semanticResultFor(
+            ActionResult(ok = true, semanticResult = """{"type":"MESSAGE_SENT","recipientName":"Sam"}""")
+        )
+        val supportingData = semanticResultFor(
+            ActionResult(ok = true, semanticResult = """{"summary":"3 tracks","type":"SUPPORTING_DATA"}""")
+        )
+
+        assertEquals(SemanticResult.MessageSent(recipientName = "Sam"), messageSent)
+        assertEquals(SemanticResult.SupportingData(summary = "3 tracks"), supportingData)
+    }
+
+    @Test
+    fun unknownKeysInAPluginSemanticResultAreIgnored() = runTest {
+        val semanticResult = semanticResultFor(
+            ActionResult(
+                ok = true,
+                semanticResult = """{"type":"SupportingData","summary":"3 tracks","extra":1}""",
+            )
+        )
+
+        assertEquals(SemanticResult.SupportingData(summary = "3 tracks"), semanticResult)
+    }
+
+    @Test
+    fun disallowedPluginSemanticResultFallsBackToGenericSuccess() = runTest {
+        val disallowed = listOf(
+            """{"type":"UserDenied"}""",
+            """{"type":"USER_DENIED"}""",
+            """{"type":"RequiresConfirmation","integrationName":"Music","toolName":"next","arguments":{},"destructive":false}""",
+            """{"type":"ValidationFailure","integrationName":"Music","toolName":"next","arguments":{},"probabilityValid":0.1}""",
+        )
+
+        disallowed.forEach {
+            assertIs<SemanticResult.GenericSuccess>(
+                semanticResultFor(ActionResult(ok = true, semanticResult = it)),
+                it,
+            )
+        }
+    }
+
+    @Test
+    fun undecodablePluginSemanticResultFallsBackToGenericSuccess() = runTest {
+        val undecodable = listOf(
+            "not json",
+            """{"type":"NoSuchResult"}""",
+            """{"type":"NO_SUCH_RESULT"}""",
+            """{"type":"message_sent","recipientName":"Sam"}""",
+            """{"type":7}""",
+            """[]""",
+            """{"type":"MessageSent"}""",
+            """{"recipientName":"Sam"}""",
+        )
+
+        undecodable.forEach {
+            assertIs<SemanticResult.GenericSuccess>(
+                semanticResultFor(ActionResult(ok = true, semanticResult = it)),
+                it,
+            )
+        }
+    }
+
+    @Test
+    fun failedActionIgnoresThePluginSemanticResult() = runTest {
+        val semanticResult = semanticResultFor(
+            ActionResult.error(PluginErrors.INVALID_ARGS, "bad")
+                .copy(semanticResult = """{"type":"GenericSuccess"}""")
+        )
+
+        val failure = assertIs<SemanticResult.GenericFailure>(semanticResult)
+        assertEquals("bad", failure.userErrorMessage)
     }
 
     @Test

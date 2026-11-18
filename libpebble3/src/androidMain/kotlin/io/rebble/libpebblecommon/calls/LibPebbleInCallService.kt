@@ -12,6 +12,7 @@ import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,13 +60,18 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     override fun onCreate() {
         super.onCreate()
         logger.d { "onCreate()" }
+        if (!LibPebble3.isCreated) return
         libPebble.currentCall.value = null
     }
 
     override fun onDestroy() {
         logger.d { "onDestroy()" }
-        libPebble.currentCall.value = null
-        inCallServiceCallCoordinator.clearAll()
+        pendingDndChecks.clear()
+        suppressedCalls.clear()
+        if (LibPebble3.isCreated) {
+            libPebble.currentCall.value = null
+            inCallServiceCallCoordinator.clearAll()
+        }
         super.onDestroy()
     }
 
@@ -86,6 +92,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onCallAdded(call: Call?) {
         call ?: return
+        if (!LibPebble3.isCreated) return
         if (calls.size > 1) {
             logger.w { "Multiple calls detected" }
         }
@@ -101,6 +108,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onCallRemoved(call: Call?) {
         call ?: return
+        if (!LibPebble3.isCreated) return
         libPebbleCoroutineScope.launch(Dispatchers.Main.immediate) {
             suppressedCalls.remove(call)
             pendingDndChecks.remove(call)

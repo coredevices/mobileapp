@@ -38,7 +38,7 @@ class IndexSettingsSummary(
 
         val webhooks = RingGesture.entries.mapNotNull { gesture ->
             webhookPreferences.configFor(gesture).takeIf { it.isActive }?.let { config ->
-                "${gesture.gestureLabel} -> ${hostOf(config.url)} (${config.payloadMode})"
+                "${gesture.gestureLabel} -> ${hostOf(config.url)} (${config.payloadMode}${if (config.sendJson) ", JSON" else ""})"
             }
         }
         appendLine("Webhooks: ${webhooks.ifEmpty { listOf("none") }.joinToString("; ")}")

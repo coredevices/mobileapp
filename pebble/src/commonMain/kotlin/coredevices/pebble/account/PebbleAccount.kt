@@ -2,12 +2,15 @@ package coredevices.pebble.account
 
 import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
+import coredevices.database.AppstoreSourceDao
 import coredevices.firestore.UsersDao
 import coredevices.pebble.services.PebbleWebServices
+import coredevices.pebble.services.isRebbleFeed
 import io.rebble.libpebblecommon.connection.TokenProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -25,6 +28,7 @@ class RealPebbleAccount(
     private val pebbleWebServices: PebbleWebServices,
     private val bootConfigProvider: BootConfigProvider,
     private val usersDao: UsersDao,
+    private val appstoreSourceDao: AppstoreSourceDao,
 ) : PebbleAccount {
     private val logger = Logger.withTag("PebbleAccount")
     private val _loggedIn = MutableStateFlow(getToken())
@@ -40,6 +44,9 @@ class RealPebbleAccount(
             settings.remove(TOKEN_KEY)
         }
         _loggedIn.value = token
+        appstoreSourceDao.getAllSources().first().firstOrNull { it.isRebbleFeed() }?.let {
+            appstoreSourceDao.setSourceEnabled(it.id, token != null)
+        }
         bootConfigProvider.setUrl(bootUrl)
         setDevPortalId()
     }

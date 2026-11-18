@@ -7,6 +7,7 @@ import coredevices.indexai.data.entity.RecordingEntryStatus
 import coredevices.indexai.database.dao.RecordingEntryDao
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.ToolCallResult
+import coredevices.ring.agent.IntentAgentRouter
 import coredevices.ring.agent.McpSessionFactory
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.service.recordings.RecordingProcessingQueue
@@ -65,6 +66,7 @@ open class TextOnlyRecordingOperation(
     text: String,
     private val mcpSessionFactory: McpSessionFactory,
     private val forcedTool: (suspend (sessionContext: SessionContext) -> ToolCallResult)?,
+    private val agentRouter: IntentAgentRouter? = null,
 ) : TextRecordingOperation(recordingId, text) {
     companion object {
         private val logger = Logger.withTag("TextOnlyRecordingOperation")
@@ -77,7 +79,7 @@ open class TextOnlyRecordingOperation(
                 recordingId = recordingId,
                 mcpSession = mcpSession,
                 recordingEntryId = entryId,
-                agent = chatAgent,
+                agent = agentRouter?.route(chatAgent, text, mcpSession, canCapture = forcedTool != null) ?: chatAgent,
                 forcedTool = forcedTool?.let { { _, sessionContext -> it(sessionContext) } },
                 text = text
             )

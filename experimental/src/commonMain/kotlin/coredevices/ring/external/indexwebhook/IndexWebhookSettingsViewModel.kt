@@ -61,6 +61,9 @@ class IndexWebhookSettingsViewModel(
     private val _clickPayloadInput = MutableStateFlow("")
     val clickPayloadInput = _clickPayloadInput.asStateFlow()
 
+    private val _sendJsonInput = MutableStateFlow(false)
+    val sendJsonInput = _sendJsonInput.asStateFlow()
+
     private val _signRequestsInput = MutableStateFlow(false)
     val signRequestsInput = _signRequestsInput.asStateFlow()
 
@@ -151,6 +154,10 @@ class IndexWebhookSettingsViewModel(
         _payloadModeInput.value = mode
     }
 
+    fun updateSendJson(sendJson: Boolean) {
+        _sendJsonInput.value = sendJson
+    }
+
     fun updateClickPayload(payload: String) {
         _clickPayloadInput.value = payload
     }
@@ -184,6 +191,7 @@ class IndexWebhookSettingsViewModel(
                 signRequests = signRequests,
                 signingSecret = signingSecret,
                 clickPayload = _clickPayloadInput.value,
+                sendJson = _sendJsonInput.value,
             )
             _testState.value = WebhookTestState.Done(
                 ok = result.ok,
@@ -210,6 +218,7 @@ class IndexWebhookSettingsViewModel(
         if (signRequests && signingSecret.isBlank()) return
         val payloadMode = _payloadModeInput.value
         val clickPayload = _clickPayloadInput.value.trim()
+        val sendJson = _sendJsonInput.value
         val headers = draftHeaders()
         _saving.value = true
         viewModelScope.launch {
@@ -232,6 +241,7 @@ class IndexWebhookSettingsViewModel(
                             signRequests = signRequests,
                             saved = true,
                             clickPayload = clickPayload,
+                            sendJson = sendJson,
                         ),
                     )
                 }
@@ -251,6 +261,7 @@ class IndexWebhookSettingsViewModel(
             .ifEmpty { listOf(WebhookHeaderInput("", "")) }
         _payloadModeInput.value = config.payloadMode
         _clickPayloadInput.value = config.clickPayload
+        _sendJsonInput.value = config.sendJson
         _signRequestsInput.value = config.signRequests
         _signingSecretInput.value = ""
         val loadId = ++secretLoadId

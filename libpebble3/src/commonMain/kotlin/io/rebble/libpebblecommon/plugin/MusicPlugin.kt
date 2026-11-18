@@ -80,6 +80,7 @@ class MusicPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         val artworkSize = iconPixelSize

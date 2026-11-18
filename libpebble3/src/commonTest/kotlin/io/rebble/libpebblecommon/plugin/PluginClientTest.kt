@@ -2,8 +2,6 @@ package io.rebble.libpebblecommon.plugin
 
 import com.russhwolf.settings.MapSettings
 import io.rebble.libpebblecommon.LibPebbleAnalytics
-import io.rebble.libpebblecommon.WatchConfig
-import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.database.entity.LockerAppPermission
 import io.rebble.libpebblecommon.permissions.APP
 import io.rebble.libpebblecommon.permissions.FakePermissionDao
@@ -17,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -56,16 +55,19 @@ private class ClientFakePlugin(
     val invoked = mutableListOf<JsonObject>()
     val prompting = mutableListOf<Boolean>()
     val requested = mutableListOf<Pair<List<String>?, IconPixelSize?>>()
+    val limits = mutableListOf<Int?>()
 
     override fun observe(
         category: String,
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = flow {
         prompting += prompt
         requested += properties to iconPixelSize
+        limits += limit
         envelopes.collect { emit(it) }
     }
 
@@ -92,8 +94,11 @@ class PluginClientTest {
     private val running = RunningApps(NoWatches)
     private val analytics = CountingAnalytics()
     private val logs = PluginLogs()
-    private val registry = PluginRegistry(emptySet(), WatchConfig(enablePlugins = true).asFlow(), MapSettings())
-    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs)
+    private val registry = PluginRegistry(emptySet(), MapSettings())
+    private val actionLog = mutableListOf<Pair<String, ActionResult>>()
+    private val client = PluginClient(registry, permissions(dao, running = running), running, analytics, logs) { _, _, action, _, result ->
+        actionLog += action to result
+    }
 
     private fun ClientFakePlugin.registered(): PluginMetadata = also { registry.registerPlugin(it) }.metadata
 
@@ -109,6 +114,22 @@ class PluginClientTest {
     }
 
     @Test
+    fun aLimitIsClampedAndCapsTheInstances() = runTest {
+        val instances = List(300) { SourceInstance(it.toString(), emptyMap()) }
+        val plugin = ClientFakePlugin(envelopes = flowOf(SourceUpdate.Data(ENVELOPE.copy(instances = instances))))
+        val metadata = plugin.registered()
+
+        val capped = assertIs<SourceUpdate.Data>(client.observe(APP_CALLER, metadata, "weather", "now", limit = 2).first())
+        val clamped = assertIs<SourceUpdate.Data>(client.observe(APP_CALLER, metadata, "weather", "now", limit = 500).first())
+        val unasked = assertIs<SourceUpdate.Data>(client.observe(APP_CALLER, metadata, "weather", "now").first())
+
+        assertEquals(listOf(2, Plugin.MAX_LIMIT, null), plugin.limits)
+        assertEquals(2, capped.envelope.instances.size)
+        assertEquals(Plugin.MAX_LIMIT, clamped.envelope.instances.size)
+        assertEquals(Plugin.MAX_LIMIT, unasked.envelope.instances.size)
+    }
+
+    @Test
     fun theHostInvokesWithoutCallerPermissionsAndIsCounted() = runTest {
         val plugin = ClientFakePlugin(callerPermissions = listOf(PluginPermission(PluginPermissions.CALENDAR)))
 
@@ -117,7 +138,7 @@ class PluginClientTest {
         assertTrue(result.ok)
         assertEquals(listOf(ARGS), plugin.invoked)
         assertEquals(listOf(true), plugin.prompting)
-        assertEquals(listOf(PluginHeartbeatCounters.HOST_INVOCATIONS), analytics.counters)
+        assertEquals(listOf(PluginHeartbeatCounters.HOST_INVOCATIONS, PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.INVOCATIONS)), analytics.counters)
     }
 
     @Test
@@ -136,7 +157,31 @@ class PluginClientTest {
     fun appInvocationsAreCountedSeparately() = runTest {
         client.invoke(APP_CALLER, ClientFakePlugin().registered(), "do_it", ARGS)
 
-        assertEquals(listOf(PluginHeartbeatCounters.PKJS_INVOCATIONS), analytics.counters)
+        assertEquals(listOf(PluginHeartbeatCounters.PKJS_INVOCATIONS, PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.INVOCATIONS)), analytics.counters)
+    }
+
+    @Test
+    fun anAppsActionsAreLoggedWhetherTheySucceedOrFail() = runTest {
+        val failed = ActionResult.error(PluginErrors.UNKNOWN, "broke")
+        var result = ActionResult(ok = true)
+        val plugin = ClientFakePlugin(onInvoke = { result }).registered()
+
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+        result = failed
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+
+        assertEquals(listOf("do_it" to ActionResult(ok = true), "do_it" to failed), actionLog)
+    }
+
+    @Test
+    fun refusedAndHostActionsAreNotLogged() = runTest {
+        val plugin = ClientFakePlugin(callerPermissions = listOf(PluginPermission(PluginPermissions.CALENDAR))).registered()
+        dao.insertOrReplace(deniedRow(PluginPermissions.CALENDAR))
+
+        client.invoke(APP_CALLER, plugin, "do_it", ARGS)
+        client.invoke(PluginCaller.Host(), plugin, "do_it", ARGS)
+
+        assertEquals(emptyList(), actionLog)
     }
 
     @Test
@@ -191,7 +236,12 @@ class PluginClientTest {
         client.read(APP_CALLER, ClientFakePlugin().registered(), "weather", "now")
 
         assertEquals(
-            listOf(PluginHeartbeatCounters.HOST_OBSERVATIONS, PluginHeartbeatCounters.PKJS_OBSERVATIONS),
+            listOf(
+                PluginHeartbeatCounters.HOST_OBSERVATIONS,
+                PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.SUBSCRIPTIONS),
+                PluginHeartbeatCounters.PKJS_OBSERVATIONS,
+                PluginHeartbeatCounters.perPlugin(PLUGIN, PluginHeartbeatCounters.SUBSCRIPTIONS),
+            ),
             analytics.counters,
         )
     }

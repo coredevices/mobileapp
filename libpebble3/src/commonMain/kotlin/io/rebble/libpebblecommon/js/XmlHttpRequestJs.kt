@@ -2,11 +2,12 @@ package io.rebble.libpebblecommon.js
 
 /**
  * The `XMLHttpRequest` developers write against, on top of the `_XMLHTTPRequestManager`
- * interface. Shared by PKJS on iOS and by every [JsEngine] context.
+ * interface. Shared by PKJS on both platforms and by every [JsEngine] context.
  */
 internal const val XML_HTTP_REQUEST_JS = """
 class XMLHttpRequest {
     static _instances = new Map();
+    static _lastEvents = ["loadend", "error", "abort", "timeout"];
 
     static UNSENT = 0;
     static OPENED = 1;
@@ -21,6 +22,9 @@ class XMLHttpRequest {
     responseType = "";
     status = 0;
     statusText = "";
+    // Scripts set handlers on it, so it has to exist.
+    upload = { addEventListener() {}, removeEventListener() {} };
+    _overrideMimeType = null;
     _listeners = new Map();
 
     constructor() {
@@ -61,6 +65,7 @@ class XMLHttpRequest {
         // Set here rather than from the host: send() checks it on the very next line of script,
         // and a host-side eval cannot land before this call returns.
         this.readyState = XMLHttpRequest.OPENED;
+        XMLHttpRequest._instances.set(this._instanceID, this);
         _XMLHTTPRequestManager.open(this._instanceID, method, url, async, user, password);
         this._dispatchEvent("readystatechange", { type: "readystatechange" });
     }
@@ -85,34 +90,82 @@ class XMLHttpRequest {
         return this.responseHeaders[header.toLowerCase()] || null;
     }
 
+    overrideMimeType(mime) {
+        this._overrideMimeType = String(mime);
+    }
+
     send(data) {
         if (this.readyState !== XMLHttpRequest.OPENED) {
-            throw new Error("InvalidStateError: The object is in an invalid state (not opened).");s
+            throw new Error("InvalidStateError: The object is in an invalid state (not opened).");
         }
-        if (this.responseType === "blob" || this.responseType === "document") {
-            throw new Error("Blob and document response types are not supported.");
+        if (this.responseType === "document" && typeof DOMParser === "undefined") {
+            throw new Error("The document response type is not supported.");
         }
-        _XMLHTTPRequestManager.send(this._instanceID, this.responseType, data);
+        // The bridge carries strings, so binary crosses as base64 both ways.
+        let binary = false;
+        if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+            const bytes = data instanceof ArrayBuffer
+                ? new Uint8Array(data)
+                : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            data = XMLHttpRequest._toBase64(bytes);
+            binary = true;
+        }
+        const asBytes = this.responseType === "blob" || this._userDefinedCharset();
+        const hostType = asBytes ? "arraybuffer" : this.responseType === "document" ? "text" : this.responseType;
+        const result = _XMLHTTPRequestManager.send(this._instanceID, hostType, data, binary);
+        // A synchronous request is answered by the call itself.
+        if (result != null) this._completeSync(JSON.parse(result));
+    }
+
+    _completeSync(result) {
+        if (result.type === "load") {
+            this._onResponseComplete(result.headers, result.status, result.statusText, result.body);
+        }
+        if (result.notAllowed) this._notAllowed = true;
+        this.readyState = XMLHttpRequest.DONE;
+        this._dispatchEvent("readystatechange", { type: "readystatechange" });
+        this._dispatchEvent(result.type, { type: result.type });
+        if (result.type === "load") this._dispatchEvent("loadend", { type: "loadend" });
     }
 
     abort() {
         _XMLHTTPRequestManager.abort(this._instanceID);
     }
 
+    /** The old way to read binary as text: each byte becomes one character. */
+    _userDefinedCharset() {
+        return this._overrideMimeType !== null && /x-user-defined/i.test(this._overrideMimeType) &&
+            (this.responseType === "" || this.responseType === "text");
+    }
+
+    static _toBase64(bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+    }
+
+    static _fromBase64(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
     _onResponseComplete(responseHeaders, status, statusText, body) {
         this.responseHeaders = responseHeaders;
         this.status = status;
         this.statusText = statusText;
+        const type = this._overrideMimeType || responseHeaders["content-type"] || "";
         switch (this.responseType) {
             case "arraybuffer":
                 this.responseText = null;
-                this.response = Uint8Array.fromBase64(body);
+                this.response = XMLHttpRequest._fromBase64(body).buffer;
                 break;
             case "blob":
-                this.response = null; // no blob in JSContext
+                this.response = typeof Blob === "function" ? new Blob([XMLHttpRequest._fromBase64(body)], { type }) : null;
                 break;
             case "document":
-                this.response = null; // no document in JSContext
+                this.response = new DOMParser().parseFromString(body, /html/i.test(type) ? "text/html" : "text/xml");
                 break;
             case "json":
                 this.responseText = body;
@@ -129,6 +182,14 @@ class XMLHttpRequest {
                 }
                 break;
             default: // "text" or ""
+                if (this._userDefinedCharset()) {
+                    const bytes = XMLHttpRequest._fromBase64(body);
+                    let text = "";
+                    for (let i = 0; i < bytes.length; i++) {
+                        text += String.fromCharCode(bytes[i] < 0x80 ? bytes[i] : 0xF700 + bytes[i]);
+                    }
+                    body = text;
+                }
                 this.response = body;
                 this.responseText = body;
                 break;
@@ -136,10 +197,12 @@ class XMLHttpRequest {
     }
 
     _dispatchEvent(type, event) {
+        event.target = this;
+        event.currentTarget = this;
         if (this._listeners.has(type)) {
             const listeners = this._listeners.get(type);
             for (const listener of listeners) {
-                listener(event);
+                listener.call(this, event);
             }
         }
         switch (type) {
@@ -170,6 +233,10 @@ class XMLHttpRequest {
             default:
                 console.warn("XHR - Unknown event type:", type);
                 break;
+        }
+        // The host forgets a finished request too; open() registers it again.
+        if (this.readyState === XMLHttpRequest.DONE && XMLHttpRequest._lastEvents.includes(type)) {
+            XMLHttpRequest._instances.delete(this._instanceID);
         }
     }
 }

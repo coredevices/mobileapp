@@ -94,7 +94,7 @@ class CallDoNotDisturbFilter(
         contactName: String?,
         contactNumber: String,
     ): Boolean {
-        if (!notificationConfig.value.respectDoNotDisturb) return false
+        if (!notificationConfig.value.respectDoNotDisturbForCalls) return false
         if (!isDoNotDisturbActive()) return false
 
         waitForRecentRanking(contactName, contactNumber)

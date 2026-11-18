@@ -132,6 +132,8 @@ private object PreferencesTestImpl: Preferences {
         get() = TODO("Not yet implemented")
     override val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
         get() = TODO("Not yet implemented")
+    override val beeperMessageAnyone: StateFlow<Boolean>
+        get() = TODO("Not yet implemented")
     override val secondaryMode: StateFlow<SecondaryMode>
         get() = TODO("Not yet implemented")
     override val reminderProviderId: StateFlow<String>
@@ -141,6 +143,8 @@ private object PreferencesTestImpl: Preferences {
     override val noteShortcut: StateFlow<NoteShortcutType>
         get() = TODO("Not yet implemented")
     override val autoDismissActionNotifications: StateFlow<Boolean>
+        get() = MutableStateFlow(true)
+    override val actionValidationEnabled: StateFlow<Boolean>
         get() = MutableStateFlow(true)
     override val backupEnabled: StateFlow<Boolean>
         get() = MutableStateFlow(true)
@@ -209,6 +213,10 @@ private object PreferencesTestImpl: Preferences {
         TODO("Not yet implemented")
     }
 
+    override fun setBeeperMessageAnyone(enabled: Boolean) {
+        TODO("Not yet implemented")
+    }
+
     override fun setSecondaryMode(mode: SecondaryMode) {
         TODO("Not yet implemented")
     }
@@ -226,6 +234,8 @@ private object PreferencesTestImpl: Preferences {
     }
 
     override fun setAutoDismissActionNotifications(enabled: Boolean) {}
+
+    override fun setActionValidationEnabled(enabled: Boolean) {}
 
     override fun setBackupEnabled(enabled: Boolean) {}
     override fun setPhoneCalendarEnabled(enabled: Boolean) {}

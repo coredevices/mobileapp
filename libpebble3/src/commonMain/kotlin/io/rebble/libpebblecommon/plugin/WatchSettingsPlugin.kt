@@ -112,6 +112,7 @@ class WatchSettingsPlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         val kind = SettingKind.entries.firstOrNull { it.item == item }
         if (category != CATEGORY || kind == null) return emptyFlow()

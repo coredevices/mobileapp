@@ -76,7 +76,7 @@ fun ToolConfirmationCard(
             Spacer(Modifier.width(6.dp))
             Column {
                 Text(
-                    "Confirm action",
+                    request.title ?: "Confirm action",
                     color = colors.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -129,7 +129,7 @@ fun ToolConfirmationCard(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onRespond(false) }, modifier = Modifier.weight(1f)) {
-                Text("Deny")
+                Text(request.denyLabel ?: "Deny")
             }
             Button(
                 onClick = { onRespond(true) },
@@ -139,7 +139,7 @@ fun ToolConfirmationCard(
                 } else {
                     ButtonDefaults.buttonColors()
                 },
-            ) { Text("Allow") }
+            ) { Text(request.allowLabel ?: "Allow") }
         }
     }
     if (showDetails) {

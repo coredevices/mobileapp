@@ -221,6 +221,7 @@ class IndexWebhookSettingsViewModelTest {
             signRequests: Boolean,
             signingSecret: String?,
             clickPayload: String,
+            sendJson: Boolean,
         ): IndexWebhookRunResult {
             lastTestRequest = TestRequest(gesture, url, signRequests, signingSecret)
             return IndexWebhookRunResult(true, "200 OK", "test event", 0, 0)

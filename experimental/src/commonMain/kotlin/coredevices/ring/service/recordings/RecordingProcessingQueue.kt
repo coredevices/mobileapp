@@ -29,10 +29,12 @@ import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.ring.agent.AgentAuthenticationException
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.parseAsButtonSequence
 import coredevices.ring.service.recordings.button.RecordingOperationFactory
 import coredevices.ring.storage.RecordingStorage
 import coredevices.ring.util.trace.RingTraceSession
+import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -73,12 +75,14 @@ class RecordingProcessingQueue(
     private val recordingPreprocessor: RecordingPreprocessor,
     private val trace: RingTraceSession,
     settings: Settings,
+    platform: Platform,
     rescheduleDelay: Duration = 1.minutes,
     maxConcurrency: Int = 20,
 ): KoinComponent, PersistentQueueScheduler<RecordingProcessingTask>(
     repository = queueTaskRepository,
     scope = scope,
     settings = settings,
+    platform = platform,
     label = "RecordingProcessing",
     rescheduleDelay = rescheduleDelay,
     maxConcurrency = maxConcurrency,
@@ -537,14 +541,12 @@ class RecordingProcessingQueue(
         trace.markEvent("handling_audio_task_end", TraceEventData.HandlingAudioTask(transferId))
     }
 
-    fun isTypedQuestion(text: String): Boolean = text.trim().endsWith("?")
-
     private suspend fun handleChat(
         handle: TaskHandle,
         task: ProcessingTask.TextRecording
     ) {
         val transcription = task.transcription
-        val isGestureCommand = task.buttonSequence != null
+        val gesture = task.buttonSequence?.parseAsButtonSequence()?.let { RingGesture.forSequence(it) }
         logger.v { "Handling text recording" }
         val recordingId = if (handle.stage is RecordingProcessingStage.RecordingEntityCreated) {
             (handle.stage as RecordingProcessingStage.RecordingEntityCreated).recordingEntityId
@@ -553,7 +555,7 @@ class RecordingProcessingQueue(
             val id = recordingRepository.createRecording(
                 firestoreId = firestoreRecordingsDao.newDocumentId(),
             )
-            if (isGestureCommand) {
+            if (task.buttonSequence != null) {
                 queueTaskRepository.updateTaskRecordingId(taskId = handle.taskId, recordingId = id)
             }
             handle.updateStage(
@@ -565,8 +567,7 @@ class RecordingProcessingQueue(
             recordingId = recordingId,
             text = transcription,
             forcedTool = { sessionContext -> forcedNoteTool(transcription, sessionContext) },
-            isQuestion = !isGestureCommand && isTypedQuestion(transcription),
-            isGestureCommand = isGestureCommand,
+            gesture = gesture,
         )
         operation.run(handle)
     }
@@ -609,6 +610,10 @@ class RecordingProcessingQueue(
         fileId: String,
         buttonSequence: String? = null,
     ) {
+        if ((recordingStorage.statCachedRecordingSource(fileId) ?: 0L) == 0L) {
+            logger.w { "Local recording $fileId is missing/empty, ignoring" }
+            return
+        }
         val task = ProcessingTask.LocalAudioRecording(
             fileId = fileId,
             buttonSequence = buttonSequence,

@@ -1,8 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
 import com.russhwolf.settings.MapSettings
-import io.rebble.libpebblecommon.WatchConfig
-import io.rebble.libpebblecommon.asFlow
 import io.rebble.libpebblecommon.permissions.PermissionSubject
 import io.rebble.libpebblecommon.permissions.notificationsKey
 import io.rebble.libpebblecommon.plugin.PluginPermissions.NOTIFICATIONS
@@ -34,7 +32,7 @@ private class BuiltIn(override val sources: List<SourceDeclaration>) : NativePlu
     override val pluginUuid = BUILT_IN
     override val name = "Preferences"
     override val description = ""
-    override fun observe(category: String, item: String, properties: List<String>?, iconPixelSize: IconPixelSize?) =
+    override fun observe(category: String, item: String, properties: List<String>?, iconPixelSize: IconPixelSize?, limit: Int?) =
         emptyFlow<SourceEnvelope>()
 }
 
@@ -45,6 +43,7 @@ private class Js(override val pluginUuid: Uuid, override val name: String, overr
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate> = emptyFlow()
 
@@ -63,7 +62,7 @@ class PluginSourcesTest {
         vararg plugins: Plugin,
         upstream: (PluginMetadata) -> Flow<SourceUpdate> = { flowOf(served(it.pluginUuid)) },
     ): PluginSources {
-        val registry = PluginRegistry(plugins.filterIsInstance<NativePlugin>().toSet(), WatchConfig(enablePlugins = true).asFlow(), MapSettings())
+        val registry = PluginRegistry(plugins.filterIsInstance<NativePlugin>().toSet(), MapSettings())
         plugins.filterNot { it is NativePlugin }.forEach(registry::registerPlugin)
         return PluginSources(registry, { PermissionSubject(it, legacy = false) }, { _, p -> declared[p] ?: listOf(p) }) { caller, plugin, _ ->
             readAs += caller to plugin.pluginUuid

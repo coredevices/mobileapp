@@ -30,6 +30,7 @@ import coredevices.libindex.LibIndex
 import coredevices.libindex.device.IndexIdentifier
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
+import coredevices.pebble.PendingBootConfig
 import coredevices.pebble.PendingFirmwareSideload
 import coredevices.pebble.Platform
 import coredevices.pebble.RealPebbleDeepLinkHandler
@@ -362,6 +363,9 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override fun navigateToLockerTab(type: AppType) {}
         override fun consumeRequestIndexCompanion() {}
         override fun confirmPendingFirmwareSideload() {}
+        override val pendingBootConfig: StateFlow<PendingBootConfig?> = MutableStateFlow(null)
+        override fun confirmPendingBootConfig() {}
+        override fun dismissPendingBootConfig() {}
         override fun dismissPendingFirmwareSideload() {}
         override fun sideloadFirmware(file: Path) {}
         override fun openStoreAppLink(url: String): Boolean = false

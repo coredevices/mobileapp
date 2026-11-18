@@ -40,8 +40,13 @@ private val WATCH_PLUGIN_UUIDS: Set<Uuid> = setOf(
 
 fun PluginMetadata.needsWatch(): Boolean = pluginUuid in WATCH_PLUGIN_UUIDS
 
-/** Plugins with something for the agent, in either form. */
-fun List<PluginMetadata>.forAgent(): List<PluginMetadata> = filter { plugin -> PluginGrant.entries.any { plugin.offers(it) } }
+/**
+ * Plugins with something for the agent, in either form. The servlet plugins are left out: the agent
+ * already has their tools through the built-in servlets.
+ */
+fun List<PluginMetadata>.forAgent(): List<PluginMetadata> = filter { plugin ->
+    plugin.pluginUuid !in IndexServletPlugins.UUIDS && PluginGrant.entries.any { plugin.offers(it) }
+}
 
 /** Drops the watch-bound plugins while no watch is paired. */
 fun List<PluginMetadata>.forWatchPaired(watchPaired: Boolean): List<PluginMetadata> =

@@ -4,6 +4,9 @@ import coredevices.indexai.util.JsonSnake
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.withItemId
 import dev.gitlive.firebase.internal.decode
+import dev.gitlive.firebase.internal.encode
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -139,5 +142,55 @@ class TolerantSemanticResultSerializerTest {
         val lookup = SemanticResult.SupportingData("info").withItemId("item-2")
         assertNull(lookup.itemId)
         assertEquals(SemanticResult.SupportingData("info"), lookup)
+    }
+
+    private val confirmation = SemanticResult.RequiresConfirmation(
+        integrationName = "Music",
+        toolName = "clear_queue",
+        arguments = JsonObject(mapOf("count" to JsonPrimitive(3))),
+        destructive = true,
+    )
+
+    @Test
+    fun requiresConfirmationRoundTripsOnTheFirestorePath() {
+        val doc = RecordingDocument(
+            assistantSession = AssistantSessionDocument(
+                messages = listOf(
+                    ConversationMessageDocument(
+                        role = MessageRole.tool,
+                        tool_call_id = "call-1",
+                        semantic_result = confirmation,
+                    ),
+                ),
+            ),
+        )
+        val encoded = encode(RecordingDocument.serializer(), doc) {}
+        assertEquals(doc, decode(RecordingDocument.serializer(), encoded))
+    }
+
+    @Test
+    fun validationFailureRoundTripsOnTheFirestorePath() {
+        val doc = RecordingDocument(
+            assistantSession = AssistantSessionDocument(
+                messages = listOf(
+                    ConversationMessageDocument(
+                        role = MessageRole.tool,
+                        tool_call_id = "call-1",
+                        semantic_result = SemanticResult.ValidationFailure(
+                            "Music", "clear_queue", confirmation.arguments, probabilityValid = 0.125,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val encoded = encode(RecordingDocument.serializer(), doc) {}
+        assertEquals(doc, decode(RecordingDocument.serializer(), encoded))
+    }
+
+    @Test
+    fun requiresConfirmationArgumentsStayAnObjectInJson() {
+        val json = JsonSnake.encodeToString(TolerantSemanticResultSerializer, confirmation)
+        assertTrue(""""arguments":{"count":3}""" in json, json)
+        assertEquals(confirmation, JsonSnake.decodeFromString(TolerantSemanticResultSerializer, json))
     }
 }

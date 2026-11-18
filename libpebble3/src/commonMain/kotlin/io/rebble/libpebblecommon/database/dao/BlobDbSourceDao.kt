@@ -57,6 +57,8 @@ data class ValueParams(
 interface BlobDbItem {
     fun key(): UByteArray
     fun value(params: ValueParams): UByteArray?
+    /** When true, the item is marked synced without being sent to the watch. */
+    fun skipForWatch(params: ValueParams): Boolean = false
     fun recordHashCode(): Int
     /** Only needed for tables which use insert-with-timestamp */
     fun timestamp(): Instant? = null

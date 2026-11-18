@@ -1,16 +1,19 @@
 package io.rebble.libpebblecommon.connection.devconnection
 
+import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.PebbleProtocolHandler
 import io.rebble.libpebblecommon.connection.endpointmanager.CompanionAppLifecycleManager
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.plugin.PluginLogs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -37,6 +40,7 @@ class DevConnectionManager(
     private val resumer: DevConnectionResumer,
     private val scope: ConnectionCoroutineScope
 ): ConnectedPebble.DevConnection {
+    private val logger = Logger.withTag("DevConnectionManager")
     private val job: MutableStateFlow<Job?> = MutableStateFlow(null)
     override val devConnectionActive: StateFlow<Boolean> =
         job.map { it?.isActive == true }.stateIn(
@@ -44,6 +48,8 @@ class DevConnectionManager(
             SharingStarted.Companion.Eagerly,
             false
         )
+    private val _devConnectionError = MutableStateFlow<String?>(null)
+    override val devConnectionError: StateFlow<String?> = _devConnectionError.asStateFlow()
 
     fun init() {
         val forceLan = resumer.active.value[identifier] ?: return
@@ -63,6 +69,7 @@ class DevConnectionManager(
             companionAppLifecycleManager.currentPKJSSession.flatMapLatest { it?.logMessages?.receiveAsFlow() ?: emptyFlow() },
             pluginLogs.messages,
         )
+        _devConnectionError.value = null
         job.value = scope.launch {
             var last: DevConnectionTransport? = null
             try {
@@ -79,6 +86,11 @@ class DevConnectionManager(
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.e(e) { "Dev connection failed" }
+                _devConnectionError.value = e.message ?: e::class.simpleName
             } finally {
                 // The LAN server is a process-wide singleton; coroutine cancellation alone won't
                 // release its socket, so stop() explicitly to free port 9000.
@@ -92,6 +104,7 @@ class DevConnectionManager(
     }
 
     override suspend fun stopDevConnection() {
+        _devConnectionError.value = null
         resumer.active.update { it - identifier }
         job.value?.cancel()
     }

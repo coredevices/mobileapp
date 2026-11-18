@@ -98,26 +98,6 @@ fun formatDateRangeLabel(startDate: LocalDate, endDate: LocalDate): String {
 }
 
 /**
- * Formats a time label (e.g., "3PM" or "3:30PM").
- */
-fun formatTimeLabel(instant: Instant, timeZone: TimeZone): String {
-    val localTime = instant.toLocalDateTime(timeZone).time
-    val hour24 = localTime.hour
-    val minute = localTime.minute
-    val amPm = if (hour24 >= 12) "PM" else "AM"
-    val displayHour = when (val h = hour24 % 12) {
-        0 -> 12
-        else -> h
-    }
-
-    return if (minute == 0) {
-        "$displayHour$amPm"
-    } else {
-        "$displayHour:${minute.toString().padStart(2, '0')}$amPm"
-    }
-}
-
-/**
  * Rounds an instant to the nearest hour.
  */
 fun roundToNearestHour(instant: Instant, timeZone: TimeZone): Instant {

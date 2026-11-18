@@ -108,6 +108,15 @@ object PebbleNavBarRoutes {
     data object PermissionUsageRoute : NavBarRoute
 
     @Serializable
+    data object AppDataUsageRoute : NavBarRoute
+
+    @Serializable
+    data object AppActivityRoute : NavBarRoute
+
+    @Serializable
+    data class ActionLogRoute(val callerUuid: String?, val pluginUuid: String?) : NavBarRoute
+
+    @Serializable
     data class PermissionHoldersRoute(val permission: String) : NavBarRoute
 
     @Serializable
@@ -293,6 +302,16 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.PermissionUsageRoute> {
         PermissionUsageScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.AppDataUsageRoute> {
+        AppDataUsageScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.AppActivityRoute> {
+        AppActivityScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.ActionLogRoute> {
+        val route: PebbleNavBarRoutes.ActionLogRoute = it.toRoute()
+        ActionLogScreen(nav, topBarParams, route.callerUuid?.let(Uuid::parse), route.pluginUuid?.let(Uuid::parse))
     }
     composable<PebbleNavBarRoutes.PermissionHoldersRoute> {
         val route: PebbleNavBarRoutes.PermissionHoldersRoute = it.toRoute()

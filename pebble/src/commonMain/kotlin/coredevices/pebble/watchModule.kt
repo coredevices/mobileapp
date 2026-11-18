@@ -150,7 +150,8 @@ val watchModule = module {
             return this@single.get()
         }
     } } bind PebbleAccountProvider::class
-    singleOf(::PebbleAppDelegate)
+    // Too many params for singleOf
+    single { PebbleAppDelegate(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::BundledAppMigration)
     singleOf(::PermissionSettingsSync)
     singleOf(::PermissionDecisionSync)

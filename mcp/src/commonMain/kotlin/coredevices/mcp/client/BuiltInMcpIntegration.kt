@@ -9,7 +9,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
 import kotlinx.serialization.json.JsonElement
 
-open class BuiltInMcpIntegration(override val name: String, protected val tools: List<McpTool>) : McpIntegration {
+open class BuiltInMcpIntegration(override val name: String, val tools: List<McpTool>) : McpIntegration {
     private val toolMap: Map<String, McpTool> = tools.associateBy { it.definition.name }
     override suspend fun connect() {
         // no-op
@@ -35,7 +35,7 @@ open class BuiltInMcpIntegration(override val name: String, protected val tools:
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? {
         val disabled = getDisabledTools().toSet()
-        return tools.filterNot { it.definition.name in disabled }.joinToString("\n") { it.extraContext ?: "" }.takeIf { it.isNotEmpty() }
+        return tools.filterNot { it.definition.name in disabled }.map { it.getExtraContext() ?: "" }.joinToString("\n").takeIf { it.isNotEmpty() }
     }
 
     protected open suspend fun getDisabledTools() = emptyList<String>()

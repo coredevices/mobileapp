@@ -33,6 +33,7 @@ internal class FakePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (!serves(category, item)) return emptyFlow()
         val served = envelopes["$category/$item"] ?: envelope ?: return emptyFlow()

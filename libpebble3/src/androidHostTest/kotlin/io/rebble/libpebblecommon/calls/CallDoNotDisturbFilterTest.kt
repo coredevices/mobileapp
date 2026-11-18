@@ -15,7 +15,7 @@ class CallDoNotDisturbFilterTest {
     private var interruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL
 
     private fun filter(
-        config: NotificationConfig = NotificationConfig(respectDoNotDisturb = true),
+        config: NotificationConfig = NotificationConfig(respectDoNotDisturbForCalls = true),
     ) = CallDoNotDisturbFilter(
         notificationConfig = config.asFlow(),
         privateLogger = PrivateLogger(config.asFlow()),
@@ -25,7 +25,7 @@ class CallDoNotDisturbFilterTest {
     @Test
     fun `setting off never suppresses calls`() = runTest {
         interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY
-        val filter = filter(NotificationConfig(respectDoNotDisturb = false))
+        val filter = filter(NotificationConfig(respectDoNotDisturb = true))
 
         assertFalse(filter.shouldSuppressIncomingCall("Alice", "+15551234567"))
     }

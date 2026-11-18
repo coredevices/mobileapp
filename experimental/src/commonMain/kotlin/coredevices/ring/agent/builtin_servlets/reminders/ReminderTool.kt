@@ -10,17 +10,18 @@ import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import coredevices.ring.agent.builtin_servlets.DESTINATION_ARG
-import coredevices.ring.agent.builtin_servlets.destinationProperty
-import coredevices.ring.agent.builtin_servlets.withoutDestination
+import coredevices.ring.agent.builtin_servlets.REMINDER_DESTINATION_DESCRIPTION
 import coredevices.ring.agent.integrations.itemSource
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.IntegrationSupport
 import coredevices.ring.agent.integrations.providers.externalDestination
-import coredevices.ring.ui.isLocale24HourFormat
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.util.isLocale24HourFormat
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
 import coredevices.util.capitalizeFirstWord
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -29,15 +30,11 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 
 class ReminderTool: BuiltInMcpTool(
-    definition = DEFINITION,
-    localDefinition = DEFINITION.withoutDestination(),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
         Only pass times to 'create_reminder' that the user actually said. If the user started to specify a reminder time but it was cut off, do not guess one and do not create the reminder; tell the user the time was missing. Omit the time fields entirely for reminders without a time.
     """.trimIndent()
@@ -48,52 +45,20 @@ class ReminderTool: BuiltInMcpTool(
         const val TOOL_NAME = "create_reminder"
         const val TOOL_DESCRIPTION = "Set a reminder optionally for a future time. Use when the user requests a reminder, asks to remember to do something ('remind me to...', 'remember to...'), or wants to be reminded at a specific time or date."
         private val logger = Logger.withTag("ReminderTool")
-        private val DEFINITION = Tool(
-            name = TOOL_NAME,
-            description = TOOL_DESCRIPTION,
-            inputSchema = ToolSchema(
-                properties = JsonObject(
-                    mapOf(
-                        "date_time_human" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'"
-                            ).toJson()
-                        ),
-                        "duration_human" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'"
-                            ).toJson()
-                        ),
-                        "notification_hours_before" to JsonObject(
-                            mapOf(
-                                "type" to "number",
-                                "description" to "If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice."
-                            ).toJson()
-                        ),
-                        "message" to JsonObject(
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The message to remind the user e.g. 'Buy more milk'"
-                            ).toJson()
-                        ),
-                        DESTINATION_ARG to destinationProperty("reminder"),
-                    )
-                ),
-                required = listOf(
-                    "message"
-                )
-            )
-        )
     }
 
+    @ToolDefinition(servlet = ReminderServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     private data class RemindArgs(
+        @ToolParam("If provided by the user, the date and/or time to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'tomorrow at 13:00', 'next Monday at 9am', 'on July 5th at 14:30', 'at 3pm'")
         val date_time_human: String? = null,
+        @ToolParam("If provided by the user, the duration from now to remind the user in human readable format. Must be in English — translate it if the user spoke another language. e.g. 'in 2 hours', 'in 30 minutes', 'in 1 day and 3 hours'")
         val duration_human: String? = null,
+        @ToolParam("If the user requests to be reminded before the reminder time, set the number of hours here, for example 'before Monday' would be 24 hours notice, but 'before 3pm' would be 1 hour notice.")
         val notification_hours_before: Double? = null,
+        @ToolParam("The message to remind the user e.g. 'Buy more milk'")
         val message: String,
+        @ToolParam(REMINDER_DESTINATION_DESCRIPTION)
         val destination: String? = null,
     )
 
@@ -133,11 +98,9 @@ class ReminderTool: BuiltInMcpTool(
             }
             when (parsed) {
                 is InterpretedDateTime.AbsoluteDate -> {
-                    logger.d { "Parsed absolute date: $parsed will assume 9am" }
-                    LocalDateTime(
-                        date = parsed.date,
-                        time = LocalTime(9, 0)
-                    )
+                    val resolved = parsed.resolveDefaultTime(Clock.System.now(), tz)
+                    logger.d { "Parsed absolute date: $parsed resolved to $resolved" }
+                    resolved
                 }
                 is InterpretedDateTime.AbsoluteDateTime -> {
                     logger.d { "Parsed absolute date time: $parsed" }

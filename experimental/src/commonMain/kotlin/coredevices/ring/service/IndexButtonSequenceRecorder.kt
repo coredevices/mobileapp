@@ -35,6 +35,8 @@ enum class ButtonPress {
     Long
 }
 
+fun List<ButtonPress>.toButtonSequenceString(): String = joinToString(" ") { it.name.lowercase() }
+
 fun String.parseAsButtonSequence(): List<ButtonPress> {
     return this.split(" ").mapNotNull {
         when (it.lowercase()) {

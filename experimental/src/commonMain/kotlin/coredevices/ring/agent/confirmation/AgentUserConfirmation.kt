@@ -21,7 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Lets the user allow or deny a tool call the agent paused on ([SemanticResult.RequiresConfirmation]),
+ * Lets the user allow or deny a tool call the agent paused on ([SemanticResult.confirmationRequest]),
  * from the conversation screen or a notification. Answering runs the call (or records the denial)
  * and resumes the agent.
  */
@@ -45,7 +45,7 @@ class RealAgentUserConfirmation(
     private val inFlight = mutableSetOf<String>()
 
     override suspend fun requestConfirmation(recordingId: Long, request: ConversationMessageDocument) {
-        val result = request.semantic_result as? SemanticResult.RequiresConfirmation ?: return
+        val result = request.semantic_result?.confirmationRequest ?: return
         val callId = request.tool_call_id ?: return
         notifications.notify(confirmationNotification(recordingId, callId, result))
     }
@@ -88,6 +88,22 @@ private const val RECORDING_ID_PARAM = "recordingId"
 private const val CALL_ID_PARAM = "callId"
 private const val APPROVED_PARAM = "approved"
 
+private const val VALIDATION_FAILURE_DESCRIPTION = "This might not be what you asked for."
+
+/** The allow / deny prompt this result puts to the user, or null when it asks for nothing. */
+val SemanticResult.confirmationRequest: SemanticResult.RequiresConfirmation?
+    get() = when (this) {
+        is SemanticResult.RequiresConfirmation -> this
+        is SemanticResult.ValidationFailure -> SemanticResult.RequiresConfirmation(
+            integrationName = integrationName,
+            toolName = toolName,
+            arguments = arguments,
+            destructive = false,
+            description = VALIDATION_FAILURE_DESCRIPTION,
+        )
+        else -> null
+    }
+
 internal fun confirmationNotificationId(toolCallId: String): Int =
     NOTIFICATION_ID_BASE + (toolCallId.hashCode() and 0xFFFF)
 
@@ -97,7 +113,7 @@ internal fun confirmationNotification(
     request: SemanticResult.RequiresConfirmation,
 ): GenericNotification {
     val tool = humanizeToolName(request.toolName) ?: request.toolName
-    val content = buildString {
+    val content = if (request.title != null) request.description.orEmpty() else buildString {
         appendLine("Allow agent to run $tool from ${request.integrationName}?")
         request.description?.let {
             appendLine()
@@ -110,13 +126,13 @@ internal fun confirmationNotification(
     }.trim()
     return GenericNotification(
         id = confirmationNotificationId(toolCallId),
-        title = "Confirm agent action",
+        title = request.title ?: "Confirm agent action",
         contentText = content.takeIf { it.isNotBlank() },
         deepLink = RingRoutes.recordingDeepLink(recordingId),
         channel = IndexNotificationChannel.IndexAction,
         actions = listOf(
-            NotificationAction("Allow", confirmationDeepLink(recordingId, toolCallId, approved = true), background = true),
-            NotificationAction("Deny", confirmationDeepLink(recordingId, toolCallId, approved = false), background = true),
+            NotificationAction(request.allowLabel ?: "Allow", confirmationDeepLink(recordingId, toolCallId, approved = true), background = true),
+            NotificationAction(request.denyLabel ?: "Deny", confirmationDeepLink(recordingId, toolCallId, approved = false), background = true),
         ),
     )
 }

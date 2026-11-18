@@ -24,15 +24,17 @@ import co.touchlab.kermit.Severity
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
-import coil3.gif.GifDecoder
-import coil3.memory.MemoryCache
+import coil3.gif.AnimatedImageDecoder
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.google.firebase.Firebase
 import com.google.firebase.crashlytics.crashlytics
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import com.russhwolf.settings.Settings
+import com.russhwolf.settings.set
 import coredevices.ExperimentalDevices
+import coredevices.analytics.CoreAnalytics
 import coredevices.coreapp.di.androidDefaultModule
 import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
@@ -47,6 +49,9 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.R
 import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -55,6 +60,7 @@ import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 
 private val logger = Logger.withTag("MainApplication")
+private const val KEY_LAST_REPORTED_EXIT_TIMESTAMP = "last_reported_exit_timestamp"
 
 class MainApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
@@ -63,6 +69,14 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+    private val coreAnalytics: CoreAnalytics by inject()
+    private val settings: Settings by inject()
+
+    companion object {
+        // False if the process started without onCreate, e.g. backup restricted mode
+        var koinStarted = false
+            private set
+    }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
@@ -84,9 +98,10 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                 watchModule,
             )
         }
+        koinStarted = true
         initLogging()
         logger.i { "onCreate() version = $appVersionName ($appVersionCode) ${if (AppContext(this).isDebugBuild()) "debug" else "release"}" }
-        dumpPreviousExitInfo()
+        GlobalScope.launch(Dispatchers.IO) { dumpPreviousExitInfo() }
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -123,11 +138,9 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         } else {
             PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         }
-        packageManager.setComponentEnabledSetting(
-            ComponentName(this, className),
-            state,
-            PackageManager.DONT_KILL_APP,
-        )
+        val component = ComponentName(this, className)
+        if (packageManager.getComponentEnabledSetting(component) == state) return
+        packageManager.setComponentEnabledSetting(component, state, PackageManager.DONT_KILL_APP)
     }
 
     private fun dumpPreviousExitInfo() {
@@ -136,6 +149,10 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                 getSystemService(ActivityManager::class.java)
             // The newest record is often an isolated child (WebView), so log them all.
             val reasons = am.getHistoricalProcessExitReasons(packageName, 0, 0)
+            // First run: only report the most recent exit, not the whole history.
+            val lastReported = settings.getLongOrNull(KEY_LAST_REPORTED_EXIT_TIMESTAMP)
+                ?: reasons.filter { it.processName == packageName }.maxOfOrNull { it.timestamp - 1 }
+                ?: 0L
             reasons.forEach { info ->
                 val time = Instant.fromEpochMilliseconds(info.timestamp)
                 logger.i {
@@ -144,7 +161,21 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
                             "description=${info.description} importance=${info.importance} " +
                             "pss=${info.pss} rss=${info.rss} status=${info.status}"
                 }
+                if (info.timestamp > lastReported && info.processName == packageName) {
+                    coreAnalytics.logEvent(
+                        "app.previous_exit",
+                        mapOf(
+                            "reason" to reasonName(info.reason),
+                            "description" to (info.description ?: ""),
+                            "importance" to info.importance,
+                            "pss_kb" to info.pss,
+                            "rss_kb" to info.rss,
+                            "status" to info.status,
+                        )
+                    )
+                }
             }
+            reasons.maxOfOrNull { it.timestamp }?.let { settings[KEY_LAST_REPORTED_EXIT_TIMESTAMP] = it }
         }
     }
 
@@ -204,33 +235,31 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private fun setupExceptionHandler() {
         val existingHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            fileLogWriter.logBlockingAndFlush(
-                Severity.Error,
-                "Unhandled exception in thread ${thread.name}: ${throwable.message}",
-                "MainApplication",
-                throwable
-            )
-            // Allow Firebase to also handle the exception
-            existingHandler?.uncaughtException(thread, throwable)
+            try {
+                fileLogWriter.logBlockingAndFlush(
+                    Severity.Error,
+                    "Unhandled exception in thread ${thread.name}: ${throwable.message}",
+                    "MainApplication",
+                    throwable
+                )
+            } finally {
+                // Must always run: it's what kills the process
+                existingHandler?.uncaughtException(thread, throwable)
+            }
         }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .crossfade(true)
-            .memoryCache {
-                MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
-                    .build()
-            }
+            // Cached hardware bitmaps keep their GPU buffers after backgrounding (the foreground service blocks trimming).
+            .memoryCache(null)
             .components {
                 add(SvgDecoder.Factory())
-                // Trying to see if not using AnimatedImageDecoder fixes memory leaks
-//                if (SDK_INT >= 28) {
-//                    add(AnimatedImageDecoder.Factory())
-//                } else {
-                    add(GifDecoder.Factory())
-//                }
+                // Below P, GIFs show their first frame.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(AnimatedImageDecoder.Factory())
+                }
             }
             .build()
     }
@@ -245,14 +274,17 @@ fun scheduleBackgroundJob(appContext: AppContext, coreConfig: CoreConfig) {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
     ).build()
-    try {
-        WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
-            uniqueWorkName = "core_refresh",
-            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
-            request = workRequest,
-        )
-    } catch (e: Throwable) {
-        // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
-        logger.e(e) { "Failed to schedule background job" }
+    // WorkManager.getInstance opens its database on first use
+    GlobalScope.launch(Dispatchers.IO) {
+        try {
+            WorkManager.getInstance(appContext.context).enqueueUniquePeriodicWork(
+                uniqueWorkName = "core_refresh",
+                existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.UPDATE,
+                request = workRequest,
+            )
+        } catch (e: Throwable) {
+            // Broken OEM builds throw NoSuchMethodError from WorkManager init; sync just won't run.
+            logger.e(e) { "Failed to schedule background job" }
+        }
     }
 }

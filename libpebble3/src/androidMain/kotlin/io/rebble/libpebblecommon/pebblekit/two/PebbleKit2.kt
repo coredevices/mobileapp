@@ -119,7 +119,7 @@ class PebbleKit2(
     }
 
     private suspend fun isAllowed(pkg: String) =
-        !permissions.enforcing || permissions.request(uuid, pebbleKit2Key(pkg)) == PermissionDecision.Granted
+        permissions.request(uuid, pebbleKit2Key(pkg)) == PermissionDecision.Granted
 
     suspend fun sendMessage(pebbleDictionary: PebbleDictionary): TransmissionResult {
         val transactionId = (nextTransactionId.getAndIncrement() % UByte.MAX_VALUE.toInt()).toUByte()

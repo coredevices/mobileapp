@@ -50,11 +50,13 @@ import coredevices.libindex.database.entity.RingTransfer
 import coredevices.ring.data.entity.room.TraceEntryEntity
 import coredevices.ring.data.entity.room.TraceSessionEntity
 import coredevices.ring.data.entity.room.clock.LocalClockEntry
+import coredevices.ring.data.entity.room.battery.RingBatteryHistory
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import coredevices.ring.database.room.dao.CachedItemDao
 import coredevices.ring.database.room.dao.CachedListDao
 import coredevices.ring.database.room.dao.CachedRecordingMetadataDao
 import coredevices.ring.database.room.dao.LocalClockDao
+import coredevices.ring.database.room.dao.RingBatteryHistoryDao
 import coredevices.ring.database.room.dao.LocalReminderDao
 import coredevices.ring.database.room.dao.PluginGrantDao
 import coredevices.ring.database.room.dao.IndexWebhookDeliveryDao
@@ -63,6 +65,8 @@ import coredevices.ring.database.room.dao.RingDebugTransferDao
 import coredevices.ring.database.room.dao.RingRssiReadingDao
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.dao.RingTransferFeedItem
+import coredevices.ring.data.entity.room.SavedGeofenceLocation
+import coredevices.ring.database.room.dao.SavedGeofenceLocationDao
 import coredevices.ring.database.room.dao.TraceEntryDao
 import coredevices.ring.database.room.dao.TraceSessionDao
 import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
@@ -96,12 +100,14 @@ import kotlin.uuid.Uuid
         AgentIterationEntity::class,
         RingRssiReading::class,
         LocalClockEntry::class,
+        RingBatteryHistory::class,
+        SavedGeofenceLocation::class,
     ],
     views = [
         RecordingFeedItem::class,
         RingTransferFeedItem::class
     ],
-    version = 46,
+    version = 50,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -161,6 +167,14 @@ import kotlin.uuid.Uuid
         AutoMigration(from = 44, to = 45),
         // 45→46: adds IndexWebhookDeliveryEntity.
         AutoMigration(from = 45, to = 46),
+        // 46→47: adds SavedGeofenceLocation and LocalReminderData.geofenceLocationId.
+        AutoMigration(from = 46, to = 47),
+        // 47→48: adds RingBatteryHistory (Index 01 battery-life estimate).
+        AutoMigration(from = 47, to = 48),
+        // 48→49: turns the voice bug report action off until the user enables it.
+        AutoMigration(from = 48, to = 49, Migrate48To49::class),
+        // 49→50: adds indices on TraceEntryEntity, RecordingProcessingTaskEntity and RingTransfer.
+        AutoMigration(from = 49, to = 50),
     ]
 )
 @TypeConverters(Converters::class)
@@ -185,6 +199,8 @@ abstract class RingDatabase: RoomDatabase() {
     abstract fun agentIterationDao(): AgentIterationDao
     abstract fun ringRssiReadingDao(): RingRssiReadingDao
     abstract fun localClockDao(): LocalClockDao
+    abstract fun ringBatteryHistoryDao(): RingBatteryHistoryDao
+    abstract fun savedGeofenceLocationDao(): SavedGeofenceLocationDao
 }
 
 @DeleteColumn("LocalReminderData", "platformId")
@@ -344,14 +360,42 @@ private fun SQLiteConnection.denyDefaultPluginGrants() {
     }
 }
 
+/**
+ * Built-in actions that start off; the user turns them on in Index settings. The bug report action
+ * sends logs and recordings, so the agent calling it by accident must not count as consent.
+ */
+private val BUILTINS_DISABLED_BY_DEFAULT = listOf("builtin_bug_report")
+
+private fun SQLiteConnection.disableDefaultBuiltins() {
+    val statement = prepare("INSERT OR IGNORE INTO DisabledBuiltinMcp (builtinMcpName) VALUES (?)")
+    try {
+        BUILTINS_DISABLED_BY_DEFAULT.forEach { name ->
+            statement.bindText(1, name)
+            statement.step()
+            statement.reset()
+        }
+    } finally {
+        statement.close()
+    }
+}
+
+class Migrate48To49 : AutoMigrationSpec {
+    override fun onPostMigrate(connection: SQLiteConnection) = connection.disableDefaultBuiltins()
+}
+
 class Migrate42To43 : AutoMigrationSpec {
     override fun onPostMigrate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
 }
 
 /** Fresh databases skip migrations, so the default denials are seeded here instead. */
 object SeedDefaultPluginGrants : RoomDatabase.Callback() {
-    override fun onCreate(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
-    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.denyDefaultPluginGrants()
+    override fun onCreate(connection: SQLiteConnection) = connection.seedDefaults()
+    override fun onDestructiveMigration(connection: SQLiteConnection) = connection.seedDefaults()
+
+    private fun SQLiteConnection.seedDefaults() {
+        denyDefaultPluginGrants()
+        disableDefaultBuiltins()
+    }
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")

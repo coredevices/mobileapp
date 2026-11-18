@@ -26,7 +26,6 @@ data class PermissionDefinition(
     val scopeProperty: String? = null,
 )
 
-/** No Health: the watch reads it directly, so the phone can't enforce it. */
 object PermissionRegistry {
     val all: List<PermissionDefinition> = listOf(
         PermissionDefinition(PluginPermissions.INTERNET, PermissionKind.Exfiltrating),
@@ -34,6 +33,7 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.GLOBAL_INTERNET, PermissionKind.Exfiltrating),
         PermissionDefinition(PluginPermissions.LOCATION, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WATCH_MICROPHONE, PermissionKind.Read),
+        PermissionDefinition(PluginPermissions.HEALTH, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.NOTIFICATIONS, PermissionKind.Dangerous, SourceInstance.PROPERTY_PACKAGE),
         PermissionDefinition(PluginPermissions.CALENDAR, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.CONTACTS, PermissionKind.Read),
@@ -46,6 +46,10 @@ object PermissionRegistry {
         PermissionDefinition(PluginPermissions.READ_APPS, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.LAUNCH_APPS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.FIND_MY_PHONE, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.SET_INDEX_ALARMS, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.SEND_MESSAGES_BEEPER, PermissionKind.Exfiltrating),
+        PermissionDefinition(PluginPermissions.WRITE_INDEX_NOTES, PermissionKind.Write),
+        PermissionDefinition(PluginPermissions.WRITE_INDEX_REMINDERS, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.READ_FILES, PermissionKind.Read),
         PermissionDefinition(PluginPermissions.WRITE_FILES, PermissionKind.Write),
         PermissionDefinition(PluginPermissions.LEGACY_PEBBLEKIT, PermissionKind.Exfiltrating),
@@ -58,6 +62,21 @@ object PermissionRegistry {
 }
 
 fun isLegacy(manifestVersion: Int): Boolean = manifestVersion < 2
+
+/** The first SDK that refuses to build an app using health without declaring `Health`. */
+private const val HEALTH_PERMISSION_SDK_MAJOR = 5
+private const val HEALTH_PERMISSION_SDK_MINOR = 113
+private val SDK_VERSION = Regex("(\\d+)\\.(\\d+)")
+
+/**
+ * Built before the SDK checked health use, from each platform's binary SDK version ("5.112"). Health
+ * is enforced for these only while `askLegacyAppsForPermissions` is on.
+ */
+fun isLegacyForHealth(sdkVersions: Collection<String>): Boolean = sdkVersions.all { version ->
+    val (major, minor) = SDK_VERSION.find(version)?.destructured ?: return@all true
+    major.toInt() < HEALTH_PERMISSION_SDK_MAJOR ||
+        (major.toInt() == HEALTH_PERMISSION_SDK_MAJOR && minor.toInt() < HEALTH_PERMISSION_SDK_MINOR)
+}
 
 private val LEGACY_PKJS = listOf(
     PluginPermissions.GLOBAL_INTERNET,

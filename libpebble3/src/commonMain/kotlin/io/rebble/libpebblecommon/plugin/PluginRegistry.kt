@@ -1,7 +1,6 @@
 package io.rebble.libpebblecommon.plugin
 
 import com.russhwolf.settings.Settings
-import io.rebble.libpebblecommon.WatchConfigFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +17,6 @@ import kotlin.uuid.Uuid
  */
 class PluginRegistry(
     builtIns: Set<NativePlugin>,
-    private val watchConfig: WatchConfigFlow,
     private val settings: Settings,
 ) {
     private val natives = MutableStateFlow<Map<Uuid, NativePlugin>>(builtIns.associateBy { it.pluginUuid })
@@ -55,9 +53,8 @@ class PluginRegistry(
         MutableStateFlow<Map<Uuid, Plugin>>(natives.value.filterKeys { it !in _disabledBuiltIns.value })
     }
 
-    /** Every lookup goes through here, so disabling plugins hides them all. */
     private val plugins: Collection<Plugin>
-        get() = if (watchConfig.value.enablePlugins) registered.value.values else emptyList()
+        get() = registered.value.values
 
     /** Every built-in, including disabled ones. */
     fun nativePlugins(): Flow<List<PluginMetadata>> = natives.map { all -> all.values.map { it.metadata } }
@@ -81,7 +78,8 @@ class PluginRegistry(
     }
 
     fun unregisterPlugin(pluginUuid: Uuid): Plugin? {
-        val plugin = registered.value[pluginUuid]
+        val plugin = registered.value[pluginUuid] ?: natives.value[pluginUuid]
+        natives.update { it - pluginUuid }
         registered.update { it - pluginUuid }
         return plugin
     }

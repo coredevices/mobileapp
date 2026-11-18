@@ -9,9 +9,13 @@ import coredevices.mcp.SessionContext
 import coredevices.mcp.asFrozenClock
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -21,30 +25,9 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
-import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Instant
 
 class SetTimerTool : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "time_human" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The duration or target end time to set the timer for in human readable format e.g. '1 hour and 30 minutes', '45 minutes', 'for 1:50pm', 'at 13:30'",
-                        ).toJson()
-                    )
-                )
-            ),
-            required = listOf("time_human")
-        )
-    ),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
     extraContext = """
         When using the 'set_timer' tool, lean towards setting timers for durations when it's ambiguous, for example a timer for '3:20' should be set for '3 hours and 20 minutes' not 'at 3:20'.
         Only pass a duration or end time the user actually said. If the request has no duration or end time (e.g. it cuts off like 'start the timer for'), do not call this tool and do not guess a value.
@@ -98,9 +81,11 @@ class SetTimerTool : BuiltInMcpTool(
         }
     }
 
+    @ToolDefinition(servlet = CLOCK_SERVLET_NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
     private data class SetTimerArgs(
         @SerialName("time_human")
+        @ToolParam("The duration or target end time to set the timer for in human readable format e.g. '1 hour and 30 minutes', '45 minutes', 'for 1:50pm', 'at 13:30'")
         val timeHuman: String,
     )
 

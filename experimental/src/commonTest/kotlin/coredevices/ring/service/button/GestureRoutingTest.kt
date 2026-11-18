@@ -5,6 +5,8 @@ import coredevices.ring.database.MusicControlMode
 import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.SecondaryMode
 import coredevices.ring.service.ButtonPress
+import coredevices.ring.service.parseAsButtonSequence
+import coredevices.ring.service.toButtonSequenceString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +28,14 @@ class GestureRoutingTest {
     }
 
     @Test
+    fun storedSequenceRoundTripsToGesture() {
+        RingGesture.entries.forEach { gesture ->
+            val stored = gesture.sequence.toButtonSequenceString()
+            assertEquals(gesture, RingGesture.forSequence(stored.parseAsButtonSequence()))
+        }
+    }
+
+    @Test
     fun sequencesResolveToGestures() {
         assertEquals(RingGesture.Click, RingGesture.forSequence(listOf(ButtonPress.Short)))
         assertEquals(
@@ -44,6 +54,19 @@ class GestureRoutingTest {
         assertNull(RingGesture.forSequence(emptyList()))
         assertNull(RingGesture.forSequence(listOf(ButtonPress.Long, ButtonPress.Long)))
         assertNull(RingGesture.forSequence(listOf(ButtonPress.Long, ButtonPress.Short)))
+    }
+
+    @Test
+    fun recordingSequencesResolveToTheHoldThatEndedThem() {
+        val short = ButtonPress.Short
+        val long = ButtonPress.Long
+        assertEquals(RingGesture.Hold, RingGesture.forRecordingSequence(listOf(long)))
+        assertEquals(RingGesture.Hold, RingGesture.forRecordingSequence(listOf(long, long)))
+        assertEquals(RingGesture.ClickHold, RingGesture.forRecordingSequence(listOf(short, long)))
+        assertEquals(RingGesture.ClickHold, RingGesture.forRecordingSequence(listOf(long, short, long)))
+        assertEquals(RingGesture.ClickHold, RingGesture.forRecordingSequence(listOf(short, long, short, long)))
+        assertNull(RingGesture.forRecordingSequence(emptyList()))
+        assertNull(RingGesture.forRecordingSequence(listOf(short, long, short)))
     }
 
     @Test

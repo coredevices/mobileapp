@@ -1,5 +1,9 @@
 <resources>
     <string name="voice_widget_description">Voice Note</string>
+    <string name="reminders_widget_description">Upcoming Index reminders</string>
+    <string name="reminders_widget_title">Reminders</string>
+    <string name="reminders_widget_empty">No upcoming reminders</string>
+    <string name="reminders_widget_mark_done">Mark %1$s done</string>
     <string name="share_target_index_note">Index note</string>
     <string name="share_target_index_reminder">Index reminder</string>
     <string name="share_to_index_note_done">Note added to Index</string>

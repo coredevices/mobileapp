@@ -6,7 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement.SpaceEvenly
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -60,6 +60,7 @@ import rememberOpenPhotoLauncher
 
 private val logger = Logger.withTag("ViewBugReportScreen")
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ViewBugReportScreen(
     coreNav: CoreNav,
@@ -133,8 +134,7 @@ fun ViewBugReportScreen(
             snackbarHost = { SnackbarHost(snackBarHostState) }
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                FlowRow(
                     horizontalArrangement = SpaceEvenly,
                     modifier = Modifier.fillMaxWidth(),
                 ) {

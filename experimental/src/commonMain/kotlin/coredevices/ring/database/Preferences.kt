@@ -7,6 +7,7 @@ import coredevices.ring.agent.builtin_servlets.messaging.ApprovedBeeperContact
 import coredevices.ring.agent.integrations.providers.BuiltInIntegrationProviders
 import coredevices.ring.agent.integrations.providers.LegacyProviderIds
 import coredevices.ring.data.NoteShortcutType
+import coredevices.ring.util.IndexVendorHacks
 import coredevices.util.models.CactusSTTMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -23,6 +24,7 @@ interface Preferences: BasePreferences {
     val musicControlMode: StateFlow<MusicControlMode>
     val debugDetailsEnabled: StateFlow<Boolean>
     val approvedBeeperContacts: StateFlow<List<ApprovedBeeperContact>>
+    val beeperMessageAnyone: StateFlow<Boolean>
     val secondaryMode: StateFlow<SecondaryMode>
     /** Ids of [coredevices.ring.agent.integrations.providers.IntegrationProvider]s; resolve them
      *  through `IntegrationProviderRepository`, which also handles a selection that no longer exists. */
@@ -30,6 +32,8 @@ interface Preferences: BasePreferences {
     val noteProviderId: StateFlow<String>
     val noteShortcut: StateFlow<NoteShortcutType>
     val autoDismissActionNotifications: StateFlow<Boolean>
+    /** Whether the online agent has the user confirm tool calls that don't look like what they asked for. */
+    val actionValidationEnabled: StateFlow<Boolean>
     val backupEnabled: StateFlow<Boolean>
     /** Whether the user has connected the Phone Calendar integration (Accounts → Add integration).
      *  The calendar tool stays unavailable until this is enabled AND calendar permission is granted. */
@@ -51,11 +55,13 @@ interface Preferences: BasePreferences {
     fun setMusicControlMode(mode: MusicControlMode)
     fun setDebugDetailsEnabled(enabled: Boolean)
     suspend fun setApprovedBeeperContacts(contacts: List<ApprovedBeeperContact>?)
+    fun setBeeperMessageAnyone(enabled: Boolean)
     fun setSecondaryMode(mode: SecondaryMode)
     fun setReminderProviderId(id: String)
     fun setNoteProviderId(id: String)
     fun setNoteShortcut(shortcut: NoteShortcutType)
     fun setAutoDismissActionNotifications(enabled: Boolean)
+    fun setActionValidationEnabled(enabled: Boolean)
     fun setBackupEnabled(enabled: Boolean)
     fun setPhoneCalendarEnabled(enabled: Boolean)
     fun setUseEncryption(enabled: Boolean)
@@ -125,6 +131,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         } ?: emptyList()
     )
     override val approvedBeeperContacts = _approvedBeeperContacts.asStateFlow()
+    private val _beeperMessageAnyone = MutableStateFlow(settings.getBoolean("beeper_message_anyone", false))
+    override val beeperMessageAnyone = _beeperMessageAnyone.asStateFlow()
     private val _secondaryMode = MutableStateFlow(
         SecondaryMode.fromId(settings.getInt("ring_secondary_mode", SecondaryMode.Search.id))
     )
@@ -146,6 +154,8 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override val noteShortcut: StateFlow<NoteShortcutType> = _noteShortcut.asStateFlow()
     private val _autoDismissActionNotifications = MutableStateFlow(settings.getBoolean("auto_dismiss_action_notifications", true))
     override val autoDismissActionNotifications = _autoDismissActionNotifications.asStateFlow()
+    private val _actionValidationEnabled = MutableStateFlow(settings.getBoolean("action_validation_enabled", true))
+    override val actionValidationEnabled = _actionValidationEnabled.asStateFlow()
     private val _backupEnabled = MutableStateFlow(settings.getBoolean("backup_enabled", true))
     override val backupEnabled = _backupEnabled.asStateFlow()
     private val _phoneCalendarEnabled = MutableStateFlow(settings.getBoolean("phone_calendar_enabled", false))
@@ -166,7 +176,7 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         pendingIntentScanSupported && settings.getBoolean("use_pending_intent_scan_2", true)
     )
     override val usePendingIntentScan = _usePendingIntentScan.asStateFlow()
-    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", true))
+    private val _scanByPairedAddress = MutableStateFlow(settings.getBoolean("scan_by_paired_address", IndexVendorHacks.getScanByPairedAddressDefault()))
     override val scanByPairedAddress = _scanByPairedAddress.asStateFlow()
 
     override suspend fun setUseCactusTranscription(useCactus: Boolean) {
@@ -234,6 +244,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
         }
     }
 
+    override fun setBeeperMessageAnyone(enabled: Boolean) {
+        settings.putBoolean("beeper_message_anyone", enabled)
+        _beeperMessageAnyone.value = enabled
+    }
+
     override fun setSecondaryMode(mode: SecondaryMode) {
         settings.putInt("ring_secondary_mode", mode.id)
         _secondaryMode.value = mode
@@ -258,6 +273,11 @@ class PreferencesImpl(private val settings: Settings): Preferences {
     override fun setAutoDismissActionNotifications(enabled: Boolean) {
         settings.putBoolean("auto_dismiss_action_notifications", enabled)
         _autoDismissActionNotifications.value = enabled
+    }
+
+    override fun setActionValidationEnabled(enabled: Boolean) {
+        settings.putBoolean("action_validation_enabled", enabled)
+        _actionValidationEnabled.value = enabled
     }
 
     override fun setBackupEnabled(enabled: Boolean) {

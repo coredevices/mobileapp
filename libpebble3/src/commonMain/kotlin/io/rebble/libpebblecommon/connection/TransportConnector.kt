@@ -70,7 +70,11 @@ enum class ConnectionFailureReason {
     ClassicDisconnected,
     SocketConnectionFailed,
     SocketDisconnected,
+    PeripheralNotFound,
 }
+
+/** After this many consecutive [ConnectionFailureReason.PeripheralNotFound] failures, stop auto-connecting. */
+const val PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS = 3
 
 sealed class PebbleConnectionResult {
     data class Success(val reversePpogVersion: ReversePpogVersion?) : PebbleConnectionResult()

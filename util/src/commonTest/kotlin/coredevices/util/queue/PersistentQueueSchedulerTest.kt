@@ -1,6 +1,7 @@
 package coredevices.util.queue
 
 import com.russhwolf.settings.MapSettings
+import coredevices.util.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,12 +63,20 @@ private class FakeRepository : QueueTaskRepository<FakeTask> {
     }
 }
 
+private class FakePlatform(override val previousRunCrashed: Boolean) : Platform {
+    override val name = "Test"
+    override val deviceModelName = "Test"
+    override suspend fun openUrl(url: String) {}
+    override suspend fun runWithBgTask(name: String, task: suspend () -> Unit) = task()
+}
+
 private class TestScheduler(
     repository: FakeRepository,
     scope: CoroutineScope,
     settings: MapSettings,
+    previousRunCrashed: Boolean = false,
     private val onProcess: suspend (FakeTask) -> Unit = {},
-) : PersistentQueueScheduler<FakeTask>(repository, scope, settings, "test", rescheduleDelay = 1.minutes) {
+) : PersistentQueueScheduler<FakeTask>(repository, scope, settings, FakePlatform(previousRunCrashed), "test", rescheduleDelay = 1.minutes) {
     val processed = mutableListOf<Long>()
 
     override suspend fun processTask(task: FakeTask) {
@@ -94,11 +103,11 @@ class PersistentQueueSchedulerTest {
         }
 
     @Test
-    fun interruptedTaskIsFailedInsteadOfResumed() = runTest {
+    fun interruptedTaskIsFailedAfterCrash() = runTest {
         val interrupted = repository.insertTask(FakeTask(attempts = 1))
         val resumable = repository.insertTask(FakeTask(attempts = 1))
         settings.putString(IN_PROGRESS_KEY, "$interrupted")
-        val scheduler = TestScheduler(repository, scope, settings)
+        val scheduler = TestScheduler(repository, scope, settings, previousRunCrashed = true)
 
         scheduler.resumePendingTasks()
         awaitTask(resumable) { it.status == TaskStatus.Success }
@@ -107,6 +116,31 @@ class PersistentQueueSchedulerTest {
         assertEquals(listOf(resumable), scheduler.processed)
         assertEquals(1, repository.tasks.getValue(interrupted).attempts)
         assertFalse(settings.hasKey(IN_PROGRESS_KEY))
+    }
+
+    @Test
+    fun interruptedTaskIsResumedAfterKill() = runTest {
+        val interrupted = repository.insertTask(FakeTask(attempts = 1))
+        settings.putString(IN_PROGRESS_KEY, "$interrupted")
+        val scheduler = TestScheduler(repository, scope, settings)
+
+        scheduler.resumePendingTasks()
+        awaitTask(interrupted) { it.status == TaskStatus.Success }
+
+        assertEquals(listOf(interrupted), scheduler.processed)
+        assertEquals(2, repository.tasks.getValue(interrupted).attempts)
+    }
+
+    @Test
+    fun interruptedTaskIsFailedAfterRepeatedKills() = runTest {
+        val interrupted = repository.insertTask(FakeTask(attempts = 3))
+        settings.putString(IN_PROGRESS_KEY, "$interrupted")
+        val scheduler = TestScheduler(repository, scope, settings)
+
+        scheduler.resumePendingTasks()
+        awaitTask(interrupted) { it.status == TaskStatus.Failed }
+
+        assertEquals(emptyList(), scheduler.processed)
     }
 
     @Test

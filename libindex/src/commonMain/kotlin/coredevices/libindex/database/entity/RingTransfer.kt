@@ -30,7 +30,8 @@ import kotlin.time.Instant
         Index(value = ["recordingId"]),
         Index(value = ["recordingEntryId"]),
         Index(value = ["isCurrentIndexIteration", "transferInfo_collectionStartIndex"]),
-        Index(value = ["createdAt"])
+        Index(value = ["createdAt"]),
+        Index(value = ["transferInfo_collectionStartIndex"]),
     ]
 )
 data class RingTransfer(

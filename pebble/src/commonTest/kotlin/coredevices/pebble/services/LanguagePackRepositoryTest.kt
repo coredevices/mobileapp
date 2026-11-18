@@ -20,9 +20,15 @@ class LanguagePackRepositoryTest {
         translationUrl = "https://translate.repebble.com/projects/pebbleos/watch/",
     )
 
+    private val legacyPack = LegacyLanguagePack(
+        locale = "bg_BG", name = "Bulgarian", nativeName = "Български", version = 1,
+        hardware = null, url = "https://example.com/Bulgarian-v1.pbl", sha256 = published.sha256, size = 3,
+    )
+
     private fun legacy(locale: String, hardware: String? = WatchHardwarePlatform.PEBBLE_SILK.revision, id: String = locale) = LanguagePack(
-        isoLocal = locale, file = "https://example.com/$id.pbl", firmwareVersion = "4.3",
+        isoLocal = locale, file = "https://example.com/$id.pbl",
         hardware = hardware, localName = locale, name = locale, version = 38, id = id,
+        sha256 = published.sha256, size = 3,
     )
 
     @Test
@@ -35,6 +41,35 @@ class LanguagePackRepositoryTest {
         assertEquals(1, packs.first().version)
         assertEquals(published, packs.first().published)
         assertNull(packs.last().published)
+    }
+
+    @Test
+    fun oldWatchesPreferLegacyAndOnlyAddUnmatchedPublishedLocales() {
+        val hardware = WatchHardwarePlatform.PEBBLE_SNOWY_DVT
+        val de = legacy("de_DE", hardware.revision)
+        val packs = selectLanguagePacks(listOf(de, legacy("zh_TW", null)),
+            listOf(published, published.copy(locale = "zh_Hant"), published.copy(locale = "fr_FR")), hardware, "de-DE")
+        assertEquals(listOf("de_DE", "fr_FR", "zh_TW"), packs.map { it.isoLocal })
+        assertEquals(de, packs.first())
+        assertEquals("fr_FR", packs[1].published?.locale)
+    }
+
+    @Test
+    fun renamedLocalesMatchWhatOldWatchesReport() {
+        assertEquals(canonicalLocale("bg_BG"), canonicalLocale("bg"))
+        assertEquals(canonicalLocale("zh_Hant"), canonicalLocale("zh_TW"))
+        assertEquals(canonicalLocale("ar_AA"), canonicalLocale("ar_SA"))
+    }
+
+    @Test
+    fun legacyManifestPacksMapToVerifiableCommunityPacks() {
+        val pack = legacyPack.asLanguagePack()
+        assertNull(pack.published)
+        assertEquals("legacy:bg_BG:null:${published.sha256}", pack.id)
+        assertEquals(LanguagePackGroup.Community, groupLanguagePacks(listOf(pack)).single().first)
+        assertFalse(pack.canContribute())
+        pack.verify("abc".encodeToByteArray())
+        assertFailsWith<IllegalArgumentException> { pack.verify("abd".encodeToByteArray()) }
     }
 
     @Test
@@ -61,7 +96,7 @@ class LanguagePackRepositoryTest {
     }
 
     @Test
-    fun emptyManifestOrOfflineFirstLaunchRetainsLegacyCatalog() {
+    fun emptyPublishedListRetainsLegacyCatalog() {
         val old = listOf(legacy("de_DE"), legacy("he_IL"))
         assertEquals(old, selectLanguagePacks(old, emptyList(), WatchHardwarePlatform.CORE_ASTERIX, "de-DE"))
     }
@@ -77,7 +112,7 @@ class LanguagePackRepositoryTest {
 
     @Test
     fun validatesManifestAndRejectsUnsupportedOrUnsafeCatalogs() {
-        val manifest = LanguageManifest(1, "packs-test", listOf(published))
+        val manifest = LanguageManifest(1, "packs-test", listOf(published), listOf(legacyPack, legacyPack.copy(hardware = "silk")))
         assertEquals(manifest, decodeLanguageManifest(json, json.encodeToString(manifest)))
         for (bad in listOf(
             manifest.copy(schemaVersion = 2),
@@ -86,6 +121,9 @@ class LanguagePackRepositoryTest {
             manifest.copy(languages = listOf(published.copy(translatedStrings = 778))),
             manifest.copy(languages = listOf(published.copy(url = "https://example.com/pack.pbl"))),
             manifest.copy(languages = listOf(published.copy(translationUrl = "https://translate.repebble.com.evil.org/"))),
+            manifest.copy(legacyLanguages = listOf(legacyPack, legacyPack)),
+            manifest.copy(legacyLanguages = listOf(legacyPack.copy(url = "http://example.com/pack.pbl"))),
+            manifest.copy(legacyLanguages = listOf(legacyPack.copy(sha256 = "abc"))),
         )) {
             assertFailsWith<IllegalArgumentException> { decodeLanguageManifest(json, json.encodeToString(bad)) }
         }
@@ -93,9 +131,10 @@ class LanguagePackRepositoryTest {
 
     @Test
     fun verifiesDownloadedSizeAndHashBeforeInstallation() {
-        published.verify("abc".encodeToByteArray())
-        assertFailsWith<IllegalArgumentException> { published.verify("abcd".encodeToByteArray()) }
-        assertFailsWith<IllegalArgumentException> { published.verify("abd".encodeToByteArray()) }
+        val pack = published.asLanguagePack()
+        pack.verify("abc".encodeToByteArray())
+        assertFailsWith<IllegalArgumentException> { pack.verify("abcd".encodeToByteArray()) }
+        assertFailsWith<IllegalArgumentException> { pack.verify("abd".encodeToByteArray()) }
     }
 
     @Test

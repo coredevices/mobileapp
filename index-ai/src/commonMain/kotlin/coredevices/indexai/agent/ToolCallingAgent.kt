@@ -9,6 +9,7 @@ import coredevices.mcp.client.McpSession
 import coredevices.mcp.client.McpSessionTool
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
+import coredevices.mcp.data.isConfirmationRequest
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -35,6 +36,14 @@ abstract class ToolCallingAgent(
     override val iterations: SharedFlow<AgentIteration> get() = _iterations
 
     protected open val logger = Logger.withTag("ToolCallingAgent")
+
+    /**
+     * Asked before each tool call runs; a call it questions waits on the user's confirmation.
+     * Not asked about a tool that confirms every call itself.
+     */
+    protected open val toolCallValidator: ToolCallValidator? get() = null
+
+    private var listedTools = emptyList<McpSessionTool>()
 
     protected suspend fun currentConversation(): List<ConversationMessageDocument> =
         _conversation.first()
@@ -67,6 +76,10 @@ abstract class ToolCallingAgent(
     protected abstract fun decodeToolCalls(
         assistantMessage: ConversationMessageDocument
     ): List<AgentToolCall>
+
+    /** What this agent declares to its model out of the session's [tools], for [AgentIteration]. */
+    protected open fun declaredTools(tools: List<McpSessionTool>): List<ToolDeclarationRecord> =
+        tools.map { ToolDeclarationRecord(it.integrationName, it.tool.definition) }
 
     /** Lifecycle prep before a run. */
     protected open suspend fun prepare() {}
@@ -106,11 +119,11 @@ abstract class ToolCallingAgent(
         includePromptsFromMcps: Map<String, Set<String>>,
     ): ConversationMessageDocument {
         val history = currentConversation().filterNot { it.awaitsConfirmation }
-        val tools = mcpSession.listTools()
+        val tools = mcpSession.listTools().also { listedTools = it }
         _iterations.emit(
             AgentIteration(
                 agent = label,
-                toolDeclarations = tools.map { ToolDeclarationRecord(it.integrationName, it.tool.definition) },
+                toolDeclarations = declaredTools(tools),
                 conversation = history,
             )
         )
@@ -131,13 +144,14 @@ abstract class ToolCallingAgent(
         sessionContext: SessionContext,
     ): Boolean {
         val results = toolCalls.map { call ->
-            val r = mcpSession.callTool(
-                call.integrationName,
-                call.toolName,
-                call.arguments,
-                sessionContext.copy(toolCallId = call.id),
-                requireExists = false
-            )
+            val r = validationFailure(call)?.let { ToolCallResult(AWAITING_CONFIRMATION_RESULT, it) }
+                ?: mcpSession.callTool(
+                    call.integrationName,
+                    call.toolName,
+                    call.arguments,
+                    sessionContext.copy(toolCallId = call.id),
+                    requireExists = false
+                )
             ConversationMessageDocument(
                 role = MessageRole.tool,
                 content = encodeToolResultContent(r),
@@ -160,6 +174,15 @@ abstract class ToolCallingAgent(
         return false
     }
 
+    private suspend fun validationFailure(call: AgentToolCall): SemanticResult.ValidationFailure? {
+        val validator = toolCallValidator ?: return null
+        val tool = listedTools.firstOrNull {
+            it.integrationName == call.integrationName && it.tool.definition.name == call.toolName
+        }
+        if (tool?.tool?.requiresConfirmation == true) return null
+        return validator.validate(call, tool, currentConversation().filterNot { it.awaitsConfirmation })
+    }
+
     override suspend fun send(
         input: String,
         mcpSession: McpSession,
@@ -175,16 +198,18 @@ abstract class ToolCallingAgent(
     }
 }
 
+private const val AWAITING_CONFIRMATION_RESULT = "Waiting for the user to confirm this action"
+
 /** A tool result that is a placeholder for a call the user has yet to confirm. */
 val ConversationMessageDocument.awaitsConfirmation: Boolean
-    get() = role == MessageRole.tool && semantic_result is SemanticResult.RequiresConfirmation
+    get() = role == MessageRole.tool && semantic_result?.isConfirmationRequest == true
 
-/** Placeholders whose call has no real result yet. */
+/** Placeholders with no later result for their call, be it the real one or another placeholder. */
 fun List<ConversationMessageDocument>.pendingConfirmations(): List<ConversationMessageDocument> {
-    val answered = filter { it.role == MessageRole.tool && !it.awaitsConfirmation }
-        .mapNotNull { it.tool_call_id }
-        .toSet()
-    return filter { it.awaitsConfirmation && it.tool_call_id !in answered }
+    val lastResult = withIndex()
+        .filter { it.value.role == MessageRole.tool }
+        .associate { it.value.tool_call_id to it.index }
+    return filterIndexed { index, message -> message.awaitsConfirmation && lastResult[message.tool_call_id] == index }
 }
 
 /** A tool call normalized to something [McpSession.callTool] can dispatch directly. */

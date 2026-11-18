@@ -6,6 +6,8 @@ import coredevices.haversine.CollectionIndexStorage
 import coredevices.haversine.KMPHaversineDebugDelegate
 import coredevices.haversine.KMPHaversineHacksDelegate
 import coredevices.indexai.agent.ServletRepository
+import coredevices.indexai.agent.ToolCallValidator
+import coredevices.indexai.agent.systemone.SystemOneAgent
 import coredevices.libindex.database.BasePreferences
 import coredevices.libindex.di.libIndexModule
 import coredevices.ring.BuildKonfig
@@ -15,14 +17,21 @@ import coredevices.ring.transcription.InferenceBoostProvider
 import coredevices.ring.transcription.NoOpInferenceBoostProvider
 import coredevices.util.transcription.CactusModelPathProvider
 import coredevices.ring.agent.AgentFactory
+import coredevices.ring.agent.ChatMode
 import coredevices.ring.agent.DefaultCaptureType
 import coredevices.ring.agent.LLMLocationProvider
+import coredevices.ring.agent.IndexActionsRepository
 import coredevices.ring.agent.IndexAgentNenya
+import coredevices.ring.agent.IntentAgentRouter
+import coredevices.ring.agent.NenyaSystemOneAgent
+import coredevices.ring.agent.RecordingIntentClassifier
 import coredevices.ring.agent.SearchAgentNenya
+import coredevices.ring.agent.SystemOneToolCallValidator
 import coredevices.ring.agent.BuiltinServletRepository
 import coredevices.ring.agent.ShareActionHandler
 import coredevices.ring.agent.ShortcutActionHandler
 import coredevices.ring.agent.confirmation.AgentUserConfirmation
+import coredevices.ring.agent.pebble_plugin.PluginGrant
 import coredevices.ring.agent.confirmation.RealAgentUserConfirmation
 import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
@@ -31,7 +40,6 @@ import coredevices.pebble.ui.IndexTabBadge
 import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
-import coredevices.ring.agent.integrations.providers.pluginsEnabled
 import coredevices.ring.agent.builtin_servlets.reminders.createBuiltInReminderIntegration
 import coredevices.ring.agent.integrations.DelegatedIntegrationItems
 import coredevices.ring.agent.integrations.GTasksIntegration
@@ -60,6 +68,7 @@ import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.reminders.ReminderReconciler
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
+import coredevices.ring.service.indexfeed.GeofenceLocationSyncService
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
 import coredevices.ring.service.indexfeed.ItemFactory
 import coredevices.libindex.database.repository.RingTransferRepository
@@ -101,9 +110,12 @@ import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.ring.viewmodelModule
 import coredevices.util.CommonBuildKonfig
 import coredevices.ring.bugreport.IndexRebootLogStore
+import coredevices.ring.battery.RingBatteryLifeRepository
+import coredevices.ring.battery.RingBatteryLifeStore
 import coredevices.ring.bugreport.RingRssiStatistics
 import coredevices.analytics.HeartbeatMetricsSource
 import coredevices.ring.bugreport.IndexSettingsSummary
+import coredevices.ring.database.room.repository.GeofenceLocationRepository
 import coredevices.util.PermissionRequester
 import coredevices.util.sync.SyncHandler
 import coredevices.util.Platform
@@ -112,6 +124,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -203,6 +216,9 @@ val experimentalModule = module {
     single {
         get<RingDatabase>().localClockDao()
     }
+    single {
+        get<RingDatabase>().savedGeofenceLocationDao()
+    }
     singleOf(::PluginGrantRepository)
     singleOf(::RecordingRepository)
     single {
@@ -210,6 +226,7 @@ val experimentalModule = module {
     }
     singleOf(::RecordingProcessingTaskRepository)
     singleOf(::IndexWebhookDeliveryRepository)
+    singleOf(::GeofenceLocationRepository)
     single {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
@@ -223,6 +240,7 @@ val experimentalModule = module {
     singleOf(::ListRepository)
     singleOf(::DefaultListsBootstrap)
     singleOf(::IndexFeedSyncService)
+    singleOf(::GeofenceLocationSyncService)
     singleOf(::ItemFactory)
     singleOf(::ReminderDeepLinkResolver)
     singleOf(::ReminderCompleter)
@@ -243,6 +261,9 @@ val experimentalModule = module {
     }
 
     singleOf(::NenyaClientImpl) bind NenyaClient::class
+    single<SystemOneAgent> { NenyaSystemOneAgent(get()) }
+    singleOf(::RecordingIntentClassifier)
+    singleOf(::SystemOneToolCallValidator) bind ToolCallValidator::class
     singleOf(::NotionApi)
     singleOf(::GoogleTasksApi)
     singleOf(::M4aEncoder)
@@ -263,8 +284,8 @@ val experimentalModule = module {
     } bind IndexWebhookApi::class
 
     single { RecordingBackgroundScope(CoroutineScope(Dispatchers.IO + SupervisorJob())) }
-    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get()) }
+    single { RecordingProcessingQueue(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { IndexWebhookDeliveryQueue(get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::RecordingOperationFactory)
     singleOf(::RealRecordingStorage) bind RecordingStorage::class
     singleOf(::RecordingUploadSyncHandler) bind SyncHandler::class
@@ -279,19 +300,62 @@ val experimentalModule = module {
     singleOf(::RingPairing)
     singleOf(::IndexSettingsSummary)
     singleOf(::IndexRebootLogStore)
+    single { RingBatteryLifeStore(get<RingDatabase>().ringBatteryHistoryDao(), get()) }
+    singleOf(::RingBatteryLifeRepository)
     single { RingRssiStatistics(get()) } bind HeartbeatMetricsSource::class
-    singleOf(::ExperimentalDevices)
+    single {
+        ExperimentalDevices(
+            watchNotifier = get(),
+            ringSync = get(),
+            recordingStorage = get(),
+            ringDelegate = get(),
+            recordingRepository = get(),
+            conversationMessageDao = get(),
+            agentIterationDao = get(),
+            preferences = get(),
+            shortcutActionHandler = get(),
+            libIndex = get(),
+            permissionRequester = get(),
+            indexFeedSyncService = get(),
+            geofenceLocationSyncService = get(),
+            defaultListsBootstrap = get(),
+            reminderReconciler = get(),
+            indexSettingsSummary = get(),
+            rebootLogStore = get(),
+            rssiStatistics = get(),
+            platform = get(),
+            targetCalendarSeeder = get(),
+            indexNotificationManager = get(),
+            libPebble = get(),
+            indexWebhookDeliveryQueue = get(),
+            indexServletPlugins = get(),
+        )
+    }
     single { TargetCalendarSeeder(get(), get<LibPebble>(), get()) }
     singleOf(::PrefsCollectionIndexStorage) bind CollectionIndexStorage::class
     factory { HackyPermissionRequesterProvider { get<PermissionRequester>() } }
     singleOf(::LLMLocationProvider)
     factory { p -> AgentNenya(get(), p.getOrNull() ?: "", p.getOrNull() ?: NenyaModel.Default, p.getOrNull() ?: emptyList()) }
-    factory { p -> IndexAgentNenya(get(), p.getOrNull() ?: emptyList(), p.getOrNull() ?: DefaultCaptureType.Note) }
+    factory { p ->
+        IndexAgentNenya(
+            nenyaClient = get(),
+            conversation = p.getOrNull() ?: emptyList(),
+            captureType = p.getOrNull() ?: DefaultCaptureType.Note,
+            toolCallValidator = get<ToolCallValidator>().takeIf { get<Preferences>().actionValidationEnabled.value },
+        )
+    }
     factory { p -> SearchAgentNenya(get(), get(), get(), p.getOrNull() ?: emptyList()) }
     single { CactusModelProvider() }
     single<CactusModelPathProvider> { get<CactusModelProvider>() }
-    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), get(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
+    factory { p -> IndexAgentCactus(get<CactusModelProvider>(), p.getOrNull() ?: emptyList(), getOrNull<InferenceBoostProvider>() ?: NoOpInferenceBoostProvider()) }
     singleOf(::AgentFactory)
+    single {
+        IntentAgentRouter(
+            classifier = get(),
+            sourcePlugins = { get<IndexActionsRepository>().grantedPlugins(PluginGrant.Sources).first() },
+            searchAgent = { get<AgentFactory>().createForChatMode(ChatMode.Search) },
+        )
+    }
     singleOf(::RecordingProcessor)
     singleOf(::IndexButtonActionHandler)
     singleOf(::IndexButtonSequenceRecorder)
@@ -306,7 +370,7 @@ val experimentalModule = module {
     singleOf(::DelegatedIntegrationItems)
     single { IntegrationProviderRepository(get(), get(), get(), get()) }
     single { DefaultDestinationPrompter(get(), get()) }
-    single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
+    single { LegacyDestinations(get(), get()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)
     singleOf(::RealAgentUserConfirmation) bind AgentUserConfirmation::class

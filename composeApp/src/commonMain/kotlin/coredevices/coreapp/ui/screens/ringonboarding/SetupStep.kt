@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cactus.isCactusSupported
 import com.russhwolf.settings.Settings
-import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.ui.ModelDownloadPromptDialog
 import coredevices.pebble.ui.PermissionsIntroContent
 import coredevices.pebble.ui.rememberSettingsItemsState
@@ -132,7 +131,6 @@ internal fun SetupStep(
     val coreConfigHolder: CoreConfigHolder = koinInject()
     val coreConfig by coreConfigHolder.config.collectAsState()
     val appSettings: Settings = koinInject()
-    val pluginsEnabled = rememberLibPebble().config.collectAsState().value.watchConfig.enablePlugins
     val modelManager: ModelManager = koinInject()
     val coreUser by Firebase.auth.authStateChanged
         .map { it?.emailOrNull }
@@ -312,24 +310,22 @@ internal fun SetupStep(
             RingButtonSection(coreNav, ringButtonViewModel)
         }
 
-        // Before the agent's actions, which become plugins once plugins are on.
-        if (pluginsEnabled) {
-            LaunchedEffect(Unit) { appSettings.setHasSeenPermissionsIntro(true) }
-            NumberedSection(num = ++section, title = "App permissions") {
-                CardContainer {
-                    // The embedded settings row uses Material colours, which don't follow the onboarding palette.
-                    MaterialTheme(
-                        colorScheme = MaterialTheme.colorScheme.copy(
-                            surface = Color.Transparent,
-                            onSurface = palette.onSurface,
-                            onSurfaceVariant = palette.onSurfaceVariant,
-                            primary = palette.primary,
-                            surfaceContainer = palette.surfaceContainer,
-                        ),
-                    ) {
-                        CompositionLocalProvider(LocalContentColor provides palette.onSurface) {
-                            PermissionsIntroContent(rememberSettingsItemsState(navBarNav = null, snackbarDisplay = snackbarDisplay))
-                        }
+        // Before the agent's actions, which are plugins.
+        LaunchedEffect(Unit) { appSettings.setHasSeenPermissionsIntro(true) }
+        NumberedSection(num = ++section, title = "App permissions") {
+            CardContainer {
+                // The embedded settings row uses Material colours, which don't follow the onboarding palette.
+                MaterialTheme(
+                    colorScheme = MaterialTheme.colorScheme.copy(
+                        surface = Color.Transparent,
+                        onSurface = palette.onSurface,
+                        onSurfaceVariant = palette.onSurfaceVariant,
+                        primary = palette.primary,
+                        surfaceContainer = palette.surfaceContainer,
+                    ),
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides palette.onSurface) {
+                        PermissionsIntroContent(rememberSettingsItemsState(navBarNav = null, snackbarDisplay = snackbarDisplay))
                     }
                 }
             }

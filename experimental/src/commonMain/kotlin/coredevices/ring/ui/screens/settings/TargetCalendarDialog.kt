@@ -55,9 +55,11 @@ fun TargetCalendarDialog(onDismiss: () -> Unit) {
     LaunchedEffect(calendars) {
         if (calendars.isEmpty()) return@LaunchedEffect
         val writable = calendars.filter { it.writable }
-        if (writable.none { it.id == selectedId }) {
-            selectedId = writable.firstOrNull()?.id
-        }
+        if (writable.any { it.id == selectedId }) return@LaunchedEffect
+        val default = libPebble.defaultCalendar()?.takeIf { d -> writable.any { it.id == d.id } }
+        // The user may have tapped a row while defaultCalendar() was suspended.
+        if (writable.any { it.id == selectedId }) return@LaunchedEffect
+        selectedId = default?.id ?: writable.firstOrNull()?.id
     }
 
     M3Dialog(

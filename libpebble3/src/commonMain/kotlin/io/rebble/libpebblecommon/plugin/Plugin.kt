@@ -47,6 +47,10 @@ interface Plugin {
      * hasn't asked for them, and a plugin must not do the work of producing them: text and
      * numbers are free once fetched, bitmaps are not.
      *
+     * [limit] is the most instances the subscriber wants (host-clamped to 1..[MAX_LIMIT]); the host
+     * drops any past it, or past [MAX_LIMIT] without one. A source with a default cap should let
+     * it override that cap.
+     *
      * [prompt]: whether the plugin's own permission checks may ask the user.
      */
     fun observe(
@@ -54,6 +58,7 @@ interface Plugin {
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
         prompt: Boolean,
     ): Flow<SourceUpdate>
 
@@ -62,6 +67,10 @@ interface Plugin {
     fun serves(category: String, item: String) = sources.any { it.serves(category, item) }
 
     fun action(name: String) = actions.firstOrNull { it.name == name }
+
+    companion object {
+        const val MAX_LIMIT = 200
+    }
 }
 
 /** What a [Plugin] offers, without the means to call it. */

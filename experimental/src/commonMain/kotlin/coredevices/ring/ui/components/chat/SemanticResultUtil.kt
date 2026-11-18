@@ -48,7 +48,7 @@ fun SemanticResultIcon(
         is SemanticResult.SupportingData -> Icons.Outlined.IntegrationInstructions
         is SemanticResult.ActionLogged -> Icons.Default.Code
         is SemanticResult.CalendarEventCreation -> Icons.Default.DateRange
-        is SemanticResult.RequiresConfirmation -> Icons.Outlined.Lock
+        is SemanticResult.RequiresConfirmation, is SemanticResult.ValidationFailure -> Icons.Outlined.Lock
         is SemanticResult.UserDenied -> Icons.Outlined.Block
     }
     Icon(
@@ -92,7 +92,7 @@ suspend fun SemanticResult.actionText(): String {
             val humanTime = dateTime.time.format(UITimeUtil.timeFormat())
             "Added $title at $humanDate, $humanTime to calendar"
         }
-        is SemanticResult.RequiresConfirmation -> "Needs confirmation"
+        is SemanticResult.RequiresConfirmation, is SemanticResult.ValidationFailure -> "Needs confirmation"
         is SemanticResult.UserDenied -> "Action denied"
     }
 }

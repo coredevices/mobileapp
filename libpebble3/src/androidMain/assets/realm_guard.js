@@ -43,7 +43,7 @@ var __pebbleGuardRealms = (function () {
   var MARK = Symbol.for('pebble.realmGuard');
 
   var REMOVED = ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport', 'WebSocketStream', 'Worker',
-    'SharedWorker', 'customElements'];
+    'SharedWorker'];
   var FRAMES = ['HTMLIFrameElement', 'HTMLFrameElement', 'HTMLObjectElement', 'HTMLEmbedElement'];
   // Everything that can connect a node, and so a frame, to a document.
   var INSERTING = [
@@ -178,6 +178,8 @@ var __pebbleGuardRealms = (function () {
       observer = new w.MutationObserver(check);
       var i;
       for (i = 0; i < REMOVED.length; i++) remove(w, REMOVED[i]);
+      // Pages use web components; a frame's first window they reach early is torn down like any other.
+      if (purgeFrames) remove(w, 'customElements');
       if (allowed) gateWebSocket(w);
       if (w.ServiceWorkerContainer) {
         defineProperty(w.ServiceWorkerContainer.prototype, 'register', {

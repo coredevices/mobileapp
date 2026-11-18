@@ -56,13 +56,13 @@ class PebbleDeviceFactory {
         }
         if (btUsable && !connectGoal && state.isActive()) {
             return when (knownDevice) {
-                null -> RealDisconnectingPebbleDevice(pebbleDevice)
+                null -> RealDisconnectingPebbleDevice(pebbleDevice, scanResult?.leScanRecord?.watchColor())
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
         }
         return when {
             btUsable && !connectGoal && state.isActive() -> when (knownDevice) {
-                null -> RealDisconnectingPebbleDevice(pebbleDevice)
+                null -> RealDisconnectingPebbleDevice(pebbleDevice, scanResult?.leScanRecord?.watchColor())
                 else -> RealDisconnectingKnownPebbleDevice(knownDevice)
             }
 
@@ -110,6 +110,7 @@ class PebbleDeviceFactory {
                     connectGoal) -> when (knownDevice) {
                 null -> RealConnectingPebbleDevice(
                     pebbleDevice = pebbleDevice,
+                    color = scanResult?.leScanRecord?.watchColor(),
                     activeDevice = RealActiveDevice(identifier, watchConnector, usingBtClassic, reversePpogVersion),
                     negotiating = state is ConnectingPebbleState.Negotiating,
                     rebootingForFirmwareUpdate = lastFirmwareUpdateState as? FirmwareUpdateStatus.WaitingForReboot
@@ -126,14 +127,14 @@ class PebbleDeviceFactory {
             else -> {
                 val leScanRecord = scanResult?.leScanRecord
                 when {
+                    knownDevice != null -> knownDevice
+
                     leScanRecord != null && identifier is PebbleBleIdentifier ->
                         RealBleDiscoveredPebbleDevice(
                             pebbleDevice = pebbleDevice,
                             pebbleScanRecord = leScanRecord,
                             rssi = scanResult.rssi,
                         )
-
-                    knownDevice != null -> knownDevice
 
                     else -> {
                         pebbleDevice
@@ -209,6 +210,7 @@ internal class RealActiveDevice(
 
 internal class RealDisconnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
+    override val color: WatchColor?,
 ) : DisconnectingPebbleDevice, PebbleDevice by pebbleDevice {
     override fun toString(): String =
         "DisconnectingPebbleDevice: $pebbleDevice"
@@ -223,6 +225,7 @@ internal class RealDisconnectingKnownPebbleDevice(
 
 internal class RealConnectingPebbleDevice(
     private val pebbleDevice: PebbleDevice,
+    override val color: WatchColor?,
     private val activeDevice: ActiveDevice,
     override val negotiating: Boolean,
     override val rebootingForFirmwareUpdate: FirmwareUpdateStatus.WaitingForReboot?,

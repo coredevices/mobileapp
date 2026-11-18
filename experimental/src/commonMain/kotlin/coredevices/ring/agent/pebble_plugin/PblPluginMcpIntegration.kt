@@ -10,6 +10,7 @@ import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
 import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.Tool
+import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.rebble.libpebblecommon.plugin.ActionDeclaration
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.PluginMetadata
@@ -25,6 +26,33 @@ class PblPluginMcpIntegration(
 
     companion object {
         private val logger = Logger.withTag("PblPluginMcpIntegration")
+        private val lenientJson = Json { ignoreUnknownKeys = true }
+        private val allowedUserSemanticResults = setOf(
+            SemanticResult.TaskCreation::class,
+            SemanticResult.ListItemCreation::class,
+            SemanticResult.AlarmCreation::class,
+            SemanticResult.CalendarEventCreation::class,
+            SemanticResult.TimerCreation::class,
+            SemanticResult.SupportingData::class,
+            SemanticResult.MessageSent::class,
+            SemanticResult.ActionLogged::class,
+            SemanticResult.GenericSuccess::class,
+            SemanticResult.GenericFailure::class
+        )
+
+        internal fun decodeSemanticResult(str: String): SemanticResult? = runCatching {
+            lenientJson.decodeFromString(PluginSemanticResultSerializer, str)
+        }.mapCatching {
+            // Some results have associated app logic that will break if a plugin attempts
+            // to use directly
+            require(it::class in allowedUserSemanticResults) {
+                "Semantic result type not allowed for plugin result"
+            }
+            it
+        }.getOrElse {
+            logger.w(it) { "Failed to decode plugin SemanticResult: ${it.message}" }
+            null
+        }
     }
 
     val pluginUuid get() = plugin.pluginUuid
@@ -32,7 +60,8 @@ class PblPluginMcpIntegration(
 
     inner class PebblePluginActionMcpTool(private val declaration: ActionDeclaration): McpTool {
         override val definition: Tool = declaration.toToolDefinition()
-        override val extraContext: String? = null
+        override val requiresConfirmation: Boolean get() = declaration.requiresConfirmation
+        override suspend fun getExtraContext(): String? = null
 
         override suspend fun call(
             jsonInput: String,
@@ -99,16 +128,22 @@ class PblPluginMcpIntegration(
         if (!result.ok) {
             logger.w { "Error during invocation of $toolName: $errorLine" }
         }
-        return ToolCallResult(
-            resultString = errorLine ?: result.text ?: "OK",
-            semanticResult = when {
-                result.ok -> SemanticResult.GenericSuccess
-                else -> SemanticResult.GenericFailure(
+
+        return if (result.ok) {
+            val decodedSemanticResult = result.semanticResult?.let { decodeSemanticResult(it) }
+            ToolCallResult(
+                resultString = result.text ?: "OK",
+                semanticResult = decodedSemanticResult ?: SemanticResult.GenericSuccess
+            )
+        } else {
+            ToolCallResult(
+                resultString = errorLine ?: result.text ?: "Error",
+                semanticResult = SemanticResult.GenericFailure(
                     userErrorMessage = result.message,
                     llmRecoverable = true
                 )
-            }
-        )
+            )
+        }
     }
 
     override suspend fun getExtraContext(sessionContext: SessionContext?): String? = null
@@ -120,5 +155,6 @@ internal fun ActionDeclaration.toToolDefinition(): Tool {
         name = name,
         inputSchema = McpJson.decodeFromJsonElement(schema),
         description = description,
+        annotations = if (destructive) ToolAnnotations(destructiveHint = true) else null,
     )
 }

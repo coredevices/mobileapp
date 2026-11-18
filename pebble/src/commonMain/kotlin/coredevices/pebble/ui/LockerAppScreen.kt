@@ -700,11 +700,12 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         }
                     }
-                    val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
                     val storeApp = (entry.commonAppType as? CommonAppType.Store)?.storeApp
                     if (entry.commonAppType is CommonAppType.Locker) {
                         AppPermissionsSection(entry.uuid)
-                    } else if (pluginsEnabled && storeApp != null) {
+                        AppDataUsageSection(entry.uuid)
+                        AppActivitySection(entry.uuid, navBarNav)
+                    } else if (storeApp != null) {
                         StorePermissionsSection(storeApp.requestedPermissions())
                     } else if (storeEntry?.capabilities?.isNotEmpty() == true) {
                         FlowRow(modifier = Modifier.padding(5.dp)) {
@@ -713,9 +714,8 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
                             }
                         }
                     }
-                    val pluginMetadata = remember(pluginsEnabled, entry, storeApp) {
-                        if (!pluginsEnabled) null
-                        else libPebble.getAllPlugins().firstOrNull { it.pluginUuid == entry.uuid }
+                    val pluginMetadata = remember(entry, storeApp) {
+                        libPebble.getAllPlugins().firstOrNull { it.pluginUuid == entry.uuid }
                             ?: storeApp?.pluginMetadata()
                     }
                     pluginMetadata?.let { PluginCapabilitiesSection(it) }

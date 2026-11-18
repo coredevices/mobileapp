@@ -40,7 +40,7 @@ import kotlin.uuid.Uuid
 internal actual fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid,
-    bridge: ConfigPageBridge?,
+    bridge: ConfigPageBridge,
     mayLoad: (String) -> Boolean,
     network: ConfigPageNetwork,
 ): NativeWebView = defaultWebViewFactory(params).apply {
@@ -50,16 +50,14 @@ internal actual fun webViewFactory(
         network.csp?.let { WebViewCompat.addDocumentStartJavaScript(this, cspJs(it), setOf("*")) }
         WebViewCompat.addDocumentStartJavaScript(this, configNetworkJs(context), setOf("*"))
     }
-    if (bridge != null) {
-        addJavascriptInterface(NativeConfigBridge(bridge), CONFIG_NATIVE_NAMESPACE)
-        bridge.attach { js -> post { evaluateJavascript(js, null) } }
-        // Runs before the page's own <script>, which is the whole point: pages call Pebble.* from
-        // the top level. Needs WebView 83+; without it the page has to wait for onPageStarted.
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(this, CONFIG_PAGE_SHIM_JS, setOf("*"))
-        } else {
-            Logger.withTag("webViewFactory").w("No DOCUMENT_START_SCRIPT; config API lands late")
-        }
+    addJavascriptInterface(NativeConfigBridge(bridge), CONFIG_NATIVE_NAMESPACE)
+    bridge.attach { js -> post { evaluateJavascript(js, null) } }
+    // Runs before the page's own <script>, which is the whole point: pages call Pebble.* from
+    // the top level. Needs WebView 83+; without it the page has to wait for onPageStarted.
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        WebViewCompat.addDocumentStartJavaScript(this, CONFIG_PAGE_SHIM_JS, setOf("*"))
+    } else {
+        Logger.withTag("webViewFactory").w("No DOCUMENT_START_SCRIPT; config API lands late")
     }
     // Don't store the webview state (which includes localstorage) in bundle - can be too large
     isSaveEnabled = false

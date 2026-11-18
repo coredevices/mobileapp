@@ -125,6 +125,11 @@ class PebbleService: Service(), KoinComponent {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        if (!MainApplication.koinStarted) {
+            logger.w { "Koin not started; stopping" }
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         if (!pebbleBackgroundManager.onServiceStarted()) {
             logger.i { "Service started but shouldn't be running; stopping" }
             stopSelf(startId)
@@ -136,6 +141,10 @@ class PebbleService: Service(), KoinComponent {
     }
 
     override fun onDestroy() {
+        if (!MainApplication.koinStarted) {
+            super.onDestroy()
+            return
+        }
         pebbleBackgroundManager.onServiceStopped()
         ringObserverJob?.cancel()
         ringObserverJob = null

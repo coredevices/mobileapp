@@ -13,7 +13,9 @@ import coredevices.ring.data.entity.room.indexfeed.CachedList
 import coredevices.ring.database.room.repository.ItemRepository
 import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
+import coredevices.ring.service.toButtonSequenceString
 import coredevices.libindex.database.dao.RingTransferDao
 import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.di.LibIndexCoroutineScope
@@ -76,10 +78,10 @@ class FullFeedViewModel(
 
     fun setQuery(q: String) { query.value = q }
 
-    fun submitText(text: String) {
+    fun submitText(text: String, gesture: RingGesture) {
         val msg = text.trim().ifBlank { return }
         viewModelScope.launch {
-            recordingQueue.queueTextProcessing(msg)
+            recordingQueue.queueTextProcessing(msg, gesture.sequence.toButtonSequenceString())
         }
     }
 

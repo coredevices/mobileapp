@@ -18,7 +18,7 @@ fun formatStorageSummary(usage: List<StorageUsage>): String = buildString {
     append("\n  total: ${formatBytes(usage.sumOf { it.bytes })}")
 }
 
-private fun formatBytes(bytes: Long): String {
+fun formatBytes(bytes: Long): String {
     if (bytes < 1024) return "$bytes B"
     val units = listOf("KB", "MB", "GB", "TB")
     var value = bytes.toDouble() / 1024
@@ -30,3 +30,12 @@ private fun formatBytes(bytes: Long): String {
     val rounded = (value * 10).toLong() / 10.0
     return "$rounded ${units[unit]}"
 }
+
+/** "12.3 MB · 1.1 MB mobile · 345 requests", or with [split] sent and received separately. */
+fun formatDataUsage(sentBytes: Long, receivedBytes: Long, mobileBytes: Long, requests: Long, split: Boolean = false): String =
+    listOfNotNull(
+        if (split) "${formatBytes(sentBytes)} sent" else (sentBytes + receivedBytes).takeIf { it > 0 }?.let(::formatBytes),
+        if (split) "${formatBytes(receivedBytes)} received" else null,
+        mobileBytes.takeIf { it > 0 }?.let { "${formatBytes(it)} mobile" },
+        if (requests == 1L) "1 request" else "$requests requests",
+    ).joinToString(" · ")

@@ -22,8 +22,10 @@ import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
 import coredevices.util.PermissionRequester
 import coredevices.util.WatchNotifier
+import coredevices.util.emailOrNull
 import coredevices.util.models.CactusSTTMode
 import coredevices.util.storage.appStorageBreakdown
+import coredevices.util.storage.formatDataUsage
 import coredevices.util.storage.formatStorageSummary
 import coredevices.util.transcription.HybridTranscriptionService
 import dev.gitlive.firebase.Firebase
@@ -31,6 +33,8 @@ import dev.gitlive.firebase.auth.auth
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
+import io.rebble.libpebblecommon.permissions.byApp
+import io.rebble.libpebblecommon.plugin.WatchSettingsPlugin
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -64,6 +68,7 @@ import size
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 data class BugReportGenerationParams(
     val userMessage: String,
@@ -453,6 +458,32 @@ class BugReportProcessor(
         }
     }
 
+    /** Sends a report with what [BugReportScreen] attaches by default; returns once the report exists. */
+    suspend fun newVoiceBugReport(description: String, watch: Boolean): Result<Unit> {
+        if (isThirdPartyTest()) return Result.failure(Exception("Bug reports are disabled in this build"))
+        val user = Firebase.auth.currentUser?.takeIf { it.emailOrNull != null }
+            ?: return Result.failure(Exception("Please sign in before submitting a bug report"))
+        val params = BugReportGenerationParams(
+            userMessage = description,
+            userName = user.displayName ?: "",
+            userEmail = user.email,
+            screenContext = """{"source": "voice"}""",
+            attachments = emptyList(),
+            sendRecording = false,
+            sendRecentRecordings = !watch,
+            expOutputPath = null,
+            imageAttachments = emptyList(),
+            fetchPebbleLogs = watch,
+            fetchPebbleCoreDump = watch,
+            includeExperimentalDebugInfo = !watch,
+            shareLocally = false,
+        )
+        return when (val state = newBugReport(params).first { it != BugReportState.Creating }) {
+            is BugReportState.BugReportResult.Failed -> Result.failure(Exception(state.error))
+            else -> Result.success(Unit)
+        }
+    }
+
     private fun processBugReport(service: Boolean, block: suspend (state: MutableSharedFlow<BugReportState>, userIdToken: String?) -> Unit): Flow<BugReportState> {
         val state = MutableSharedFlow<BugReportState>(replay = 1, extraBufferCapacity = Int.MAX_VALUE)
         state.tryEmit(BugReportState.Creating)
@@ -749,12 +780,39 @@ class BugReportProcessor(
             }")
             appendLine("missingPermissions: ${permissionRequester.missingPermissions.value}")
             appendLine("watchesWithoutCompanionDevicePermission: $watchesWithoutCompanionDevicePermission")
+            append(appDataUsageSummary())
+            append(watchSettingsChangesByApps())
             appendLine(libPebble.watchesDebugState())
             appendLine("Watches (most recently connected first):")
             watches.forEachIndexed { index, watch ->
                 appendLine("watch_$index $watch")
             }
         }
+    }
+
+    private suspend fun appDataUsageSummary(): String = buildString {
+        val apps = libPebble.appDataUsage(BUG_REPORT_USAGE_DAYS).first().byApp()
+        val titles = libPebble.getAllLockerBasicInfo().first().associate { it.id to it.title }
+        appendLine("App data usage (last $BUG_REPORT_USAGE_DAYS days, heaviest first):")
+        if (apps.isEmpty()) appendLine("  none")
+        apps.forEach { app ->
+            appendLine("  ${titles[app.appUuid] ?: "Removed app"} (${app.appUuid}): ${formatDataUsage(app.sentBytes, app.receivedBytes, app.mobileBytes, app.requests, split = true)}")
+            app.byPermission.forEach {
+                appendLine("    ${it.reportableKey}: ${formatDataUsage(it.sentBytes, it.receivedBytes, it.mobileBytes, it.requests, split = true)}")
+            }
+        }
+    }
+
+    private suspend fun watchSettingsChangesByApps(): String = buildString {
+        val changes = libPebble.pluginActionLog(WatchSettingsPlugin.BUILT_IN_WATCH_SETTINGS_UUID).first()
+        val titles = libPebble.getAllLockerBasicInfo().first().associate { it.id to it.title }
+        appendLine("Watch settings changed by apps (newest first):")
+        if (changes.isEmpty()) appendLine("  none")
+        changes.take(BUG_REPORT_WATCH_SETTINGS_CHANGES).forEach {
+            val outcome = it.error?.let { error -> " failed: $error" }.orEmpty()
+            appendLine("  ${Instant.fromEpochMilliseconds(it.atMs)} ${titles[it.appUuid] ?: "Removed app"} (${it.appUuid}): ${it.action} ${it.args}$outcome")
+        }
+        if (changes.size > BUG_REPORT_WATCH_SETTINGS_CHANGES) appendLine("  …and ${changes.size - BUG_REPORT_WATCH_SETTINGS_CHANGES} more")
     }
 
     private suspend fun <T> withStrikes(strikes: Int = 3, block: suspend () -> Result<T>): Result<T> {
@@ -787,3 +845,5 @@ fun Path?.readMostRecent(bytes: Int): String? {
     }
 }
 
+private const val BUG_REPORT_USAGE_DAYS = 7
+private const val BUG_REPORT_WATCH_SETTINGS_CHANGES = 100

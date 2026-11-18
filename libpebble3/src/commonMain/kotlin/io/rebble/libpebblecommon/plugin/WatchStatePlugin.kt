@@ -41,6 +41,7 @@ class WatchStatePlugin(
         item: String,
         properties: List<String>?,
         iconPixelSize: IconPixelSize?,
+        limit: Int?,
     ): Flow<SourceEnvelope> {
         if (category != CATEGORY || item != ITEM_APP) return emptyFlow()
         return locker.getAllLockerBasicInfo().map(::appsEnvelope)

@@ -33,7 +33,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -113,8 +113,7 @@ internal object WatchappSettingsUrlCache {
 internal expect fun webViewFactory(
     params: WebViewFactoryParam,
     uuid: Uuid,
-    /** Null leaves the page with no `Pebble` object, which is what a plain webview should be. */
-    bridge: ConfigPageBridge?,
+    bridge: ConfigPageBridge,
     /** Blocking; whatever the page loads or connects to is checked against the app's permissions. */
     mayLoad: (String) -> Boolean,
     network: ConfigPageNetwork,
@@ -226,7 +225,7 @@ fun WatchappSettingsScreen(
         val navigator = rememberWebViewNavigator(requestInterceptor = interceptor)
         // One bridge for the life of the screen: it is installed when the WebView is built,
         // before any page has loaded, and picks up scripts as they resolve.
-        val bridge = remember { if (sessions.enabled) ConfigPageBridge(scope) else null }
+        val bridge = remember { ConfigPageBridge(scope) }
         val uiContext = rememberUiContext()
         val appContext: AppContext = koinInject()
         val debugBuild = remember { appContext.isDebugBuild() }
@@ -236,7 +235,7 @@ fun WatchappSettingsScreen(
         LaunchedEffect(bridge, webSignInApp, uiContext, debugBuild) {
             val ctx = uiContext
             // Only offer web sign-in where the platform can isolate its cookie jar.
-            bridge?.webSignIn = if (ctx != null && webSignInSupported() &&
+            bridge.webSignIn = if (ctx != null && webSignInSupported() &&
                 webSignInApp?.mayUseWebSignIn(debugBuild) == true) {
                 { request -> performWebSignIn(ctx, request) }
             } else {
@@ -245,7 +244,7 @@ fun WatchappSettingsScreen(
         }
         var linkRequest by remember { mutableStateOf<LinkRequest?>(null) }
         LaunchedEffect(bridge) {
-            bridge?.openUrl = { url ->
+            bridge.openUrl = { url ->
                 if (openStoreAppLink(url)) {
                     true
                 } else if (linkRequest != null) {
@@ -288,7 +287,7 @@ fun WatchappSettingsScreen(
             val ctx = uiContext
             val pluginUuid = webViewUuid
             // Only a plugin can use a granted file, so a page with none behind it gets no picker.
-            bridge?.fileAccess = if (ctx != null && pluginUuid != null &&
+            bridge.fileAccess = if (ctx != null && pluginUuid != null &&
                 session?.scripts?.containsKey(ConfigScriptIds.PLUGIN) == true) {
                 PluginConfigFileAccess(libPebble, pluginUuid, ctx)
             } else {
@@ -297,20 +296,19 @@ fun WatchappSettingsScreen(
         }
         DisposableEffect(session) {
             val open = session
-            bridge?.scripts = open?.scripts.orEmpty()
+            bridge.scripts = open?.scripts.orEmpty()
             // Starting a plugin takes a moment; the page waits for its 'ready' event.
-            val starting = scope.launch { open?.open { target -> bridge?.ready(target) } }
+            val starting = scope.launch { open?.open { target -> bridge.ready(target) } }
             onDispose {
                 starting.cancel()
-                open?.scripts?.keys?.forEach { bridge?.forget(it) }
-                bridge?.scripts = emptyMap()
+                open?.scripts?.keys?.forEach { bridge.forget(it) }
+                bridge.scripts = emptyMap()
                 scope.launch { open?.close() }
             }
         }
         LaunchedEffect(session) {
-            session?.messages?.collect { (target, json) -> bridge?.push(target, json) }
+            session?.messages?.collect { (target, json) -> bridge.push(target, json) }
         }
-        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
         val visibleConfigPage: VisibleConfigPage = koinInject()
         if (webViewUuid != null) {
             LifecycleResumeEffect(webViewUuid) {
@@ -374,7 +372,7 @@ fun WatchappSettingsScreen(
                         }
                     },
                     actions = {
-                        if (webViewUuid != null && pluginsEnabled) {
+                        if (webViewUuid != null) {
                             Box {
                                 TopBarIconButtonWithToolTip(
                                     onClick = { showPermissions = true },
@@ -386,7 +384,7 @@ fun WatchappSettingsScreen(
                                     expanded = showPermissions,
                                     onDismissRequest = { showPermissions = false },
                                 ) {
-                                    AppPermissionsSection(webViewUuid)
+                                    AppPermissionsSection(webViewUuid, collapsible = false)
                                 }
                             }
                         }
@@ -425,8 +423,8 @@ private fun MenuBelowAnchor(
     if (!expanded) return
     val density = LocalDensity.current
     val margin = with(density) { 8.dp.roundToPx() }
-    var maxHeight by remember { mutableIntStateOf(Int.MAX_VALUE) }
-    val positionProvider = remember(margin) {
+    var maxHeight by remember { mutableStateOf(Dp.Unspecified) }
+    val positionProvider = remember(density, margin) {
         object : PopupPositionProvider {
             override fun calculatePosition(
                 anchorBounds: IntRect,
@@ -434,7 +432,7 @@ private fun MenuBelowAnchor(
                 layoutDirection: LayoutDirection,
                 popupContentSize: IntSize,
             ): IntOffset {
-                maxHeight = windowSize.height - anchorBounds.bottom - margin
+                maxHeight = with(density) { (windowSize.height - anchorBounds.bottom.coerceAtLeast(0) - margin).coerceAtLeast(0).toDp() }
                 val x = if (layoutDirection == LayoutDirection.Ltr) {
                     anchorBounds.right - popupContentSize.width
                 } else {
@@ -457,7 +455,7 @@ private fun MenuBelowAnchor(
         ) {
             Column(
                 modifier = Modifier.widthIn(max = 400.dp)
-                    .heightIn(max = with(density) { maxHeight.coerceAtLeast(0).toDp() })
+                    .heightIn(max = maxHeight)
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 8.dp),
                 content = content,

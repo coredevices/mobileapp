@@ -25,6 +25,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coredevices.analytics.AnalyticsBackend
+import coredevices.analytics.PROP_FIREBASE_UID
 import coredevices.analytics.setUser
 import coredevices.firestore.KEY_LAST_SIGN_IN_PROVIDERS
 import coredevices.util.CommonBuildKonfig
@@ -54,11 +55,12 @@ internal class AccountSwitchRequiredException(val credential: AuthCredential?) :
     "Sign-in target account already exists; switching would abandon anonymous-account data"
 )
 
-internal suspend fun forceSignInWithCredential(credential: AuthCredential) {
+internal suspend fun forceSignInWithCredential(credential: AuthCredential): String? {
     val beforeUid = Firebase.auth.currentUser?.uid?.take(8)
     val wasAnonymous = Firebase.auth.currentUser?.isAnonymous
-    Firebase.auth.signInWithCredential(credential)
-    Logger.i { "forceSignInWithCredential: provider=${credential.providerId} beforeUid=$beforeUid wasAnonymous=$wasAnonymous finalUid=${Firebase.auth.currentUser?.uid?.take(8)}" }
+    val uid = Firebase.auth.signInWithCredential(credential).user?.uid
+    Logger.i { "forceSignInWithCredential: provider=${credential.providerId} beforeUid=$beforeUid wasAnonymous=$wasAnonymous finalUid=${uid?.take(8)}" }
+    return uid
 }
 
 @Composable
@@ -77,7 +79,11 @@ private fun SignInButton(
     var pendingSwitch by remember { mutableStateOf<AccountSwitchRequiredException?>(null) }
     suspend fun forceSwitch(e: AccountSwitchRequiredException) {
         val credential = e.credential ?: credentialProvider(context!!) ?: return
-        forceSignInWithCredential(credential)
+        val anonymousUid = Firebase.auth.currentUser?.takeIf { it.isAnonymous }?.uid
+        val uid = forceSignInWithCredential(credential)
+        if (anonymousUid != null && uid != null && uid != anonymousUid) {
+            analyticsBackend.logEvent("firebase_uid_linked", mapOf("anonymous_firebase_uid" to anonymousUid, PROP_FIREBASE_UID to uid))
+        }
         completeSignIn(analyticsBackend, settings, credential, onSuccess)
     }
     PebbleElevatedButton(

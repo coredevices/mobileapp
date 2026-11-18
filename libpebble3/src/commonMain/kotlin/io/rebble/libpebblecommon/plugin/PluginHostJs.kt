@@ -112,7 +112,7 @@ internal const val PLUGIN_HOST_JS = """
       data: function (envelope) { send(envelope || { instances: [] }); },
       ok: function (result) {
         result = result || {};
-        send({ ok: true, text: result.text || null, refreshed: result.refreshed || [] });
+        send({ ok: true, text: result.text || null, semanticResult: result.semanticResult || null, refreshed: result.refreshed || [] });
       },
       error: function (code, message) {
         if (request.kind === 'action') {

@@ -75,6 +75,7 @@ kotlin {
             dependencies {
                 implementation(project(":libpebble3"))
                 implementation(libs.health.kmp)
+                implementation(libs.highlights)
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(libs.compose.material3)

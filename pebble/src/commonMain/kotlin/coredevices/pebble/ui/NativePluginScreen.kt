@@ -107,7 +107,7 @@ private fun Modifier.greyedOut(disabled: Boolean) = if (disabled) alpha(0.4f) el
 
 /** Stands in for a pbw plugin's square icon, at the same size and shape. */
 @Composable
-private fun BuiltInPluginImage(plugin: PluginMetadata, cornerRadius: Dp, modifier: Modifier) {
+internal fun BuiltInPluginImage(plugin: PluginMetadata, cornerRadius: Dp, modifier: Modifier) {
     BoxWithConstraints(
         modifier = modifier.aspectRatio(1f)
             .clip(RoundedCornerShape(cornerRadius))

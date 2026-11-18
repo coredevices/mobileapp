@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -89,7 +90,6 @@ import coreapp.pebble.generated.resources.apps
 import coredevices.database.AppstoreCollectionDao
 import coredevices.database.AppstoreSource
 import coredevices.database.AppstoreSourceDao
-import coredevices.database.PLUGIN_DATA_APPS_SLUG
 import coredevices.database.TOP_CHARTS_COLLECTION_SLUG
 import coredevices.libindex.LibIndex
 import coredevices.libindex.device.KnownIndexDevice
@@ -332,11 +332,10 @@ fun LockerScreen(
                 sideload(it)
             }
         }
-        val pluginsEnabled = libPebble.config.collectAsState().value.watchConfig.enablePlugins
         val rings by koinInject<LibIndex>().rings.collectAsState()
         val watches by libPebble.watches.collectAsState()
         val defaultType = if (
-            pluginsEnabled && rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
+            rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
         ) AppType.Plugin else AppType.Watchface
         LaunchedEffect(defaultType) {
             if (viewModel.defaultType != defaultType) {
@@ -375,14 +374,13 @@ fun LockerScreen(
             return
         }
         val storeHomeForType = viewModel.storeHomeAllFeeds[viewModel.type.value]
-        val storeHome = remember(storeHomeForType, collections, viewModel.type.value, pluginsEnabled) {
+        val storeHome = remember(storeHomeForType, collections, viewModel.type.value) {
             val collectionRules = collections!!.groupBy { it.sourceId }
             storeHomeForType?.map { (source, home) ->
                 val sourceRules = collectionRules[source.id].orEmpty().filter { it.type == viewModel.type.value }
                 val homeFiltered = home.let {
                     it.copy(collections = it.collections.filter { col ->
-                        (pluginsEnabled || col.slug != PLUGIN_DATA_APPS_SLUG) &&
-                            sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
+                        sourceRules.firstOrNull { it.slug == col.slug }?.enabled ?: false
                     })
                 }
                 val categories = homeFiltered.categories.filter{
@@ -725,7 +723,7 @@ fun LockerScreen(
                                         )
                                     }
                                 }
-                                if (viewModel.type.value == AppType.Watchapp) {
+                                if (viewModel.type.value != AppType.Watchface) {
                                     it.categories.forEachIndexed { i, categories ->
                                         item(
                                             contentType = "categories",
@@ -737,12 +735,14 @@ fun LockerScreen(
                                                         source = source,
                                                         category = categories.first(),
                                                         navBarNav = navBarNav,
+                                                        appType = viewModel.type.value,
                                                     )
                                                     categories.getOrNull(1)?.let {
                                                         CategoryItem(
                                                             source = source,
                                                             category = it,
                                                             navBarNav = navBarNav,
+                                                            appType = viewModel.type.value,
                                                         )
                                                     }
                                                 }
@@ -780,7 +780,7 @@ fun LockerScreen(
                                                     home.categories
                                                 )
                                             }.filter { app ->
-                                                app.type == viewModel.type.value &&
+                                                (app.type == viewModel.type.value || viewModel.type.value == AppType.Plugin && app.hasPlugin) &&
                                                         (sharedViewModel.showIncompatible.value || app.isCompatible) &&
                                                         (sharedViewModel.showScaled.value || app.isNativelyCompatible) &&
                                                 app.storeId !in excludedStoreIds &&
@@ -824,6 +824,7 @@ fun RowScope.CategoryItem(
     source: AppstoreSource,
     category: StoreCategory,
     navBarNav: NavBarNav,
+    appType: AppType,
 ) {
     val color = category.color.toColorKmp()
     Box(
@@ -835,7 +836,7 @@ fun RowScope.CategoryItem(
                         sourceId = source.id,
                         path = "category/${category.slug}",
                         title = category.name,
-                        appType = AppType.Watchapp.code,
+                        appType = appType.code,
                     )
                 )
             }.background(color)
@@ -1382,6 +1383,8 @@ private fun SectionHeader(text: String) {
 fun CommonApp.listImageColorFilter(): ColorFilter? =
     if (listImageTintable) ColorFilter.tint(LocalContentColor.current) else null
 
+private const val SCREENSHOT_ASPECT_RATIO = 144f / 168f
+
 @Composable
 fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
     val placeholderColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -1395,8 +1398,10 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 val url = when (entry.type) {
                     AppType.Watchapp -> entry.screenshotImageUrl
                     AppType.Watchface -> entry.screenshotImageUrl
-                    AppType.Plugin -> entry.listImageUrl ?: entry.screenshotImageUrl
+                    AppType.Plugin -> entry.listImageUrl?.ifBlank { null } ?: entry.screenshotImageUrl
                 }
+                // A sideloaded app often has none.
+                if (url.isNullOrBlank()) return@remember null
                 ImageRequest.Builder(context)
                     .memoryCachePolicy(CachePolicy.ENABLED)
                     .data(url)
@@ -1420,6 +1425,17 @@ fun AppImage(entry: CommonApp, modifier: Modifier, size: Dp) {
                 Res.getUri(resUri)
             }
         }
+    }
+    if (model == null) {
+        Box(
+            modifier = modifier.height(size)
+                .aspectRatio(if (entry.type == AppType.Plugin) 1f else SCREENSHOT_ASPECT_RATIO)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(entry.type.icon(), contentDescription = null, modifier = Modifier.size(size * 0.4f))
+        }
+        return
     }
 
     AsyncImage(

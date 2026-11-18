@@ -117,6 +117,7 @@ data class CoreConfig(
     val showAppUpdatedBadge: Boolean = true,
     val androidForegroundServiceForWatchConnectionV2: Boolean = true,
     val showWatchConnectionDebugInfo: Boolean = false,
+    val showIndexBatteryLife: Boolean = true,
     /** Stops the ring scan/sync loop, for when another profile's app instance owns the ring. */
     val disableRingBluetoothSync: Boolean = false,
     val notifyWatchFullyCharged: Boolean = true,

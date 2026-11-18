@@ -1,9 +1,13 @@
 package coredevices.util
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.UserManager
 import androidx.core.net.toUri
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.crashlytics.crashlytics
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 class AndroidPlatform(private val context: Context) : Platform {
@@ -26,6 +30,25 @@ class AndroidPlatform(private val context: Context) : Platform {
         val userManager = context.getSystemService(UserManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) userManager.isProfile else !userManager.isSystemUser
     }
+
+    override val previousRunCrashed: Boolean
+        get() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                return Firebase.crashlytics.didCrashOnPreviousExecution()
+            }
+            val am = context.getSystemService(ActivityManager::class.java)
+            // The newest record is often an isolated child (WebView), so only look at the main process.
+            val lastExit = am.getHistoricalProcessExitReasons(context.packageName, 0, 0)
+                .filter { it.processName == context.packageName }
+                .maxByOrNull { it.timestamp }
+            return when (lastExit?.reason) {
+                ApplicationExitInfo.REASON_CRASH,
+                ApplicationExitInfo.REASON_CRASH_NATIVE,
+                ApplicationExitInfo.REASON_ANR,
+                ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> true
+                else -> false
+            }
+        }
 
     companion object {
         val audioPermResults = MutableSharedFlow<Boolean>()

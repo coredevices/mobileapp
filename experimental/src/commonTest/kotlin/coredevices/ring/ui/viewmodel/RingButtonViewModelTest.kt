@@ -228,7 +228,6 @@ class RingButtonViewModelTest {
                     builtIn = listOf(FakeProvider("index", "Built-in", storesItemsLocally = true, supports = setOf(IntegrationSupport.Note))) + providers,
                 ),
                 pluginStore = store,
-                pluginsEnabled = MutableStateFlow(true),
                 lockerUuids = MutableStateFlow(emptyList()),
             ),
         )

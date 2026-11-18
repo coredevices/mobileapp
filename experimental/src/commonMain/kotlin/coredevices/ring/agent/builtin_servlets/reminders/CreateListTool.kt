@@ -6,35 +6,17 @@ import coredevices.mcp.BuiltInMcpTool
 import coredevices.mcp.SessionContext
 import coredevices.mcp.data.SemanticResult
 import coredevices.mcp.data.ToolCallResult
-import io.modelcontextprotocol.kotlin.sdk.types.Tool
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import io.modelcontextprotocol.kotlin.sdk.types.toJson
-import kotlinx.coroutines.flow.first
+import coredevices.ring.agent.toolschema.builtinToolDefinitions
 import coredevices.ring.database.room.repository.ListRepository
+import coredevices.toolschema.ToolDefinition
+import coredevices.toolschema.ToolParam
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class CreateListTool : BuiltInMcpTool(
-    definition = Tool(
-        name = TOOL_NAME,
-        description = TOOL_DESCRIPTION,
-        inputSchema = ToolSchema(
-            properties = JsonObject(
-                mapOf(
-                    "list_name" to JsonObject(
-                        mapOf(
-                            "type" to "string",
-                            "description" to "The name of the new list, e.g. 'travel' for " +
-                                    "'Create a new list called travel'"
-                        ).toJson()
-                    ),
-                )
-            ),
-            required = listOf("list_name")
-        )
-    ),
+    definition = builtinToolDefinitions.getValue(TOOL_NAME),
 ), KoinComponent {
     private val listRepo: ListRepository by inject()
 
@@ -52,8 +34,12 @@ class CreateListTool : BuiltInMcpTool(
             text != null && triggerRegex.containsMatchIn(text)
     }
 
+    @ToolDefinition(servlet = ReminderServlet.NAME, name = TOOL_NAME, description = TOOL_DESCRIPTION)
     @Serializable
-    private data class CreateListArgs(val list_name: String)
+    private data class CreateListArgs(
+        @ToolParam("The name of the new list, e.g. 'travel' for " + "'Create a new list called travel'")
+        val list_name: String,
+    )
 
     @Serializable
     data class CreateListResult(
@@ -71,7 +57,7 @@ class CreateListTool : BuiltInMcpTool(
         val args = runCatching { JsonSnake.decodeFromString<CreateListArgs>(jsonInput) }
             .getOrElse { return failure("Invalid arguments: ${it.message}") }
         val transcript = runCatching { context.userMessageText.await() }.getOrNull()
-        if (!isTriggerPhrase(transcript)) {
+        if (transcript != null && !isTriggerPhrase(transcript)) {
             logger.w { "Refusing create_list: transcript doesn't start with the trigger phrase" }
             return failure(
                 "Lists can only be created when the user's message starts with " +

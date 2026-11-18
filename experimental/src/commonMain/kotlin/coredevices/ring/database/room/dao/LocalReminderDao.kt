@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import coredevices.ring.data.entity.room.reminders.LocalReminderData
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 @Dao
 interface LocalReminderDao {
@@ -17,6 +18,12 @@ interface LocalReminderDao {
 
     @Query("SELECT * FROM LocalReminderData WHERE itemId = :itemId")
     suspend fun getReminder(itemId: String): LocalReminderData?
+
+    @Query("SELECT * FROM LocalReminderData WHERE geofenceLocationId = :locationId")
+    suspend fun getForGeofenceLocation(locationId: Uuid): List<LocalReminderData>
+
+    @Query("UPDATE LocalReminderData SET geofenceLocationId = NULL WHERE geofenceLocationId = :locationId")
+    suspend fun clearGeofenceLocation(locationId: Uuid)
 
     @Query("UPDATE LocalReminderData SET notifyBeforeMillis = NULL WHERE itemId = :itemId")
     suspend fun clearNotifyBefore(itemId: String)

@@ -55,6 +55,7 @@ class ItemFactory {
         is SemanticResult.ListItemCreation,
         is SemanticResult.SupportingData,
         is SemanticResult.RequiresConfirmation,
+        is SemanticResult.ValidationFailure,
         is SemanticResult.UserDenied,
         is SemanticResult.GenericSuccess,
         is SemanticResult.GenericFailure -> null

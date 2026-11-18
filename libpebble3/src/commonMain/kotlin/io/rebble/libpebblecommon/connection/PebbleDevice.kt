@@ -82,10 +82,13 @@ interface KnownPebbleDevice : PebbleDevice {
     fun setNickname(nickname: String?)
 }
 
-interface DisconnectingPebbleDevice : PebbleDevice
+interface DisconnectingPebbleDevice : PebbleDevice {
+    val color: WatchColor?
+}
 interface DisconnectingKnownPebbleDevice : DisconnectingPebbleDevice, KnownPebbleDevice
 
 interface ConnectingPebbleDevice : PebbleDevice, ActiveDevice {
+    val color: WatchColor?
     val negotiating: Boolean
     /** Set while reconnecting after the watch rebooted for a firmware update. */
     val rebootingForFirmwareUpdate: FirmwareUpdater.FirmwareUpdateStatus.WaitingForReboot?
@@ -148,6 +151,7 @@ object ConnectedPebble {
         suspend fun startDevConnection(forceLan: Boolean = false)
         suspend fun stopDevConnection()
         val devConnectionActive: StateFlow<Boolean>
+        val devConnectionError: StateFlow<String?>
     }
 
     interface Screenshot {
@@ -271,6 +275,11 @@ object ConnectedPebble {
 
 fun PebbleDevice.color() = when (this) {
     is KnownPebbleDevice -> color
-    is BleDiscoveredPebbleDevice -> pebbleScanRecord.extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }
+    is ConnectingPebbleDevice -> color
+    is DisconnectingPebbleDevice -> color
+    is BleDiscoveredPebbleDevice -> pebbleScanRecord.watchColor()
     else -> null
 }
+
+internal fun PebbleLeScanRecord.watchColor(): WatchColor? =
+    extendedInfo?.color?.let { WatchColor.fromProtocolNumber(it.toInt()) }

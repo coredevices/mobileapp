@@ -12,6 +12,7 @@ import coredevices.libindex.database.entity.RingTransfer
 import coredevices.libindex.database.entity.RingTransferStatus
 import coredevices.libindex.database.repository.RingTransferRepository
 import coredevices.mcp.data.SemanticResult
+import coredevices.mcp.data.isConfirmationRequest
 import coredevices.ring.agent.integrations.providers.IntegrationProvider
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
@@ -100,6 +101,7 @@ sealed interface NotificationProgress {
 // Fixed id so repeated prompts replace the visible notification rather than stack.
 internal const val SPEECH_MODEL_PROMPT_NOTIFICATION_ID = 5
 internal const val LEGACY_DESTINATION_NOTIFICATION_ID = 6
+internal val COLLECTIONS_EVICTED_NOTIFICATION_ID = "index_collections_evicted".hashCode()
 
 expect class PlatformIndexNotificationManager{
     fun notify(notification: GenericNotification)
@@ -121,6 +123,8 @@ class IndexNotificationManager(
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
         private const val DEEP_LINK_URI = "pebble://navbar/index"
+        private const val FAQ_URL = "https://help.repebble.com/en/articles/15900461-index-01-faq-and-tips"
+        private const val RESET_URL = "https://help.repebble.com/en/articles/15724430-hard-resets-how-to-fix-most-problems-on-index-01"
         private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
         private val SPEECH_MODEL_PROMPT_DEBOUNCE = 5.minutes
@@ -199,7 +203,7 @@ class IndexNotificationManager(
         val actions = messages
             .filter { it.document.role == MessageRole.tool }
             .mapNotNull { it.document.semantic_result }
-            .filter { it !is SemanticResult.RequiresConfirmation }
+            .filterNot { it.isConfirmationRequest }
         val answer = messages.lastOrNull { it.document.isAnswer }?.document?.content?.takeIf { it.isNotBlank() }
 
         return when {
@@ -575,6 +579,7 @@ class IndexNotificationManager(
 
     suspend fun processRingSyncTransferNotifications(events: Flow<RingEvent>) = coroutineScope {
         launch { processFirmwareUpdateNotifications(events) }
+        launch { processCollectionsEvictedNotifications(events) }
         // Skip pairing issue notifications on iOS - we seem to get false positives from the OS
         // causing confusion/spam
         if (platform.isAndroid) {
@@ -626,10 +631,25 @@ class IndexNotificationManager(
                     GenericNotification(
                         id = nextNotificationId(),
                         title = "Index 01 Pairing Issue",
-                        contentText = "Your Index 01 requires re-pairing to function correctly.",
+                        contentText = "Your Index 01 requires re-pairing to function correctly. Tap for info.",
                         inProgress = null,
                         localOnly = false,
-                        deepLink = DEEP_LINK_URI
+                        deepLink = RESET_URL
+                    )
+                )
+            }
+    }
+
+    private suspend fun processCollectionsEvictedNotifications(events: Flow<RingEvent>) {
+        events.filterIsInstance<RingEvent.CollectionsEvicted>()
+            .collect {
+                platformIndexNotificationManager.notify(
+                    GenericNotification(
+                        id = COLLECTIONS_EVICTED_NOTIFICATION_ID,
+                        title = "Some Index 01 recordings were lost",
+                        contentText = "Your Index 01's storage filled up before it could sync with your phone, " +
+                            "so the oldest recordings were overwritten.",
+                        deepLink = FAQ_URL
                     )
                 )
             }
@@ -646,7 +666,7 @@ class IndexNotificationManager(
                             val notif = GenericNotification(
                                 id = notifId,
                                 title = "Recovering your Index 01",
-                                contentText = "Your Index 01 ran into a problem and needs to be restored.",
+                                contentText = "Your Index 01 ran into a problem and is being restored.",
                                 inProgress = NotificationProgress.Indeterminate,
                                 localOnly = true
                             )

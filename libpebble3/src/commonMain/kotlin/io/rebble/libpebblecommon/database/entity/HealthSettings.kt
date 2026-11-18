@@ -30,6 +30,8 @@ import io.rebble.libpebblecommon.util.Endian
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.time.Instant.Companion.DISTANT_PAST
@@ -92,6 +94,8 @@ private val FW_HRM_MEASUREMENT_INTERVAL = fwSentinel(4, 9, 146)
 private val FW_HRM_ACTIVITY_TRACKING = fwSentinel(4, 9, 150)
 private val FW_HRM_FIVE_MIN = fwSentinel(4, 39, 0)
 
+fun currentYear(): Int = Clock.System.todayIn(TimeZone.currentSystemDefault()).year
+
 private fun fwSentinel(major: Int, minor: Int, patch: Int) = FirmwareVersion(
     stringVersion = "v$major.$minor.$patch",
     timestamp = DISTANT_PAST,
@@ -128,6 +132,7 @@ fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
             heightMm = activityPrefs.heightMm,
             weightDag = activityPrefs.weightDag,
             ageYears = activityPrefs.ageYears,
+            birthYear = activityPrefs.birthYear,
             gender = activityPrefs.gender,
             trackingEnabled = activityPrefs.trackingEnabled,
             activityInsightsEnabled = activityPrefs.activityInsightsEnabled,
@@ -159,18 +164,20 @@ suspend fun HealthSettingsEntryDao.setImperialUnits(imperialUnits: Boolean) {
 
 suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettings) {
     val now = Clock.System.now().asMillisecond()
+    val activityPrefs = ActivityPrefsValue(
+        heightMm = healthSettings.heightMm,
+        weightDag = healthSettings.weightDag,
+        trackingEnabled = healthSettings.trackingEnabled,
+        activityInsightsEnabled = healthSettings.activityInsightsEnabled,
+        sleepInsightsEnabled = healthSettings.sleepInsightsEnabled,
+        ageYears = healthSettings.ageYears,
+        birthYear = healthSettings.birthYear,
+        gender = healthSettings.gender,
+    ).withBirthYear(currentYear())
     insertOrReplace(
         HealthSettingsEntry(
             id = KEY_ACTIVITY_PREFERENCES,
-            value = ActivityPrefsValue(
-                heightMm = healthSettings.heightMm,
-                weightDag = healthSettings.weightDag,
-                trackingEnabled = healthSettings.trackingEnabled,
-                activityInsightsEnabled = healthSettings.activityInsightsEnabled,
-                sleepInsightsEnabled = healthSettings.sleepInsightsEnabled,
-                ageYears = healthSettings.ageYears,
-                gender = healthSettings.gender,
-            ).encodeToString(),
+            value = activityPrefs.encodeToString(),
             timestamp = now,
         )
     )
@@ -198,7 +205,7 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
         HealthSettingsEntry(
             id = KEY_HEART_RATE_PREFERENCES,
             value = HeartRatePreferencesValue.forAge(
-                ageYears = healthSettings.ageYears,
+                ageYears = activityPrefs.ageYears,
                 restingHr = healthSettings.restingHr,
                 elevatedHr = healthSettings.elevatedHr,
             ).encodeToString(),
@@ -207,9 +214,19 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
     )
 }
 
-/** Re-derives the heart rate zones from the stored age if they don't match it. */
-suspend fun HealthSettingsEntryDao.updateHeartRateZonesFromAge() {
-    val activityPrefs = ActivityPrefsValue.fromString(getEntry(KEY_ACTIVITY_PREFERENCES)?.value) ?: return
+/** Re-derives the age from the birth year (filling it in if missing), and the heart rate zones from the age. */
+suspend fun HealthSettingsEntryDao.updateAgeDerivedSettings() {
+    val stored = ActivityPrefsValue.fromString(getEntry(KEY_ACTIVITY_PREFERENCES)?.value) ?: return
+    val activityPrefs = stored.withBirthYear(currentYear())
+    if (activityPrefs != stored) {
+        insertOrReplace(
+            HealthSettingsEntry(
+                id = KEY_ACTIVITY_PREFERENCES,
+                value = activityPrefs.encodeToString(),
+                timestamp = Clock.System.now().asMillisecond(),
+            )
+        )
+    }
     val current = HeartRatePreferencesValue.fromString(getEntry(KEY_HEART_RATE_PREFERENCES)?.value)
         ?: HeartRatePreferencesValue()
     val derived = HeartRatePreferencesValue.forAge(
@@ -235,8 +252,15 @@ data class ActivityPrefsValue(
     val activityInsightsEnabled: Boolean = false,
     val sleepInsightsEnabled: Boolean = false,
     val ageYears: Int = 35,
+    val birthYear: Int? = null, // Phone-only; the watch only knows ageYears
     val gender: HealthGender = HealthGender.Female,
 ) {
+    /** Derives age from birth year, or birth year from age if it isn't known yet. */
+    fun withBirthYear(currentYear: Int): ActivityPrefsValue = when (birthYear) {
+        null -> copy(birthYear = currentYear - ageYears)
+        else -> copy(ageYears = currentYear - birthYear)
+    }
+
     companion object {
         fun ActivityPrefsValue.encodeToString(): String = json.encodeToString(this)
         fun fromString(value: String?): ActivityPrefsValue? = value?.let { json.decodeFromString(value) }

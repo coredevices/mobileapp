@@ -88,17 +88,18 @@ interface LockerEntryRealDao : LockerEntryDao {
 
     @Query("""
         UPDATE LockerEntryEntity
-        SET microphoneGranted = :granted, recordHashcode = :hashcode
-        WHERE id = :id AND microphoneGranted != :granted
+        SET watchPermissions = :permissions, recordHashcode = :hashcode
+        WHERE id = :id AND watchPermissions != :permissions
     """)
-    suspend fun updateMicrophoneGrant(id: Uuid, granted: Boolean, hashcode: Int)
+    suspend fun updateWatchPermissions(id: Uuid, permissions: Int, hashcode: Int)
 
+    /** Apps missing from [permissions] have none. */
     @Transaction
-    suspend fun syncMicrophoneGrants(grants: Set<Uuid>) {
+    suspend fun syncWatchPermissions(permissions: Map<Uuid, Int>) {
         getAll().forEach { entry ->
-            val granted = entry.id in grants
-            if (entry.microphoneGranted != granted) {
-                updateMicrophoneGrant(entry.id, granted, entry.copy(microphoneGranted = granted).recordHashCode())
+            val bits = permissions[entry.id] ?: 0
+            if (entry.watchPermissions != bits) {
+                updateWatchPermissions(entry.id, bits, entry.copy(watchPermissions = bits).recordHashCode())
             }
         }
     }

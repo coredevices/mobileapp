@@ -13,6 +13,7 @@ import coredevices.indexai.data.entity.RecordingEntryEntity
 import coredevices.indexai.data.entity.ToolCall
 import coredevices.mcp.client.LazyLoadingMcpSession
 import coredevices.mcp.data.SemanticResult
+import coredevices.ring.agent.confirmation.confirmationRequest
 import coredevices.ring.agent.builtin_servlets.plugins.ReadSourceTool
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -236,6 +237,18 @@ class ConversationTurnsTest {
             mapOf("c1" to action("c1", request)),
         )
         assertEquals(listOf(AssistantPart.Confirmation("c1", request)), assistantTurn(turns).parts)
+    }
+
+    @Test
+    fun callThatFailedValidationIsAPrompt() {
+        val failure = SemanticResult.ValidationFailure(
+            "Music", "clear_queue", JsonObject(mapOf("all" to JsonPrimitive(true))), probabilityValid = 0.1,
+        )
+        val turns = conversationTurns(
+            listOf(user("what's playing"), assistant(null, "c1" to "music__clear_queue"), toolResult("c1", failure)),
+            mapOf("c1" to action("c1", failure)),
+        )
+        assertEquals(listOf(AssistantPart.Confirmation("c1", failure.confirmationRequest!!)), assistantTurn(turns).parts)
     }
 
     @Test

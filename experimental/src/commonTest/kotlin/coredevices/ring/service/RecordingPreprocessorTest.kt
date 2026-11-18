@@ -121,6 +121,8 @@ class RecordingPreprocessorTest {
                 )
             }
 
+            override suspend fun statCachedRecordingSource(idNoSuffix: String, useOriginalAudio: Boolean): Long? = null
+
             override suspend fun persistRecording(id: String) {}
 
             override fun recordingExists(id: String): Boolean {

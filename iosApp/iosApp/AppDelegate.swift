@@ -8,34 +8,65 @@ import FirebaseAuth
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         UIImagePickerController.hideCameraSource()
-        let mixpanel = Mixpanel.initialize(token: "2c9c89f4bc233ba9317f82abe488511a", trackAutomaticEvents: true)
+        // Super properties passed at init so the SDK's first automatic events carry them.
+        let destinations: Properties = ["analytics_destinations": "mixpanel,collector"]
+        let token = "2c9c89f4bc233ba9317f82abe488511a"
+        // Mixpanel first: the $ae_updated version marker is shared, only the first instance reports upgrades.
+        let mixpanel = Mixpanel.initialize(token: token, trackAutomaticEvents: true, superProperties: destinations)
+        // Second SDK instance sending the same events to our collector (BigQuery).
+        // iOS keeps opt-out per instance: start the collector opted out if the user opted out of Mixpanel.
+        let collector = Mixpanel.initialize(token: token, trackAutomaticEvents: true, instanceName: "collector", optOutTrackingByDefault: mixpanel.hasOptedOutTracking(), superProperties: destinations, serverURL: "https://events.cluster.repebble.com")
+        Mixpanel.setMainInstance(name: token) // initialize() makes the last instance main
+        let instances = [mixpanel, collector]
+        // Kept here rather than read back from the SDK: reset() and opt-out drop super properties.
+        var firebaseUid: String? = nil
+        let identityLock = NSLock()
+        func baseProperties() -> Properties {
+            var properties = destinations
+            properties["firebase_uid"] = firebaseUid
+            return properties
+        }
         AlarmKitBridge.register()
         let res = IOSDelegate.shared.didFinishLaunching(application: application, logAnalyticsEvent: { (name: String, params: [String: Any]?) -> Void in
-            if let params = params as? Properties {
-                let properties = params
-                mixpanel.track(event: name, properties: properties)
-            } else {
-                mixpanel.track(event: name)
+            for instance in instances {
+                if let params = params as? Properties {
+                    instance.track(event: name, properties: params)
+                } else {
+                    instance.track(event: name)
+                }
             }
         }, addGlobalAnalyticsProperty: { (name: String, value: MixpanelType?) -> Void in
-            if (name == "email") {
-                if let value = value as? String {
-                    mixpanel.identify(distinctId: value)
+            identityLock.lock()
+            defer { identityLock.unlock() }
+            if name == "firebase_uid" {
+                firebaseUid = value as? String
+            }
+            for instance in instances {
+                if (name == "email") {
+                    if let value = value as? String {
+                        instance.identify(distinctId: value)
+                    } else {
+                        instance.reset()
+                        instance.registerSuperProperties(baseProperties())
+                    }
                 } else {
-                    mixpanel.reset()
-                }
-            } else {
-                if let value = value {
-                    mixpanel.registerSuperPropertiesOnce([name: value])
-                } else {
-                    mixpanel.unregisterSuperProperty(name)
+                    if let value = value {
+                        instance.registerSuperProperties([name: value])
+                    } else {
+                        instance.unregisterSuperProperty(name)
+                    }
                 }
             }
         }, setAnalyticsEnabled: { (enabled: KotlinBoolean) -> Void in
-            if (enabled.boolValue) {
-                mixpanel.optInTracking()
-            } else {
-                mixpanel.optOutTracking()
+            identityLock.lock()
+            defer { identityLock.unlock() }
+            for instance in instances {
+                if (enabled.boolValue) {
+                    instance.optInTracking(properties: baseProperties())
+                    instance.registerSuperProperties(baseProperties()) // opt-out cleared it
+                } else {
+                    instance.optOutTracking()
+                }
             }
         })
         SpeechAnalyzerBridge.register()

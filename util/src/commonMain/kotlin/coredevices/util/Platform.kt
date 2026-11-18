@@ -19,6 +19,9 @@ interface Platform {
     /** Running under a secondary Android user/profile (work profile, Secure Folder, Private Space).
      *  Bluetooth bonds are shared with the main profile, so a second app instance there races it for the ring. */
     val isSecondaryProfile: Boolean get() = false
+
+    /** Whether the previous run of the app ended in a crash, as opposed to being killed by the user or the OS. */
+    val previousRunCrashed: Boolean get() = false
     companion object {
         /**
          * Channel for URI intents
