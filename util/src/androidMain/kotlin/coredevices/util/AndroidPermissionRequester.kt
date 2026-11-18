@@ -129,7 +129,7 @@ class AndroidPermissionRequester(
                 } else {
                     PermissionResult.Rejected
                 }
-                continuation.resume(result)
+                if (continuation.isActive) continuation.resume(result)
             }
             val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
             launcher.launch(intent)
@@ -149,7 +149,7 @@ class AndroidPermissionRequester(
         }
         return suspendCancellableCoroutine { continuation ->
             val launcher = registry.activityResultRegistry.register(
-                "requestScheduleExactAlarm",
+                "requestIgnoreBatteryOptimizations",
                 ActivityResultContracts.StartActivityForResult(),
             ) { _ ->
                 val result = if (batteryOptimizationsAreDisabled()) {
@@ -157,7 +157,7 @@ class AndroidPermissionRequester(
                 } else {
                     PermissionResult.Rejected
                 }
-                continuation.resume(result)
+                if (continuation.isActive) continuation.resume(result)
             }
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = "package:${context.packageName}".toUri()
