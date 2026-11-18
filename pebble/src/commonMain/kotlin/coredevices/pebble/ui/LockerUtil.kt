@@ -3,11 +3,14 @@ package coredevices.pebble.ui
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -896,11 +899,6 @@ fun AppsFilterRow(
     showWatchfaceOrderSetting: Boolean,
 ) {
     val tabTypes = AppType.entries
-    LaunchedEffect(tabTypes) {
-        if (selectedType != null && selectedType.value !in tabTypes) {
-            selectedType.value = AppType.Watchface
-        }
-    }
     val scrollState = rememberScrollState()
     LaunchedEffect(hasShownScrollHint) {
         if (!hasShownScrollHint && scrollState.maxValue > 0) {
@@ -922,53 +920,52 @@ fun AppsFilterRow(
             )
         }
     }
-    Box(
-        modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 12.dp, end = 12.dp)
+    Column(
+        modifier = Modifier.padding(top = 0.dp, bottom = 4.dp, start = 12.dp, end = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        if (selectedType != null) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth().height(37.dp),
+            ) {
+                tabTypes.forEachIndexed { index, appType ->
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = tabTypes.size
+                        ),
+                        selected = selectedType.value == appType,
+                        onClick = { selectedType.value = appType },
+                        icon = { },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(0.dp)
+                            ) {
+                                Icon(
+                                    appType.icon(),
+                                    contentDescription = appType.shortName(),
+                                    modifier = Modifier.size(22.dp).padding(0.dp)
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Text(
+                                    appType.shortName(),
+                                    lineHeight = 13.sp,
+                                    modifier = Modifier.padding(0.dp),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(0.dp)
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier.horizontalScroll(scrollState),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val height = 37.dp
-            if (selectedType != null) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.height(height).padding(0.dp),
-                ) {
-                    tabTypes.forEachIndexed { index, appType ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = tabTypes.size
-                            ),
-                            selected = selectedType.value == appType,
-                            onClick = { selectedType.value = appType },
-                            icon = { },
-                            label = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(0.dp)
-                                ) {
-                                    Icon(
-                                        appType.icon(),
-                                        contentDescription = appType.shortName(),
-                                        modifier = Modifier.size(22.dp).padding(0.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text(
-                                        appType.shortName(),
-                                        lineHeight = 13.sp,
-                                        modifier = Modifier.padding(0.dp),
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                            modifier = Modifier.padding(0.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
             if (sharedLockerViewModel.watchType.value.performsScaling()) {
                 val shortName = sharedLockerViewModel.watchType.value.shortName()
                 FilterChip(
