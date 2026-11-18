@@ -434,7 +434,7 @@ private fun MenuBelowAnchor(
                 layoutDirection: LayoutDirection,
                 popupContentSize: IntSize,
             ): IntOffset {
-                maxHeight = with(density) { (windowSize.height - anchorBounds.bottom - margin).coerceAtLeast(0).toDp() }
+                maxHeight = with(density) { (windowSize.height - anchorBounds.bottom.coerceAtLeast(0) - margin).coerceAtLeast(0).toDp() }
                 val x = if (layoutDirection == LayoutDirection.Ltr) {
                     anchorBounds.right - popupContentSize.width
                 } else {
