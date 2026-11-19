@@ -11,17 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup JDK
-        uses: actions/setup-java@v6.0.1
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: 'temurin'
           java-version: 17
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
       - name: Cache build deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
@@ -41,16 +41,16 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Setup JDK
-        uses: actions/setup-java@v6.0.1
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: 'temurin'
           java-version: 17
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Cache build deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches
