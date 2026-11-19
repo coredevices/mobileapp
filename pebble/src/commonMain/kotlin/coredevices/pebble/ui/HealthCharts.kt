@@ -34,6 +34,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coredevices.util.formatHourOfDay
 import coredevices.util.formatTimeOfDay
 import coredevices.util.isLocale24HourFormat
 import io.rebble.libpebblecommon.health.OverlayType
@@ -274,8 +275,8 @@ internal fun DailySleepTimeline(segments: List<SleepSegmentUi>, totalH: Float, d
             Spacer(Modifier.height(4.dp))
         }
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            for (l in if (is24Hour) listOf("18:00", "00:00", "06:00", "12:00") else listOf("6 PM", "12 AM", "6 AM", "12 PM"))
-                Text(l, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+            for (h in listOf(18, 0, 6, 12))
+                Text(formatHourOfDay(h, is24Hour), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
         }
         Spacer(Modifier.height(4.dp))
         Canvas(

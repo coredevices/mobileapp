@@ -176,7 +176,7 @@ private fun ActivityCard(st: ActivityUiState, range: HealthTimeRange, imperial: 
         else -> "${st.averageSteps}"
     }
     val headerSub = when {
-        sl != null && range == HealthTimeRange.Daily -> "at $sl:00"
+        sl != null && range == HealthTimeRange.Daily -> "at $sl"
         sl != null && range == HealthTimeRange.Monthly -> "daily avg · $sl"
         sl != null -> sl
         else -> ""
