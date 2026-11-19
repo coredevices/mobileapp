@@ -382,6 +382,14 @@ class WatchManagerTest {
     }
 
     @Test
+    fun knownWatchesPresentOnceLoaded() = runTest(timeout = 5.seconds) {
+        seededKnownWatches = listOf(seededWatch(lastConnected = null))
+        val watchManager = create(backgroundScope)
+        watchManager.init()
+        assertEquals(listOf(identifier), watchManager.watches.first().map { it.identifier })
+    }
+
+    @Test
     fun watchNotFoundStopsAutoConnectingInsteadOfForgetting() = runTest(timeout = 5.seconds) {
         seededKnownWatches = listOf(seededWatch(lastConnected = MillisecondInstant(Instant.fromEpochMilliseconds(1_000))))
         platformIdentifierFailuresRemaining = PERIPHERAL_NOT_FOUND_MAX_ATTEMPTS

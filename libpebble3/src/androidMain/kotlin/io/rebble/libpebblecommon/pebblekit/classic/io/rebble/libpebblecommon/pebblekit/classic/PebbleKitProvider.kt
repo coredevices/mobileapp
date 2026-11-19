@@ -11,6 +11,8 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.Watches
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class PebbleKitProvider : ContentProvider(), LibPebbleKoinComponent {
     private var initialized = false
@@ -69,7 +71,7 @@ class PebbleKitProvider : ContentProvider(), LibPebbleKoinComponent {
                 return@use
             }
 
-            val connectedWatch = watches.watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
+            val connectedWatch = runBlocking { watches.watches.first() }.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
 
             if (connectedWatch != null) {
                 val fwVersion = connectedWatch.watchInfo.runningFwVersion

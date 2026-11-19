@@ -30,6 +30,7 @@ import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlinx.datetime.DatePeriod
@@ -126,7 +127,7 @@ class Health(
 
     override fun requestHealthData(fullSync: Boolean) {
         libPebbleCoroutineScope.launch {
-            val device = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
+            val device = watchManager.watches.first().filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
             device?.requestHealthData(fullSync)
         }
     }

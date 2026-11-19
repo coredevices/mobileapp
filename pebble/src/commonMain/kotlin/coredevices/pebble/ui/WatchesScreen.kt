@@ -148,6 +148,7 @@ import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
 import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.displayName
 import coredevices.ui.ConfirmDialog
@@ -202,6 +203,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -432,7 +434,7 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         listState.animateScrollToItem(0)
                     }
                 }
-                if (libPebble.watches.value.none { it.isFullyConnected() }) {
+                if (libPebble.watches.first().none { it.isFullyConnected() }) {
                     addFabExpanded = true
                 }
 
@@ -446,11 +448,8 @@ fun WatchesScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                 libPebble.watches
                     .map { it.sortedWith(PebbleDeviceComparator) }
             }
-            val watches by watchesFlow.collectAsState(
-                initial = libPebble.watches.value.sortedWith(
-                    PebbleDeviceComparator
-                )
-            )
+            val unsortedWatches = rememberWatches() ?: return@Box
+            val watches = remember(unsortedWatches) { unsortedWatches.sortedWith(PebbleDeviceComparator) }
             val rings by libIndex.rings.collectAsState()
             val ringPairing by remember {
                 derivedStateOf {

@@ -173,15 +173,15 @@ class RealPebbleDeepLinkHandler(
 
             uri.scheme == "pebblejs" && uri.host?.startsWith("close") == true -> {
                 val data = uri.encodedFragment ?: return false
-                libPebble.watches.value
-                    .filterIsInstance<ConnectedPebbleDevice>()
-                    .firstOrNull { it.currentPKJSSession.value != null }
-                    ?.currentPKJSSession
-                    ?.value
-                    ?.triggerOnWebviewClosed(data) ?: run {
-                        logger.w { "No PKJS session found, cannot handle webview close" }
-                        return false
-                    }
+                GlobalScope.launch {
+                    libPebble.watches.first()
+                        .filterIsInstance<ConnectedPebbleDevice>()
+                        .firstOrNull { it.currentPKJSSession.value != null }
+                        ?.currentPKJSSession
+                        ?.value
+                        ?.triggerOnWebviewClosed(data)
+                        ?: logger.w { "No PKJS session found, cannot handle webview close" }
+                }
                 true
             }
 
@@ -217,15 +217,17 @@ class RealPebbleDeepLinkHandler(
             _snackBarMessages.tryEmit("Failed to load language pack file")
             return false
         }
-        val connectedWatch =
-            libPebble.watches.value.filterIsInstance<ConnectedPebble.Language>().firstOrNull()
-        if (connectedWatch == null) {
-            logger.w { "handleLanguagePack: no connected watch" }
-            _snackBarMessages.tryEmit("Failed to load language pack: no connected watch")
-            return false
+        GlobalScope.launch {
+            val connectedWatch =
+                libPebble.watches.first().filterIsInstance<ConnectedPebble.Language>().firstOrNull()
+            if (connectedWatch == null) {
+                logger.w { "handleLanguagePack: no connected watch" }
+                _snackBarMessages.tryEmit("Failed to load language pack: no connected watch")
+                return@launch
+            }
+            _snackBarMessages.tryEmit("Installing language pack...")
+            connectedWatch.installLanguagePack(file, name)
         }
-        _snackBarMessages.tryEmit("Installing language pack...")
-        connectedWatch.installLanguagePack(file, name)
         return true
     }
 
@@ -398,7 +400,9 @@ class RealPebbleDeepLinkHandler(
 
     private fun handleShowWatches(path: String?): Boolean {
         if (path != null) {
-            firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
+            GlobalScope.launch {
+                firmwareUpdateUiTracker.updateWatchNow(libPebble, path.removePrefix("/").removeSuffix("/"))
+            }
         }
         val route = PebbleNavBarRoutes.WatchesRoute
         _navigateToPebbleDeepLink.value = PebbleDeepLink(route)

@@ -14,6 +14,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdateTrigger
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater.FirmwareUpdateStatus
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
@@ -23,7 +24,7 @@ interface FirmwareUpdateUiTracker {
     fun didFirmwareUpdateCheckFromUi()
     fun shouldUiUpdateCheck(): Boolean
     fun onConnectedWatch(watch: CommonConnectedDevice)
-    fun updateWatchNow(libPebble: LibPebble, identifier: String)
+    suspend fun updateWatchNow(libPebble: LibPebble, identifier: String)
 }
 
 class RealFirmwareUpdateUiTracker(
@@ -130,10 +131,10 @@ class RealFirmwareUpdateUiTracker(
 
     private fun watchKey(key: Int) = "firmware-update/$key"
 
-    override fun updateWatchNow(libPebble: LibPebble, identifier: String) {
+    override suspend fun updateWatchNow(libPebble: LibPebble, identifier: String) {
         removeNotification(identifier)
         val watch =
-            libPebble.watches.value.firstOrNull { it.identifier.asString == identifier }
+            libPebble.watches.first().firstOrNull { it.identifier.asString == identifier }
         if (watch == null) {
             logger.w { "No matching connected watch found for $identifier" }
             return

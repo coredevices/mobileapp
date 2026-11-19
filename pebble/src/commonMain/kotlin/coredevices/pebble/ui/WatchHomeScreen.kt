@@ -110,6 +110,7 @@ import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.ui.M3Dialog
 import coredevices.ui.SecondaryProfileWarningDialog
 import coredevices.util.CoreConfig
@@ -147,10 +148,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-fun LibPebble.haveSeenFullyConnectedWatch() = watches.value.any {
-    it.isFullyConnected()
-}
-
 fun LibIndex.isAnyRingPaired() = rings.value.any { it is KnownIndexDevice }
 
 fun PebbleDevice.isFullyConnected() = this is KnownPebbleDevice && runningFwVersion != UNKNOWN_WATCH_SERIAL_OR_VERSION
@@ -167,11 +164,11 @@ class WatchHomeViewModel(
     /** Null until the bar's tabs are known; then [launchTab]. */
     val selectedTab = mutableStateOf<WatchHomeNavTab?>(null)
 
-    fun launchTab(barTabs: List<WatchHomeNavTab>): WatchHomeNavTab {
+    fun launchTab(barTabs: List<WatchHomeNavTab>, watches: List<PebbleDevice>): WatchHomeNavTab {
         val automatic = when {
             coreConfig.value.startOnFirstNavBarTab -> null
             coreConfig.value.enableIndex && libIndex.isAnyRingPaired() -> WatchHomeNavTab.Index
-            libPebble.haveSeenFullyConnectedWatch() -> WatchHomeNavTab.WatchFaces
+            watches.any { it.isFullyConnected() } -> WatchHomeNavTab.WatchFaces
             else -> WatchHomeNavTab.Watches
         }
         return automatic?.takeIf { it in barTabs } ?: barTabs.first()
@@ -233,6 +230,8 @@ fun WatchHomeScreen(
         val coreConfigHolder: CoreConfigHolder = koinInject()
         val coreConfig by coreConfigHolder.config.collectAsState()
         val healthEnabledValue = viewModel.healthTrackingEnabled.collectAsState()
+        val libPebble = rememberLibPebble()
+        val watches = rememberWatches()
         val watchOnboardingFinished: WatchOnboardingFinished = koinInject()
 
         // Create a SaveableStateHolder to preserve state for each tab
@@ -264,7 +263,7 @@ fun WatchHomeScreen(
             )
         }
         val healthEnabled = healthEnabledValue.value
-        if (healthEnabled == null) {
+        if (healthEnabled == null || watches == null) {
             return
         }
 
@@ -272,7 +271,7 @@ fun WatchHomeScreen(
         val barTabs = WatchHomeNavTab.barTabs(coreConfig, tabs)
         val moreTabs = tabs.drop(barTabs.size)
         val currentTab = viewModel.selectedTab.value?.takeIf { it in tabs }
-            ?: viewModel.launchTab(barTabs).also { viewModel.selectedTab.value = it }
+            ?: viewModel.launchTab(barTabs, watches).also { viewModel.selectedTab.value = it }
         val pebbleNavHostController = navControllers[currentTab]!!
 
         LaunchedEffect(Unit) {
@@ -323,7 +322,6 @@ fun WatchHomeScreen(
             }
         }
         val snackbarHostState = remember { SnackbarHostState() }
-        val libPebble = rememberLibPebble()
         val libIndex = koinInject<LibIndex>()
         LaunchedEffect(Unit) {
             scope.launch {
@@ -480,15 +478,6 @@ fun WatchHomeScreen(
             SecondaryProfileWarningDialog { secondaryProfileWarningPending = false }
         }
 
-        val watchesFlow = remember {
-            libPebble.watches
-                .map { it.sortedWith(PebbleDeviceComparator) }
-        }
-        val watches by watchesFlow.collectAsState(
-            initial = libPebble.watches.value.sortedWith(
-                PebbleDeviceComparator
-            )
-        )
         val ringsFlow = remember {
             libIndex.rings
         }

@@ -95,6 +95,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
@@ -108,8 +109,6 @@ import kotlin.uuid.Uuid
 
 data class PhoneCapabilities(val capabilities: Set<ProtocolCapsFlag>)
 data class PlatformFlags(val flags: UInt)
-
-typealias PebbleDevices = StateFlow<List<PebbleDevice>>
 
 sealed class PebbleConnectionEvent {
     data class PebbleConnectedEvent(val device: CommonConnectedDevice) : PebbleConnectionEvent()
@@ -351,7 +350,8 @@ interface WatchPrefs {
 }
 
 interface Watches {
-    val watches: PebbleDevices
+    /** Doesn't emit until known watches have been loaded. */
+    val watches: Flow<List<PebbleDevice>>
     val connectionEvents: Flow<PebbleConnectionEvent>
     fun watchesDebugState(): String
 }
@@ -397,7 +397,7 @@ interface Calendar {
     suspend fun defaultCalendar(): CalendarEntity?
 }
 
-fun PebbleDevices.forDevice(identifier: String): Flow<PebbleDevice> {
+fun Flow<List<PebbleDevice>>.forDevice(identifier: String): Flow<PebbleDevice> {
     return mapNotNull { it.firstOrNull { it.identifier.asString == identifier } }
 }
 
@@ -660,14 +660,16 @@ class LibPebble3(
     }
 
     private suspend fun forEachConnectedWatch(block: suspend ConnectedPebbleDevice.() -> Unit) {
-        watches.value.filterIsInstance<ConnectedPebbleDevice>().forEach {
+        watches.first().filterIsInstance<ConnectedPebbleDevice>().forEach {
             it.block()
         }
     }
 
     private fun forEachConnectedWatchInAnyState(block: CommonConnectedDevice.() -> Unit) {
-        watches.value.filterIsInstance<CommonConnectedDevice>().forEach {
-            it.block()
+        libPebbleCoroutineScope.launch {
+            watches.first().filterIsInstance<CommonConnectedDevice>().forEach {
+                it.block()
+            }
         }
     }
 

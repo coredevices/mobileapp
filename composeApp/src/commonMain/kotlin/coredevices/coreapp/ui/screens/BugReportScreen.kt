@@ -67,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -83,7 +84,7 @@ import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
-import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.ui.TopBarIconButtonWithToolTip
 import coredevices.pebble.ui.toPngBytes
 import io.rebble.libpebblecommon.connection.ConnectedPebble
@@ -97,6 +98,8 @@ import coredevices.util.isIOS
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.auth.auth
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -137,8 +140,12 @@ fun BugReportScreen(
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val platform = koinInject<Platform>()
         // Watch screenshot capture / stored-watch detection
-        val libPebble = rememberLibPebble()
-        val watches by libPebble.watches.collectAsState()
+        val loadedWatches = rememberWatches()
+        val watchesTimedOut by produceState(false) {
+            delay(2.seconds)
+            value = true
+        }
+        val watches = loadedWatches ?: if (watchesTimedOut) emptyList() else return@Box
         // Default to an Index bug report when there are no watches stored in libpebble.
         var isWatch by remember { mutableStateOf(pebble && watches.isNotEmpty()) }
         val coreConfigFlow: CoreConfigFlow = koinInject()

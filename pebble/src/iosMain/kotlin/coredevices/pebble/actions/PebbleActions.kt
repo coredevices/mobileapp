@@ -46,9 +46,9 @@ interface PebbleTimelineActions {
 }
 
 interface PebbleWatchInfoActions {
-    fun getWatchBatteryLevel(): Int?
-    fun isWatchConnected(): Boolean
-    fun getConnectedWatchName(): String?
+    suspend fun getWatchBatteryLevel(): Int?
+    suspend fun isWatchConnected(): Boolean
+    suspend fun getConnectedWatchName(): String?
     suspend fun getWatchScreenshotBase64(): String
     /** Returns the watch screenshot as raw PNG bytes, or null on failure. */
     suspend fun getWatchScreenshotBytes(): ByteArray? = null

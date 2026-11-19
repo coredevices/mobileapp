@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
-import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.util.CoreConfigHolder
 import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import org.koin.compose.koinInject
@@ -83,8 +83,7 @@ fun PermissionPolicyDetails() {
 /** What permissions are, and when apps ask; shown once, in a dialog or in onboarding. */
 @Composable
 fun PermissionsIntroContent(settings: SettingsItemsState?, modifier: Modifier = Modifier) {
-    val libPebble = rememberLibPebble()
-    val hasWatch = libPebble.watches.collectAsState().value.isNotEmpty()
+    val hasWatch = !rememberWatches().isNullOrEmpty()
     val indexEnabled = koinInject<CoreConfigHolder>().config.collectAsState().value.enableIndex
     val askers = when {
         hasWatch && indexEnabled ->

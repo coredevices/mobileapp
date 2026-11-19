@@ -60,6 +60,7 @@ import coredevices.pebble.Platform
 import coredevices.pebble.account.FirestoreLocker
 import coredevices.pebble.account.FirestoreLockerEntry
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.PEBBLE_FEED_URL
 import coredevices.pebble.services.PebbleAccountProvider
@@ -369,10 +370,9 @@ fun WatchType.modelDescription() = when (this) {
 
 @Composable
 fun lastConnectedWatch(): KnownPebbleDevice? {
-    val libPebble = rememberLibPebble()
-    val watches by libPebble.watches.collectAsState()
+    val watches = rememberWatches()
     val lastConnectedWatch = remember(watches) {
-        watches.sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
+        watches.orEmpty().sortedWith(PebbleDeviceComparator).filterIsInstance<KnownPebbleDevice>()
             .firstOrNull()
     }
     return lastConnectedWatch

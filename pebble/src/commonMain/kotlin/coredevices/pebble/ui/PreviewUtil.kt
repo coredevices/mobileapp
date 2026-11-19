@@ -140,7 +140,7 @@ private fun fakePebbleModule(appContext: AppContext) = module {
         override fun didFirmwareUpdateCheckFromUi() {}
         override fun shouldUiUpdateCheck(): Boolean = false
         override fun onConnectedWatch(watch: CommonConnectedDevice) {}
-        override fun updateWatchNow(
+        override suspend fun updateWatchNow(
             libPebble: LibPebble,
             identifier: String
         ) {

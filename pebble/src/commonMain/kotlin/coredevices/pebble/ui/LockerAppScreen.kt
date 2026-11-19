@@ -1126,7 +1126,7 @@ suspend fun CommonApp.showSettings(
                 )
                 return
             }
-            val watch = libPebble.watches.value.filterIsInstance<ConnectedPebbleDevice>()
+            val watch = libPebble.watches.first().filterIsInstance<ConnectedPebbleDevice>()
                 .firstOrNull()
             //TODO: Handle multiple watches connected, selector?
             if (watch == null) {

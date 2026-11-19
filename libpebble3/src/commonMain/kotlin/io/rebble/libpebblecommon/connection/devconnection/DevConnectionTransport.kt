@@ -74,7 +74,7 @@ abstract class DevConnectionTransport(
             log("Firmware install failed: $reason")
             sendStatus(false)
         }
-        val watch = libPebble.watches.value.firstOrNull { it.identifier == identifier } as? ConnectedPebble.Firmware
+        val watch = libPebble.watches.first().firstOrNull { it.identifier == identifier } as? ConnectedPebble.Firmware
         if (watch == null) return fail("the watch is not connected")
         if (watch.firmwareUpdateState !is FirmwareUpdateStatus.NotInProgress) {
             return fail("a firmware update is already in progress")

@@ -283,7 +283,7 @@ class Locker(
                 return false
             }
         }
-        val connected = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>()
+        val connected = watchManager.watches.first().filterIsInstance<ConnectedPebbleDevice>()
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
         // A watch only erases an app's storage when the app is removed: re-added before the removal
@@ -505,7 +505,7 @@ class Locker(
         }
         // A plugin-only pbw never reaches the watch.
         val tasks = if (loadOnWatch && type != AppType.Plugin) {
-            watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
+            watchManager.watches.first().filterIsInstance<ConnectedPebbleDevice>().map {
                 libPebbleCoroutineScope.async {
                     val entryStatus = lockerEntryDao.existsOnWatch(
                         it.identifier.asString,

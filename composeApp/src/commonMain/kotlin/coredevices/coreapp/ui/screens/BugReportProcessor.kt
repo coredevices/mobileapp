@@ -17,6 +17,7 @@ import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_FIREBASE_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MEMFAULT_UPLOADS
 import coredevices.pebble.ui.SettingsKeys.KEY_ENABLE_MIXPANEL_UPLOADS
+import coredevices.pebble.watchesOrEmpty
 import coredevices.ring.util.trace.TraceSessionExporter
 import coredevices.util.CompanionDevice
 import coredevices.util.CoreConfigFlow
@@ -154,7 +155,7 @@ class BugReportProcessor(
         private const val MAX_CONCURRENT_UPLOADS = 4
     }
 
-    private fun getPKJSSummary(): String {
+    private suspend fun getPKJSSummary(): String {
         return try {
             pebbleAppDelegate.getPKJSSessions()
         } catch (e: Exception) {
@@ -751,7 +752,7 @@ class BugReportProcessor(
     }
 
     suspend fun pebbleScreenContext(): String {
-        val watches = libPebble.watches.value.sortedByDescending {
+        val watches = libPebble.watchesOrEmpty().sortedByDescending {
             when (it) {
                 is KnownPebbleDevice -> it.lastConnected.epochSeconds
                 else -> 0

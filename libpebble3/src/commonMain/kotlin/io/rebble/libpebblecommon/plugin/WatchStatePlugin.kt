@@ -48,7 +48,7 @@ class WatchStatePlugin(
     }
 
     override suspend fun invoke(action: String, args: JsonObject): ActionResult {
-        val connected = watches.watches.value.filterIsInstance<ConnectedPebbleDevice>()
+        val connected = watches.watches.first().filterIsInstance<ConnectedPebbleDevice>()
         return when (action) {
             ACTION_LAUNCH_APP -> {
                 val uuid = (args[PARAM_UUID] ?: args[ActionDeclaration.PARAM_INSTANCE_ID])

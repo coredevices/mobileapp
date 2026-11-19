@@ -112,7 +112,7 @@ class FakeLibPebble : LibPebble {
         // No-op
     }
 
-    override val watches: PebbleDevices = MutableStateFlow(fakeWatches())
+    override val watches: Flow<List<PebbleDevice>> = MutableStateFlow(fakeWatches())
     override val connectionEvents: Flow<PebbleConnectionEvent> = MutableSharedFlow()
 
     override fun watchesDebugState(): String {

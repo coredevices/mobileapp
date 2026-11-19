@@ -244,17 +244,17 @@ class PebbleAppDelegate(
     }
 
     suspend fun getWatchLogs(): Path? {
-        return libPebble.watches.value.filterIsInstance<ConnectedPebble.Logs>().firstOrNull()
+        return libPebble.watchesOrEmpty().filterIsInstance<ConnectedPebble.Logs>().firstOrNull()
             ?.gatherLogs()
     }
 
     suspend fun getCoreDump(): Path? {
-        return libPebble.watches.value.filterIsInstance<ConnectedPebble.CoreDump>().firstOrNull()
+        return libPebble.watchesOrEmpty().filterIsInstance<ConnectedPebble.CoreDump>().firstOrNull()
             ?.getCoreDump(unread = false)
     }
 
-    fun getPKJSSessions(): String {
-        val sessions = libPebble.watches.value.filterIsInstance<ConnectedPebble.PKJS>()
+    suspend fun getPKJSSessions(): String {
+        val sessions = libPebble.watchesOrEmpty().filterIsInstance<ConnectedPebble.PKJS>()
             .mapNotNull { it.currentPKJSSession.value }
         return buildString {
             sessions.forEach {

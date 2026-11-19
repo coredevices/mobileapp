@@ -28,6 +28,7 @@ import io.rebble.pebblekit2.server.BasePebbleSenderReceiver
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withTimeout
 import java.util.UUID
@@ -128,7 +129,7 @@ class PebbleSenderReceiver : BasePebbleSenderReceiver(), LibPebbleKoinComponent 
         watches: List<WatchIdentifier>?,
         crossinline action: suspend (ConnectedPebbleDevice) -> TransmissionResult
     ): Map<WatchIdentifier, TransmissionResult> {
-        val connectedWatches = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>()
+        val connectedWatches = watchManager.watches.first().filterIsInstance<ConnectedPebbleDevice>()
 
         val targetWatches = if (watches == null) {
             connectedWatches.map { WatchIdentifier(it.watchInfo.serial) }

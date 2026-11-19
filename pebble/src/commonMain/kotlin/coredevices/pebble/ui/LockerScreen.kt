@@ -96,6 +96,7 @@ import coredevices.libindex.device.KnownIndexDevice
 import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.Platform
 import coredevices.pebble.rememberLibPebble
+import coredevices.pebble.rememberWatches
 import coredevices.pebble.services.AppStoreHome
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.PebbleWebServices
@@ -333,7 +334,7 @@ fun LockerScreen(
             }
         }
         val rings by koinInject<LibIndex>().rings.collectAsState()
-        val watches by libPebble.watches.collectAsState()
+        val watches = rememberWatches() ?: return@Box
         val defaultType = if (
             rings.any { it is KnownIndexDevice } && watches.none { it is KnownPebbleDevice }
         ) AppType.Plugin else AppType.Watchface

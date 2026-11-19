@@ -192,6 +192,7 @@ import io.rebble.libpebblecommon.services.FirmwareVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -2114,10 +2115,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Debug,
                     action = {
-                        libPebble.watches.value.filterIsInstance<ConnectedPebble.CompanionAppControl>()
-                            .forEach {
-                                it.currentCompanionAppSessions.value.filterIsInstance<PKJSApp>().firstOrNull()?.debugForceGC()
-                            }
+                        scope.launch {
+                            libPebble.watches.first().filterIsInstance<ConnectedPebble.CompanionAppControl>()
+                                .forEach {
+                                    it.currentCompanionAppSessions.value.filterIsInstance<PKJSApp>().firstOrNull()?.debugForceGC()
+                                }
+                        }
                     },
                     isDebugSetting = true,
                 ),
