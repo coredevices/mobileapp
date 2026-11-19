@@ -238,6 +238,7 @@ internal val WATCH_PREF_LAYOUT: List<PrefLayout> = listOf(
     PrefLayout(BoolWatchPref.MusicShowAlbumArt, Section.Music),
 
     PrefLayout(BoolWatchPref.StandbyMode, Section.Other),
+    PrefLayout(EnumWatchPref.ChargeLimit, Section.Other),
 )
 
 private val LAYOUT = WATCH_PREF_LAYOUT.associateBy { it.pref }

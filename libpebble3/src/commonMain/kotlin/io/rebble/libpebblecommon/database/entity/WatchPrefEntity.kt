@@ -539,6 +539,18 @@ enum class TimelinePeekFaceMode(override val code: UByte, override val displayNa
     SquishUp(1u, "Squish Up"),
 }
 
+// The watch accepts 0 (off) or a limit between 50 and 95.
+enum class ChargeLimitLevel(override val code: UByte, override val displayName: String) : WatchPrefEnum {
+    Off(0u, "Off"),
+    Limit50(50u, "50%"),
+    Limit60(60u, "60%"),
+    Limit70(70u, "70%"),
+    Limit80(80u, "80%"),
+    Limit85(85u, "85%"),
+    Limit90(90u, "90%"),
+    Limit95(95u, "95%"),
+}
+
 enum class EnumWatchPref(
     override val id: String,
     override val displayName: String,
@@ -696,6 +708,13 @@ enum class EnumWatchPref(
         description = "How the Quick View peek is drawn on watchfaces that don't support it (supported watch models only)",
         defaultValue = TimelinePeekFaceMode.Overlay,
         options = TimelinePeekFaceMode.entries,
+    ),
+    ChargeLimit(
+        id = "chargeLimitPct",
+        displayName = "Charge Limit",
+        description = "Stop charging at this level to extend battery lifespan. The watch runs from USB power once it is reached.",
+        defaultValue = ChargeLimitLevel.Off,
+        options = ChargeLimitLevel.entries,
     ),
     ;
 
