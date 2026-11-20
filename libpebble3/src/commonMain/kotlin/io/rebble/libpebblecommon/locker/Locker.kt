@@ -352,7 +352,7 @@ class Locker(
             configPage = info.configPage,
             configurable = entry.configurable || info.configPage != null,
         )
-        if (patched != entry) lockerEntryDao.insertOrReplace(patched)
+        if (patched != entry) lockerEntryDao.insertOrReplaceAndOrder(patched, config.value.lockerSyncLimitV2)
         return patched
     }
 
@@ -408,7 +408,7 @@ class Locker(
         if (!entry.sideloaded) return
         // The store copy can share the sideloaded pbw's version, which would keep the cached one.
         lockerPBWCache.deleteApp(id)
-        lockerEntryDao.insertOrReplace(entry.copy(sideloaded = false))
+        lockerEntryDao.insertOrReplaceAndOrder(entry.copy(sideloaded = false), config.value.lockerSyncLimitV2)
     }
 
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)

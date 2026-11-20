@@ -33,6 +33,7 @@ import kotlin.uuid.Uuid
     windowBeforeSecs = -1,
     /** Watch cleans these up itself - never send deletions */
     sendDeletions = false,
+    manualSync = false,
 )
 data class TimelineNotification(
     override val itemId: Uuid,
@@ -57,6 +58,7 @@ data class TimelineNotification(
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class TimelinePin(
     override val itemId: Uuid,
@@ -74,6 +76,7 @@ data class TimelinePin(
     windowAfterSecs = 1 * 60 * 60 * 24, // 1 day
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class TimelineReminder(
     override val itemId: Uuid,

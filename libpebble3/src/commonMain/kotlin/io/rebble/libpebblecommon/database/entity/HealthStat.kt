@@ -15,6 +15,7 @@ import kotlin.time.Clock
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class HealthStat(
     val key: String,

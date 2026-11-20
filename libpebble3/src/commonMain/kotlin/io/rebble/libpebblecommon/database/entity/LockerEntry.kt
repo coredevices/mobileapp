@@ -27,6 +27,7 @@ private val logger = Logger.withTag("LockerEntry")
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = true,
 )
 data class LockerEntry(
     val id: Uuid,

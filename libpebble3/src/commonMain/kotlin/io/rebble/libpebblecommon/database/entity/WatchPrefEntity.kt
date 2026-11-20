@@ -56,6 +56,7 @@ fun watchReceivesWatchPrefs(capabilities: Set<ProtocolCapsFlag>, config: LibPebb
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class WatchPrefItem(
     val id: String,

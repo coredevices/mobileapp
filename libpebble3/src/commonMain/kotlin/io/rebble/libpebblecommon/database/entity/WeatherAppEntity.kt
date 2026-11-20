@@ -31,6 +31,7 @@ import kotlin.uuid.Uuid
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class WeatherAppEntry(
     val key: Uuid,

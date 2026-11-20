@@ -35,6 +35,7 @@ import kotlin.time.Instant
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class NotificationAppItem(
     val packageName: String,

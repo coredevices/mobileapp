@@ -13,6 +13,8 @@ annotation class GenerateRoomEntity(
     val onlyInsertAfter: Boolean,
     /** Send deletions to watch? We never want to e.g. for notifications */
     val sendDeletions: Boolean,
+    /** The DAO maintains `sync` itself; the record-level insertOrReplace isn't generated. */
+    val manualSync: Boolean,
 )
 
 // TODO move somewhere better

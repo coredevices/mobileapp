@@ -378,31 +378,33 @@ class BlobDbEntityProcessor(
                     )
                     .build()
             )
-            daoBuilder.addFunction(
-                FunSpec.builder("insertOrReplace")
-                    .addModifiers(KModifier.SUSPEND)
-                    .addParameter("item", classDeclaration.toClassName())
-                    .addStatement("""
-                        val hashcode = item.recordHashCode()
-                        val deleted = false
-                        insertOrReplace($entityClassName(hashcode, deleted, item))
-                        """.trimIndent())
-                    .build()
-            )
-            daoBuilder.addFunction(
-                FunSpec.builder("insertOrReplace")
-                    .addModifiers(KModifier.SUSPEND)
-                    .addParameter("items", List::class.asClassName().parameterizedBy(classDeclaration.toClassName()))
-                    .addStatement("""
-                        val mapped = items.map {
-                            val hashcode = it.recordHashCode()
+            if (!annotation.manualSync) {
+                daoBuilder.addFunction(
+                    FunSpec.builder("insertOrReplace")
+                        .addModifiers(KModifier.SUSPEND)
+                        .addParameter("item", classDeclaration.toClassName())
+                        .addStatement("""
+                            val hashcode = item.recordHashCode()
                             val deleted = false
-                            $entityClassName(hashcode, deleted, it)
-                        }
-                        insertOrReplaceAll(mapped)
-                        """.trimIndent())
-                    .build()
-            )
+                            insertOrReplace($entityClassName(hashcode, deleted, item))
+                            """.trimIndent())
+                        .build()
+                )
+                daoBuilder.addFunction(
+                    FunSpec.builder("insertOrReplace")
+                        .addModifiers(KModifier.SUSPEND)
+                        .addParameter("items", List::class.asClassName().parameterizedBy(classDeclaration.toClassName()))
+                        .addStatement("""
+                            val mapped = items.map {
+                                val hashcode = it.recordHashCode()
+                                val deleted = false
+                                $entityClassName(hashcode, deleted, it)
+                            }
+                            insertOrReplaceAll(mapped)
+                            """.trimIndent())
+                        .build()
+                )
+            }
             daoBuilder.addFunction(
                 FunSpec.builder("markForDeletion")
                     .addModifiers(KModifier.ABSTRACT, KModifier.SUSPEND)

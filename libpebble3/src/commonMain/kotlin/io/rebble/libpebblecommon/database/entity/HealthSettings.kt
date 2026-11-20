@@ -50,6 +50,7 @@ import kotlinx.serialization.json.Json
     windowAfterSecs = -1,
     onlyInsertAfter = false,
     sendDeletions = true,
+    manualSync = false,
 )
 data class HealthSettingsEntry(
     val id: String,

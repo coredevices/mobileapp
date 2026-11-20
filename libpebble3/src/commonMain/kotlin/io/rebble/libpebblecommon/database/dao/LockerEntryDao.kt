@@ -6,6 +6,7 @@ import androidx.room.RewriteQueriesToDropUnusedColumns
 import androidx.room.Transaction
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.database.entity.LockerEntryDao
+import io.rebble.libpebblecommon.database.entity.LockerEntryEntity
 import io.rebble.libpebblecommon.locker.AppType
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
@@ -106,14 +107,14 @@ interface LockerEntryRealDao : LockerEntryDao {
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entry: LockerEntry, syncLimit: Int) {
-        insertOrReplace(entry)
+        insertOrReplace(entry.asEntity())
         updateOrder(entry.type)
         updateSync(syncLimit)
     }
 
     @Transaction
     suspend fun insertOrReplaceAndOrder(entries: List<LockerEntry>, syncLimit: Int) {
-        insertOrReplace(entries)
+        insertOrReplaceAll(entries.map { it.asEntity() })
         AppType.entries.forEach {
             updateOrder(it.code)
         }
@@ -227,3 +228,5 @@ interface LockerEntryRealDao : LockerEntryDao {
     """)
     fun getActiveWatchface(): Flow<LockerEntry?>
 }
+
+private fun LockerEntry.asEntity() = LockerEntryEntity(recordHashcode = recordHashCode(), deleted = false, record = this)
