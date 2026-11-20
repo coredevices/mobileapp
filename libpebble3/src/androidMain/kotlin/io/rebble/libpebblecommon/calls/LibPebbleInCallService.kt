@@ -14,6 +14,9 @@ import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.LibPebble3
 import io.rebble.libpebblecommon.di.LibPebbleKoinComponent
+import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import kotlin.random.Random
 import kotlin.random.nextUInt
@@ -48,6 +51,11 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
     }
 
     private val libPebble: LibPebble by inject()
+    private val callDoNotDisturbFilter: CallDoNotDisturbFilter by inject()
+    private val libPebbleCoroutineScope: LibPebbleCoroutineScope by inject()
+    private val inCallServiceCallCoordinator: InCallServiceCallCoordinator by inject()
+    private val suppressedCalls = mutableSetOf<Call>()
+    private val pendingDndChecks = mutableSetOf<Call>()
 
     override fun onCreate() {
         super.onCreate()
@@ -58,7 +66,12 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     override fun onDestroy() {
         logger.d { "onDestroy()" }
-        if (LibPebble3.isCreated) libPebble.currentCall.value = null
+        pendingDndChecks.clear()
+        suppressedCalls.clear()
+        if (LibPebble3.isCreated) {
+            libPebble.currentCall.value = null
+            inCallServiceCallCoordinator.clearAll()
+        }
         super.onDestroy()
     }
 
@@ -73,7 +86,7 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
         override fun onStateChanged(call: Call?, state: Int) {
             call ?: return
             logger.d { "Call state changed: ${call.state} (arg state: $state)" }
-            libPebble.currentCall.value = createLibPebbleCall(call, cookie)
+            publishCall(call, cookie)
         }
     }
 
@@ -90,13 +103,18 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
         }
         logger.d { "New call in state: ${call.state}" }
         call.registerCallback(callback)
-        libPebble.currentCall.value = createLibPebbleCall(call, cookie)
+        publishCall(call, cookie)
     }
 
     override fun onCallRemoved(call: Call?) {
         call ?: return
         if (!LibPebble3.isCreated) return
-        libPebble.currentCall.value = null
+        libPebbleCoroutineScope.launch(Dispatchers.Main.immediate) {
+            suppressedCalls.remove(call)
+            pendingDndChecks.remove(call)
+            inCallServiceCallCoordinator.clear(call)
+            libPebble.currentCall.value = null
+        }
     }
 
     private fun Call.resolveContactName(): String? {
@@ -117,6 +135,46 @@ class LibPebbleInCallService : InCallService(), LibPebbleKoinComponent {
 
     private fun Call.resolveContactNumber(): String {
         return this.details.handle?.schemeSpecificPart ?: "Unknown"
+    }
+
+    private fun publishCall(call: Call, cookie: UInt) {
+        libPebbleCoroutineScope.launch(Dispatchers.Main.immediate) {
+            if (call in suppressedCalls || call in pendingDndChecks) return@launch
+            if (call.state == Call.STATE_RINGING) {
+                inCallServiceCallCoordinator.markHandling(call)
+                pendingDndChecks += call
+                val pebbleCall = createLibPebbleCall(call, cookie)
+                        as? io.rebble.libpebblecommon.calls.Call.RingingCall
+                    ?: run {
+                        pendingDndChecks.remove(call)
+                        inCallServiceCallCoordinator.clear(call)
+                        return@launch
+                    }
+                val shouldSuppress = callDoNotDisturbFilter.shouldSuppressIncomingCall(
+                    contactName = pebbleCall.contactName,
+                    contactNumber = pebbleCall.contactNumber,
+                )
+                if (call !in pendingDndChecks) return@launch
+                if (shouldSuppress) {
+                    suppressedCalls += call
+                    pendingDndChecks.remove(call)
+                    return@launch
+                }
+                pendingDndChecks.remove(call)
+                val currentPebbleCall = createLibPebbleCall(call, cookie) ?: run {
+                    inCallServiceCallCoordinator.clear(call)
+                    return@launch
+                }
+                libPebble.currentCall.value = currentPebbleCall
+                return@launch
+            }
+            inCallServiceCallCoordinator.markHandling(call)
+            val pebbleCall = createLibPebbleCall(call, cookie) ?: run {
+                inCallServiceCallCoordinator.clear(call)
+                return@launch
+            }
+            libPebble.currentCall.value = pebbleCall
+        }
     }
 
     private fun createLibPebbleCall(call: Call, cookie: UInt): io.rebble.libpebblecommon.calls.Call? =

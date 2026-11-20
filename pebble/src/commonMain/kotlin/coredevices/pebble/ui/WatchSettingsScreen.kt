@@ -979,6 +979,23 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     show = { pebbleFeatures.supportsNotificationFiltering() && anyWatchNeedsPhoneSideDnd },
                 ),
                 basicSettingsToggleItem(
+                    title = "Respect Phone Do Not Disturb for calls",
+                    description = "Calls won't be sent to the watch during Do Not Disturb unless allowed by phone settings",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Notifications,
+                    checked = libPebbleConfig.notificationConfig.respectDoNotDisturbForCalls,
+                    onCheckChanged = {
+                        libPebble.updateConfig(
+                            libPebbleConfig.copy(
+                                notificationConfig = libPebbleConfig.notificationConfig.copy(
+                                    respectDoNotDisturbForCalls = it
+                                )
+                            )
+                        )
+                    },
+                    show = { pebbleFeatures.supportsNotificationFiltering() },
+                ),
+                basicSettingsToggleItem(
                     title = "Mute phone notification effects",
                     description = "Mutes the phone's own notification vibration/sound while the watch is connected",
                     topLevelType = TopLevelType.Phone,

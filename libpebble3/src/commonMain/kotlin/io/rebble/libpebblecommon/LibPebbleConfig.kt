@@ -177,6 +177,7 @@ data class NotificationConfig(
     val mutePhoneCallSoundsWhenConnected: Boolean = false,
     /** Drop DND-silenced notifications for watches which can't receive the RespectPhoneSilence watch pref. */
     val respectDoNotDisturb: Boolean = false,
+    val respectDoNotDisturbForCalls: Boolean = false,
     /**
      * Default new apps to be enabled (else they will be disabled).
      */
