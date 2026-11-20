@@ -27,6 +27,7 @@ class ThemeTest {
     fun `unknown theme key falls back to system`() {
         assertEquals(CoreAppTheme.System, null.asCoreAppTheme())
         assertEquals(CoreAppTheme.System, "amoled".asCoreAppTheme())
+        assertEquals(CoreAppTheme.System, "dynamic".asCoreAppTheme())
     }
 
     @Test
