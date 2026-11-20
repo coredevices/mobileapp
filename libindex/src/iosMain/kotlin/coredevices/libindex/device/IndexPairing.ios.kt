@@ -50,13 +50,17 @@ actual suspend fun createBond(
 private suspend fun bondAttempt(identifier: IndexIdentifier): Boolean {
     val peripheral = Peripheral(Uuid.parse(identifier.asPlatformAddress))
     try {
+        logger.d { "Connecting..." }
         peripheral.connect()
+        logger.d { "Connected, grabbing service..." }
         val channel = peripheral.services.first()
             ?.firstOrNull { it.serviceUuid == haversineUuid }
             ?.characteristics
             ?.firstOrNull { it.characteristicUuid == telestoDataChannel }
             ?: return false
+        logger.d { "Writing to service to trigger bond..." }
         peripheral.write(channel, byteArrayOf(0x00), writeType = WriteType.WithResponse)
+        logger.d { "Write attempt complete" }
         return true
     } catch (e: CancellationException) {
         throw e
