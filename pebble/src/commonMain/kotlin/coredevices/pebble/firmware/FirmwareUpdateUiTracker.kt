@@ -75,7 +75,8 @@ class RealFirmwareUpdateUiTracker(
             return
         }
         val update = watch.firmwareUpdateAvailable.result as? FirmwareUpdateCheckResult.FoundUpdate ?: return
-        val key = update.hashCode() + watch.identifier.asString.hashCode()
+        // update.url is presigned per check, so it can't be part of the key.
+        val key = update.version.stringVersion.hashCode() + watch.identifier.asString.hashCode()
         val config = coreConfigFlow.value
         val now = clock.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
         // Recovery mode, and an update that has to go through it, are left to the user.
