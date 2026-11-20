@@ -27,6 +27,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return properties
         }
         AlarmKitBridge.register()
+        RemindersWidgetBridge.register()
         let res = IOSDelegate.shared.didFinishLaunching(application: application, logAnalyticsEvent: { (name: String, params: [String: Any]?) -> Void in
             for instance in instances {
                 if let params = params as? Properties {

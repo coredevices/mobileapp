@@ -35,6 +35,8 @@ import coredevices.pebble.watchModule
 import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
 import coredevices.ring.reminders.ReminderScheduler
+import coredevices.ring.reminders.RemindersWidgetBridge
+import coredevices.ring.reminders.RemindersWidgetPublisher
 import coredevices.util.CoreConfig
 import coredevices.util.CoreConfigHolder
 import coredevices.util.DoneInitialOnboarding
@@ -124,6 +126,18 @@ object IOSDelegate : KoinComponent {
         NativeAlarmKitBridge.requestAuthorization = requestAuthorization
         NativeAlarmKitBridge.schedule = schedule
         NativeAlarmKitBridge.cancel = cancel
+    }
+
+    fun registerRemindersWidget(publish: (String) -> Unit) {
+        RemindersWidgetBridge.publish = publish
+    }
+
+    fun markReminderDoneFromWidget(itemId: String, completion: () -> Unit) {
+        val publisher: RemindersWidgetPublisher = get()
+        bgTaskScope.launch {
+            runCatching { publisher.markDone(itemId, onMarked = completion) }
+                .onFailure { logger.e(it) { "Widget: failed to mark reminder $itemId done" } }
+        }
     }
 
     fun handleOpenUrl(url: NSURL): Boolean {
