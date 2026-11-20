@@ -5,6 +5,8 @@ import co.touchlab.kermit.Logger
 import com.juul.kable.AndroidPeripheral
 import com.juul.kable.Peripheral
 import io.rebble.libpebblecommon.connection.PebbleBleIdentifier
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.DEFAULT_MTU
+import io.rebble.libpebblecommon.connection.bt.ble.pebble.LEConstants.TARGET_MTU
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -17,11 +19,13 @@ internal actual fun peripheralFromIdentifier(
     autoConnect: Boolean,
 ): Peripheral? = Peripheral(identifier.macAddress) {
     autoConnectIf { autoConnect }
+    mtu = TARGET_MTU
 }
 
+// Kable negotiates the MTU (TARGET_MTU) while connecting; this only reports the result.
 internal actual suspend fun Peripheral.requestMtuNative(mtu: Int): Int {
     if (this is AndroidPeripheral) {
-        return this.requestMtu(mtu)
+        return this.mtu.value ?: DEFAULT_MTU
     }
     throw IllegalStateException("Not an AndroidPeripheral")
 }
