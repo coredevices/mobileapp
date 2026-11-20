@@ -1,0 +1,7 @@
+<resources>
+    <string name="voice_widget_description">Nota de voz</string>
+    <string name="share_target_index_note">Nota de índice</string>
+    <string name="share_target_index_reminder">Recordatorio de índice</string>
+    <string name="share_to_index_note_done">Nota agregada al índice</string>
+    <string name="share_to_index_reminder_done">Recordatorio añadido al índice</string>
+</resources>
