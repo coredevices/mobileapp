@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -127,7 +128,8 @@ class UsersDaoImpl(
                                         try {
                                             logger.i { "Attempting silent re-auth (trigger=$trigger)" }
                                             val success = try {
-                                                silentSignIn.attempt()
+                                                withTimeoutOrNull(SILENT_REAUTH_TIMEOUT) { silentSignIn.attempt() }
+                                                    ?: false.also { logger.w { "Silent re-auth timed out" } }
                                             } catch (e: CancellationException) {
                                                 throw e
                                             } catch (e: Exception) {
@@ -364,6 +366,7 @@ internal const val GOOGLE_PROVIDER_ID = "google.com"
 // Give Firebase's own restoration ~6s (attempts 1-2) before trying silent re-auth.
 internal const val SILENT_REAUTH_MIN_WAIT_ATTEMPT = 3
 internal const val SILENT_REAUTH_MAX_ATTEMPTS = 5
+private val SILENT_REAUTH_TIMEOUT = 30.seconds
 // ~6 minutes of waiting given the 2s-doubling-to-1m backoff.
 internal const val AUTH_RESTORE_MAX_ATTEMPTS = 10
 
