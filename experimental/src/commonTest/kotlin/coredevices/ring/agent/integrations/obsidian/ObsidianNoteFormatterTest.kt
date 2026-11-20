@@ -89,6 +89,40 @@ class ObsidianNoteFormatterTest {
     }
 
     @Test
+    fun customAppendPrefixSupportsWikiLinksBulletsAndEscapedNewlinesInBothModes() {
+        for (mode in listOf(ObsidianMode.MAIN_NOTE, ObsidianMode.NAMED_NOTE)) {
+            val cfg = config(mode, targetNote = "Inbox").copy(
+                appendPrefix = "- [[YYYY-MM-DD]] HH:mm:\\n\\n",
+            )
+            val write = ObsidianNoteFormatter.plan(cfg, "buy milk", y, mo, d, h, mi) as ObsidianWrite.Append
+            assertEquals("- [[2026-06-18]] 14:05:\n\nbuy milk\n", write.block)
+        }
+    }
+
+    @Test
+    fun prefixPreservesActualNewlinesAndSpacesWithoutExpandingNoteContent() {
+        val cfg = config(ObsidianMode.MAIN_NOTE).copy(appendPrefix = "[[YYYY-MM-DD]]\n- HH:mm: ")
+        val write = ObsidianNoteFormatter.plan(cfg, "Keep YYYY-MM-DD, HH:mm and \\n", y, mo, d, h, mi) as ObsidianWrite.Append
+        assertEquals("[[2026-06-18]]\n- 14:05: Keep YYYY-MM-DD, HH:mm and \\n\n", write.block)
+    }
+
+    @Test
+    fun emptyAppendPrefixWritesOnlyNoteText() {
+        val cfg = config(ObsidianMode.MAIN_NOTE).copy(appendPrefix = "")
+        val write = ObsidianNoteFormatter.plan(cfg, "buy milk", y, mo, d, h, mi) as ObsidianWrite.Append
+        assertEquals("buy milk\n", write.block)
+    }
+
+    @Test
+    fun appendPrefixDoesNotChangeTimestampedFiles() {
+        val cfg = config(ObsidianMode.TIMESTAMPED_FILES)
+        assertEquals(
+            ObsidianNoteFormatter.plan(cfg, "buy milk", y, mo, d, h, mi),
+            ObsidianNoteFormatter.plan(cfg.copy(appendPrefix = "- HH:mm: "), "buy milk", y, mo, d, h, mi),
+        )
+    }
+
+    @Test
     fun namedNoteKeepsExistingMdExtension() {
         val cfg = config(ObsidianMode.NAMED_NOTE, targetNote = "Daily.md")
         val write = ObsidianNoteFormatter.plan(cfg, "t", y, mo, d, h, mi) as ObsidianWrite.Append

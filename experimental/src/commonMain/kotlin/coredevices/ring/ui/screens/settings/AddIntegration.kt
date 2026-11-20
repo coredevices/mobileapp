@@ -431,6 +431,7 @@ fun ObsidianDialog(
     var mode by remember { mutableStateOf(if (alreadyConfigured) integration.currentMode() else ObsidianMode.TIMESTAMPED_FILES) }
     var subfolder by remember { mutableStateOf(if (alreadyConfigured) integration.currentSubfolder().ifEmpty { ObsidianPreferences.DEFAULT_SUBFOLDER } else ObsidianPreferences.DEFAULT_SUBFOLDER) }
     var customTag by remember { mutableStateOf(if (alreadyConfigured) integration.currentCustomTag() else "") }
+    var appendPrefix by remember { mutableStateOf(integration.currentAppendPrefix()) }
     var notes by remember { mutableStateOf<List<String>>(emptyList()) }
     var notePath by remember { mutableStateOf(if (alreadyConfigured) integration.currentTargetNote() else "") }
 
@@ -463,6 +464,7 @@ fun ObsidianDialog(
     M3Dialog(
         onDismissRequest = onDismiss,
         title = { Text("Obsidian") },
+        scrollableContent = true,
         buttons = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
             if (vaultName != null) {
@@ -477,6 +479,7 @@ fun ObsidianDialog(
                                 targetNote = notePath,
                                 subfolder = subfolder,
                                 customTag = customTag,
+                                appendPrefix = appendPrefix,
                             )
                             if (!alreadyConfigured) {
                                 providers.selectNoteProvider(BuiltInIntegrationProviders.Obsidian)
@@ -531,6 +534,21 @@ fun ObsidianDialog(
                     notePath = notePath,
                     onNotePathChange = { notePath = it },
                 )
+                if (mode != ObsidianMode.TIMESTAMPED_FILES) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = appendPrefix,
+                        onValueChange = { appendPrefix = it },
+                        label = { Text("Text before each note") },
+                        placeholder = { Text("[[YYYY-MM-DD]] HH:mm: ") },
+                        supportingText = {
+                            Text("YYYY-MM-DD = date, HH:mm = time. Use \\n or Enter for a newline. Note text follows exactly; include any spaces or bullets. Leave empty for note text only.")
+                        },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
             if (error != null) {
                 Text(
