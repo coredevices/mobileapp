@@ -1112,6 +1112,26 @@ private fun EditableNoteRow(
         if (clean.isNotBlank() && clean != child.title.trim()) onSave(clean)
     }
 
+    val deleteButton = @Composable {
+        IconButton(
+            onClick = {
+                draft = child.title
+                onDelete()
+            },
+            enabled = isFocused,
+            modifier = Modifier
+                .size(30.dp)
+                .graphicsLayer { alpha = if (isFocused) 1f else 0f },
+        ) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "Delete",
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+    }
+
     LaunchedEffect(requestFocus) {
         if (requestFocus) {
             focusRequester.requestFocus()
@@ -1144,7 +1164,8 @@ private fun EditableNoteRow(
             )
             Spacer(Modifier.width(12.dp))
         } else {
-            Spacer(Modifier.width(31.dp))
+            deleteButton()
+            Spacer(Modifier.width(1.dp))
         }
         BasicTextField(
             value = draft,
@@ -1211,6 +1232,7 @@ private fun EditableNoteRow(
                 }
             },
         )
+        if (isChecklist && isFocused) deleteButton()
         IconButton(
             onClick = {
                 flush()
