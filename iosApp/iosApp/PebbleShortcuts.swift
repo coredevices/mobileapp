@@ -685,6 +685,24 @@ struct GetWatchScreenshotIntent: AppIntent {
     }
 }
 
+@available(iOS 16.0, *)
+struct RecordToIndexIntent: AppIntent {
+    static var title: LocalizedStringResource = "Record to Index"
+    static var description = IntentDescription("Opens the app and starts recording a voice note for Index from your phone's microphone.", categoryName: "Index")
+
+    static var openAppWhenRun: Bool = true
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Record to Index")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IOSDelegateShortcuts.shared.startIndexRecording()
+        return .result()
+    }
+}
+
 // Shortcuts Provider
 
 @available(iOS 16.0, *)
@@ -730,6 +748,12 @@ struct PebbleShortcutsProvider: AppShortcutsProvider {
             phrases: [
                 "Get watch screenshot in \(.applicationName)",
                 "Watch screenshot in \(.applicationName)"
+            ]
+        )
+        AppShortcut(
+            intent: RecordToIndexIntent(),
+            phrases: [
+                "Record to Index in \(.applicationName)"
             ]
         )
     }

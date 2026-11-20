@@ -32,6 +32,7 @@ class CoreDeepLinkHandler {
             RingRoutes.RECORDING_DEEP_LINK_PATH -> id?.toLongOrNull()?.let { RingRoutes.RecordingDetails(it) }
             RingRoutes.SETTINGS_DEEP_LINK_PATH -> RingRoutes.Settings
             RingRoutes.TIMERS_ALARMS_DEEP_LINK_PATH -> RingRoutes.TimersAndAlarms
+            RingRoutes.LISTEN_DEEP_LINK_PATH -> RingRoutes.ListenDialog
             CommonRoutes.SPEECH_MODEL_DOWNLOAD_DEEP_LINK_PATH -> CommonRoutes.SpeechModelDownloadDialog
             else -> null
         }
