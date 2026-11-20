@@ -397,6 +397,11 @@ internal actual class GattServer(
         return false
     }
 
+    actual fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean =
+        callback.registeredDevices.any { (mac, device) ->
+            mac != identifier.macAddress && device.notificationsEnabled
+        }
+
     actual fun initServer() {
     }
 

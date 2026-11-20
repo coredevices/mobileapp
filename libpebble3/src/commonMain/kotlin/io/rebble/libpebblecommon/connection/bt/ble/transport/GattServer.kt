@@ -38,6 +38,7 @@ internal expect class GattServer {
         characteristicUuid: Uuid, data: ByteArray
     ): SendResult
     fun wasRestoredWithSubscribedCentral(): Boolean
+    fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean
     fun initServer()
 }
 
@@ -138,6 +139,22 @@ internal class GattServerManager(
 
     fun wasRestoredWithSubscribedCentral(): Boolean {
         return gattServer?.wasRestoredWithSubscribedCentral() ?: false
+    }
+
+    /** Sends a service-changed over the still-up link so the watch rediscovers before the next attempt. */
+    suspend fun republishServicesAfterInitTimeout(identifier: PebbleBleIdentifier) {
+        if (!blePlatformConfig.republishGattServicesOnPpogInitTimeout) return
+        serverMutex.withLock {
+            val gs = gattServer ?: return
+            if (!servicesAdded) return
+            if (gs.hasOtherSubscribedDevice(identifier)) {
+                logger.w("not re-publishing services after PPoG init timeout: another watch is subscribed")
+                return
+            }
+            logger.d("re-publishing services after PPoG init timeout")
+            gs.removeServices()
+            gs.addServices()
+        }
     }
 
     private suspend fun openIfNeeded() {

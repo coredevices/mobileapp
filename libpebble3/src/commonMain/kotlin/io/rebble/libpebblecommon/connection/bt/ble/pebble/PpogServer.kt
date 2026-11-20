@@ -22,4 +22,8 @@ internal class PpogServer(
     override fun wasRestoredWithSubscribedCentral(): Boolean {
         return gattServerManager.wasRestoredWithSubscribedCentral()
     }
+
+    override suspend fun onInitTimeout() {
+        gattServerManager.republishServicesAfterInitTimeout(identifier)
+    }
 }

@@ -18,6 +18,7 @@ internal data class BlePlatformConfig(
     val delayBleDisconnections: Boolean = true,
     val fallbackToResetRequest: Boolean = false,
     val closeGattServerWhenBtDisabled: Boolean = true,
+    val republishGattServicesOnPpogInitTimeout: Boolean = false,
     val supportsBtClassic: Boolean = false,
     val supportsPpogResetCharacteristic: Boolean = false,
     val supportsGattAutoConnect: Boolean = false,

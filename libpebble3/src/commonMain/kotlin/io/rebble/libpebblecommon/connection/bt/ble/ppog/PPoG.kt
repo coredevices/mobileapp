@@ -22,6 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 internal interface PPoGPacketSender {
     suspend fun sendPacket(packet: ByteArray): Boolean
     fun wasRestoredWithSubscribedCentral(): Boolean
+    suspend fun onInitTimeout() {}
 }
 
 internal class PPoGStream(val inboundPPoGBytesChannel: Channel<ByteArray> = Channel(capacity = 100))
@@ -56,7 +57,10 @@ internal class PPoG(
                     } else {
                         null
                     }
-                } ?: throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
+                } ?: run {
+                    pPoGPacketSender.onInitTimeout()
+                    throw ConnectionException(ConnectionFailureReason.TimeoutInitializingPpog)
+                }
             }
             runConnection(params)
         }

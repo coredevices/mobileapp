@@ -132,7 +132,7 @@ public data class BleConfig(
      * iOS only. When true, re-publish the GATT services automatically after the BT stack
      * returns to PoweredOn following a state restoration.
      */
-    val republishGattServicesOnRestore: Boolean = false,
+    val republishGattServicesOnRestore: Boolean = true,
     /**
      * Android only. After a failed connection attempt, use GATT autoConnect for subsequent
      * attempts, so that the OS waits for the watch to appear instead of us retrying in a loop.

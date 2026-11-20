@@ -34,7 +34,12 @@ internal class PPoGTest {
         override fun wasRestoredWithSubscribedCentral(): Boolean {
             return false
         }
+
+        override suspend fun onInitTimeout() {
+            initTimeouts++
+        }
     }
+    private var initTimeouts = 0
     val bleConfig = BleConfig(
         legacyReversedPPoG = false,
     )
@@ -126,6 +131,7 @@ internal class PPoGTest {
                 testScheduler.advanceTimeBy(30.seconds)
             }
         }
+        assertEquals(1, initTimeouts)
     }
 
     @Test

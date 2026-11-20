@@ -41,4 +41,8 @@ internal class PpogPacketSenderProxy(
         Mode.Forward -> ppogServer.wasRestoredWithSubscribedCentral()
         else -> false
     }
+
+    override suspend fun onInitTimeout() {
+        if (mode == Mode.Forward) ppogServer.onInitTimeout()
+    }
 }

@@ -81,6 +81,7 @@ internal actual val platformModule: Module = module {
         sendPpogResetOnDisconnection = true,
         fallbackToResetRequest = true,
         closeGattServerWhenBtDisabled = false,
+        republishGattServicesOnPpogInitTimeout = true,
         delayBleConnectionsAfterAppStart = true,
         supportsPpogResetCharacteristic = true,
         writeWithoutResponseStallTimeout = 5.seconds,

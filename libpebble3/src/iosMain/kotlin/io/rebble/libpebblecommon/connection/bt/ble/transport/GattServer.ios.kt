@@ -319,6 +319,12 @@ internal actual class GattServer(
         return wasSubscribedAtRestore
     }
 
+    actual fun hasOtherSubscribedDevice(identifier: PebbleBleIdentifier): Boolean =
+        (findCharacteristic(PPOGATT_DEVICE_SERVICE_UUID_SERVER, PPOGATT_DEVICE_CHARACTERISTIC_SERVER)
+            ?.subscribedCentrals as? List<CBCentral>)
+            .orEmpty()
+            .any { it.identifier.asUuid().toString().asPebbleBleIdentifier() != identifier }
+
     private val peripheralManagerState = MutableStateFlow(CBManagerStateUnknown)
 
     override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
