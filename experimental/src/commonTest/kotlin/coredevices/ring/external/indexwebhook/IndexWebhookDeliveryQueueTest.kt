@@ -89,7 +89,7 @@ class IndexWebhookDeliveryQueueTest {
         assertNull(runRepository.runs(RingGesture.Hold).first().single().retryDeliveryId)
 
         val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
-        assertFailsWith<RecoverableTaskException> { queue(retryable).processTask(lastAttempt) }
+        assertFailsWith<IllegalStateException> { queue(retryable).processTask(lastAttempt) }
         assertEquals("text-7", runRepository.runs(RingGesture.Hold).first().first().retryDeliveryId)
 
         val permanent = FakeWebhookApi(result(ok = false, retryable = false))
@@ -114,13 +114,31 @@ class IndexWebhookDeliveryQueueTest {
 
         val lastAttempt = delivery().copy(attempts = IndexWebhookDeliveryQueue.MAX_ATTEMPTS - 1)
         val finalOutcome = async(start = CoroutineStart.UNDISPATCHED) { queue.outcomes.first() }
-        assertFailsWith<RecoverableTaskException> { queue.processTask(lastAttempt) }
+        assertFailsWith<IllegalStateException> { queue.processTask(lastAttempt) }
         assertEquals(false, finalOutcome.await().willRetry)
 
         val off = queue(FakeWebhookApi(result = null))
         val offOutcome = async(start = CoroutineStart.UNDISPATCHED) { off.outcomes.first() }
         off.processTask(delivery())
         assertEquals(IndexWebhookDeliveryOutcome("text-7", result = null, willRetry = false), offOutcome.await())
+    }
+
+    @Test
+    fun clickEventSendsAsAButtonEventWithItsPressTime() = runTest {
+        val api = FakeWebhookApi(result(ok = true))
+        val click = delivery().copy(deliveryId = "click-1", gesture = RingGesture.TripleClick, transcription = null)
+        queue(api).processTask(click)
+
+        assertEquals(listOf(FakeWebhookApi.ButtonCall(RingGesture.TripleClick, created, "click-1")), api.buttonCalls)
+        assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun failedClickEventIsRetried() = runTest {
+        val api = FakeWebhookApi(result(ok = false, retryable = true))
+        val click = delivery().copy(deliveryId = "click-1", gesture = RingGesture.Click, transcription = null)
+        assertFailsWith<RecoverableTaskException> { queue(api).processTask(click) }
+        assertFalse(runRepository.runs(RingGesture.Click).first().single().ok)
     }
 
     @Test
@@ -182,7 +200,18 @@ private class FakeWebhookApi(private val result: IndexWebhookRunResult?) : Index
         return result
     }
 
-    override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+    data class ButtonCall(val gesture: RingGesture, val pressedAt: Instant, val deliveryId: String)
+
+    val buttonCalls = mutableListOf<ButtonCall>()
+
+    override suspend fun sendButtonEvent(
+        gesture: RingGesture,
+        pressedAt: Instant,
+        deliveryId: String,
+    ): IndexWebhookRunResult? {
+        buttonCalls += ButtonCall(gesture, pressedAt, deliveryId)
+        return result
+    }
 
     override suspend fun sendTestEvent(
         gesture: RingGesture,

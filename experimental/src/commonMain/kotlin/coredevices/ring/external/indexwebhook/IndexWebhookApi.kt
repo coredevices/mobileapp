@@ -13,8 +13,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.io.IOException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -49,8 +47,9 @@ interface IndexWebhookApi {
         gesture: RingGesture,
     ): IndexWebhookRunResult?
 
-    /** POST a click gesture's button event to its webhook. Runs asynchronously. */
-    fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant)
+    /** POST a click gesture's button event to its webhook. Returns null when no webhook is
+     *  active for [gesture]. */
+    suspend fun sendButtonEvent(gesture: RingGesture, pressedAt: Instant, deliveryId: String): IndexWebhookRunResult?
 
     /** POST a synthetic payload so a user can verify their endpoint before saving. */
     suspend fun sendTestEvent(
@@ -102,7 +101,6 @@ class IndexWebhookApiImpl(
     private val webhookPreferences: IndexWebhookPreferences,
     private val signingSecretStorage: IndexWebhookSigningSecretStorage,
     private val runRepository: IndexWebhookRunRepository,
-    private val scope: CoroutineScope,
 ) : IndexWebhookApi, ApiClient(config.version, timeout = 2.minutes, followAllRedirects = true) {
 
     companion object {
@@ -155,41 +153,32 @@ class IndexWebhookApiImpl(
         return result
     }
 
-    override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) {
+    override suspend fun sendButtonEvent(
+        gesture: RingGesture,
+        pressedAt: Instant,
+        deliveryId: String,
+    ): IndexWebhookRunResult? {
         val config = webhookPreferences.configFor(gesture)
         val url = config.url
-        if (!config.isActive || url == null) return
+        if (!config.isActive || url == null) return null
 
-        scope.launch {
-            try {
-                val result = post(
-                    url = url,
-                    headers = config.headers,
-                    signRequests = config.signRequests,
-                    signingSecret = signingSecretFor(gesture, config),
-                    deliveryId = Uuid.random().toString(),
-                    triggerValue = gesture.webhookTriggerValue,
-                    bodyBytes = buildButtonEventBody(gesture, config.clickPayload, pressedAt, isTest = false),
-                    contentType = ContentType.Application.Json,
-                    audioSize = null,
-                    isTest = false,
-                    okDetail = buttonEventLabel(gesture),
-                )
-                runRepository.record(
-                    gesture = gesture,
-                    ok = result.ok,
-                    status = result.status,
-                    detail = result.detail,
-                    byteSize = result.byteSize,
-                    durationMs = result.durationMs,
-                )
-                if (!result.ok) {
-                    logger.e { "Button webhook failed for ${gesture.name}: ${result.status} ${result.detail}" }
-                }
-            } catch (e: Exception) {
-                logger.e(e) { "Error sending button webhook for ${gesture.name}" }
-            }
+        val result = post(
+            url = url,
+            headers = config.headers,
+            signRequests = config.signRequests,
+            signingSecret = signingSecretFor(gesture, config),
+            deliveryId = deliveryId,
+            triggerValue = gesture.webhookTriggerValue,
+            bodyBytes = buildButtonEventBody(gesture, config.clickPayload, pressedAt, isTest = false),
+            contentType = ContentType.Application.Json,
+            audioSize = null,
+            isTest = false,
+            okDetail = buttonEventLabel(gesture),
+        )
+        if (!result.ok) {
+            logger.e { "Button webhook failed for ${gesture.name}: ${result.status} ${result.detail}" }
         }
+        return result
     }
 
     override suspend fun sendTestEvent(

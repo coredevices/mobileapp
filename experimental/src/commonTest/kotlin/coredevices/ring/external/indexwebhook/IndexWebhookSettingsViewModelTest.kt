@@ -212,7 +212,7 @@ class IndexWebhookSettingsViewModelTest {
             gesture: RingGesture,
         ): IndexWebhookRunResult? = null
 
-        override fun sendButtonEventIfEnabled(gesture: RingGesture, pressedAt: Instant) = Unit
+        override suspend fun sendButtonEvent(gesture: RingGesture, pressedAt: Instant, deliveryId: String): IndexWebhookRunResult? = null
 
         override suspend fun sendTestEvent(
             gesture: RingGesture,

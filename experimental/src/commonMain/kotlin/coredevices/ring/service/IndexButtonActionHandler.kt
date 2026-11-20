@@ -1,18 +1,18 @@
 package coredevices.ring.service
 
 import co.touchlab.kermit.Logger
-import coredevices.ring.external.indexwebhook.IndexWebhookApi
+import coredevices.ring.external.indexwebhook.IndexWebhookDeliveryQueue
 import coredevices.ring.service.button.GestureDestination
 import coredevices.ring.service.button.GestureRoutingPreferences
 import coredevices.ring.service.button.RingGesture
 import coredevices.ring.service.recordings.RecordingProcessingQueue
 import kotlinx.coroutines.CancellationException
-import kotlin.time.Clock
+import kotlin.time.Instant
 
 class IndexButtonActionHandler(
     private val gestureRouting: GestureRoutingPreferences,
     sequenceRecorder: IndexButtonSequenceRecorder,
-    private val webhookApi: IndexWebhookApi,
+    private val webhookQueue: IndexWebhookDeliveryQueue,
     private val recordingQueue: RecordingProcessingQueue,
 ) {
     companion object {
@@ -21,17 +21,17 @@ class IndexButtonActionHandler(
     private val sequenceEvents = sequenceRecorder.sequenceEvents()
 
     suspend fun handleButtonActions() {
-        sequenceEvents.collect { handleSequence(it) }
+        sequenceEvents.collect { handleSequence(it.presses, it.releasedAt) }
     }
 
-    private suspend fun handleSequence(buttonPresses: List<ButtonPress>) {
+    private suspend fun handleSequence(buttonPresses: List<ButtonPress>, releasedAt: Instant) {
         val action = gestureRouting.buttonActionFor(buttonPresses) ?: return
         try {
             when (action) {
                 ButtonAction.PlayPause -> onPlayPause()
                 ButtonAction.NextTrack -> onNextTrack()
                 ButtonAction.PreviousTrack -> onPreviousTrack()
-                is ButtonAction.Webhook -> webhookApi.sendButtonEventIfEnabled(action.gesture, Clock.System.now())
+                is ButtonAction.Webhook -> webhookQueue.enqueueButtonEvent(action.gesture, releasedAt)
                 is ButtonAction.AgentCommand -> recordingQueue.queueTextProcessing(
                     action.command,
                     buttonSequence = action.buttonSequence,

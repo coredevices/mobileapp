@@ -5,6 +5,7 @@ import coredevices.indexai.database.dao.LocalRecordingDao
 import coredevices.ring.data.entity.room.IndexWebhookDeliveryEntity
 import coredevices.ring.database.room.repository.IndexWebhookDeliveryRepository
 import coredevices.ring.service.RecordingBackgroundScope
+import coredevices.ring.service.button.RingGesture
 import coredevices.ring.storage.RecordingStorage
 import coredevices.util.Platform
 import coredevices.util.queue.PersistentQueueScheduler
@@ -16,10 +17,12 @@ import kotlinx.io.buffered
 import kotlinx.io.readShortLe
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
- * Sends recordings to their gesture's webhook, retrying network errors and 408/429/5xx
- * responses (including after an app restart) so a brief outage doesn't lose a recording.
+ * Sends recordings and click events to their gesture's webhook, retrying network errors and
+ * 408/429/5xx responses (including after an app restart) so a brief outage doesn't lose one.
  */
 class IndexWebhookDeliveryQueue(
     private val repository: IndexWebhookDeliveryRepository,
@@ -42,6 +45,8 @@ class IndexWebhookDeliveryQueue(
 ) {
     companion object {
         const val MAX_ATTEMPTS = 10
+        /** [IndexWebhookDeliveryEntity.recordingId] of a click event, which has no recording. */
+        private const val NO_RECORDING = 0L
     }
 
     private val _outcomes = MutableSharedFlow<IndexWebhookDeliveryOutcome>(extraBufferCapacity = 64)
@@ -60,17 +65,33 @@ class IndexWebhookDeliveryQueue(
         repository.resetFailed(deliveryId)?.let { scheduleTask(it) }
     }
 
-    override suspend fun processTask(task: IndexWebhookDeliveryEntity) {
-        val audio = task.fileId?.let { readAudio(it) }
-        val recordedAt = localRecordingDao.getRecording(task.recordingId)?.localTimestamp ?: task.created
-        val result = webhookApi.upload(
-            samples = audio?.first,
-            sampleRate = audio?.second ?: 16000,
-            recordingId = task.deliveryId,
-            transcription = task.transcription,
-            recordedAt = recordedAt,
-            gesture = task.gesture,
+    /** Queues a click gesture's button event; [pressedAt] is sent as the press time on every attempt. */
+    suspend fun enqueueButtonEvent(gesture: RingGesture, pressedAt: Instant) = enqueue(
+        IndexWebhookDeliveryEntity(
+            created = pressedAt,
+            deliveryId = Uuid.random().toString(),
+            gesture = gesture,
+            recordingId = NO_RECORDING,
+            fileId = null,
+            transcription = null,
         )
+    )
+
+    override suspend fun processTask(task: IndexWebhookDeliveryEntity) {
+        val result = if (task.gesture.isClick) {
+            webhookApi.sendButtonEvent(task.gesture, pressedAt = task.created, deliveryId = task.deliveryId)
+        } else {
+            val audio = task.fileId?.let { readAudio(it) }
+            val recordedAt = localRecordingDao.getRecording(task.recordingId)?.localTimestamp ?: task.created
+            webhookApi.upload(
+                samples = audio?.first,
+                sampleRate = audio?.second ?: 16000,
+                recordingId = task.deliveryId,
+                transcription = task.transcription,
+                recordedAt = recordedAt,
+                gesture = task.gesture,
+            )
+        }
         if (result == null) {
             _outcomes.emit(IndexWebhookDeliveryOutcome(task.deliveryId, result = null, willRetry = false))
             return
@@ -87,10 +108,11 @@ class IndexWebhookDeliveryQueue(
             durationMs = result.durationMs,
             retryDeliveryId = task.deliveryId.takeIf { failedForGood },
         )
+        // A final attempt fails the task now, so its run's Retry can reset it.
         when {
             result.ok -> Unit
-            result.retryable -> throw RecoverableTaskException("Webhook delivery failed: ${result.status}")
-            else -> error("Webhook delivery failed: ${result.status} ${result.detail}")
+            failedForGood -> error("Webhook delivery failed: ${result.status} ${result.detail}")
+            else -> throw RecoverableTaskException("Webhook delivery failed: ${result.status}")
         }
     }
 
