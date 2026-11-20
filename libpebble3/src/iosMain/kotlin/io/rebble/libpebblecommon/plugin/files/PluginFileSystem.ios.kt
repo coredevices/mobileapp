@@ -7,6 +7,7 @@ import io.rebble.libpebblecommon.plugin.PluginNativeException
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.BooleanVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.ObjCObjectVar
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArrayOf
@@ -17,10 +18,13 @@ import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import platform.Foundation.NSCocoaErrorDomain
 import platform.Foundation.NSData
 import platform.Foundation.NSDate
+import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileModificationDate
+import platform.Foundation.NSFileNoSuchFileError
 import platform.Foundation.NSFileSize
 import platform.Foundation.NSNumber
 import platform.Foundation.NSURL
@@ -52,7 +56,7 @@ internal class IosPluginFileSystem(private val settings: Settings) : PluginFileS
     }
 
     override suspend fun hasAccess(scope: String): Boolean = withContext(Dispatchers.Default) {
-        val url = resolve(scope) ?: return@withContext false
+        val url = runCatching { resolve(scope) }.getOrNull() ?: return@withContext false
         val started = url.startAccessingSecurityScopedResource()
         try {
             url.checkResourceIsReachableAndReturnError(null)
@@ -126,16 +130,23 @@ internal class IosPluginFileSystem(private val settings: Settings) : PluginFileS
         }
     }
 
-    private fun resolve(scope: String): NSURL? {
+    /** Null when the entry can't be reached; throws NOT_FOUND when the picked entry itself is gone. */
+    private fun resolve(scope: String): NSURL? = memScoped {
         val bookmark = settings.getStringOrNull(bookmarkKey(scope)) ?: return null
         val data = NSData.create(base64EncodedString = bookmark, options = 0u) ?: return null
-        return NSURL.URLByResolvingBookmarkData(
+        val error = alloc<ObjCObjectVar<NSError?>>()
+        NSURL.URLByResolvingBookmarkData(
             data,
             options = NSURLBookmarkResolutionWithoutUI,
             relativeToURL = null,
             bookmarkDataIsStale = null,
-            error = null,
-        )
+            error = error.ptr,
+        ) ?: run {
+            val e = error.value
+            // Deleted, or its app was reinstalled: tell plugins it's gone rather than inaccessible.
+            if (e?.domain == NSCocoaErrorDomain && e?.code == NSFileNoSuchFileError) throw notFound(emptyList())
+            null
+        }
     }
 
     private fun bookmarkKey(scope: String) = "$BOOKMARK_PREFIX$scope"
